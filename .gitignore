@@ -1,0 +1,6 @@
+.DS_Store
+nbproject/*
+*.gem
+.idea/*
+Gemfile.lock
+._test

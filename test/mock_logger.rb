@@ -1,0 +1,25 @@
+# Looks like a standard Ruby Logger or Rails Logger
+# Except that it stores the last logged entry in the instance variable: message
+class MockLogger
+  attr_accessor :message
+
+  Logger::Severity.constants.each do |level|
+    class_eval <<-EOT, __FILE__, __LINE__
+        def #{level.downcase}(message = nil, progname = nil, &block)
+          if message
+            self.message = message
+          elsif block
+            self.message = block.call
+          else
+            self.message = progname
+          end
+          self.message
+        end
+
+        def #{level}?
+          @true
+        end
+    EOT
+  end
+end
+
