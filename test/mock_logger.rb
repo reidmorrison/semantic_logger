@@ -21,5 +21,9 @@ class MockLogger
         end
     EOT
   end
+
+  def flush
+    true
+  end
 end
 

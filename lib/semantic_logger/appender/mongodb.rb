@@ -46,9 +46,8 @@ module SemanticLogger
       attr_accessor :formatter, :host_name, :safe, :application
 
       # Create a MongoDB Appender instance
-      # SemanticLogger::Appender::MongoDB.new(
-      #         :db => Cache::Work.db
-      #        )
+      #
+      #   SemanticLogger::Appender::MongoDB.new(:db => Mongo::Connection.new['database'])
       #
       # Parameters:
       # :db [Mongo::Database]
@@ -128,34 +127,40 @@ module SemanticLogger
         @collection ||= db[collection_name]
       end
 
-      # For JRuby include the Thread name rather than its id
-      if defined? Java
-        def self.thread_name
-          Java::java.lang::Thread.current_thread.name
-        end
-      else
-        def self.thread_name
-          Thread.object_id
-        end
+      # Flush all pending logs to disk.
+      #  Waits for all sent documents to be writted to disk
+      def flush
+        db.get_last_error
       end
 
       # Default log formatter
       #  Replace this formatter by supplying a Block to the initializer
       def default_formatter
-        Proc.new do |level, name, message, hash, block|
+        Proc.new do |log|
           document = {
-            :time      => Time.now,
-            :host_name => host_name,
-            :pid       => $PID,
-            :thread    => SemanticLogger::Appender::MongoDB.thread_name,
-            :name      => name,
-            :level     => level,
+            :time        => log.time,
+            :host_name   => host_name,
+            :pid         => $PID,
+            :thread_name => log.thread_name,
+            :name        => log.name,
+            :level       => log.level,
           }
           document[:application] = application if application
-          document[:message] = self.class.strip_colorizing(message) if message
+          document[:message]     = self.class.strip_colorizing(log.message) if log.message
+          document[:duration]    = log.duration if log.duration
 
-          SemanticLogger::Appender::MongoDB.populate(document, hash) if hash
-          SemanticLogger::Appender::MongoDB.populate(document, block.call) if block
+          if log.payload
+            if log.payload.is_a?(Exception)
+              exception = log.payload
+              document[:payload] = {
+                :exception => exception.class.name,
+                :message   => exception.message,
+                :backtrace => exception.backtrace
+              }
+            else
+              document[:payload] = log.payload
+            end
+          end
           document
         end
       end
@@ -165,53 +170,13 @@ module SemanticLogger
         message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, '').strip
       end
 
-      # Log the message
-      def log(level, name, message, hash, &block)
+      # Log the message to MongoDB
+      def log(log)
         # Insert log entry into Mongo
         # Use safe=>false so that we do not wait for it to be written to disk, or
         # for the response from the MongoDB server
-        document = formatter.call(level, name, message, hash, &block)
+        document = formatter.call(log)
         collection.insert(document, :safe=>safe)
-      end
-
-      # Populate Log Hash
-      def self.populate(document, message)
-        case message
-        when ::String
-          if document[:message]
-            document[:message] << " " << strip_colorizing(message)
-          else
-            document[:message] = strip_colorizing(message)
-          end
-        when ::Exception
-          document[:exception] = {
-            :class => message.class.name,
-            :message => message.message,
-            :backtrace => message.backtrace
-          }
-        when ::Hash
-          # With a hash, the message can be an element of the hash itself
-          if msg = message[:message]
-            # Cannot change supplied hash
-            hash = message.clone
-            hash.delete(:message)
-            if document[:message]
-              document[:message] << " " << strip_colorizing(msg)
-            else
-              document[:message] = strip_colorizing(msg)
-            end
-            document[:metadata] = hash
-          else
-            document[:metadata] = message
-          end
-        else
-          if document[:message]
-            document[:message] << " " << msg.inspect
-          else
-            document[:message] = msg.inspect
-          end
-        end
-        document
       end
 
     end

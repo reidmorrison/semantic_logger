@@ -4,11 +4,8 @@ $LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
 require 'rubygems'
 require 'test/unit'
 require 'shoulda'
-require 'logger'
 require 'mongo'
-require 'sync_attr'
-require 'semantic_logger/logger'
-require 'semantic_logger/appender/mongodb'
+require 'semantic_logger'
 
 # Unit Test for SemanticLogger::Appender::MongoDB
 #
@@ -16,98 +13,103 @@ class AppenderMongoDBTest < Test::Unit::TestCase
   context SemanticLogger::Appender::MongoDB do
     setup do
       @db = Mongo::Connection.new['test']
+      @appender = SemanticLogger::Appender::MongoDB.new(
+        :db               => @db,
+        :collection_size  => 10*1024**2, # 10MB
+        :host_name        => 'test',
+        :application      => 'test_application'
+      )
+      @hash = { :tracking_number => 12345, :session_id => 'HSSKLEU@JDK767'}
+      @time = Time.now
     end
 
-    context "configuration" do
-      #TODO verify configuration setting carry through
+    teardown do
+      @appender.purge_all
     end
 
-    context "formatter" do
-      setup do
-        @appender = SemanticLogger::Appender::MongoDB.new(
-          :db               => @db,
-          :collection_size  => 10*1024**2, # 10MB
-          :host_name        => 'test',
-          :application      => 'test_application'
-        )
-        @time = Time.parse("2012-08-02 09:48:32.482")
-        @hash = { :session_id=>"HSSKLEU@JDK767", :tracking_number=>12345 }
+    context "format logs into documents" do
+
+      should "handle nil name, message and hash" do
+        @appender.log SemanticLogger::Logger::Log.new(:debug)
+        document = @appender.collection.find_one
+        assert_equal :debug, document['level']
+        assert_equal nil, document['message']
+        assert_equal nil, document['thread_name']
+        assert_equal nil, document['time']
+        assert_equal nil, document['payload']
+        assert_equal $PID, document['pid']
+        assert_equal 'test', document['host_name']
+        assert_equal 'test_application', document['application']
       end
 
-      context "format messages into text form" do
-        should "handle nil level, application, message and hash" do
-          document = @appender.formatter.call(nil, nil, nil, nil)
-          assert_equal({ :level=>nil, :time=>document[:time], :name=>nil, :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application'}, document)
-        end
+      should "handle nil message and payload" do
+        log = SemanticLogger::Logger::Log.new(:debug)
+        log.payload = @hash
+        @appender.log(log)
 
-        should "handle nil application, message and hash" do
-          document = @appender.formatter.call(:debug, nil, nil, nil)
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>nil, :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application'}, document)
-        end
+        document = @appender.collection.find_one
+        assert_equal :debug, document['level']
+        assert_equal nil, document['message']
+        assert_equal nil, document['thread_name']
+        assert_equal nil, document['time']
+        assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
+        assert_equal $PID, document['pid']
+        assert_equal 'test', document['host_name']
+        assert_equal 'test_application', document['application']
+      end
 
-        should "handle nil message and hash" do
-          document = @appender.formatter.call(:debug, nil, nil, @hash)
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>nil, :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :metadata=>{:session_id=>"HSSKLEU@JDK767", :tracking_number=>12345}}, document)
-        end
+      should "handle message and payload" do
+        log = SemanticLogger::Logger::Log.new(:debug)
+        log.message = 'hello world'
+        log.payload = @hash
+        log.thread_name = 'thread'
+        log.time = @time
+        @appender.log(log)
 
-        should "handle nil hash" do
-          document = @appender.formatter.call(:debug, 'myclass', 'hello world', nil)
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>'myclass', :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :message=>'hello world'}, document)
-        end
+        document = @appender.collection.find_one
+        assert_equal :debug, document['level']
+        assert_equal 'hello world', document['message']
+        assert_equal 'thread', document['thread_name']
+        assert_equal @time.to_i, document['time'].to_i
+        assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
+        assert_equal $PID, document['pid']
+        assert_equal 'test', document['host_name']
+        assert_equal 'test_application', document['application']
+      end
 
-        should "handle hash" do
-          document = @appender.formatter.call(:debug, 'myclass', 'hello world', @hash)
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>'myclass', :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :message=>'hello world', :metadata=>{:session_id=>"HSSKLEU@JDK767", :tracking_number=>12345}}, document)
-        end
+      should "handle message without payload" do
+        log = SemanticLogger::Logger::Log.new(:debug)
+        log.message = 'hello world'
+        log.thread_name = 'thread'
+        log.time = @time
+        @appender.log(log)
 
-        should "handle string block with no message" do
-          document = @appender.formatter.call(:debug, 'myclass', nil, @hash, Proc.new { "Calculations" })
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>'myclass', :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :message=>'Calculations', :metadata=>{:session_id=>"HSSKLEU@JDK767", :tracking_number=>12345}}, document)
-        end
-
-        should "handle string block" do
-          document = @appender.formatter.call(:debug, 'myclass', 'hello world', @hash, Proc.new { "Calculations" })
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>'myclass', :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :message=>'hello world Calculations', :metadata=>{:session_id=>"HSSKLEU@JDK767", :tracking_number=>12345}}, document)
-        end
-
-        should "handle hash block" do
-          document = @appender.formatter.call(:debug, 'myclass', 'hello world', nil, Proc.new { @hash })
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>'myclass', :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :message=>'hello world', :metadata=>{:session_id=>"HSSKLEU@JDK767", :tracking_number=>12345}}, document)
-        end
-
-        should "handle string block with no other parameters" do
-          document = @appender.formatter.call(:debug, 'myclass', 'hello world', @hash, Proc.new { "Calculations" })
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>'myclass', :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :message=>'hello world Calculations', :metadata=>{:session_id=>"HSSKLEU@JDK767", :tracking_number=>12345}}, document)
-        end
-
-        should "handle hash block with no other parameters" do
-          document = @appender.formatter.call(:debug, nil, nil, nil, Proc.new { @hash.merge(:message => 'hello world') })
-          assert_equal({ :level=>:debug, :time=>document[:time], :name=>nil, :pid=>$PID, :host_name=>"test", :thread=>document[:thread], :application=>'test_application', :message=>'hello world', :metadata=>{:session_id=>"HSSKLEU@JDK767", :tracking_number=>12345}}, document)
-        end
+        document = @appender.collection.find_one
+        assert_equal :debug, document['level']
+        assert_equal 'hello world', document['message']
+        assert_equal 'thread', document['thread_name']
+        assert_equal @time.to_i, document['time'].to_i
+        assert_equal nil, document['payload']
+        assert_equal $PID, document['pid']
+        assert_equal 'test', document['host_name']
+        assert_equal 'test_application', document['application']
       end
     end
 
-    context "log to Mongo logger" do
-      setup do
-        @appender = SemanticLogger::Appender::MongoDB.new(
-          :db               => @db,
-          :collection_size  => 10*1024**2, # 10MB
-          :host_name        => 'test',
-          :application      => 'test_application'
-        )
-        @hash = { :tracking_number => 12345, :session_id => 'HSSKLEU@JDK767'}
-      end
-
-      teardown do
-        @appender.purge_all
-      end
-
+    context "for each log level" do
       # Ensure that any log level can be logged
       SemanticLogger::Logger::LEVELS.each do |level|
         should "log #{level} information" do
-          @appender.log(level, 'my_class', 'hello world', @hash) { "Calculations" }
+          @appender.log SemanticLogger::Logger::Log.new(level, 'thread', 'my_class', 'hello world -- Calculations', @hash, @time)
           document = @appender.collection.find_one
-          assert_equal({"_id"=>document['_id'], "level"=>level, "message"=>"hello world", "thread"=>document['thread'], "time"=>document['time'], 'metadata'=>{'session_id'=>"HSSKLEU@JDK767", 'tracking_number'=>12345}, "name"=>"my_class", "pid"=>document['pid'], "host_name"=>"test", "application"=>"test_application"}, document)
+          assert_equal level, document['level']
+          assert_equal 'hello world -- Calculations', document['message']
+          assert_equal 'thread', document['thread_name']
+          assert_equal @time.to_i, document['time'].to_i
+          assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
+          assert_equal $PID, document['pid']
+          assert_equal 'test', document['host_name']
+          assert_equal 'test_application', document['application']
         end
       end
 

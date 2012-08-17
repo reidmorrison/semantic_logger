@@ -5,7 +5,7 @@ require 'rubygems'
 require 'test/unit'
 require 'shoulda'
 require 'logger'
-require 'semantic_logger/appender/logger'
+require 'semantic_logger'
 require 'test/mock_logger'
 
 # Unit Test for SemanticLogger::Appender::Logger
@@ -14,64 +14,59 @@ class AppenderLoggerTest < Test::Unit::TestCase
   context SemanticLogger::Appender::Logger do
     setup do
       @time = Time.parse("2012-08-02 09:48:32.482")
+      @mock_logger = MockLogger.new
+      @appender = SemanticLogger::Appender::Logger.new(@mock_logger)
+      @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
     end
 
-    context "format messages into text form" do
-      setup do
-        @hash = { :session_id=>"HSSKLEU@JDK767", :tracking_number=>12345 }
+    context "format logs into text form" do
+      should "handle nil name, message and payload" do
+        log = SemanticLogger::Logger::Log.new
+        log.time = Time.now
+        log.level = :debug
+        @appender.log(log)
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\]  -- \n/, @mock_logger.message
       end
 
-      should "handle nil level, application, message and hash" do
-        msg = SemanticLogger::Appender::Logger.format_message(nil, nil, nil, nil)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+  \[\d+:\w+\]  -- \n/, msg
+      should "handle nil message and payload" do
+        log = SemanticLogger::Logger::Log.new
+        log.time = Time.now
+        log.level = :debug
+        log.name = 'class'
+        @appender.log(log)
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- \n/, @mock_logger.message
       end
 
-      should "handle nil application, message and hash" do
-        msg = SemanticLogger::Appender::Logger.format_message(:debug, nil, nil, nil)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\]  -- \n/, msg
+      should "handle nil payload" do
+        log = SemanticLogger::Logger::Log.new
+        log.time = Time.now
+        log.level = :debug
+        log.name = 'class'
+        log.message = 'hello world'
+        @appender.log(log)
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world\n/, @mock_logger.message
       end
 
-      should "handle nil message and hash" do
-        msg = SemanticLogger::Appender::Logger.format_message(:debug, 'application', nil, nil)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\] application -- \n/, msg
-      end
-
-      should "handle nil hash" do
-        msg = SemanticLogger::Appender::Logger.format_message(:debug, 'application', 'hello world', nil)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\] application -- hello world\n/, msg
-      end
-
-      should "handle hash" do
-        msg = SemanticLogger::Appender::Logger.format_message(:debug, 'application', 'hello world', @hash)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\] application -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}\n/, msg
-      end
-
-      should "handle block" do
-        msg = SemanticLogger::Appender::Logger.format_message(:debug, 'application', 'hello world', @hash) { "Calculations" }
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\] application -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\} -- Calculations\n/, msg
-      end
-
-      should "handle block with no other parameters" do
-        msg = SemanticLogger::Appender::Logger.format_message(:debug, nil, nil, nil) { "Calculations" }
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\]  --  -- Calculations\n/, msg
+      should "handle payload" do
+        log = SemanticLogger::Logger::Log.new
+        log.time = Time.now
+        log.level = :debug
+        log.name = 'class'
+        log.message = 'hello world'
+        log.payload = @hash
+        @appender.log(log)
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}\n/, @mock_logger.message
       end
     end
 
-    context "log to Ruby logger" do
-      setup do
-        @mock_logger = MockLogger.new
-        @appender = SemanticLogger::Appender::Logger.new(@mock_logger)
-        @hash = { :tracking_number => 12345, :session_id => 'HSSKLEU@JDK767'}
-      end
-
+    context "for each log level" do
       # Ensure that any log level can be logged
       Logger::Severity.constants.each do |level|
         should "log #{level.downcase.to_sym} info" do
-          @appender.log(level.downcase.to_sym, 'application', 'hello world', @hash) { "Calculations" }
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+\] application -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\} -- Calculations\n/, @mock_logger.message
+          @appender.log SemanticLogger::Logger::Log.new(level.downcase.to_sym, 'thread', 'class', 'hello world -- Calculations', @hash, Time.now)
+          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:thread\] class -- hello world -- Calculations -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}\n/, @mock_logger.message
         end
       end
-
     end
 
   end

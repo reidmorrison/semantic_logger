@@ -2,18 +2,6 @@
 #
 #   Maps the SemanticLogger API's to the Rails log, log4j, or Ruby Logger
 #
-# Installation:
-#    Rails.logger = SemanticLogger::Appender::Logger.new(Rails.logger)
-#
-# Also works with the Ruby Logger
-#    require 'logger'
-#    require 'semantic_logger'
-#    logger = Logger.new(STDOUT)
-#    Rails.log = SemanticLogger::Appender::Logger.new(logger)
-#
-# ActiveResource::BufferedLogger
-#    ...
-#
 # The log level is controlled by the Logging implementation passed into
 # this appender
 module SemanticLogger
@@ -21,80 +9,64 @@ module SemanticLogger
     class Logger
       attr_reader :logger
 
-      def initialize(logger)
+      # Create a Logger or Rails Logger appender instance
+      #
+      # Ruby Logger
+      #    require 'logger'
+      #    require 'semantic_logger'
+      #    ruby_logger = Logger.new(STDOUT)
+      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(ruby_logger)
+      #    logger =  SemanticLogger::Logger.new('test')
+      #    logger.info('Hello World', :some => :payload)
+      #
+      # Enhance the Rails Logger
+      #    # Add the Rails logger to the list of appenders
+      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(Rails.logger)
+      #    Rails.logger = SemanticLogger::Logger.new('Rails')
+      #
+      #    # Make ActiveRecord logging include its class name in every log entry
+      #    ActiveRecord::Base.logger = SemanticLogger::Logger.new('ActiveRecord')
+      def initialize(logger, &block)
         raise "logger cannot be null when initiailizing the SemanticLogging::Appender::Logger" unless logger
         @logger = logger
+
+        # Set the formatter to the supplied block
+        @formatter = block || self.default_formatter
       end
 
-      # The default log formatter
-      # Generates logs of the form:
+      # Default log formatter
+      #  Replace this formatter by supplying a Block to the initializer
+      #  Generates logs of the form:
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
-      @@formatter = Proc.new do |level, name, message, time, duration|
-        str = "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (time.usec/1000)} #{level.to_s[0..0].upcase} [#{$$}:#{thread_name}] #{name} -- #{message}\n"
-        str << " (#{duration}ms)" if duration
-        str
-      end
+      def default_formatter
+        Proc.new do |log|
+          message = log.message.to_s
+          if log.payload
+            if log.payload.is_a?(Exception)
+              exception = log.payload
+              message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+            else
+              message << " -- " << log.payload.inspect
+            end
+          end
 
-      # For JRuby include the Thread name rather than its id
-      if defined? Java
-        def self.thread_name
-          Java::java.lang::Thread.current_thread.name
+          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{log.name} -- #{message}\n"
+          str << " (#{log.duration}ms)" if log.duration
+          str
         end
-      else
-        def self.thread_name
-          Thread.object_id
-        end
-      end
-
-      # Allow the global formatter to be replaced
-      def self.formatter=(formatter)
-        @@formatter = formatter
       end
 
       # Pass log calls to the underlying Rails, log4j or Ruby logger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
-      def log(level, name, message, hash, &block)
-        @logger.send(level == :trace ? :debug : level) { self.class.format_message(level, name, message, hash, &block) }
+      def log(log)
+        @logger.send(log.level == :trace ? :debug : log.level, @formatter.call(log))
       end
 
-      # Convert a semantic log entry into plain text
-      def self.format_message(level, name, message, hash=nil, &block)
-        # TODO need to define :try if not already defined. E.g. Outside Rails
-        msg = time = duration = nil
-        if hash
-          msg      = hash.delete(:message)
-          time     = hash.delete(:time)
-          duration = hash.delete(:duration)
-        end
-        msg  ||= message.to_s
-        time ||= Time.now
-
-        msg << " -- " << self.msg2str(hash) if hash
-        msg << " -- " << self.msg2str(block.call) if block
-        @@formatter.call(level, name, msg, time, duration)
-      end
-
-      # Convert Objects to Strings for text based logging
-      def self.msg2str(message)
-        case message
-        when ::String
-          message
-        when ::Exception
-          "#{message.class}: #{message.message}\n#{(message.backtrace || []).join("\n")}"
-        when ::Hash
-          # With a hash, the message can be an element of the hash itself
-          if msg = message[:message]
-            # Cannot change supplied hash
-            hash = message.clone
-            hash.delete(:message)
-            "#{msg} #{hash.inspect}"
-          else
-            message.inspect
-          end
-        else
-          message.inspect
-        end
+      # Flush all pending logs to disk.
+      #  Waits for all sent documents to be writted to disk
+      def flush
+        @logger.flush
       end
 
     end

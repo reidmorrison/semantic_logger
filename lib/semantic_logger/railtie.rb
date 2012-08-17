@@ -26,6 +26,10 @@ module SemanticLogger #:nodoc:
     initializer :initialize_semantic_logger, :after => :initialize_logger do
       config = Rails.application.config
 
+      # First set the internal logger to the one used by Rails in case something goes wrong
+      # with an appender
+      SemanticLogger::Logger.logger = Rails.logger
+
       # Add the Rails Logger to the list of appenders
       SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(Rails.logger)
 

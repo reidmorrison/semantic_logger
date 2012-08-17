@@ -23,7 +23,7 @@ class LoggerTest < Test::Unit::TestCase
         # Use this test's class name as the application name in the log output
         @logger = SemanticLogger::Logger.new('LoggerTest', :level => :trace)
 
-        @hash = { :tracking_number => 12345, :session_id => 'HSSKLEU@JDK767'}
+        @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
       end
 
       teardown do
@@ -34,7 +34,8 @@ class LoggerTest < Test::Unit::TestCase
       SemanticLogger::Logger::LEVELS.each do |level|
         should "log #{level} info" do
           @logger.send(level, 'hello world', @hash) { "Calculations" }
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+\] LoggerTest -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\} -- Calculations\n/, @mock_logger.message
+          @logger.flush
+          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- hello world -- Calculations -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}\n/, @mock_logger.message
         end
       end
 
