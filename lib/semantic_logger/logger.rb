@@ -108,13 +108,21 @@ module SemanticLogger
           @level_index <= #{index}
         end
 
+        # Log the duration of the supplied block
+        #   If an exception occurs in the block the exception is logged using the
+        #   same log level. The exception will flow through to the caller unchanged
         def benchmark_#{level}(message, payload = nil)
           raise "Mandatory block missing" unless block_given?
           if @level_index <= #{index}
             start = Time.now
-            result = yield
-            self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, start, Time.now - start)
-            result
+            begin
+              result = yield
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, start, Time.now - start)
+              result
+            rescue Exception => exc
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, exc, start, Time.now - start)
+              raise exc
+            end
           else
             yield
           end
@@ -216,7 +224,7 @@ module SemanticLogger
           # #TODO Logger needs it's own "reliable" appender ;)
           # For example if an appender constantly fails
           # ( bad filename or path, invalid server )
-          logger.debug "SemanticLogger::Logger Appender Thread Started"
+          logger.debug "SemanticLogger::Logger Appender thread started"
           while message=queue.pop
             if message.is_a? Log
               appenders.each {|appender| appender.log(message) }
@@ -235,10 +243,11 @@ module SemanticLogger
             end
           end
         rescue Exception => exception
-          logger.fatal "SemanticLogger::Logger Appender Thread crashed: #{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-          exit(-2)
+          logger.error "SemanticLogger::Logger Appender thread restarting due to exception: #{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          # Start a new appender thread and let this one terminate
+          startup
         ensure
-          logger.debug "SemanticLogger::Logger Appender Thread stopped"
+          logger.debug "SemanticLogger::Logger Appender thread stopped"
         end
       end
     end
@@ -250,7 +259,11 @@ module SemanticLogger
       logger.debug "SemanticLogger::Logger Shutdown. Stopping appender thread"
       reply_queue = Queue.new
       queue << { :command => :shutdown, :reply_queue => reply_queue }
-      reply_queue.pop
+      result = reply_queue.pop
+      # Undefine the class variable for the queue since in test environments
+      # at_exit can be invoked multiple times
+      remove_class_variable(:@@queue)
+      result
     end
 
   end
