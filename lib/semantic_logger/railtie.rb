@@ -29,7 +29,9 @@ module SemanticLogger #:nodoc:
       logger = Rails.logger || config.logger || begin
         path = config.paths.log.to_a.first
         logger = ActiveSupport::BufferedLogger.new(path)
-        logger.level = ActiveSupport::BufferedLogger.const_get(config.log_level.to_s.upcase)
+        # Translate trace to debug level for BufferedLogger
+        level = config.log_level == :trace ? :debug : config.log_level
+        logger.level = ActiveSupport::BufferedLogger.const_get(level.to_s.upcase)
         logger.auto_flushing = false if Rails.env.production?
         logger
       rescue StandardError => e
@@ -50,7 +52,7 @@ module SemanticLogger #:nodoc:
       SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(logger)
 
       # Set the default log level based on the Rails config
-      SemanticLogger::Logger.default_level = Rails.configuration.log_level
+      SemanticLogger::Logger.default_level = config.log_level
 
       # Replace the default Rails loggers
       Rails.logger = config.logger = SemanticLogger::Logger.new(Rails)

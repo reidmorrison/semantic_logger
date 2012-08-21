@@ -148,6 +148,7 @@ module SemanticLogger
           document[:application] = application if application
           document[:message]     = self.class.strip_colorizing(log.message) if log.message
           document[:duration]    = log.duration if log.duration
+          document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
 
           if log.payload
             if log.payload.is_a?(Exception)
