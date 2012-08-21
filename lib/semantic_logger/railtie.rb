@@ -23,15 +23,31 @@ module SemanticLogger #:nodoc:
     #
     # Loaded after Rails logging is initialized since SemanticLogger will continue
     # to forward logging to the Rails Logger
-    initializer :initialize_semantic_logger, :after => :initialize_logger do
+    initializer :initialize_semantic_logger, :before => :initialize_logger do
       config = Rails.application.config
 
-      # First set the internal logger to the one used by Rails in case something goes wrong
+      logger = Rails.logger || config.logger || begin
+        path = config.paths.log.to_a.first
+        logger = ActiveSupport::BufferedLogger.new(path)
+        logger.level = ActiveSupport::BufferedLogger.const_get(config.log_level.to_s.upcase)
+        logger.auto_flushing = false if Rails.env.production?
+        logger
+      rescue StandardError => e
+        logger = ActiveSupport::BufferedLogger.new(STDERR)
+        logger.level = ActiveSupport::BufferedLogger::WARN
+        logger.warn(
+          "Rails Error: Unable to access log file. Please ensure that #{path} exists and is chmod 0666. " +
+            "The log level has been raised to WARN and the output directed to STDERR until the problem is fixed."
+        )
+        logger
+      end
+
+      # First set the internal logger to the default file one used by Rails in case something goes wrong
       # with an appender
-      SemanticLogger::Logger.logger = Rails.logger
+      SemanticLogger::Logger.logger = logger
 
       # Add the Rails Logger to the list of appenders
-      SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(Rails.logger)
+      SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(logger)
 
       # Set the default log level based on the Rails config
       SemanticLogger::Logger.default_level = Rails.configuration.log_level
@@ -41,6 +57,10 @@ module SemanticLogger #:nodoc:
       if defined?(ActiveRecord)
         ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
       end
+      if defined?(ActionController)
+        ActionController::Base.logger = SemanticLogger::Logger.new(ActionController)
+      end
+      SemanticLogger::Logger.logger.info "SemanticLogger initialized"
     end
 
   end

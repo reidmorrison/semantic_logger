@@ -12,8 +12,8 @@ module SemanticLogger
     #    level      : 'trace|debug|warn|info|error',
     #    message    : "blah blah",
     #    duration   : ms,  # Set by Logger#benchmark
-    #    tracking_number : "Some tracking id"
-    #    metadata : {
+    #    tags       : "Some tracking id" | ["id1", "id2"]
+    #    payload : {
     #      Optional. Any user supplied data, including any thread specific context variables
     #      values supplied on a per log entry will override any thread context values
     #    }

@@ -9,7 +9,6 @@ require 'semantic_logger'
 require 'test/mock_logger'
 
 # Unit Test for SemanticLogger::Logger
-#
 class LoggerTest < Test::Unit::TestCase
   context SemanticLogger::Logger do
 
@@ -39,6 +38,36 @@ class LoggerTest < Test::Unit::TestCase
         end
       end
 
+      context "with_tags logging" do
+        should "add tags to log entries" do
+          @logger.with_tags('12345', 'DJHSFK') do
+            @logger.info('Hello world')
+            @logger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world\n/, @mock_logger.message
+          end
+        end
+
+        should "add embedded tags to log entries" do
+          @logger.with_tags('First Level', 'tags') do
+            @logger.with_tags('Second Level') do
+              @logger.info('Hello world')
+              @logger.flush
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \[First Level\] \[tags\] \[Second Level\] LoggerTest -- Hello world\n/, @mock_logger.message
+            end
+          end
+        end
+
+        should "add payload to log entries" do
+          @logger.with_payload(:tracking_number => '123456') do
+            @logger.with_payload(:more => 'data', :even => 2) do
+              @logger.info('Hello world')
+              @logger.flush
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- Hello world -- \{:more=>\"data\", :even=>2, :tracking_number=>\"123456\"\}\n/, @mock_logger.message
+            end
+          end
+        end
+
+      end
     end
 
   end

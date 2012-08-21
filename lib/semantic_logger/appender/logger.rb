@@ -41,6 +41,8 @@ module SemanticLogger
       def default_formatter
         Proc.new do |log|
           message = log.message.to_s
+          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+
           if log.payload
             if log.payload.is_a?(Exception)
               exception = log.payload
@@ -50,8 +52,9 @@ module SemanticLogger
             end
           end
 
-          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{log.name} -- #{message}\n"
+          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
           str << " (#{'%.1f' % log.duration}ms)" if log.duration
+          str << "\n"
           str
         end
       end

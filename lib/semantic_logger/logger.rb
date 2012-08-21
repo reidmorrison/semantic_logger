@@ -53,7 +53,13 @@ module SemanticLogger
 
     @@default_level = :info
 
-    # Create a Logger instance
+    # Returns a Logger instance
+    #
+    # Return the logger for a specific class, supports class specific log levels
+    #   logger = SemanticLogger::Logger.new(self)
+    # OR
+    #   logger = SemanticLogger::Logger.new('MyClass')
+    #
     # Parameters:
     #  application: A class, module or a string with the application/class name
     #               to be used in the logger
@@ -94,10 +100,14 @@ module SemanticLogger
               if result.is_a?(String)
                 message = message.nil? ? result : "\#{message} -- \#{result.to_s}"
               else
-                payload = payload.nil? ? sresult : payload.merge(result)
+                payload = payload.nil? ? result : payload.merge(result)
               end
             end
-            self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, Time.now)
+            # Add scoped payload
+            if self.payload
+              payload = payload.nil? ? self.payload : self.payload.merge(payload)
+            end
+            self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, Time.now, nil, tags)
             true
           else
             false
@@ -117,10 +127,15 @@ module SemanticLogger
             start = Time.now
             begin
               result = yield
-              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, start, Time.now - start)
+              # Add scoped payload
+              if self.payload
+                payload = payload.nil? ? self.payload : self.payload.merge(payload)
+              end
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, start, Time.now - start, tags)
               result
             rescue Exception => exc
-              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, exc, start, Time.now - start)
+              # TODO Need to be able to have both an exception and a Payload
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, exc, start, Time.now - start, tags)
               raise exc
             end
           else
@@ -128,6 +143,55 @@ module SemanticLogger
           end
         end
       EOT
+    end
+
+    # Add the supplied tags to the list of tags to log for this thread whilst
+    # the supplied block is active
+    # Returns nil if no tags are currently set
+    def with_tags(*tags)
+      current_tags = self.tags
+      # Check for nil tags
+      if tags
+        Thread.current[:semantic_logger_tags] = current_tags ? current_tags + tags : tags
+      end
+      yield
+    ensure
+      Thread.current[:semantic_logger_tags] = current_tags
+    end
+
+    # Returns [Array] of [String] tags currently active for this thread
+    # Returns nil if no tags are set
+    def tags
+      Thread.current[:semantic_logger_tags]
+    end
+
+    # Thread specific context information to be logged with every log entry
+    #
+    # Add a payload to all log calls on This Thread within the supplied block
+    #
+    #   logger.with_payload(:tracking_number=>12345) do
+    #     logger.debug('Hello World')
+    #   end
+    #
+    # If a log call already includes a pyload, this payload will be merged with
+    # the supplied payload, with the supplied payload taking precedence
+    #
+    #   logger.with_payload(:tracking_number=>12345) do
+    #     logger.debug('Hello World', :result => 'blah')
+    #   end
+    def with_payload(payload)
+      current_payload = self.payload
+      Thread.current[:semantic_logger_payload] = current_payload ? current_payload.merge(payload) : payload
+      yield
+    ensure
+      Thread.current[:semantic_logger_payload] = current_payload
+    end
+
+    # Returns [Hash] payload to be added to every log entry in the current scope
+    # on this thread.
+    # Returns nil if no payload is currently set
+    def payload
+      Thread.current[:semantic_logger_payload]
     end
 
     # Semantic Logging does not support :unknown level since these
@@ -187,7 +251,7 @@ module SemanticLogger
       Queue.new
     end
 
-    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration)
+    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags)
 
     # For JRuby include the Thread name rather than its id
     if defined? Java
