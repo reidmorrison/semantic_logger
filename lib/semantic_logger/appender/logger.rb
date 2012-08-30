@@ -54,7 +54,6 @@ module SemanticLogger
 
           str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
           str << " (#{'%.1f' % log.duration}ms)" if log.duration
-          str << "\n"
           str
         end
       end
@@ -69,7 +68,7 @@ module SemanticLogger
       # Flush all pending logs to disk.
       #  Waits for all sent documents to be writted to disk
       def flush
-        @logger.flush
+        @logger.flush if @logger.respond_to?(:flush)
       end
 
     end

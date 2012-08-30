@@ -25,7 +25,7 @@ class AppenderLoggerTest < Test::Unit::TestCase
         log.time = Time.now
         log.level = :debug
         @appender.log(log)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\]  -- \n/, @mock_logger.message
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\]  -- /, @mock_logger.message
       end
 
       should "handle nil message and payload" do
@@ -34,7 +34,7 @@ class AppenderLoggerTest < Test::Unit::TestCase
         log.level = :debug
         log.name = 'class'
         @appender.log(log)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- \n/, @mock_logger.message
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- /, @mock_logger.message
       end
 
       should "handle nil payload" do
@@ -44,7 +44,7 @@ class AppenderLoggerTest < Test::Unit::TestCase
         log.name = 'class'
         log.message = 'hello world'
         @appender.log(log)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world\n/, @mock_logger.message
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world/, @mock_logger.message
       end
 
       should "handle payload" do
@@ -55,7 +55,7 @@ class AppenderLoggerTest < Test::Unit::TestCase
         log.message = 'hello world'
         log.payload = @hash
         @appender.log(log)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}\n/, @mock_logger.message
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}/, @mock_logger.message
       end
     end
 
@@ -64,7 +64,7 @@ class AppenderLoggerTest < Test::Unit::TestCase
       Logger::Severity.constants.each do |level|
         should "log #{level.downcase.to_sym} info" do
           @appender.log SemanticLogger::Logger::Log.new(level.downcase.to_sym, 'thread', 'class', 'hello world -- Calculations', @hash, Time.now)
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:thread\] class -- hello world -- Calculations -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}\n/, @mock_logger.message
+          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:thread\] class -- hello world -- Calculations -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}/, @mock_logger.message
         end
       end
     end

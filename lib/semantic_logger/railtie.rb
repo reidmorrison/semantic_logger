@@ -56,12 +56,16 @@ module SemanticLogger #:nodoc:
 
       # Replace the default Rails loggers
       Rails.logger = config.logger = SemanticLogger::Logger.new(Rails)
-      if defined?(ActiveRecord)
+      if defined?(ActiveRecord::Base)
         ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
       end
-      if defined?(ActionController)
+      if defined?(ActionController::Base)
         ActionController::Base.logger = SemanticLogger::Logger.new(ActionController)
       end
+      if defined?(ActiveResource::Base)
+        ActiveResource::Base.logger = SemanticLogger::Logger.new(ActiveResource)
+      end
+
       SemanticLogger::Logger.logger.info "SemanticLogger initialized"
     end
 
