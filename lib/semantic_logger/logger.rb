@@ -251,6 +251,33 @@ module SemanticLogger
       Queue.new
     end
 
+    # Struct Log
+    #
+    # level
+    #   Log level of the supplied log call
+    #   :trace, :debug, :info, :warn, :error, :fatal
+    #
+    # thread_name
+    #   Name of the thread in which the logging call was called
+    #
+    # name
+    #   Class name supplied to the logging instance
+    #
+    # message
+    #   Text message to be logged
+    #
+    # payload
+    #   Optional Hash or Ruby Exception object to be logged
+    #
+    # time
+    #   The time at which the log entry was created
+    #
+    # duration
+    #   The time taken to complete a benchmark call
+    #
+    # tags
+    #   Any tags active on the thread when the log call was made
+    #
     Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags)
 
     # For JRuby include the Thread name rather than its id

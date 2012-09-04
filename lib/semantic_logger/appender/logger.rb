@@ -8,6 +8,7 @@ module SemanticLogger
   module Appender
     class Logger
       attr_reader :logger
+      attr_accessor :formatter
 
       # Create a Logger or Rails Logger appender instance
       #

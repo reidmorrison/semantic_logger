@@ -1,4 +1,4 @@
-# Temp until in Gemfile
+# Include sync_attr dependency
 require 'sync_attr'
 
 module SemanticLogger

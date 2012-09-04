@@ -21,6 +21,7 @@ task :gem  do |t|
     spec.description = "Machine readable document oriented logging with support for MongoDB and text files"
     spec.files       = FileList["./**/*"].exclude('*.gem', 'nbproject').map{|f| f.sub(/^\.\//, '')}
     spec.has_rdoc    = true
+    spec.add_dependency 'sync_attr'
     spec.add_development_dependency 'shoulda'
   end
   Gem::Builder.new(gemspec).build

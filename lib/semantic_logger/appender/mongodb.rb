@@ -171,6 +171,16 @@ module SemanticLogger
         message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, '').strip
       end
 
+      # Default host_name to use if none is supplied to the appenders initializer
+      def self.host_name
+        @@host_name ||= Socket.gethostname.split('.').first
+      end
+
+      # Override the default host_name
+      def self.host_name=(host_name)
+        @@host_name = host_name
+      end
+
       # Log the message to MongoDB
       def log(log)
         # Insert log entry into Mongo
