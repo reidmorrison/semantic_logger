@@ -109,8 +109,11 @@ module SemanticLogger
       # * Document updates cannot make them any larger
       # * Documents are always stored in insertion order
       #   * A find will always return the documents in their insertion order
+      #
+      # Creates an index based on tags to support faster lookups
       def create_indexes
         db.create_collection(collection_name, {:capped => true, :size => @collection_size, :max => @collection_max})
+        collection.ensure_index('tags')
       end
 
       # Purge all data from the capped collection by dropping the collection

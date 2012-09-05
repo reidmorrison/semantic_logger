@@ -33,7 +33,7 @@ class LoggerTest < Test::Unit::TestCase
       SemanticLogger::Logger::LEVELS.each do |level|
         should "log #{level} info" do
           @logger.send(level, 'hello world', @hash) { "Calculations" }
-          @logger.flush
+          SemanticLogger::Logger.flush
           assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- hello world -- Calculations -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}/, @mock_logger.message
         end
       end
@@ -42,7 +42,7 @@ class LoggerTest < Test::Unit::TestCase
         should "add tags to log entries" do
           @logger.with_tags('12345', 'DJHSFK') do
             @logger.info('Hello world')
-            @logger.flush
+            SemanticLogger::Logger.flush
             assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world/, @mock_logger.message
           end
         end
@@ -51,7 +51,7 @@ class LoggerTest < Test::Unit::TestCase
           @logger.with_tags('First Level', 'tags') do
             @logger.with_tags('Second Level') do
               @logger.info('Hello world')
-              @logger.flush
+              SemanticLogger::Logger.flush
               assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \[First Level\] \[tags\] \[Second Level\] LoggerTest -- Hello world/, @mock_logger.message
             end
           end
@@ -61,7 +61,7 @@ class LoggerTest < Test::Unit::TestCase
           @logger.with_payload(:tracking_number => '123456') do
             @logger.with_payload(:more => 'data', :even => 2) do
               @logger.info('Hello world')
-              @logger.flush
+              SemanticLogger::Logger.flush
               assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- Hello world -- \{:more=>\"data\", :even=>2, :tracking_number=>\"123456\"\}/, @mock_logger.message
             end
           end

@@ -178,10 +178,19 @@ This will result in the log output identitying the log entry as from the Externa
 
     2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] ExternalSupplier -- Calling external interface (5.2ms)
 
+#### Tagged Logging
 
-### Future
+    logger.with_tags(tracking_number) do
+      logger.debug("Hello World")
+      # ...
+    end
 
-- Web Interface to view and search log information stored in MongoDB
+#### Payload injected logging
+
+    logger.with_payload(:user => 'Jack') do
+      logger.debug("Hello World")
+      # ...
+    end
 
 ### Configuration
 
@@ -221,7 +230,7 @@ config/environments/production.rb inside the Application.configure block
 
       # Besides logging to the standard Rails logger, also log to MongoDB
       config.semantic_logger.appenders << SemanticLogger::Appender::MongoDB.new(
-        :db              => Cache::Work.db,
+        :db              => db,
         :collection_size => 25.gigabytes
       )
     end
@@ -375,7 +384,15 @@ specific.
 
 ### Install
 
-  gem install semantic-logger
+    gem install semantic-logger
+
+To log to MongoDB
+
+    gem install mongo
+
+### Future
+
+- Web Interface to view and search log information stored in MongoDB
 
 Development
 -----------

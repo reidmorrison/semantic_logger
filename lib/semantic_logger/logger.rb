@@ -12,16 +12,23 @@
 #   log = Logger.new(STDOUT)
 #   log.level = Logger::DEBUG
 #
-#   SemanticLogger::Manager.register_appender(SemanticLogger::Appender::Logger.new(log))
+#   SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(log)
 #
 #   logger = SemanticLogger::Logger.new("my.app.class")
 #   logger.debug("Login time", :user => 'Joe', :duration => 100, :ip_address=>'127.0.0.1')
 #
-# # Now log to the Logger above as well as Mongo at the same time
+#   # Now log to the Logger above as well as MongoDB at the same time
 #
-#   SemanticLogger::Manager.register_appender(SemanticLogger::Appender::Mongo.new(cfg))
+#   db = Mongo::Connection.new['production_logging']
+#
+#   SemanticLogger::Logger.appenders << SemanticLogger::Appender::MongoDB.new(
+#     :db              => db,
+#     :collection_size => 25.gigabytes
+#   )
 # ...
+#   # This will be logged to both the Ruby Logger and MongoDB
 #   logger.debug("Login time", :user => 'Mary', :duration => 230, :ip_address=>'192.168.0.1')
+#
 module SemanticLogger
   class Logger
     include SyncAttr
@@ -211,12 +218,6 @@ module SemanticLogger
     # look into speeding up the appenders themselves
     def self.cache_count
       queue.size
-    end
-
-    # Flush all pending log entry disk, database, etc.
-    #  All pending log writes are completed and each appender is flushed in turn
-    def flush
-      self.class.flush
     end
 
     # Flush all pending log entry disk, database, etc.
