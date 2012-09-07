@@ -62,7 +62,7 @@ class LoggerTest < Test::Unit::TestCase
             @logger.with_payload(:more => 'data', :even => 2) do
               @logger.info('Hello world')
               SemanticLogger::Logger.flush
-              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- Hello world -- \{:more=>\"data\", :even=>2, :tracking_number=>\"123456\"\}/, @mock_logger.message
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- Hello world -- \{:even=>2, :more=>\"data\", :tracking_number=>\"123456\"\}/, @mock_logger.message
             end
           end
         end

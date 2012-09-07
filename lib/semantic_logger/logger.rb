@@ -134,15 +134,16 @@ module SemanticLogger
             start = Time.now
             begin
               result = yield
+              end_time = Time.now
               # Add scoped payload
               if self.payload
                 payload = payload.nil? ? self.payload : self.payload.merge(payload)
               end
-              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, start, 1000.0 * (Time.now - start), tags)
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, 1000.0 * (end_time - start), tags)
               result
             rescue Exception => exc
               # TODO Need to be able to have both an exception and a Payload
-              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, exc, start, 1000.0 * (Time.now - start), tags)
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, exc, Time.now, 1000.0 * (Time.now - start), tags)
               raise exc
             end
           else
