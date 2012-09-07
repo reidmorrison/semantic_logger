@@ -138,11 +138,11 @@ module SemanticLogger
               if self.payload
                 payload = payload.nil? ? self.payload : self.payload.merge(payload)
               end
-              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, start, Time.now - start, tags)
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, payload, start, 1000.0 * (Time.now - start), tags)
               result
             rescue Exception => exc
               # TODO Need to be able to have both an exception and a Payload
-              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, exc, start, Time.now - start, tags)
+              self.class.queue << Log.new(:#{level}, self.class.thread_name, name, message, exc, start, 1000.0 * (Time.now - start), tags)
               raise exc
             end
           else
@@ -230,10 +230,13 @@ module SemanticLogger
       reply_queue.pop
     end
 
-    # Internal logger for SymanticLogger
+    # Internal logger for SemanticLogger
     #   For example when an appender is not working etc..
     #   By default logs to STDERR, replace with another Ruby logger or Rails
     #   logger, but never to SemanticLogger itself
+    #
+    # Warning: Do not use this logger directly it is intended for internal logging
+    #          within Semantic Logger itself
     sync_cattr_accessor :logger do
       require 'logger'
       l = ::Logger.new(STDOUT)
