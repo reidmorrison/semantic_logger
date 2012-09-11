@@ -59,9 +59,10 @@ class LoggerTest < Test::Unit::TestCase
 
         should "add payload to log entries" do
           @logger.with_payload(:tracking_number => '123456') do
-            @logger.with_payload(:more => 'data', :even => 2) do
+            @logger.with_payload(:even => 2, :more => 'data') do
               @logger.info('Hello world')
               SemanticLogger::Logger.flush
+              # TODO make test ignore order of Hash elements
               assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- Hello world -- \{:even=>2, :more=>\"data\", :tracking_number=>\"123456\"\}/, @mock_logger.message
             end
           end

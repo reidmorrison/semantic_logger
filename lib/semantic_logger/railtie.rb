@@ -26,17 +26,42 @@ module SemanticLogger #:nodoc:
     initializer :initialize_semantic_logger, :before => :initialize_logger do
       config = Rails.application.config
 
-      logger = Rails.logger || config.logger || begin
-        path = config.paths.log.to_a.first
-        logger = ActiveSupport::BufferedLogger.new(path)
-        # Translate trace to debug level for BufferedLogger
-        level = config.log_level == :trace ? :debug : config.log_level
-        logger.level = ActiveSupport::BufferedLogger.const_get(level.to_s.upcase)
-        logger.auto_flushing = false if Rails.env.production?
-        logger
-      rescue StandardError => e
-        logger = ActiveSupport::BufferedLogger.new(STDERR)
-        logger.level = ActiveSupport::BufferedLogger::WARN
+      # Set the default log level based on the Rails config
+      SemanticLogger::Logger.level = config.log_level
+
+      # Also log to any pre-existing loggers with SymanticLogger
+      if existing_logger = (Rails.logger || config.logger)
+        # Add existing Logger to the list of appenders
+        SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(existing_logger)
+      end
+
+      Rails.logger = config.logger = begin
+        # First check for Rails 3.2 path, then fallback to pre-3.2
+        path = ((config.paths.log.to_a rescue nil) || config.paths['log']).first
+        unless File.exist? File.dirname path
+          FileUtils.mkdir_p File.dirname path
+        end
+
+        # First set the internal logger in case something goes wrong
+        # with an appender
+        SemanticLogger::Logger.logger = begin
+          l = ::Logger.new(path)
+          l.level = ::Logger.const_get(config.log_level.to_s.upcase)
+          l
+        end
+
+        # Add the log file to the list of appenders
+        SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(path)
+
+        #logger = ActiveSupport::TaggedLogging.new(logger) if defined?(ActiveSupport::TaggedLogging)
+
+        SemanticLogger::Logger.new(Rails)
+      rescue StandardError
+        SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDERR)
+
+        logger = SemanticLogger::Logger.new(Rails)
+        logger.level = :warn
+        #logger = ActiveSupport::TaggedLogging.new(logger) if defined?(ActiveSupport::TaggedLogging)
         logger.warn(
           "Rails Error: Unable to access log file. Please ensure that #{path} exists and is chmod 0666. " +
             "The log level has been raised to WARN and the output directed to STDERR until the problem is fixed."
@@ -44,18 +69,8 @@ module SemanticLogger #:nodoc:
         logger
       end
 
-      # First set the internal logger to the default file one used by Rails in case something goes wrong
-      # with an appender
-      SemanticLogger::Logger.logger = logger
-
-      # Add the Rails Logger to the list of appenders
-      SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(logger)
-
-      # Set the default log level based on the Rails config
-      SemanticLogger::Logger.default_level = config.log_level
-
+      # #TODO Should these be moved?
       # Replace the default Rails loggers
-      Rails.logger = config.logger = SemanticLogger::Logger.new(Rails)
       if defined?(ActiveRecord::Base)
         ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
       end

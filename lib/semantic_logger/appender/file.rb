@@ -28,11 +28,9 @@ module SemanticLogger
           filename
         else
           @log = open(filename, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
-          # Force all log entries to log immediately without buffering
-          # #TODO Should this be configurable since it is not necessary, but
-          # is convenient in a development environment when we want to see log
-          # entries immediately
+          # Force all log entries to write immediately without buffering
           @log.sync = true
+          @log.set_encoding(Encoding::BINARY) if @log.respond_to?(:set_encoding)
           @log
         end
 

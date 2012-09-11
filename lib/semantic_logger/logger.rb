@@ -29,6 +29,7 @@
 #   # This will be logged to both the Ruby Logger and MongoDB
 #   logger.debug("Login time", :user => 'Mary', :duration => 230, :ip_address=>'192.168.0.1')
 #
+require 'logger'
 module SemanticLogger
   class Logger
     include SyncAttr
@@ -47,18 +48,21 @@ module SemanticLogger
       []
     end
 
-    # Allow for setting the default log level
-    def self.default_level=(default_level)
-      @@default_level = default_level
+    # Allow for setting the global default log level
+    # This change only applies to _new_ loggers, existing logger levels
+    # will not be changed in any way
+    def self.level=(level)
+      @@level = level
     end
 
-    def self.default_level
-      @@default_level
+    # Returns the global default log level for new Logger instances
+    def self.level
+      @@level
     end
 
     attr_reader :name, :level
 
-    @@default_level = :info
+    @@level = :info
 
     # Returns a Logger instance
     #
@@ -74,7 +78,7 @@ module SemanticLogger
     #    :level   The initial log level to start with for this logger instance
     def initialize(klass, options={})
       @name = klass.is_a?(String) ? klass : klass.name
-      set_level(options[:level] || self.class.default_level)
+      set_level(options[:level] || self.class.level)
     end
 
     # Set the logging level
@@ -239,8 +243,7 @@ module SemanticLogger
     # Warning: Do not use this logger directly it is intended for internal logging
     #          within Semantic Logger itself
     sync_cattr_accessor :logger do
-      require 'logger'
-      l = ::Logger.new(STDOUT)
+      l = ::Logger.new(STDERR)
       l.level = ::Logger::INFO
       l
     end
