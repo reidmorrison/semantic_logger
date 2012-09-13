@@ -69,17 +69,10 @@ module SemanticLogger #:nodoc:
         logger
       end
 
-      # #TODO Should these be moved?
       # Replace the default Rails loggers
-      if defined?(ActiveRecord::Base)
-        ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
-      end
-      if defined?(ActionController::Base)
-        ActionController::Base.logger = SemanticLogger::Logger.new(ActionController)
-      end
-      if defined?(ActiveResource::Base)
-        ActiveResource::Base.logger = SemanticLogger::Logger.new(ActiveResource)
-      end
+      ActiveSupport.on_load(:active_record)     { self.logger = SemanticLogger::Logger.new('ActiveRecord') }
+      ActiveSupport.on_load(:action_controller) { self.logger = SemanticLogger::Logger.new('ActionController') }
+      ActiveSupport.on_load(:action_mailer)     { self.logger = SemanticLogger::Logger.new('ActionMailer') }
 
       SemanticLogger::Logger.logger.info "SemanticLogger initialized"
     end
