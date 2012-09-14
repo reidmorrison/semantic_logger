@@ -29,12 +29,8 @@ module SemanticLogger #:nodoc:
       # Set the default log level based on the Rails config
       SemanticLogger::Logger.level = config.log_level
 
-      # Also log to any pre-existing loggers with SymanticLogger
-      if existing_logger = (Rails.logger || config.logger)
-        # Add existing Logger to the list of appenders
-        SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(existing_logger)
-      end
-
+      # Existing loggers are ignored because servers like trinidad supply their
+      # own file loggers which would result in duplicate logging to the same log file
       Rails.logger = config.logger = begin
         # First check for Rails 3.2 path, then fallback to pre-3.2
         path = ((config.paths.log.to_a rescue nil) || config.paths['log']).first
