@@ -295,7 +295,7 @@ module SemanticLogger
       end
     else
       def self.thread_name
-        Thread.object_id
+        Thread.current.object_id
       end
     end
 
