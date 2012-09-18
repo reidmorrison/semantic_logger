@@ -70,6 +70,20 @@ class LoggerTest < Test::Unit::TestCase
           end
         end
 
+        context "Ruby Logger" do
+          # Ensure that any log level can be logged
+          Logger::Severity.constants.each do |level|
+            should "log Ruby logger #{level} info" do
+              @logger.level = Logger::Severity.const_get(level)
+              if level == 'UNKNOWN'
+                assert_equal Logger::Severity.const_get('ERROR')+1, @logger.send(:level_index)
+              else
+                assert_equal Logger::Severity.const_get(level)+1, @logger.send(:level_index)
+              end
+            end
+          end
+        end
+
       end
     end
 

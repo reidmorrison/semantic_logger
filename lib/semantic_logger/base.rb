@@ -265,14 +265,16 @@ module SemanticLogger
     # Internal method to return the log level as an internal index
     # Also supports mapping the ::Logger levels to SemanticLogger levels
     def self.map_level_to_index(level)
-      index = if level.is_a?(Integer)
+      index = if level.is_a?(Integer) && defined?(::Logger::Severity)
         # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
         @@map_levels ||= begin
           levels = []
           ::Logger::Severity.constants.each do |constant|
             levels[::Logger::Severity.const_get(constant)] = LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
           end
-        end [level] if defined?(::Logger::Severity)
+          levels
+        end
+        @@map_levels[level]
       elsif level.is_a?(String)
         level = level.downcase.to_sym
         LEVELS.index(level)
