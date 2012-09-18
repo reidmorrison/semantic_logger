@@ -16,13 +16,14 @@ class LoggerTest < Test::Unit::TestCase
       setup do
         # Use a mock logger that just keeps the last logged entry in an instance variable
         @mock_logger = MockLogger.new
-        @appender = SemanticLogger::Appender::Logger.new(@mock_logger)
+        @appender = SemanticLogger::Appender::Wrapper.new(@mock_logger)
         SemanticLogger::Logger.appenders << @appender
 
         # Use this test's class name as the application name in the log output
-        @logger = SemanticLogger::Logger.new('LoggerTest', :level => :trace)
+        @logger = SemanticLogger::Logger.new('LoggerTest', :trace)
 
         @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
+        @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
       end
 
       teardown do
@@ -30,11 +31,11 @@ class LoggerTest < Test::Unit::TestCase
       end
 
       # Ensure that any log level can be logged
-      SemanticLogger::Logger::LEVELS.each do |level|
+      SemanticLogger::LEVELS.each do |level|
         should "log #{level} info" do
           @logger.send(level, 'hello world', @hash) { "Calculations" }
           SemanticLogger::Logger.flush
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- hello world -- Calculations -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}/, @mock_logger.message
+          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message
         end
       end
 
@@ -58,12 +59,13 @@ class LoggerTest < Test::Unit::TestCase
         end
 
         should "add payload to log entries" do
+          hash = {:tracking_number=>"123456", :even=>2, :more=>"data"}
+          hash_str = hash.inspect.sub("{", "\\{").sub("}", "\\}")
           @logger.with_payload(:tracking_number => '123456') do
             @logger.with_payload(:even => 2, :more => 'data') do
               @logger.info('Hello world')
               SemanticLogger::Logger.flush
-              # TODO make test ignore order of Hash elements
-              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- Hello world -- \{:even=>2, :more=>\"data\", :tracking_number=>\"123456\"\}/, @mock_logger.message
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
             end
           end
         end

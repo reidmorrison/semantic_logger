@@ -98,7 +98,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
 
     context "for each log level" do
       # Ensure that any log level can be logged
-      SemanticLogger::Logger::LEVELS.each do |level|
+      SemanticLogger::LEVELS.each do |level|
         should "log #{level} information" do
           @appender.log SemanticLogger::Logger::Log.new(level, 'thread', 'my_class', 'hello world -- Calculations', @hash, @time)
           document = @appender.collection.find_one

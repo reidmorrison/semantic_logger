@@ -27,7 +27,7 @@ module SemanticLogger #:nodoc:
       config = Rails.application.config
 
       # Set the default log level based on the Rails config
-      SemanticLogger::Logger.level = config.log_level
+      SemanticLogger::Logger.default_level = config.log_level
 
       # Existing loggers are ignored because servers like trinidad supply their
       # own file loggers which would result in duplicate logging to the same log file
@@ -38,26 +38,24 @@ module SemanticLogger #:nodoc:
           FileUtils.mkdir_p File.dirname path
         end
 
-        # First set the internal logger in case something goes wrong
-        # with an appender
-        SemanticLogger::Logger.logger = begin
-          l = ::Logger.new(path)
-          l.level = ::Logger.const_get(config.log_level.to_s.upcase)
-          l
-        end
-
         # Add the log file to the list of appenders
-        SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(path)
+        file_appender = SemanticLogger::Appender::File.new(path)
 
-        #logger = ActiveSupport::TaggedLogging.new(logger) if defined?(ActiveSupport::TaggedLogging)
-
+        # Set internal logger to log to file only, in case another appender
+        # experiences logging problems
+        SemanticLogger::Logger.logger = file_appender
+        SemanticLogger::Logger.appenders << file_appender
+        
         SemanticLogger::Logger.new(Rails)
       rescue StandardError
-        SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDERR)
+        # If not able to log to file, log to standard error with warning level only
+        SemanticLogger::Logger.default_level = :warn
+
+        file_appender = SemanticLogger::Appender::File.new(STDERR)
+        SemanticLogger::Logger.logger = file_appender
+        SemanticLogger::Logger.appenders << file_appender
 
         logger = SemanticLogger::Logger.new(Rails)
-        logger.level = :warn
-        #logger = ActiveSupport::TaggedLogging.new(logger) if defined?(ActiveSupport::TaggedLogging)
         logger.warn(
           "Rails Error: Unable to access log file. Please ensure that #{path} exists and is chmod 0666. " +
             "The log level has been raised to WARN and the output directed to STDERR until the problem is fixed."

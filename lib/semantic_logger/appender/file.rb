@@ -4,13 +4,15 @@
 #
 module SemanticLogger
   module Appender
-    class File
-      attr_accessor :formatter
+    class File < SemanticLogger::Base
 
       # Create a File Logger appender instance
       #
       # Example
       #    require 'semantic_logger'
+      #
+      #    # Enable trace level logging
+      #    SemanticLogger::Logger.level = :info
       #
       #    # Log to screen
       #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDOUT)
@@ -21,7 +23,23 @@ module SemanticLogger
       #    logger =  SemanticLogger::Logger.new('test')
       #    logger.info 'Hello World'
       #
-      def initialize(filename, &block)
+      # Example 2. To log all levels to file and only :info and above to screen:
+      #
+      #    require 'semantic_logger'
+      #
+      #    # Enable trace level logging
+      #    SemanticLogger::Logger.level = :trace
+      #
+      #    # Log to screen but only display :info and above
+      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDOUT, :info)
+      #
+      #    # And log to a file at the same time, including all :trace level data
+      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('application.log')
+      #
+      #    logger =  SemanticLogger::Logger.new('test')
+      #    logger.info 'Hello World'
+      #
+      def initialize(filename, level=nil, &block)
         raise "logger cannot be null when initializing the SemanticLogging::Appender::Logger" unless filename
         @filename = filename
         @log = if filename.respond_to?(:write) and filename.respond_to?(:close)
@@ -29,38 +47,14 @@ module SemanticLogger
         else
           @log = open(filename, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
           # Force all log entries to write immediately without buffering
+          # Allows multiple processes to write to the same log file simultaneously
           @log.sync = true
           @log.set_encoding(Encoding::BINARY) if @log.respond_to?(:set_encoding)
           @log
         end
 
-        # Set the formatter to the supplied block
-        @formatter = block || self.default_formatter
-      end
-
-      # Default log formatter
-      #  Replace this formatter by supplying a Block to the initializer
-      #  Generates logs of the form:
-      #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World\n
-      def default_formatter
-        Proc.new do |log|
-          message = log.message.to_s
-          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
-
-          if log.payload
-            if log.payload.is_a?(Exception)
-              exception = log.payload
-              message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-            else
-              message << " -- " << log.payload.inspect
-            end
-          end
-
-          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
-          str << " (#{'%.1f' % log.duration}ms)" if log.duration
-          str << "\n"
-          str
-        end
+        # Set the log level and formatter if supplied
+        super(level, &block)
       end
 
       # Pass log calls to the underlying Rails, log4j or Ruby logger
@@ -69,7 +63,8 @@ module SemanticLogger
       def log(log)
         # Since only one appender thread will be writing to the file at a time
         # it is not necessary to protect access to the file with a semaphore
-        @log.write(@formatter.call(log))
+        # Allow this logger to filter out log levels lower than it's own
+        @log.write(@formatter.call(log) << "\n") if level_index <= (log.level_index || 0)
       end
 
       # Flush all pending logs to disk.

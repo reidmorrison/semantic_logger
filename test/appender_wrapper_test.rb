@@ -8,15 +8,16 @@ require 'logger'
 require 'semantic_logger'
 require 'test/mock_logger'
 
-# Unit Test for SemanticLogger::Appender::Logger
+# Unit Test for SemanticLogger::Appender::Wrapper
 #
-class AppenderLoggerTest < Test::Unit::TestCase
-  context SemanticLogger::Appender::Logger do
+class AppenderWrapperTest < Test::Unit::TestCase
+  context SemanticLogger::Appender::Wrapper do
     setup do
       @time = Time.parse("2012-08-02 09:48:32.482")
       @mock_logger = MockLogger.new
-      @appender = SemanticLogger::Appender::Logger.new(@mock_logger)
+      @appender = SemanticLogger::Appender::Wrapper.new(@mock_logger)
       @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
+      @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
     end
 
     context "format logs into text form" do
@@ -55,7 +56,7 @@ class AppenderLoggerTest < Test::Unit::TestCase
         log.message = 'hello world'
         log.payload = @hash
         @appender.log(log)
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}/, @mock_logger.message
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world -- #{@hash_str}/, @mock_logger.message
       end
     end
 
@@ -63,8 +64,8 @@ class AppenderLoggerTest < Test::Unit::TestCase
       # Ensure that any log level can be logged
       Logger::Severity.constants.each do |level|
         should "log #{level.downcase.to_sym} info" do
-          @appender.log SemanticLogger::Logger::Log.new(level.downcase.to_sym, 'thread', 'class', 'hello world -- Calculations', @hash, Time.now)
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:thread\] class -- hello world -- Calculations -- \{:session_id=>\"HSSKLEU@JDK767\", :tracking_number=>12345\}/, @mock_logger.message
+          @appender.log SemanticLogger::Logger::Log.new(level.downcase.to_sym, 'thread', 'class', 'hello world', @hash, Time.now)
+          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:thread\] class -- hello world -- #{@hash_str}/, @mock_logger.message
         end
       end
     end

@@ -1,3 +1,4 @@
+require 'socket'
 module SemanticLogger
   module Appender
     # The Mongo Appender for the SemanticLogger
@@ -41,9 +42,9 @@ module SemanticLogger
     #   params: Hash
     #
     #   tracking_number: 'user defined tracking number'
-    class MongoDB
+    class MongoDB < SemanticLogger::Base
       attr_reader :db, :collection_name
-      attr_accessor :formatter, :host_name, :safe, :application
+      attr_accessor :host_name, :safe, :application
 
       # Create a MongoDB Appender instance
       #
@@ -84,6 +85,9 @@ module SemanticLogger
       #  :collection_max [Integer]
       #    Maximum number of log entries that the capped collection will hold
       #
+      #  :level [Symbol]
+      #    Only allow log entries of this level or higher to be written to MongoDB
+      #
       def initialize(params={}, &block)
         @db              = params[:db] || raise('Missing mandatory parameter :db')
         @collection_name = params[:collection_name] || 'semantic_logger'
@@ -95,11 +99,11 @@ module SemanticLogger
         @collection_size = params[:collection_size] || 1024**3
         @collection_max  = params[:collection_max]
 
-        # Set the formatter to the supplied block
-        @formatter       = block || self.default_formatter
-
         # Create the collection and necessary indexes
         create_indexes
+
+        # Set the log level and formatter
+        super(params[:level], &block)
       end
 
       # Create the required capped collection
@@ -189,8 +193,7 @@ module SemanticLogger
         # Insert log entry into Mongo
         # Use safe=>false so that we do not wait for it to be written to disk, or
         # for the response from the MongoDB server
-        document = formatter.call(log)
-        collection.insert(document, :safe=>safe)
+        collection.insert(formatter.call(log), :safe=>safe) if level_index <= (log.level_index || 0)
       end
 
     end
