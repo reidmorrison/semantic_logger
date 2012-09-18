@@ -93,6 +93,31 @@ module SemanticLogger
       reply_queue.pop
     end
 
+    @@lag_check_interval = 1000
+    @@lag_threshold_s = 30
+
+    # Returns the check_interval which is the number of messages between checks
+    # to determine if the appender thread is falling behind
+    def self.lag_check_interval
+      @@lag_check_interval
+    end
+
+    # Set the check_interval which is the number of messages between checks
+    # to determine if the appender thread is falling behind
+    def self.lag_check_interval=(lag_check_interval)
+      @@lag_check_interval = lag_check_interval
+    end
+
+    # Returns the amount of time in seconds
+    # to determine if the appender thread is falling behind
+    def self.lag_threshold_s
+      @@lag_threshold_s
+    end
+
+    def self.time_threshold_s=(time_threshold_s)
+      @@lag_threshold_s = time_threshold_s
+    end
+
     ############################################################################
     protected
 
@@ -128,9 +153,18 @@ module SemanticLogger
       @@appender_thread = Thread.new do
         begin
           logger.debug "SemanticLogger::Logger Appender thread started"
+          count = 0
           while message=queue.pop
             if message.is_a? Log
               appenders.each {|appender| appender.log(message) }
+              count += 1
+              # Check every few log messages whether this appender thread is falling behind
+              if count > lag_check_interval
+                if (diff = Time.now - message.time) > lag_threshold_s
+                  logger.warn "SemanticLogger::Logger Appender thread has fallen behind by #{diff} seconds with #{cache_count} messages queued up. Consider reducing the log level or changing the appenders"
+                end
+                count = 0
+              end
             else
               case message[:command]
               when :shutdown

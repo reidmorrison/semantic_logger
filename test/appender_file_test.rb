@@ -48,5 +48,32 @@ class AppenderFileTest < Test::Unit::TestCase
       end
     end
 
+    context "custom formatter" do
+      setup do
+        @appender = SemanticLogger::Appender::File.new(@io) do |log|
+          message = log.message.to_s
+          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+
+          if log.payload
+            if log.payload.is_a?(Exception)
+              exception = log.payload
+              message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+            else
+              message << " -- " << log.payload.inspect
+            end
+          end
+
+          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
+          str << " (#{'%.1f' % log.duration}ms)" if log.duration
+          str
+        end
+      end
+
+      should "format using formatter" do
+        @appender.debug
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ DEBUG \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- \n/, @io.string
+      end
+    end
+
   end
 end

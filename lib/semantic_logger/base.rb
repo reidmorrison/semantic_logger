@@ -37,7 +37,7 @@ module SemanticLogger
           end
         end
 
-        str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
+        str = "#{SemanticLogger::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
         str << " (#{'%.1f' % log.duration}ms)" if log.duration
         str
       end
@@ -240,12 +240,25 @@ module SemanticLogger
 
     # For JRuby include the Thread name rather than its id
     if defined? Java
+      # Name of the current Thread
       def self.thread_name
         Java::java.lang::Thread.current_thread.name
+      end
+
+      # Return the Time as a formatted string
+      # JRuby only supports time in ms
+      def self.formatted_time(time)
+        "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (time.usec/1000)}"
       end
     else
       def self.thread_name
         Thread.current.object_id
+      end
+
+      # Return the Time as a formatted string
+      # Ruby MRI supports micro seconds
+      def self.formatted_time(time)
+        "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%06d" % (time.usec)}"
       end
     end
 

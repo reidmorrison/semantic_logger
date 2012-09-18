@@ -285,7 +285,7 @@ For example to replace the Rails or Ruby text log formatter, in the environment 
             end
           end
 
-          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
+          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%06d" % log.time.usec} #{"%-05s" % log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
           str << " (#{'%.1f' % log.duration}ms)" if log.duration
           str
       end
