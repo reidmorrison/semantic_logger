@@ -63,13 +63,17 @@ module SemanticLogger
     #   logger = SemanticLogger::Logger.new('MyClass')
     #
     # Parameters:
-    #  application: A class, module or a string with the application/class name
-    #               to be used in the logger
-    #  options:
-    #    :level   The initial log level to start with for this logger instance
-    def initialize(klass, level=self.class.default_level)
+    #  application
+    #    A class, module or a string with the application/class name
+    #    to be used in the logger
+    #
+    #  level
+    #    The initial log level to start with for this logger instance
+    #    Default: SemanticLogger::Logger.default_level
+    #
+    def initialize(klass, level=nil)
       @name = klass.is_a?(String) ? klass : klass.name
-      self.level = level
+      self.level = level || self.class.default_level
     end
 
     # Returns [Integer] the number of log entries that have not been written

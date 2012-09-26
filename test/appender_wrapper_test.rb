@@ -13,7 +13,7 @@ require 'test/mock_logger'
 class AppenderWrapperTest < Test::Unit::TestCase
   context SemanticLogger::Appender::Wrapper do
     setup do
-      @time = Time.parse("2012-08-02 09:48:32.482")
+      @time = Time.new
       @mock_logger = MockLogger.new
       @appender = SemanticLogger::Appender::Wrapper.new(@mock_logger)
       @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }

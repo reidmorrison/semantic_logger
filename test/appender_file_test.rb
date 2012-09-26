@@ -7,13 +7,14 @@ require 'shoulda'
 require 'logger'
 require 'semantic_logger'
 require 'test/mock_logger'
+require 'stringio'
 
 # Unit Test for SemanticLogger::Appender::File
 #
 class AppenderFileTest < Test::Unit::TestCase
   context SemanticLogger::Appender::File do
     setup do
-      @time = Time.parse("2012-08-02 09:48:32.482")
+      @time = Time.new
       @io = StringIO.new
       @appender = SemanticLogger::Appender::File.new(@io)
       @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
