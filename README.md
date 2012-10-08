@@ -1,7 +1,10 @@
-semantic-logger-ruby
-====================
+semantic_logger
+===============
 
-* http://github.com/ClarityServices/semantic-logger-ruby
+Ruby and Rails Logger enhanced with semantic capabilities, high performance, standardized
+logging with multiple appenders
+
+* http://github.com/ClarityServices/semantic_logger
 
 ### Introduction
 
@@ -384,7 +387,7 @@ specific.
 
 ### Install
 
-    gem install semantic-logger
+    gem install semantic_logger
 
 To log to MongoDB
 
@@ -401,9 +404,9 @@ Want to contribute to Semantic Logger?
 
 First clone the repo and run the tests:
 
-    git clone git://github.com/ClarityServices/semantic-logger.git
-    cd semantic-logger
-    jruby -S rake test
+    git clone git://github.com/ClarityServices/semantic_logger.git
+    cd semantic_logger
+    ruby -S rake test
 
 Feel free to ping the mailing list with any issues and we'll try to resolve it.
 
@@ -412,20 +415,19 @@ Contributing
 
 Once you've made your great commits:
 
-1. [Fork](http://help.github.com/forking/) semantic-logger
+1. [Fork](http://help.github.com/forking/) semantic_logger
 2. Create a topic branch - `git checkout -b my_branch`
 3. Push to your branch - `git push origin my_branch`
-4. Create an [Issue](http://github.com/ClarityServices/semantic-logger/issues) with a link to your branch
+4. Create an [Issue](http://github.com/ClarityServices/semantic_logger/issues) with a link to your branch
 5. That's it!
 
 Meta
 ----
 
-* Code: `git clone git://github.com/ClarityServices/semantic-logger.git`
-* Home: <https://github.com/ClarityServices/semantic-logger>
-* Docs: TODO <http://ClarityServices.github.com/semantic-logger/>
-* Bugs: <http://github.com/reidmorrison/semantic-logger/issues>
-* Gems: <http://rubygems.org/gems/semantic-logger>
+* Code: `git clone git://github.com/ClarityServices/semantic_logger.git`
+* Home: <https://github.com/ClarityServices/semantic_logger>
+* Bugs: <http://github.com/reidmorrison/semantic_logger/issues>
+* Gems: <http://rubygems.org/gems/semantic_logger>
 
 This project uses [Semantic Versioning](http://semver.org/).
 
