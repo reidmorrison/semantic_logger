@@ -137,6 +137,7 @@ of code based on the log level. For example:
 Rails.logger.benchmark_info "Calling external interface" do
   # Code to call external service ...
 end
+```
 
 The following output will be written to file:
 
@@ -219,6 +220,9 @@ It is recommended to include a class specific logger for all major classes that 
 be logging. For Example:
 
 ```ruby
+require 'sync_attr'
+require 'semantic_logger'
+
 class ExternalSupplier
   # Gem sync_attr is a dependency of semantic_logger so is already installed
   include SyncAttr
@@ -239,6 +243,9 @@ end
 This will result in the log output identifying the log entry as from the ExternalSupplier class
 
     2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) ExternalSupplier -- Calling external interface
+
+[SyncAttr](https://github.com/ClarityServices/sync_attr) is a gem that supports
+lazy loading and thread-safe initialization of class attributes
 
 #### Tagged Logging
 
