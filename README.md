@@ -21,7 +21,9 @@ that contain the necessary meta-data.
 
 Example of current calls:
 
-    logger.info("Queried users table in #{duration} ms, with a result code of #{result}")
+```ruby
+logger.info("Queried users table in #{duration} ms, with a result code of #{result}")
+```
 
 For a machine to find all queries for table 'users' that took longer than
 100 ms, would require using a regular expression just to extract the table name
@@ -31,16 +33,20 @@ similar text output.
 
 This can be changed over time to:
 
-    Rails.logger.info("Queried table",
-           :duration => duration,
-           :result   => result,
-           :table    => "users",
-           :action   => "query")
+```ruby
+Rails.logger.info("Queried table",
+  :duration => duration,
+  :result   => result,
+  :table    => "users",
+  :action   => "query")
+```
 
 Using the MongoDB appender, we can easily find all queries for table 'users'
 that took longer than 100 ms:
 
-    db.logs.find({"payload.table":"users", "payload.action":"query", "payload.duration":{$gt:100} })
+```javascript
+db.logs.find({"payload.table":"users", "payload.action":"query", "payload.duration":{$gt:100} })
+```
 
 Since SemanticLogger can call existing Loggers, it does not force end-users
 to have to adopt a Semantic aware adapter. Although, such adapters create
@@ -53,20 +59,26 @@ tremendous value in the problem monitoring and determination processes.
 The Semantic Logger logging API supports the existing logging interface for
 the Rails and Ruby Loggers. For example:
 
-    logger.info("Hello World")
+```ruby
+logger.info("Hello World")
+```
 
 Or to query whether a specific log level is set
 
-    logger.info?
+```ruby
+logger.info?
+```
 
-The following logging methods are all available
+The following logging methods are available
 
-    logger.trace(message, payload) { # optional block }
-    logger.debug(message, payload) { # optional block }
-    logger.info(message, payload) { # optional block }
-    logger.warn(message, payload) { # optional block }
-    logger.error(message, payload) { # optional block }
-    logger.fatal(message, payload) { # optional block }
+```ruby
+trace(message, payload=nil, &block)
+debug(message, payload=nil, &block)
+info(message, payload=nil, &block)
+warn(message, payload=nil, &block)
+error(message, payload=nil, &block)
+fatal(message, payload=nil, &block)
+```
 
 Parameters
 
@@ -79,32 +91,37 @@ Parameters
 
 Examples:
 
-    logger.debug("Calling Supplier")
+```ruby
+logger.debug("Calling Supplier")
 
-    logger.debug("Calling Supplier", :request => 'update', :user => 'Jack')
+logger.debug("Calling Supplier", :request => 'update', :user => 'Jack')
 
-    logger.debug { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
+logger.debug { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
+```
 
 ### Exceptions
 
 The Semantic Logger adds an extra parameter to the existing log methods so that
 a corresponding Exception can be logged in a standard way
 
-    begin
-      # ... Code that can raise an exception
-    rescue Exception => exception
-      logger.error("Oops external call failed", exception)
-      # Re-raise or handle the exception
-      raise exception
-    end
-
+```ruby
+begin
+  # ... Code that can raise an exception
+rescue Exception => exception
+  logger.error("Oops external call failed", exception)
+  # Re-raise or handle the exception
+  raise exception
+end
+```
 
 #### Payload
 
 The Semantic Logger adds an extra parameter to the existing log methods so that
 additional payload can be logged, such as a Hash or a Ruby Exception object.
 
-    logger.info("Oops external call failed", :result => :failed, :reason_code => -10)
+```ruby
+logger.info("Oops external call failed", :result => :failed, :reason_code => -10)
+```
 
 The additional payload is machine readable so that we don't have to write complex
 regular expressions so that a program can analyze log output. With the MongoDB
@@ -116,25 +133,36 @@ is therefore fully searchable
 Another common logging requirement is to measure the time it takes to execute a block
 of code based on the log level. For example:
 
-    Rails.logger.benchmark_info "Calling external interface" do
-      # Code to call external service ...
-    end
+```ruby
+Rails.logger.benchmark_info "Calling external interface" do
+  # Code to call external service ...
+end
 
 The following output will be written to file:
 
-    2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] Rails -- Calling external interface (5.2ms)
+    2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) Rails -- Calling external interface
 
 If an exception is raised during the block the exception is logged
 at the same log level as the benchmark along with the duration and message.
 The exception will flow through to the caller unchanged
 
 ```
-Parameters to benchmark_info, benchmark_debug, etc..
+The following benchmarking methods are available
 
-message
-  The message for this log entry
+```ruby
+benchmark_trace(message, params=nil, &block)
+benchmark_debug(message, params=nil, &block)
+benchmark_info(message, params=nil, &block)
+benchmark_warn(message, params=nil, &block)
+benchmark_error(message, params=nil, &block)
+benchmark_fatal(message, params=nil, &block)
+```
 
-params:
+Parameters
+
+- message: The mandatory text message to log.
+- params:
+```
   :log_exception
     Control whether or how an exception thrown in the block is
     reported by SemanticLogger. Values:
@@ -148,9 +176,10 @@ params:
 
   :min_duration
     Only log if the block takes longer than this duration in ms
+    Default: 0.0
 
   :payload
-    To log a custom payload along with this log entry
+    Optional, either a Ruby Exception object or a Hash
 ```
 
 #### Logging levels
@@ -178,7 +207,9 @@ When Semantic Logger is included on a Rails project it automatically replaces th
 loggers for Rails, ActiveRecord::Base, ActionController::Base, and ActiveResource::Base
 with wrappers that set their Class name. For example in railtie.rb:
 
-      ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
+```ruby
+ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
+```
 
 By replacing their loggers we now get the class name in the text logging output:
 
@@ -187,39 +218,45 @@ By replacing their loggers we now get the class name in the text logging output:
 It is recommended to include a class specific logger for all major classes that will
 be logging. For Example:
 
-    class ExternalSupplier
-      # Gem sync_attr is a dependency of semantic_logger so is already installed
-      include SyncAttr
+```ruby
+class ExternalSupplier
+  # Gem sync_attr is a dependency of semantic_logger so is already installed
+  include SyncAttr
 
-      # Lazy initializes the class logger on it's first call in a thread-safe way
-      sync_cattr_reader :logger do
-        SemanticLogger::Logger.new(self)
-      end
+  # Lazy initializes the class logger on it's first call in a thread-safe way
+  sync_cattr_reader :logger do
+    SemanticLogger::Logger.new(self)
+  end
 
-      def call(params)
-        self.class.logger.benchmark_info "Calling external interface" do
-            # Code to call external service ...
-        end
-      end
+  def call(params)
+    self.class.logger.benchmark_info "Calling external interface" do
+        # Code to call external service ...
     end
+  end
+end
+```
 
-This will result in the log output identitying the log entry as from the ExternalSupplier class
+This will result in the log output identifying the log entry as from the ExternalSupplier class
 
-    2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] ExternalSupplier -- Calling external interface (5.2ms)
+    2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) ExternalSupplier -- Calling external interface
 
 #### Tagged Logging
 
-    logger.with_tags(tracking_number) do
-      logger.debug("Hello World")
-      # ...
-    end
+```ruby
+logger.tagged(tracking_number) do
+  logger.debug("Hello World")
+  # ...
+end
+```
 
 #### Payload injected logging
 
-    logger.with_payload(:user => 'Jack') do
-      logger.debug("Hello World")
-      # ...
-    end
+```ruby
+logger.with_payload(:user => 'Jack') do
+  logger.debug("Hello World")
+  # ...
+end
+```
 
 ### Configuration
 
@@ -231,11 +268,15 @@ ActiveResource::BufferedLogger at the same time.
 
 Add the following line to Gemfile
 
-    gem 'semantic_logger'
+```ruby
+gem 'semantic_logger'
+```
 
 Also add the following line to Gemfile if you want to log to MongoDB
 
-    gem 'mongo'
+```ruby
+gem 'mongo'
+```
 
 Install required gems with bundler
 
@@ -248,21 +289,25 @@ By default Semantic Logger will detect the log level from Rails. To set the
 log level explicitly, add the following line to
 config/environments/production.rb inside the Application.configure block
 
-    config.log_level = :trace
+```ruby
+config.log_level = :trace
+```
 
 To log to both the Rails logger and MongoDB add the following lines to
 config/environments/production.rb inside the Application.configure block
 
-    config.after_initialize do
-      # Re-use the existing MongoDB connection, or create a new one here
-      db = Mongo::Connection.new['production_logging']
+```ruby
+config.after_initialize do
+  # Re-use the existing MongoDB connection, or create a new one here
+  db = Mongo::Connection.new['production_logging']
 
-      # Besides logging to the standard Rails logger, also log to MongoDB
-      config.semantic_logger.appenders << SemanticLogger::Appender::MongoDB.new(
-        :db              => db,
-        :collection_size => 25.gigabytes
-      )
-    end
+  # Besides logging to the standard Rails logger, also log to MongoDB
+  config.semantic_logger.appenders << SemanticLogger::Appender::MongoDB.new(
+    :db              => db,
+    :collection_size => 25.gigabytes
+  )
+end
+```
 
 #### Custom Formatters
 
@@ -271,6 +316,7 @@ existing formatter supply a block of code when creating the appender.
 
 For example to replace the Rails or Ruby text log formatter, in the environment configuration file:
 
+```ruby
     config.after_initialize do
       # Since the Rails logger is already initialized, replace its default formatter
       config.semantic_logger.appenders.first.formatter = Proc.new do |log|
@@ -319,9 +365,11 @@ For example to replace the Rails or Ruby text log formatter, in the environment 
           str
       end
     end
+```
 
 For example to replace the MongoDB formatter, in the environment configuration file:
 
+```ruby
     config.after_initialize do
       # Log to MongoDB and supply a custom document formatter
       mongodb_appender = SemanticLogger::Appender::MongoDB.new(
@@ -385,6 +433,7 @@ For example to replace the MongoDB formatter, in the environment configuration f
       end
       config.semantic_logger.appenders << mongodb_appender
     end
+```
 
 ### Architecture & Performance
 
