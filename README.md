@@ -147,7 +147,6 @@ If an exception is raised during the block the exception is logged
 at the same log level as the benchmark along with the duration and message.
 The exception will flow through to the caller unchanged
 
-```
 The following benchmarking methods are available
 
 ```ruby
