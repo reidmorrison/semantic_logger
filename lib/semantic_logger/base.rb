@@ -33,13 +33,13 @@ module SemanticLogger
             exception = log.payload
             message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
           else
-            message << " -- " << log.payload.inspect
+            message << " -- " << self.class.inspect_payload(log.payload)
           end
         end
 
-        str = "#{SemanticLogger::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
-        str << " (#{'%.1f' % log.duration}ms)" if log.duration
-        str
+        duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
+
+        "#{SemanticLogger::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
       end
     end
 
@@ -113,25 +113,33 @@ module SemanticLogger
           @level_index <= #{index}
         end
 
-        # Log the duration of the supplied block
-        #   If an exception occurs in the block the exception is logged using the
-        #   same log level. The exception will flow through to the caller unchanged
-        def benchmark_#{level}(message, payload = nil)
+        def benchmark_#{level}(message, params = nil)
           raise "Mandatory block missing" unless block_given?
+          log_exception = params.nil? ? :full : params[:log_exception]
+          min_duration  = params.nil? ? 0.0   : (params[:min_duration] || 0.0)
+          payload       = params.nil? ? nil   : params[:payload]
           if @level_index <= #{index}
             start = Time.now
             begin
               result = yield
               end_time = Time.now
-              # Add scoped payload
-              if self.payload
-                payload = payload.nil? ? self.payload : self.payload.merge(payload)
+              duration = 1000.0 * (end_time - start)
+
+              # Only log if the block took longer than 'min_duration' to complete
+              if duration >= min_duration
+                # Add scoped payload
+                if self.payload
+                  payload = payload.nil? ? self.payload : self.payload.merge(payload)
+                end
+                log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index})
               end
-              log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, 1000.0 * (end_time - start), tags, #{index})
               result
             rescue Exception => exc
-              # TODO Need to be able to have both an exception and a Payload
-              log Log.new(:#{level}, self.class.thread_name, name, message, exc, Time.now, 1000.0 * (Time.now - start), tags, #{index})
+              if log_exception == :full
+                log Log.new(:#{level}, self.class.thread_name, name, message, exc, Time.now, 1000.0 * (Time.now - start), tags, #{index})
+              elsif log_exception == :partial
+                log Log.new(:#{level}, self.class.thread_name, name, "\#{message} -- \#{exception.class}: \#{exception.message}", payload, end_time, 1000.0 * (end_time - start), tags, #{index})
+              end
               raise exc
             end
           else
@@ -259,6 +267,17 @@ module SemanticLogger
       # Ruby MRI supports micro seconds
       def self.formatted_time(time)
         "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%06d" % (time.usec)}"
+      end
+    end
+
+    if RUBY_VERSION.to_f >= 1.9
+      # With Ruby 1.9 calling .to_s on a hash now returns { 'a' => 1 }
+      def self.inspect_payload(payload)
+        payload.to_s
+      end
+    else
+      def self.inspect_payload(payload)
+        payload.inspect
       end
     end
 

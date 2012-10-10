@@ -6,7 +6,6 @@ require 'test/unit'
 require 'shoulda'
 require 'logger'
 require 'semantic_logger'
-require 'test/mock_logger'
 require 'stringio'
 
 # Unit Test for SemanticLogger::Appender::File

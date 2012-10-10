@@ -1,3 +1,6 @@
+require 'thread'
+require 'sync_attr'
+
 # Logger is the interface used by
 #
 # Logger maintains the logging name to be used for all log entries generated

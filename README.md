@@ -125,7 +125,33 @@ The following output will be written to file:
     2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] Rails -- Calling external interface (5.2ms)
 
 If an exception is raised during the block the exception is logged
-at the same log level as the benchmark along with the duration and message
+at the same log level as the benchmark along with the duration and message.
+The exception will flow through to the caller unchanged
+
+```
+Parameters to benchmark_info, benchmark_debug, etc..
+
+message
+  The message for this log entry
+
+params:
+  :log_exception
+    Control whether or how an exception thrown in the block is
+    reported by SemanticLogger. Values:
+    :full
+      Log the exception class, message, and backtrace
+    :partial
+      Log the exception class and messag
+      The backtrace will not be logged
+    :off
+      Any unhandled exception from the block will not be logged
+
+  :min_duration
+    Only log if the block takes longer than this duration in ms
+
+  :payload
+    To log a custom payload along with this log entry
+```
 
 #### Logging levels
 

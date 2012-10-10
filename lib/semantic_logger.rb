@@ -1,6 +1,3 @@
-# Include sync_attr dependency
-require 'sync_attr'
-
 module SemanticLogger
   autoload :Base,   'semantic_logger/base'
   autoload :Logger, 'semantic_logger/logger'

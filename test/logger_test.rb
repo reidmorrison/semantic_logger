@@ -6,7 +6,6 @@ require 'test/unit'
 require 'shoulda'
 require 'logger'
 require 'semantic_logger'
-require 'test/mock_logger'
 
 # Unit Test for SemanticLogger::Logger
 class LoggerTest < Test::Unit::TestCase
@@ -80,6 +79,29 @@ class LoggerTest < Test::Unit::TestCase
               else
                 assert_equal Logger::Severity.const_get(level)+1, @logger.send(:level_index)
               end
+            end
+          end
+        end
+
+        context "benchmark" do
+          # Ensure that any log level can be benchmarked and logged
+          SemanticLogger::LEVELS.each do |level|
+            should "log #{level} info" do
+              assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world') { "result" }
+              SemanticLogger::Logger.flush
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+            end
+
+            should "log #{level} info with payload" do
+              assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :payload => @hash) { "result" }
+              SemanticLogger::Logger.flush
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+            end
+
+            should "not log #{level} info when block is faster than :min_duration" do
+              assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 0.5) { "result" }
+              SemanticLogger::Logger.flush
+              assert_nil @mock_logger.message
             end
           end
         end
