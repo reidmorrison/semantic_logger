@@ -161,7 +161,7 @@ module SemanticLogger
         begin
           logger.debug "SemanticLogger::Logger Appender thread started"
           count = 0
-          while message=queue.pop
+          while message = queue.pop
             if message.is_a? Log
               appenders.each {|appender| appender.log(message) }
               count += 1
@@ -176,12 +176,12 @@ module SemanticLogger
               case message[:command]
               when :shutdown
                 appenders.each {|appender| appender.flush }
-                message[:reply_queue] << true
+                message[:reply_queue] << true if message[:reply_queue]
                 logger.debug "SemanticLogger::Logger appenders flushed, now shutting down"
                 break
               when :flush
                 appenders.each {|appender| appender.flush }
-                message[:reply_queue] << true
+                message[:reply_queue] << true if message[:reply_queue]
                 logger.debug "SemanticLogger::Logger appenders flushed"
               end
             end
@@ -201,13 +201,12 @@ module SemanticLogger
       return false unless @@appender_thread.alive?
 
       logger.debug "SemanticLogger::Logger Shutdown. Stopping appender thread"
-      reply_queue = Queue.new
-      queue << { :command => :shutdown, :reply_queue => reply_queue }
-      result = reply_queue.pop
+      queue << { :command => :shutdown }
+      @@appender_thread.join
       # Undefine the class variable for the queue since in test environments
       # at_exit can be invoked multiple times
       remove_class_variable(:@@queue)
-      result
+      true
     end
 
     # Formatting does not occur within this thread, it is done by each appender
