@@ -7,3 +7,4 @@ group :test do
 end
 
 gem "sync_attr"
+gem "thread_safe"

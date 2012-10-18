@@ -22,6 +22,7 @@ task :gem  do |t|
     spec.files       = FileList["./**/*"].exclude('*.gem', 'nbproject').map{|f| f.sub(/^\.\//, '')}
     spec.has_rdoc    = true
     spec.add_dependency 'sync_attr'
+    spec.add_dependency 'thread_safe'
     spec.add_development_dependency 'shoulda'
   end
   Gem::Builder.new(gemspec).build

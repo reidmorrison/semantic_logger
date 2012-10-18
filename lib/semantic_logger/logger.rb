@@ -1,4 +1,5 @@
 require 'thread'
+require 'thread_safe'
 require 'sync_attr'
 
 # Logger is the interface used by
@@ -36,9 +37,14 @@ module SemanticLogger
   class Logger < Base
     include SyncAttr
 
-    # Thread safe Class Attribute accessor for appenders array
-    sync_cattr_accessor :appenders do
-      []
+    # Add or remove logging appenders to the appenders Array
+    # Appenders will be written to in the order that they appear in this list
+    sync_cattr_reader :appenders do
+      # The logging thread is only started once an appender has been defined
+      startup
+
+      # Thread safe appenders array
+      ThreadSafe::Array.new
     end
 
     # Initial default Level for all new instances of SemanticLogger::Logger
@@ -90,17 +96,17 @@ module SemanticLogger
       queue.size
     end
 
-    # Flush all pending log entry disk, database, etc.
-    #  All pending log writes are completed and each appender is flushed in turn
+    # Flush all queued log entries disk, database, etc.
+    #  All queued log messages are written and then each appender is flushed in turn
     def self.flush
-      return false unless @@appender_thread.alive?
+      return false unless started?
 
       reply_queue = Queue.new
       queue << { :command => :flush, :reply_queue => reply_queue }
       reply_queue.pop
     end
 
-    @@lag_check_interval = 1000
+    @@lag_check_interval = 5000
     @@lag_threshold_s = 30
 
     # Returns the check_interval which is the number of messages between checks
@@ -125,13 +131,25 @@ module SemanticLogger
       @@lag_threshold_s = time_threshold_s
     end
 
+    # Returns whether the logging thread has been started
+    def self.started?
+      defined? :@@appenders
+    end
+
     ############################################################################
     protected
+
+    @@queue = Queue.new
+
+    # Queue to hold messages that need to be logged to the various appenders
+    def self.queue
+      @@queue
+    end
 
     # Place log request on the queue for the Appender thread to write to each
     # appender in the order that they were registered
     def log(log)
-      self.class.queue << log
+      self.class.queue << log if self.class.started?
     end
 
     # Internal logger for SemanticLogger
@@ -146,24 +164,27 @@ module SemanticLogger
       SemanticLogger::Appender::File.new(STDERR, :warn)
     end
 
-    # Log to queue
-    #   Starts the appender thread the first time a logging call is made
-    sync_cattr_reader :queue do
-      startup
-      at_exit { shutdown }
-      Queue.new
-    end
-
     # Start a separate appender thread responsible for reading log messages and
     # calling the appenders in it's thread
     def self.startup
-      @@appender_thread = Thread.new do
+      # This thread is designed to never go down unless the main thread terminates
+      # Before terminating at_exit is used to flush all the appenders
+      #
+      # Should any appender fail to log or flush, the exception is logged and
+      # other appenders will still be called
+      Thread.new do
+        logger.debug "SemanticLogger::Logger Appender thread started"
         begin
-          logger.debug "SemanticLogger::Logger Appender thread started"
           count = 0
           while message = queue.pop
             if message.is_a? Log
-              appenders.each {|appender| appender.log(message) }
+              appenders.each do |appender|
+                begin
+                  appender.log(message)
+                rescue Exception => exc
+                  logger.error "SemanticLogger::Logger Appender thread: Failed to log to appender: #{appender.inspect}", exc
+                end
+              end
               count += 1
               # Check every few log messages whether this appender thread is falling behind
               if count > lag_check_interval
@@ -174,39 +195,34 @@ module SemanticLogger
               end
             else
               case message[:command]
-              when :shutdown
-                appenders.each {|appender| appender.flush }
-                message[:reply_queue] << true if message[:reply_queue]
-                logger.debug "SemanticLogger::Logger appenders flushed, now shutting down"
-                break
               when :flush
-                appenders.each {|appender| appender.flush }
+                appenders.each do |appender|
+                  begin
+                    appender.flush
+                  rescue Exception => exc
+                    logger.error "SemanticLogger::Logger Appender thread: Failed to flush appender: #{appender.inspect}", exc
+                  end
+                end
+
                 message[:reply_queue] << true if message[:reply_queue]
                 logger.debug "SemanticLogger::Logger appenders flushed"
+              else
+                logger.warn "SemanticLogger::Logger Appender thread: Ignoring unknown command: #{message[:command]}"
               end
             end
           end
         rescue Exception => exception
-          logger.error "SemanticLogger::Logger Appender thread restarting due to exception: #{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-          # Start a new appender thread and let this one terminate
-          startup
+          logger.error "SemanticLogger::Logger Appender thread restarting due to exception", exception
+          retry
         ensure
           logger.debug "SemanticLogger::Logger Appender thread stopped"
         end
       end
-    end
 
-    # Stop the log appender thread and flush all appenders
-    def self.shutdown
-      return false unless @@appender_thread.alive?
-
-      logger.debug "SemanticLogger::Logger Shutdown. Stopping appender thread"
-      queue << { :command => :shutdown }
-      @@appender_thread.join
-      # Undefine the class variable for the queue since in test environments
-      # at_exit can be invoked multiple times
-      remove_class_variable(:@@queue)
-      true
+      at_exit do
+        logger.debug "SemanticLogger::Logger process terminating, flushing appenders"
+        flush
+      end
     end
 
     # Formatting does not occur within this thread, it is done by each appender
