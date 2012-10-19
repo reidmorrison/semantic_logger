@@ -93,8 +93,14 @@ module SemanticLogger
     # able to write to the appenders fast enough. Either reduce the amount of
     # logging, increase the log level, reduce the number of appenders, or
     # look into speeding up the appenders themselves
-    def self.cache_count
+    def self.queue_size
       queue.size
+    end
+
+    # DEPRECATED: Please use queue_size instead.
+    def self.cache_count
+      warn "[DEPRECATION] 'SemanticLogger::Logger.cache_count' is deprecated.  Please use 'SemanticLogger::Logger.queue_size' instead."
+      queue_size
     end
 
     # Flush all queued log entries disk, database, etc.
@@ -102,6 +108,7 @@ module SemanticLogger
     def self.flush
       return false unless started? && @@appender_thread && @@appender_thread.alive?
 
+      logger.debug "SemanticLogger::Logger Flushing appenders with #{queue_size} log messages on the queue"
       reply_queue = Queue.new
       queue << { :command => :flush, :reply_queue => reply_queue }
       reply_queue.pop
@@ -190,7 +197,7 @@ module SemanticLogger
               # Check every few log messages whether this appender thread is falling behind
               if count > lag_check_interval
                 if (diff = Time.now - message.time) > lag_threshold_s
-                  logger.warn "SemanticLogger::Logger Appender thread has fallen behind by #{diff} seconds with #{cache_count} messages queued up. Consider reducing the log level or changing the appenders"
+                  logger.warn "SemanticLogger::Logger Appender thread has fallen behind by #{diff} seconds with #{queue_size} messages queued up. Consider reducing the log level or changing the appenders"
                 end
                 count = 0
               end
