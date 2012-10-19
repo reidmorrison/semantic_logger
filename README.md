@@ -111,7 +111,7 @@ NOSQL Destinations
     "thread_name" : "main",
     "name" : "UserLocator",
     "level" : "debug",
-    "message" : "Fetch user information"
+    "message" : "Fetch user information",
     "duration" : 12,
     "payload" : {
         "user" : "Jack",
@@ -669,6 +669,99 @@ have been written and flushed to their respective appenders before returning.
 Since all logging is now from this thread calling flush is no longer thread
 specific.
 
+### Write your own Appender
+
+To write your own appender it should meet the following requirements:
+
+* Inherit from SemanticLogger::Base
+* In the initializer connect to the resource being logged to
+* Implement #log(log) which needs to write to the relevant resource
+* Implement #flush if the resource can be flushed
+* Write a test for the new appender
+
+The #log method takes the log struct as a parameter which is defined as follows:
+```ruby
+Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index)
+```
+level
+
+* Log level of the supplied log call
+* :trace, :debug, :info, :warn, :error, :fatal
+
+thread_name
+
+* Name or id of the thread in which the logging call was called
+
+name
+
+* Class name supplied to the logging instance
+
+message
+
+* Text message to be logged
+
+payload [Hash|Exception]
+
+* Optional Hash or Ruby Exception object to be logged
+
+time [Time]
+
+* The time at which the log entry was created
+
+duration [Float]
+
+* The time taken in milli-seconds to complete a benchmark call
+
+tags [Array<String>]
+
+* Any tags active on the thread when the log call was made
+
+level_index
+
+* Internal use only. Index of the log level
+
+Basic outline for an Appender:
+
+```ruby
+require 'semantic_logger'
+
+class SimpleAppender < SemanticLogger::Base
+  def initialize(level=nil, &block)
+    # Set the log level and formatter if supplied
+    super(level, &block)
+  end
+
+  # Just display the log struct
+  def log(log)
+    p log
+  end
+
+  # Optional
+  def flush
+    puts "Flush :)"
+  end
+end
+```
+
+Sample program calling the above appender:
+```ruby
+SemanticLogger::Logger.default_level = :trace
+# Log to file dev.log
+SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('dev.log')
+# Also log the above sample appender
+SemanticLogger::Logger.appenders << SimpleAppender.new
+
+logger = SemanticLogger::Logger.new('Hello')
+logger.info "Hello World"
+```
+
+Look at the [existing appenders](https://github.com/ClarityServices/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
+
+To have your appender included in the standard list of appenders follow the fork
+instructions below.
+Very Important: New appenders will not be accepted without complete working tests.
+See the [MongoDB Appender Test](https://github.com/ClarityServices/semantic_logger/blob/master/test/appender_mongodb_test.rb) for an example.
+
 ### Dependencies
 
 - Ruby MRI 1.8.7, 1.9.3 (or above) Or, JRuby 1.6.3 (or above)
@@ -698,7 +791,7 @@ First clone the repo and run the tests:
 
     git clone git://github.com/ClarityServices/semantic_logger.git
     cd semantic_logger
-    ruby -S rake test
+    rake test
 
 Feel free to ping the mailing list with any issues and we'll try to resolve it.
 

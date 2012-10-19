@@ -135,7 +135,7 @@ module SemanticLogger
       end
 
       # Flush all pending logs to disk.
-      #  Waits for all sent documents to be writted to disk
+      #  Waits for all sent documents to be written to disk
       def flush
         db.get_last_error
       end

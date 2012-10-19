@@ -49,6 +49,7 @@ module SemanticLogger
 
     # Initial default Level for all new instances of SemanticLogger::Logger
     @@default_level = :info
+    @@appender_thread = nil
 
     # Allow for setting the global default log level
     # This change only applies to _new_ loggers, existing logger levels
@@ -99,7 +100,7 @@ module SemanticLogger
     # Flush all queued log entries disk, database, etc.
     #  All queued log messages are written and then each appender is flushed in turn
     def self.flush
-      return false unless started?
+      return false unless started? && @@appender_thread && @@appender_thread.alive?
 
       reply_queue = Queue.new
       queue << { :command => :flush, :reply_queue => reply_queue }
@@ -172,7 +173,7 @@ module SemanticLogger
       #
       # Should any appender fail to log or flush, the exception is logged and
       # other appenders will still be called
-      Thread.new do
+      @@appender_thread = Thread.new do
         logger.debug "SemanticLogger::Logger Appender thread started"
         begin
           count = 0
