@@ -1,14 +1,141 @@
 semantic_logger
 ===============
 
-Ruby and Rails Logger enhanced with semantic capabilities, high performance, standardized
-logging with multiple appenders
+Improved logging for Ruby
 
 * http://github.com/ClarityServices/semantic_logger
+
+### Overview
+
+Semantic Logger takes logging in Ruby to a new level by adding several new
+capabilities to the commonly used Logging API:
+
+Dynamic
+
+* Increase the log level at runtime for just one class
+* For example enable debug level logging for a single class (logging instance)
+  while the program is running to get more detailed logging in production for just that class
+
+Tagged Logging
+
+* Supply custom data to be added to every log entry within a block of code,
+  including libraries and existing Gems
+
+High Performance
+
+* Logging is performed in a separate thread so as not to impact performance of
+  running code
+
+Customizable
+
+* Custom formatting by destination
+* Easy to "roll your own" destination (Appender).
+  For example to log to Hadoop, Redis, etc..
+
+Payload support
+
+* Aside from the regular log message, a hash payload can also be supplied with
+  every log entry
+* Very powerful when logging to NOSQL destinations that allow queries against
+  any data in the payload
+
+Exceptions
+
+* Directly log exceptions
+* Semantic Logger standardizes the logging of exceptions with their backtraces
+  to text destinations and writes the exception elements as a hash to NOSQL
+  destinations
+
+Drop-in Replacement
+
+* Simple drop-in replacement for the Ruby, or the Rails loggers
+* Supports current common logging interface
+* No changes to existing to code to use new logger ( other than replacing the logger )
+
+Rails 2 & 3 Support
+
+* Just include the semantic_logger gem into Rails and it will immediately
+  replace the existing loggers to improve performance and information
+  in the log files
+
+Thread Aware
+
+* Includes the process and thread id information in every log entry
+
+Trace Level
+
+* :trace is a new level common in other languages and is commonly used for
+  logging trace level detail. It is intended for logging data at level below
+  :debug.
+* :trace can be used for logging the actual data sent or received over the network
+  that is rarely needed but is critical when things are not working as expected.
+* Since :trace can be enabled on a per class basis it can even be turned on
+  in production to resolve what was actually sent to an external vendor
+
+Multiple Destinations
+
+* Log to multiple destinations at the same time ( File and MongoDB, etc.. )
+* Each destination can also have its own log level.
+  For example only write :info and above to MongoDB
+  Or have a second log file for :warn and above log entries
+
+Benchmarking
+
+* The performance of any block of code can be measured and logged at the same time
+  depending on the active log level
+
+Semantic Capabilities
+
+* With Semantic Logger it is simple to mix-in additional semantic information with
+every log entry
+* The application or class name is automatically included for every log entry under
+  a specific logging instance
+* Includes the duration of blocks of code
+* any Hash containing context specific information such as user_id or location information
+
+Beyond Tagged Logging
+
+* Supply entire hash of custom data to be added to the payload of every log entry
+  within a block of code, including libraries and existing Gems
+
+NOSQL Destinations
+
+* Every log entry is broken down into elements that NOSQL data stores can understand:
+
+```json
+{
+    "_id" : ObjectId("5034fa48e3f3fea945e83ef2"),
+    "time" : ISODate("2012-08-22T15:27:04.409Z"),
+    "host_name" : "release",
+    "pid" : 16112,
+    "thread_name" : "main",
+    "name" : "UserLocator",
+    "level" : "debug",
+    "message" : "Fetch user information"
+    "duration" : 12,
+    "payload" : {
+        "user" : "Jack",
+        "zip_code" : 12345,
+        "location" : "US"
+    }
+}
+```
+
+Thread Safe
+
+* Semantic Logger is completely thread safe and all methods can be called
+  concurrently from any thread
+* Tagged logging keeps any tagging data on a per-thread basis to ensure that
+  tags from different threads are not inter-mingled
 
 ### Introduction
 
 SemanticLogger is a Logger that supports logging of meta-data, along with text messages
+to multiple appenders
+
+An appender is a Logging destination such as a File, MongoDB collection, etc..
+Multiple Appenders can be active at the same time. All log entries are written
+to each appender.
 
 Machines can understand the logged data without having to use
 complex Regular Expressions or other text parsing techniques
@@ -205,7 +332,7 @@ as debug calls only if the log level is set to trace
 
 When Semantic Logger is included on a Rails project it automatically replaces the
 loggers for Rails, ActiveRecord::Base, ActionController::Base, and ActiveResource::Base
-with wrappers that set their Class name. For example in railtie.rb:
+with wrappers that set their Class name. For example in semantic_logger/railtie.rb:
 
 ```ruby
 ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
@@ -246,7 +373,36 @@ This will result in the log output identifying the log entry as from the Externa
 [SyncAttr](https://github.com/ClarityServices/sync_attr) is a gem that supports
 lazy loading and thread-safe initialization of class attributes
 
+Extract from a Rails log file after adding the semantic_logger gem:
+
+```
+2012-10-19 12:05:46.736 I [35940:JRubyWorker-10] Rails --
+
+Started GET "/" for 127.0.0.1 at 2012-10-19 12:05:46 +0000
+2012-10-19 12:05:47.318 I [35940:JRubyWorker-10] ActionController --   Processing by AdminController#index as HTML
+2012-10-19 12:05:47.633 D [35940:JRubyWorker-10] ActiveRecord --   User Load (2.0ms)  SELECT `users`.* FROM `users` WHERE `users`.`id` = 1 LIMIT 1
+2012-10-19 12:05:49.833 D [35940:JRubyWorker-10] ActiveRecord --   Role Load (2.0ms)  SELECT `roles`.* FROM `roles`
+2012-10-19 12:05:49.868 D [35940:JRubyWorker-10] ActiveRecord --   Role Load (1.0ms)  SELECT * FROM `roles` INNER JOIN `roles_users` ON `roles`.id = `roles_users`.role_id WHERE (`roles_users`.user_id = 1 )
+2012-10-19 12:05:49.885 I [35940:JRubyWorker-10] ActionController -- Rendered menus/_control_system.html.erb (98.0ms)
+2012-10-19 12:05:51.014 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_top_bar.html.erb (386.0ms)
+2012-10-19 12:05:51.071 D [35940:JRubyWorker-10] ActiveRecord --   Announcement Load (20.0ms)  SELECT `announcements`.* FROM `announcements` WHERE `announcements`.`active` = 1 ORDER BY created_at desc
+2012-10-19 12:05:51.072 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_announcement.html.erb (26.0ms)
+2012-10-19 12:05:51.083 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_flash.html.erb (4.0ms)
+2012-10-19 12:05:51.109 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_footer.html.erb (16.0ms)
+2012-10-19 12:05:51.109 I [35940:JRubyWorker-10] ActionController -- Rendered admin/index.html.erb within layouts/base (1329.0ms)
+2012-10-19 12:05:51.113 I [35940:JRubyWorker-10] ActionController -- Completed 200 OK in 3795ms (Views: 1349.0ms | ActiveRecord: 88.0ms | Mongo: 0.0ms)
+```
+
 #### Tagged Logging
+
+Semantic Logger allows any Ruby or Rails program to also include tagged logging.
+
+This means that any logging performed within a block, including any called
+libraries or gems to include the specified tag with every log entry.
+
+Using Tagged logging is critical in any highly concurrent environment so that
+one can quickly find all related log entries across all levels of code, and even
+across threads
 
 ```ruby
 logger.tagged(tracking_number) do
@@ -255,10 +411,17 @@ logger.tagged(tracking_number) do
 end
 ```
 
-#### Payload injected logging
+#### Beyond Tagged Logging
+
+Blocks of code can be tagged with not only values, but can be tagged with
+entire hashes of data. The additional hash of data will be merged into
+the payload of every log entry
+
+For example every corresponding log entry could include a hash containing
+a user_id, name, region, zip_code, tracking_number, etc...
 
 ```ruby
-logger.with_payload(:user => 'Jack') do
+logger.with_payload(:user => 'Jack', :zip_code => 12345) do
   logger.debug("Hello World")
   # ...
 end
@@ -441,6 +604,52 @@ For example to replace the MongoDB formatter, in the environment configuration f
     end
 ```
 
+### SysLog and other standard loggers
+
+To write log entries to a Syslog logger or any other logger of your choice,
+that conforms the standard Ruby Logger API, Semantic Logger has an Appender to
+use that logger.
+
+For example to configure rails to also log to the Syslogger gem:
+```ruby
+config.after_initialize do
+  # Besides logging to the local file also log to Syslogger
+  config.semantic_logger.appenders << SemanticLogger::Appender::Wrapper.new(Syslogger.new("yourappname"))
+end
+```
+
+### Performance
+
+The traditional logging implementations write their log information to file in the
+same thread of execution as the program itself. This means that for every log entry
+the program has to wait for the data to be written.
+
+With Semantic Logger it uses a dedicated thread for logging so that writing to
+the log file or other appenders does not hold up program execution.
+
+Also, since the logging is in this separate thread there is no impact to program
+execution if we decided to add another appender.
+For example, log to both a file and a MongoDB collection.
+
+### Log Rotation
+
+Since the log file is not re-opened with every call, when the log file needs
+to be rotated, use a copy-truncate operation over deleting the file.
+
+### Why Semantic logging?
+
+Just as there is the initiative to add Semantic information to data on the web
+so that computers can directly understand the content without having to resort
+to complex regular expressions or machine learning techniques, it is important
+to be able to do the same with log files or data.
+
+Semantic Logger allows every log entry to have not only a message, but a payload
+that can be written to a file or a NOSQL destination.
+
+Once the logging data is in the NOSQL data store it can be queried quickly and
+efficiently. Some SQL data stores also allow complex data types that could be used
+for storing and querying the logging data
+
 ### Architecture & Performance
 
 In order to ensure that logging does not hinder the performance of the application
@@ -449,7 +658,7 @@ for writing the log entries to each of the appenders.
 
 In this way formatting and disk or network write delays will not affect the
 performance of the application. Also adding more than one appender does not affect
-the runtime performance of the application
+the runtime performance of the application.
 
 The additional thread is automatically started on initialization. When the program
 terminates it will complete writing out all log data and flush the appenders before
@@ -462,7 +671,7 @@ specific.
 
 ### Dependencies
 
-- Ruby MRI 1.8.7 (or above) Or, JRuby 1.6.3 (or above)
+- Ruby MRI 1.8.7, 1.9.3 (or above) Or, JRuby 1.6.3 (or above)
 - Optional: Rails 3.0.10 (or above)
 - Optional: To log to MongoDB, Mongo Ruby Driver 1.5.2 or above
 
@@ -476,7 +685,9 @@ To log to MongoDB
 
 ### Future
 
-- Web Interface to view and search log information stored in MongoDB
+- Configuration file to support setting the log level for a specific class
+- Configuration file to support adding appenders
+- Based on demand add direct appenders for: Syslog, hadoop, redis
 
 Development
 -----------
