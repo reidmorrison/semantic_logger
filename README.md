@@ -19,7 +19,10 @@ Dynamic
 Tagged Logging
 
 * Supply custom data to be added to every log entry within a block of code,
-  including libraries and existing Gems
+  including libraries and existing gems
+* Tagged logging is critical for any high traffic site so that one can narrow
+  down log entries for a single call that is mixed in with log entries
+  from hundreds of other log entries
 
 High Performance
 
@@ -57,10 +60,12 @@ Rails 2 & 3 Support
 * Just include the semantic_logger gem into Rails and it will immediately
   replace the existing loggers to improve performance and information
   in the log files
+* The Rails 3 Tagged logging feature is already available for Rails 2 by use Semantic Logger
 
 Thread Aware
 
 * Includes the process and thread id information in every log entry
+* If running JRuby it will also include the name of the thread for every log entry
 
 Trace Level
 
@@ -76,8 +81,8 @@ Multiple Destinations
 
 * Log to multiple destinations at the same time ( File and MongoDB, etc.. )
 * Each destination can also have its own log level.
-  For example only write :info and above to MongoDB
-  Or have a second log file for :warn and above log entries
+  For example, only log :info and above to MongoDB, or :warn and above to a
+  second log file
 
 Benchmarking
 
@@ -91,12 +96,12 @@ every log entry
 * The application or class name is automatically included for every log entry under
   a specific logging instance
 * Includes the duration of blocks of code
-* any Hash containing context specific information such as user_id or location information
+* Any hash containing context specific information such as user_id or location information
 
 Beyond Tagged Logging
 
 * Supply entire hash of custom data to be added to the payload of every log entry
-  within a block of code, including libraries and existing Gems
+  within a block of code, including libraries and existing gems
 
 NOSQL Destinations
 
@@ -130,7 +135,7 @@ Thread Safe
 
 ### Introduction
 
-SemanticLogger is a Logger that supports logging of meta-data, along with text messages
+Semantic Logger is a Logger that supports logging of meta-data, along with text messages
 to multiple appenders
 
 An appender is a Logging destination such as a File, MongoDB collection, etc..
@@ -140,10 +145,10 @@ to each appender.
 Machines can understand the logged data without having to use
 complex Regular Expressions or other text parsing techniques
 
-SemanticLogger, sits on top of existing logger implementations and can also
+Semantic Logger, sits on top of existing logger implementations and can also
 be used as a drop in replacement for existing Ruby loggers.
 This allows the existing logging to be replaced immediately with the
-SemanticLogger Appenders, and over time the calls can be replaced with ones
+Semantic Logger Appenders, and over time the calls can be replaced with ones
 that contain the necessary meta-data.
 
 Example of current calls:
@@ -175,7 +180,7 @@ that took longer than 100 ms:
 db.logs.find({"payload.table":"users", "payload.action":"query", "payload.duration":{$gt:100} })
 ```
 
-Since SemanticLogger can call existing Loggers, it does not force end-users
+Since Semantic Logger can call existing Loggers, it does not force end-users
 to have to adopt a Semantic aware adapter. Although, such adapters create
 tremendous value in the problem monitoring and determination processes.
 
@@ -292,7 +297,7 @@ Parameters
 ```
   :log_exception
     Control whether or how an exception thrown in the block is
-    reported by SemanticLogger. Values:
+    reported by Semantic Logger. Values:
     :full
       Log the exception class, message, and backtrace
     :partial
@@ -752,6 +757,9 @@ To log to MongoDB, it also needs the Ruby Mongo Driver
 
 ### Future
 
+- In V1: Move Railtie to it's own gem so that the Rails logger is not replaced
+  automatically
+- In V1: Add support for a configuration file that can set log level by class name
 - Configuration file to support setting the log level for a specific class
 - Configuration file to support adding appenders
 - Based on demand add appenders for: Syslog, hadoop, redis

@@ -2,16 +2,18 @@ require 'socket'
 module SemanticLogger
   module Appender
     # The Mongo Appender for the SemanticLogger
-    # clarity_log Schema:
+    #
+    # Mongo Document Schema:
     #    _id        : ObjectId("4d9cbcbf7abb3abdaf9679cd"),
     #    time       : ISODate("2011-04-06T19:19:27.006Z"),
     #    host_name  : "Name of the host on which this log entry originated",
     #    application: 'Name of application or service logging the data - clarity_base, nginx, tomcat',
     #    pid        : process id
-    #    thread     : "name of thread",
-    #    name       : "ch.qos.logback.classic.db.mongo.MongoDBAppenderTest",
-    #    level      : 'trace|debug|warn|info|error',
-    #    message    : "blah blah",
+    #    thread     : "name or id of thread",
+    #    name       : "com.clarity.MyClass",
+    #    level      : 'trace|debug|info|warn|error|fatal'
+    #    level_index: 0|1|2|3|4|5
+    #    message    : "Message supplied to the logging call",
     #    duration   : ms,  # Set by Logger#benchmark
     #    tags       : "Some tracking id" | ["id1", "id2"]
     #    payload : {
@@ -22,26 +24,10 @@ module SemanticLogger
     #    # If supplied as the first parameter, message='exception name'
     #    exception: {
     #      name: 'MyException',
-    #      description: 'blah',
+    #      description: 'Invalid value',
     #      stack_trace: []
     #    }
     #
-    #    # For trace and debug level logging, the following can also be logged
-    #    # for all levels. Not on for higher levels due to performance impact
-    #    source: {
-    #      filename:
-    #      method:
-    #      line_number:
-    #    }
-    #
-    # # Future, the Rails around filter can log the following additional data
-    #   controller:
-    #   action:
-    #   duration: 'ms'
-    #   http_verb: 'get|post|..'
-    #   params: Hash
-    #
-    #   tracking_number: 'user defined tracking number'
     class MongoDB < SemanticLogger::Appender::Base
       attr_reader :db, :collection_name
       attr_accessor :host_name, :safe, :application
@@ -160,10 +146,10 @@ module SemanticLogger
           if log.payload
             if log.payload.is_a?(Exception)
               exception = log.payload
-              document[:payload] = {
-                :exception => exception.class.name,
-                :message   => exception.message,
-                :backtrace => exception.backtrace
+              document[:exception] = {
+                :name        => exception.class.name,
+                :description => exception.message,
+                :stack_trace => exception.backtrace
               }
             else
               document[:payload] = log.payload
