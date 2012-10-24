@@ -137,6 +137,7 @@ module SemanticLogger
             :thread_name => log.thread_name,
             :name        => log.name,
             :level       => log.level,
+            :level_index => log.level_index,
           }
           document[:application] = application if application
           document[:message]     = self.class.strip_colorizing(log.message) if log.message
