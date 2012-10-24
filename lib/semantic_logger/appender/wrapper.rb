@@ -4,7 +4,7 @@
 #
 module SemanticLogger
   module Appender
-    class Wrapper < SemanticLogger::Base
+    class Wrapper < SemanticLogger::Appender::Base
       attr_reader :logger
 
       # Create a Logger or Rails Logger appender instance

@@ -1,6 +1,6 @@
-# Base appender
+# Base logger
 #
-#   Abstract base class for appenders
+#   Abstract base class for loggers
 #
 #   Implements common behavior such as log level, default text formatter etc
 #
@@ -8,47 +8,12 @@
 #
 module SemanticLogger
   class Base
-    attr_accessor :formatter
-    attr_reader   :level
+    # Class name to be logged
+    attr_accessor :name
 
-    def initialize(level, &block)
-      # Set the formatter to the supplied block
-      @formatter = block || default_formatter
+    attr_reader :level
 
-      # Log everything that comes to the appender by default
-      self.level = level || :trace
-    end
-
-    # Default log formatter
-    #  Replace this formatter by supplying a Block to the initializer
-    #  Generates logs of the form:
-    #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
-    def default_formatter
-      Proc.new do |log|
-        message = log.message.to_s
-        tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
-
-        if log.payload
-          if log.payload.is_a?(Exception)
-            exception = log.payload
-            message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-          else
-            message << " -- " << self.class.inspect_payload(log.payload)
-          end
-        end
-
-        duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
-
-        "#{SemanticLogger::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
-      end
-    end
-
-    # Write log data to underlying data storage
-    def log(log_)
-      raise "Logging Appender must implement #log(log)"
-    end
-
-    # Set the logging level for this appender
+    # Set the logging level for this logger
     #
     # Note: This level is only for this particular appender. It does not override
     #   the log level in any logging instance or the default log level
@@ -209,8 +174,33 @@ module SemanticLogger
 
     # #TODO implement a thread safe #silence method
 
+    # Initial default Level for all new instances of SemanticLogger::Logger
+    @@default_level = :info
+
+    # Allow for setting the global default log level
+    # This change only applies to _new_ loggers, existing logger levels
+    # will not be changed in any way
+    def self.default_level=(level)
+      @@default_level = level
+    end
+
+    # Returns the global default log level for new Logger instances
+    def self.default_level
+      @@default_level
+    end
+
     ############################################################################
     protected
+
+    def initialize(klass, level=nil)
+      @name = klass.is_a?(String) ? klass : klass.name
+      self.level = level || self.class.default_level
+    end
+
+    # Write log data to underlying data storage
+    def log(log_)
+      raise "Logging Appender must implement #log(log)"
+    end
 
     # Return the level index for fast comparisons
     attr_reader :level_index
@@ -252,32 +242,9 @@ module SemanticLogger
       def self.thread_name
         Java::java.lang::Thread.current_thread.name
       end
-
-      # Return the Time as a formatted string
-      # JRuby only supports time in ms
-      def self.formatted_time(time)
-        "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (time.usec/1000)}"
-      end
     else
       def self.thread_name
         Thread.current.object_id
-      end
-
-      # Return the Time as a formatted string
-      # Ruby MRI supports micro seconds
-      def self.formatted_time(time)
-        "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%06d" % (time.usec)}"
-      end
-    end
-
-    if RUBY_VERSION.to_f >= 1.9
-      # With Ruby 1.9 calling .to_s on a hash now returns { 'a' => 1 }
-      def self.inspect_payload(payload)
-        payload.to_s
-      end
-    else
-      def self.inspect_payload(payload)
-        payload.inspect
       end
     end
 
@@ -302,12 +269,6 @@ module SemanticLogger
       end
       raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
       index
-    end
-
-    # Appenders don't take a class name, so use this class name if an appender
-    # is logged to directly
-    def name
-      self.class.name
     end
 
   end

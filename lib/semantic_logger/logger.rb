@@ -47,24 +47,6 @@ module SemanticLogger
       ThreadSafe::Array.new
     end
 
-    # Initial default Level for all new instances of SemanticLogger::Logger
-    @@default_level = :info
-    @@appender_thread = nil
-
-    # Allow for setting the global default log level
-    # This change only applies to _new_ loggers, existing logger levels
-    # will not be changed in any way
-    def self.default_level=(level)
-      @@default_level = level
-    end
-
-    # Returns the global default log level for new Logger instances
-    def self.default_level
-      @@default_level
-    end
-
-    attr_reader :name
-
     # Returns a Logger instance
     #
     # Return the logger for a specific class, supports class specific log levels
@@ -147,6 +129,7 @@ module SemanticLogger
     ############################################################################
     protected
 
+    @@appender_thread = nil
     @@queue = Queue.new
 
     # Queue to hold messages that need to be logged to the various appenders
@@ -231,12 +214,6 @@ module SemanticLogger
         logger.debug "SemanticLogger::Logger process terminating, flushing appenders"
         flush
       end
-    end
-
-    # Formatting does not occur within this thread, it is done by each appender
-    # in the appender thread
-    def default_formatter
-      nil
     end
 
   end

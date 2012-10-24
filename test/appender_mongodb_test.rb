@@ -30,7 +30,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
     context "format logs into documents" do
 
       should "handle nil name, message and hash" do
-        @appender.log SemanticLogger::Logger::Log.new(:debug)
+        @appender.log SemanticLogger::Base::Log.new(:debug)
         document = @appender.collection.find_one
         assert_equal :debug, document['level']
         assert_equal nil, document['message']
@@ -43,7 +43,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
       end
 
       should "handle nil message and payload" do
-        log = SemanticLogger::Logger::Log.new(:debug)
+        log = SemanticLogger::Base::Log.new(:debug)
         log.payload = @hash
         @appender.log(log)
 
@@ -59,7 +59,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
       end
 
       should "handle message and payload" do
-        log = SemanticLogger::Logger::Log.new(:debug)
+        log = SemanticLogger::Base::Log.new(:debug)
         log.message = 'hello world'
         log.payload = @hash
         log.thread_name = 'thread'
@@ -78,7 +78,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
       end
 
       should "handle message without payload" do
-        log = SemanticLogger::Logger::Log.new(:debug)
+        log = SemanticLogger::Base::Log.new(:debug)
         log.message = 'hello world'
         log.thread_name = 'thread'
         log.time = @time
@@ -100,7 +100,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
       # Ensure that any log level can be logged
       SemanticLogger::LEVELS.each do |level|
         should "log #{level} information" do
-          @appender.log SemanticLogger::Logger::Log.new(level, 'thread', 'my_class', 'hello world -- Calculations', @hash, @time)
+          @appender.log SemanticLogger::Base::Log.new(level, 'thread', 'my_class', 'hello world -- Calculations', @hash, @time)
           document = @appender.collection.find_one
           assert_equal level, document['level']
           assert_equal 'hello world -- Calculations', document['message']

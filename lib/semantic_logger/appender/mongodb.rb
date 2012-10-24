@@ -42,7 +42,7 @@ module SemanticLogger
     #   params: Hash
     #
     #   tracking_number: 'user defined tracking number'
-    class MongoDB < SemanticLogger::Base
+    class MongoDB < SemanticLogger::Appender::Base
       attr_reader :db, :collection_name
       attr_accessor :host_name, :safe, :application
 

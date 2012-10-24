@@ -3,6 +3,7 @@ module SemanticLogger
   autoload :Logger, 'semantic_logger/logger'
 
   module Appender
+    autoload :Base,    'semantic_logger/appender/base'
     autoload :File,    'semantic_logger/appender/file'
     autoload :Wrapper, 'semantic_logger/appender/wrapper'
     autoload :MongoDB, 'semantic_logger/appender/mongodb'
