@@ -9,7 +9,7 @@ module SemanticLogger
     #    host_name  : "Name of the host on which this log entry originated",
     #    application: 'Name of application or service logging the data - clarity_base, nginx, tomcat',
     #    pid        : process id
-    #    thread     : "name or id of thread",
+    #    thread_name: "name or id of thread",
     #    name       : "com.clarity.MyClass",
     #    level      : 'trace|debug|info|warn|error|fatal'
     #    level_index: 0|1|2|3|4|5
@@ -23,8 +23,8 @@ module SemanticLogger
     #    # When an exception is supplied as the first or second parameter
     #    # If supplied as the first parameter, message='exception name'
     #    exception: {
-    #      name: 'MyException',
-    #      description: 'Invalid value',
+    #      name:        'MyException',
+    #      message:     'Invalid value',
     #      stack_trace: []
     #    }
     #
@@ -149,7 +149,7 @@ module SemanticLogger
               exception = log.payload
               document[:exception] = {
                 :name        => exception.class.name,
-                :description => exception.message,
+                :message     => exception.message,
                 :stack_trace => exception.backtrace
               }
             else

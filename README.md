@@ -491,20 +491,20 @@ the fields:
 ```ruby
 Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index)
 ```
-level
+level [Symbol]
 
 * Log level of the supplied log call
 * :trace, :debug, :info, :warn, :error, :fatal
 
-thread_name
+thread_name [String]
 
 * Name or id of the thread in which the logging call was called
 
-name
+name [String]
 
 * Class name supplied to the logging instance
 
-message
+message [String]
 
 * Text message to be logged
 
@@ -524,7 +524,7 @@ tags [Array<String>]
 
 * Any tags active on the thread when the log call was made
 
-level_index
+level_index [Integer]
 
 * Internal use only. Index of the log level
 
