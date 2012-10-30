@@ -9,14 +9,14 @@ require 'semantic_logger'
 require 'stringio'
 
 class TestAttribute
-  include SemanticLogger::Attribute
+  include SemanticLogger::Loggable
 end
 
 
 # Unit Test for SemanticLogger::Appender::File
 #
 class AppenderFileTest < Test::Unit::TestCase
-  context SemanticLogger::Attribute do
+  context SemanticLogger::Loggable do
     setup do
       @time = Time.new
       @io = StringIO.new

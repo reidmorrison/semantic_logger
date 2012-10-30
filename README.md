@@ -348,14 +348,14 @@ By replacing their loggers we now get the class name in the text logging output:
     2012-08-30 15:24:13.439 D [47900:main] ActiveRecord --   SQL (12.0ms)  SELECT `schema_migrations`.`version` FROM `schema_migrations`
 
 It is recommended to include a class specific logger for all major classes that will
-be logging using the SemanticLogger::Attribute mix-in. For Example:
+be logging using the SemanticLogger::Loggable mix-in. For Example:
 
 ```ruby
 require 'semantic_logger'
 
 class ExternalSupplier
   # Lazy load logger class variable on first use
-  include SemanticLogger::Attribute
+  include SemanticLogger::Loggable
 
   def call_supplier(amount, name)
     logger.debug "Calculating with amount", { :amount => amount, :name => name }

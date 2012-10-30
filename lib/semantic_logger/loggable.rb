@@ -11,7 +11,7 @@
 #
 #  class ExternalSupplier
 #    # Lazy load 'logger' class variable on first use
-#    include SemanticLogger::Attribute
+#    include SemanticLogger::Loggable
 #
 #    def call_supplier(amount, name)
 #      logger.debug "Calculating with amount", { :amount => amount, :name => name }
@@ -23,13 +23,17 @@
 #    end
 #  end
 module SemanticLogger
-  module Attribute
-    # Thread safe class variable initialization
-    include SyncAttr unless defined? :sync_cattr_reader
+  module Loggable
 
-    # Lazy initializes the class logger on it's first call in a thread-safe way
-    sync_cattr_reader :logger do
-      SemanticLogger::Logger.new(self)
+    def self.included(base)
+      base.class_eval do
+        # Thread safe class variable initialization
+        include SyncAttr
+
+        sync_cattr_reader :logger do
+          SemanticLogger::Logger.new(self)
+        end
+      end
     end
 
     # Also make the logger available as an instance method MixIn

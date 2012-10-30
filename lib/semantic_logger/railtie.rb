@@ -65,8 +65,6 @@ module SemanticLogger #:nodoc:
       ActiveSupport.on_load(:active_record)     { self.logger = SemanticLogger::Logger.new('ActiveRecord') }
       ActiveSupport.on_load(:action_controller) { self.logger = SemanticLogger::Logger.new('ActionController') }
       ActiveSupport.on_load(:action_mailer)     { self.logger = SemanticLogger::Logger.new('ActionMailer') }
-
-      SemanticLogger::Logger.logger.info "SemanticLogger initialized"
     end
 
   end

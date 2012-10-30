@@ -6,7 +6,7 @@ require 'sync_attr'
 module SemanticLogger
   autoload :Base,      'semantic_logger/base'
   autoload :Logger,    'semantic_logger/logger'
-  autoload :Attribute, 'semantic_logger/attribute'
+  autoload :Loggable,  'semantic_logger/loggable'
 
   module Appender
     autoload :Base,    'semantic_logger/appender/base'
