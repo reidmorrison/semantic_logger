@@ -199,7 +199,7 @@ module SemanticLogger
 
     # Write log data to underlying data storage
     def log(log_)
-      raise "Logging Appender must implement #log(log)"
+      raise NotImplementedError.new("Logging Appender must implement #log(log)")
     end
 
     # Return the level index for fast comparisons

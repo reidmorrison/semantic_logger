@@ -335,7 +335,7 @@ as debug calls only if the log level is set to trace
 
 #### Changing the Class name for Log Entries
 
-When Semantic Logger is included on a Rails project it automatically replaces the
+When Semantic Logger is included in a Rails project it automatically replaces the
 loggers for Rails, ActiveRecord::Base, ActionController::Base, and ActiveResource::Base
 with wrappers that set their Class name. For example in semantic_logger/railtie.rb:
 
@@ -348,24 +348,21 @@ By replacing their loggers we now get the class name in the text logging output:
     2012-08-30 15:24:13.439 D [47900:main] ActiveRecord --   SQL (12.0ms)  SELECT `schema_migrations`.`version` FROM `schema_migrations`
 
 It is recommended to include a class specific logger for all major classes that will
-be logging. For Example:
+be logging using the SemanticLogger::Attribute mix-in. For Example:
 
 ```ruby
-require 'sync_attr'
 require 'semantic_logger'
 
 class ExternalSupplier
-  # Gem sync_attr is a dependency of semantic_logger so is already installed
-  include SyncAttr
+  # Lazy load logger class variable on first use
+  include SemanticLogger::Attribute
 
-  # Lazy initializes the class logger on it's first call in a thread-safe way
-  sync_cattr_reader :logger do
-    SemanticLogger::Logger.new(self)
-  end
+  def call_supplier(amount, name)
+    logger.debug "Calculating with amount", { :amount => amount, :name => name }
 
-  def call(params)
-    self.class.logger.benchmark_info "Calling external interface" do
-        # Code to call external service ...
+    # Measure and log on completion how long the call took to the external supplier
+    logger.benchmark_info "Calling external interface" do
+      # Code to call the external supplier ...
     end
   end
 end
@@ -430,6 +427,26 @@ logger.with_payload(:user => 'Jack', :zip_code => 12345) do
   logger.debug("Hello World")
   # ...
 end
+```
+
+### Using SemanticLogger outside of Rails
+
+Example:
+
+```ruby
+require 'semantic_logger'
+
+# Set the log level to log everything
+SemanticLogger::Logger.default_level = :trace
+
+# Add a file appender to log everything to a file
+SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('dev.log')
+
+# Add an appender to only log :info and above to standard out
+SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDOUT, :info)
+
+logger = SemanticLogger::Logger.new('Example')
+logger.info "Hello World"
 ```
 
 ### Configuration

@@ -1,7 +1,3 @@
-require 'thread'
-require 'thread_safe'
-require 'sync_attr'
-
 # Logger is the interface used by
 #
 # Logger maintains the logging name to be used for all log entries generated
@@ -189,6 +185,7 @@ module SemanticLogger
               when :flush
                 appenders.each do |appender|
                   begin
+                    logger.debug "SemanticLogger::Logger Appender thread: Flushing appender: #{appender.name}"
                     appender.flush
                   rescue Exception => exc
                     logger.error "SemanticLogger::Logger Appender thread: Failed to flush appender: #{appender.inspect}", exc
@@ -196,7 +193,7 @@ module SemanticLogger
                 end
 
                 message[:reply_queue] << true if message[:reply_queue]
-                logger.debug "SemanticLogger::Logger appenders flushed"
+                logger.debug "SemanticLogger::Logger Appender thread: All appenders flushed"
               else
                 logger.warn "SemanticLogger::Logger Appender thread: Ignoring unknown command: #{message[:command]}"
               end
@@ -211,7 +208,7 @@ module SemanticLogger
       end
 
       at_exit do
-        logger.debug "SemanticLogger::Logger process terminating, flushing appenders"
+        logger.debug "SemanticLogger::Logger Process terminating, flushing appenders"
         flush
       end
     end

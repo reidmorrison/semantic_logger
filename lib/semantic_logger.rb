@@ -1,6 +1,12 @@
+# Place requires here to prevent issues on JRuby with global.require.lock=true
+require 'thread'
+require 'thread_safe'
+require 'sync_attr'
+
 module SemanticLogger
-  autoload :Base,   'semantic_logger/base'
-  autoload :Logger, 'semantic_logger/logger'
+  autoload :Base,      'semantic_logger/base'
+  autoload :Logger,    'semantic_logger/logger'
+  autoload :Attribute, 'semantic_logger/attribute'
 
   module Appender
     autoload :Base,    'semantic_logger/appender/base'

@@ -1,4 +1,5 @@
 require 'socket'
+require 'mongo'
 module SemanticLogger
   module Appender
     # The Mongo Appender for the SemanticLogger

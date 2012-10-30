@@ -38,22 +38,20 @@ module SemanticLogger #:nodoc:
           FileUtils.mkdir_p File.dirname path
         end
 
-        # Add the log file to the list of appenders
-        file_appender = SemanticLogger::Appender::File.new(path)
-
         # Set internal logger to log to file only, in case another appender
         # experiences logging problems
-        SemanticLogger::Logger.logger = file_appender
-        SemanticLogger::Logger.appenders << file_appender
-        
+        SemanticLogger::Logger.logger = SemanticLogger::Appender::File.new(path)
+
+        # Add the log file to the list of appenders
+        SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(path)
+
         SemanticLogger::Logger.new(Rails)
       rescue StandardError
         # If not able to log to file, log to standard error with warning level only
         SemanticLogger::Logger.default_level = :warn
 
-        file_appender = SemanticLogger::Appender::File.new(STDERR)
-        SemanticLogger::Logger.logger = file_appender
-        SemanticLogger::Logger.appenders << file_appender
+        SemanticLogger::Logger.logger = SemanticLogger::Appender::File.new(STDERR)
+        SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDERR)
 
         logger = SemanticLogger::Logger.new(Rails)
         logger.warn(
