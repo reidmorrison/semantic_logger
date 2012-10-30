@@ -19,7 +19,7 @@ task :gem  do |t|
     spec.date        = Date.today.to_s
     spec.summary     = "Semantic Logger for Ruby, and Ruby on Rails"
     spec.description = "Machine readable document oriented logging with support for MongoDB and text files"
-    spec.files       = FileList["./**/*"].exclude('*.gem', 'nbproject').map{|f| f.sub(/^\.\//, '')}
+    spec.files       = FileList["./**/*"].exclude(/.gem$/, /.log$/,/^nbproject/).map{|f| f.sub(/^\.\//, '')}
     spec.has_rdoc    = true
     spec.add_dependency 'sync_attr'
     spec.add_dependency 'thread_safe'

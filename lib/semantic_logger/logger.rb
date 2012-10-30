@@ -202,7 +202,7 @@ module SemanticLogger
         logger.error "SemanticLogger::Logger Appender thread restarting due to exception", exception
         retry
       ensure
-        logger.error "SemanticLogger::Logger Appender thread has died. All logging will be terminated"
+        logger.debug "SemanticLogger::Logger Appender thread has stopped"
       end
     end
 
