@@ -36,8 +36,8 @@ module SemanticLogger
     # Add or remove logging appenders to the appenders Array
     # Appenders will be written to in the order that they appear in this list
     sync_cattr_reader :appenders do
-      # The logging thread is only started once an appender has been defined
-      startup
+      # The logging thread is only started when an appender is added
+      @@appender_thread = Thread.new { appender_thread }
 
       # Thread safe appenders array
       ThreadSafe::Array.new
@@ -151,67 +151,65 @@ module SemanticLogger
       SemanticLogger::Appender::File.new(STDERR, :warn)
     end
 
-    # Start a separate appender thread responsible for reading log messages and
+    # Separate appender thread responsible for reading log messages and
     # calling the appenders in it's thread
-    def self.startup
+    def self.appender_thread
       # This thread is designed to never go down unless the main thread terminates
       # Before terminating at_exit is used to flush all the appenders
       #
       # Should any appender fail to log or flush, the exception is logged and
       # other appenders will still be called
-      @@appender_thread = Thread.new do
-        logger.debug "SemanticLogger::Logger Appender thread started"
-        begin
-          count = 0
-          while message = queue.pop
-            if message.is_a? Log
-              appenders.each do |appender|
-                begin
-                  appender.log(message)
-                rescue Exception => exc
-                  logger.error "SemanticLogger::Logger Appender thread: Failed to log to appender: #{appender.inspect}", exc
-                end
-              end
-              count += 1
-              # Check every few log messages whether this appender thread is falling behind
-              if count > lag_check_interval
-                if (diff = Time.now - message.time) > lag_threshold_s
-                  logger.warn "SemanticLogger::Logger Appender thread has fallen behind by #{diff} seconds with #{queue_size} messages queued up. Consider reducing the log level or changing the appenders"
-                end
-                count = 0
-              end
-            else
-              case message[:command]
-              when :flush
-                appenders.each do |appender|
-                  begin
-                    logger.debug "SemanticLogger::Logger Appender thread: Flushing appender: #{appender.name}"
-                    appender.flush
-                  rescue Exception => exc
-                    logger.error "SemanticLogger::Logger Appender thread: Failed to flush appender: #{appender.inspect}", exc
-                  end
-                end
-
-                message[:reply_queue] << true if message[:reply_queue]
-                logger.debug "SemanticLogger::Logger Appender thread: All appenders flushed"
-              else
-                logger.warn "SemanticLogger::Logger Appender thread: Ignoring unknown command: #{message[:command]}"
+      logger.info "SemanticLogger::Logger V#{VERSION} Appender thread active"
+      begin
+        count = 0
+        while message = queue.pop
+          if message.is_a? Log
+            appenders.each do |appender|
+              begin
+                appender.log(message)
+              rescue Exception => exc
+                logger.error "SemanticLogger::Logger Appender thread: Failed to log to appender: #{appender.inspect}", exc
               end
             end
-          end
-        rescue Exception => exception
-          logger.error "SemanticLogger::Logger Appender thread restarting due to exception", exception
-          retry
-        ensure
-          logger.debug "SemanticLogger::Logger Appender thread stopped"
-        end
-      end
+            count += 1
+            # Check every few log messages whether this appender thread is falling behind
+            if count > lag_check_interval
+              if (diff = Time.now - message.time) > lag_threshold_s
+                logger.warn "SemanticLogger::Logger Appender thread has fallen behind by #{diff} seconds with #{queue_size} messages queued up. Consider reducing the log level or changing the appenders"
+              end
+              count = 0
+            end
+          else
+            case message[:command]
+            when :flush
+              appenders.each do |appender|
+                begin
+                  logger.info "SemanticLogger::Logger Appender thread: Flushing appender: #{appender.name}"
+                  appender.flush
+                rescue Exception => exc
+                  logger.error "SemanticLogger::Logger Appender thread: Failed to flush appender: #{appender.inspect}", exc
+                end
+              end
 
-      at_exit do
-        logger.debug "SemanticLogger::Logger Process terminating, flushing appenders"
-        flush
+              message[:reply_queue] << true if message[:reply_queue]
+              logger.info "SemanticLogger::Logger Appender thread: All appenders flushed"
+            else
+              logger.warn "SemanticLogger::Logger Appender thread: Ignoring unknown command: #{message[:command]}"
+            end
+          end
+        end
+      rescue Exception => exception
+        logger.error "SemanticLogger::Logger Appender thread restarting due to exception", exception
+        retry
+      ensure
+        logger.error "SemanticLogger::Logger Appender thread has died. All logging will be terminated"
       end
     end
 
   end
 end
+
+at_exit do
+  SemanticLogger::Logger.flush
+end
+
