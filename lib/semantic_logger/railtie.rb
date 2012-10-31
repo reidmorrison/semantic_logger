@@ -40,8 +40,8 @@ module SemanticLogger #:nodoc:
         end
 
         # Set internal logger to log to file only, in case another appender
-        # experiences logging problems
-        appender = SemanticLogger::Appender::File.new(path)
+        # experiences errors during writes
+        appender = SemanticLogger::Appender::File.new(path, config.log_level)
         appender.name = "SemanticLogger::Logger"
         SemanticLogger::Logger.logger = appender
 

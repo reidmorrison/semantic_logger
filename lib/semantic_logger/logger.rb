@@ -213,8 +213,13 @@ module SemanticLogger
         logger.error "Appender thread restarting due to exception", exception
         retry
       ensure
-        logger.debug "Appender thread has stopped"
         @@appender_thread = nil
+        # This block may be called after the file handles have been released by Ruby
+        begin
+          logger.debug "Appender thread has stopped"
+        rescue Exception
+          nil
+        end
       end
     end
 
