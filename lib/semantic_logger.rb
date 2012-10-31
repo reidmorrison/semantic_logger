@@ -2,6 +2,7 @@
 require 'thread'
 require 'thread_safe'
 require 'sync_attr'
+require 'semantic_logger/version'
 
 module SemanticLogger
   autoload :Base,      'semantic_logger/base'

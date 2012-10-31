@@ -31,16 +31,10 @@
 #
 module SemanticLogger
   class Logger < Base
-    include SyncAttr
-
-    # Add or remove logging appenders to the appenders Array
+    # Add or remove logging appenders to the thread-safe appenders Array
     # Appenders will be written to in the order that they appear in this list
-    sync_cattr_reader :appenders do
-      # The logging thread is only started when an appender is added
-      @@appender_thread = Thread.new { appender_thread }
-
-      # Thread safe appenders array
-      ThreadSafe::Array.new
+    def self.appenders
+      @@appenders
     end
 
     # Returns a Logger instance
@@ -84,9 +78,9 @@ module SemanticLogger
     # Flush all queued log entries disk, database, etc.
     #  All queued log messages are written and then each appender is flushed in turn
     def self.flush
-      return false unless started? && @@appender_thread && @@appender_thread.alive?
+      return false unless appender_thread_active?
 
-      logger.debug "SemanticLogger::Logger Flushing appenders with #{queue_size} log messages on the queue"
+      logger.debug "Flushing appenders with #{queue_size} log messages on the queue"
       reply_queue = Queue.new
       queue << { :command => :flush, :reply_queue => reply_queue }
       reply_queue.pop
@@ -117,16 +111,21 @@ module SemanticLogger
       @@lag_threshold_s = time_threshold_s
     end
 
-    # Returns whether the logging thread has been started
-    def self.started?
-      defined? :@@appenders
+    # Allow the internal logger to be overridden from its default to STDERR
+    #   Can be replaced with another Ruby logger or Rails logger, but never to
+    #   SemanticLogger::Logger itself since it is for reporting problems
+    #   while trying to log to the various appenders
+    def self.logger=(logger)
+      @@logger = logger
     end
+
 
     ############################################################################
     protected
 
+    @@appenders       = ThreadSafe::Array.new
     @@appender_thread = nil
-    @@queue = Queue.new
+    @@queue           = Queue.new
 
     # Queue to hold messages that need to be logged to the various appenders
     def self.queue
@@ -136,19 +135,31 @@ module SemanticLogger
     # Place log request on the queue for the Appender thread to write to each
     # appender in the order that they were registered
     def log(log)
-      self.class.queue << log if self.class.started?
+      self.class.queue << log if @@appender_thread
     end
 
     # Internal logger for SemanticLogger
     #   For example when an appender is not working etc..
     #   By default logs to STDERR
-    #   Can be replaced with another Ruby logger or Rails logger, but never to
-    #   SemanticLogger::Logger itself
-    #
-    # Warning: Do not use this logger directly it is intended for internal logging
-    #          within Semantic Logger itself
-    sync_cattr_accessor :logger do
-      SemanticLogger::Appender::File.new(STDERR, :warn)
+    def self.logger
+      @@logger ||= begin
+        l = SemanticLogger::Appender::File.new(STDERR, :warn)
+        l.name = self.class.name
+        l
+      end
+    end
+
+    # Start the appender thread
+    def self.start_appender_thread
+      return false if appender_thread_active?
+      @@appender_thread = Thread.new { appender_thread }
+      raise "Failed to start Appender Thread" unless @@appender_thread
+      true
+    end
+
+    # Returns true if the appender_thread is active
+    def self.appender_thread_active?
+      @@appender_thread && @@appender_thread.alive?
     end
 
     # Separate appender thread responsible for reading log messages and
@@ -159,7 +170,7 @@ module SemanticLogger
       #
       # Should any appender fail to log or flush, the exception is logged and
       # other appenders will still be called
-      logger.info "SemanticLogger::Logger V#{VERSION} Appender thread active"
+      logger.debug "V#{VERSION} Appender thread active"
       begin
         count = 0
         while message = queue.pop
@@ -168,14 +179,14 @@ module SemanticLogger
               begin
                 appender.log(message)
               rescue Exception => exc
-                logger.error "SemanticLogger::Logger Appender thread: Failed to log to appender: #{appender.inspect}", exc
+                logger.error "Appender thread: Failed to log to appender: #{appender.inspect}", exc
               end
             end
             count += 1
             # Check every few log messages whether this appender thread is falling behind
             if count > lag_check_interval
               if (diff = Time.now - message.time) > lag_threshold_s
-                logger.warn "SemanticLogger::Logger Appender thread has fallen behind by #{diff} seconds with #{queue_size} messages queued up. Consider reducing the log level or changing the appenders"
+                logger.warn "Appender thread has fallen behind by #{diff} seconds with #{queue_size} messages queued up. Consider reducing the log level or changing the appenders"
               end
               count = 0
             end
@@ -184,32 +195,37 @@ module SemanticLogger
             when :flush
               appenders.each do |appender|
                 begin
-                  logger.info "SemanticLogger::Logger Appender thread: Flushing appender: #{appender.name}"
+                  logger.info "Appender thread: Flushing appender: #{appender.name}"
                   appender.flush
                 rescue Exception => exc
-                  logger.error "SemanticLogger::Logger Appender thread: Failed to flush appender: #{appender.inspect}", exc
+                  logger.error "Appender thread: Failed to flush appender: #{appender.inspect}", exc
                 end
               end
 
               message[:reply_queue] << true if message[:reply_queue]
-              logger.info "SemanticLogger::Logger Appender thread: All appenders flushed"
+              logger.info "Appender thread: All appenders flushed"
             else
-              logger.warn "SemanticLogger::Logger Appender thread: Ignoring unknown command: #{message[:command]}"
+              logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
             end
           end
         end
       rescue Exception => exception
-        logger.error "SemanticLogger::Logger Appender thread restarting due to exception", exception
+        logger.error "Appender thread restarting due to exception", exception
         retry
       ensure
-        logger.debug "SemanticLogger::Logger Appender thread has stopped"
+        logger.debug "Appender thread has stopped"
+        @@appender_thread = nil
       end
     end
 
+    # Flush all appenders at exit, waiting for outstanding messages on the queue
+    # to be written first
+    at_exit do
+      flush
+    end
+
+    # Start appender thread on load to workaround intermittent startup issues
+    # with JRuby 1.8.6 under Trinidad in 1.9 mode
+    start_appender_thread
   end
 end
-
-at_exit do
-  SemanticLogger::Logger.flush
-end
-

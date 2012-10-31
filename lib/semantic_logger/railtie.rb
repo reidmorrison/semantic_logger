@@ -1,3 +1,4 @@
+require 'logger'
 module SemanticLogger #:nodoc:
   class Railtie < Rails::Railtie #:nodoc:
     # Make the SemanticLogger config available in the Rails application config
@@ -40,11 +41,12 @@ module SemanticLogger #:nodoc:
 
         # Set internal logger to log to file only, in case another appender
         # experiences logging problems
-        SemanticLogger::Logger.logger = SemanticLogger::Appender::File.new(path)
+        appender = SemanticLogger::Appender::File.new(path)
+        appender.name = "SemanticLogger::Logger"
+        SemanticLogger::Logger.logger = appender
 
         # Add the log file to the list of appenders
         SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(path)
-
         SemanticLogger::Logger.new(Rails)
       rescue StandardError
         # If not able to log to file, log to standard error with warning level only
