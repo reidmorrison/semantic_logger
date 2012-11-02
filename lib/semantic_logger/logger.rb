@@ -210,7 +210,12 @@ module SemanticLogger
           end
         end
       rescue Exception => exception
-        logger.error "Appender thread restarting due to exception", exception
+        # This block may be called after the file handles have been released by Ruby
+        begin
+          logger.error "Appender thread restarting due to exception", exception
+        rescue Exception
+          nil
+        end
         retry
       ensure
         @@appender_thread = nil
