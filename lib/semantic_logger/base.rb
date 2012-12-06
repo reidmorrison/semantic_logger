@@ -31,7 +31,23 @@ module SemanticLogger
     # Implement the log level query
     #   logger.debug?
     #
-    # Example:
+    # Parameters:
+    #   message
+    #     [String] text message to be logged
+    #     Should always be supplied unless the result of the supplied block returns
+    #     a string in which case it will become the logged message
+    #     Default: nil
+    #
+    #   payload
+    #     [Hash|Exception] Optional hash payload or an exception to be logged
+    #     Default: nil
+    #
+    #   exception
+    #     [Exception] Optional exception to be logged
+    #     Allows both an exception and a payload to be logged
+    #     Default: nil
+    #
+    # Examples:
     #    require 'semantic_logger'
     #
     #    # Enable trace level logging
@@ -54,20 +70,28 @@ module SemanticLogger
     #
     SemanticLogger::LEVELS.each_with_index do |level, index|
       class_eval <<-EOT, __FILE__, __LINE__
-        def #{level}(message = nil, payload = nil)
+        def #{level}(message=nil, payload=nil, exception=nil)
           if @level_index <= #{index}
+            if exception.nil? && payload && payload.is_a?(Exception)
+              exception = payload
+              payload = nil
+            end
+
             if block_given? && (result = yield)
               if result.is_a?(String)
-                message = message.nil? ? result : "\#{message} -- \#{result.to_s}"
+                message = message.nil? ? result : "\#{message} -- \#{result}"
+              elsif payload && payload.respond_to?(:merge)
+                payload.merge(result)
               else
-                payload = payload.nil? ? result : payload.merge(result)
+                payload = result
               end
             end
+
             # Add scoped payload
             if self.payload
               payload = payload.nil? ? self.payload : self.payload.merge(payload)
             end
-            log Log.new(:#{level}, self.class.thread_name, name, message, payload, Time.now, nil, tags, #{index})
+            log Log.new(:#{level}, self.class.thread_name, name, message, payload, Time.now, nil, tags, #{index}, exception)
             true
           else
             false
@@ -80,13 +104,17 @@ module SemanticLogger
 
         def benchmark_#{level}(message, params = nil)
           raise "Mandatory block missing" unless block_given?
-          log_exception = params.nil? ? :full : params[:log_exception]
-          min_duration  = params.nil? ? 0.0   : (params[:min_duration] || 0.0)
-          payload       = params.nil? ? nil   : params[:payload]
           if @level_index <= #{index}
-            start = Time.now
+            log_exception = params.nil? ? :partial : (params[:log_exception] || :partial)
+            min_duration  = params.nil? ? 0.0      : (params[:min_duration] || 0.0)
+            payload       = params.nil? ? nil      : params[:payload]
+            exception     = params[:exception]
+            start         = Time.now
             begin
-              result = yield
+              yield
+            rescue Exception => exc
+              exception = exc
+            ensure
               end_time = Time.now
               duration = 1000.0 * (end_time - start)
 
@@ -96,16 +124,18 @@ module SemanticLogger
                 if self.payload
                   payload = payload.nil? ? self.payload : self.payload.merge(payload)
                 end
-                log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index})
+                if exception
+                  case log_exception
+                  when :full
+                    log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, exception)
+                  when :partial
+                    log Log.new(:#{level}, self.class.thread_name, name, "\#{message} -- Exception: \#{exception.class}: \#{exception.message}", payload, end_time, duration, tags, #{index}, nil)
+                  end
+                  raise exception
+                else
+                 log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, nil)
+                end
               end
-              result
-            rescue Exception => exc
-              if log_exception == :full
-                log Log.new(:#{level}, self.class.thread_name, name, message, exc, Time.now, 1000.0 * (Time.now - start), tags, #{index})
-              elsif log_exception == :partial
-                log Log.new(:#{level}, self.class.thread_name, name, "\#{message} -- \#{exception.class}: \#{exception.message}", payload, end_time, 1000.0 * (end_time - start), tags, #{index})
-              end
-              raise exc
             end
           else
             yield
@@ -234,7 +264,7 @@ module SemanticLogger
     #
     # level_index
     #   Internal index of the log level
-    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index)
+    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception)
 
     # For JRuby include the Thread name rather than its id
     if defined? Java

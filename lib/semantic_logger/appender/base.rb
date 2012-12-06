@@ -17,17 +17,11 @@ module SemanticLogger
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def default_formatter
         Proc.new do |log|
-          message = log.message.to_s
           tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
-          if log.payload
-            if log.payload.is_a?(Exception)
-              exception = log.payload
-              message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-            else
-              message << " -- " << self.class.inspect_payload(log.payload)
-            end
-          end
+          message = log.message.to_s
+          message << " -- " << log.payload.inspect if log.payload
+          message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
@@ -64,17 +58,6 @@ module SemanticLogger
         # Ruby MRI supports micro seconds
         def self.formatted_time(time)
           "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%06d" % (time.usec)}"
-        end
-      end
-
-      if RUBY_VERSION.to_f >= 1.9
-        # With Ruby 1.9 calling .to_s on a hash now returns { 'a' => 1 }
-        def self.inspect_payload(payload)
-          payload.to_s
-        end
-      else
-        def self.inspect_payload(payload)
-          payload.inspect
         end
       end
 

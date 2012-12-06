@@ -204,12 +204,12 @@ logger.info?
 The following logging methods are available
 
 ```ruby
-trace(message, payload=nil, &block)
-debug(message, payload=nil, &block)
-info(message, payload=nil, &block)
-warn(message, payload=nil, &block)
-error(message, payload=nil, &block)
-fatal(message, payload=nil, &block)
+trace(message, payload=nil, exception=nil, &block)
+debug(message, payload=nil, exception=nil, &block)
+info(message, payload=nil, exception=nil, &block)
+warn(message, payload=nil, exception=nil, &block)
+error(message, payload=nil, exception=nil, &block)
+fatal(message, payload=nil, exception=nil, &block)
 ```
 
 Parameters
@@ -217,6 +217,7 @@ Parameters
 - message: The text message to log.
   Mandatory only if no block is supplied
 - payload: Optional, either a Ruby Exception object or a Hash
+- exception: Optional, Ruby Exception object. Allows both an exception and a payload to be logged
 - block:   The optional block is executed only if the corresponding log level
   is active. Can be used to prevent unnecessary calculations of debug data in
   production.
@@ -311,7 +312,10 @@ Parameters
     Default: 0.0
 
   :payload
-    Optional, either a Ruby Exception object or a Hash
+    Optional, Hash payload
+
+  :exception
+    Optional, Ruby Exception object to log along with the duration of the supplied block
 ```
 
 #### Logging levels
@@ -578,21 +582,15 @@ Example: Replace the Rails log formatter, in the environment configuration file:
     config.after_initialize do
       # Since the Rails logger is already initialized, replace its default formatter
       config.semantic_logger.appenders.first.formatter = Proc.new do |log|
-          message = log.message.to_s
           tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
-          if log.payload
-            if log.payload.is_a?(Exception)
-              exception = log.payload
-              message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-            else
-              message << " -- " << log.payload.inspect
-            end
-          end
+          message = log.message.to_s
+          message << " -- " << log.payload.inspect if log.payload
+          message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
-          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%06d" % log.time.usec} #{"%-05s" % log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
-          str << " (#{'%.1f' % log.duration}ms)" if log.duration
-          str
+          duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
+
+          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
       end
     end
 ```
@@ -614,24 +612,18 @@ Example: Replace the MongoDB formatter, in the environment configuration file:
             :thread_name => log.thread_name,
             :name        => log.name,
             :level       => log.level,
+            :level_index => log.level_index,
           }
           document[:application] = 'MyApplication'
           document[:message]     = SemanticLogger::Appender::MongoDB.strip_colorizing(log.message) if log.message
           document[:duration]    = log.duration if log.duration
           document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
-
-          if log.payload
-            if log.payload.is_a?(Exception)
-              exception = log.payload
-              document[:payload] = {
-                :exception => exception.class.name,
-                :message   => exception.message,
-                :backtrace => exception.backtrace
-              }
-            else
-              document[:payload] = log.payload
-            end
-          end
+          document[:payload]     = log.payload if log.payload
+          document[:exception]   = {
+            :name        => log.exception.class.name,
+            :message     => log.exception.message,
+            :stack_trace => log.exception.backtrace
+          } if log.exception
           document
       end
       config.semantic_logger.appenders << mongodb_appender

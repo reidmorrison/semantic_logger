@@ -36,6 +36,11 @@ class AppenderFileTest < Test::Unit::TestCase
         @appender.debug 'hello world', @hash
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str}\n/, @io.string
       end
+
+      should "handle message, payload, and exception" do
+        @appender.debug 'hello world', @hash, StandardError.new("StandardError")
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str} -- StandardError: StandardError\n\n/, @io.string
+      end
     end
 
     context "for each log level" do
@@ -51,21 +56,15 @@ class AppenderFileTest < Test::Unit::TestCase
     context "custom formatter" do
       setup do
         @appender = SemanticLogger::Appender::File.new(@io) do |log|
-          message = log.message.to_s
           tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
-          if log.payload
-            if log.payload.is_a?(Exception)
-              exception = log.payload
-              message << " -- " << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-            else
-              message << " -- " << log.payload.inspect
-            end
-          end
+          message = log.message.to_s
+          message << " -- " << log.payload.inspect if log.payload
+          message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
-          str = "#{log.time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (log.time.usec/1000)} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}"
-          str << " (#{'%.1f' % log.duration}ms)" if log.duration
-          str
+          duration_str = log.duration ? " (#{'%.1f' % log.duration}ms)" : ''
+
+          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
         end
       end
 
