@@ -108,7 +108,7 @@ module SemanticLogger
             log_exception = params.nil? ? :partial : (params[:log_exception] || :partial)
             min_duration  = params.nil? ? 0.0      : (params[:min_duration] || 0.0)
             payload       = params.nil? ? nil      : params[:payload]
-            exception     = params[:exception]
+            exception     = params.nil? ? nil      : params[:exception]
             start         = Time.now
             begin
               yield
