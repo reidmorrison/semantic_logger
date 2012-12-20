@@ -9,7 +9,7 @@ Improved logging for Ruby
 
 As of SemanticLogger V2.0 the Rails logging is no longer automatically replaced
 when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/ClarityServices/rails_semantic_logger)
-to replace the Rails default logger with SemanticLogger
+gem to replace the Rails default logger with SemanticLogger
 
 ### Overview
 
@@ -60,13 +60,6 @@ Drop-in Replacement
 * Simple drop-in replacement for the Ruby, or the Rails loggers
 * Supports current common logging interface
 * No changes to existing to code to use new logger ( other than replacing the logger )
-
-Rails 2 & 3 Support
-
-* Just include the semantic_logger gem into Rails and it will immediately
-  replace the existing loggers to improve performance and information
-  in the log files
-* The Rails 3 Tagged logging feature is already available for Rails 2 by use Semantic Logger
 
 Thread Aware
 
@@ -711,30 +704,6 @@ To log to MongoDB, it also needs the Ruby Mongo Driver
 - Add support for a configuration file that can set log level by class name
 - Configuration file to support adding appenders
 - Based on end-user demand add appenders for: Syslog, hadoop, redis, etc..
-
-Development
------------
-
-Want to contribute to Semantic Logger?
-
-First clone the repo and run the tests:
-
-    git clone git://github.com/ClarityServices/semantic_logger.git
-    cd semantic_logger
-    rake test
-
-Feel free to ping the mailing list with any issues and we'll try to resolve it.
-
-Contributing
-------------
-
-Once you've made your great commits:
-
-1. [Fork](http://help.github.com/forking/) semantic_logger
-2. Create a topic branch - `git checkout -b my_branch`
-3. Push to your branch - `git push origin my_branch`
-4. Create an [Issue](http://github.com/ClarityServices/semantic_logger/issues) with a link to your branch
-5. That's it!
 
 Meta
 ----
