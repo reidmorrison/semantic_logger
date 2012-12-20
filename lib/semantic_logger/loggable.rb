@@ -1,3 +1,5 @@
+require 'sync_attr'
+
 # Logger class variable mix-in
 #
 #   Lazy initialize and a logger class variable with instance accessor

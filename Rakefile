@@ -17,8 +17,8 @@ task :gem  do |t|
     spec.email       = ['reidmo@gmail.com']
     spec.homepage    = 'https://github.com/ClarityServices/semantic_logger'
     spec.date        = Date.today.to_s
-    spec.summary     = "Semantic Logger for Ruby, and Ruby on Rails"
-    spec.description = "Machine readable document oriented logging with support for MongoDB and text files"
+    spec.summary     = "Improved logging for Ruby"
+    spec.description = "Semantic Logger takes logging in Ruby to a new level by adding several new capabilities to the commonly used Logging API"
     spec.files       = FileList["./**/*"].exclude(/.gem$/, /.log$/,/^nbproject/).map{|f| f.sub(/^\.\//, '')}
     spec.has_rdoc    = true
     spec.add_dependency 'sync_attr'

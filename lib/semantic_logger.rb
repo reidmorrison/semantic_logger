@@ -1,7 +1,5 @@
 # Place requires here to prevent issues on JRuby with global.require.lock=true
 require 'thread'
-require 'thread_safe'
-require 'sync_attr'
 require 'semantic_logger/version'
 
 module SemanticLogger
@@ -18,8 +16,4 @@ module SemanticLogger
 
   # Logging levels in order with most detailed logging first
   LEVELS = [:trace, :debug, :info, :warn, :error, :fatal]
-end
-
-if defined?(Rails)
-  require 'semantic_logger/railtie'
 end

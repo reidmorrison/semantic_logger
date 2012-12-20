@@ -5,6 +5,12 @@ Improved logging for Ruby
 
 * http://github.com/ClarityServices/semantic_logger
 
+### Note:
+
+As of SemanticLogger V2.0 the Rails logging is no longer automatically replaced
+when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/ClarityServices/rails_semantic_logger)
+to replace the Rails default logger with SemanticLogger
+
 ### Overview
 
 Semantic Logger takes logging in Ruby to a new level by adding several new
@@ -234,7 +240,7 @@ logger.debug { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed"
 
 ### Exceptions
 
-The Semantic Logger adds an extra parameter to the existing log methods so that
+The Semantic Logger adds an optional parameter to the existing log methods so that
 a corresponding Exception can be logged in a standard way
 
 ```ruby
@@ -376,29 +382,6 @@ This will result in the log output identifying the log entry as from the Externa
 
     2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) ExternalSupplier -- Calling external interface
 
-[SyncAttr](https://github.com/ClarityServices/sync_attr) is a gem that supports
-lazy loading and thread-safe initialization of class attributes
-
-Extract from a Rails log file after adding the semantic_logger gem:
-
-```
-2012-10-19 12:05:46.736 I [35940:JRubyWorker-10] Rails --
-
-Started GET "/" for 127.0.0.1 at 2012-10-19 12:05:46 +0000
-2012-10-19 12:05:47.318 I [35940:JRubyWorker-10] ActionController --   Processing by AdminController#index as HTML
-2012-10-19 12:05:47.633 D [35940:JRubyWorker-10] ActiveRecord --   User Load (2.0ms)  SELECT `users`.* FROM `users` WHERE `users`.`id` = 1 LIMIT 1
-2012-10-19 12:05:49.833 D [35940:JRubyWorker-10] ActiveRecord --   Role Load (2.0ms)  SELECT `roles`.* FROM `roles`
-2012-10-19 12:05:49.868 D [35940:JRubyWorker-10] ActiveRecord --   Role Load (1.0ms)  SELECT * FROM `roles` INNER JOIN `roles_users` ON `roles`.id = `roles_users`.role_id WHERE (`roles_users`.user_id = 1 )
-2012-10-19 12:05:49.885 I [35940:JRubyWorker-10] ActionController -- Rendered menus/_control_system.html.erb (98.0ms)
-2012-10-19 12:05:51.014 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_top_bar.html.erb (386.0ms)
-2012-10-19 12:05:51.071 D [35940:JRubyWorker-10] ActiveRecord --   Announcement Load (20.0ms)  SELECT `announcements`.* FROM `announcements` WHERE `announcements`.`active` = 1 ORDER BY created_at desc
-2012-10-19 12:05:51.072 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_announcement.html.erb (26.0ms)
-2012-10-19 12:05:51.083 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_flash.html.erb (4.0ms)
-2012-10-19 12:05:51.109 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_footer.html.erb (16.0ms)
-2012-10-19 12:05:51.109 I [35940:JRubyWorker-10] ActionController -- Rendered admin/index.html.erb within layouts/base (1329.0ms)
-2012-10-19 12:05:51.113 I [35940:JRubyWorker-10] ActionController -- Completed 200 OK in 3795ms (Views: 1349.0ms | ActiveRecord: 88.0ms | Mongo: 0.0ms)
-```
-
 #### Tagged Logging
 
 Semantic Logger allows any Ruby or Rails program to also include tagged logging.
@@ -433,7 +416,7 @@ logger.with_payload(:user => 'Jack', :zip_code => 12345) do
 end
 ```
 
-### Using SemanticLogger outside of Rails
+### Using SemanticLogger
 
 Example:
 
@@ -456,53 +439,13 @@ logger.info "Hello World"
 ### Configuration
 
 The Semantic Logger follows the principle where multiple appenders can be active
-at the same time. This allows one to log to MongoDB and the Rails
-ActiveResource::BufferedLogger at the same time.
+at the same time. For example, this allows one to log to MongoDB and the Rails
+log file at the same time.
 
 #### Rails Configuration
 
-Add the following line to Gemfile
+To automatically replace the Rails logger with Semantic Logger use the gem [rails_semantic_logger](http://github.com/ClarityServices/rails_semantic_logger)
 
-```ruby
-gem 'semantic_logger'
-```
-
-Also add the following line to Gemfile if you want to log to MongoDB
-
-```ruby
-gem 'mongo'
-```
-
-Install required gems with bundler
-
-    bundle install
-
-This will automatically replace the standard Rails logger with Semantic Logger
-which will write all log data to the configured Rails logger.
-
-By default Semantic Logger will detect the log level from Rails. To set the
-log level explicitly, add the following line to
-config/environments/production.rb inside the Application.configure block
-
-```ruby
-config.log_level = :trace
-```
-
-To log to both the Rails logger and MongoDB add the following lines to
-config/environments/production.rb inside the Application.configure block
-
-```ruby
-config.after_initialize do
-  # Re-use the existing MongoDB connection, or create a new one here
-  db = Mongo::Connection.new['production_logging']
-
-  # Besides logging to the standard Rails logger, also log to MongoDB
-  config.semantic_logger.appenders << SemanticLogger::Appender::MongoDB.new(
-    :db              => db,
-    :collection_size => 25.gigabytes
-  )
-end
-```
 ### Log Struct
 
 Internally all log messages are passed around in a Log Struct. In order
@@ -753,7 +696,6 @@ See the [MongoDB Appender Test](https://github.com/ClarityServices/semantic_logg
 ### Dependencies
 
 - Ruby MRI 1.8.7, 1.9.3 (or above) Or, JRuby 1.6.3 (or above)
-- Optional: Rails 3.0.10 (or above)
 - Optional: To log to MongoDB, Mongo Ruby Driver 1.5.2 or above
 
 ### Install
@@ -766,12 +708,9 @@ To log to MongoDB, it also needs the Ruby Mongo Driver
 
 ### Future
 
-- In V1: Move Railtie to it's own gem so that the Rails logger is not replaced
-  automatically
-- In V1: Add support for a configuration file that can set log level by class name
-- Configuration file to support setting the log level for a specific class
+- Add support for a configuration file that can set log level by class name
 - Configuration file to support adding appenders
-- Based on demand add appenders for: Syslog, hadoop, redis
+- Based on end-user demand add appenders for: Syslog, hadoop, redis, etc..
 
 Development
 -----------
@@ -802,7 +741,7 @@ Meta
 
 * Code: `git clone git://github.com/ClarityServices/semantic_logger.git`
 * Home: <https://github.com/ClarityServices/semantic_logger>
-* Bugs: <http://github.com/reidmorrison/semantic_logger/issues>
+* Bugs: <http://github.com/ClarityServices/semantic_logger/issues>
 * Gems: <http://rubygems.org/gems/semantic_logger>
 
 This project uses [Semantic Versioning](http://semver.org/).

@@ -1,3 +1,5 @@
+require 'thread_safe'
+
 # Logger is the interface used by
 #
 # Logger maintains the logging name to be used for all log entries generated
