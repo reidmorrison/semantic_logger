@@ -12,15 +12,15 @@ module SemanticLogger
       #    require 'semantic_logger'
       #
       #    # Enable trace level logging
-      #    SemanticLogger::Logger.level = :info
+      #    SemanticLogger.default_level = :info
       #
       #    # Log to screen
-      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDOUT)
+      #    SemanticLogger.add_appender(STDOUT)
       #
       #    # And log to a file at the same time
-      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('application.log')
+      #    SemanticLogger::Logger.add_appender('application.log')
       #
-      #    logger =  SemanticLogger::Logger.new('test')
+      #    logger = SemanticLogger['test']
       #    logger.info 'Hello World'
       #
       # Example 2. To log all levels to file and only :info and above to screen:
@@ -28,19 +28,19 @@ module SemanticLogger
       #    require 'semantic_logger'
       #
       #    # Enable trace level logging
-      #    SemanticLogger::Logger.level = :trace
+      #    SemanticLogger.default_level = :trace
       #
       #    # Log to screen but only display :info and above
-      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDOUT, :info)
+      #    SemanticLogger.add_appender(STDOUT, :info)
       #
       #    # And log to a file at the same time, including all :trace level data
-      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('application.log')
+      #    SemanticLogger.add_appender('application.log')
       #
-      #    logger =  SemanticLogger::Logger.new('test')
+      #    logger =  SemanticLogger['test']
       #    logger.info 'Hello World'
       #
       def initialize(filename, level=nil, &block)
-        raise "logger cannot be null when initializing the SemanticLogging::Appender::Logger" unless filename
+        raise "filename cannot be null when initializing the SemanticLogging::Appender::File" unless filename
         @filename = filename
         @log = if filename.respond_to?(:write) and filename.respond_to?(:close)
           filename

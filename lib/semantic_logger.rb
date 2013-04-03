@@ -1,6 +1,7 @@
 # Place requires here to prevent issues on JRuby with global.require.lock=true
 require 'thread'
 require 'semantic_logger/version'
+require 'semantic_logger/semantic_logger'
 
 module SemanticLogger
   autoload :Base,      'semantic_logger/base'
@@ -13,7 +14,4 @@ module SemanticLogger
     autoload :Wrapper, 'semantic_logger/appender/wrapper'
     autoload :MongoDB, 'semantic_logger/appender/mongodb'
   end
-
-  # Logging levels in order with most detailed logging first
-  LEVELS = [:trace, :debug, :info, :warn, :error, :fatal]
 end

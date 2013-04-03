@@ -1,43 +1,9 @@
 require 'thread_safe'
 
-# Logger is the interface used by
-#
-# Logger maintains the logging name to be used for all log entries generated
-# by the invoking classes or modules
-#
-# It is recommended to create an instance of the class for every class or
-# module so that it can be uniquely identified and searched on
-#
-# Example, log to Logger:
-#   require 'logger'
-#   require 'semantic_logger'
-#   log = Logger.new(STDOUT)
-#   log.level = Logger::DEBUG
-#
-#   SemanticLogger::Logger.appenders << SemanticLogger::Appender::Logger.new(log)
-#
-#   logger = SemanticLogger::Logger.new("my.app.class")
-#   logger.debug("Login time", :user => 'Joe', :duration => 100, :ip_address=>'127.0.0.1')
-#
-#   # Now log to the Logger above as well as MongoDB at the same time
-#
-#   db = Mongodb::Connection.new['production_logging']
-#
-#   SemanticLogger::Logger.appenders << SemanticLogger::Appender::MongoDB.new(
-#     :db              => db,
-#     :collection_size => 25.gigabytes
-#   )
-# ...
-#   # This will be logged to both the Ruby Logger and MongoDB
-#   logger.debug("Login time", :user => 'Mary', :duration => 230, :ip_address=>'192.168.0.1')
-#
+# Logger stores the class name to be used for all log messages so that every
+# log message written by this instance will include the class name
 module SemanticLogger
   class Logger < Base
-    # Add or remove logging appenders to the thread-safe appenders Array
-    # Appenders will be written to in the order that they appear in this list
-    def self.appenders
-      @@appenders
-    end
 
     # Returns a Logger instance
     #
@@ -53,11 +19,11 @@ module SemanticLogger
     #
     #  level
     #    The initial log level to start with for this logger instance
-    #    Default: SemanticLogger::Logger.default_level
+    #    Default: SemanticLogger.default_level
     #
     def initialize(klass, level=nil)
       @name = klass.is_a?(String) ? klass : klass.name
-      self.level = level || self.class.default_level
+      self.level = level || SemanticLogger.default_level
     end
 
     # Returns [Integer] the number of log entries that have not been written
@@ -69,12 +35,6 @@ module SemanticLogger
     # look into speeding up the appenders themselves
     def self.queue_size
       queue.size
-    end
-
-    # DEPRECATED: Please use queue_size instead.
-    def self.cache_count
-      warn "[DEPRECATION] 'SemanticLogger::Logger.cache_count' is deprecated.  Please use 'SemanticLogger::Logger.queue_size' instead."
-      queue_size
     end
 
     # Flush all queued log entries disk, database, etc.
@@ -121,11 +81,21 @@ module SemanticLogger
       @@logger = logger
     end
 
+    # DEPRECATED See SemanticLogger.add_appender
+    def self.appenders
+      warn "[DEPRECATION] `SemanticLogger::Logger.appenders` is deprecated.  Please use `SemanticLogger.add_appender` instead."
+      SemanticLogger.appenders
+    end
+
+    # DEPRECATED: Please use queue_size instead.
+    def self.cache_count
+      warn "[DEPRECATION] 'SemanticLogger::Logger.cache_count' is deprecated.  Please use 'SemanticLogger::Logger.queue_size' instead."
+      queue_size
+    end
 
     ############################################################################
     protected
 
-    @@appenders       = ThreadSafe::Array.new
     @@appender_thread = nil
     @@queue           = Queue.new
 
@@ -177,7 +147,7 @@ module SemanticLogger
         count = 0
         while message = queue.pop
           if message.is_a? Log
-            appenders.each do |appender|
+            SemanticLogger.appenders.each do |appender|
               begin
                 appender.log(message)
               rescue Exception => exc
@@ -195,7 +165,7 @@ module SemanticLogger
           else
             case message[:command]
             when :flush
-              appenders.each do |appender|
+              SemanticLogger.appenders.each do |appender|
                 begin
                   logger.info "Appender thread: Flushing appender: #{appender.name}"
                   appender.flush

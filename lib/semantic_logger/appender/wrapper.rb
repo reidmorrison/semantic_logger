@@ -13,22 +13,22 @@ module SemanticLogger
       #    require 'logger'
       #    require 'semantic_logger'
       #    ruby_logger = Logger.new(STDOUT)
-      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::Wrapper.new(ruby_logger)
-      #    logger =  SemanticLogger::Logger.new('test')
+      #    SemanticLogger.add_appender(ruby_logger)
+      #    logger =  SemanticLogger['test']
       #    logger.info('Hello World', :some => :payload)
       #
       # Enhance the Rails Logger
       #    # Add the Rails logger to the list of appenders
-      #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::Wrapper.new(Rails.logger)
-      #    Rails.logger = SemanticLogger::Logger.new('Rails')
+      #    SemanticLogger.add_appender(Rails.logger)
+      #    Rails.logger = SemanticLogger['Rails']
       #
       #    # Make ActiveRecord logging include its class name in every log entry
-      #    ActiveRecord::Base.logger = SemanticLogger::Logger.new('ActiveRecord')
+      #    ActiveRecord::Base.logger = SemanticLogger['ActiveRecord']
       #
       # Note: Since the log level is controlled by setting the Ruby or Rails logger directly
       #   the level is ignored for this appender
       def initialize(logger, &block)
-        raise "logger cannot be null when initiailizing the SemanticLogging::Appender::Logger" unless logger
+        raise "logger cannot be null when initiailizing the SemanticLogging::Appender::Wrapper" unless logger
         @logger = logger
 
         # Set the formatter to the supplied block

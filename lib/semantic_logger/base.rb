@@ -17,9 +17,9 @@ module SemanticLogger
     #
     # Note: This level is only for this particular appender. It does not override
     #   the log level in any logging instance or the default log level
-    #   SemanticLogger::Logger.level
+    #   SemanticLogger.default_level
     #
-    # Must be one of the values in SemanticLogger::Logger::LEVELS
+    # Must be one of the values in SemanticLogger::LEVELS
     def level=(level)
       @level_index = self.class.map_level_to_index(level)
       @level = level
@@ -51,15 +51,15 @@ module SemanticLogger
     #    require 'semantic_logger'
     #
     #    # Enable trace level logging
-    #    SemanticLogger::Logger.level = :info
+    #    SemanticLogger.default_level = :info
     #
     #    # Log to screen
-    #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDOUT)
+    #    SemanticLogger.add_appender(STDOUT)
     #
     #    # And log to a file at the same time
-    #    SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('application.log')
+    #    SemanticLogger.add_appender('application.log')
     #
-    #    logger = SemanticLogger::Logger.new('MyApplication')
+    #    logger = SemanticLogger['MyApplication']
     #    logger.debug("Only display this if log level is set to Debug or lower")
     #
     #    # Log semantic information along with a text message
@@ -204,19 +204,16 @@ module SemanticLogger
 
     # #TODO implement a thread safe #silence method
 
-    # Initial default Level for all new instances of SemanticLogger::Logger
-    @@default_level = :info
-
-    # Allow for setting the global default log level
-    # This change only applies to _new_ loggers, existing logger levels
-    # will not be changed in any way
+    # DEPRECATED See SemanticLogger.default_level=
     def self.default_level=(level)
-      @@default_level = level
+      warn "[DEPRECATION] `SemanticLogger::Logger.default_level=` is deprecated.  Please use `SemanticLogger.default_level=` instead."
+      SemanticLogger.default_level = level
     end
 
-    # Returns the global default log level for new Logger instances
+    # DEPRECATED See SemanticLogger.default_level
     def self.default_level
-      @@default_level
+      warn "[DEPRECATION] `SemanticLogger::Logger.default_level` is deprecated.  Please use `SemanticLogger.default_level` instead."
+      SemanticLogger.default_level
     end
 
     ############################################################################
@@ -224,7 +221,7 @@ module SemanticLogger
 
     def initialize(klass, level=nil)
       @name = klass.is_a?(String) ? klass : klass.name
-      self.level = level || self.class.default_level
+      self.level = level || SemanticLogger.default_level
     end
 
     # Write log data to underlying data storage

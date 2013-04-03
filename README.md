@@ -165,7 +165,7 @@ similar text output.
 This can be changed over time to:
 
 ```ruby
-Rails.logger.info("Queried table",
+logger.info("Queried table",
   :duration => duration,
   :result   => result,
   :table    => "users",
@@ -343,7 +343,7 @@ loggers for Rails, ActiveRecord::Base, ActionController::Base, and ActiveResourc
 with wrappers that set their Class name. For example in semantic_logger/railtie.rb:
 
 ```ruby
-ActiveRecord::Base.logger = SemanticLogger::Logger.new(ActiveRecord)
+ActiveRecord::Base.logger = SemanticLogger[ActiveRecord]
 ```
 
 By replacing their loggers we now get the class name in the text logging output:
@@ -411,22 +411,126 @@ end
 
 ### Using SemanticLogger
 
-Example:
+When using SemanticLogger inside of Rails all we need to do is include the
+rails_semantic_logger gem and the default Rails logger will be replaced with
+Semantic Logger.
 
+In a stand-alone or non-rails environment we can easily log to a file called
+'development.log' as follows:
 ```ruby
 require 'semantic_logger'
+SemanticLogger.add_appender('development.log')
 
-# Set the log level to log everything
-SemanticLogger::Logger.default_level = :trace
-
-# Add a file appender to log everything to a file
-SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('dev.log')
-
-# Add an appender to only log :info and above to standard out
-SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new(STDOUT, :info)
-
-logger = SemanticLogger::Logger.new('Example')
+logger = SemanticLogger['Example']
 logger.info "Hello World"
+```
+
+By default it will only log :info and above, to log everything to the log file:
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender('development.log')
+
+logger = SemanticLogger['Example']
+logger.info "Hello World"
+logger.trace "Low level trace information"
+```
+
+By supplying multiple appenders Semantic Logger can write to multiple destinations
+at the same time. For example, log to a file and the screen:
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender(STDOUT)
+
+logger = SemanticLogger['Example']
+logger.info "Hello World"
+logger.trace "Low level trace information"
+```
+
+To reduce the log level of logging to STDOUT to just :info and above, add the
+log_level such as :info as the second parameter when adding the appender:
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender(STDOUT, :info)
+
+logger = SemanticLogger['Example']
+logger.info "Hello World"
+logger.trace "Low level trace information"
+```
+
+To log :debug and above to a log file, :error and above to $stderr, and :info
+and above to MongoDB:
+```ruby
+require 'semantic_logger'
+require 'mongo'
+
+SemanticLogger.default_level = :debug
+SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender($stderr, :error)
+
+mongo_appender = SemanticLogger::Appender::MongoDB.new(
+  :db              => Mongodb::Connection.new['production_logging'],
+  :collection_size => 25.gigabytes
+)
+SemanticLogger.add_appender(mongo_appender, :info)
+
+logger = SemanticLogger['Example']
+logger.info "Hello World"
+logger.trace "Low level trace information"
+logger.error "Oops an error occurred"
+logger.info("Login time", :user => 'Mary', :duration => 230, :ip_address=>'192.168.0.1')
+```
+
+When starting out with Semantic Logger it can be useful to gain all the benefits
+of Semantic Logger and still continue to log to an existing logger:
+```ruby
+require 'logger'
+require 'semantic_logger'
+
+# Built-in Ruby logger
+log = Logger.new(STDOUT)
+log.level = Logger::DEBUG
+
+SemanticLogger.default_level = :debug
+SemanticLogger.add_appender(log)
+
+logger = SemanticLogger['Example']
+logger.info "Hello World"
+logger.debug("Login time", :user => 'Joe', :duration => 100, :ip_address=>'127.0.0.1')
+```
+
+It is recommended that every class or module have it's own logging instance.
+This can be achieved by including SemanticLogger::Loggable:
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender('development.log')
+
+class ExternalSupplier
+  # Makes available a class and instance level logger
+  #    ExternalSupplier.logger and ExternalSupplier#logger
+  include SemanticLogger::Loggable
+
+  # logger class method example
+  def self.hostname=(hostname)
+    logger.debug "Setting hostname to #{hostname}"
+    @@hostname = hostname
+  end
+
+  # logger instance method example
+  def call_supplier(amount, name)
+    logger.debug "Calculating with amount", { :amount => amount, :name => name }
+
+    # Measure and log on completion how long the call took to the external supplier
+    logger.benchmark_info "Calling external interface" do
+      # Code to call the external supplier ...
+    end
+  end
+end
 ```
 
 ### Configuration
@@ -495,16 +599,14 @@ Example: Formatter that just returns the Log Struct
 ```ruby
 require 'semantic_logger'
 
-SemanticLogger::Logger.default_level = :trace
+SemanticLogger.default_level = :trace
 
-appender = SemanticLogger::Appender::File.new(STDOUT) do |log|
+SemanticLogger.add_appender(STDOUT) do |log|
  # This formatter just returns the log struct as a string
   log.inspect
 end
 
-SemanticLogger::Logger.appenders << appender
-
-logger = SemanticLogger::Logger.new('Hello')
+logger = SemanticLogger['Hello']
 logger.info "Hello World"
 ```
 Output:
@@ -512,58 +614,56 @@ Output:
     #<struct SemanticLogger::Base::Log level=:info, thread_name=70167090649820, name="Hello", message="Hello World", payload=nil, time=2012-10-24 10:09:33 -0400, duration=nil, tags=nil, level_index=2>
 
 
-Example: Replace the Rails log formatter, in the environment configuration file:
+Example: Replace the default log file formatter
 
 ```ruby
-    config.after_initialize do
-      # Since the Rails logger is already initialized, replace its default formatter
-      config.semantic_logger.appenders.first.formatter = Proc.new do |log|
-          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
 
-          message = log.message.to_s
-          message << " -- " << log.payload.inspect if log.payload
-          message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+SemanticLogger.add_appender('development.log') do |log|
+tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
-          duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
+message = log.message.to_s
+message << " -- " << log.payload.inspect if log.payload
+message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
-          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
-      end
-    end
+duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
+
+"#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+end
 ```
 
-Example: Replace the MongoDB formatter, in the environment configuration file:
+Example: Replace the default MongoDB formatter
 
 ```ruby
-    config.after_initialize do
-      # Log to MongoDB and supply a custom document formatter
-      mongodb_appender = SemanticLogger::Appender::MongoDB.new(
-        :db              => Cache::Work.db,
-        :collection_size => 25.gigabytes
-      ) do |log|
-          # Return a document (Hash) of the data to be saved to MongoDB
-          document = {
-            :time        => log.time,
-            :host_name   => SemanticLogger::Appender::MongoDB.host_name,
-            :pid         => $PID,
-            :thread_name => log.thread_name,
-            :name        => log.name,
-            :level       => log.level,
-            :level_index => log.level_index,
-          }
-          document[:application] = 'MyApplication'
-          document[:message]     = SemanticLogger::Appender::MongoDB.strip_colorizing(log.message) if log.message
-          document[:duration]    = log.duration if log.duration
-          document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
-          document[:payload]     = log.payload if log.payload
-          document[:exception]   = {
-            :name        => log.exception.class.name,
-            :message     => log.exception.message,
-            :stack_trace => log.exception.backtrace
-          } if log.exception
-          document
-      end
-      config.semantic_logger.appenders << mongodb_appender
-    end
+# Log to MongoDB and supply a custom document formatter
+mongodb_appender = SemanticLogger::Appender::MongoDB.new(
+  :db              => Cache::Work.db,
+  :collection_size => 25.gigabytes
+) do |log|
+    # Return a document (Hash) of the data to be saved to MongoDB
+    document = {
+      :time        => log.time,
+      :host_name   => SemanticLogger::Appender::MongoDB.host_name,
+      :pid         => $PID,
+      :thread_name => log.thread_name,
+      :name        => log.name,
+      :level       => log.level,
+      :level_index => log.level_index,
+    }
+    document[:application] = 'MyApplication'
+    document[:message]     = SemanticLogger::Appender::MongoDB.strip_colorizing(log.message) if log.message
+    document[:duration]    = log.duration if log.duration
+    document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
+    document[:payload]     = log.payload if log.payload
+    document[:exception]   = {
+      :name        => log.exception.class.name,
+      :message     => log.exception.message,
+      :stack_trace => log.exception.backtrace
+    } if log.exception
+    document
+end
+SemanticLogger.add_appender(mongodb_appender)
 ```
 
 ### SysLog and other standard loggers
@@ -622,14 +722,11 @@ In this way formatting and disk or network write delays will not affect the
 performance of the application. Also adding more than one appender does not affect
 the runtime performance of the application.
 
-The additional thread is automatically started on initialization. When the program
-terminates it will complete writing out all log data and flush the appenders before
-the program exits.
+The logging thread is automatically started on initialization. When the program
+terminates it will call flush on each of the appenders.
 
 Calling SemanticLogger::Logger#flush will wait until all outstanding log messages
 have been written and flushed to their respective appenders before returning.
-Since all logging is now from this thread calling flush is no longer thread
-specific.
 
 ### Write your own Appender
 
@@ -669,13 +766,13 @@ end
 
 Sample program calling the above appender:
 ```ruby
-SemanticLogger::Logger.default_level = :trace
+SemanticLogger.default_level = :trace
 # Log to file dev.log
-SemanticLogger::Logger.appenders << SemanticLogger::Appender::File.new('dev.log')
+SemanticLogger.add_appender('dev.log')
 # Also log the above sample appender
-SemanticLogger::Logger.appenders << SimpleAppender.new
+SemanticLogger.add_appender(SimpleAppender.new)
 
-logger = SemanticLogger::Logger.new('Hello')
+logger = SemanticLogger['Hello']
 logger.info "Hello World"
 ```
 
@@ -723,7 +820,7 @@ Reid Morrison :: reidmo@gmail.com :: @reidmorrison
 License
 -------
 
-Copyright 2012 Clarity Services, Inc.
+Copyright 2012,2013 Clarity Services, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
