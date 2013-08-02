@@ -589,6 +589,44 @@ level_index [Integer]
 
 * Internal use only. Index of the log level
 
+#### Mixing Logging Levels
+
+It is sometimes useful to log a subset of the log messages to a separate file
+or appender. For example, log :error and :fatal level messages to a special
+error file.
+
+Below is a stand-alone example that better shows this behavior:
+
+```ruby
+require 'semantic_logger'
+
+# Set default log level for new logger instances
+SemanticLogger.default_level = :info
+
+# Log all warning messages and above to warnings.log
+SemanticLogger.add_appender('log/warnings.log', :warn)
+
+# Log all trace messages and above to trace.log
+SemanticLogger.add_appender('log/trace.log', :trace)
+
+logger = SemanticLogger['MyClass']
+logger.level = :trace
+logger.trace "This is a trace message"
+logger.info "This is an info message"
+logger.warn "This is a warning message"
+```
+
+The output is as follows:
+```bash
+==> trace.log <==
+2013-08-02 14:15:56.733532 T [35669:70176909690580] MyClass -- This is a trace message
+2013-08-02 14:15:56.734273 I [35669:70176909690580] MyClass -- This is an info message
+2013-08-02 14:15:56.735273 W [35669:70176909690580] MyClass -- This is a warning message
+
+==> warnings.log <==
+2013-08-02 14:15:56.735273 W [35669:70176909690580] MyClass -- This is a warning message
+```
+
 #### Custom Formatters
 
 The formatting for each appender can be replaced with custom code. To replace the

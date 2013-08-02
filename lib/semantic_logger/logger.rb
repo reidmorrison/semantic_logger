@@ -5,6 +5,18 @@ require 'thread_safe'
 module SemanticLogger
   class Logger < Base
 
+    # DO NOT USE. Adding unused formatter to support Rails 4 logging
+    # Formatters must be set at the appender level, not at the logger level
+    #
+    # Due to the following code in Rails::Server#start that cannot be changed
+    # without patching the entire method
+    #    console = ActiveSupport::Logger.new($stdout)
+    #    console.formatter = Rails.logger.formatter
+    #    console.level = Rails.logger.level
+    #
+    #    Rails.logger.extend(ActiveSupport::Logger.broadcast(console))
+    attr_accessor :formatter
+
     # Returns a Logger instance
     #
     # Return the logger for a specific class, supports class specific log levels

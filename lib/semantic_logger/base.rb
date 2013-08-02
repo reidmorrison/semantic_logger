@@ -147,24 +147,36 @@ module SemanticLogger
     # Add the supplied tags to the list of tags to log for this thread whilst
     # the supplied block is active
     # Returns nil if no tags are currently set
-    def with_tags(*tags)
-      current_tags = self.tags
-      # Check for nil tags
-      if tags
-        Thread.current[:semantic_logger_tags] = current_tags ? current_tags + tags : tags
-      end
+    #   To support: ActiveSupport::TaggedLogging V3 and above
+    def tagged(*tags)
+      push_tags(*tags)
       yield
     ensure
-      Thread.current[:semantic_logger_tags] = current_tags
+      pop_tags(tags.size)
     end
 
-    # Add support for the ActiveSupport::TaggedLogging
-    alias_method :tagged, :with_tags
+    # Previous method for supplying tags
+    alias_method :with_tags, :tagged
 
     # Returns [Array] of [String] tags currently active for this thread
     # Returns nil if no tags are set
     def tags
       Thread.current[:semantic_logger_tags]
+    end
+
+    # Add tags to the current scope
+    #   To support: ActiveSupport::TaggedLogging V4 and above
+    def push_tags *tags
+      # Check for nil tags
+      Thread.current[:semantic_logger_tags] = (self.tags || []) + tags if tags
+    end
+
+    # Remove specified number of tags from the current tag list
+    #   To support: ActiveSupport::TaggedLogging V4 and above
+    def pop_tags(quantity)
+      if tags = self.tags
+        Thread.current[:semantic_logger_tags] = tags.pop(quantity)
+      end
     end
 
     # Thread specific context information to be logged with every log entry
