@@ -8,6 +8,21 @@
 #
 module SemanticLogger
   module Appender
+
+    # Formatting & colors used by optional colorized_formatter
+    module AnsiColors
+      CLEAR   = "\e[0m"
+      BOLD    = "\e[1m"
+      BLACK   = "\e[30m"
+      RED     = "\e[31m"
+      GREEN   = "\e[32m"
+      YELLOW  = "\e[33m"
+      BLUE    = "\e[34m"
+      MAGENTA = "\e[35m"
+      CYAN    = "\e[36m"
+      WHITE   = "\e[37m"
+    end
+
     class Base < SemanticLogger::Base
       attr_accessor :formatter
 
@@ -17,7 +32,7 @@ module SemanticLogger
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def default_formatter
         Proc.new do |log|
-          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags.size > 0
 
           message = log.message.to_s
           message << " -- " << log.payload.inspect if log.payload
@@ -26,6 +41,39 @@ module SemanticLogger
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
           "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+        end
+      end
+
+      # Optional log formatter to colorize log output
+      # To use this formatter
+      #   SemanticLogger.add_appender($stdout, nil, &SemanticLogger::Logger.colorized_formatter)
+      #
+      #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
+      def self.colorized_formatter
+        Proc.new do |log|
+          colors = SemanticLogger::Appender::AnsiColors
+          tags = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags.size > 0
+
+          message = log.message.to_s.dup
+          message << " -- " << log.payload.inspect if log.payload
+          message << " -- " << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+
+          duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
+
+          level_color = case log.level
+          when :trace
+            colors::MAGENTA
+          when :debug
+            colors::CYAN
+          when :info
+            colors::GREEN
+          when :warn
+            colors::YELLOW
+          when :error, :fatal
+            colors::RED
+          end
+
+          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{level_color}#{colors::BOLD}#{log.level.to_s[0..0].upcase}#{colors::CLEAR} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{level_color}#{log.name}#{colors::CLEAR} -- #{message}"
         end
       end
 

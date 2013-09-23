@@ -21,6 +21,7 @@ class LoggerTest < Test::Unit::TestCase
       @logger            = SemanticLogger::Logger.new(self.class, :trace)
       @hash              = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
       @hash_str          = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+      assert_equal [], @logger.tags
     end
 
     teardown do
@@ -53,6 +54,9 @@ class LoggerTest < Test::Unit::TestCase
             SemanticLogger.flush
             assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \[First Level\] \[tags\] \[Second Level\] LoggerTest -- Hello world/, @mock_logger.message
           end
+          assert_equal 2, @logger.tags.count, @logger.tags
+          assert_equal 'First Level', @logger.tags.first
+          assert_equal 'tags', @logger.tags.last
         end
       end
 
