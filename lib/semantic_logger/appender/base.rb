@@ -32,7 +32,7 @@ module SemanticLogger
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def default_formatter
         Proc.new do |log|
-          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags.size > 0
+          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s
           message << " -- " << log.payload.inspect if log.payload
@@ -52,7 +52,7 @@ module SemanticLogger
       def self.colorized_formatter
         Proc.new do |log|
           colors = SemanticLogger::Appender::AnsiColors
-          tags = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags.size > 0
+          tags = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s.dup
           message << " -- " << log.payload.inspect if log.payload
