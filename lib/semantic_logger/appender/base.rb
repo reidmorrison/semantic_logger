@@ -64,11 +64,11 @@ module SemanticLogger
           when :trace
             colors::MAGENTA
           when :debug
-            colors::CYAN
-          when :info
             colors::GREEN
+          when :info
+            colors::CYAN
           when :warn
-            colors::YELLOW
+            colors::BOLD
           when :error, :fatal
             colors::RED
           end
