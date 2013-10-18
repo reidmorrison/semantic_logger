@@ -122,6 +122,14 @@ module SemanticLogger
     SemanticLogger::Logger.flush
   end
 
+  # After forking an active process call SemanticLogger.reopen to re-open
+  # any open file handles etc to resources
+  #
+  # Note: Only appenders that implement the reopen method will be called
+  def self.reopen
+    @@appenders.each {|appender| appender.reopen if appender.respond_to?(:reopen)}
+  end
+
   ############################################################################
   protected
 

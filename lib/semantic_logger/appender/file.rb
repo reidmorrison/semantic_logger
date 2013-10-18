@@ -41,20 +41,31 @@ module SemanticLogger
       #
       def initialize(filename, level=nil, &block)
         raise "filename cannot be null when initializing the SemanticLogging::Appender::File" unless filename
-        @filename = filename
         @log = if filename.respond_to?(:write) and filename.respond_to?(:close)
           filename
         else
-          @log = open(filename, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
-          # Force all log entries to write immediately without buffering
-          # Allows multiple processes to write to the same log file simultaneously
-          @log.sync = true
-          @log.set_encoding(Encoding::BINARY) if @log.respond_to?(:set_encoding)
-          @log
+          @filename = filename
+          reopen
         end
 
         # Set the log level and formatter if supplied
         super(level, &block)
+      end
+
+      # After forking an active process call #reopen to re-open
+      # open the file handles etc to resources
+      #
+      # Note: This method will only work if a String filename was supplied
+      #       on the initializer.
+      def reopen
+        return unless @filename
+
+        @log = open(@filename, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
+        # Force all log entries to write immediately without buffering
+        # Allows multiple processes to write to the same log file simultaneously
+        @log.sync = true
+        @log.set_encoding(Encoding::BINARY) if @log.respond_to?(:set_encoding)
+        @log
       end
 
       # Pass log calls to the underlying Rails, log4j or Ruby logger
