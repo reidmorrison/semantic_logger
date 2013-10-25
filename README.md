@@ -5,13 +5,13 @@ Improved logging for Ruby
 
 * http://github.com/ClarityServices/semantic_logger
 
-### Note:
+## Note:
 
 As of SemanticLogger V2.0 the Rails logging is no longer automatically replaced
 when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/ClarityServices/rails_semantic_logger)
 gem to replace the Rails default logger with SemanticLogger
 
-### Overview
+## Overview
 
 Semantic Logger takes logging in Ruby to a new level by adding several new
 capabilities to the commonly used Logging API:
@@ -132,7 +132,7 @@ Thread Safe
 * Tagged logging keeps any tagging data on a per-thread basis to ensure that
   tags from different threads are not inter-mingled
 
-### Introduction
+## Introduction
 
 Semantic Logger is a Logger that supports logging of meta-data, along with text messages
 to multiple appenders
@@ -183,9 +183,9 @@ Since Semantic Logger can call existing Loggers, it does not force end-users
 to have to adopt a Semantic aware adapter. Although, such adapters create
 tremendous value in the problem monitoring and determination processes.
 
-### Logging API
+## Logging API
 
-#### Standard Logging methods
+### Standard Logging methods
 
 The Semantic Logger logging API supports the existing logging interface for
 the Rails and Ruby Loggers. For example:
@@ -231,7 +231,7 @@ logger.debug("Calling Supplier", :request => 'update', :user => 'Jack')
 logger.debug { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
 ```
 
-### Exceptions
+## Exceptions
 
 The Semantic Logger adds an optional parameter to the existing log methods so that
 a corresponding Exception can be logged in a standard way
@@ -246,7 +246,7 @@ rescue Exception => exception
 end
 ```
 
-#### Payload
+### Payload
 
 The Semantic Logger adds an extra parameter to the existing log methods so that
 additional payload can be logged, such as a Hash or a Ruby Exception object.
@@ -260,7 +260,7 @@ regular expressions so that a program can analyze log output. With the MongoDB
 appender the payload is written directly to MongoDB as part of the document and
 is therefore fully searchable
 
-#### Benchmarking
+### Benchmarking
 
 Another common logging requirement is to measure the time it takes to execute a block
 of code based on the log level. For example:
@@ -317,7 +317,7 @@ Parameters
     Optional, Ruby Exception object to log along with the duration of the supplied block
 ```
 
-#### Logging levels
+### Logging levels
 
 The following logging levels are available through Semantic Logger
 
@@ -336,7 +336,7 @@ in the development environment for low level trace logging of methods calls etc.
 If only the rails logger is being used, then :trace level calls will be logged
 as debug calls only if the log level is set to trace
 
-#### Changing the Class name for Log Entries
+### Changing the Class name for Log Entries
 
 When Semantic Logger is included in a Rails project it automatically replaces the
 loggers for Rails, ActiveRecord::Base, ActionController::Base, and ActiveResource::Base
@@ -375,7 +375,7 @@ This will result in the log output identifying the log entry as from the Externa
 
     2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) ExternalSupplier -- Calling external interface
 
-#### Tagged Logging
+### Tagged Logging
 
 Semantic Logger allows any Ruby or Rails program to also include tagged logging.
 
@@ -393,7 +393,7 @@ logger.tagged(tracking_number) do
 end
 ```
 
-#### Beyond Tagged Logging
+### Beyond Tagged Logging
 
 Blocks of code can be tagged with not only values, but can be tagged with
 entire hashes of data. The additional hash of data will be merged into
@@ -409,7 +409,7 @@ logger.with_payload(:user => 'Jack', :zip_code => 12345) do
 end
 ```
 
-### Using SemanticLogger
+## Standalone SemanticLogger
 
 When using SemanticLogger inside of Rails all we need to do is include the
 rails_semantic_logger gem and the default Rails logger will be replaced with
@@ -533,17 +533,34 @@ class ExternalSupplier
 end
 ```
 
-### Configuration
+### Logging to Syslog
+
+Log to a local Syslog:
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
+```
+
+Log to a local file and to a remote Syslog server such as syslog-ng over TCP:
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(:server => 'tcp://myloghost:514'))
+```
+
+## Configuration
 
 The Semantic Logger follows the principle where multiple appenders can be active
 at the same time. For example, this allows one to log to MongoDB and the Rails
 log file at the same time.
 
-#### Rails Configuration
+### Rails Configuration
 
 To automatically replace the Rails logger with Semantic Logger use the gem [rails_semantic_logger](http://github.com/ClarityServices/rails_semantic_logger)
 
-### Log Struct
+## Log Struct
 
 Internally all log messages are passed around in a Log Struct. In order
 to write your own custom formatter or log appender it is necessary to understand
@@ -589,7 +606,7 @@ level_index [Integer]
 
 * Internal use only. Index of the log level
 
-#### Mixing Logging Levels
+### Mixing Logging Levels
 
 It is sometimes useful to log a subset of the log messages to a separate file
 or appender. For example, log :error and :fatal level messages to a special
@@ -627,7 +644,7 @@ The output is as follows:
 2013-08-02 14:15:56.735273 W [35669:70176909690580] MyClass -- This is a warning message
 ```
 
-#### Custom Formatters
+### Custom Formatters
 
 The formatting for each appender can be replaced with custom code. To replace the
 existing formatter supply a block of code when creating the appender.
@@ -704,21 +721,7 @@ end
 SemanticLogger.add_appender(mongodb_appender)
 ```
 
-### SysLog and other standard loggers
-
-To write log entries to a Syslog logger or any other logger of your choice,
-that conforms the standard Ruby Logger API, Semantic Logger has an Appender to
-use that logger.
-
-For example to configure rails to also log to the Syslogger gem:
-```ruby
-config.after_initialize do
-  # Besides logging to the local file also log to Syslogger
-  config.semantic_logger.appenders << SemanticLogger::Appender::Wrapper.new(Syslogger.new("yourappname"))
-end
-```
-
-### Performance
+## Performance
 
 The traditional logging implementations write their log information to file in the
 same thread of execution as the program itself. This means that for every log entry
@@ -731,12 +734,12 @@ Also, since the logging is in this separate thread there is no impact to program
 execution if we decided to add another appender.
 For example, log to both a file and a MongoDB collection.
 
-### Log Rotation
+## Log Rotation
 
 Since the log file is not re-opened with every call, when the log file needs
 to be rotated, use a copy-truncate operation over deleting the file.
 
-### Why Semantic logging?
+## Why Semantic logging?
 
 Just as there is the initiative to add Semantic information to data on the web
 so that computers can directly understand the content without having to resort
@@ -750,7 +753,7 @@ Once the logging data is in the NOSQL data store it can be queried quickly and
 efficiently. Some SQL data stores also allow complex data types that could be used
 for storing and querying the logging data
 
-### Architecture & Performance
+## Architecture & Performance
 
 In order to ensure that logging does not hinder the performance of the application
 all log entries are written to thread-safe Queue. A separate thread is responsible
@@ -766,7 +769,7 @@ terminates it will call flush on each of the appenders.
 Calling SemanticLogger::Logger#flush will wait until all outstanding log messages
 have been written and flushed to their respective appenders before returning.
 
-### Write your own Appender
+## Write your own Appender
 
 To write your own appender it should meet the following requirements:
 
@@ -821,12 +824,12 @@ instructions below.
 Very Important: New appenders will not be accepted without complete working tests.
 See the [MongoDB Appender Test](https://github.com/ClarityServices/semantic_logger/blob/master/test/appender_mongodb_test.rb) for an example.
 
-### Dependencies
+## Dependencies
 
 - Ruby MRI 1.8.7, 1.9.3 (or above) Or, JRuby 1.6.3 (or above)
 - Optional: To log to MongoDB, Mongo Ruby Driver 1.5.2 or above
 
-### Install
+## Install
 
     gem install semantic_logger
 
@@ -834,7 +837,7 @@ To log to MongoDB, it also needs the Ruby Mongo Driver
 
     gem install mongo
 
-### Future
+## Future
 
 - Add support for a configuration file that can set log level by class name
 - Configuration file to support adding appenders
@@ -850,10 +853,15 @@ Meta
 
 This project uses [Semantic Versioning](http://semver.org/).
 
-Authors
+Author
 -------
 
 Reid Morrison :: reidmo@gmail.com :: @reidmorrison
+
+Contributors
+------------
+
+Marc Bellingrath :: marrrc.b@gmail.com
 
 License
 -------
