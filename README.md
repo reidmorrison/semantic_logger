@@ -866,7 +866,7 @@ Marc Bellingrath :: marrrc.b@gmail.com
 License
 -------
 
-Copyright 2012,2013 Clarity Services, Inc.
+Copyright 2012,2013 Reid Morrison
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
