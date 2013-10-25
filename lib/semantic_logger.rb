@@ -13,5 +13,6 @@ module SemanticLogger
     autoload :File,    'semantic_logger/appender/file'
     autoload :Wrapper, 'semantic_logger/appender/wrapper'
     autoload :MongoDB, 'semantic_logger/appender/mongodb'
+    autoload :Syslog,  'semantic_logger/appender/syslog'
   end
 end
