@@ -118,23 +118,21 @@ module SemanticLogger
               end_time = Time.now
               duration = 1000.0 * (end_time - start)
 
-              # Only log if the block took longer than 'min_duration' to complete
-              if duration >= min_duration
-                # Add scoped payload
-                if self.payload
-                  payload = payload.nil? ? self.payload : self.payload.merge(payload)
+              # Add scoped payload
+              if self.payload
+                payload = payload.nil? ? self.payload : self.payload.merge(payload)
+              end
+              if exception
+                case log_exception
+                when :full
+                  log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, exception)
+                when :partial
+                  log Log.new(:#{level}, self.class.thread_name, name, "\#{message} -- Exception: \#{exception.class}: \#{exception.message}", payload, end_time, duration, tags, #{index}, nil)
                 end
-                if exception
-                  case log_exception
-                  when :full
-                    log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, exception)
-                  when :partial
-                    log Log.new(:#{level}, self.class.thread_name, name, "\#{message} -- Exception: \#{exception.class}: \#{exception.message}", payload, end_time, duration, tags, #{index}, nil)
-                  end
-                  raise exception
-                else
-                 log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, nil)
-                end
+                raise exception
+              elsif duration >= min_duration
+                # Only log if the block took longer than 'min_duration' to complete
+                log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, nil)
               end
             end
           else
