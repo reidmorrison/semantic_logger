@@ -3,12 +3,12 @@ semantic_logger
 
 Improved logging for Ruby
 
-* http://github.com/ClarityServices/semantic_logger
+* http://github.com/reidmorrison/semantic_logger
 
 ## Note:
 
 As of SemanticLogger V2.0 the Rails logging is no longer automatically replaced
-when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/ClarityServices/rails_semantic_logger)
+when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
 gem to replace the Rails default logger with SemanticLogger
 
 ## Overview
@@ -60,6 +60,16 @@ Drop-in Replacement
 * Simple drop-in replacement for the Ruby, or the Rails loggers
 * Supports current common logging interface
 * No changes to existing to code to use new logger ( other than replacing the logger )
+
+Thread Safe
+
+* Semantic Logger ensures that all logging is fully thread-safe
+* Supports highly concurrent environments running hundreds of threads
+* Each appender writes all log entries sequentially in the appender thread so
+  that log entries are written in the correct sequence
+* Avoids issues that other loggers experience when multiple threads try to write
+  to the same log file at the same time creating partial and overwritten log
+  entries in the log file
 
 Thread Aware
 
@@ -354,8 +364,6 @@ It is recommended to include a class specific logger for all major classes that 
 be logging using the SemanticLogger::Loggable mix-in. For Example:
 
 ```ruby
-require 'semantic_logger'
-
 class ExternalSupplier
   # Lazy load logger class variable on first use
   include SemanticLogger::Loggable
@@ -374,6 +382,55 @@ end
 This will result in the log output identifying the log entry as from the ExternalSupplier class
 
     2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) ExternalSupplier -- Calling external interface
+
+### Changing the log level for a single class at runtime
+
+Since the logger is class specific, its log level can be changed dynamically at runtime.
+For example, to temporarily set the log level to :trace to diagnose an issue:
+
+```ruby
+require 'semantic_logger'
+
+SemanticLogger.default_level = :info
+SemanticLogger.add_appender('example.log')
+
+class ExternalSupplier
+  # Lazy load logger class variable on first use
+  include SemanticLogger::Loggable
+
+  def call_supplier(amount, name)
+    logger.trace "Calculating with amount", { :amount => amount, :name => name }
+
+    # Measure and log on completion how long the call took to the external supplier
+    logger.benchmark_info "Calling external interface" do
+      # Code to call the external supplier ...
+    end
+  end
+end
+
+# Create and use the class
+supplier = ExternalSupplier.new
+supplier.call_supplier(100, 'Jack')
+
+# Now change the log level to :trace
+ExternalSupplier.logger.level = :trace
+
+# Call the supplier, this time including trace level messages
+supplier.call_supplier(100, 'Jack')
+
+# Change the log level back to the default level
+ExternalSupplier.logger.level = SemanticLogger.default_level
+```
+
+Below is the output from the above example showing the :trace log level message
+that was written during the second call to the ExternalSupplier:
+
+```
+2013-11-07 16:19:26.496 I [35674:main] (0.0ms) ExternalSupplier -- Calling external interface
+
+2013-11-07 16:19:26.683 T [35674:main] ExternalSupplier -- Calculating with amount -- {:amount=>100, :name=>"Jack"}
+2013-11-07 16:19:26.683 I [35674:main] (0.0ms) ExternalSupplier -- Calling external interface
+```
 
 ### Tagged Logging
 
@@ -407,6 +464,39 @@ logger.with_payload(:user => 'Jack', :zip_code => 12345) do
   logger.debug("Hello World")
   # ...
 end
+```
+
+### Named threads
+
+SemanticLogger logs the name or id of the thread in every log message.
+
+On Ruby MRI the thread name is by default the thread's object_id, For example: 70184354571980
+
+```
+2013-11-07 16:25:14.279627 I [35841:70184354571980] (0.0ms) ExternalSupplier -- Calling external interface
+```
+
+To set a custom name for any thread so that it shows up in the logger:
+
+```ruby
+Thread.current.name = "User calculation thread 32"
+```
+
+Sample output:
+
+```
+2013-11-07 16:26:02.744139 I [35841:User calculation thread 32] (0.0ms) ExternalSupplier -- Calling external interface
+```
+
+#### NOTE:
+
+Make sure that the assigned thread name is unique otherwise it will be difficult
+to distinguish between concurrently running threads if they have the same name.
+
+For example, use the current thread object_id to ensure uniqueness:
+
+```ruby
+Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
 ```
 
 ## Standalone SemanticLogger
@@ -558,7 +648,7 @@ log file at the same time.
 
 ### Rails Configuration
 
-To automatically replace the Rails logger with Semantic Logger use the gem [rails_semantic_logger](http://github.com/ClarityServices/rails_semantic_logger)
+To automatically replace the Rails logger with Semantic Logger use the gem [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
 
 ## Log Struct
 
@@ -676,15 +766,15 @@ require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
 SemanticLogger.add_appender('development.log') do |log|
-tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+  tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
-message = log.message.to_s
-message << " -- " << log.payload.inspect if log.payload
-message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+  message = log.message.to_s
+  message << " -- " << log.payload.inspect if log.payload
+  message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
-duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
+  duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
-"#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+  "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
 end
 ```
 
@@ -817,12 +907,12 @@ logger = SemanticLogger['Hello']
 logger.info "Hello World"
 ```
 
-Look at the [existing appenders](https://github.com/ClarityServices/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
+Look at the [existing appenders](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
 
 To have your appender included in the standard list of appenders follow the fork
 instructions below.
 Very Important: New appenders will not be accepted without complete working tests.
-See the [MongoDB Appender Test](https://github.com/ClarityServices/semantic_logger/blob/master/test/appender_mongodb_test.rb) for an example.
+See the [MongoDB Appender Test](https://github.com/reidmorrison/semantic_logger/blob/master/test/appender_mongodb_test.rb) for an example.
 
 ## Dependencies
 
@@ -846,9 +936,9 @@ To log to MongoDB, it also needs the Ruby Mongo Driver
 Meta
 ----
 
-* Code: `git clone git://github.com/ClarityServices/semantic_logger.git`
-* Home: <https://github.com/ClarityServices/semantic_logger>
-* Bugs: <http://github.com/ClarityServices/semantic_logger/issues>
+* Code: `git clone git://github.com/reidmorrison/semantic_logger.git`
+* Home: <https://github.com/reidmorrison/semantic_logger>
+* Bugs: <http://github.com/reidmorrison/semantic_logger/issues>
 * Gems: <http://rubygems.org/gems/semantic_logger>
 
 This project uses [Semantic Versioning](http://semver.org/).

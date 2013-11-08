@@ -18,7 +18,7 @@ class AppenderFileTest < Test::Unit::TestCase
       @appender = SemanticLogger::Appender::File.new(@io)
       @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
       @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
-      @thread_name = SemanticLogger::Base.thread_name
+      @thread_name = Thread.current.name
     end
 
     context "format logs into text form" do

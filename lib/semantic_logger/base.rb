@@ -91,7 +91,7 @@ module SemanticLogger
             if self.payload
               payload = payload.nil? ? self.payload : self.payload.merge(payload)
             end
-            log Log.new(:#{level}, self.class.thread_name, name, message, payload, Time.now, nil, tags, #{index}, exception)
+            log Log.new(:#{level}, Thread.current.name, name, message, payload, Time.now, nil, tags, #{index}, exception)
             true
           else
             false
@@ -125,14 +125,14 @@ module SemanticLogger
               if exception
                 case log_exception
                 when :full
-                  log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, exception)
+                  log Log.new(:#{level}, Thread.current.name, name, message, payload, end_time, duration, tags, #{index}, exception)
                 when :partial
-                  log Log.new(:#{level}, self.class.thread_name, name, "\#{message} -- Exception: \#{exception.class}: \#{exception.message}", payload, end_time, duration, tags, #{index}, nil)
+                  log Log.new(:#{level}, Thread.current.name, name, "\#{message} -- Exception: \#{exception.class}: \#{exception.message}", payload, end_time, duration, tags, #{index}, nil)
                 end
                 raise exception
               elsif duration >= min_duration
                 # Only log if the block took longer than 'min_duration' to complete
-                log Log.new(:#{level}, self.class.thread_name, name, message, payload, end_time, duration, tags, #{index}, nil)
+                log Log.new(:#{level}, Thread.current.name, name, message, payload, end_time, duration, tags, #{index}, nil)
               end
             end
           else
@@ -165,8 +165,7 @@ module SemanticLogger
     # Add tags to the current scope
     #   To support: ActiveSupport::TaggedLogging V4 and above
     def push_tags *tags
-      # Check for nil tags
-      Thread.current[:semantic_logger_tags] = self.tags.concat(tags)
+      Thread.current[:semantic_logger_tags] = self.tags.concat(tags.flatten.collect(&:to_s).reject(&:empty?))
     end
 
     # Remove specified number of tags from the current tag list
@@ -270,18 +269,6 @@ module SemanticLogger
     # level_index
     #   Internal index of the log level
     Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception)
-
-    # For JRuby include the Thread name rather than its id
-    if defined? Java
-      # Name of the current Thread
-      def self.thread_name
-        Java::java.lang::Thread.current_thread.name
-      end
-    else
-      def self.thread_name
-        Thread.current.object_id
-      end
-    end
 
     # Internal method to return the log level as an internal index
     # Also supports mapping the ::Logger levels to SemanticLogger levels

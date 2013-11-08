@@ -1,5 +1,4 @@
-# Place requires here to prevent issues on JRuby with global.require.lock=true
-require 'thread'
+require 'semantic_logger/core_ext/thread'
 require 'semantic_logger/version'
 require 'semantic_logger/semantic_logger'
 
