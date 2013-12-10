@@ -99,6 +99,11 @@ module SemanticLogger
       SemanticLogger::Appender::Wrapper.new(appender, &block)
     end
     @@appenders << appender_instance
+
+    # Start appender thread if it is not already running
+    SemanticLogger::Logger.start_appender_thread
+    
+    appender_instance
   end
 
   # Remove an existing appender
@@ -113,7 +118,7 @@ module SemanticLogger
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
   def self.appenders
-    @@appenders.dup
+    @@appenders.clone
   end
 
   # Wait until all queued log messages have been written and flush all active
@@ -128,12 +133,14 @@ module SemanticLogger
   # Note: Only appenders that implement the reopen method will be called
   def self.reopen
     @@appenders.each {|appender| appender.reopen if appender.respond_to?(:reopen)}
+    # After a fork the appender thread is not running, start it if it is not running
+    SemanticLogger::Logger.start_appender_thread
   end
 
   ############################################################################
   protected
 
-  @@appenders     = ThreadSafe::Array.new
+  @@appenders = ThreadSafe::Array.new
 
   ############################################################################
   private

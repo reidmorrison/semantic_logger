@@ -128,7 +128,7 @@ module SemanticLogger
     def self.logger
       @@logger ||= begin
         l = SemanticLogger::Appender::File.new(STDERR, :warn)
-        l.name = self.class.name
+        l.name = name
         l
       end
     end
@@ -212,14 +212,5 @@ module SemanticLogger
       end
     end
 
-    # Flush all appenders at exit, waiting for outstanding messages on the queue
-    # to be written first
-    at_exit do
-      flush
-    end
-
-    # Start appender thread on load to workaround intermittent startup issues
-    # with JRuby 1.8.6 under Trinidad in 1.9 mode
-    start_appender_thread
   end
 end

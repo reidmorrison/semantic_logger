@@ -1,0 +1,2 @@
+thread.pool.enabled=true
+backtrace.color=true

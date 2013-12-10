@@ -156,22 +156,26 @@ module SemanticLogger
     # Previous method for supplying tags
     alias_method :with_tags, :tagged
 
-    # Returns [Array] of [String] tags currently active for this thread
+    # Returns a copy of the [Array] of [String] tags currently active for this thread
     # Returns nil if no tags are set
     def tags
-      Thread.current[:semantic_logger_tags] ||= []
+      # Since tags are stored on a per thread basis this list is thread-safe
+      t = Thread.current[:semantic_logger_tags]
+      t.nil? ? [] : t.clone
     end
 
     # Add tags to the current scope
-    #   To support: ActiveSupport::TaggedLogging V4 and above
     def push_tags *tags
-      Thread.current[:semantic_logger_tags] = self.tags.concat(tags.flatten.collect(&:to_s).reject(&:empty?))
+      # Need to flatten and reject empties to support calls from Rails 4
+      new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
+      t = Thread.current[:semantic_logger_tags]
+      Thread.current[:semantic_logger_tags] = t.nil? ? new_tags : t.concat(new_tags)
     end
 
     # Remove specified number of tags from the current tag list
-    #   To support: ActiveSupport::TaggedLogging V4 and above
     def pop_tags(quantity=1)
-      tags.pop(quantity)
+      t = Thread.current[:semantic_logger_tags]
+      t.pop(quantity) unless t.nil?
     end
 
     # Thread specific context information to be logged with every log entry

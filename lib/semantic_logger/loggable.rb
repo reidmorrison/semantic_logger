@@ -2,10 +2,10 @@ require 'sync_attr'
 
 # Logger class variable mix-in
 #
-#   Lazy initialize and a logger class variable with instance accessor
+#   Lazy initialize a logger class variable with instance accessor
 #
 #   By including this mix-in into any class it will define a class level logger
-#   and make it accessible via instance methods
+#   and also make it accessible via instance methods
 #
 # Example
 #

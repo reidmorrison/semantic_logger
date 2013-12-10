@@ -34,7 +34,7 @@ module SemanticLogger
         Proc.new do |log|
           tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
-          message = log.message.to_s
+          message = log.message.to_s.dup
           message << " -- " << log.payload.inspect if log.payload
           message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 

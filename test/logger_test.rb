@@ -38,9 +38,9 @@ class LoggerTest < Test::Unit::TestCase
       end
     end
 
-    context "with_tags logging" do
+    context "tagged logging" do
       should "add tags to log entries" do
-        @logger.with_tags('12345', 'DJHSFK') do
+        @logger.tagged('12345', 'DJHSFK') do
           @logger.info('Hello world')
           SemanticLogger.flush
           assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world/, @mock_logger.message
@@ -48,8 +48,8 @@ class LoggerTest < Test::Unit::TestCase
       end
 
       should "add embedded tags to log entries" do
-        @logger.with_tags('First Level', 'tags') do
-          @logger.with_tags('Second Level') do
+        @logger.tagged('First Level', 'tags') do
+          @logger.tagged('Second Level') do
             @logger.info('Hello world')
             SemanticLogger.flush
             assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \[First Level\] \[tags\] \[Second Level\] LoggerTest -- Hello world/, @mock_logger.message

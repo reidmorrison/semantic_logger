@@ -15,3 +15,9 @@ module SemanticLogger
     autoload :Syslog,  'semantic_logger/appender/syslog'
   end
 end
+
+# Flush all appenders at exit, waiting for outstanding messages on the queue
+# to be written first
+at_exit do
+  SemanticLogger.flush
+end
