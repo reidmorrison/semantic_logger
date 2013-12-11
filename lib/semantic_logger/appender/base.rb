@@ -40,7 +40,7 @@ module SemanticLogger
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
-          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{'%.30s' % log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{'%.50s' % log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
         end
       end
 

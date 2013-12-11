@@ -154,6 +154,7 @@ module SemanticLogger
       #
       # Should any appender fail to log or flush, the exception is logged and
       # other appenders will still be called
+      Thread.current.name = "SemanticLogger::AppenderThread"
       logger.debug "V#{VERSION} Appender thread active"
       begin
         count = 0
