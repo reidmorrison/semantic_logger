@@ -70,28 +70,9 @@ module SemanticLogger
     #
     SemanticLogger::LEVELS.each_with_index do |level, index|
       class_eval <<-EOT, __FILE__, __LINE__
-        def #{level}(message=nil, payload=nil, exception=nil)
+        def #{level}(message=nil, payload=nil, exception=nil, &block)
           if @level_index <= #{index}
-            if exception.nil? && payload && payload.is_a?(Exception)
-              exception = payload
-              payload = nil
-            end
-
-            if block_given? && (result = yield)
-              if result.is_a?(String)
-                message = message.nil? ? result : "\#{message} -- \#{result}"
-              elsif payload && payload.respond_to?(:merge)
-                payload.merge(result)
-              else
-                payload = result
-              end
-            end
-
-            # Add scoped payload
-            if self.payload
-              payload = payload.nil? ? self.payload : self.payload.merge(payload)
-            end
-            log Log.new(:#{level}, Thread.current.name, name, message, payload, Time.now, nil, tags, #{index}, exception)
+            log_internal(:#{level}, #{index}, message, payload, exception, &block)
             true
           else
             false
@@ -102,41 +83,11 @@ module SemanticLogger
           @level_index <= #{index}
         end
 
-        def benchmark_#{level}(message, params = nil)
-          raise "Mandatory block missing" unless block_given?
+        def benchmark_#{level}(message, params = {}, &block)
           if @level_index <= #{index}
-            log_exception = params.nil? ? :partial : (params[:log_exception] || :partial)
-            min_duration  = params.nil? ? 0.0      : (params[:min_duration] || 0.0)
-            payload       = params.nil? ? nil      : params[:payload]
-            exception     = params.nil? ? nil      : params[:exception]
-            start         = Time.now
-            begin
-              yield
-            rescue Exception => exc
-              exception = exc
-            ensure
-              end_time = Time.now
-              duration = 1000.0 * (end_time - start)
-
-              # Add scoped payload
-              if self.payload
-                payload = payload.nil? ? self.payload : self.payload.merge(payload)
-              end
-              if exception
-                case log_exception
-                when :full
-                  log Log.new(:#{level}, Thread.current.name, name, message, payload, end_time, duration, tags, #{index}, exception)
-                when :partial
-                  log Log.new(:#{level}, Thread.current.name, name, "\#{message} -- Exception: \#{exception.class}: \#{exception.message}", payload, end_time, duration, tags, #{index}, nil)
-                end
-                raise exception
-              elsif duration >= min_duration
-                # Only log if the block took longer than 'min_duration' to complete
-                log Log.new(:#{level}, Thread.current.name, name, message, payload, end_time, duration, tags, #{index}, nil)
-              end
-            end
+            benchmark_internal(:#{level}, #{index}, message, params, &block)
           else
-            yield
+            block.call(params) if block
           end
         end
       EOT
@@ -213,8 +164,6 @@ module SemanticLogger
     alias :unknown :error
     alias :unknown? :error?
 
-    # #TODO implement a thread safe #silence method
-
     # DEPRECATED See SemanticLogger.default_level=
     def self.default_level=(level)
       warn "[DEPRECATION] `SemanticLogger::Logger.default_level=` is deprecated.  Please use `SemanticLogger.default_level=` instead."
@@ -272,7 +221,10 @@ module SemanticLogger
     #
     # level_index
     #   Internal index of the log level
-    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception)
+    #
+    # metric [Object]
+    #   Object supplied when benchmark_x was called
+    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric)
 
     # Internal method to return the log level as an internal index
     # Also supports mapping the ::Logger levels to SemanticLogger levels
@@ -295,6 +247,71 @@ module SemanticLogger
       end
       raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
       index
+    end
+
+    # Log message at the specified level
+    def log_internal(level, index, message=nil, payload=nil, exception=nil, &block)
+      if exception.nil? && payload && payload.is_a?(Exception)
+        exception = payload
+        payload = nil
+      end
+
+      if block && (result = block.call)
+        if result.is_a?(String)
+          message = message.nil? ? result : "#{message} -- #{result}"
+        elsif payload && payload.respond_to?(:merge)
+          payload.merge(result)
+        else
+          payload = result
+        end
+      end
+
+      # Add scoped payload
+      if self.payload
+        payload = payload.nil? ? self.payload : self.payload.merge(payload)
+      end
+      log Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception)
+    end
+
+    # Measure the supplied block and log the message
+    def benchmark_internal(level, index, message, params, &block)
+      start     = Time.now
+      begin
+        rc = block.call(params) if block
+        exception = params[:exception]
+        rc
+      rescue Exception => exc
+        exception = exc
+      ensure
+        end_time = Time.now
+        # Extract options after block completes so that block can modify any of the options
+        log_exception = params[:log_exception] || :partial
+        min_duration  = params[:min_duration] || 0.0
+        payload       = params[:payload]
+        metric        = params[:metric]
+        duration      = if block_given?
+          1000.0 * (end_time - start)
+        else
+          params[:duration] || raise("Mandatory block missing when :duration option is not supplied")
+        end
+
+        # Add scoped payload
+        if self.payload
+          payload = payload.nil? ? self.payload : self.payload.merge(payload)
+        end
+        if exception
+          case log_exception
+          when :full
+            log Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, exception, metric)
+          when :partial
+            log Log.new(level, Thread.current.name, name, "#{message} -- Exception: #{exception.class}: #{exception.message}", payload, end_time, duration, tags, index, nil, metric)
+          end
+          raise exception
+        elsif duration >= min_duration
+          # Only log if the block took longer than 'min_duration' to complete
+          log Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric)
+        end
+      end
     end
 
   end

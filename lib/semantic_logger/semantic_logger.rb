@@ -102,13 +102,12 @@ module SemanticLogger
 
     # Start appender thread if it is not already running
     SemanticLogger::Logger.start_appender_thread
-    
+
     appender_instance
   end
 
   # Remove an existing appender
   # Currently only supports appender instances
-  # TODO allow removing by filename, STDOUT etc..
   def self.remove_appender(appender)
     @@appenders.delete(appender)
   end
@@ -135,6 +134,20 @@ module SemanticLogger
     @@appenders.each {|appender| appender.reopen if appender.respond_to?(:reopen)}
     # After a fork the appender thread is not running, start it if it is not running
     SemanticLogger::Logger.start_appender_thread
+  end
+
+  # Supply a block to be called whenever a metric is seen during benchmark logging
+  #
+  #  Parameters
+  #    block
+  #      The block to be called
+  #
+  # Example:
+  #   SemanticLogger.on_metric do |log_struct|
+  #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
+  #   end
+  def self.on_metric(&block)
+    SemanticLogger::Logger.on_metric(&block)
   end
 
   ############################################################################

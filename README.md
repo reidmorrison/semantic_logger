@@ -311,20 +311,30 @@ Parameters
     :full
       Log the exception class, message, and backtrace
     :partial
-      Log the exception class and messag
+      Log the exception class and message
       The backtrace will not be logged
     :off
-      Any unhandled exception from the block will not be logged
+      Any unhandled exception raised in the block will not be logged
+    Default: :partial
 
-  :min_duration
+  :min_duration [Float]
     Only log if the block takes longer than this duration in ms
     Default: 0.0
 
-  :payload
+  :payload [Hash]
     Optional, Hash payload
 
-  :exception
+  :exception [Exception]
     Optional, Ruby Exception object to log along with the duration of the supplied block
+
+  :duration [Float]
+    Optional, supply the duration in ms that is logged when a block is not supplied
+    If a block is not supplied then :duration is mandatory
+    If a block is supplied :duration is ignored
+
+  :metric [Object]
+    Optional, when this parameter is supplied all subscribers will be notified of this
+    metric, along with the Log Struct described below
 ```
 
 ### Logging levels
@@ -488,6 +498,9 @@ Sample output:
 2013-11-07 16:26:02.744139 I [35841:User calculation thread 32] (0.0ms) ExternalSupplier -- Calling external interface
 ```
 
+When running JRuby, Thread.current.name will also set the underlying thread name in the JVM
+which is very useful when monitoring the JVM via JMX using tools such as jconsole.
+
 #### NOTE:
 
 Make sure that the assigned thread name is unique otherwise it will be difficult
@@ -497,6 +510,45 @@ For example, use the current thread object_id to ensure uniqueness:
 
 ```ruby
 Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
+```
+
+### Metrics integration
+
+In production environments it is often necessary to not only measure the performance of a
+block of code using for example:
+
+```ruby
+logger.benchmark_info "Calling external interface" do
+  # Code to call the external supplier ...
+end
+```
+
+Sending the performance information gathered above to something like NewRelic
+is also very useful, and we can end up with:
+
+```ruby
+logger.benchmark_info "Calling external interface" do
+  self.class.trace_execution_scoped(['Custom/slow_action/beginning_work']) do
+    # Code to call the external supplier ...
+  end
+end
+```
+
+Rather than wrapping the code everywhere with two blocks, a single subscriber can
+be setup in config/initializers/semantic_logger_metrics.rb:
+
+```ruby
+SemanticLogger.on_metric do |log_struct|
+  ::NewRelic::Agent.record_metric(log_struct.metric, log_struct.duration)
+end
+```
+
+Then update the log entry as follows:
+
+```ruby
+logger.benchmark_info "Calling external interface", :metric => 'Custom/slow_action/beginning_work' do
+  # Code to call the external supplier ...
+end
 ```
 
 ## Standalone SemanticLogger
@@ -843,6 +895,11 @@ Once the logging data is in the NOSQL data store it can be queried quickly and
 efficiently. Some SQL data stores also allow complex data types that could be used
 for storing and querying the logging data
 
+Before writing SemanticLogger all of the following logging frameworks were thoroughly
+evaluated. None of them met the above Semantic requirements, or the performance requirements
+of hundreds of threads all logging at the same time:
+logback, logging, log4r, central_logger, whoops
+
 ## Architecture & Performance
 
 In order to ensure that logging does not hinder the performance of the application
@@ -931,7 +988,7 @@ To log to MongoDB, it also needs the Ruby Mongo Driver
 
 - Add support for a configuration file that can set log level by class name
 - Configuration file to support adding appenders
-- Based on end-user demand add appenders for: Syslog, hadoop, redis, etc..
+- Based on end-user demand add appenders for: hadoop, redis, etc..
 
 Meta
 ----

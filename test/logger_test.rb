@@ -17,10 +17,16 @@ class LoggerTest < Test::Unit::TestCase
       @mock_logger = MockLogger.new
       SemanticLogger.add_appender(@mock_logger)
 
+      # Add mock metric subscriber
+      $last_metric = nil
+      SemanticLogger.on_metric do |log_struct|
+        $last_metric = log_struct.dup
+      end
+
       # Use this test's class name as the application name in the log output
-      @logger            = SemanticLogger::Logger.new(self.class, :trace)
-      @hash              = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
-      @hash_str          = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+      @logger   = SemanticLogger::Logger.new(self.class, :trace)
+      @hash     = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
+      @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
       assert_equal [], @logger.tags
     end
 
@@ -119,6 +125,14 @@ class LoggerTest < Test::Unit::TestCase
             end
             SemanticLogger.flush
             assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
+          end
+
+          should "log #{level} info with metric" do
+            metric_name = '/my/custom/metric'
+            assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', metric: metric_name) { "result" } # Measure duration of the supplied block
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+            assert metric_name, $last_metric.metric
           end
         end
 

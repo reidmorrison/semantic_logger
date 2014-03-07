@@ -7,6 +7,7 @@ group :test do
   gem "bson_ext", :platform => 'ruby'
   gem 'syslog_protocol'
   gem 'resilient_socket'
+  gem 'awesome_print'
 end
 
 gem "sync_attr"

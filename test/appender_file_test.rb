@@ -39,7 +39,7 @@ class AppenderFileTest < Test::Unit::TestCase
 
       should "handle message, payload, and exception" do
         @appender.debug 'hello world', @hash, StandardError.new("StandardError")
-        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str} -- StandardError: StandardError\n\n/, @io.string
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str} -- Exception: StandardError: StandardError\n\n/, @io.string
       end
     end
 

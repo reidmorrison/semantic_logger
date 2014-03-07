@@ -105,11 +105,26 @@ module SemanticLogger
       queue_size
     end
 
+    # Supply a block to be called whenever a metric is seen during benchmark logging
+    #
+    #  Parameters
+    #    block
+    #      The block to be called
+    #
+    # Example:
+    #   SemanticLogger.on_metric do |log_struct|
+    #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
+    #   end
+    def self.on_metric(&block)
+      (@@metric_subscribers  ||= ThreadSafe::Array.new) << block
+    end
+
     ############################################################################
     protected
 
-    @@appender_thread = nil
-    @@queue           = Queue.new
+    @@appender_thread    = nil
+    @@queue              = Queue.new
+    @@metric_subscribers = nil
 
     # Queue to hold messages that need to be logged to the various appenders
     def self.queue
@@ -167,6 +182,7 @@ module SemanticLogger
                 logger.error "Appender thread: Failed to log to appender: #{appender.inspect}", exc
               end
             end
+            call_metric_subscribers(message) if message.metric
             count += 1
             # Check every few log messages whether this appender thread is falling behind
             if count > lag_check_interval
@@ -180,7 +196,7 @@ module SemanticLogger
             when :flush
               SemanticLogger.appenders.each do |appender|
                 begin
-                  logger.info "Appender thread: Flushing appender: #{appender.name}"
+                  logger.debug "Appender thread: Flushing appender: #{appender.name}"
                   appender.flush
                 rescue Exception => exc
                   logger.error "Appender thread: Failed to flush appender: #{appender.inspect}", exc
@@ -188,7 +204,7 @@ module SemanticLogger
               end
 
               message[:reply_queue] << true if message[:reply_queue]
-              logger.info "Appender thread: All appenders flushed"
+              logger.debug "Appender thread: All appenders flushed"
             else
               logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
             end
@@ -209,6 +225,20 @@ module SemanticLogger
           logger.debug "Appender thread has stopped"
         rescue Exception
           nil
+        end
+      end
+    end
+
+    # Call Metric subscribers
+    def self.call_metric_subscribers(log_struct)
+      # If no subscribers registered, then return immediately
+      return unless @@metric_subscribers
+
+      @@metric_subscribers.each do |subscriber|
+        begin
+          subscriber.call(log_struct)
+        rescue Exception => exc
+          logger.error "Exception calling subscriber", exc
         end
       end
     end

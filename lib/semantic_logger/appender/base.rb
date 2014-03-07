@@ -36,7 +36,7 @@ module SemanticLogger
 
           message = log.message.to_s.dup
           message << " -- " << log.payload.inspect if log.payload
-          message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          message << " -- Exception: " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
@@ -56,7 +56,7 @@ module SemanticLogger
 
           message = log.message.to_s.dup
           message << " -- " << log.payload.inspect if log.payload
-          message << " -- " << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          message << " -- Exception: " << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
 
