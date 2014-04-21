@@ -144,7 +144,7 @@ class LoggerTest < Test::Unit::TestCase
 
                 should "log #{level} info with metric" do
                   metric_name = '/my/custom/metric'
-                  assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', metric: metric_name) { "result" } # Measure duration of the supplied block
+                  assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
                   SemanticLogger.flush
                   assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
                   assert metric_name, $last_metric.metric
@@ -186,7 +186,7 @@ class LoggerTest < Test::Unit::TestCase
 
                 should "log #{level} info with metric" do
                   metric_name = '/my/custom/metric'
-                  assert_equal "result", @logger.benchmark(level, 'hello world', metric: metric_name) { "result" } # Measure duration of the supplied block
+                  assert_equal "result", @logger.benchmark(level, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
                   SemanticLogger.flush
                   assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
                   assert metric_name, $last_metric.metric

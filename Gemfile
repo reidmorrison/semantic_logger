@@ -19,8 +19,8 @@ group :development do
 end
 
 group :test do
-  gem 'minitest', '~> 4.0'
-  gem 'shoulda'
+  gem 'minitest', '~> 3.0'
+  gem 'shoulda', '~> 2.0'
   gem 'mocha'
 end
 
