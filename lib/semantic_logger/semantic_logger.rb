@@ -161,13 +161,14 @@ module SemanticLogger
   #   :warn, :info, :debug, :trace
   #
   # If the current level is :trace it wraps around back to :warn
-  def add_signal_handler(signal='URS2')
+  def self.add_signal_handler(signal='USR2')
     Signal.trap(signal) do
-      #LEVELS = []
       index = (default_level == :trace) ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
       new_level = LEVELS[index-1]
       self['SemanticLogger'].warn "Changed global default log level to #{new_level.inspect}"
+      self.default_level = new_level
     end
+    signal
   end
 
   ############################################################################

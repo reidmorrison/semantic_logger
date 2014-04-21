@@ -110,13 +110,13 @@ class LoggerTest < Test::Unit::TestCase
             end
 
             should "not log #{level} info when block is faster than :min_duration" do
-              assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 0.5) { "result" } # Measure duration of the supplied block
+              assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
               SemanticLogger.flush
               assert_nil @mock_logger.message
             end
 
             should "log #{level} info when block duration exceeds :min_duration" do
-              assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 0.2, :payload => @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
+              assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 200, :payload => @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
               SemanticLogger.flush
               assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
             end
@@ -152,13 +152,13 @@ class LoggerTest < Test::Unit::TestCase
             end
 
             should "not log #{level} info when block is faster than :min_duration" do
-              assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 0.5) { "result" } # Measure duration of the supplied block
+              assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
               SemanticLogger.flush
               assert_nil @mock_logger.message
             end
 
             should "log #{level} info when block duration exceeds :min_duration" do
-              assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 0.2, :payload => @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
+              assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 200, :payload => @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
               SemanticLogger.flush
               assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
             end

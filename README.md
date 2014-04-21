@@ -442,6 +442,49 @@ that was written during the second call to the ExternalSupplier:
 2013-11-07 16:19:26.683 I [35674:main] (0.0ms) ExternalSupplier -- Calling external interface
 ```
 
+### Change the global default logging level at runtime
+
+Log levels can be changed using signals on operating systems that support them.
+This allows log levels to be changed externally without requiring a restart
+of the running process.
+
+When the signal is raised, the global default log level rotates through the following
+log levels in the following order, starting from the current global default level:
+
+```ruby
+  :warn, :info, :debug, :trace
+```
+
+If the current level is :trace it wraps around back to :warn
+
+Example:
+
+```
+kill -SIGUSR2 1234
+```
+
+#### Enabling Log Level Signal handler
+
+On startup SemanticLogger does not register any signals so that it does not
+interfere with any existing signal handlers. In order to enable the above log level
+changes the signal handler must be registered by calling `SemanticLogger.add_signal_handler`
+
+```ruby
+require 'semantic_logger'
+
+# Enable signal handling for this process
+SemanticLogger.add_signal_handler('USR2')
+
+SemanticLogger.add_appender('development.log')
+
+logger = SemanticLogger['Example']
+logger.info "Hello World"
+```
+
+Note: The changes to the logging level will not change for any classes where the
+log_level was set explicity within the application itself. The above signal only changes
+the global default level, which is used by loggers when their log level has not been changed.
+
 ### Tagged Logging
 
 Semantic Logger allows any Ruby or Rails program to also include tagged logging.
