@@ -31,7 +31,7 @@ module SemanticLogger
     #
     class MongoDB < SemanticLogger::Appender::Base
       attr_reader :db, :collection_name
-      attr_accessor :host_name, :safe, :application
+      attr_accessor :host_name, :write_concern, :application
 
       # Create a MongoDB Appender instance
       #
@@ -49,11 +49,10 @@ module SemanticLogger
       #   host_name to include in the document logged to Mongo
       #   Default: first part of host name extracted from Socket
       #
-      # :safe [Boolean]
-      #   Whether to use safe write for logging
-      #   Not recommended to change this value except to diagnose connection
-      #   issues or when log entries are not being written to Mongo
-      #   Default: false
+      # :write_concern [Integer]
+      #   Write concern to use
+      #   see: http://docs.mongodb.org/manual/reference/write-concern/
+      #   Default: 0
       #
       # :application [String]
       #   Name of the application to include in the document written to mongo
@@ -79,7 +78,7 @@ module SemanticLogger
         @db              = params[:db] || raise('Missing mandatory parameter :db')
         @collection_name = params[:collection_name] || 'semantic_logger'
         @host_name       = params[:host_name] || Socket.gethostname.split('.').first
-        @safe            = params[:safe] || false
+        @write_concern   = params[:write_concern] || 0
         @application     = params[:application]
 
         # Create a collection that will hold the lesser of 1GB space or 10K documents
@@ -174,9 +173,7 @@ module SemanticLogger
       # Log the message to MongoDB
       def log(log)
         # Insert log entry into Mongo
-        # Use safe=>false so that we do not wait for it to be written to disk, or
-        # for the response from the MongoDB server
-        collection.insert(formatter.call(log), :safe=>safe) if level_index <= (log.level_index || 0)
+        collection.insert(formatter.call(log), :w=>@write_concern) if level_index <= (log.level_index || 0)
       end
 
     end

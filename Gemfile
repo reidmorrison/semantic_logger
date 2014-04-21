@@ -5,7 +5,7 @@ gem 'sync_attr'
 gem 'thread_safe'
 
 # [optional] MongoDB Appender
-gem 'mongo'
+gem 'mongo', '~> 1.9.2'
 gem 'bson_ext', :platform => 'ruby'
 
 # [optional] Syslog appender
