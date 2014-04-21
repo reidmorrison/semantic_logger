@@ -80,18 +80,25 @@ module SemanticLogger
       ############################################################################
       protected
 
-      # By default the appender should log everything that is sent to it by
-      # the loggers. That way the loggers control the log level
-      # By setting the log level to a higher value the appender can be setup
-      # to log for example only :warn or higher while other appenders
-      # are able to log lower level information
-      def initialize(level, &block)
+      # Initializer for Abstract Class SemanticLogger::Appender
+      #
+      # Parameters
+      #  level [Symbol]
+      #    Only allow log entries of this level or higher to be written to this appender
+      #    For example if set to :warn, this appender would only log :warn and :fatal
+      #    log messages when other appenders could be logging :info and lower
+      #
+      #  filter [RegExp|Proc]
+      #    Optional regular expression to filter log entries based on the class name
+      #    When filter is a proc, it is passed the entire log struct and must return
+      #    true or false indicating whether to log the message
+      def initialize(level=nil, filter=nil, &block)
         # Set the formatter to the supplied block
         @formatter = block || default_formatter
 
         # Appenders don't take a class name, so use this class name if an appender
         # is logged to directly
-        super(self.class, level || :trace)
+        super(self.class, level, filter)
       end
 
       # For JRuby include the Thread name rather than its id

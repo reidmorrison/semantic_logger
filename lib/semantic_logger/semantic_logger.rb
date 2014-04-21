@@ -191,6 +191,8 @@ module SemanticLogger
   # Internal method to return the log level as an internal index
   # Also supports mapping the ::Logger levels to SemanticLogger levels
   def self.level_to_index(level)
+    return if level.nil?
+    
     index = if level.is_a?(Symbol)
       LEVELS.index(level)
     elsif level.is_a?(String)

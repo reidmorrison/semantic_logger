@@ -74,12 +74,18 @@ module SemanticLogger
       #  :level [Symbol]
       #    Only allow log entries of this level or higher to be written to MongoDB
       #
+      #  :filter [Regexp|Proc]
+      #    RegExp: Only include log messages where the class name matches the supplied
+      #    regular expression. All other messages will be ignored
+      #    Proc: Only include log messages where the supplied Proc returns true
+      #          The Proc must return true or false
       def initialize(params={}, &block)
         @db              = params[:db] || raise('Missing mandatory parameter :db')
         @collection_name = params[:collection_name] || 'semantic_logger'
         @host_name       = params[:host_name] || Socket.gethostname.split('.').first
         @write_concern   = params[:write_concern] || 0
         @application     = params[:application]
+        filter           = params[:filter]
 
         # Create a collection that will hold the lesser of 1GB space or 10K documents
         @collection_size = params[:collection_size] || 1024**3
@@ -89,7 +95,7 @@ module SemanticLogger
         create_indexes
 
         # Set the log level and formatter
-        super(params[:level], &block)
+        super(params[:level], filter, &block)
       end
 
       # Create the required capped collection

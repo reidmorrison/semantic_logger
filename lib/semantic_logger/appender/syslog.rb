@@ -143,22 +143,24 @@ module SemanticLogger
       #     For a list of options see the resilient_socket documentation:
       #       https://github.com/reidmorrison/resilient_socket/blob/master/lib/resilient_socket/tcp_client.rb
       def initialize(params = {}, &block)
-        params = params.dup
-        @ident = params.delete(:ident) || 'ruby'
-        options = params.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
-        @facility = params.delete(:facility) || ::Syslog::LOG_USER
-        level = params.delete(:level)
-        level_map = params.delete(:level_map)
+        params     = params.dup
+        @ident     = params.delete(:ident) || 'ruby'
+        options    = params.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
+        @facility  = params.delete(:facility) || ::Syslog::LOG_USER
+        filter     = params.delete(:filter)
+        level      = params.delete(:level)
+        level_map  = params.delete(:level_map)
         @level_map = DEFAULT_LEVEL_MAP.dup
         @level_map.update(level_map) if level_map
-        @server = params.delete(:server) || 'syslog://localhost'
-        uri = URI(@server)
-        @host = uri.host || 'localhost'
-        @protocol = (uri.scheme || :syslog).to_sym
+        @server    = params.delete(:server) || 'syslog://localhost'
+        uri        = URI(@server)
+        @host      = uri.host || 'localhost'
+        @protocol  = (uri.scheme || :syslog).to_sym
         raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
-        @host = 'localhost' if @protocol == :syslog
-        @port = URI(@server).port || 514
-        @local_hostname = params.delete(:local_hostname) || Socket.gethostname || `hostname`.strip
+        @host      = 'localhost' if @protocol == :syslog
+        @port      = URI(@server).port || 514
+
+        @local_hostname    = params.delete(:local_hostname) || Socket.gethostname || `hostname`.strip
         tcp_client_options = params.delete(:tcp_client)
 
         # Warn about any unknown configuration options.
@@ -194,7 +196,7 @@ module SemanticLogger
             raise "Unsupported protocol: #{protocol}"
         end
 
-        super(level, &block)
+        super(level, filter, &block)
       end
 
       # Write the log using the specified protocol and host.

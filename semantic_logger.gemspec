@@ -11,8 +11,8 @@ Gem::Specification.new do |spec|
   spec.authors     = ['Reid Morrison']
   spec.email       = ['reidmo@gmail.com']
   spec.homepage    = 'https://github.com/reidmorrison/semantic_logger'
-  spec.summary     = "Improved logging for Ruby"
-  spec.description = "Semantic Logger takes logging in Ruby to a new level by adding several new capabilities to the commonly used Logging API"
+  spec.summary     = "Scalable, next generation logging for Ruby"
+  spec.description = "Semantic Logger takes logging in Ruby to the next level by adding several new capabilities to the commonly used Logging API"
   spec.files       = Dir["lib/**/*", "LICENSE.txt", "Rakefile", "README.md"]
   spec.test_files  = Dir["test/**/*"]
   spec.license     = "Apache License V2.0"

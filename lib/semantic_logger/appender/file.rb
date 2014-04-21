@@ -39,7 +39,7 @@ module SemanticLogger
       #    logger =  SemanticLogger['test']
       #    logger.info 'Hello World'
       #
-      def initialize(filename, level=nil, &block)
+      def initialize(filename, level=nil, filter=nil, &block)
         raise "filename cannot be null when initializing the SemanticLogging::Appender::File" unless filename
         @log = if filename.respond_to?(:write) and filename.respond_to?(:close)
           filename
@@ -49,7 +49,7 @@ module SemanticLogger
         end
 
         # Set the log level and formatter if supplied
-        super(level, &block)
+        super(level, filter, &block)
       end
 
       # After forking an active process call #reopen to re-open

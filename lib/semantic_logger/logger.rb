@@ -33,8 +33,13 @@ module SemanticLogger
     #    The initial log level to start with for this logger instance
     #    Default: SemanticLogger.default_level
     #
-    def initialize(klass, level=nil)
-      @name = klass.is_a?(String) ? klass : klass.name
+    #  filter [Regexp|Proc]
+    #    RegExp: Only include log messages where the class name matches the supplied
+    #    regular expression. All other messages will be ignored
+    #    Proc: Only include log messages where the supplied Proc returns true
+    #          The Proc must return true or false
+    def initialize(klass, level=nil, filter=nil)
+      super
     end
 
     # Returns [Integer] the number of log entries that have not been written

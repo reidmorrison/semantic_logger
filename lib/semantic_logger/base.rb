@@ -9,7 +9,7 @@
 module SemanticLogger
   class Base
     # Class name to be logged
-    attr_accessor :name
+    attr_accessor :name, :filter
 
     # Set the logging level for this logger
     #
@@ -17,7 +17,8 @@ module SemanticLogger
     #   the log level in any logging instance or the default log level
     #   SemanticLogger.default_level
     #
-    # Must be one of the values in SemanticLogger::LEVELS
+    # Must be one of the values in SemanticLogger::LEVELS, or
+    # nil if this logger instance should use the global default log_level
     def level=(level)
       @level_index = SemanticLogger.level_to_index(level)
       @level = level
@@ -193,8 +194,31 @@ module SemanticLogger
     ############################################################################
     protected
 
-    def initialize(klass, level=nil)
-      @name = klass.is_a?(String) ? klass : klass.name
+    # Initializer for Abstract Class SemanticLogger::Base
+    #
+    # Parameters
+    #  klass [String]
+    #   Name of the class, module, or other identifier for which the log messages
+    #   are being logged
+    #
+    #  level [Symbol]
+    #    Only allow log entries of this level or higher to be written to this appender
+    #    For example if set to :warn, this appender would only log :warn and :fatal
+    #    log messages when other appenders could be logging :info and lower
+    #
+    #  filter [Regexp|Proc]
+    #    RegExp: Only include log messages where the class name matches the supplied
+    #    regular expression. All other messages will be ignored
+    #    Proc: Only include log messages where the supplied Proc returns true
+    #          The Proc must return true or false
+    def initialize(klass, level=nil, filter=nil)
+      # Support filtering all messages to this logger using a Regular Expression
+      # or Proc
+      raise ":filter must be a Regexp or Proc" unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
+
+      @filter    = filter.is_a?(Regexp) ? filter.freeze : filter
+      @name      = klass.is_a?(String) ? klass : klass.name
+      self.level = level unless level.nil?
     end
 
     # Write log data to underlying data storage
@@ -243,6 +267,17 @@ module SemanticLogger
     #   Object supplied when benchmark_x was called
     Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric)
 
+    # Whether to log the supplied message based on the current filter if any
+    def include_message?(struct)
+      return true if @filter.nil?
+
+      if @filter.is_a?(Regexp)
+        (@filter =~ struct.name) != nil
+      elsif @filter.is_a?(Proc)
+        @filter.call(struct) == true
+      end
+    end
+
     # Log message at the specified level
     def log_internal(level, index, message=nil, payload=nil, exception=nil, &block)
       if exception.nil? && payload && payload.is_a?(Exception)
@@ -264,7 +299,8 @@ module SemanticLogger
       if self.payload
         payload = payload.nil? ? self.payload : self.payload.merge(payload)
       end
-      log Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception)
+      struct = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception)
+      log(struct) if include_message?(struct)
     end
 
     # Measure the supplied block and log the message
@@ -296,14 +332,17 @@ module SemanticLogger
         if exception
           case log_exception
           when :full
-            log Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, exception, metric)
+            struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, exception, metric)
+            log(struct) if include_message?(struct)
           when :partial
-            log Log.new(level, Thread.current.name, name, "#{message} -- Exception: #{exception.class}: #{exception.message}", payload, end_time, duration, tags, index, nil, metric)
+            struct = Log.new(level, Thread.current.name, name, "#{message} -- Exception: #{exception.class}: #{exception.message}", payload, end_time, duration, tags, index, nil, metric)
+            log(struct) if include_message?(struct)
           end
           raise exception
         elsif duration >= min_duration
           # Only log if the block took longer than 'min_duration' to complete
-          log Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric)
+          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric)
+          log(struct) if include_message?(struct)
         end
       end
     end

@@ -27,13 +27,13 @@ module SemanticLogger
       #
       # Note: Since the log level is controlled by setting the Ruby or Rails logger directly
       #   the level is ignored for this appender
-      def initialize(logger, &block)
+      def initialize(logger, filter=nil, &block)
         raise "logger cannot be null when initiailizing the SemanticLogging::Appender::Wrapper" unless logger
         @logger = logger
 
         # Set the formatter to the supplied block
         @formatter = block || self.default_formatter
-        super(:trace, &block)
+        super(nil, filter, &block)
       end
 
       # Pass log calls to the underlying Rails, log4j or Ruby logger

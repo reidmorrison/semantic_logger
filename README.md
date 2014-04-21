@@ -1,26 +1,35 @@
-semantic_logger
+semantic_logger [![Build Status](https://secure.travis-ci.org/reidmorrison/semantic_logger.png?branch=master)](http://travis-ci.org/reidmorrison/semantic_logger)
 ===============
 
-Improved logging for Ruby
+Scalable, next generation logging for Ruby
 
 * http://github.com/reidmorrison/semantic_logger
 
-## Note:
-
-As of SemanticLogger V2.0 the Rails logging is no longer automatically replaced
-when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
-gem to replace the Rails default logger with SemanticLogger
-
 ## Overview
 
-Semantic Logger takes logging in Ruby to a new level by adding several new
+Semantic Logger takes logging in Ruby to the next level by adding several new
 capabilities to the commonly used Logging API:
+
+High Performance
+
+* Logging is performed in a separate thread so as not to slow down the application
+  whilst logging to one or more destinations
+* Supports logging from hundreds of concurrent threads in the same process
+
+Drop-in Replacement
+
+* Simple drop-in replacement for the Ruby, or the Rails loggers
+* Supports current common logging interface
+* No changes to existing to code to use new logger ( other than replacing the logger )
 
 Dynamic
 
 * Increase the log level at runtime for just one class
 * For example enable debug level logging for a single class (logging instance)
   while the program is running to get more detailed logging in production for just that class
+* Change the default global logging level for all classes, unless that class has
+  specifically been overridden above
+* Use UNIX signals to change the log level for a running process
 
 Tagged Logging
 
@@ -29,17 +38,6 @@ Tagged Logging
 * Tagged logging is critical for any high traffic site so that one can narrow
   down log entries for a single call that is mixed in with log entries
   from hundreds of other log entries
-
-High Performance
-
-* Logging is performed in a separate thread so as not to impact performance of
-  running code
-
-Customizable
-
-* Custom formatting by destination
-* Easy to "roll your own" destination (Appender).
-  For example to log to Hadoop, Redis, etc..
 
 Payload support
 
@@ -55,15 +53,23 @@ Exceptions
   to text destinations and writes the exception elements as a hash to NOSQL
   destinations
 
-Drop-in Replacement
+Benchmarking
 
-* Simple drop-in replacement for the Ruby, or the Rails loggers
-* Supports current common logging interface
-* No changes to existing to code to use new logger ( other than replacing the logger )
+* The performance of any block of code can be measured and logged at the same time
+  depending on the active log level
+* Supports only logging when the block of code exceeds a specified number of milli-seconds.
+  Makes it easy to find bottlenecks when the system suddenly slows down in production
+* Exceptions thrown in the block of code can also be logged so as to aid in finding
+  exceptions that may be discarded or hidden by the application
+* Benchmarked data can also be forwarded to external metric systems so that the
+  performance of these blocks can be measured and/or monitored over time
 
 Thread Safe
 
-* Semantic Logger ensures that all logging is fully thread-safe
+* Semantic Logger is completely thread safe and all methods can be called
+  concurrently from any thread
+* Tagged logging keeps any tagging data on a per-thread basis to ensure that
+  tags from different threads are not inter-mingled
 * Supports highly concurrent environments running hundreds of threads
 * Each appender writes all log entries sequentially in the appender thread so
   that log entries are written in the correct sequence
@@ -73,8 +79,9 @@ Thread Safe
 
 Thread Aware
 
-* Includes the process and thread id information in every log entry
-* If running JRuby it will also include the name of the thread for every log entry
+* Includes the process id, and thread name or thread id in every log entry so that
+  log entries from different processes and even threads are easily discernable
+* Human readable names can be assigned to every thread for logging purposes
 
 Trace Level
 
@@ -92,11 +99,6 @@ Multiple Destinations
 * Each destination can also have its own log level.
   For example, only log :info and above to MongoDB, or :warn and above to a
   second log file
-
-Benchmarking
-
-* The performance of any block of code can be measured and logged at the same time
-  depending on the active log level
 
 Semantic Capabilities
 
@@ -135,12 +137,11 @@ NOSQL Destinations
 }
 ```
 
-Thread Safe
+Customizable
 
-* Semantic Logger is completely thread safe and all methods can be called
-  concurrently from any thread
-* Tagged logging keeps any tagging data on a per-thread basis to ensure that
-  tags from different threads are not inter-mingled
+* Custom formatting by destination
+* Easy to "roll your own" destination (Appender).
+  For example to log to Hadoop, Redis, etc..
 
 ## Introduction
 
@@ -210,24 +211,30 @@ Or to query whether a specific log level is set
 logger.info?
 ```
 
-The following logging methods are available
+The following traditional logging methods are available
 
 ```ruby
-trace(message, payload=nil, exception=nil, &block)
-debug(message, payload=nil, exception=nil, &block)
-info(message, payload=nil, exception=nil, &block)
-warn(message, payload=nil, exception=nil, &block)
-error(message, payload=nil, exception=nil, &block)
-fatal(message, payload=nil, exception=nil, &block)
+logger.trace("Low level trace information such as data sent over a socket")
+logger.debug("Debugging information to aid with problem determination")
+logger.info("Informational message such as request received")
+logger.warn("Warn about something in the system")
+logger.error("An error occurred during processing")
+logger.fatal("Oh no something really bad happened")
+```
+
+Each of the above calls can take additional parameters, for example:
+
+```ruby
+log.info(message, payload=nil, exception=nil, &block)
 ```
 
 Parameters
 
-- message: The text message to log.
+- message:   The text message to log.
   Mandatory only if no block is supplied
-- payload: Optional, either a Ruby Exception object or a Hash
+- payload:   Optional, either a Ruby Exception object or a Hash
 - exception: Optional, Ruby Exception object. Allows both an exception and a payload to be logged
-- block:   The optional block is executed only if the corresponding log level
+- block:     The optional block is executed only if the corresponding log level
   is active. Can be used to prevent unnecessary calculations of debug data in
   production.
 
@@ -292,12 +299,21 @@ The exception will flow through to the caller unchanged
 The following benchmarking methods are available
 
 ```ruby
-benchmark_trace(message, params=nil, &block)
-benchmark_debug(message, params=nil, &block)
-benchmark_info(message, params=nil, &block)
-benchmark_warn(message, params=nil, &block)
-benchmark_error(message, params=nil, &block)
-benchmark_fatal(message, params=nil, &block)
+logger.benchmark_trace("Low level trace information such as data sent over a socket")
+logger.benchmark_debug("Debugging information to aid with problem determination")
+logger.benchmark_info("Informational message such as request received")
+logger.benchmark_warn("Warn about something in the system")
+logger.benchmark_error("An error occurred during processing")
+logger.benchmark_fatal("Oh no something really bad happened")
+logger.benchmark(:info, "Informational message such as request received")
+```
+
+Each of the above calls can take additional parameters, for example:
+
+```ruby
+log.benchmark_info(message, params=nil) do
+  # Measure how long it takes to run this block of code
+end
 ```
 
 Parameters
@@ -485,6 +501,16 @@ Note: The changes to the logging level will not change for any classes where the
 log_level was set explicity within the application itself. The above signal only changes
 the global default level, which is used by loggers when their log level has not been changed.
 
+#### Change the log level without using signals
+
+If the application has another means of communicating without needing signals,
+the global default log level can be modified using `SemanticLogger.default_level=`
+
+```ruby
+# Change the global default logging level for active loggers
+SemanticLogger.default_level = :debug
+```
+
 ### Tagged Logging
 
 Semantic Logger allows any Ruby or Rails program to also include tagged logging.
@@ -566,27 +592,17 @@ logger.benchmark_info "Calling external interface" do
 end
 ```
 
-Sending the performance information gathered above to something like NewRelic
-is also very useful, and we can end up with:
+A single subscriber can be defined to collect all the metrics and forward them
+for example to NewRelic:
 
 ```ruby
-logger.benchmark_info "Calling external interface" do
-  self.class.trace_execution_scoped(['Custom/slow_action/beginning_work']) do
-    # Code to call the external supplier ...
-  end
-end
-```
-
-Rather than wrapping the code everywhere with two blocks, a single subscriber can
-be setup in config/initializers/semantic_logger_metrics.rb:
-
-```ruby
+# config/initializers/semantic_logger_metrics.rb
 SemanticLogger.on_metric do |log_struct|
   ::NewRelic::Agent.record_metric(log_struct.metric, log_struct.duration)
 end
 ```
 
-Then update the log entry as follows:
+Add the :metric option to the log entry as follows:
 
 ```ruby
 logger.benchmark_info "Calling external interface", :metric => 'Custom/slow_action/beginning_work' do
@@ -752,7 +768,7 @@ to write your own custom formatter or log appender it is necessary to understand
 the fields:
 
 ```ruby
-Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index)
+Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric)
 ```
 level [Symbol]
 
@@ -790,6 +806,10 @@ tags [Array<String>]
 level_index [Integer]
 
 * Internal use only. Index of the log level
+
+metric [Object]
+
+* Object supplied when the benchmark api was called
 
 ### Mixing Logging Levels
 
@@ -1009,29 +1029,29 @@ logger.info "Hello World"
 
 Look at the [existing appenders](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
 
-To have your appender included in the standard list of appenders follow the fork
-instructions below.
-Very Important: New appenders will not be accepted without complete working tests.
+To have your appender included in the standard list of appenders, submit it along
+with complete working tests.
 See the [MongoDB Appender Test](https://github.com/reidmorrison/semantic_logger/blob/master/test/appender_mongodb_test.rb) for an example.
 
 ## Dependencies
 
-- Ruby MRI 1.8.7, 1.9.3 (or above) Or, JRuby 1.6.3 (or above)
-- Optional: To log to MongoDB, Mongo Ruby Driver 1.5.2 or above
+See [.travis.yml](https://github.com/reidmorrison/semantic_logger/.travis.yml) for the list of tested Ruby platforms
+
+The following gems are only required when their corresponding appenders are being used,
+and are therefore not automatically included by this gem:
+- MongoDB Appender: mongo 1.9.2 or above
+- Syslog Appender: syslog_protocol 0.9.2 or above
+- Syslog Appender to a remote syslogng server over TCP or UDP: resilient_socket 0.5.0 or above
 
 ## Install
 
     gem install semantic_logger
 
-To log to MongoDB, it also needs the Ruby Mongo Driver
+## Upgrade Notes:
 
-    gem install mongo
-
-## Future
-
-- Add support for a configuration file that can set log level by class name
-- Configuration file to support adding appenders
-- Based on end-user demand add appenders for: hadoop, redis, etc..
+As of SemanticLogger V2.0 the Rails logging is no longer automatically replaced
+when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
+gem to replace the Rails default logger with SemanticLogger
 
 Meta
 ----
@@ -1056,7 +1076,7 @@ Marc Bellingrath :: marrrc.b@gmail.com
 License
 -------
 
-Copyright 2012, 2013 Reid Morrison
+Copyright 2012, 2013, 2014 Reid Morrison
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
