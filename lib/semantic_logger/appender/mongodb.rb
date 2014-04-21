@@ -103,7 +103,9 @@ module SemanticLogger
       #
       # Creates an index based on tags to support faster lookups
       def create_indexes
-        db.create_collection(collection_name, {:capped => true, :size => @collection_size, :max => @collection_max})
+        options = {:capped => true, :size => @collection_size}
+        options[:max] = @collection_max if @collection_max
+        db.create_collection(collection_name, options)
         collection.ensure_index('tags')
       end
 

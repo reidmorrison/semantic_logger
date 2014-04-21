@@ -11,18 +11,22 @@ module SemanticLogger
     # Class name to be logged
     attr_accessor :name
 
-    attr_reader :level
-
     # Set the logging level for this logger
     #
-    # Note: This level is only for this particular appender. It does not override
+    # Note: This level is only for this particular instance. It does not override
     #   the log level in any logging instance or the default log level
     #   SemanticLogger.default_level
     #
     # Must be one of the values in SemanticLogger::LEVELS
     def level=(level)
-      @level_index = self.class.map_level_to_index(level)
+      @level_index = SemanticLogger.level_to_index(level)
       @level = level
+    end
+
+    # Returns the current log level if set, otherwise it returns the global
+    # default log level
+    def level
+      @level || SemanticLogger.default_level
     end
 
     # Implement the log level calls
@@ -69,9 +73,9 @@ module SemanticLogger
     #    logger.info("Parsing received XML", exc)
     #
     SemanticLogger::LEVELS.each_with_index do |level, index|
-      class_eval <<-EOT, __FILE__, __LINE__
+      class_eval <<-EOT, __FILE__, __LINE__ + 1
         def #{level}(message=nil, payload=nil, exception=nil, &block)
-          if @level_index <= #{index}
+          if level_index <= #{index}
             log_internal(:#{level}, #{index}, message, payload, exception, &block)
             true
           else
@@ -80,17 +84,27 @@ module SemanticLogger
         end
 
         def #{level}?
-          @level_index <= #{index}
+          level_index <= #{index}
         end
 
         def benchmark_#{level}(message, params = {}, &block)
-          if @level_index <= #{index}
+          if level_index <= #{index}
             benchmark_internal(:#{level}, #{index}, message, params, &block)
           else
             block.call(params) if block
           end
         end
       EOT
+    end
+
+    # Dynamically supply the log level with every benchmark call
+    def benchmark(level, message, params = {}, &block)
+      index = SemanticLogger.level_to_index(level)
+      if level_index <= index
+        benchmark_internal(level, index, message, params, &block)
+      else
+        block.call(params) if block
+      end
     end
 
     # Add the supplied tags to the list of tags to log for this thread whilst
@@ -181,7 +195,6 @@ module SemanticLogger
 
     def initialize(klass, level=nil)
       @name = klass.is_a?(String) ? klass : klass.name
-      self.level = level || SemanticLogger.default_level
     end
 
     # Write log data to underlying data storage
@@ -190,7 +203,11 @@ module SemanticLogger
     end
 
     # Return the level index for fast comparisons
-    attr_reader :level_index
+    # Returns the global default level index if the level has not been explicitly
+    # set for this instance
+    def level_index
+      @level_index || SemanticLogger.default_level_index
+    end
 
     # Struct Log
     #
@@ -225,29 +242,6 @@ module SemanticLogger
     # metric [Object]
     #   Object supplied when benchmark_x was called
     Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric)
-
-    # Internal method to return the log level as an internal index
-    # Also supports mapping the ::Logger levels to SemanticLogger levels
-    def self.map_level_to_index(level)
-      index = if level.is_a?(Integer) && defined?(::Logger::Severity)
-        # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
-        @@map_levels ||= begin
-          levels = []
-          ::Logger::Severity.constants.each do |constant|
-            levels[::Logger::Severity.const_get(constant)] = LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
-          end
-          levels
-        end
-        @@map_levels[level]
-      elsif level.is_a?(String)
-        level = level.downcase.to_sym
-        LEVELS.index(level)
-      else
-        LEVELS.index(level)
-      end
-      raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
-      index
-    end
 
     # Log message at the specified level
     def log_internal(level, index, message=nil, payload=nil, exception=nil, &block)

@@ -13,6 +13,7 @@ require 'stringio'
 class AppenderFileTest < Test::Unit::TestCase
   context SemanticLogger::Appender::File do
     setup do
+      SemanticLogger.default_level = :trace
       @time = Time.new
       @io = StringIO.new
       @appender = SemanticLogger::Appender::File.new(@io)

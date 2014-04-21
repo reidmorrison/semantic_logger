@@ -24,7 +24,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
     end
 
     teardown do
-      @appender.purge_all
+      @appender.purge_all if @appender
     end
 
     context "format logs into documents" do

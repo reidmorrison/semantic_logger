@@ -13,6 +13,8 @@ module SemanticLogger
   # will not be changed in any way
   def self.default_level=(level)
     @@default_level = level
+    # For performance reasons pre-calculate the level index
+    @@default_level_index = level_to_index(level)
   end
 
   # Returns the global default log level for new Logger instances
@@ -150,6 +152,24 @@ module SemanticLogger
     SemanticLogger::Logger.on_metric(&block)
   end
 
+  # Add a signal handler so that the log level can be changed externally
+  # without restarting the process
+  #
+  # When the signal is raised on this process, the global default log level
+  # rotates through the following log levels in the following order, starting
+  # from the current global default level:
+  #   :warn, :info, :debug, :trace
+  #
+  # If the current level is :trace it wraps around back to :warn
+  def add_signal_handler(signal='URS2')
+    Signal.trap(signal) do
+      #LEVELS = []
+      index = (default_level == :trace) ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
+      new_level = LEVELS[index-1]
+      self['SemanticLogger'].warn "Changed global default log level to #{new_level.inspect}"
+    end
+  end
+
   ############################################################################
   protected
 
@@ -158,6 +178,39 @@ module SemanticLogger
   ############################################################################
   private
 
+  def self.default_level_index
+    @@default_level_index
+  end
+
+  # Returns the symbolic level for the supplied level index
+  def index_to_level(level_index)
+    LEVELS[level_index]
+  end
+
+  # Internal method to return the log level as an internal index
+  # Also supports mapping the ::Logger levels to SemanticLogger levels
+  def self.level_to_index(level)
+    index = if level.is_a?(Symbol)
+      LEVELS.index(level)
+    elsif level.is_a?(String)
+      level = level.downcase.to_sym
+      LEVELS.index(level)
+    elsif level.is_a?(Integer) && defined?(::Logger::Severity)
+      # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
+      @@map_levels ||= begin
+        levels = []
+        ::Logger::Severity.constants.each do |constant|
+          levels[::Logger::Severity.const_get(constant)] = LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
+        end
+        levels
+      end
+      @@map_levels[level]
+    end
+    raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
+    index
+  end
+
   # Initial default Level for all new instances of SemanticLogger::Logger
   @@default_level = :info
+  @@default_level_index = level_to_index(@@default_level)
 end

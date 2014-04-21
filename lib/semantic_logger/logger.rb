@@ -35,7 +35,6 @@ module SemanticLogger
     #
     def initialize(klass, level=nil)
       @name = klass.is_a?(String) ? klass : klass.name
-      self.level = level || SemanticLogger.default_level
     end
 
     # Returns [Integer] the number of log entries that have not been written
