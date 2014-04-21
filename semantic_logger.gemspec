@@ -1,4 +1,5 @@
-$:.push File.expand_path("../lib", __FILE__)
+lib = File.expand_path('../lib/', __FILE__)
+$:.unshift lib unless $:.include?(lib)
 
 # Maintain your gem's version:
 require 'semantic_logger/version'
