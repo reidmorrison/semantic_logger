@@ -1,7 +1,7 @@
 semantic_logger [![Build Status](https://secure.travis-ci.org/reidmorrison/semantic_logger.png?branch=master)](http://travis-ci.org/reidmorrison/semantic_logger)
 ===============
 
-Scalable, next generation logging for Ruby
+Next generation logging system for Ruby to support highly concurrent, high throughput, low latency systems
 
 * http://github.com/reidmorrison/semantic_logger
 
