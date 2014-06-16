@@ -77,6 +77,10 @@ module SemanticLogger
         end
       end
 
+      def flush
+        # An appender can implement a flush method if it supports it.
+      end
+
       ############################################################################
       protected
 

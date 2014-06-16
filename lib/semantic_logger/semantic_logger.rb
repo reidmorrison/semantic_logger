@@ -47,9 +47,9 @@ module SemanticLogger
   #     Ruby built-in Logger, or any logger that implements the following methods:
   #       :debug, :info, :warn, :error, :fatal
   #
-  #   log_level [Symbol]
+  #   level [Symbol]
   #     Optional
-  #     By setting the log_level higher than the SemanticLogger::default_level
+  #     By setting the level higher than the SemanticLogger::default_level
   #     this appender can exclude lower level log messages
   #     Any one of SemanticLogger::LEVELS. For example: :trace, :debug, :info, :warn, :error, :fatal
   #
@@ -82,13 +82,13 @@ module SemanticLogger
   #   logger.info "Hello World"
   #   logger.debug("Login time", :user => 'Joe', :duration => 100, :ip_address=>'127.0.0.1')
   #
-  def self.add_appender(appender, log_level=nil, &block)
+  def self.add_appender(appender, level=nil, &block)
     appender_instance = if appender.is_a?(String) || appender.is_a?(IO)
       # $stderr, STDOUT, other IO, or a filename
-      SemanticLogger::Appender::File.new(appender, log_level, &block)
+      SemanticLogger::Appender::File.new(appender, level, &block)
     elsif appender.is_a? Appender::Base
       # Already an instance of an appender
-      appender.log_level = log_level if log_level
+      appender.level = level if level
       appender.formatter = block if block
       appender
     else
@@ -97,7 +97,7 @@ module SemanticLogger
         raise "Supplied appender does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..-1].inspect}"
       end
 
-      raise "Change the log level to #{log_level}, update the log level directly against the supplied appender" if log_level
+      raise "Change the log level to #{level}, update the log level directly against the supplied appender" if level
       SemanticLogger::Appender::Wrapper.new(appender, &block)
     end
     @@appenders << appender_instance
@@ -192,7 +192,7 @@ module SemanticLogger
   # Also supports mapping the ::Logger levels to SemanticLogger levels
   def self.level_to_index(level)
     return if level.nil?
-    
+
     index = if level.is_a?(Symbol)
       LEVELS.index(level)
     elsif level.is_a?(String)
