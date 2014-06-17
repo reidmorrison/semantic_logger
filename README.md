@@ -754,7 +754,7 @@ SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(:server => 'tcp
 ### Send errors to New Relic
 
 Adding the New Relic appender will send :error and :fatal log entries to New Relic as error events.
-Note: Any payload information will not automatically be filtered, so take care not to push any sensitive information when logging with tags or a payload.
+Note: Payload information is not filtered, so take care not to push any sensitive information when logging with tags or a payload.
 
 For a Rails application already configured to use SemanticLogger and New Relic, create a file called <Rails Root>/config/initializers/newrelic_appender.rb with the following contents and restart the application:
 
@@ -788,7 +788,7 @@ logger.error 'This is written to application.log and will also be sent to New Re
 # The appender will send tags, payloads and benchmark duration to New Relic
 logger.tagged('test') do
   logger.with_payload( {key1: 123, key2: 'abc'} ) do
-    logger.benchmark(:error, @message) do
+    logger.benchmark_error(@message) do
       sleep 0.001
     end
   end
@@ -1058,8 +1058,14 @@ class SimpleAppender < SemanticLogger::Appender::Base
 
   # Display the log struct and the text formatted output
   def log(log)
+    # Only log if the supplied level matches or exceeds the level for this appender
+    return unless level_index <= (log.level_index || 0)
+
+    # Display the raw log structure
     p log
-    puts formatter.call(log) if level_index <= (log.level_index || 0)
+
+    # Display the formatted output
+    puts formatter.call(log)
   end
 
   # Optional
