@@ -473,7 +473,7 @@ log levels in the following order, starting from the current global default leve
 
 If the current level is :trace it wraps around back to :warn
 
-Example:
+Example (where the target ruby process id is 1234):
 
 ```
 kill -SIGUSR2 1234
@@ -498,7 +498,7 @@ logger.info "Hello World"
 ```
 
 Note: The changes to the logging level will not change for any classes where the
-log_level was set explicity within the application itself. The above signal only changes
+level was set explicitly within the application itself. The above signal only changes
 the global default level, which is used by loggers when their log level has not been changed.
 
 #### Change the log level without using signals
@@ -651,7 +651,7 @@ logger.trace "Low level trace information"
 ```
 
 To reduce the log level of logging to STDOUT to just :info and above, add the
-log_level such as :info as the second parameter when adding the appender:
+level such as :info as the second parameter when adding the appender:
 ```ruby
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
@@ -751,6 +751,56 @@ SemanticLogger.add_appender('development.log')
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(:server => 'tcp://myloghost:514'))
 ```
 
+### Send errors to New Relic
+
+Adding the New Relic appender will send :error and :fatal log entries to New Relic as error events.
+Note: Payload information is not filtered, so take care not to push any sensitive information when logging with tags or a payload.
+
+For a Rails application already configured to use SemanticLogger and New Relic, create a file called <Rails Root>/config/initializers/newrelic_appender.rb with the following contents and restart the application:
+
+```ruby
+# Send :error and :fatal log messages to New Relic
+SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
+Rails.logger.info 'SemanticLogger New Relic Appender added.'
+```
+
+For a non-Rails application, send :info and more severe log entries to a file called application.log and also send :error and :fatal log entries to New Relic.
+
+```ruby
+# ./newrelic.yml needs to be set up -- see https://docs.newrelic.com/docs/ruby/ruby-agent-installation for more information.
+
+require 'semantic_logger'
+require 'newrelic_rpm'
+
+# New Relic setup
+NewRelic::Agent.manual_start
+
+# SemanticLogger setup
+SemanticLogger.default_level = :info
+SemanticLogger.add_appender('application.log')
+SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
+logger = SemanticLogger['Example']
+
+# Log some messages
+logger.info  'This is only written to application.log'
+logger.error 'This is written to application.log and will also be sent to New Relic as an error event'
+
+# The appender will send tags, payloads and benchmark duration to New Relic
+logger.tagged('test') do
+  logger.with_payload( {key1: 123, key2: 'abc'} ) do
+    logger.benchmark_error(@message) do
+      sleep 0.001
+    end
+  end
+end
+
+# New Relic does not seem to receive any errors if the application exits too soon after sending error alerts.
+sleep 10
+
+# New Relic shutdown - should send any queued data before exiting
+::NewRelic::Agent.shutdown
+```
+
 ## Configuration
 
 The Semantic Logger follows the principle where multiple appenders can be active
@@ -806,6 +856,10 @@ tags [Array<String>]
 level_index [Integer]
 
 * Internal use only. Index of the log level
+
+exception [Object]
+
+* Ruby Exception object to log
 
 metric [Object]
 
@@ -1004,7 +1058,13 @@ class SimpleAppender < SemanticLogger::Appender::Base
 
   # Display the log struct and the text formatted output
   def log(log)
+    # Only log if the supplied level matches or exceeds the level for this appender
+    return unless level_index <= (log.level_index || 0)
+
+    # Display the raw log structure
     p log
+
+    # Display the formatted output
     puts formatter.call(log)
   end
 

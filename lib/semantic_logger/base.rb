@@ -18,7 +18,7 @@ module SemanticLogger
     #   SemanticLogger.default_level
     #
     # Must be one of the values in SemanticLogger::LEVELS, or
-    # nil if this logger instance should use the global default log_level
+    # nil if this logger instance should use the global default level
     def level=(level)
       @level_index = SemanticLogger.level_to_index(level)
       @level = level
@@ -262,6 +262,9 @@ module SemanticLogger
     #
     # level_index
     #   Internal index of the log level
+    #
+    # exception
+    #   Ruby Exception object to log
     #
     # metric [Object]
     #   Object supplied when benchmark_x was called
