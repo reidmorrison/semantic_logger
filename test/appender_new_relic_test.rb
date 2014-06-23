@@ -54,7 +54,7 @@ class AppenderNewRelicTest < Test::Unit::TestCase
 
     should 'send notification to New Relic with custom attributes' do
       @appender.tagged('test') do
-        @appender.with_payload({key1: 1, key2: 'a'}) do
+        @appender.with_payload({:key1 => 1, :key2 => 'a'}) do
           @appender.benchmark(:error, @message) do
             sleep 0.001
           end
@@ -63,7 +63,7 @@ class AppenderNewRelicTest < Test::Unit::TestCase
       assert_equal @message, ::NewRelic::Agent.message
       assert_equal ['test'], ::NewRelic::Agent.hash[:custom_params][:tags], ::NewRelic::Agent.hash
       assert_equal "SemanticLogger::Appender::NewRelic/#{@message}", ::NewRelic::Agent.hash[:metric]
-      assert_equal({key1: 1, key2: 'a'}, ::NewRelic::Agent.hash[:custom_params][:payload], ::NewRelic::Agent.hash)
+      assert_equal({:key1 => 1, :key2 => 'a'}, ::NewRelic::Agent.hash[:custom_params][:payload], ::NewRelic::Agent.hash)
       assert_not_nil ::NewRelic::Agent.hash[:custom_params][:duration], ::NewRelic::Agent.hash
       assert_not_nil ::NewRelic::Agent.hash[:custom_params][:thread_name], ::NewRelic::Agent.hash
     end
