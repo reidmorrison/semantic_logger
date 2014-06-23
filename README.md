@@ -473,7 +473,7 @@ log levels in the following order, starting from the current global default leve
 
 If the current level is :trace it wraps around back to :warn
 
-Example:
+Example (where the target ruby process id is 1234):
 
 ```
 kill -SIGUSR2 1234
