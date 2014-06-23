@@ -79,7 +79,7 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
       short_message = self.class.first_non_empty_line(log.message)
       metric = log.metric || "#{log.name}/#{short_message}"
 
-      custom_params = { thread_name: log.thread_name }
+      custom_params = { :thread_name => log.thread_name }
       # Only show the message under custom attributes if the error message uses an exception or shortened message (first non-empty line).
       custom_params[:message]  = log.message  if log.message && (log.exception || log.message != short_message)
       custom_params[:duration] = "#{log.duration} ms" if log.duration
