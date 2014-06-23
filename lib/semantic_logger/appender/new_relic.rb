@@ -86,7 +86,7 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
       custom_params[:payload]  = log.payload  if log.payload
       custom_params[:tags]     = log.tags     if log.tags && (log.tags.size > 0)
 
-      { metric: metric, custom_params: custom_params }
+      { :metric => metric, :custom_params => custom_params }
     end
   end
 
