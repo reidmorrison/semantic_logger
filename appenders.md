@@ -19,9 +19,17 @@ than deleting the file.
 ### Logging to Syslog
 
 ```ruby
+# Log to a local Syslog daemon
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
+```
+
+```ruby
+# Log to a remote Syslog server such as syslog-ng over TCP:
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(server: 'tcp://myloghost:514'))
 ```
 
 ### Logging to an existing Logger
@@ -48,7 +56,7 @@ Adding the New Relic appender will send `:error` and `:fatal` log entries to New
 
 Note: Payload information is not filtered, so take care not to push any sensitive information when logging with tags or a payload.
 
-For a Rails application already configured to use SemanticLogger and New Relic, create a file called <Rails Root>/config/initializers/newrelic_appender.rb with the following contents and restart the application:
+For a Rails application already configured to use Semantic Logger and New Relic, create a file called <Rails Root>/config/initializers/newrelic_appender.rb with the following contents and restart the application:
 
 ```ruby
 # Send :error and :fatal log messages to New Relic
@@ -183,10 +191,10 @@ The output is as follows:
 2013-08-02 14:15:56.735273 W [35669:70176909690580] MyClass -- This is a warning message
 ```
 
-### Using Appenders Standalone from SemanticLogger
+### Using Appenders Standalone from Semantic Logger
 
 Any appender can be used directly and all the regular Logging API's called
-against it without needing to use the global SemanticLogger queuing and appender
+against it without needing to use the global Semantic Logger queuing and appender
 thread. For example:
 
 ```ruby
@@ -194,7 +202,7 @@ require 'semantic_logger'
 
 appender = SemanticLogger::Appender::File.new('separate.log', :info)
 
-# Use appender directly, without using global SemanticLogger
+# Use appender directly, without using global Semantic Logger
 appender.warn 'Only send this to separate.log'
 
 appender.benchmark_info 'Called supplier' do
@@ -205,7 +213,7 @@ end
 This technique can also be used to temporarily send certain log messages to a
 separate file from the global logging
 
-Note: Do not call appenders directly that have been added to SemanticLogger
+Note: Do not call appenders directly that have been added to Semantic Logger
 as appender instances are not designed to be accessed concurrently by multiple threads.
 A separate instance per thread is recommended in multi-threaded envrionments, or just
-use the global SemanticLogger since it is designed for concurrency.
+use the global Semantic Logger since it is designed for concurrency.

@@ -6,7 +6,7 @@ layout: default
 
 To write your own appender it should meet the following requirements:
 
-* Inherit from SemanticLogger::Base
+* Inherit from `SemanticLogger::Base`
 * In the initializer connect to the resource being logged to
 * Implement #log(log) which needs to write to the relevant resource
 * Implement #flush if the resource can be flushed

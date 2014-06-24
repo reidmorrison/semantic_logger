@@ -99,7 +99,7 @@ logger.debug("Login time", :user => 'Joe', :duration => 100, :ip_address=>'127.0
 ```
 
 It is recommended that every class or module have it's own logging instance.
-This can be achieved by including SemanticLogger::Loggable:
+This can be achieved by including `SemanticLogger::Loggable`:
 
 ```ruby
 require 'semantic_logger'

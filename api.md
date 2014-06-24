@@ -217,7 +217,7 @@ end
 
 ### Named threads
 
-SemanticLogger logs the name or id of the thread in every log message.
+Semantic Logger logs the name or id of the thread in every log message.
 
 On Ruby MRI the thread name is by default the thread's object_id, For example: 70184354571980
 
@@ -254,7 +254,7 @@ Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
 ### Changing the Class name for Log Entries
 
 It is recommended to include a class specific logger for all major classes that will
-be logging using the SemanticLogger::Loggable mix-in. For Example:
+be logging using the `SemanticLogger::Loggable` mix-in. For Example:
 
 ```ruby
 class ExternalSupplier
@@ -348,7 +348,7 @@ kill -SIGUSR2 1234
 
 #### Enabling Log Level Signal handler
 
-On startup SemanticLogger does not register any signals so that it does not
+On startup Semantic Logger does not register any signals so that it does not
 interfere with any existing signal handlers. In order to enable the above log level
 changes the signal handler must be registered by calling `SemanticLogger.add_signal_handler`
 
@@ -407,3 +407,18 @@ logger.benchmark_info "Calling external interface", :metric => 'Custom/slow_acti
 end
 ```
 
+### Flushing the logs
+
+Semantic Logger automatically flushes all appenders ( log files, etc. ) when a process
+exits.
+
+The `flush` method is not defined for Semantic Logger instances since there could be
+many logging instances, sometimes one per class.
+
+To perform a global flush of all appenders and to wait for any outstanding queued
+messages to be written:
+
+```ruby
+# Flush all appenders and wait for them to complete flushing
+SemanticLogger.flush
+```
