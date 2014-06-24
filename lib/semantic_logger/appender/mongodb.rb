@@ -141,7 +141,7 @@ module SemanticLogger
           document = {
             :time        => log.time,
             :host_name   => host_name,
-            :pid         => $PID,
+            :pid         => $$,
             :thread_name => log.thread_name,
             :name        => log.name,
             :level       => log.level,
