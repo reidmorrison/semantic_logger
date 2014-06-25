@@ -37,7 +37,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
         assert_equal nil, document['thread_name']
         assert_equal nil, document['time']
         assert_equal nil, document['payload']
-        assert_equal $PID, document['pid']
+        assert_equal $$, document['pid']
         assert_equal 'test', document['host_name']
         assert_equal 'test_application', document['application']
       end
@@ -53,7 +53,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
         assert_equal nil, document['thread_name']
         assert_equal nil, document['time']
         assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
-        assert_equal $PID, document['pid']
+        assert_equal $$, document['pid']
         assert_equal 'test', document['host_name']
         assert_equal 'test_application', document['application']
       end
@@ -72,7 +72,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
         assert_equal 'thread', document['thread_name']
         assert_equal @time.to_i, document['time'].to_i
         assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
-        assert_equal $PID, document['pid']
+        assert_equal $$, document['pid']
         assert_equal 'test', document['host_name']
         assert_equal 'test_application', document['application']
       end
@@ -90,7 +90,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
         assert_equal 'thread', document['thread_name']
         assert_equal @time.to_i, document['time'].to_i
         assert_equal nil, document['payload']
-        assert_equal $PID, document['pid']
+        assert_equal $$, document['pid']
         assert_equal 'test', document['host_name']
         assert_equal 'test_application', document['application']
       end
@@ -107,7 +107,7 @@ class AppenderMongoDBTest < Test::Unit::TestCase
           assert_equal 'thread', document['thread_name']
           assert_equal @time.to_i, document['time'].to_i
           assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
-          assert_equal $PID, document['pid']
+          assert_equal $$, document['pid']
           assert_equal 'test', document['host_name']
           assert_equal 'test_application', document['application']
         end
