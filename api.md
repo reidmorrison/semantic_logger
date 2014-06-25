@@ -11,17 +11,63 @@ The following logging levels are available through Semantic Logger
     :trace, :debug, :info, :warn, :error, :fatal
 
 The log levels are listed above in the order of precedence with the most detail to the least.
-For example :debug would include :info, :warn, :error, :fatal levels but not :trace
-And :fatal would only log :fatal error messages and nothing else
+For example `:debug` would include `:info`, `:warn`, `:error`, `:fatal` levels but not `:trace`
+And `:fatal` would only log `:fatal` error messages and nothing else
 
-:unknown has been mapped to :fatal for Rails and Ruby Logger
-
-:trace is a new level that is often used for tracing low level calls such
+`:trace` is a new level that is often used for tracing low level calls such
 as the data sent or received to external web services. It is also commonly used
 in the development environment for low level trace logging of methods calls etc.
 
-If only the rails logger is being used, then :trace level calls will be logged
-as debug calls only if the log level is set to trace
+### Creating an instance of a logger
+
+To create a stand-alone logger instance by supplying the name of the class/application:
+
+```ruby
+logger = SemanticLogger['MyClass']
+```
+
+Or, even better, pass the actual class itself:
+
+```ruby
+logger = SemanticLogger[MyClass]
+```
+
+A logger instance should be created for every class so that it's log entries
+can be uniquely identified from logging entries from other classes.
+
+All logger instances forward their log messages to the global Appender Thread that
+does the actual logging to each appender, see [Appenders](appenders.html) for a list of available
+Appenders.
+
+#### Using the SemanticLogger::Loggable Mixin
+
+Rather than creating logger instances above inside classes it is recommended to
+use the SemanticLogger::Loggable Mixin by adding the following include:
+
+```ruby
+  include SemanticLogger::Loggable
+```
+
+For Example:
+
+```ruby
+class Supplier
+  # Include class and instance logger variables
+  include SemanticLogger::Loggable
+
+  def self.some_class_method
+    logger.debug 'logger is accessible from class methods'
+  end
+
+  def call_supplier
+    logger.debug "logger is accessible from instance methods"
+  end
+end
+```
+
+This will result in the log output identifying the log entry as from the `Supplier` class
+
+    2012-08-30 15:37:29.474 I [48308:main] Supplier -- logger is accessible from instance methods
 
 ### Standard Logging methods
 
@@ -52,18 +98,18 @@ logger.fatal("Oh no something really bad happened")
 Each of the above calls can take additional parameters, for example:
 
 ```ruby
-log.info(message, payload=nil, exception=nil, &block)
+log.info(message, payload_or_exception=nil, exception=nil, &block)
 ```
 
 Parameters
 
 - `message`:   The text message to log.
   Mandatory only if no block is supplied
-- `payload`:   Optional, either a Ruby Exception object or a Hash
+- `payload_or_exception`:   Optional, either a Ruby Exception object or a Hash
 - `exception`: Optional, Ruby Exception object. Allows both an exception and a payload to be logged
-- `block`:     The optional block is executed only if the corresponding log level
-  is active. Can be used to prevent unnecessary calculations of debug data in
-  production.
+- `block`:     The optional block is executed only if the corresponding log level is active.
+By supplying a block, it is only evaluated when the log level meets or exceeds the supplied log level.
+This can be used to prevent the block from being evaluated in production environments.
 
 Examples:
 
@@ -72,7 +118,7 @@ logger.debug("Calling Supplier")
 
 logger.debug("Calling Supplier", :request => 'update', :user => 'Jack')
 
-logger.debug { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
+logger.trace { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
 ```
 
 ### Exceptions
@@ -84,7 +130,10 @@ a corresponding Exception can be logged in a standard way
 begin
   # ... Code that can raise an exception
 rescue Exception => exception
+
+  # Log the exception as an error
   logger.error("Oops external call failed", exception)
+
   # Re-raise or handle the exception
   raise exception
 end
@@ -96,7 +145,7 @@ The Semantic Logger adds an extra parameter to the existing log methods so that
 additional payload can be logged, such as a Hash or a Ruby Exception object.
 
 ```ruby
-logger.info("Oops external call failed", :result => :failed, :reason_code => -10)
+logger.info("Oops external call failed", result: :failed, reason_code: -10)
 ```
 
 The additional payload is machine readable so that we don't have to write complex
@@ -110,20 +159,23 @@ Another common logging requirement is to measure the time it takes to execute a 
 of code based on the log level. For example:
 
 ```ruby
-logger.benchmark_info "Calling external interface" do
+logger.benchmark_info "Called external interface" do
   # Code to call external service ...
 end
 ```
 
 The following output will be written to file:
 
-    2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) Rails -- Calling external interface
+    2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) Rails -- Called external interface
 
-If an exception is raised during the block the exception is logged
+The log message is only written once the block completes and includes how long it
+took to complete.
+
+If an exception is raised during the block, the exception message will be logged
 at the same log level as the benchmark along with the duration and message.
-The exception will flow through to the caller unchanged
+After logging the exception is re-raised unchanged.
 
-The following benchmarking methods are available
+The following benchmarking methods are available:
 
 ```ruby
 logger.benchmark_trace("Low level trace information such as data sent over a socket")
@@ -132,10 +184,15 @@ logger.benchmark_info("Informational message such as request received")
 logger.benchmark_warn("Warn about something in the system")
 logger.benchmark_error("An error occurred during processing")
 logger.benchmark_fatal("Oh no something really bad happened")
+```
+
+The log level can be supplied dynamically as the first parameter to:
+
+```ruby
 logger.benchmark(:info, "Informational message such as request received")
 ```
 
-Each of the above calls can take additional parameters, for example:
+Each of the above calls take additional optional parameters:
 
 ```ruby
 log.benchmark_info(message, params=nil) do
@@ -143,59 +200,90 @@ log.benchmark_info(message, params=nil) do
 end
 ```
 
-Parameters
+Benchmark calls take two parameters, the first is a mandatory text message, the
+second is a Hash of settings:
 
-- `message`: The mandatory text message to log.
-- `params`:
+#### `:log_exception` [Symbol]
 
+Control whether or how an exception thrown in the block is
+reported by Semantic Logger. Values:
+
+- `:full`
+     Log the exception class, message, and backtrace
+- `:partial`
+     Log the exception class and message. The backtrace will not be logged
+- `:off`
+     Any unhandled exception raised in the block will not be logged
+- Default: :partial
+
+#### `:min_duration` [Float]
+
+Only log if the block takes longer than this duration in `ms`
+
+Very useful to make a log entry only appear when the specified minimum duration
+has been exceeded, which is ideal for isolating the cause of application slow-downs.
+
+Default: 0.0 ( Always log )
+
+#### `:payload` [Hash]
+
+Optional, Hash payload
+
+#### `:exception` [Exception]
+
+Optional, Ruby Exception object to log along with the duration of the supplied block
+
+#### `:duration` [Float]
+
+- Optional, supply the duration in ms that is logged when a block is not supplied
+- If a block is not supplied then :duration is mandatory
+- If a block is supplied :duration is ignored
+
+#### `:metric` [Object]
+
+Optional, when this parameter is supplied all subscribers will be notified of this
+metric, along with the Log Struct described below
+
+Example
+
+```ruby
+logger.benchmark_info "Called external interface",
+    log_exception: :full,
+    min_duration:  100,
+    metric:        'Custom/Supplier/process' do
+  # Code to call external service ...
+end
 ```
-  :log_exception [Symbol]
-    Control whether or how an exception thrown in the block is
-    reported by Semantic Logger. Values:
-    :full
-      Log the exception class, message, and backtrace
-    :partial
-      Log the exception class and message
-      The backtrace will not be logged
-    :off
-      Any unhandled exception raised in the block will not be logged
-    Default: :partial
 
-  :min_duration [Float]
-    Only log if the block takes longer than this duration in ms
-    Default: 0.0
+If the duration is already available, it is possible to use the same benchmark logging
+and manually supply the duration without a block. This ensures that the duration is
+logged in a semantic way rather than inserting the duration into the text message itself.
 
-  :payload [Hash]
-    Optional, Hash payload
-
-  :exception [Exception]
-    Optional, Ruby Exception object to log along with the duration of the supplied block
-
-  :duration [Float]
-    Optional, supply the duration in ms that is logged when a block is not supplied
-    If a block is not supplied then :duration is mandatory
-    If a block is supplied :duration is ignored
-
-  :metric [Object]
-    Optional, when this parameter is supplied all subscribers will be notified of this
-    metric, along with the Log Struct described below
+```ruby
+duration = Time.now - start_time
+logger.benchmark_info "Called external interface", duration: duration
 ```
+
+Note: Either a code block or `:duration` must be supplied on all benchmark calls
 
 ### Tagged Logging
 
-Semantic Logger allows any Ruby or Rails program to also include tagged logging.
+Tagged logging adds the specified tags to every log message within the supplied block.
+If a new thread is created within the block the logging tags are not automatically
+copied to that thread. Look into [Parallel Minion](https://github.com/reidmorrison/parallel_minion)
+for a library that creates threads and automatically copies across any logging tags to the
+new thread.
 
-This means that any logging performed within a block, including any called
-libraries or gems to include the specified tag with every log entry.
 
 Using Tagged logging is critical in any highly concurrent environment so that
-one can quickly find all related log entries across all levels of code, and even
-across threads
+one can quickly find all related log entries across all levels of code, and threads.
 
 ```ruby
+tracking_number = '15354128'
+
 logger.tagged(tracking_number) do
+  # All log entries in this block will include the 'tracking_number' logging tag
   logger.debug("Hello World")
-  # ...
 end
 ```
 
@@ -205,13 +293,10 @@ Blocks of code can be tagged with not only values, but can be tagged with
 entire hashes of data. The additional hash of data will be merged into
 the payload of every log entry
 
-For example every corresponding log entry could include a hash containing
-a user_id, name, region, zip_code, tracking_number, etc...
-
 ```ruby
 logger.with_payload(:user => 'Jack', :zip_code => 12345) do
+  # All log entries in this block will include the above payload hash
   logger.debug("Hello World")
-  # ...
 end
 ```
 
@@ -251,35 +336,10 @@ For example, use the current thread object_id to ensure uniqueness:
 Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
 ```
 
-### Changing the Class name for Log Entries
-
-It is recommended to include a class specific logger for all major classes that will
-be logging using the `SemanticLogger::Loggable` mix-in. For Example:
-
-```ruby
-class ExternalSupplier
-  # Lazy load logger class variable on first use
-  include SemanticLogger::Loggable
-
-  def call_supplier(amount, name)
-    logger.debug "Calculating with amount", { :amount => amount, :name => name }
-
-    # Measure and log on completion how long the call took to the external supplier
-    logger.benchmark_info "Calling external interface" do
-      # Code to call the external supplier ...
-    end
-  end
-end
-```
-
-This will result in the log output identifying the log entry as from the ExternalSupplier class
-
-    2012-08-30 15:37:29.474 I [48308:ScriptThreadProcess: script/rails] (5.2ms) ExternalSupplier -- Calling external interface
-
 ### Changing the log level for a single class at runtime
 
 Since the logger is class specific, its log level can be changed dynamically at runtime.
-For example, to temporarily set the log level to :trace to diagnose an issue:
+For example, to temporarily set the log level to `:trace` to diagnose an issue:
 
 ```ruby
 require 'semantic_logger'
@@ -315,7 +375,7 @@ supplier.call_supplier(100, 'Jack')
 ExternalSupplier.logger.level = nil
 ```
 
-Below is the output from the above example showing the :trace log level message
+Below is the output from the above example showing the `:trace` log level message
 that was written during the second call to the ExternalSupplier:
 
 ```
@@ -338,7 +398,7 @@ log levels in the following order, starting from the current global default leve
   :warn, :info, :debug, :trace
 ```
 
-If the current level is :trace it wraps around back to :warn
+If the current level is `:trace` it wraps around back to `:warn`
 
 Example (where the target ruby process id is 1234) :
 
@@ -389,8 +449,12 @@ logger.benchmark_info "Calling external interface" do
 end
 ```
 
-A single subscriber can be defined to collect all the metrics and forward them
-for example to NewRelic:
+Subscriber can be defined to receive every log message that has a `:metric` option
+specified. The subscribers are called asynchronously from the Appender Thread so
+as not to impact the orginal thread that logged the message.
+
+For example, to forward the metric to NewRelic for every benchmark call with the
+`:metric` option supplied:
 
 ```ruby
 # config/initializers/semantic_logger_metrics.rb
@@ -399,13 +463,15 @@ SemanticLogger.on_metric do |log_struct|
 end
 ```
 
-Add the :metric option to the log entry as follows:
+Add the `:metric` option to the log entry as follows:
 
 ```ruby
-logger.benchmark_info "Calling external interface", :metric => 'Custom/slow_action/beginning_work' do
+logger.benchmark_info "Calling external interface", metric: 'Custom/slow_action/beginning_work' do
   # Code to call the external supplier ...
 end
 ```
+
+For the format of the Log Struct, look under [Customize](customize.html)
 
 ### Flushing the logs
 

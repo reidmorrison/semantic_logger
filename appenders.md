@@ -6,10 +6,20 @@ layout: default
 
 ### Logging to File
 
+Log to file with the standard formatter:
+
 ```ruby
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 SemanticLogger.add_appender('development.log')
+```
+
+Log to file with the standard colorized formatter:
+
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
 ```
 
 For performance reasons the log file is not re-opened with every call.
@@ -46,6 +56,11 @@ SemanticLogger.add_appender(ruby_logger)
 logger =  SemanticLogger['test']
 logger.info('Hello World', name: 'Jack')
 ```
+
+The log level `:unknown` from the Ruby Logger is mapped to `:fatal` in Semantic Logger
+
+The Semantic Logger log level :trace level calls are mapped to `:debug` in the
+underlying standard Ruby Logger
 
 ### Logging to NewRelic
 
@@ -211,9 +226,9 @@ end
 ```
 
 This technique can also be used to temporarily send certain log messages to a
-separate file from the global logging
+separate file from the global logging.
 
-Note: Do not call appenders directly that have been added to Semantic Logger
-as appender instances are not designed to be accessed concurrently by multiple threads.
+Note: Do not call appenders directly that have been added to Semantic Logger.
+Appender instances are not designed to be accessed concurrently by multiple threads.
 A separate instance per thread is recommended in multi-threaded envrionments, or just
-use the global Semantic Logger since it is designed for concurrency.
+use the global Semantic Logger since it is specifically designed for concurrency.
