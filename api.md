@@ -18,6 +18,28 @@ And `:fatal` would only log `:fatal` error messages and nothing else
 as the data sent or received to external web services. It is also commonly used
 in the development environment for low level trace logging of methods calls etc.
 
+### Changing the global default log level
+
+By default Semantic Logger will only log `:info` and above, to log everything to
+the log file set the global default log level to `:trace`:
+
+```ruby
+require 'semantic_logger'
+
+# Override the default log level of :info so that :debug and :trace are also logged
+SemanticLogger.default_level = :trace
+
+SemanticLogger.add_appender('development.log')
+
+logger = SemanticLogger['MyClass']
+logger.info "Hello World"
+logger.trace "Low level trace information"
+```
+
+All loggers and appenders will by default use the global `SemanticLogger.default_level`
+unless they have been explicity set to another level. In which case changing
+`SemanticLogger.default_level` will not affect that particular logger or appender.
+
 ### Creating an instance of a logger
 
 To create a stand-alone logger instance by supplying the name of the class/application:
@@ -420,7 +442,7 @@ SemanticLogger.add_signal_handler('USR2')
 
 SemanticLogger.add_appender('development.log')
 
-logger = SemanticLogger['Example']
+logger = SemanticLogger['MyClass']
 logger.info "Hello World"
 ```
 
@@ -487,4 +509,22 @@ messages to be written:
 ```ruby
 # Flush all appenders and wait for them to complete flushing
 SemanticLogger.flush
+```
+
+### Replacing loggers for other Gems
+
+Rails Semantic Logger already replaces the loggers for the following Gems, but
+if Semantic Logger is being used stand-alone, then these need to be called from
+within your code as needed:
+
+```ruby
+# Replace the Resque Logger
+Resque.logger = SemanticLogger[Resque] if defined?(Resque) && Resque.respond_to?(:logger)
+
+# Replace the Sidekiq logger
+Sidekiq::Logging.logger = SemanticLogger[Sidekiq] if defined?(Sidekiq)
+
+# Replace the Mongoid Logger
+Mongoid.logger = SemanticLogger[Mongoid] if defined?(Mongoid)
+Moped.logger   = SemanticLogger[Moped] if defined?(Moped)
 ```

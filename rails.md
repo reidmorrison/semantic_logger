@@ -52,7 +52,7 @@ Install required gems with bundler
     bundle install
 
 This will automatically replace the standard Rails logger with Semantic Logger
-which will write all log data to the configured Rails logger.
+which will write all log data to the configured Rails log file.
 
 ## Configuration
 
@@ -157,6 +157,16 @@ SemanticLogger.appenders.first.formatter = Proc.new do |log|
   "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} : #{message}"
 end
 ```
+
+## Replacing Existing loggers
+
+Rails Semantic Logger automatically replaces the default logger for the following gems
+after they have been initialized:
+
+- Sidekiq
+- Resque
+- Mongoid
+- Moped
 
 ## Known issues
 

@@ -9,16 +9,12 @@ layout: default
 Log to file with the standard formatter:
 
 ```ruby
-require 'semantic_logger'
-SemanticLogger.default_level = :trace
 SemanticLogger.add_appender('development.log')
 ```
 
 Log to file with the standard colorized formatter:
 
 ```ruby
-require 'semantic_logger'
-SemanticLogger.default_level = :trace
 SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
 ```
 
@@ -26,19 +22,24 @@ For performance reasons the log file is not re-opened with every call.
 When the log file needs to be rotated, use a copy-truncate operation rather
 than deleting the file.
 
+### Logging to an existing IO Stream
+
+Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdout
+
+```ruby
+# Log errors and above to standard error:
+SemanticLogger.add_appender($stderror, :error)
+```
+
 ### Logging to Syslog
 
 ```ruby
 # Log to a local Syslog daemon
-require 'semantic_logger'
-SemanticLogger.default_level = :trace
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
 ```
 
 ```ruby
 # Log to a remote Syslog server such as syslog-ng over TCP:
-require 'semantic_logger'
-SemanticLogger.default_level = :trace
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(server: 'tcp://myloghost:514'))
 ```
 
@@ -49,17 +50,15 @@ logging framework. This makes the additional Semantic Logger API's available yet
 can log to existing files or other appenders.
 
 ```ruby
-require 'logger'
-require 'semantic_logger'
 ruby_logger = Logger.new(STDOUT)
+
+# Log to an existing Ruby Logger instance
 SemanticLogger.add_appender(ruby_logger)
-logger =  SemanticLogger['test']
-logger.info('Hello World', name: 'Jack')
 ```
 
 The log level `:unknown` from the Ruby Logger is mapped to `:fatal` in Semantic Logger
 
-The Semantic Logger log level :trace level calls are mapped to `:debug` in the
+The Semantic Logger log level `:trace` level calls are mapped to `:debug` in the
 underlying standard Ruby Logger
 
 ### Logging to NewRelic
@@ -67,22 +66,27 @@ underlying standard Ruby Logger
 NewRelic supports Error Events in both it's paid and free subscriptions. This New Relic
 Appender sends `:error` and `:fatal` level to New Relic as Error Events
 
-Adding the New Relic appender will send `:error` and `:fatal` log entries to New Relic as error events.
+Adding the New Relic appender will send `:error` and `:fatal` log entries to
+New Relic as error events.
 
-Note: Payload information is not filtered, so take care not to push any sensitive information when logging with tags or a payload.
+Note: Payload information is not filtered, so take care not to push any sensitive
+information when logging with tags or a payload.
 
-For a Rails application already configured to use Semantic Logger and New Relic, create a file called <Rails Root>/config/initializers/newrelic_appender.rb with the following contents and restart the application:
+For a Rails application already configured to use Semantic Logger and New Relic,
+create a file called `<Rails Root>/config/initializers/newrelic_appender.rb` with
+the following contents and restart the application:
 
 ```ruby
-# Send :error and :fatal log messages to New Relic
+# Send :error and :fatal log messages to New Relic as Error events
 SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
-Rails.logger.info 'SemanticLogger New Relic Appender added.'
 ```
 
-For a non-Rails application, send :info and more severe log entries to a file called application.log and also send :error and :fatal log entries to New Relic.
+For a non-Rails application, send `:info` and more severe log entries to a file
+called application.log and also send `:error` and `:fatal` to New Relic as Error events.
 
 ```ruby
-# ./newrelic.yml needs to be set up -- see https://docs.newrelic.com/docs/ruby/ruby-agent-installation for more information.
+# ./newrelic.yml needs to be set up
+# See https://docs.newrelic.com/docs/ruby/ruby-agent-installation for more information.
 
 require 'semantic_logger'
 require 'newrelic_rpm'

@@ -45,4 +45,27 @@ so the custom code below is only necessary when using Semantic Logger stand-alon
 
 - Phusion Passenger
 - Resque
+- Spring
 
+Add the following code only if Rails Semantic Logger gem is not being used and
+you are using these frameworks:
+
+```ruby
+# Passenger provides the :starting_worker_process event for executing
+# code after it has forked, so we use that and reconnect immediately.
+if defined?(PhusionPassenger)
+  PhusionPassenger.on_event(:starting_worker_process) do |forked|
+    ::SemanticLogger.reopen if forked
+  end
+end
+
+# Re-open appenders after Resque has forked a worker
+if defined?(Resque)
+  Resque.after_fork { |job| ::SemanticLogger.reopen }
+end
+
+# Re-open appenders after Spring has forked a process
+if defined?(Spring)
+  Spring.after_fork { |job| ::SemanticLogger.reopen }
+end
+```
