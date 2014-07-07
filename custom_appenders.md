@@ -12,7 +12,8 @@ To write your own appender it should meet the following requirements:
 * Implement #flush if the resource can be flushed
 * Write a test for the new appender
 
-The #log method takes the log struct as a parameter which is described above.
+The #log method takes the `Log Struct` as a parameter.
+For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 
 Basic outline for an Appender:
 
@@ -27,8 +28,8 @@ class SimpleAppender < SemanticLogger::Appender::Base
 
   # Display the log struct and the text formatted output
   def log(log)
-    # Only log if the supplied level matches or exceeds the level for this appender
-    return unless level_index <= (log.level_index || 0)
+    # Ensure minimum log level is met, and check filter
+    return false if (level_index > (log.level_index || 0)) || !include_message?(log)
 
     # Display the raw log structure
     p log

@@ -493,7 +493,7 @@ logger.benchmark_info "Calling external interface", metric: 'Custom/slow_action/
 end
 ```
 
-For the format of the Log Struct, look under [Customize](customize.html)
+For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 
 ### Flushing the logs
 
