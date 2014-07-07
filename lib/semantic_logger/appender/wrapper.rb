@@ -40,7 +40,12 @@ module SemanticLogger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
       def log(log)
+        # Check filter
+        return false unless include_message?(log)
+
+        # Underlying wrapper logger implements log level, so don't check here
         @logger.send(log.level == :trace ? :debug : log.level, @formatter.call(log))
+        true
       end
 
       # Flush all pending logs to disk.

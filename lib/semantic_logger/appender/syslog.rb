@@ -48,12 +48,12 @@ module SemanticLogger
       # ::Syslog::LOG_INFO    - "Informational message"
       # ::Syslog::LOG_DEBUG   - "Debugging information"
       DEFAULT_LEVEL_MAP = {
-          :fatal   => ::Syslog::LOG_CRIT,
-          :error   => ::Syslog::LOG_ERR,
-          :warn    => ::Syslog::LOG_WARNING,
-          :info    => ::Syslog::LOG_NOTICE,
-          :debug   => ::Syslog::LOG_INFO,
-          :trace   => ::Syslog::LOG_DEBUG
+        :fatal   => ::Syslog::LOG_CRIT,
+        :error   => ::Syslog::LOG_ERR,
+        :warn    => ::Syslog::LOG_WARNING,
+        :info    => ::Syslog::LOG_NOTICE,
+        :debug   => ::Syslog::LOG_INFO,
+        :trace   => ::Syslog::LOG_DEBUG
       }
 
       # For more information on the Syslog constants used below see http://ruby-doc.org/stdlib-2.0.0/libdoc/syslog/rdoc/Syslog.html
@@ -176,24 +176,24 @@ module SemanticLogger
         end
 
         case @protocol
-          when :syslog
-            ::Syslog.open(@ident, options, @facility)
-          when :tcp
-            # The resilient_socket gem is required when logging over TCP.
-            begin
-              require 'resilient_socket'
-            rescue LoadError
-              raise 'Missing gem: resilient_socket. This gem is required when logging over TCP. To fix this error: gem install resilient_socket'
-            end
-            options = tcp_client_options || {}
-            options[:server] = "#{@host}:#{@port}"
-            @remote_syslog = ResilientSocket::TCPClient.new(options)
-            # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
-            @remote_syslog.logger = SemanticLogger::Logger.logger
-          when :udp
-            @remote_syslog = UDPSocket.new
-          else
-            raise "Unsupported protocol: #{protocol}"
+        when :syslog
+          ::Syslog.open(@ident, options, @facility)
+        when :tcp
+          # The resilient_socket gem is required when logging over TCP.
+          begin
+            require 'resilient_socket'
+          rescue LoadError
+            raise 'Missing gem: resilient_socket. This gem is required when logging over TCP. To fix this error: gem install resilient_socket'
+          end
+          options = tcp_client_options || {}
+          options[:server] = "#{@host}:#{@port}"
+          @remote_syslog = ResilientSocket::TCPClient.new(options)
+          # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
+          @remote_syslog.logger = SemanticLogger::Logger.logger
+        when :udp
+          @remote_syslog = UDPSocket.new
+        else
+          raise "Unsupported protocol: #{protocol}"
         end
 
         super(level, filter, &block)
@@ -201,18 +201,20 @@ module SemanticLogger
 
       # Write the log using the specified protocol and host.
       def log(log)
-        if level_index <= (log.level_index || 0)
-          case @protocol
-            when :syslog
-              ::Syslog.log @level_map[log.level], formatter.call(log)
-            when :tcp
-              @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{syslog_packet_formatter(log)}\r\n") }
-            when :udp
-              @remote_syslog.send syslog_packet_formatter(log), 0, @host, @port
-            else
-              raise "Unsupported protocol: #{protocol}"
-          end
+        # Ensure minimum log level is met, and check filter
+        return false if (level_index > (log.level_index || 0)) || !include_message?(log)
+
+        case @protocol
+        when :syslog
+          ::Syslog.log @level_map[log.level], formatter.call(log)
+        when :tcp
+          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{syslog_packet_formatter(log)}\r\n") }
+        when :udp
+          @remote_syslog.send syslog_packet_formatter(log), 0, @host, @port
+        else
+          raise "Unsupported protocol: #{protocol}"
         end
+        true
       end
 
       # Flush is called by the semantic_logger during shutdown.

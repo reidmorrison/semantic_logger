@@ -72,10 +72,14 @@ module SemanticLogger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
       def log(log)
+        # Ensure minimum log level is met, and check filter
+        return false if (level_index > (log.level_index || 0)) || !include_message?(log)
+
         # Since only one appender thread will be writing to the file at a time
         # it is not necessary to protect access to the file with a semaphore
         # Allow this logger to filter out log levels lower than it's own
-        @log.write(@formatter.call(log) << "\n") if level_index <= (log.level_index || 0)
+        @log.write(@formatter.call(log) << "\n")
+        true
       end
 
       # Flush all pending logs to disk.

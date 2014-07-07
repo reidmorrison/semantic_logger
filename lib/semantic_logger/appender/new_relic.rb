@@ -92,14 +92,14 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
 
   # Send an error notification to New Relic
   def log(log)
-    # Ensure minimum log level is met.
-    return false unless level_index <= (log.level_index || 0)
+    # Ensure minimum log level is met, and check filter
+    return false if (level_index > (log.level_index || 0)) || !include_message?(log)
 
     # For more documentation on the NewRelic::Agent.notice_error method see:
     # http://rubydoc.info/github/newrelic/rpm/NewRelic/Agent#notice_error-instance_method
     # and https://docs.newrelic.com/docs/ruby/ruby-agent-api
     NewRelic::Agent.notice_error(log.exception || self.class.first_non_empty_line(log.message), formatter.call(log))
-    return true
+    true
   end
 
 end

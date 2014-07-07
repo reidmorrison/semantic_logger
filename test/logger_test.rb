@@ -12,13 +12,14 @@ class LoggerTest < Test::Unit::TestCase
   context SemanticLogger::Logger do
     # Test each filter
     [ nil, /\ALogger/, Proc.new{|l| (/\AExclude/ =~ l.message).nil? } ].each do |filter|
-      context "filter: #{filter.inspect}" do
+      context "filter: #{filter.class.name}" do
         setup do
           # Use a mock logger that just keeps the last logged entry in an instance
           # variable
           SemanticLogger.default_level = :trace
           @mock_logger = MockLogger.new
-          SemanticLogger.add_appender(@mock_logger)
+          appender = SemanticLogger.add_appender(@mock_logger)
+          appender.filter = filter
 
           # Add mock metric subscriber
           $last_metric = nil
@@ -27,7 +28,7 @@ class LoggerTest < Test::Unit::TestCase
           end
 
           # Use this test's class name as the application name in the log output
-          @logger   = SemanticLogger::Logger.new(self.class, :trace, filter)
+          @logger   = SemanticLogger[self.class]
           @hash     = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
           @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
           assert_equal [], @logger.tags
@@ -54,6 +55,16 @@ class LoggerTest < Test::Unit::TestCase
                 assert_nil @mock_logger.message
               end
             end
+
+            should "exclude log messages using RegExp filter" do
+              if filter.is_a?(Regexp)
+                logger = SemanticLogger::Logger.new('NotLogger', :trace, filter)
+                logger.send(level, 'Ignore all log messages from this class', @hash) { "Calculations" }
+                SemanticLogger.flush
+                assert_nil @mock_logger.message
+              end
+            end
+
           end
         end
 
