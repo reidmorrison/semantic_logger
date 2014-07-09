@@ -206,7 +206,9 @@ module SemanticLogger
 
         case @protocol
         when :syslog
-          ::Syslog.log @level_map[log.level], formatter.call(log)
+          # Since the Ruby Syslog API supports sprintf format strings, double up all existing '%'
+          message = formatter.call(log).gsub "%", "%%"
+          ::Syslog.log @level_map[log.level], message
         when :tcp
           @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{syslog_packet_formatter(log)}\r\n") }
         when :udp
@@ -247,7 +249,6 @@ module SemanticLogger
         packet.content = default_formatter.call(log)
         packet.to_s
       end
-
     end
   end
 end
