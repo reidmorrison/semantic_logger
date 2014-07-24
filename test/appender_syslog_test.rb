@@ -46,5 +46,14 @@ class AppenderSyslogTest < Test::Unit::TestCase
       end
     end
 
+    should "allow logging with %" do
+      message = "AppenderSyslogTest %test"
+      syslog_appender = SemanticLogger::Appender::Syslog.new
+
+      assert_nothing_raised ArgumentError do
+        syslog_appender.debug(message)
+      end
+    end
+
   end
 end
