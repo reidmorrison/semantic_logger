@@ -172,6 +172,3 @@ after they have been initialized:
 
 * Due to the way that Rails logs to the console, after adding `rails_semantic_logger` it
 no longer logs to the console when a Rails server is started: `bin/rails server`
-* Rails has a defect where supplying multiple tags through `config.log_tags` it is
-leaving some tags behind and not cleaning them up after a request completes.
-The workaround for now is to only specify a single tag in `config.log_tags`.
