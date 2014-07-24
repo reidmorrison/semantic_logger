@@ -113,10 +113,10 @@ module SemanticLogger
     # Returns nil if no tags are currently set
     #   To support: ActiveSupport::TaggedLogging V3 and above
     def tagged(*tags)
-      push_tags(*tags)
-      yield
+      new_tags = push_tags(*tags)
+      yield self
     ensure
-      pop_tags(tags.size)
+      pop_tags(new_tags.size)
     end
 
     # Previous method for supplying tags
@@ -131,11 +131,13 @@ module SemanticLogger
     end
 
     # Add tags to the current scope
+    # Returns the list of tags pushed after flattening them out and removing blanks
     def push_tags *tags
       # Need to flatten and reject empties to support calls from Rails 4
       new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
       t = Thread.current[:semantic_logger_tags]
       Thread.current[:semantic_logger_tags] = t.nil? ? new_tags : t.concat(new_tags)
+      new_tags
     end
 
     # Remove specified number of tags from the current tag list
