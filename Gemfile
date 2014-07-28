@@ -14,6 +14,8 @@ end
 gem 'syslog_protocol'
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
 gem 'resilient_socket'
+# [optional] Splunk appender
+gem 'splunk-sdk-ruby'
 
 group :development do
   gem 'awesome_print'

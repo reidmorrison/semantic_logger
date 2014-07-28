@@ -14,6 +14,7 @@ module SemanticLogger
     autoload :MongoDB,  'semantic_logger/appender/mongodb'
     autoload :Syslog,   'semantic_logger/appender/syslog'
     autoload :NewRelic, 'semantic_logger/appender/new_relic'
+    autoload :Splunk,   'semantic_logger/appender/splunk'
   end
 end
 
