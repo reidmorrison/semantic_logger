@@ -120,6 +120,24 @@ sleep 10
 ::NewRelic::Agent.shutdown
 ```
 
+### Logging to Splunk
+
+Send all `:error` and `:fatal` log entries to [Splunk](http://www.splunk.com) as text only messages.
+All semantic information and exception traces will be converted to plain
+text before being submitted to [Splunk](http://www.splunk.com).
+
+Note: Payload information is not filtered, so take care not to push any sensitive
+information when logging with tags or a payload.
+
+For a Rails application already configured to use Semantic Logger and New Relic,
+create a file called `<Rails Root>/config/initializers/splunk_appender.rb` with
+the following contents and restart the application:
+
+```ruby
+# Send :error and :fatal log messages to Splunk
+SemanticLogger.add_appender(SemanticLogger::Appender::Splunk.new)
+```
+
 ### Logging to MongoDB
 
 ```ruby
