@@ -49,7 +49,7 @@ This project uses [Semantic Versioning](http://semver.org/).
 
 ## Author
 
-Reid Morrison :: reidmo@gmail.com :: @reidmorrison
+[Reid Morrison](https://github.com/reidmorrison) :: @reidmorrison
 
 ## Contributors
 
