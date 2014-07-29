@@ -6,9 +6,7 @@ gem 'thread_safe'
 
 # [optional] MongoDB Appender
 gem 'mongo', '~> 1.9.2'
-if RUBY_VERSION.to_f > 1.8
-  gem 'bson_ext', :platform => 'ruby'
-end
+gem 'bson_ext', :platform => 'ruby'
 
 # [optional] Syslog appender
 gem 'syslog_protocol'

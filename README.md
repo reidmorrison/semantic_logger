@@ -11,13 +11,16 @@ For complete documentation see: http://reidmorrison.github.io/semantic_logger
 
 ## Dependencies
 
-See [.travis.yml](https://github.com/reidmorrison/semantic_logger/.travis.yml) for the list of tested Ruby platforms
+Semantic Logger supports the following Ruby platforms:
+- Ruby 1.9.3, 2.0, 2.1
+- JRuby 1.7
 
 The following gems are only required when their corresponding appenders are being used,
 and are therefore not automatically included by this gem:
-- MongoDB Appender: mongo 1.9.2 or above
-- Syslog Appender: syslog_protocol 0.9.2 or above
-- Syslog Appender to a remote syslogng server over TCP or UDP: resilient_socket 0.5.0 or above
+- MongoDB Appender: gem 'mongo' 1.9.2 or above
+- Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
+- Syslog Appender to a remote syslogng server over TCP or UDP: gem 'resilient_socket' 0.5.0 or above
+- Splunk Appender: gem 'splunk-sdk-ruby'
 
 ## Install
 
@@ -25,8 +28,14 @@ and are therefore not automatically included by this gem:
 
 ## Upgrade Notes:
 
-As of SemanticLogger V2.0 the Rails logging is no longer automatically replaced
-when including SemanticLogger. Include the [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
+### V2.10
+
+Ruby 1.8 is no longer supported, see [Ruby 1.8.7 EOL](https://www.ruby-lang.org/en/news/2014/07/01/eol-for-1-8-7-and-1-9-2/)
+
+### V2.0
+
+Rails logging is no longer automatically replaced when including SemanticLogger.
+Include the [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
 gem to replace the Rails default logger with SemanticLogger
 
 ## Meta
@@ -44,7 +53,8 @@ Reid Morrison :: reidmo@gmail.com :: @reidmorrison
 
 ## Contributors
 
-Marc Bellingrath :: marrrc.b@gmail.com
+* [Marc Bellingrath](https://github.com/marc)
+* [Andrew Medeiros](https://github.com/amedeiros)
 
 ## License
 
