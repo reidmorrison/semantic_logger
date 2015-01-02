@@ -1,14 +1,8 @@
-# Allow test to be run in-place without requiring a gem install
-$LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
-
-require 'rubygems'
-require 'test/unit'
-require 'shoulda'
-require 'logger'
-require 'semantic_logger'
+$LOAD_PATH.unshift File.dirname(__FILE__)
+require 'test_helper'
 
 # Unit Test for SemanticLogger::Logger
-class LoggerTest < Test::Unit::TestCase
+class LoggerTest < Minitest::Test
   context SemanticLogger::Logger do
     # Test each filter
     [ nil, /\ALogger/, Proc.new{|l| (/\AExclude/ =~ l.message).nil? } ].each do |filter|
@@ -146,7 +140,7 @@ class LoggerTest < Test::Unit::TestCase
                 end
 
                 should "log #{level} info with an exception" do
-                  assert_raise RuntimeError do
+                  assert_raises RuntimeError do
                     @logger.send("benchmark_#{level}", 'hello world', :payload => @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
                   end
                   SemanticLogger.flush
@@ -188,7 +182,7 @@ class LoggerTest < Test::Unit::TestCase
                 end
 
                 should "log #{level} info with an exception" do
-                  assert_raise RuntimeError do
+                  assert_raises RuntimeError do
                     @logger.benchmark(level, 'hello world', :payload => @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
                   end
                   SemanticLogger.flush

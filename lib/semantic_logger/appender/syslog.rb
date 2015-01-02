@@ -139,29 +139,28 @@ module SemanticLogger
       #   :tcp_client [Hash]
       #     Default: {}
       #     Only used with the TCP protocol.
-      #     Specify custom parameters to pass into ResilientSocket.TCPClient.new
-      #     For a list of options see the resilient_socket documentation:
-      #       https://github.com/reidmorrison/resilient_socket/blob/master/lib/resilient_socket/tcp_client.rb
+      #     Specify custom parameters to pass into Net::TCPClient.new
+      #     For a list of options see the net_tcp_client documentation:
+      #       https://www.omniref.com/ruby/gems/net_tcp_client/1.0.0/symbols/Net::TCPClient/initialize
       def initialize(params = {}, &block)
-        params     = params.dup
-        @ident     = params.delete(:ident) || 'ruby'
-        options    = params.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
-        @facility  = params.delete(:facility) || ::Syslog::LOG_USER
-        filter     = params.delete(:filter)
-        level      = params.delete(:level)
-        level_map  = params.delete(:level_map)
-        @level_map = DEFAULT_LEVEL_MAP.dup
+        params              = params.dup
+        @ident              = params.delete(:ident) || 'ruby'
+        @options            = params.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
+        @facility           = params.delete(:facility) || ::Syslog::LOG_USER
+        filter              = params.delete(:filter)
+        level               = params.delete(:level)
+        level_map           = params.delete(:level_map)
+        @level_map          = DEFAULT_LEVEL_MAP.dup
         @level_map.update(level_map) if level_map
-        @server    = params.delete(:server) || 'syslog://localhost'
-        uri        = URI(@server)
-        @host      = uri.host || 'localhost'
-        @protocol  = (uri.scheme || :syslog).to_sym
+        @server             = params.delete(:server) || 'syslog://localhost'
+        uri                 = URI(@server)
+        @host               = uri.host || 'localhost'
+        @protocol           = (uri.scheme || :syslog).to_sym
         raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
-        @host      = 'localhost' if @protocol == :syslog
-        @port      = URI(@server).port || 514
-
-        @local_hostname    = params.delete(:local_hostname) || Socket.gethostname || `hostname`.strip
-        tcp_client_options = params.delete(:tcp_client)
+        @host               = 'localhost' if @protocol == :syslog
+        @port               = URI(@server).port || 514
+        @local_hostname     = params.delete(:local_hostname) || Socket.gethostname || `hostname`.strip
+        @tcp_client_options = params.delete(:tcp_client)
 
         # Warn about any unknown configuration options.
         params.each_pair { |key,val| SemanticLogger::Logger.logger.warn "Ignoring unknown configuration option: #{key.inspect} => #{val.inspect}" }
@@ -173,30 +172,39 @@ module SemanticLogger
           rescue LoadError
             raise 'Missing gem: syslog_protocol. This gem is required when logging over TCP or UDP. To fix this error: gem install syslog_protocol'
           end
+
+          # The net_tcp_client gem is required when logging over TCP.
+          if protocol == :tcp
+            @tcp_client_options ||= {}
+            @tcp_client_options[:server] = "#{@host}:#{@port}"
+            begin
+              require 'net/tcp_client'
+            rescue LoadError
+              raise 'Missing gem: net_tcp_client. This gem is required when logging over TCP. To fix this error: gem install net_tcp_client'
+            end
+          end
         end
 
+        reopen
+
+        super(level, filter, &block)
+      end
+
+      # After forking an active process call #reopen to re-open
+      # open the handles to resources
+      def reopen
         case @protocol
         when :syslog
-          ::Syslog.open(@ident, options, @facility)
+          ::Syslog.open(@ident, @options, @facility)
         when :tcp
-          # The resilient_socket gem is required when logging over TCP.
-          begin
-            require 'resilient_socket'
-          rescue LoadError
-            raise 'Missing gem: resilient_socket. This gem is required when logging over TCP. To fix this error: gem install resilient_socket'
-          end
-          options = tcp_client_options || {}
-          options[:server] = "#{@host}:#{@port}"
-          @remote_syslog = ResilientSocket::TCPClient.new(options)
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
-          @remote_syslog.logger = SemanticLogger::Logger.logger
+          @tcp_client_options[:logger] = SemanticLogger::Logger.logger
+          @remote_syslog = Net::TCPClient.new(@tcp_client_options)
         when :udp
           @remote_syslog = UDPSocket.new
         else
-          raise "Unsupported protocol: #{protocol}"
+          raise "Unsupported protocol: #{@protocol}"
         end
-
-        super(level, filter, &block)
       end
 
       # Write the log using the specified protocol and host.
@@ -221,7 +229,7 @@ module SemanticLogger
 
       # Flush is called by the semantic_logger during shutdown.
       def flush
-        # TODO Add flush for :tcp.
+        @remote_syslog.flush if @remote_syslog && @remote_syslog.respond_to?(:flush)
       end
 
       # Custom log formatter for syslog
@@ -245,8 +253,8 @@ module SemanticLogger
         packet.hostname = @local_hostname
         packet.facility = @facility
         packet.severity =  @level_map[log.level]
-        packet.tag = @ident
-        packet.content = default_formatter.call(log)
+        packet.tag      = @ident
+        packet.content  = default_formatter.call(log)
         packet.to_s
       end
     end

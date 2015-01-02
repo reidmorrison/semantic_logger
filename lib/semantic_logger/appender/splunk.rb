@@ -1,8 +1,6 @@
 require 'splunk-sdk-ruby'
 
-
-# Recommended not to use the colorized formatter.
-
+# Note: Not recommended to use the colorized formatter.
 class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   attr_reader :config, :index, :service, :service_index
 
@@ -12,16 +10,21 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
     # Parse input options for setting up splunk connection
     parse_options(options)
 
-    # Connect to splunk. Connect is a synonym for creating a Service by hand and calling login.
-    @service = Splunk::connect(@config)
-
-    # The index we are logging to
-    @service_index = @service.indexes[@index]
+    reopen
 
     # Pass on the level and custom formatter if supplied
     super(level, &block)
   end
 
+  # After forking an active process call #reopen to re-open
+  # open the handles to resources
+  def reopen
+    # Connect to splunk. Connect is a synonym for creating a Service by hand and calling login.
+    @service = Splunk::connect(@config)
+
+    # The index we are logging to
+    @service_index = @service.indexes[@index]
+  end
 
   # Log the message to Splunk
   def log(log)
@@ -34,23 +37,23 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
 
   private
 
-    def parse_options(options)
-      @config = {
-       scheme:   options[:scheme] || :https,
-       host:     options[:host]   || 'localhost',
-       port:     options[:port]   || 8089,
-       username: options[:username],
-       password: options[:password]
-      }
+  def parse_options(options)
+    @config = {
+      scheme:   options[:scheme] || :https,
+      host:     options[:host]   || 'localhost',
+      port:     options[:port]   || 8089,
+      username: options[:username],
+      password: options[:password]
+    }
 
-      @index = options[:index]
+    @index = options[:index]
 
-      if @config[:username].nil?
-        raise ArgumentError, 'Must supply a username.'
-      elsif @config[:password].nil?
-        raise ArgumentError, 'Must supply a password.'
-      elsif @index.nil?
-        raise ArgumentError, 'Must supply an index.'
-      end
+    if @config[:username].nil?
+      raise ArgumentError, 'Must supply a username.'
+    elsif @config[:password].nil?
+      raise ArgumentError, 'Must supply a password.'
+    elsif @index.nil?
+      raise ArgumentError, 'Must supply an index.'
     end
+  end
 end

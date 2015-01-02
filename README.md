@@ -7,19 +7,21 @@ Next generation logging system for Ruby to support highly concurrent, high throu
 
 ## Documentation
 
-For complete documentation see: http://reidmorrison.github.io/semantic_logger
+[Semantic Logger Guide](http://reidmorrison.github.io/semantic_logger)
+
+API Documentation: [![semantic_logger API Documentation](https://www.omniref.com/ruby/gems/semantic_logger.png)](https://www.omniref.com/ruby/gems/semantic_logger)
 
 ## Dependencies
 
 Semantic Logger supports the following Ruby platforms:
-- Ruby 1.9.3, 2.0, 2.1
+- Ruby 1.9.3, 2.x
 - JRuby 1.7
 
 The following gems are only required when their corresponding appenders are being used,
 and are therefore not automatically included by this gem:
 - MongoDB Appender: gem 'mongo' 1.9.2 or above
 - Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
-- Syslog Appender to a remote syslogng server over TCP or UDP: gem 'resilient_socket' 0.5.0 or above
+- Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
 
 ## Install
@@ -58,7 +60,7 @@ This project uses [Semantic Versioning](http://semver.org/).
 
 ## License
 
-Copyright 2012, 2013, 2014 Reid Morrison
+Copyright 2012, 2013, 2014, 2015 Reid Morrison
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

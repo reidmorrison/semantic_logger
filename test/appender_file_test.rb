@@ -1,16 +1,10 @@
-# Allow test to be run in-place without requiring a gem install
-$LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
-
-require 'rubygems'
-require 'test/unit'
-require 'shoulda'
-require 'logger'
-require 'semantic_logger'
+$LOAD_PATH.unshift File.dirname(__FILE__)
+require 'test_helper'
 require 'stringio'
 
 # Unit Test for SemanticLogger::Appender::File
 #
-class AppenderFileTest < Test::Unit::TestCase
+class AppenderFileTest < Minitest::Test
   context SemanticLogger::Appender::File do
     setup do
       SemanticLogger.default_level = :trace

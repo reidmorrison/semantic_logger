@@ -1,16 +1,9 @@
-# Allow test to be run in-place without requiring a gem install
-$LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
-
-require 'rubygems'
-require 'test/unit'
-require 'mocha/setup'
-require 'shoulda'
-require 'logger'
-require 'semantic_logger'
+$LOAD_PATH.unshift File.dirname(__FILE__)
+require 'test_helper'
 
 # Unit Test for SemanticLogger::Appender::Splunk
 #
-class AppenderSplunkTest < Test::Unit::TestCase
+class AppenderSplunkTest < Minitest::Test
   context SemanticLogger::Appender::Splunk do
 
     context '#parse_options' do
@@ -41,14 +34,12 @@ class AppenderSplunkTest < Test::Unit::TestCase
       end
 
       context 'set default values' do
-        # Stub the splunk connect call, and index call.
-        setup do
-          Splunk.expects(:connect).returns(Splunk::Service.new({}))
-          Splunk::Service.any_instance.expects(:indexes).returns({})
-        end
-
         should 'have default values' do
-          appender = SemanticLogger::Appender::Splunk.new(username: 'username', password: 'password', index: 'index')
+          appender = Splunk.stub(:connect, Splunk::Service.new({})) do
+            Splunk::Service.stub_any_instance(:indexes, {}) do
+              SemanticLogger::Appender::Splunk.new(username: 'username', password: 'password', index: 'index')
+            end
+          end
           config   = appender.config
           # Default host
           assert_equal 'localhost', config[:host]

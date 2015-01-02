@@ -30,7 +30,7 @@ module SemanticLogger
     #    }
     #
     class MongoDB < SemanticLogger::Appender::Base
-      attr_reader :db, :collection_name
+      attr_reader :db, :collection_name, :collection
       attr_accessor :host_name, :write_concern, :application
 
       # Create a MongoDB Appender instance
@@ -52,7 +52,7 @@ module SemanticLogger
       # :write_concern [Integer]
       #   Write concern to use
       #   see: http://docs.mongodb.org/manual/reference/write-concern/
-      #   Default: 0
+      #   Default: 1
       #
       # :application [String]
       #   Name of the application to include in the document written to mongo
@@ -83,7 +83,7 @@ module SemanticLogger
         @db              = params[:db] || raise('Missing mandatory parameter :db')
         @collection_name = params[:collection_name] || 'semantic_logger'
         @host_name       = params[:host_name] || Socket.gethostname.split('.').first
-        @write_concern   = params[:write_concern] || 0
+        @write_concern   = params[:write_concern] || 1
         @application     = params[:application]
         filter           = params[:filter]
 
@@ -91,11 +91,19 @@ module SemanticLogger
         @collection_size = params[:collection_size] || 1024**3
         @collection_max  = params[:collection_max]
 
+        reopen
+
         # Create the collection and necessary indexes
         create_indexes
 
         # Set the log level and formatter
         super(params[:level], filter, &block)
+      end
+
+      # After forking an active process call #reopen to re-open
+      # open the handles to resources
+      def reopen
+        @collection = db[@collection_name]
       end
 
       # Create the required capped collection
@@ -111,7 +119,7 @@ module SemanticLogger
         options = {:capped => true, :size => @collection_size}
         options[:max] = @collection_max if @collection_max
         db.create_collection(collection_name, options)
-        collection.ensure_index('tags')
+        db[@collection_name].ensure_index('tags')
       end
 
       # Purge all data from the capped collection by dropping the collection
@@ -121,11 +129,6 @@ module SemanticLogger
         collection.drop
         @collection = nil
         create_indexes
-      end
-
-      # Return the collection being used to write the log document to
-      def collection
-        @collection ||= db[collection_name]
       end
 
       # Flush all pending logs to disk.
@@ -182,7 +185,7 @@ module SemanticLogger
         return false if (level_index > (log.level_index || 0)) || !include_message?(log)
 
         # Insert log entry into Mongo
-        collection.insert(formatter.call(log), :w=>@write_concern)
+        collection.insert(formatter.call(log), w: @write_concern)
         true
       end
 

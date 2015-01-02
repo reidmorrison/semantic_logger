@@ -1,17 +1,9 @@
-# Allow test to be run in-place without requiring a gem install
-$LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
 $LOAD_PATH.unshift File.dirname(__FILE__)
-
-require 'rubygems'
-require 'test/unit'
-require 'shoulda'
-require 'logger'
-require 'semantic_logger'
-require 'mock_logger'
+require 'test_helper'
 
 # Unit Test for SemanticLogger::Appender::Wrapper
 #
-class AppenderWrapperTest < Test::Unit::TestCase
+class AppenderWrapperTest < Minitest::Test
   context SemanticLogger::Appender::Wrapper do
     setup do
       @time = Time.new

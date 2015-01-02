@@ -1,58 +1,61 @@
-# Allow test to be run in-place without requiring a gem install
-$LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
-
-require 'rubygems'
-require 'test/unit'
-require 'shoulda'
-require 'mocha/setup'
-require 'semantic_logger'
-require 'socket'
-require 'resilient_socket'
-require 'syslog_protocol'
+$LOAD_PATH.unshift File.dirname(__FILE__)
+require 'test_helper'
+require 'net/tcp_client'
 
 # Unit Test for SemanticLogger::Appender::Syslog
 #
-class AppenderSyslogTest < Test::Unit::TestCase
+class AppenderSyslogTest < Minitest::Test
   context SemanticLogger::Appender::Syslog do
 
     should 'handle local syslog' do
-      ::Syslog.expects(:open).once
-      ::Syslog.expects(:log).once
-      syslog_appender = SemanticLogger::Appender::Syslog.new
-      syslog_appender.debug 'AppenderSyslogTest log message'
+      message = nil
+      Syslog.stub(:open, nil) do
+        Syslog.stub(:log, -> level, msg { message = msg }) do
+          syslog_appender = SemanticLogger::Appender::Syslog.new(level: :debug)
+          syslog_appender.debug 'AppenderSyslogTest log message'
+        end
+      end
+      assert_match /D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message
     end
 
     should 'handle remote syslog over TCP' do
-      ::ResilientSocket::TCPClient.any_instance.stubs('closed?').returns(false)
-      ::ResilientSocket::TCPClient.any_instance.stubs('connect')
-      ::ResilientSocket::TCPClient.any_instance.expects(:write).with{ |message| message =~ /<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/ }
-      syslog_appender = SemanticLogger::Appender::Syslog.new(:server => 'tcp://localhost:88888')
-      syslog_appender.debug 'AppenderSyslogTest log message'
+      message = nil
+      Net::TCPClient.stub_any_instance(:closed?, false) do
+        Net::TCPClient.stub_any_instance(:connect, nil) do
+          syslog_appender = SemanticLogger::Appender::Syslog.new(server: 'tcp://localhost:88888', level: :debug)
+          syslog_appender.remote_syslog.stub(:write, Proc.new { |data| message = data }) do
+            syslog_appender.debug 'AppenderSyslogTest log message'
+          end
+        end
+      end
+      assert_match /<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message
     end
 
     should 'handle remote syslog over UDP' do
-      ::UDPSocket.any_instance.expects(:send).with{ |*params| params[0] =~ /<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/ }
-      syslog_appender = SemanticLogger::Appender::Syslog.new(:server => 'udp://localhost:88888')
-      syslog_appender.debug 'AppenderSyslogTest log message'
+      message = nil
+      syslog_appender = SemanticLogger::Appender::Syslog.new(server: 'udp://localhost:88888', level: :debug)
+      UDPSocket.stub_any_instance(:send, -> msg, num, host, port { message = msg }) do
+        syslog_appender.debug 'AppenderSyslogTest log message'
+      end
+      assert_match /<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message
     end
 
     # Should be able to log each level.
     SemanticLogger::LEVELS.each do |level|
       should "log #{level} information" do
-        ::Syslog.expects(:open).once
-        ::Syslog.expects(:log).once
-        syslog_appender = SemanticLogger::Appender::Syslog.new
-        syslog_appender.send(level, 'AppenderSyslogTest #{level.to_s} message')
+        Syslog.stub(:open, nil) do
+          Syslog.stub(:log, nil) do
+            syslog_appender = SemanticLogger::Appender::Syslog.new
+            syslog_appender.send(level, 'AppenderSyslogTest #{level.to_s} message')
+          end
+        end
       end
     end
 
     should "allow logging with %" do
       message = "AppenderSyslogTest %test"
       syslog_appender = SemanticLogger::Appender::Syslog.new
-
-      assert_nothing_raised ArgumentError do
-        syslog_appender.debug(message)
-      end
+      syslog_appender.debug(message)
     end
 
   end
