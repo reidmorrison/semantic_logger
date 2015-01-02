@@ -320,11 +320,12 @@ module SemanticLogger
       ensure
         end_time = Time.now
         # Extract options after block completes so that block can modify any of the options
-        log_exception = params[:log_exception] || :partial
-        min_duration  = params[:min_duration] || 0.0
-        payload       = params[:payload]
-        metric        = params[:metric]
-        duration      = if block_given?
+        log_exception      = params[:log_exception] || :partial
+        on_exception_level = params[:on_exception_level]
+        min_duration       = params[:min_duration] || 0.0
+        payload            = params[:payload]
+        metric             = params[:metric]
+        duration           = if block_given?
           1000.0 * (end_time - start)
         else
           params[:duration] || raise("Mandatory block missing when :duration option is not supplied")
@@ -335,14 +336,28 @@ module SemanticLogger
           payload = payload.nil? ? self.payload : self.payload.merge(payload)
         end
         if exception
+          logged_exception = exception
           case log_exception
           when :full
-            struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, exception, metric)
-            log(struct) if include_message?(struct)
+            # On exception change the log level
+            if on_exception_level
+              level = on_exception_level
+              index = SemanticLogger.level_to_index(level)
+            end
           when :partial
-            struct = Log.new(level, Thread.current.name, name, "#{message} -- Exception: #{exception.class}: #{exception.message}", payload, end_time, duration, tags, index, nil, metric)
-            log(struct) if include_message?(struct)
+            # On exception change the log level
+            if on_exception_level
+              level = on_exception_level
+              index = SemanticLogger.level_to_index(level)
+            end
+            message = "#{message} -- Exception: #{exception.class}: #{exception.message}"
+            logged_exception = nil
+          else
+            # Log the message with its duration but leave out the exception that was raised
+            logged_exception = nil
           end
+          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, logged_exception, metric)
+          log(struct) if include_message?(struct)
           raise exception
         elsif duration >= min_duration
           # Only log if the block took longer than 'min_duration' to complete
