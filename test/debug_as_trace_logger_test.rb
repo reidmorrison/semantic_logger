@@ -2,7 +2,7 @@ $LOAD_PATH.unshift File.dirname(__FILE__)
 require 'test_helper'
 
 # Unit Test for SemanticLogger::Logger
-class LoggerTest < Minitest::Test
+class DebugAsTraceLoggerTest < Minitest::Test
   context SemanticLogger::Logger do
     # Test each filter
     [ nil, /\ALogger/, Proc.new{|l| (/\AExclude/ =~ l.message).nil? } ].each do |filter|
