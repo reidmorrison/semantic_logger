@@ -81,6 +81,12 @@ module SemanticLogger
         # An appender can implement a flush method if it supports it.
       end
 
+      # Returns the current log level if set, otherwise it returns the global
+      # default log level
+      def level
+        @level || :trace
+      end
+
       ############################################################################
       protected
 
@@ -103,6 +109,13 @@ module SemanticLogger
         # Appenders don't take a class name, so use this class name if an appender
         # is logged to directly
         super(self.class, level, filter)
+      end
+
+      # Return the level index for fast comparisons
+      # Returns the lowest level index if the level has not been explicitly
+      # set for this instance
+      def level_index
+        @level_index || 0
       end
 
       # For JRuby include the Thread name rather than its id

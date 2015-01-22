@@ -97,128 +97,146 @@ class LoggerTest < Minitest::Test
               end
             end
           end
+        end
 
-          context "Ruby Logger" do
-            # Ensure that any log level can be logged
-            Logger::Severity.constants.each do |level|
-              should "log Ruby logger #{level} info" do
-                @logger.level = Logger::Severity.const_get(level)
-                if level.to_s == 'UNKNOWN'
-                  assert_equal Logger::Severity.const_get('ERROR')+1, @logger.send(:level_index)
-                else
-                  assert_equal Logger::Severity.const_get(level)+1, @logger.send(:level_index)
-                end
+        context "Ruby Logger" do
+          # Ensure that any log level can be logged
+          Logger::Severity.constants.each do |level|
+            should "log Ruby logger #{level} info" do
+              @logger.level = Logger::Severity.const_get(level)
+              if level.to_s == 'UNKNOWN'
+                assert_equal Logger::Severity.const_get('ERROR')+1, @logger.send(:level_index)
+              else
+                assert_equal Logger::Severity.const_get(level)+1, @logger.send(:level_index)
               end
-            end
-          end
-
-          context "benchmark" do
-            # Ensure that any log level can be benchmarked and logged
-            SemanticLogger::LEVELS.each do |level|
-              level_char = level.to_s.upcase[0]
-
-              context 'direct method' do
-                should "log #{level} info" do
-                  assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world') { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
-                end
-
-                should "log #{level} info with payload" do
-                  assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', payload: @hash) { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
-                end
-
-                should "not log #{level} info when block is faster than :min_duration" do
-                  assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_nil @mock_logger.message
-                end
-
-                should "log #{level} info when block duration exceeds :min_duration" do
-                  assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
-                end
-
-                should "log #{level} info with an exception" do
-                  assert_raises RuntimeError do
-                    @logger.send("benchmark_#{level}", 'hello world', payload: @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
-                  end
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
-                end
-
-                should "change log #{level} info with an exception" do
-                  assert_raises RuntimeError do
-                    @logger.send("benchmark_#{level}", 'hello world', payload: @hash, on_exception_level: :fatal) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
-                  end
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
-                end
-
-                should "log #{level} info with metric" do
-                  metric_name = '/my/custom/metric'
-                  assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
-                  assert metric_name, $last_metric.metric
-                end
-              end
-
-              context 'generic method' do
-                should "log #{level} info" do
-                  assert_equal "result", @logger.benchmark(level, 'hello world') { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
-                end
-
-                should "log #{level} info with payload" do
-                  assert_equal "result", @logger.benchmark(level, 'hello world', payload: @hash) { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
-                end
-
-                should "not log #{level} info when block is faster than :min_duration" do
-                  assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_nil @mock_logger.message
-                end
-
-                should "log #{level} info when block duration exceeds :min_duration" do
-                  assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
-                end
-
-                should "log #{level} info with an exception" do
-                  assert_raises RuntimeError do
-                    @logger.benchmark(level, 'hello world', payload: @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
-                  end
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
-                end
-
-                should "log #{level} info with metric" do
-                  metric_name = '/my/custom/metric'
-                  assert_equal "result", @logger.benchmark(level, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
-                  SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
-                  assert metric_name, $last_metric.metric
-                end
-              end
-            end
-
-            should "log when the block performs a return" do
-              assert_equal "Good", function_with_return(@logger)
-              SemanticLogger.flush
-              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
             end
           end
         end
+
+        context "benchmark" do
+          # Ensure that any log level can be benchmarked and logged
+          SemanticLogger::LEVELS.each do |level|
+            level_char = level.to_s.upcase[0]
+
+            context 'direct method' do
+              should "log #{level} info" do
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world') { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+              end
+
+              should "log #{level} info with payload" do
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', payload: @hash) { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+              end
+
+              should "not log #{level} info when block is faster than :min_duration" do
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_nil @mock_logger.message
+              end
+
+              should "log #{level} info when block duration exceeds :min_duration" do
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+              end
+
+              should "log #{level} info with an exception" do
+                assert_raises RuntimeError do
+                  @logger.send("benchmark_#{level}", 'hello world', payload: @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
+                end
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
+              end
+
+              should "change log #{level} info with an exception" do
+                assert_raises RuntimeError do
+                  @logger.send("benchmark_#{level}", 'hello world', payload: @hash, on_exception_level: :fatal) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
+                end
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
+              end
+
+              should "log #{level} info with metric" do
+                metric_name = '/my/custom/metric'
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                assert metric_name, $last_metric.metric
+              end
+            end
+
+            context 'generic method' do
+              should "log #{level} info" do
+                assert_equal "result", @logger.benchmark(level, 'hello world') { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+              end
+
+              should "log #{level} info with payload" do
+                assert_equal "result", @logger.benchmark(level, 'hello world', payload: @hash) { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+              end
+
+              should "not log #{level} info when block is faster than :min_duration" do
+                assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_nil @mock_logger.message
+              end
+
+              should "log #{level} info when block duration exceeds :min_duration" do
+                assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+              end
+
+              should "log #{level} info with an exception" do
+                assert_raises RuntimeError do
+                  @logger.benchmark(level, 'hello world', payload: @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
+                end
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
+              end
+
+              should "log #{level} info with metric" do
+                metric_name = '/my/custom/metric'
+                assert_equal "result", @logger.benchmark(level, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                assert metric_name, $last_metric.metric
+              end
+            end
+          end
+
+          should "log when the block performs a return" do
+            assert_equal "Good", function_with_return(@logger)
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+          end
+        end
+
+        context '.default_level' do
+          should 'log at a level below the global default' do
+            SemanticLogger.default_level = :debug
+            assert_equal :debug, @logger.level
+            @logger.trace('hello world', @hash) { "Calculations" }
+            SemanticLogger.flush
+            assert_nil @mock_logger.message
+
+            @logger.level = :trace
+            assert_equal :trace, @logger.level
+            @logger.trace('hello world', @hash) { "Calculations" }
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message
+          end
+        end
+
       end
     end
+
   end
 
   # Make sure that benchmark still logs when a block uses return to return from
