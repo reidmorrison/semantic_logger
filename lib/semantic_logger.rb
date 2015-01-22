@@ -3,9 +3,10 @@ require 'semantic_logger/version'
 require 'semantic_logger/semantic_logger'
 
 module SemanticLogger
-  autoload :Base,       'semantic_logger/base'
-  autoload :Logger,     'semantic_logger/logger'
-  autoload :Loggable,   'semantic_logger/loggable'
+  autoload :Base,                  'semantic_logger/base'
+  autoload :Logger,                'semantic_logger/logger'
+  autoload :Loggable,              'semantic_logger/loggable'
+  autoload :MapDebugToTraceLogger, 'semantic_logger/map_debug_to_trace_logger'
 
   module Appender
     autoload :Base,     'semantic_logger/appender/base'

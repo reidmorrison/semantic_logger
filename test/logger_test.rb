@@ -219,18 +219,31 @@ class LoggerTest < Minitest::Test
         end
 
         context '.default_level' do
-          should 'log at a level below the global default' do
+          setup do
             SemanticLogger.default_level = :debug
+          end
+
+          should 'not log at a level below the global default' do
             assert_equal :debug, @logger.level
             @logger.trace('hello world', @hash) { "Calculations" }
             SemanticLogger.flush
             assert_nil @mock_logger.message
+          end
 
+          should 'log at the instance level' do
             @logger.level = :trace
             assert_equal :trace, @logger.level
             @logger.trace('hello world', @hash) { "Calculations" }
             SemanticLogger.flush
             assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message
+          end
+
+          should 'not log at a level below the instance level' do
+            @logger.level = :warn
+            assert_equal :warn, @logger.level
+            @logger.debug('hello world', @hash) { "Calculations" }
+            SemanticLogger.flush
+            assert_nil @mock_logger.message
           end
         end
 
