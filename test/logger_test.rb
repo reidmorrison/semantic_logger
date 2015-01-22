@@ -247,6 +247,43 @@ class LoggerTest < Minitest::Test
           end
         end
 
+        context '.level?' do
+          should 'return true for debug? with :trace level' do
+            SemanticLogger.default_level = :trace
+            assert_equal :trace, @logger.level
+            assert_equal true,   @logger.debug?
+            assert_equal true,   @logger.trace?
+          end
+
+          should 'return false for debug? with global :debug level' do
+            SemanticLogger.default_level = :debug
+            assert_equal :debug, @logger.level,  @logger.inspect
+            assert_equal true,   @logger.debug?, @logger.inspect
+            assert_equal false,  @logger.trace?, @logger.inspect
+          end
+
+          should 'return true for debug? with global :info level' do
+            SemanticLogger.default_level = :info
+            assert_equal :info, @logger.level,  @logger.inspect
+            assert_equal false,  @logger.debug?, @logger.inspect
+            assert_equal false,  @logger.trace?, @logger.inspect
+          end
+
+          should 'return false for debug? with instance :debug level' do
+            @logger.level = :debug
+            assert_equal :debug, @logger.level,  @logger.inspect
+            assert_equal true,   @logger.debug?, @logger.inspect
+            assert_equal false,  @logger.trace?, @logger.inspect
+          end
+
+          should 'return true for debug? with instance :info level' do
+            @logger.level = :info
+            assert_equal :info, @logger.level,  @logger.inspect
+            assert_equal false,  @logger.debug?, @logger.inspect
+            assert_equal false,  @logger.trace?, @logger.inspect
+          end
+        end
+
       end
     end
 
