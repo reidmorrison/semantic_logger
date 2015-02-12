@@ -266,6 +266,15 @@ Optional, Ruby Exception object to log along with the duration of the supplied b
 Optional, when this parameter is supplied all subscribers will be notified of this
 metric, along with the Log Struct described below
 
+#### `:silence` [Symbol]
+
+Optional, the log level to silence all log messages to within the block.
+`silence` is thread-safe and only affects messages logged on the current thread.
+
+#### `:on_exception_level` [Symbol]
+
+Optional, If an exception is raised, increase the log level to this level
+
 Example
 
 ```ruby
@@ -358,6 +367,59 @@ For example, use the current thread object_id to ensure uniqueness:
 Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
 ```
 
+### Silencing noisy logs
+
+Silence noisy log levels by changing the default_level within the block
+
+This setting is thread-safe and only applies to the current thread
+
+Any threads spawned from within the block will not be affected by `silence`
+
+```ruby
+# Silence all logging below :error level
+logger.silence do
+ logger.info "this will _not_ be logged"
+ logger.warn "this neither"
+ logger.error "but errors will be logged"
+end
+```
+
+`silence` can also lower the log level within the supplied block. For example
+to increase log information in diagnosing a specific issue.
+
+```ruby
+# Perform trace level logging within the block, even when the default is higher
+SemanticLogger.default_level = :info
+
+logger.debug 'this will _not_ be logged'
+
+logger.silence(:trace) do
+ logger.debug "this will be logged"
+end
+```
+
+#### Note
+
+`silence` does not affect any loggers which have had their log level set
+explicitly. I.e. That do not rely on the global default level
+
+### Debug logging as Trace
+
+Some third party gems log a large amount of information at debug since they
+do not use Semantic Logger and do not have access to the `:trace` level for
+logging.
+
+To map the `:debug` logging calls for these existing libraries to `:trace`, replace
+its logger with an instance of `DebugAsTraceLogger::SemanticLogger`
+
+```ruby
+# Example, log debug level messages as trace:
+logger = SemanticLogger::DebugAsTraceLogger.new('NoisyLibrary')
+
+# This will be logged as :trace
+logger.debug 'Some very low level noisy message'
+```
+
 ### Changing the log level for a single class at runtime
 
 Since the logger is class specific, its log level can be changed dynamically at runtime.
@@ -406,49 +468,6 @@ that was written during the second call to the ExternalSupplier:
 2013-11-07 16:19:26.683 T [35674:main] ExternalSupplier -- Calculating with amount -- {:amount=>100, :name=>"Jack"}
 2013-11-07 16:19:26.683 I [35674:main] (0.0ms) ExternalSupplier -- Calling external interface
 ```
-
-### Change the global default logging level at runtime
-
-Log levels can be changed using signals on operating systems that support them.
-This allows log levels to be changed externally without requiring a restart
-of the running process.
-
-When the signal is raised, the global default log level rotates through the following
-log levels in the following order, starting from the current global default level:
-
-```ruby
-  :warn, :info, :debug, :trace
-```
-
-If the current level is `:trace` it wraps around back to `:warn`
-
-Example (where the target ruby process id is 1234) :
-
-```
-kill -SIGUSR2 1234
-```
-
-#### Enabling Log Level Signal handler
-
-On startup Semantic Logger does not register any signals so that it does not
-interfere with any existing signal handlers. In order to enable the above log level
-changes the signal handler must be registered by calling `SemanticLogger.add_signal_handler`
-
-```ruby
-require 'semantic_logger'
-
-# Enable signal handling for this process
-SemanticLogger.add_signal_handler('USR2')
-
-SemanticLogger.add_appender('development.log')
-
-logger = SemanticLogger['MyClass']
-logger.info "Hello World"
-```
-
-Note: The changes to the logging level will not change for any classes where the
-level was set explicity within the application itself. The above signal only changes
-the global default level, which is used by loggers when their log level has not been changed.
 
 #### Change the log level without using signals
 
