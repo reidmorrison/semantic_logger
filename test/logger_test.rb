@@ -216,6 +216,29 @@ class LoggerTest < Minitest::Test
             SemanticLogger.flush
             assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
           end
+
+          should 'not log at a level below the silence level' do
+            SemanticLogger.default_level = :info
+            @logger.benchmark_info('hello world', silence: :error) do
+              @logger.warn "don't log me"
+            end
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+          end
+
+          should 'log at a silence level below the default level' do
+            SemanticLogger.default_level = :info
+            first_message = nil
+            @logger.benchmark_info('hello world', silence: :trace) do
+              @logger.debug('hello world', @hash) { "Calculations" }
+              SemanticLogger.flush
+              first_message = @mock_logger.message
+            end
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:.+\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, first_message
+            SemanticLogger.flush
+            # Only the last log message is kept in mock logger
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+          end
         end
 
         context '.default_level' do

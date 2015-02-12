@@ -356,9 +356,17 @@ module SemanticLogger
     def benchmark_internal(level, index, message, params, &block)
       start     = Time.now
       begin
-        rc = block.call(params) if block
-        exception = params[:exception]
-        rc
+        if block
+          result = if silence_level = params[:silence]
+            # In case someone accidentally sets `silence: true` instead of `silence: :error`
+            silence_level = :error if silence_level == true
+            silence(silence_level) { block.call(params) }
+          else
+            block.call(params)
+          end
+          exception = params[:exception]
+          result
+        end
       rescue Exception => exc
         exception = exc
       ensure
