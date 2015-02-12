@@ -181,6 +181,50 @@ module SemanticLogger
     alias :unknown :error
     alias :unknown? :error?
 
+    # Silence noisy log levels by changing the default_level within the block
+    #
+    # This setting is thread-safe and only applies to the current thread
+    #
+    # Any threads spawned within the block will not be affected by this setting
+    #
+    # #silence can be used to both raise and lower the log level within
+    # the supplied block.
+    #
+    # Example:
+    #
+    #   # Perform trace level logging within the block when the default is higher
+    #   SemanticLogger.default_level = :info
+    #
+    #   logger.debug 'this will _not_ be logged'
+    #
+    #   logger.silence(:trace) do
+    #     logger.debug "this will be logged"
+    #   end
+    #
+    # Parameters
+    #   new_level
+    #     The new log level to apply within the block
+    #     Default: :error
+    #
+    # Example:
+    #   # Silence all logging below :error level
+    #   logger.silence do
+    #     logger.info "this will _not_ be logged"
+    #     logger.warn "this neither"
+    #     logger.error "but errors will be logged"
+    #   end
+    #
+    # Note:
+    #   #silence does not affect any loggers which have had their log level set
+    #   explicitly. I.e. That do not rely on the global default level
+    def silence(new_level = :error)
+      current_index = Thread.current[:semantic_logger_silence]
+      Thread.current[:semantic_logger_silence] = SemanticLogger.level_to_index(new_level)
+      yield
+    ensure
+      Thread.current[:semantic_logger_silence] = current_index
+    end
+
     # DEPRECATED See SemanticLogger.default_level=
     def self.default_level=(level)
       warn "[DEPRECATION] `SemanticLogger::Logger.default_level=` is deprecated.  Please use `SemanticLogger.default_level=` instead."

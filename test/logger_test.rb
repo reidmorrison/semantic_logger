@@ -224,6 +224,7 @@ class LoggerTest < Minitest::Test
           end
 
           should 'not log at a level below the global default' do
+            assert_equal :debug, SemanticLogger.default_level
             assert_equal :debug, @logger.level
             @logger.trace('hello world', @hash) { "Calculations" }
             SemanticLogger.flush
@@ -231,6 +232,7 @@ class LoggerTest < Minitest::Test
           end
 
           should 'log at the instance level' do
+            assert_equal :debug, SemanticLogger.default_level
             @logger.level = :trace
             assert_equal :trace, @logger.level
             @logger.trace('hello world', @hash) { "Calculations" }
@@ -239,11 +241,51 @@ class LoggerTest < Minitest::Test
           end
 
           should 'not log at a level below the instance level' do
+            assert_equal :debug, SemanticLogger.default_level
             @logger.level = :warn
             assert_equal :warn, @logger.level
             @logger.debug('hello world', @hash) { "Calculations" }
             SemanticLogger.flush
             assert_nil @mock_logger.message
+          end
+        end
+
+        context '.silence' do
+          setup do
+            SemanticLogger.default_level = :info
+          end
+
+          should 'not log at a level below the silence level' do
+            assert_equal :info, SemanticLogger.default_level
+            assert_equal :info, @logger.level
+            @logger.silence do
+              @logger.warn('hello world', @hash) { "Calculations" }
+              @logger.info('hello world', @hash) { "Calculations" }
+              @logger.debug('hello world', @hash) { "Calculations" }
+              @logger.trace('hello world', @hash) { "Calculations" }
+            end
+            SemanticLogger.flush
+            assert_nil @mock_logger.message
+          end
+
+          should 'log at the instance level even with the silencer at a higher level' do
+            @logger.level = :trace
+            assert_equal :trace, @logger.level
+            @logger.silence do
+              @logger.trace('hello world', @hash) { "Calculations" }
+            end
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message
+          end
+
+          should 'log at a silence level below the default level' do
+            assert_equal :info, SemanticLogger.default_level
+            assert_equal :info, @logger.level
+            @logger.silence(:debug) do
+              @logger.debug('hello world', @hash) { "Calculations" }
+            end
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:.+\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message
           end
         end
 

@@ -171,6 +171,25 @@ module SemanticLogger
     signal
   end
 
+  # Add a signal handler to log a Ruby thread dump to the currently active
+  # log file / appenders
+  #
+  # When the signal is raised on this process, Semantic Logger will write the list
+  # of threads to the log file, along with their back-traces when available
+  #
+  # For JRuby users this thread dump differs form the standard QUIT triggered
+  # Java thread dump which includes system threads and Java stack traces.
+  def self.add_thread_dump_signal_handler(signal='TTIN')
+    Signal.trap(signal) do
+      logger = SemanticLogger['Ruby Thread Dump']
+      Thread.list.each do |thread|
+        backtrace = thread.backtrace ? thread.backtrace.join("\n") : ''
+        logger.warn "#{thread.name}\n#{backtrace}"
+      end
+    end
+    signal
+  end
+
   ############################################################################
   protected
 
@@ -180,7 +199,7 @@ module SemanticLogger
   private
 
   def self.default_level_index
-    @@default_level_index
+    Thread.current[:semantic_logger_silence] || @@default_level_index
   end
 
   # Returns the symbolic level for the supplied level index
