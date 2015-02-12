@@ -17,6 +17,12 @@ module SemanticLogger
     autoload :NewRelic, 'semantic_logger/appender/new_relic'
     autoload :Splunk,   'semantic_logger/appender/splunk'
   end
+
+  if defined?(JRuby)
+    module JRuby
+      autoload :GarbageCollectionLogger, 'semantic_logger/jruby/garbage_collection_logger'
+    end
+  end
 end
 
 # Flush all appenders at exit, waiting for outstanding messages on the queue

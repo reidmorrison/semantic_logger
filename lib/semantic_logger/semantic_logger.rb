@@ -152,42 +152,65 @@ module SemanticLogger
     SemanticLogger::Logger.on_metric(&block)
   end
 
-  # Add a signal handler so that the log level can be changed externally
-  # without restarting the process
+  # Add signal handlers for Semantic Logger
   #
-  # When the signal is raised on this process, the global default log level
-  # rotates through the following log levels in the following order, starting
-  # from the current global default level:
-  #   :warn, :info, :debug, :trace
+  # Two signal handlers will be registered by default:
   #
-  # If the current level is :trace it wraps around back to :warn
-  def self.add_signal_handler(signal='USR2')
-    Signal.trap(signal) do
+  # 1. Changing the log_level:
+  #
+  #   The log level can be changed without restarting the process by sending the
+  #   log_level_signal, which by default is 'USR2'
+  #
+  #   When the log_level_signal is raised on this process, the global default log level
+  #   rotates through the following log levels in the following order, starting
+  #   from the current global default level:
+  #     :warn, :info, :debug, :trace
+  #
+  #   If the current level is :trace it wraps around back to :warn
+  #
+  # 2. Logging a Ruby thread dump
+  #
+  #   When the signal is raised on this process, Semantic Logger will write the list
+  #   of threads to the log file, along with their back-traces when available
+  #
+  #   For JRuby users this thread dump differs form the standard QUIT triggered
+  #   Java thread dump which includes system threads and Java stack traces.
+  #
+  #   It is recommended to name any threads you create in the application, by
+  #   calling the following from within the thread itself:
+  #      Thread.current.name = 'My Worker'
+  #
+  # Also adds JRuby Garbage collection logging so that any garbage collections
+  # that exceed the time threshold will be logged. Default: 10 ms
+  # Currently only supported when running JRuby
+  #
+  # Note:
+  #   To only register one of the signal handlers, set the other to nil
+  #   Set gc_log_microseconds to nil to not enable JRuby Garbage collections
+  def self.add_signal_handler(log_level_signal='USR2', thread_dump_signal='TTIN', gc_log_microseconds=10000)
+    Signal.trap(log_level_signal) do
       index = (default_level == :trace) ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
       new_level = LEVELS[index-1]
       self['SemanticLogger'].warn "Changed global default log level to #{new_level.inspect}"
       self.default_level = new_level
-    end
-    signal
-  end
+    end if log_level_signal
 
-  # Add a signal handler to log a Ruby thread dump to the currently active
-  # log file / appenders
-  #
-  # When the signal is raised on this process, Semantic Logger will write the list
-  # of threads to the log file, along with their back-traces when available
-  #
-  # For JRuby users this thread dump differs form the standard QUIT triggered
-  # Java thread dump which includes system threads and Java stack traces.
-  def self.add_thread_dump_signal_handler(signal='TTIN')
-    Signal.trap(signal) do
+    Signal.trap(thread_dump_signal) do
       logger = SemanticLogger['Ruby Thread Dump']
       Thread.list.each do |thread|
         backtrace = thread.backtrace ? thread.backtrace.join("\n") : ''
         logger.warn "#{thread.name}\n#{backtrace}"
       end
+    end if thread_dump_signal
+
+    if gc_log_microseconds && defined?(JRuby)
+      listener = SemanticLogger::JRuby::GarbageCollectionLogger.new(gc_log_microseconds)
+      Java::JavaLangManagement::ManagementFactory.getGarbageCollectorMXBeans.each do |gcbean|
+        gcbean.add_notification_listener(listener, nil, nil)
+      end
     end
-    signal
+
+    true
   end
 
   ############################################################################
