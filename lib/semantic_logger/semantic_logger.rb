@@ -181,13 +181,13 @@ module SemanticLogger
   #      Thread.current.name = 'My Worker'
   #
   # Also adds JRuby Garbage collection logging so that any garbage collections
-  # that exceed the time threshold will be logged. Default: 10 ms
+  # that exceed the time threshold will be logged. Default: 100 ms
   # Currently only supported when running JRuby
   #
   # Note:
   #   To only register one of the signal handlers, set the other to nil
   #   Set gc_log_microseconds to nil to not enable JRuby Garbage collections
-  def self.add_signal_handler(log_level_signal='USR2', thread_dump_signal='TTIN', gc_log_microseconds=10000)
+  def self.add_signal_handler(log_level_signal='USR2', thread_dump_signal='TTIN', gc_log_microseconds=100000)
     Signal.trap(log_level_signal) do
       index = (default_level == :trace) ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
       new_level = LEVELS[index-1]
