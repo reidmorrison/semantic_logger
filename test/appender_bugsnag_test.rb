@@ -6,11 +6,11 @@ require 'test_helper'
 class AppenderBugsnagTest < Minitest::Test
   context SemanticLogger::Appender::Bugsnag do
     setup do
-      @appender = SemanticLogger::Appender::Bugsnag.new(:error)
+      @appender = SemanticLogger::Appender::Bugsnag.new(:warn)
       @message  = 'AppenderBugsnagTest log message'
     end
 
-    (SemanticLogger::LEVELS - [:error, :fatal]).each do |level|
+    (SemanticLogger::LEVELS - [:warn, :error]).each do |level|
       should "not send :#{level} notifications to Bugsnag" do
         message = hash = nil
         Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
@@ -21,21 +21,19 @@ class AppenderBugsnagTest < Minitest::Test
       end
     end
 
-    [:error, :fatal].each do |level|
-      should "send :#{level} notifications to Bugsnag with severity" do
-        message = hash = nil
-        Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
-          @appender.send(level, @message)
-        end
-        assert_equal @message, message
-        assert_equal level.to_s, hash[:severity]
-      end
-    end
-
-    should 'replace warn severity with warning' do
+    should "send error notifications to Bugsnag with severity" do
       message = hash = nil
       Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
-        SemanticLogger::Appender::Bugsnag.new(:warn).warn @message
+        @appender.error @message
+      end
+      assert_equal @message, message
+      assert_equal 'error', hash[:severity]
+    end
+
+    should 'send warn notifications to Bugsnag replace warn severity with warning' do
+      message = hash = nil
+      Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
+        @appender.warn @message
       end
       assert_equal @message, message
       assert_equal 'warning', hash[:severity]
@@ -49,6 +47,15 @@ class AppenderBugsnagTest < Minitest::Test
       assert_equal @message, message
       assert_equal(1, hash[:key1], hash)
       assert_equal('a', hash[:key2], hash)
+    end
+
+    should 'send notification to Bugsnag with exception' do
+      message = hash = nil
+      error = RuntimeError
+      Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
+        @appender.error error
+      end
+      assert_equal error, message
     end
   end
 end
