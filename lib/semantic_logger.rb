@@ -16,6 +16,7 @@ module SemanticLogger
     autoload :Syslog,   'semantic_logger/appender/syslog'
     autoload :NewRelic, 'semantic_logger/appender/new_relic'
     autoload :Splunk,   'semantic_logger/appender/splunk'
+    autoload :Bugsnag,   'semantic_logger/appender/bugsnag'
   end
 
   if defined?(JRuby)

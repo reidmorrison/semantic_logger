@@ -18,5 +18,7 @@ gem 'syslog_protocol'
 gem 'net_tcp_client'
 # [optional] Splunk appender
 gem 'splunk-sdk-ruby'
+# [optional] Bugsnag appender
+gem 'bugsnag'
 
 gem 'awesome_print'
