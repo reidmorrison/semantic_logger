@@ -56,7 +56,7 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   # Returns [Hash] of parameters to send to Bugsnag.
   def default_formatter
     proc do |log|
-      { :severity => log_level(log), tags: log.tags }.merge(Hash(log.payload))
+      { :severity => log_level(log), tags: log.tags }.merge(log.payload || {})
     end
   end
 
