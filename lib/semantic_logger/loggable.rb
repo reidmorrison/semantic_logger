@@ -31,9 +31,7 @@ module SemanticLogger
 
     def self.included(base)
       base.class_eval do
-        # Thread safe class variable initialization
-        include SyncAttr
-
+        # Thread safe logger class variable initializer
         sync_cattr_reader :logger do
           SemanticLogger[self]
         end

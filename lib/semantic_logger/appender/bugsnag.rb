@@ -19,8 +19,6 @@ Example 2
 
 For a non-Rails application, send :info and more severe log entries to a file called application.log and also send :error log entries to Bugsnag.
 
-# ./newrelic.yml needs to be set up -- see https://docs.newrelic.com/docs/ruby/ruby-agent-installation for more information.
-
 require 'semantic_logger'
 require 'bugsnag'
 

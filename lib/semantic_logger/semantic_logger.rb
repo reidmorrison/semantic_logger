@@ -196,10 +196,17 @@ module SemanticLogger
     end if log_level_signal
 
     Signal.trap(thread_dump_signal) do
-      logger = SemanticLogger['Ruby Thread Dump']
+      logger = SemanticLogger['Thread Dump']
       Thread.list.each do |thread|
-        backtrace = thread.backtrace ? thread.backtrace.join("\n") : ''
-        logger.warn "#{thread.name}\n#{backtrace}"
+        next if thread == Thread.current
+        message = thread.name
+        if backtrace = thread.backtrace
+          message += "\n"
+          message << backtrace.join("\n")
+        end
+        tags = thread[:semantic_logger_tags]
+        tags = tags.nil? ? [] : tags.clone
+        logger.tagged(tags) { logger.warn(message) }
       end
     end if thread_dump_signal
 
