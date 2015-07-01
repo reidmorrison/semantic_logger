@@ -1,7 +1,7 @@
-semantic_logger [![Build Status](https://secure.travis-ci.org/reidmorrison/semantic_logger.png?branch=master)](http://travis-ci.org/reidmorrison/semantic_logger)
+semantic_logger [![Build Status](https://secure.travis-ci.org/reidmorrison/semantic_logger.png?branch=master)](http://travis-ci.org/reidmorrison/semantic_logger) ![](http://ruby-gem-downloads-badge.herokuapp.com/semantic_logger?type=total)
 ===============
 
-Next generation logging system for Ruby to support highly concurrent, high throughput, low latency systems
+Low latency, high throughput, enterprise-scale logging system for Ruby
 
 * http://github.com/reidmorrison/semantic_logger
 
@@ -10,6 +10,25 @@ Next generation logging system for Ruby to support highly concurrent, high throu
 [Semantic Logger Guide](http://reidmorrison.github.io/semantic_logger)
 
 API Documentation: [![semantic_logger API Documentation](https://www.omniref.com/ruby/gems/semantic_logger.png)](https://www.omniref.com/ruby/gems/semantic_logger)
+
+## Supports
+
+Logging to the following destinations are all supported "out-of-the-box":
+
+* File
+* Screen
+* MongoDB
+* BugSnag
+* NewRelic
+* Splunk
+* Syslog
+* Roll-your-own
+
+Semantic Logger is capable of logging thousands of lines per second without slowing
+down the application. Traditional logging systems make the application wait while
+the log information is being saved. Semantic Logger avoids this slowdown by pushing
+log events to an in-memory queue that is serviced by a separate thread that only
+handles saving log information to multiple destinations at the same time.
 
 ## Dependencies
 
