@@ -54,7 +54,9 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   # Returns [Hash] of parameters to send to Bugsnag.
   def default_formatter
     proc do |log|
-      { :severity => log_level(log), tags: log.tags }.merge(log.payload || {})
+      h = { severity: log_level(log), tags: log.tags }
+      h.merge!(log.payload) if log.payload
+      h
     end
   end
 
@@ -69,13 +71,14 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
 
     # For more documentation on the Bugsnag.notify method see:
     # https://bugsnag.com/docs/notifiers/ruby#sending-handled-exceptions
-    Bugsnag.notify(log.exception || log.message, formatter.call(log))
+    Bugsnag.notify(log.exception || RuntimeError.new(log.message), formatter.call(log))
     true
   end
 
   private
 
   def log_level(log)
-    log.level.to_s.gsub('warn', 'warning')
+    return 'warning' if log.level == :warn
+    log.level.to_s
   end
 end

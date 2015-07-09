@@ -1,5 +1,4 @@
-$LOAD_PATH.unshift File.dirname(__FILE__)
-require 'test_helper'
+require_relative 'test_helper'
 
 # Unit Test for SemanticLogger::Appender::Bugsnag
 #
@@ -26,7 +25,7 @@ class AppenderBugsnagTest < Minitest::Test
       Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
         @appender.error @message
       end
-      assert_equal @message, message
+      assert_equal RuntimeError.new(@message), message
       assert_equal 'error', hash[:severity]
     end
 
@@ -35,7 +34,7 @@ class AppenderBugsnagTest < Minitest::Test
       Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
         @appender.warn @message
       end
-      assert_equal @message, message
+      assert_equal RuntimeError.new(@message), message
       assert_equal 'warning', hash[:severity]
     end
 
@@ -44,14 +43,14 @@ class AppenderBugsnagTest < Minitest::Test
       Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
         @appender.error @message, {:key1 => 1, :key2 => 'a'}
       end
-      assert_equal @message, message
+      assert_equal RuntimeError.new(@message), message
       assert_equal(1, hash[:key1], hash)
       assert_equal('a', hash[:key2], hash)
     end
 
     should 'send notification to Bugsnag with exception' do
       message = hash = nil
-      error = RuntimeError
+      error = RuntimeError.new('Hello World')
       Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
         @appender.error error
       end

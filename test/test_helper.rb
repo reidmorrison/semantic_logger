@@ -10,6 +10,6 @@ require 'minitest/stub_any_instance'
 require 'shoulda/context'
 require 'semantic_logger'
 require 'logger'
-require 'mock_logger'
+require_relative 'mock_logger'
 
 Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new

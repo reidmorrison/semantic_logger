@@ -329,7 +329,10 @@ module SemanticLogger
 
     # Log message at the specified level
     def log_internal(level, index, message=nil, payload=nil, exception=nil, &block)
-      if exception.nil? && payload && payload.is_a?(Exception)
+      if exception.nil? && payload.nil? && message.kind_of?(Exception)
+        exception = message
+        message   = exception.inspect
+      elsif exception.nil? && payload && payload.is_a?(Exception)
         exception = payload
         payload = nil
       end

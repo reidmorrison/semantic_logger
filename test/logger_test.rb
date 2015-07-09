@@ -1,5 +1,4 @@
-$LOAD_PATH.unshift File.dirname(__FILE__)
-require 'test_helper'
+require_relative 'test_helper'
 
 # Unit Test for SemanticLogger::Logger
 class LoggerTest < Minitest::Test

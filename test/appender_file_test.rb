@@ -1,5 +1,4 @@
-$LOAD_PATH.unshift File.dirname(__FILE__)
-require 'test_helper'
+require_relative 'test_helper'
 require 'stringio'
 
 # Unit Test for SemanticLogger::Appender::File
@@ -35,6 +34,11 @@ class AppenderFileTest < Minitest::Test
       should "handle message, payload, and exception" do
         @appender.debug 'hello world', @hash, StandardError.new("StandardError")
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str} -- Exception: StandardError: StandardError\n\n/, @io.string
+      end
+
+      should "handle exception only" do
+        @appender.debug StandardError.new("StandardError")
+        assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- #<StandardError: StandardError> -- Exception: StandardError: StandardError\n\n/, @io.string
       end
     end
 

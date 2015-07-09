@@ -1,5 +1,4 @@
-$LOAD_PATH.unshift File.dirname(__FILE__)
-require 'test_helper'
+require_relative 'test_helper'
 require 'net/tcp_client'
 
 # Unit Test for SemanticLogger::Appender::Syslog
