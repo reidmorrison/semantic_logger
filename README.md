@@ -32,13 +32,17 @@ handles saving log information to multiple destinations at the same time.
 
 ## Dependencies
 
-Semantic Logger supports the following Ruby platforms:
-- Ruby 1.9.3, 2.x
-- JRuby 1.7
+Semantic Logger is tested and supported on the following Ruby platforms:
+- Ruby 2.0 and above
+- JRuby 1.7 and above
+- JRuby 9.0.0.0 and above
+- Rubinius 2.5 and above
 
 The following gems are only required when their corresponding appenders are being used,
 and are therefore not automatically included by this gem:
+- Bugsnag Appender: gem 'bugsnag'
 - MongoDB Appender: gem 'mongo' 1.9.2 or above
+- NewRelic Appender: gem 'newrelic_rpm'
 - Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
 - Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
