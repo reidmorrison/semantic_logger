@@ -9,7 +9,7 @@ Low latency, high throughput, enterprise-scale logging system for Ruby
 
 [Semantic Logger Guide](http://reidmorrison.github.io/semantic_logger)
 
-API Documentation: [![semantic_logger API Documentation](https://www.omniref.com/ruby/gems/semantic_logger.png)](https://www.omniref.com/ruby/gems/semantic_logger)
+[Reference Documentation](http://www.rubydoc.info/gems/semantic_logger/)
 
 ## Supports
 
