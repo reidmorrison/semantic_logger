@@ -40,13 +40,14 @@ module SemanticLogger
       #    logger.info 'Hello World'
       #
       def initialize(filename, level=nil, filter=nil, &block)
-        raise "filename cannot be null when initializing the SemanticLogging::Appender::File" unless filename
-        @log = if filename.respond_to?(:write) and filename.respond_to?(:close)
-          filename
-        else
-          @filename = filename
-          reopen
-        end
+        raise 'filename cannot be null when initializing the SemanticLogging::Appender::File' unless filename
+        @log =
+          if filename.respond_to?(:write) and filename.respond_to?(:close)
+            filename
+          else
+            @filename = filename
+            reopen
+          end
 
         # Set the log level and formatter if supplied
         super(level, filter, &block)
@@ -60,7 +61,7 @@ module SemanticLogger
       def reopen
         return unless @filename
 
-        @log = open(@filename, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
+        @log      = open(@filename, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @log.sync = true

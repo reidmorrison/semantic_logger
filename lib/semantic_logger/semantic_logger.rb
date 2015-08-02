@@ -12,7 +12,7 @@ module SemanticLogger
   # This change only applies to _new_ loggers, existing logger levels
   # will not be changed in any way
   def self.default_level=(level)
-    @@default_level = level
+    @@default_level       = level
     # For performance reasons pre-calculate the level index
     @@default_level_index = level_to_index(level)
   end
@@ -83,23 +83,24 @@ module SemanticLogger
   #   logger.debug("Login time", :user => 'Joe', :duration => 100, :ip_address=>'127.0.0.1')
   #
   def self.add_appender(appender, level=nil, &block)
-    appender_instance = if appender.is_a?(String) || appender.is_a?(IO)
-      # $stderr, STDOUT, other IO, or a filename
-      SemanticLogger::Appender::File.new(appender, level, &block)
-    elsif appender.is_a? Appender::Base
-      # Already an instance of an appender
-      appender.level = level if level
-      appender.formatter = block if block
-      appender
-    else
-      # Check if the custom appender responds to all the log levels. For example Ruby ::Logger
-      if does_not_implement = LEVELS[1..-1].find{|i| !appender.respond_to?(i)}
-        raise "Supplied appender does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..-1].inspect}"
-      end
+    appender_instance =
+      if appender.is_a?(String) || appender.is_a?(IO)
+        # $stderr, STDOUT, other IO, or a filename
+        SemanticLogger::Appender::File.new(appender, level, &block)
+      elsif appender.is_a? Appender::Base
+        # Already an instance of an appender
+        appender.level     = level if level
+        appender.formatter = block if block
+        appender
+      else
+        # Check if the custom appender responds to all the log levels. For example Ruby ::Logger
+        if does_not_implement = LEVELS[1..-1].find { |i| !appender.respond_to?(i) }
+          raise "Supplied appender does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..-1].inspect}"
+        end
 
-      raise "Change the log level to #{level}, update the log level directly against the supplied appender" if level
-      SemanticLogger::Appender::Wrapper.new(appender, &block)
-    end
+        raise "Change the log level to #{level}, update the log level directly against the supplied appender" if level
+        SemanticLogger::Appender::Wrapper.new(appender, &block)
+      end
     @@appenders << appender_instance
 
     # Start appender thread if it is not already running
@@ -133,7 +134,7 @@ module SemanticLogger
   #
   # Note: Only appenders that implement the reopen method will be called
   def self.reopen
-    @@appenders.each {|appender| appender.reopen if appender.respond_to?(:reopen)}
+    @@appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
     # After a fork the appender thread is not running, start it if it is not running
     SemanticLogger::Logger.start_appender_thread
   end
@@ -189,7 +190,7 @@ module SemanticLogger
   #   Set gc_log_microseconds to nil to not enable JRuby Garbage collections
   def self.add_signal_handler(log_level_signal='USR2', thread_dump_signal='TTIN', gc_log_microseconds=100000)
     Signal.trap(log_level_signal) do
-      index = (default_level == :trace) ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
+      index     = (default_level == :trace) ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
       new_level = LEVELS[index-1]
       self['SemanticLogger'].warn "Changed global default log level to #{new_level.inspect}"
       self.default_level = new_level
@@ -242,27 +243,28 @@ module SemanticLogger
   def self.level_to_index(level)
     return if level.nil?
 
-    index = if level.is_a?(Symbol)
-      LEVELS.index(level)
-    elsif level.is_a?(String)
-      level = level.downcase.to_sym
-      LEVELS.index(level)
-    elsif level.is_a?(Integer) && defined?(::Logger::Severity)
-      # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
-      @@map_levels ||= begin
-        levels = []
-        ::Logger::Severity.constants.each do |constant|
-          levels[::Logger::Severity.const_get(constant)] = LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
+    index =
+      if level.is_a?(Symbol)
+        LEVELS.index(level)
+      elsif level.is_a?(String)
+        level = level.downcase.to_sym
+        LEVELS.index(level)
+      elsif level.is_a?(Integer) && defined?(::Logger::Severity)
+        # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
+        @@map_levels ||= begin
+          levels = []
+          ::Logger::Severity.constants.each do |constant|
+            levels[::Logger::Severity.const_get(constant)] = LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
+          end
+          levels
         end
-        levels
+        @@map_levels[level]
       end
-      @@map_levels[level]
-    end
     raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
     index
   end
 
   # Initial default Level for all new instances of SemanticLogger::Logger
-  @@default_level = :info
+  @@default_level       = :info
   @@default_level_index = level_to_index(@@default_level)
 end

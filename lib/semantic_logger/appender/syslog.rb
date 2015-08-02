@@ -48,12 +48,12 @@ module SemanticLogger
       # ::Syslog::LOG_INFO    - "Informational message"
       # ::Syslog::LOG_DEBUG   - "Debugging information"
       DEFAULT_LEVEL_MAP = {
-        :fatal   => ::Syslog::LOG_CRIT,
-        :error   => ::Syslog::LOG_ERR,
-        :warn    => ::Syslog::LOG_WARNING,
-        :info    => ::Syslog::LOG_NOTICE,
-        :debug   => ::Syslog::LOG_INFO,
-        :trace   => ::Syslog::LOG_DEBUG
+        :fatal => ::Syslog::LOG_CRIT,
+        :error => ::Syslog::LOG_ERR,
+        :warn  => ::Syslog::LOG_WARNING,
+        :info  => ::Syslog::LOG_NOTICE,
+        :debug => ::Syslog::LOG_INFO,
+        :trace => ::Syslog::LOG_DEBUG
       }
 
       # For more information on the Syslog constants used below see http://ruby-doc.org/stdlib-2.0.0/libdoc/syslog/rdoc/Syslog.html
@@ -143,19 +143,19 @@ module SemanticLogger
       #     For a list of options see the net_tcp_client documentation:
       #       https://www.omniref.com/ruby/gems/net_tcp_client/1.0.0/symbols/Net::TCPClient/initialize
       def initialize(params = {}, &block)
-        params              = params.dup
-        @ident              = params.delete(:ident) || 'ruby'
-        @options            = params.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
-        @facility           = params.delete(:facility) || ::Syslog::LOG_USER
-        filter              = params.delete(:filter)
-        level               = params.delete(:level)
-        level_map           = params.delete(:level_map)
-        @level_map          = DEFAULT_LEVEL_MAP.dup
+        params     = params.dup
+        @ident     = params.delete(:ident) || 'ruby'
+        @options   = params.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
+        @facility  = params.delete(:facility) || ::Syslog::LOG_USER
+        filter     = params.delete(:filter)
+        level      = params.delete(:level)
+        level_map  = params.delete(:level_map)
+        @level_map = DEFAULT_LEVEL_MAP.dup
         @level_map.update(level_map) if level_map
-        @server             = params.delete(:server) || 'syslog://localhost'
-        uri                 = URI(@server)
-        @host               = uri.host || 'localhost'
-        @protocol           = (uri.scheme || :syslog).to_sym
+        @server   = params.delete(:server) || 'syslog://localhost'
+        uri       = URI(@server)
+        @host     = uri.host || 'localhost'
+        @protocol = (uri.scheme || :syslog).to_sym
         raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
         @host               = 'localhost' if @protocol == :syslog
         @port               = URI(@server).port || 514
@@ -163,7 +163,7 @@ module SemanticLogger
         @tcp_client_options = params.delete(:tcp_client)
 
         # Warn about any unknown configuration options.
-        params.each_pair { |key,val| SemanticLogger::Logger.logger.warn "Ignoring unknown configuration option: #{key.inspect} => #{val.inspect}" }
+        params.each_pair { |key, val| SemanticLogger::Logger.logger.warn "Ignoring unknown configuration option: #{key.inspect} => #{val.inspect}" }
 
         # The syslog_protocol gem is required when logging over TCP or UDP.
         if [:tcp, :udp].include?(@protocol)
@@ -175,7 +175,7 @@ module SemanticLogger
 
           # The net_tcp_client gem is required when logging over TCP.
           if protocol == :tcp
-            @tcp_client_options ||= {}
+            @tcp_client_options          ||= {}
             @tcp_client_options[:server] = "#{@host}:#{@port}"
             begin
               require 'net/tcp_client'
@@ -199,7 +199,7 @@ module SemanticLogger
         when :tcp
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
           @tcp_client_options[:logger] = SemanticLogger::Logger.logger
-          @remote_syslog = Net::TCPClient.new(@tcp_client_options)
+          @remote_syslog               = Net::TCPClient.new(@tcp_client_options)
         when :udp
           @remote_syslog = UDPSocket.new
         else
@@ -215,7 +215,7 @@ module SemanticLogger
         case @protocol
         when :syslog
           # Since the Ruby Syslog API supports sprintf format strings, double up all existing '%'
-          message = formatter.call(log).gsub "%", "%%"
+          message = formatter.call(log).gsub '%', '%%'
           ::Syslog.log @level_map[log.level], message
         when :tcp
           @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{syslog_packet_formatter(log)}\r\n") }
@@ -238,8 +238,8 @@ module SemanticLogger
           tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s
-          message << " -- " << log.payload.inspect if log.payload
-          message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          message << ' -- ' << log.payload.inspect if log.payload
+          message << ' -- ' << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
@@ -249,10 +249,10 @@ module SemanticLogger
 
       # Format the syslog packet so it can be sent over TCP or UDP
       def syslog_packet_formatter(log)
-        packet = SyslogProtocol::Packet.new
+        packet          = SyslogProtocol::Packet.new
         packet.hostname = @local_hostname
         packet.facility = @facility
-        packet.severity =  @level_map[log.level]
+        packet.severity = @level_map[log.level]
         packet.tag      = @ident
         packet.content  = default_formatter.call(log)
         packet.to_s

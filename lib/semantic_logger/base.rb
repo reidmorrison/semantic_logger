@@ -21,7 +21,7 @@ module SemanticLogger
     # nil if this logger instance should use the global default level
     def level=(level)
       @level_index = SemanticLogger.level_to_index(level)
-      @level = level
+      @level       = level
     end
 
     # Returns the current log level if set, otherwise it returns the global
@@ -134,8 +134,8 @@ module SemanticLogger
     # Returns the list of tags pushed after flattening them out and removing blanks
     def push_tags *tags
       # Need to flatten and reject empties to support calls from Rails 4
-      new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
-      t = Thread.current[:semantic_logger_tags]
+      new_tags                              = tags.flatten.collect(&:to_s).reject(&:empty?)
+      t                                     = Thread.current[:semantic_logger_tags]
       Thread.current[:semantic_logger_tags] = t.nil? ? new_tags : t.concat(new_tags)
       new_tags
     end
@@ -161,7 +161,7 @@ module SemanticLogger
     #     logger.debug('Hello World', :result => 'blah')
     #   end
     def with_payload(payload)
-      current_payload = self.payload
+      current_payload                          = self.payload
       Thread.current[:semantic_logger_payload] = current_payload ? current_payload.merge(payload) : payload
       yield
     ensure
@@ -218,7 +218,7 @@ module SemanticLogger
     #   #silence does not affect any loggers which have had their log level set
     #   explicitly. I.e. That do not rely on the global default level
     def silence(new_level = :error)
-      current_index = Thread.current[:semantic_logger_silence]
+      current_index                            = Thread.current[:semantic_logger_silence]
       Thread.current[:semantic_logger_silence] = SemanticLogger.level_to_index(new_level)
       yield
     ensure
@@ -227,13 +227,13 @@ module SemanticLogger
 
     # DEPRECATED See SemanticLogger.default_level=
     def self.default_level=(level)
-      warn "[DEPRECATION] `SemanticLogger::Logger.default_level=` is deprecated.  Please use `SemanticLogger.default_level=` instead."
+      warn '[DEPRECATION] SemanticLogger::Logger.default_level= is deprecated.  Please use SemanticLogger.default_level= instead.'
       SemanticLogger.default_level = level
     end
 
     # DEPRECATED See SemanticLogger.default_level
     def self.default_level
-      warn "[DEPRECATION] `SemanticLogger::Logger.default_level` is deprecated.  Please use `SemanticLogger.default_level` instead."
+      warn '[DEPRECATION] SemanticLogger::Logger.default_level is deprecated.  Please use SemanticLogger.default_level instead.'
       SemanticLogger.default_level
     end
 
@@ -260,7 +260,7 @@ module SemanticLogger
     def initialize(klass, level=nil, filter=nil)
       # Support filtering all messages to this logger using a Regular Expression
       # or Proc
-      raise ":filter must be a Regexp or Proc" unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
+      raise ':filter must be a Regexp or Proc' unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
 
       @filter    = filter.is_a?(Regexp) ? filter.freeze : filter
       @name      = klass.is_a?(String) ? klass : klass.name
@@ -269,7 +269,7 @@ module SemanticLogger
 
     # Write log data to underlying data storage
     def log(log_)
-      raise NotImplementedError.new("Logging Appender must implement #log(log)")
+      raise NotImplementedError.new('Logging Appender must implement #log(log)')
     end
 
     # Return the level index for fast comparisons
@@ -334,7 +334,7 @@ module SemanticLogger
         message   = exception.inspect
       elsif exception.nil? && payload && payload.is_a?(Exception)
         exception = payload
-        payload = nil
+        payload   = nil
       end
 
       if block && (result = block.call)
@@ -357,34 +357,36 @@ module SemanticLogger
 
     # Measure the supplied block and log the message
     def benchmark_internal(level, index, message, params, &block)
-      start     = Time.now
+      start = Time.now
       begin
         if block
-          result = if silence_level = params[:silence]
-            # In case someone accidentally sets `silence: true` instead of `silence: :error`
-            silence_level = :error if silence_level == true
-            silence(silence_level) { block.call(params) }
-          else
-            block.call(params)
-          end
+          result    =
+            if silence_level = params[:silence]
+              # In case someone accidentally sets `silence: true` instead of `silence: :error`
+              silence_level = :error if silence_level == true
+              silence(silence_level) { block.call(params) }
+            else
+              block.call(params)
+            end
           exception = params[:exception]
           result
         end
       rescue Exception => exc
         exception = exc
       ensure
-        end_time = Time.now
+        end_time           = Time.now
         # Extract options after block completes so that block can modify any of the options
         log_exception      = params[:log_exception] || :partial
         on_exception_level = params[:on_exception_level]
         min_duration       = params[:min_duration] || 0.0
         payload            = params[:payload]
         metric             = params[:metric]
-        duration           = if block_given?
-          1000.0 * (end_time - start)
-        else
-          params[:duration] || raise("Mandatory block missing when :duration option is not supplied")
-        end
+        duration           =
+          if block_given?
+            1000.0 * (end_time - start)
+          else
+            params[:duration] || raise('Mandatory block missing when :duration option is not supplied')
+          end
 
         # Add scoped payload
         if self.payload
@@ -405,7 +407,7 @@ module SemanticLogger
               level = on_exception_level
               index = SemanticLogger.level_to_index(level)
             end
-            message = "#{message} -- Exception: #{exception.class}: #{exception.message}"
+            message          = "#{message} -- Exception: #{exception.class}: #{exception.message}"
             logged_exception = nil
           else
             # Log the message with its duration but leave out the exception that was raised

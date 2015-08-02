@@ -52,7 +52,7 @@ module SemanticLogger
       def self.colorized_formatter
         Proc.new do |log|
           colors = SemanticLogger::Appender::AnsiColors
-          tags = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
+          tags   = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s.dup
           message << " -- " << log.payload.inspect if log.payload
@@ -60,18 +60,19 @@ module SemanticLogger
 
           duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
 
-          level_color = case log.level
-          when :trace
-            colors::MAGENTA
-          when :debug
-            colors::GREEN
-          when :info
-            colors::CYAN
-          when :warn
-            colors::BOLD
-          when :error, :fatal
-            colors::RED
-          end
+          level_color =
+            case log.level
+            when :trace
+              colors::MAGENTA
+            when :debug
+              colors::GREEN
+            when :info
+              colors::CYAN
+            when :warn
+              colors::BOLD
+            when :error, :fatal
+              colors::RED
+            end
 
           "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{level_color}#{colors::BOLD}#{log.level.to_s[0..0].upcase}#{colors::CLEAR} [#{$$}:#{'%.30s' % log.thread_name}] #{tags}#{duration_str}#{level_color}#{log.name}#{colors::CLEAR} -- #{message}"
         end

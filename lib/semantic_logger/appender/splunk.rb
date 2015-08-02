@@ -20,7 +20,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   # open the handles to resources
   def reopen
     # Connect to splunk. Connect is a synonym for creating a Service by hand and calling login.
-    @service = Splunk::connect(@config)
+    @service       = Splunk::connect(@config)
 
     # The index we are logging to
     @service_index = @service.indexes[@index]

@@ -116,7 +116,7 @@ module SemanticLogger
       #
       # Creates an index based on tags to support faster lookups
       def create_indexes
-        options = {:capped => true, :size => @collection_size}
+        options       = { :capped => true, :size => @collection_size }
         options[:max] = @collection_max if @collection_max
         db.create_collection(collection_name, options)
         db[@collection_name].ensure_index('tags')
@@ -141,7 +141,7 @@ module SemanticLogger
       #  Replace this formatter by supplying a Block to the initializer
       def default_formatter
         Proc.new do |log|
-          document = {
+          document               = {
             :time        => log.time,
             :host_name   => host_name,
             :pid         => $$,

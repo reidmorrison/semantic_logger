@@ -65,7 +65,7 @@ module SemanticLogger
     end
 
     @@lag_check_interval = 5000
-    @@lag_threshold_s = 30
+    @@lag_threshold_s    = 30
 
     # Returns the check_interval which is the number of messages between checks
     # to determine if the appender thread is falling behind
@@ -99,13 +99,13 @@ module SemanticLogger
 
     # DEPRECATED See SemanticLogger.add_appender
     def self.appenders
-      warn "[DEPRECATION] `SemanticLogger::Logger.appenders` is deprecated.  Please use `SemanticLogger.add_appender` instead."
+      warn '[DEPRECATION] SemanticLogger::Logger.appenders is deprecated.  Please use SemanticLogger.add_appender instead.'
       SemanticLogger.appenders
     end
 
     # DEPRECATED: Please use queue_size instead.
     def self.cache_count
-      warn "[DEPRECATION] 'SemanticLogger::Logger.cache_count' is deprecated.  Please use 'SemanticLogger::Logger.queue_size' instead."
+      warn '[DEPRECATION] SemanticLogger::Logger.cache_count is deprecated.  Please use SemanticLogger::Logger.queue_size instead.'
       queue_size
     end
 
@@ -120,7 +120,7 @@ module SemanticLogger
     #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
     #   end
     def self.on_metric(&block)
-      (@@metric_subscribers  ||= ThreadSafe::Array.new) << block
+      (@@metric_subscribers ||= ThreadSafe::Array.new) << block
     end
 
     ############################################################################
@@ -146,7 +146,7 @@ module SemanticLogger
     #   By default logs to STDERR
     def self.logger
       @@logger ||= begin
-        l = SemanticLogger::Appender::File.new(STDERR, :warn)
+        l      = SemanticLogger::Appender::File.new(STDERR, :warn)
         l.name = name
         l
       end
@@ -156,7 +156,7 @@ module SemanticLogger
     def self.start_appender_thread
       return false if appender_thread_active?
       @@appender_thread = Thread.new { appender_thread }
-      raise "Failed to start Appender Thread" unless @@appender_thread
+      raise 'Failed to start Appender Thread' unless @@appender_thread
       true
     end
 
@@ -173,7 +173,7 @@ module SemanticLogger
       #
       # Should any appender fail to log or flush, the exception is logged and
       # other appenders will still be called
-      Thread.current.name = "SemanticLogger::AppenderThread"
+      Thread.current.name = 'SemanticLogger::AppenderThread'
       logger.debug "V#{VERSION} Appender thread active"
       begin
         count = 0
@@ -208,7 +208,7 @@ module SemanticLogger
               end
 
               message[:reply_queue] << true if message[:reply_queue]
-              logger.debug "Appender thread: All appenders flushed"
+              logger.debug 'Appender thread: All appenders flushed'
             else
               logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
             end
@@ -217,7 +217,7 @@ module SemanticLogger
       rescue Exception => exception
         # This block may be called after the file handles have been released by Ruby
         begin
-          logger.error "Appender thread restarting due to exception", exception
+          logger.error 'Appender thread restarting due to exception', exception
         rescue Exception
           nil
         end
@@ -226,7 +226,7 @@ module SemanticLogger
         @@appender_thread = nil
         # This block may be called after the file handles have been released by Ruby
         begin
-          logger.debug "Appender thread has stopped"
+          logger.debug 'Appender thread has stopped'
         rescue Exception
           nil
         end
@@ -242,7 +242,7 @@ module SemanticLogger
         begin
           subscriber.call(log_struct)
         rescue Exception => exc
-          logger.error "Exception calling subscriber", exc
+          logger.error 'Exception calling subscriber', exc
         end
       end
     end

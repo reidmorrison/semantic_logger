@@ -63,7 +63,7 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
   # Allow the level for this appender to be overwritten
   #   Default: :error
   #   Note: Not recommended to set the log level to :info, :debug, or :trace as that would flood NewRelic with Error notices
-  def initialize(level=:error,&block)
+  def initialize(level=:error, &block)
     # Pass on the level and custom formatter if supplied
     super(level, &block)
   end
@@ -77,14 +77,14 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
   def default_formatter
     Proc.new do |log|
       short_message = self.class.first_non_empty_line(log.message)
-      metric = log.metric || "#{log.name}/#{short_message}"
+      metric        = log.metric || "#{log.name}/#{short_message}"
 
-      custom_params = { :thread_name => log.thread_name }
+      custom_params            = { :thread_name => log.thread_name }
       # Only show the message under custom attributes if the error message uses an exception or shortened message (first non-empty line).
-      custom_params[:message]  = log.message  if log.message && (log.exception || log.message != short_message)
+      custom_params[:message]  = log.message if log.message && (log.exception || log.message != short_message)
       custom_params[:duration] = "#{log.duration} ms" if log.duration
-      custom_params[:payload]  = log.payload  if log.payload
-      custom_params[:tags]     = log.tags     if log.tags && (log.tags.size > 0)
+      custom_params[:payload]  = log.payload if log.payload
+      custom_params[:tags]     = log.tags if log.tags && (log.tags.size > 0)
 
       { :metric => metric, :custom_params => custom_params }
     end
