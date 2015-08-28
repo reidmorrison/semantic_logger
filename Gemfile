@@ -6,7 +6,6 @@ gem 'rake'
 gem 'minitest'
 gem 'minitest-reporters'
 gem 'minitest-stub_any_instance'
-gem 'shoulda-context'
 
 # [optional] MongoDB Appender
 gem 'mongo_ha', '>= 1.11.0.rc1'

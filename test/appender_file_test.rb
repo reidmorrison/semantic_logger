@@ -4,8 +4,8 @@ require 'stringio'
 # Unit Test for SemanticLogger::Appender::File
 #
 class AppenderFileTest < Minitest::Test
-  context SemanticLogger::Appender::File do
-    setup do
+  describe SemanticLogger::Appender::File do
+    before do
       SemanticLogger.default_level = :trace
       @time = Time.new
       @io = StringIO.new
@@ -15,45 +15,45 @@ class AppenderFileTest < Minitest::Test
       @thread_name = Thread.current.name
     end
 
-    context "format logs into text form" do
-      should "handle no message or payload" do
+    describe "format logs into text form" do
+      it "handle no message or payload" do
         @appender.debug
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- \n/, @io.string
       end
 
-      should "handle message" do
+      it "handle message" do
         @appender.debug 'hello world'
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world\n/, @io.string
       end
 
-      should "handle message and payload" do
+      it "handle message and payload" do
         @appender.debug 'hello world', @hash
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str}\n/, @io.string
       end
 
-      should "handle message, payload, and exception" do
+      it "handle message, payload, and exception" do
         @appender.debug 'hello world', @hash, StandardError.new("StandardError")
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str} -- Exception: StandardError: StandardError\n\n/, @io.string
       end
 
-      should "handle exception only" do
+      it "handle exception only" do
         @appender.debug StandardError.new("StandardError")
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- #<StandardError: StandardError> -- Exception: StandardError: StandardError\n\n/, @io.string
       end
     end
 
-    context "for each log level" do
+    describe "for each log level" do
       # Ensure that any log level can be logged
       SemanticLogger::LEVELS.each do |level|
-        should "log #{level} information" do
+        it "log #{level} information" do
           @appender.send(level, 'hello world', @hash)
           assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str}\n/, @io.string
         end
       end
     end
 
-    context "custom formatter" do
-      setup do
+    describe "custom formatter" do
+      before do
         @appender = SemanticLogger::Appender::File.new(@io) do |log|
           tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
 
@@ -67,7 +67,7 @@ class AppenderFileTest < Minitest::Test
         end
       end
 
-      should "format using formatter" do
+      it "format using formatter" do
         @appender.debug
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ DEBUG \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- \n/, @io.string
       end

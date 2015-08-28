@@ -5,9 +5,9 @@ require_relative 'test_helper'
 # Unit Test for SemanticLogger::Appender::NewRelic
 #
 class AppenderNewRelicTest < Minitest::Test
-  context SemanticLogger::Appender::NewRelic do
+  describe SemanticLogger::Appender::NewRelic do
 
-    setup do
+    before do
       @appender = SemanticLogger::Appender::NewRelic.new(:error)
       @message  = 'AppenderNewRelicTest log message'
       @multi_line_message = <<-EOSTR
@@ -22,7 +22,7 @@ class AppenderNewRelicTest < Minitest::Test
     end
 
     (SemanticLogger::LEVELS - [:error, :fatal]).each do |level|
-      should "not send :#{level.to_s} notifications to New Relic" do
+      it "not send :#{level.to_s} notifications to New Relic" do
         message = hash = nil
         NewRelic::Agent.stub(:notice_error, -> msg, h { message = msg; hash = h }) do
           @appender.tagged('test') do
@@ -35,7 +35,7 @@ class AppenderNewRelicTest < Minitest::Test
     end
 
     [:error, :fatal].each do |level|
-      should "send :#{level.to_s} notifications to New Relic" do
+      it "send :#{level.to_s} notifications to New Relic" do
         message = hash = nil
         NewRelic::Agent.stub(:notice_error, -> msg, h { message = msg; hash = h }) do
           @appender.tagged('test') do
@@ -50,7 +50,7 @@ class AppenderNewRelicTest < Minitest::Test
       end
     end
 
-    should 'send notification to New Relic with custom attributes' do
+    it 'send notification to New Relic with custom attributes' do
       message = hash = nil
       NewRelic::Agent.stub(:notice_error, -> msg, h { message = msg; hash = h }) do
         @appender.tagged('test') do
@@ -69,7 +69,7 @@ class AppenderNewRelicTest < Minitest::Test
       assert hash[:custom_params][:thread_name], hash
     end
 
-    should 'use the first non-blank line for a multi-line message' do
+    it 'use the first non-blank line for a multi-line message' do
       message = hash = nil
       NewRelic::Agent.stub(:notice_error, -> msg, h { message = msg; hash = h }) do
         @appender.tagged('test') do

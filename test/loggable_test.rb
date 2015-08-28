@@ -8,8 +8,8 @@ end
 # Unit Test for SemanticLogger::Appender::File
 #
 class AppenderFileTest < Minitest::Test
-  context SemanticLogger::Loggable do
-    setup do
+  describe SemanticLogger::Loggable do
+    before do
       @time = Time.new
       @io = StringIO.new
       @appender = SemanticLogger::Appender::File.new(@io)
@@ -20,19 +20,19 @@ class AppenderFileTest < Minitest::Test
       @thread_name = Thread.current.name
     end
 
-    teardown do
+    after do
       SemanticLogger.remove_appender(@appender)
     end
 
-    context "for each log level" do
+    describe "for each log level" do
       # Ensure that any log level can be logged
       SemanticLogger::LEVELS.each do |level|
-        should "log #{level} information with class attribute" do
+        it "log #{level} information with class attribute" do
           TestAttribute.logger.send(level, "hello #{level}", @hash)
           SemanticLogger.flush
           assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name}\] TestAttribute -- hello #{level} -- #{@hash_str}\n/, @io.string
         end
-        should "log #{level} information with instance attribute" do
+        it "log #{level} information with instance attribute" do
           TestAttribute.new.logger.send(level, "hello #{level}", @hash)
           SemanticLogger.flush
           assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name}\] TestAttribute -- hello #{level} -- #{@hash_str}\n/, @io.string

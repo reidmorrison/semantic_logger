@@ -3,11 +3,11 @@ require_relative 'test_helper'
 # Unit Test for SemanticLogger::Appender::Splunk
 #
 class AppenderSplunkTest < Minitest::Test
-  context SemanticLogger::Appender::Splunk do
+  describe SemanticLogger::Appender::Splunk do
 
-    context '#parse_options' do
-      context 'argument errors' do
-        should 'raise argument error for missing username' do
+    describe '#parse_options' do
+      describe 'argument errors' do
+        it 'raise argument error for missing username' do
           error = assert_raises ArgumentError do
             SemanticLogger::Appender::Splunk.new({})
           end
@@ -15,7 +15,7 @@ class AppenderSplunkTest < Minitest::Test
           assert_equal 'Must supply a username.', error.message
         end
 
-        should 'raise argument error for missing password' do
+        it 'raise argument error for missing password' do
           error = assert_raises ArgumentError do
             SemanticLogger::Appender::Splunk.new(username: 'username')
           end
@@ -23,7 +23,7 @@ class AppenderSplunkTest < Minitest::Test
           assert_equal 'Must supply a password.', error.message
         end
 
-        should 'raise argument error for missing index' do
+        it 'raise argument error for missing index' do
           error = assert_raises ArgumentError do
             SemanticLogger::Appender::Splunk.new(username: 'username', password: 'password')
           end
@@ -32,8 +32,8 @@ class AppenderSplunkTest < Minitest::Test
         end
       end
 
-      context 'set default values' do
-        should 'have default values' do
+      describe 'set default values' do
+        it 'have default values' do
           appender = Splunk.stub(:connect, Splunk::Service.new({})) do
             Splunk::Service.stub_any_instance(:indexes, {}) do
               SemanticLogger::Appender::Splunk.new(username: 'username', password: 'password', index: 'index')

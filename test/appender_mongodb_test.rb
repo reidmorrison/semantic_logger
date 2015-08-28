@@ -3,8 +3,8 @@ require_relative 'test_helper'
 # Unit Test for SemanticLogger::Appender::MongoDB
 #
 class AppenderMongoDBTest < Minitest::Test
-  context SemanticLogger::Appender::MongoDB do
-    setup do
+  describe SemanticLogger::Appender::MongoDB do
+    before do
       @db = Mongo::Connection.new['test']
       @appender = SemanticLogger::Appender::MongoDB.new(
         db:              @db,
@@ -17,13 +17,13 @@ class AppenderMongoDBTest < Minitest::Test
       Thread.current.name = 'thread'
     end
 
-    teardown do
+    after do
       @appender.purge_all if @appender
     end
 
-    context "format logs into documents" do
+    describe "format logs into documents" do
 
-      should "handle nil name, message and hash" do
+      it "handle nil name, message and hash" do
         @appender.debug
         document = @appender.collection.find_one
         assert_equal :debug, document['level']
@@ -36,7 +36,7 @@ class AppenderMongoDBTest < Minitest::Test
         assert_equal 'test_application', document['application']
       end
 
-      should "handle nil message and payload" do
+      it "handle nil message and payload" do
         @appender.debug(@hash)
 
         document = @appender.collection.find_one
@@ -50,7 +50,7 @@ class AppenderMongoDBTest < Minitest::Test
         assert_equal 'test_application', document['application']
       end
 
-      should "handle message and payload" do
+      it "handle message and payload" do
         @appender.debug('hello world', @hash)
 
         document = @appender.collection.find_one
@@ -64,7 +64,7 @@ class AppenderMongoDBTest < Minitest::Test
         assert_equal 'test_application', document['application']
       end
 
-      should "handle message without payload" do
+      it "handle message without payload" do
         log = SemanticLogger::Base::Log.new(:debug)
         @appender.debug('hello world')
 
@@ -80,10 +80,10 @@ class AppenderMongoDBTest < Minitest::Test
       end
     end
 
-    context "for each log level" do
+    describe "for each log level" do
       # Ensure that any log level can be logged
       SemanticLogger::LEVELS.each do |level|
-        should "log #{level} information" do
+        it "log #{level} information" do
           @appender.send(level, 'hello world -- Calculations', @hash)
           document = @appender.collection.find_one
           assert_equal level, document['level']

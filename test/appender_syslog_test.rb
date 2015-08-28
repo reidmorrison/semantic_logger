@@ -4,9 +4,9 @@ require 'net/tcp_client'
 # Unit Test for SemanticLogger::Appender::Syslog
 #
 class AppenderSyslogTest < Minitest::Test
-  context SemanticLogger::Appender::Syslog do
+  describe SemanticLogger::Appender::Syslog do
 
-    should 'handle local syslog' do
+    it 'handle local syslog' do
       message = nil
       Syslog.stub(:open, nil) do
         Syslog.stub(:log, -> level, msg { message = msg }) do
@@ -17,7 +17,7 @@ class AppenderSyslogTest < Minitest::Test
       assert_match /D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message
     end
 
-    should 'handle remote syslog over TCP' do
+    it 'handle remote syslog over TCP' do
       message = nil
       Net::TCPClient.stub_any_instance(:closed?, false) do
         Net::TCPClient.stub_any_instance(:connect, nil) do
@@ -30,7 +30,7 @@ class AppenderSyslogTest < Minitest::Test
       assert_match /<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message
     end
 
-    should 'handle remote syslog over UDP' do
+    it 'handle remote syslog over UDP' do
       message = nil
       syslog_appender = SemanticLogger::Appender::Syslog.new(server: 'udp://localhost:88888', level: :debug)
       UDPSocket.stub_any_instance(:send, -> msg, num, host, port { message = msg }) do
@@ -41,7 +41,7 @@ class AppenderSyslogTest < Minitest::Test
 
     # Should be able to log each level.
     SemanticLogger::LEVELS.each do |level|
-      should "log #{level} information" do
+      it "log #{level} information" do
         Syslog.stub(:open, nil) do
           Syslog.stub(:log, nil) do
             syslog_appender = SemanticLogger::Appender::Syslog.new
@@ -51,7 +51,7 @@ class AppenderSyslogTest < Minitest::Test
       end
     end
 
-    should "allow logging with %" do
+    it "allow logging with %" do
       message = "AppenderSyslogTest %test"
       syslog_appender = SemanticLogger::Appender::Syslog.new
       syslog_appender.debug(message)
