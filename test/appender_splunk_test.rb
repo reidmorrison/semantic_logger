@@ -22,30 +22,24 @@ class AppenderSplunkTest < Minitest::Test
 
           assert_equal 'Must supply a password.', error.message
         end
-
-        it 'raise argument error for missing index' do
-          error = assert_raises ArgumentError do
-            SemanticLogger::Appender::Splunk.new(username: 'username', password: 'password')
-          end
-
-          assert_equal 'Must supply an index.', error.message
-        end
       end
 
       describe 'set default values' do
         it 'have default values' do
           appender = Splunk.stub(:connect, Splunk::Service.new({})) do
             Splunk::Service.stub_any_instance(:indexes, {}) do
-              SemanticLogger::Appender::Splunk.new(username: 'username', password: 'password', index: 'index')
+              SemanticLogger::Appender::Splunk.new(username: 'username', password: 'password')
             end
           end
           config   = appender.config
           # Default host
           assert_equal 'localhost', config[:host]
-          # Default pot
+          # Default port
           assert_equal 8089, config[:port]
           # Default scheme
           assert_equal :https, config[:scheme]
+          #Default index
+          assert_equal 'main', appender.index
         end
       end
     end
