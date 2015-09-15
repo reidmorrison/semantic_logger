@@ -46,7 +46,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
       password: options[:password]
     }
 
-    @index = options[:index]
+    @index = options[:index] || 'main'
 
     if @config[:username].nil?
       raise ArgumentError, 'Must supply a username.'
