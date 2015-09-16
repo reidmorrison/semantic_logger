@@ -15,7 +15,7 @@ module SemanticLogger
       #    ruby_logger = Logger.new(STDOUT)
       #    SemanticLogger.add_appender(ruby_logger)
       #    logger =  SemanticLogger['test']
-      #    logger.info('Hello World', :some => :payload)
+      #    logger.info('Hello World', some: :payload)
       #
       # Enhance the Rails Logger
       #    # Add the Rails logger to the list of appenders

@@ -10,13 +10,13 @@ end
 class AppenderFileTest < Minitest::Test
   describe SemanticLogger::Loggable do
     before do
-      @time = Time.new
-      @io = StringIO.new
-      @appender = SemanticLogger::Appender::File.new(@io)
+      @time                        = Time.new
+      @io                          = StringIO.new
+      @appender                    = SemanticLogger::Appender::File.new(@io)
       SemanticLogger.default_level = :trace
       SemanticLogger.add_appender(@appender)
-      @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
-      @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+      @hash        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
+      @hash_str    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
       @thread_name = Thread.current.name
     end
 

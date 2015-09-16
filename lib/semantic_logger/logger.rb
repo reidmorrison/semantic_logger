@@ -60,7 +60,7 @@ module SemanticLogger
 
       logger.debug "Flushing appenders with #{queue_size} log messages on the queue"
       reply_queue = Queue.new
-      queue << { :command => :flush, :reply_queue => reply_queue }
+      queue << {command: :flush, reply_queue: reply_queue}
       reply_queue.pop
     end
 

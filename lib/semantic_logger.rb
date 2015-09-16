@@ -2,6 +2,7 @@ require 'semantic_logger/core_ext/thread'
 require 'semantic_logger/version'
 require 'semantic_logger/semantic_logger'
 
+# @formatter:off
 module SemanticLogger
   autoload :Base,               'semantic_logger/base'
   autoload :Logger,             'semantic_logger/logger'
@@ -18,6 +19,7 @@ module SemanticLogger
     autoload :Splunk,   'semantic_logger/appender/splunk'
     autoload :Bugsnag,   'semantic_logger/appender/bugsnag'
   end
+  # @formatter:on
 
   if defined?(JRuby)
     module JRuby

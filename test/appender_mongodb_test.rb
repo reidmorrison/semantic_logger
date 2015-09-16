@@ -5,15 +5,15 @@ require_relative 'test_helper'
 class AppenderMongoDBTest < Minitest::Test
   describe SemanticLogger::Appender::MongoDB do
     before do
-      @db = Mongo::Connection.new['test']
-      @appender = SemanticLogger::Appender::MongoDB.new(
+      @db                 = Mongo::Connection.new['test']
+      @appender           = SemanticLogger::Appender::MongoDB.new(
         db:              @db,
         collection_size: 10*1024**2, # 10MB
         host_name:       'test',
         application:     'test_application',
         level:           :trace
       )
-      @hash = { :tracking_number => 12345, :session_id => 'HSSKLEU@JDK767'}
+      @hash               = {tracking_number: 12345, session_id: 'HSSKLEU@JDK767'}
       Thread.current.name = 'thread'
     end
 
@@ -58,7 +58,7 @@ class AppenderMongoDBTest < Minitest::Test
         assert_equal 'hello world', document['message']
         assert_equal 'thread', document['thread_name']
         assert document['time'].is_a?(Time)
-        assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
+        assert_equal({"tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
         assert_equal $$, document['pid']
         assert_equal 'test', document['host_name']
         assert_equal 'test_application', document['application']
@@ -90,7 +90,7 @@ class AppenderMongoDBTest < Minitest::Test
           assert_equal 'hello world -- Calculations', document['message']
           assert_equal 'thread', document['thread_name']
           assert document['time'].is_a?(Time)
-          assert_equal({ "tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
+          assert_equal({"tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
           assert_equal $$, document['pid']
           assert_equal 'test', document['host_name']
           assert_equal 'test_application', document['application']

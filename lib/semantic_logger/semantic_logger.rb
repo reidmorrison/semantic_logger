@@ -80,7 +80,7 @@ module SemanticLogger
   #
   #   logger = SemanticLogger['Example']
   #   logger.info "Hello World"
-  #   logger.debug("Login time", :user => 'Joe', :duration => 100, :ip_address=>'127.0.0.1')
+  #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
   #
   def self.add_appender(appender, level=nil, &block)
     appender_instance =

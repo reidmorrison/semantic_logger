@@ -48,12 +48,12 @@ module SemanticLogger
       # ::Syslog::LOG_INFO    - "Informational message"
       # ::Syslog::LOG_DEBUG   - "Debugging information"
       DEFAULT_LEVEL_MAP = {
-        :fatal => ::Syslog::LOG_CRIT,
-        :error => ::Syslog::LOG_ERR,
-        :warn  => ::Syslog::LOG_WARNING,
-        :info  => ::Syslog::LOG_NOTICE,
-        :debug => ::Syslog::LOG_INFO,
-        :trace => ::Syslog::LOG_DEBUG
+        fatal: ::Syslog::LOG_CRIT,
+        error: ::Syslog::LOG_ERR,
+        warn:  ::Syslog::LOG_WARNING,
+        info:  ::Syslog::LOG_NOTICE,
+        debug: ::Syslog::LOG_INFO,
+        trace: ::Syslog::LOG_DEBUG
       }
 
       # For more information on the Syslog constants used below see http://ruby-doc.org/stdlib-2.0.0/libdoc/syslog/rdoc/Syslog.html
@@ -106,18 +106,18 @@ module SemanticLogger
       #
       #   :level_map [Hash]
       #     Supply a custom map of SemanticLogger levels to syslog levels.
-      #     For example, passing in { :warn => ::Syslog::LOG_NOTICE }
+      #     For example, passing in { warn: ::Syslog::LOG_NOTICE }
       #       would result in a log mapping that matches the default level map,
       #       except for :warn, which ends up with a LOG_NOTICE level instead of a
       #       LOG_WARNING one.
       #     Without overriding any parameters, the level map will be
       #       LEVEL_MAP = {
-      #         :fatal   => ::Syslog::LOG_CRIT,
-      #         :error   => ::Syslog::LOG_ERR,
-      #         :warn    => ::Syslog::LOG_WARNING,
-      #         :info    => ::Syslog::LOG_NOTICE,
-      #         :debug   => ::Syslog::LOG_INFO,
-      #         :trace   => ::Syslog::LOG_DEBUG
+      #         fatal:   ::Syslog::LOG_CRIT,
+      #         error:   ::Syslog::LOG_ERR,
+      #         warn:    ::Syslog::LOG_WARNING,
+      #         info:    ::Syslog::LOG_NOTICE,
+      #         debug:   ::Syslog::LOG_INFO,
+      #         trace:   ::Syslog::LOG_DEBUG
       #       }
       #
       #   :local_hostname [String]

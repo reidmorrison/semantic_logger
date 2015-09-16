@@ -31,7 +31,7 @@ class AppenderSyslogTest < Minitest::Test
     end
 
     it 'handle remote syslog over UDP' do
-      message = nil
+      message         = nil
       syslog_appender = SemanticLogger::Appender::Syslog.new(server: 'udp://localhost:88888', level: :debug)
       UDPSocket.stub_any_instance(:send, -> msg, num, host, port { message = msg }) do
         syslog_appender.debug 'AppenderSyslogTest log message'
@@ -52,7 +52,7 @@ class AppenderSyslogTest < Minitest::Test
     end
 
     it "allow logging with %" do
-      message = "AppenderSyslogTest %test"
+      message         = "AppenderSyslogTest %test"
       syslog_appender = SemanticLogger::Appender::Syslog.new
       syslog_appender.debug(message)
     end

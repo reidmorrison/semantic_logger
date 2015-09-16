@@ -4,32 +4,32 @@ require_relative 'test_helper'
 class LoggerTest < Minitest::Test
   describe SemanticLogger::Logger do
     # Test each filter
-    [ nil, /\ALogger/, Proc.new{|l| (/\AExclude/ =~ l.message).nil? } ].each do |filter|
+    [nil, /\ALogger/, Proc.new { |l| (/\AExclude/ =~ l.message).nil? }].each do |filter|
       describe "filter: #{filter.class.name}" do
         before do
           # Use a mock logger that just keeps the last logged entry in an instance
           # variable
           SemanticLogger.default_level = :trace
-          @mock_logger = MockLogger.new
-          appender = SemanticLogger.add_appender(@mock_logger)
-          appender.filter = filter
+          @mock_logger                 = MockLogger.new
+          appender                     = SemanticLogger.add_appender(@mock_logger)
+          appender.filter              = filter
 
           # Add mock metric subscriber
-          $last_metric = nil
+          $last_metric                 = nil
           SemanticLogger.on_metric do |log_struct|
             $last_metric = log_struct.dup
           end
 
           # Use this test's class name as the application name in the log output
           @logger   = SemanticLogger[LoggerTest]
-          @hash     = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
+          @hash     = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
           @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
           assert_equal [], @logger.tags
         end
 
         after do
           # Remove all appenders
-          SemanticLogger.appenders.each{|appender| SemanticLogger.remove_appender(appender)}
+          SemanticLogger.appenders.each { |appender| SemanticLogger.remove_appender(appender) }
         end
 
         # Ensure that any log level can be logged
@@ -86,10 +86,10 @@ class LoggerTest < Minitest::Test
           end
 
           it "add payload to log entries" do
-            hash = {:tracking_number=>"123456", :even=>2, :more=>"data"}
+            hash     = {tracking_number: "123456", even: 2, more: "data"}
             hash_str = hash.inspect.sub("{", "\\{").sub("}", "\\}")
-            @logger.with_payload(:tracking_number => '123456') do
-              @logger.with_payload(:even => 2, :more => 'data') do
+            @logger.with_payload(tracking_number: '123456') do
+              @logger.with_payload(even: 2, more: 'data') do
                 @logger.info('Hello world')
                 SemanticLogger.flush
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:.+\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
@@ -131,13 +131,13 @@ class LoggerTest < Minitest::Test
               end
 
               it "not log #{level} info when block is faster than :min_duration" do
-                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', min_duration: 500) { "result" } # Measure duration of the supplied block
                 SemanticLogger.flush
                 assert_nil @mock_logger.message
               end
 
               it "log #{level} info when block duration exceeds :min_duration" do
-                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :min_duration => 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', min_duration: 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
                 SemanticLogger.flush
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
               end
@@ -160,7 +160,7 @@ class LoggerTest < Minitest::Test
 
               it "log #{level} info with metric" do
                 metric_name = '/my/custom/metric'
-                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
+                assert_equal "result", @logger.send("benchmark_#{level}".to_sym, 'hello world', metric: metric_name) { "result" } # Measure duration of the supplied block
                 SemanticLogger.flush
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
                 assert metric_name, $last_metric.metric
@@ -181,13 +181,13 @@ class LoggerTest < Minitest::Test
               end
 
               it "not log #{level} info when block is faster than :min_duration" do
-                assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 500) { "result" } # Measure duration of the supplied block
+                assert_equal "result", @logger.benchmark(level, 'hello world', min_duration: 500) { "result" } # Measure duration of the supplied block
                 SemanticLogger.flush
                 assert_nil @mock_logger.message
               end
 
               it "log #{level} info when block duration exceeds :min_duration" do
-                assert_equal "result", @logger.benchmark(level, 'hello world', :min_duration => 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
+                assert_equal "result", @logger.benchmark(level, 'hello world', min_duration: 200, payload: @hash) { sleep 0.5; "result" } # Measure duration of the supplied block
                 SemanticLogger.flush
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
               end
@@ -202,7 +202,7 @@ class LoggerTest < Minitest::Test
 
               it "log #{level} info with metric" do
                 metric_name = '/my/custom/metric'
-                assert_equal "result", @logger.benchmark(level, 'hello world', :metric => metric_name) { "result" } # Measure duration of the supplied block
+                assert_equal "result", @logger.benchmark(level, 'hello world', metric: metric_name) { "result" } # Measure duration of the supplied block
                 SemanticLogger.flush
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:.+\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
                 assert metric_name, $last_metric.metric
@@ -227,7 +227,7 @@ class LoggerTest < Minitest::Test
 
           it 'log at a silence level below the default level' do
             SemanticLogger.default_level = :info
-            first_message = nil
+            first_message                = nil
             @logger.benchmark_info('hello world', silence: :trace) do
               @logger.debug('hello world', @hash) { "Calculations" }
               SemanticLogger.flush
@@ -315,50 +315,50 @@ class LoggerTest < Minitest::Test
           it 'return true for debug? with :trace level' do
             SemanticLogger.default_level = :trace
             assert_equal :trace, @logger.level
-            assert_equal true,   @logger.debug?
-            assert_equal true,   @logger.trace?
+            assert_equal true, @logger.debug?
+            assert_equal true, @logger.trace?
           end
 
           it 'return false for debug? with global :debug level' do
             SemanticLogger.default_level = :debug
-            assert_equal :debug, @logger.level,  @logger.inspect
-            assert_equal true,   @logger.debug?, @logger.inspect
-            assert_equal false,  @logger.trace?, @logger.inspect
+            assert_equal :debug, @logger.level, @logger.inspect
+            assert_equal true, @logger.debug?, @logger.inspect
+            assert_equal false, @logger.trace?, @logger.inspect
           end
 
           it 'return true for debug? with global :info level' do
             SemanticLogger.default_level = :info
-            assert_equal :info, @logger.level,  @logger.inspect
-            assert_equal false,  @logger.debug?, @logger.inspect
-            assert_equal false,  @logger.trace?, @logger.inspect
+            assert_equal :info, @logger.level, @logger.inspect
+            assert_equal false, @logger.debug?, @logger.inspect
+            assert_equal false, @logger.trace?, @logger.inspect
           end
 
           it 'return false for debug? with instance :debug level' do
             @logger.level = :debug
-            assert_equal :debug, @logger.level,  @logger.inspect
-            assert_equal true,   @logger.debug?, @logger.inspect
-            assert_equal false,  @logger.trace?, @logger.inspect
+            assert_equal :debug, @logger.level, @logger.inspect
+            assert_equal true, @logger.debug?, @logger.inspect
+            assert_equal false, @logger.trace?, @logger.inspect
           end
 
           it 'return true for debug? with instance :info level' do
             @logger.level = :info
-            assert_equal :info, @logger.level,  @logger.inspect
-            assert_equal false,  @logger.debug?, @logger.inspect
-            assert_equal false,  @logger.trace?, @logger.inspect
+            assert_equal :info, @logger.level, @logger.inspect
+            assert_equal false, @logger.debug?, @logger.inspect
+            assert_equal false, @logger.trace?, @logger.inspect
           end
         end
 
       end
     end
 
-  # Make sure that benchmark still logs when a block uses return to return from
-  # a function
-  def function_with_return(logger)
-    logger.benchmark_info('hello world', payload: @hash) do
-      return "Good"
+    # Make sure that benchmark still logs when a block uses return to return from
+    # a function
+    def function_with_return(logger)
+      logger.benchmark_info('hello world', payload: @hash) do
+        return "Good"
+      end
+      "Bad"
     end
-    "Bad"
-  end
 
   end
 end

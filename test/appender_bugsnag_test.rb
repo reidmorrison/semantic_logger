@@ -41,7 +41,7 @@ class AppenderBugsnagTest < Minitest::Test
     it 'send notification to Bugsnag with custom attributes' do
       message = hash = nil
       Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
-        @appender.error @message, {:key1 => 1, :key2 => 'a'}
+        @appender.error @message, {key1: 1, key2: 'a'}
       end
       assert_equal RuntimeError.new(@message), message
       assert_equal(1, hash[:key1], hash)
@@ -50,7 +50,7 @@ class AppenderBugsnagTest < Minitest::Test
 
     it 'send notification to Bugsnag with exception' do
       message = hash = nil
-      error = RuntimeError.new('Hello World')
+      error   = RuntimeError.new('Hello World')
       Bugsnag.stub(:notify, -> msg, h { message = msg; hash = h }) do
         @appender.error error
       end

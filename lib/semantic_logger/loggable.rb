@@ -1,5 +1,3 @@
-require 'sync_attr'
-
 # Logger class variable mix-in
 #
 #   Lazy initialize a logger class variable with instance accessor
@@ -18,7 +16,7 @@ require 'sync_attr'
 #    include SemanticLogger::Loggable
 #
 #    def call_supplier(amount, name)
-#      logger.debug "Calculating with amount", { :amount => amount, :name => name }
+#      logger.debug "Calculating with amount", { amount: amount, name: name }
 #
 #      # Measure and log on completion how long the call took to the external supplier
 #      logger.benchmark_info "Calling external interface" do
@@ -31,9 +29,8 @@ module SemanticLogger
 
     def self.included(base)
       base.class_eval do
-        # Thread safe logger class variable initializer
-        sync_cattr_reader :logger do
-          SemanticLogger[self]
+        def self.logger
+          @@semantic_logger ||= SemanticLogger[self]
         end
       end
     end

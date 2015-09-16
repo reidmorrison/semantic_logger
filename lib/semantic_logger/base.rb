@@ -68,7 +68,7 @@ module SemanticLogger
     #    logger.debug("Only display this if log level is set to Debug or lower")
     #
     #    # Log semantic information along with a text message
-    #    logger.info("Request received", :user => "joe", :duration => 100)
+    #    logger.info("Request received", user: "joe", duration: 100)
     #
     #    # Log an exception in a semantic way
     #    logger.info("Parsing received XML", exc)
@@ -150,15 +150,15 @@ module SemanticLogger
     #
     # Add a payload to all log calls on This Thread within the supplied block
     #
-    #   logger.with_payload(:tracking_number=>12345) do
+    #   logger.with_payload(tracking_number: 12345) do
     #     logger.debug('Hello World')
     #   end
     #
     # If a log call already includes a pyload, this payload will be merged with
     # the supplied payload, with the supplied payload taking precedence
     #
-    #   logger.with_payload(:tracking_number=>12345) do
-    #     logger.debug('Hello World', :result => 'blah')
+    #   logger.with_payload(tracking_number: 12345) do
+    #     logger.debug('Hello World', result: 'blah')
     #   end
     def with_payload(payload)
       current_payload                          = self.payload

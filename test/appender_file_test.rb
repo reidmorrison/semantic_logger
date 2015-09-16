@@ -7,12 +7,12 @@ class AppenderFileTest < Minitest::Test
   describe SemanticLogger::Appender::File do
     before do
       SemanticLogger.default_level = :trace
-      @time = Time.new
-      @io = StringIO.new
-      @appender = SemanticLogger::Appender::File.new(@io)
-      @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
-      @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
-      @thread_name = Thread.current.name
+      @time                        = Time.new
+      @io                          = StringIO.new
+      @appender                    = SemanticLogger::Appender::File.new(@io)
+      @hash                        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
+      @hash_str                    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+      @thread_name                 = Thread.current.name
     end
 
     describe "format logs into text form" do

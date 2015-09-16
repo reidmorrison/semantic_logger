@@ -8,8 +8,8 @@ class AppenderNewRelicTest < Minitest::Test
   describe SemanticLogger::Appender::NewRelic do
 
     before do
-      @appender = SemanticLogger::Appender::NewRelic.new(:error)
-      @message  = 'AppenderNewRelicTest log message'
+      @appender           = SemanticLogger::Appender::NewRelic.new(:error)
+      @message            = 'AppenderNewRelicTest log message'
       @multi_line_message = <<-EOSTR
 
 
@@ -54,7 +54,7 @@ class AppenderNewRelicTest < Minitest::Test
       message = hash = nil
       NewRelic::Agent.stub(:notice_error, -> msg, h { message = msg; hash = h }) do
         @appender.tagged('test') do
-          @appender.with_payload({:key1 => 1, :key2 => 'a'}) do
+          @appender.with_payload({key1: 1, key2: 'a'}) do
             @appender.benchmark(:error, @message) do
               sleep 0.001
             end
@@ -64,7 +64,7 @@ class AppenderNewRelicTest < Minitest::Test
       assert_equal @message, message
       assert_equal ['test'], hash[:custom_params][:tags], hash
       assert_equal "SemanticLogger::Appender::NewRelic/#{@message}", hash[:metric]
-      assert_equal({:key1 => 1, :key2 => 'a'}, hash[:custom_params][:payload], hash)
+      assert_equal({key1: 1, key2: 'a'}, hash[:custom_params][:payload], hash)
       assert hash[:custom_params][:duration], hash
       assert hash[:custom_params][:thread_name], hash
     end

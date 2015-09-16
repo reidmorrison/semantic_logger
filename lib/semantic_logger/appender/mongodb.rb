@@ -35,7 +35,7 @@ module SemanticLogger
 
       # Create a MongoDB Appender instance
       #
-      #   SemanticLogger::Appender::MongoDB.new(:db => Mongo::Connection.new['database'])
+      #   SemanticLogger::Appender::MongoDB.new(db: Mongo::Connection.new['database'])
       #
       # Parameters:
       # :db [Mongo::Database]
@@ -116,7 +116,7 @@ module SemanticLogger
       #
       # Creates an index based on tags to support faster lookups
       def create_indexes
-        options       = { :capped => true, :size => @collection_size }
+        options       = {capped: true, size: @collection_size}
         options[:max] = @collection_max if @collection_max
         db.create_collection(collection_name, options)
         db[@collection_name].ensure_index('tags')
@@ -142,13 +142,13 @@ module SemanticLogger
       def default_formatter
         Proc.new do |log|
           document               = {
-            :time        => log.time,
-            :host_name   => host_name,
-            :pid         => $$,
-            :thread_name => log.thread_name,
-            :name        => log.name,
-            :level       => log.level,
-            :level_index => log.level_index,
+            time:        log.time,
+            host_name:   host_name,
+            pid:         $$,
+            thread_name: log.thread_name,
+            name:        log.name,
+            level:       log.level,
+            level_index: log.level_index,
           }
           document[:application] = application if application
           document[:message]     = self.class.strip_colorizing(log.message) if log.message
@@ -156,9 +156,9 @@ module SemanticLogger
           document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
           document[:payload]     = log.payload if log.payload
           document[:exception]   = {
-            :name        => log.exception.class.name,
-            :message     => log.exception.message,
-            :stack_trace => log.exception.backtrace
+            name:        log.exception.class.name,
+            message:     log.exception.message,
+            stack_trace: log.exception.backtrace
           } if log.exception
           document
         end

@@ -5,46 +5,46 @@ require_relative 'test_helper'
 class AppenderWrapperTest < Minitest::Test
   describe SemanticLogger::Appender::Wrapper do
     before do
-      @time = Time.new
+      @time        = Time.new
       @mock_logger = MockLogger.new
-      @appender = SemanticLogger::Appender::Wrapper.new(@mock_logger)
-      @hash = { :session_id => 'HSSKLEU@JDK767', :tracking_number => 12345 }
-      @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+      @appender    = SemanticLogger::Appender::Wrapper.new(@mock_logger)
+      @hash        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
+      @hash_str    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
     end
 
     describe "format logs into text form" do
       it "handle nil name, message and payload" do
-        log = SemanticLogger::Logger::Log.new
-        log.time = Time.now
+        log       = SemanticLogger::Logger::Log.new
+        log.time  = Time.now
         log.level = :debug
         @appender.log(log)
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\]  -- /, @mock_logger.message
       end
 
       it "handle nil message and payload" do
-        log = SemanticLogger::Logger::Log.new
-        log.time = Time.now
+        log       = SemanticLogger::Logger::Log.new
+        log.time  = Time.now
         log.level = :debug
-        log.name = 'class'
+        log.name  = 'class'
         @appender.log(log)
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- /, @mock_logger.message
       end
 
       it "handle nil payload" do
-        log = SemanticLogger::Logger::Log.new
-        log.time = Time.now
-        log.level = :debug
-        log.name = 'class'
+        log         = SemanticLogger::Logger::Log.new
+        log.time    = Time.now
+        log.level   = :debug
+        log.name    = 'class'
         log.message = 'hello world'
         @appender.log(log)
         assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world/, @mock_logger.message
       end
 
       it "handle payload" do
-        log = SemanticLogger::Logger::Log.new
-        log.time = Time.now
-        log.level = :debug
-        log.name = 'class'
+        log         = SemanticLogger::Logger::Log.new
+        log.time    = Time.now
+        log.level   = :debug
+        log.name    = 'class'
         log.message = 'hello world'
         log.payload = @hash
         @appender.log(log)
