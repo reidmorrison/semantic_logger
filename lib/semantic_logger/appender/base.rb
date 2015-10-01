@@ -57,7 +57,7 @@ module SemanticLogger
           message = log.message.to_s.dup
           unless log.payload.nil? or log.payload.empty?
             payload = log.payload
-            payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? log.payload.ai(multiline: false) : log.payload.inspect
+            payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
             message << " -- " << payload
           end
           message << " -- Exception: " << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
