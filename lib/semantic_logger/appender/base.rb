@@ -55,7 +55,11 @@ module SemanticLogger
           tags   = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s.dup
-          message << " -- " << log.payload.inspect unless log.payload.nil? or log.payload.empty?
+          unless log.payload.nil? or log.payload.empty?
+            payload = log.payload
+            payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
+            message << " -- " << payload
+          end
           message << " -- Exception: " << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
