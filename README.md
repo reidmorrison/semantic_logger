@@ -1,5 +1,5 @@
-semantic_logger [![Build Status](https://secure.travis-ci.org/reidmorrison/semantic_logger.png?branch=master)](http://travis-ci.org/reidmorrison/semantic_logger) ![](http://ruby-gem-downloads-badge.herokuapp.com/semantic_logger?type=total)
-===============
+# semantic_logger
+![](https://img.shields.io/gem/v/semantic_logger.svg) ![](https://img.shields.io/travis/reidmorrison/semantic_logger.svg) ![](https://img.shields.io/gem/dt/semantic_logger.svg) ![](https://img.shields.io/badge/status-production%20ready-blue.svg)
 
 Low latency, high throughput, enterprise-scale logging system for Ruby
 
@@ -63,36 +63,12 @@ Rails logging is no longer automatically replaced when including SemanticLogger.
 Include the [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
 gem to replace the Rails default logger with SemanticLogger
 
-## Meta
-
-* Code: `git clone git://github.com/reidmorrison/semantic_logger.git`
-* Home: <https://github.com/reidmorrison/semantic_logger>
-* Bugs: <http://github.com/reidmorrison/semantic_logger/issues>
-* Gems: <http://rubygems.org/gems/semantic_logger>
+## Versioning
 
 This project uses [Semantic Versioning](http://semver.org/).
 
 ## Author
 
-[Reid Morrison](https://github.com/reidmorrison) :: @reidmorrison
+[Reid Morrison](https://github.com/reidmorrison)
 
-## Contributors
-
-* [Marc Bellingrath](https://github.com/marc)
-* [Andrew Medeiros](https://github.com/amedeiros)
-
-## License
-
-Copyright 2012, 2013, 2014, 2015 Reid Morrison
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+[Contributors](https://github.com/reidmorrison/semantic_logger/graphs/contributors)
