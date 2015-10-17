@@ -63,12 +63,12 @@ Rails logging is no longer automatically replaced when including SemanticLogger.
 Include the [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
 gem to replace the Rails default logger with SemanticLogger
 
-## Versioning
-
-This project uses [Semantic Versioning](http://semver.org/).
-
 ## Author
 
 [Reid Morrison](https://github.com/reidmorrison)
 
 [Contributors](https://github.com/reidmorrison/semantic_logger/graphs/contributors)
+
+## Versioning
+
+This project uses [Semantic Versioning](http://semver.org/).
