@@ -8,16 +8,14 @@ module SemanticLogger
     SemanticLogger::Logger.new(klass)
   end
 
-  # Allow for setting the global default log level
-  # This change only applies to _new_ loggers, existing logger levels
-  # will not be changed in any way
+  # Sets the global default log level
   def self.default_level=(level)
     @@default_level       = level
     # For performance reasons pre-calculate the level index
     @@default_level_index = level_to_index(level)
   end
 
-  # Returns the global default log level for new Logger instances
+  # Returns the global default log level
   def self.default_level
     @@default_level
   end

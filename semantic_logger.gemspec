@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.platform    = Gem::Platform::RUBY
   spec.authors     = ['Reid Morrison']
   spec.email       = ['reidmo@gmail.com']
-  spec.homepage    = 'https://github.com/reidmorrison/semantic_logger'
+  spec.homepage    = 'https://github.com/rocketjob/semantic_logger'
   spec.summary     = 'Scalable, next generation enterprise logging for Ruby'
   spec.description = 'Next generation logging system for Ruby to support highly concurrent, high throughput, low latency enterprise systems'
   spec.files       = Dir['lib/**/*', 'LICENSE.txt', 'Rakefile', 'README.md']
