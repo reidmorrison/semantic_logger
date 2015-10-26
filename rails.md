@@ -35,9 +35,7 @@ Started GET "/" for 127.0.0.1 at 2012-10-19 12:05:46 +0000
 
 ### Rails Support
 
-* Supports Rails 2, 3 & 4
-* The Rails 3 Tagged logging feature is already available for Rails 2 by using Semantic Logger
-* Rails 4 push_tags and pop_tags methods are supported
+* Supports Rails 3, 4, & 5 ( or above )
 
 ## Installation
 
@@ -117,7 +115,7 @@ config.after_initialize do
 end
 ```
 
-## Log Rotation
+### Log Rotation
 
 Since the log file is not re-opened with every call, when the log file needs
 to be rotated, use a copy-truncate operation over deleting the file.
@@ -136,7 +134,7 @@ Sample Log rotation file for Linux:
 }
 ```
 
-## Custom Appenders and Formatters
+### Custom Appenders and Formatters
 
 The format of data logged by Semantic Logger is specific to each appender.
 
@@ -158,7 +156,7 @@ SemanticLogger.appenders.first.formatter = Proc.new do |log|
 end
 ```
 
-## Replacing Existing loggers
+### Replacing Existing loggers
 
 Rails Semantic Logger automatically replaces the default logger for the following gems
 after they have been initialized:
@@ -166,9 +164,8 @@ after they have been initialized:
 - Sidekiq
 - Resque
 - Mongoid
+- MongoMapper
 - Moped
+- Bugsnag
 
-## Known issues
-
-* Due to the way that Rails logs to the console, after adding `rails_semantic_logger` it
-no longer logs to the console when a Rails server is started: `bin/rails server`
+### [Next: API ==>](api.html)

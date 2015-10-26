@@ -2,7 +2,7 @@
 layout: default
 ---
 
-## Filtering
+### Filtering
 
 Filtering is useful to reduce log output for excessive log messages. It is can
 be used for example where a Library is logging messages and we do not want to modify
@@ -83,3 +83,5 @@ logger.filter = Proc.new {|log| log.message !~ /\A\*\*\* Checking/ }
 # when logging to all registered appenders
 Resque.logger = logger
 ```
+
+### [Next: Customize ==>](customize.html)

@@ -2,7 +2,7 @@
 layout: default
 ---
 
-## Process Forking
+### Process Forking
 
 In Ruby it is common for Frameworks such Puma and Resque to fork a copy of the
 process so that it can run independently from the parent process.
@@ -38,7 +38,7 @@ on_worker_boot do
 end
 ```
 
-## Auto-detected Frameworks
+### Auto-detected Frameworks
 
 The following frameworks are automatically detected by the `Rails Semantic Logger` gem,
 so the custom code below is only necessary when using Semantic Logger stand-alone:
@@ -69,3 +69,5 @@ if defined?(Spring)
   Spring.after_fork { |job| ::SemanticLogger.reopen }
 end
 ```
+
+### [Next: Filtering ==>](filtering.html)

@@ -2,7 +2,7 @@
 layout: default
 ---
 
-## Custom Formatters
+### Custom Formatters
 
 The formatting for each appender can be replaced with custom code. To replace the
 existing formatter supply a block of code when creating the appender.
@@ -37,15 +37,53 @@ require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
 SemanticLogger.add_appender('development.log') do |log|
-  tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+  tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
-  message = log.message.to_s
-  message << " -- " << log.payload.inspect if log.payload
-  message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+  message = log.message.to_s.dup
+  message << ' -- ' << log.payload.inspect unless log.payload.nil? || log.payload.empty?
+  message << ' -- Exception: ' << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
   duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
-  "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+  "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{'%.50s' % log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+end
+```
+
+Example: Replace the colorized log file formatter
+
+```ruby
+require 'semantic_logger'
+SemanticLogger.default_level = :trace
+
+SemanticLogger.add_appender('development.log') do |log|
+  colors = SemanticLogger::Appender::AnsiColors
+  tags   = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
+
+  message = log.message.to_s.dup
+  unless log.payload.nil? || log.payload.empty?
+    payload = log.payload
+    payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
+    message << ' -- ' << payload
+  end
+  message << ' -- Exception: ' << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+
+  duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
+
+  level_color =
+    case log.level
+    when :trace
+      colors::MAGENTA
+    when :debug
+      colors::GREEN
+    when :info
+      colors::CYAN
+    when :warn
+      colors::BOLD
+    when :error, :fatal
+      colors::RED
+    end
+
+  "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{level_color}#{colors::BOLD}#{log.level.to_s[0..0].upcase}#{colors::CLEAR} [#{$$}:#{'%.30s' % log.thread_name}] #{tags}#{duration_str}#{level_color}#{log.name}#{colors::CLEAR} -- #{message}"
 end
 ```
 
@@ -81,3 +119,5 @@ mongodb_appender = SemanticLogger::Appender::MongoDB.new(
 end
 SemanticLogger.add_appender(mongodb_appender)
 ```
+
+### [Next: Custom Appenders ==>](custom_appenders.html)

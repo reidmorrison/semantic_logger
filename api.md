@@ -2,7 +2,7 @@
 layout: default
 ---
 
-## Logging API
+### Application Programming Interface
 
 ### Logging levels
 
@@ -547,3 +547,5 @@ Sidekiq::Logging.logger = SemanticLogger[Sidekiq] if defined?(Sidekiq)
 Mongoid.logger = SemanticLogger[Mongoid] if defined?(Mongoid)
 Moped.logger   = SemanticLogger[Moped] if defined?(Moped)
 ```
+
+### [Next: Appenders ==>](appenders.html)

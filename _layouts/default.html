@@ -1,66 +1,51 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset='utf-8'>
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
-    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
-    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
-    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+<html lang="en-us">
+<head>
+  <meta charset="UTF-8">
+  <title>Semantic Logger by Reid Morrison</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+  <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+  <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+  <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen"/>
+  <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print"/>
+  <link rel="stylesheet" type="text/css" href="stylesheets/table.css" media="print"/>
+</head>
+<body>
+<section class="page-header">
+  <h1 class="project-name">Semantic Logger</h1>
 
-    <!--[if lt IE 9]>
-    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
-    <![endif]-->
+  <h2 class="project-tagline">Next generation logging system for Ruby supporting highly concurrent, high throughput, low latency systems.</h2>
+  <a href="index.html" class="btn">Home</a>
+  <a href="rails.html" class="btn">Rails</a>
+  <a href="api.html" class="btn">API</a>
+  <a href="appenders.html" class="btn">Appenders</a>
+  <a href="signals.html" class="btn">Signals</a>
+  <a href="forking.html" class="btn">Forking</a>
+  <a href="filtering.html" class="btn">Filtering</a>
+  <a href="customize.html" class="btn">Customize</a>
+  <a href="custom_appenders.html" class="btn">Custom Appenders</a>
+  <a href="log_struct.html" class="btn">Log Struct</a>
+  <a href="https://github.com/rocketjob/semantic_logger" class="btn">View on GitHub</a>
+</section>
 
-    <title>Semantic Logger by reidmorrison</title>
-  </head>
+<section class="main-content">
+  {{content}}
+</section>
 
-  <body>
-    <header>
-      <div class="inner">
-        <h1>Semantic Logger</h1>
-        <h2>Scalable, next generation logging for Ruby</h2>
-        <a href="https://github.com/reidmorrison/semantic_logger" class="button"><small>View project on</small>GitHub</a>
-      </div>
-    </header>
-    <div id="content-wrapper">
-      <div class="inner clearfix">
-        <section id="main-content">
-        {{content}}
-        </section>
+<script type="text/javascript">
+  var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+  document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+  try {
+    var pageTracker = _gat._getTracker("UA-52339082-2");
+    pageTracker._trackPageview();
+  } catch (err) {
+  }
+</script>
 
-        <aside id="sidebar">
-          <a href="index.html" class="button">Home</a>
-          <a href="features.html" class="button">Features</a>
-          <a href="why.html" class="button">Why ?</a>
-          <a href="introduction.html" class="button">Introduction</a>
-          <a href="api.html" class="button">API</a>
-          <a href="appenders.html" class="button">Appenders</a>
-          <a href="signals.html" class="button">Signals</a>
-          <a href="forking.html" class="button">Forking</a>
-          <a href="rails.html" class="button">Rails</a>
-          <a href="filtering.html" class="button">Filtering</a>
-          <a href="customize.html" class="button">Customize</a>
-          <a href="custom_appenders.html" class="button">Custom Appenders</a>
-          <a href="log_struct.html" class="button">Log Struct</a>
-          <a href="license.html" class="button">License</a>
-        </aside>
-
-      </div>
-    </div>
-
-    <!-- Time spent working on this site is based on the amount of usage it gets -->
-    <script type="text/javascript">
-      var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
-      document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
-    </script>
-    <script type="text/javascript">
-      try {
-        var pageTracker = _gat._getTracker("UA-52339082-2");
-        pageTracker._trackPageview();
-      } catch(err) {}
-    </script>
-  </body>
+</body>
 </html>
 

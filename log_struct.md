@@ -67,3 +67,4 @@ metric [Object]
 
 * Object supplied when the benchmark api was called
 
+### [Next: View on Github ==>](https://github.com/rocketjob/semantic_logger)

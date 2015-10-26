@@ -2,7 +2,7 @@
 layout: default
 ---
 
-## Write your own Custom Appender
+### Write your own Custom Appender
 
 To write your own appender it should meet the following requirements:
 
@@ -60,8 +60,10 @@ logger.info "Hello World"
 
 Look at the [existing appenders](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
 
-## Contribute
+### Contribute
 
 To have your custom appender included in the standard list of appenders, submit it along
 with complete working tests.
 See the [MongoDB Appender Test](https://github.com/reidmorrison/semantic_logger/blob/master/test/appender_mongodb_test.rb) for an example.
+
+### [Next: Log Struct ==>](log_struct.html)

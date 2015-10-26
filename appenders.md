@@ -2,7 +2,7 @@
 layout: default
 ---
 
-## Appenders
+### Appenders
 
 ### Logging to File
 
@@ -254,3 +254,5 @@ Note: Do not call appenders directly that have been added to Semantic Logger.
 Appender instances are not designed to be accessed concurrently by multiple threads.
 A separate instance per thread is recommended in multi-threaded envrionments, or just
 use the global Semantic Logger since it is specifically designed for concurrency.
+
+### [Next: Signals ==>](signals.html)

@@ -94,3 +94,5 @@ Set gc_log_microseconds to nil to not enable JRuby Garbage collections
 # Set the Garbage collection minimum threshold to 100,000 micro-seconds
 SemanticLogger.add_signal_handler('USR1', 'USR2', 100000)
 ```
+
+### [Next: Forking ==>](forking.html)
