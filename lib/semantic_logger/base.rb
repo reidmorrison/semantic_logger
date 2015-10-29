@@ -442,7 +442,9 @@ module SemanticLogger
             if index >= SemanticLogger.backtrace_level_index
               trace = caller
               # Remove call to this internal method
-              trace.shift(1)
+              trace.shift
+              # Ruby 1.9 has additional stack entry for parent that calls this method
+              trace.shift if RUBY_VERSION.to_f <= 2.0
               trace
             end
 
