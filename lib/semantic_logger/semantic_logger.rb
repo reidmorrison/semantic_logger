@@ -20,6 +20,33 @@ module SemanticLogger
     @@default_level
   end
 
+  # Sets the level at which backtraces should be captured
+  # for every log message.
+  #
+  # By enabling backtrace capture the filename and line number of where
+  # message was logged can be written to the log file. Additionally, the backtrace
+  # can be forwarded to error management services such as Bugsnag.
+  #
+  # Warning:
+  #   Capturing backtraces is very expensive and should not be done all
+  #   the time. It is recommended to run it at :error level in production.
+  def self.backtrace_level=(level)
+    @@backtrace_level       = level
+    # For performance reasons pre-calculate the level index
+    @@backtrace_level_index = level.nil? ? 65535 : level_to_index(level)
+  end
+
+  # Returns the current backtrace level
+  def self.backtrace_level
+    @@backtrace_level
+  end
+
+  # Returns the current backtrace level index
+  # For internal use only
+  def self.backtrace_level_index #:nodoc
+    @@backtrace_level_index
+  end
+
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger
   #
@@ -263,6 +290,8 @@ module SemanticLogger
   end
 
   # Initial default Level for all new instances of SemanticLogger::Logger
-  @@default_level       = :info
-  @@default_level_index = level_to_index(@@default_level)
+  @@default_level         = :info
+  @@default_level_index   = level_to_index(@@default_level)
+  @@backtrace_level       = :error
+  @@backtrace_level_index = level_to_index(@@backtrace_level)
 end

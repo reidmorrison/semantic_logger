@@ -28,6 +28,9 @@ module SemanticLogger
     #      message:     'Invalid value',
     #      stack_trace: []
     #    }
+    #    # When a backtrace is captured
+    #    file_name: 'my_class.rb'
+    #    line_number: 42
     #
     class MongoDB < SemanticLogger::Appender::Base
       attr_reader :db, :collection_name, :collection
@@ -155,11 +158,20 @@ module SemanticLogger
           document[:duration]    = log.duration if log.duration
           document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
           document[:payload]     = log.payload if log.payload
-          document[:exception]   = {
-            name:        log.exception.class.name,
-            message:     log.exception.message,
-            stack_trace: log.exception.backtrace
-          } if log.exception
+          if log.exception
+            document[:exception] = {
+              name:        log.exception.class.name,
+              message:     log.exception.message,
+              stack_trace: log.exception.backtrace
+            }
+          end
+          if log.backtrace || log.exception
+            backtrace              = log.backtrace || log.exception.backtrace
+            location               = backtrace[0].split('/').last
+            file, line             = location.split(':')
+            document[:file_name]   = file
+            document[:line_number] = line.to_i
+          end
           document
         end
       end

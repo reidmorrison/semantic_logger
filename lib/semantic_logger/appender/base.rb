@@ -32,15 +32,23 @@ module SemanticLogger
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def default_formatter
         Proc.new do |log|
-          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+          tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s.dup
-          message << " -- " << log.payload.inspect unless log.payload.nil? or log.payload.empty? 
-          message << " -- Exception: " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          message << ' -- ' << log.payload.inspect unless log.payload.nil? || log.payload.empty?
+          message << ' -- Exception: ' << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
-          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{'%.50s' % log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+          file_name =
+            if log.backtrace || log.exception
+              backtrace  = log.backtrace || log.exception.backtrace
+              location   = backtrace[0].split('/').last
+              file, line = location.split(':')
+              " #{file}:#{line}"
+            end
+
+          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{'%.50s' % log.thread_name}#{file_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
         end
       end
 
@@ -55,12 +63,12 @@ module SemanticLogger
           tags   = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s.dup
-          unless log.payload.nil? or log.payload.empty?
+          unless log.payload.nil? || log.payload.empty?
             payload = log.payload
             payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
-            message << " -- " << payload
+            message << ' -- ' << payload
           end
-          message << " -- Exception: " << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          message << ' -- Exception: ' << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
 
@@ -78,7 +86,15 @@ module SemanticLogger
               colors::RED
             end
 
-          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{level_color}#{colors::BOLD}#{log.level.to_s[0..0].upcase}#{colors::CLEAR} [#{$$}:#{'%.30s' % log.thread_name}] #{tags}#{duration_str}#{level_color}#{log.name}#{colors::CLEAR} -- #{message}"
+          file_name =
+            if log.backtrace || log.exception
+              backtrace = log.backtrace || log.exception.backtrace
+              location = backtrace[0].split('/').last
+              file, line = location.split(':')
+              " #{level_color}#{file}:#{line}#{colors::CLEAR}"
+            end
+
+          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{level_color}#{colors::BOLD}#{log.level.to_s[0..0].upcase}#{colors::CLEAR} [#{$$}:#{'%.30s' % log.thread_name}#{file_name}] #{tags}#{duration_str}#{level_color}#{log.name}#{colors::CLEAR} -- #{message}"
         end
       end
 
@@ -128,13 +144,13 @@ module SemanticLogger
         # Return the Time as a formatted string
         # JRuby only supports time in ms
         def self.formatted_time(time)
-          "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%03d" % (time.usec/1000)}"
+          "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%03d' % (time.usec/1000)}"
         end
       else
         # Return the Time as a formatted string
         # Ruby MRI supports micro seconds
         def self.formatted_time(time)
-          "#{time.strftime("%Y-%m-%d %H:%M:%S")}.#{"%06d" % (time.usec)}"
+          "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%06d' % (time.usec)}"
         end
       end
 

@@ -59,34 +59,22 @@ sleep 10
 require 'newrelic_rpm'
 
 class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
-
   # Allow the level for this appender to be overwritten
   #   Default: :error
   #   Note: Not recommended to set the log level to :info, :debug, or :trace as that would flood NewRelic with Error notices
   def initialize(level=:error, &block)
-    # Pass on the level and custom formatter if supplied
     super(level, &block)
-  end
-
-  # The application may send a multiline string to the appender... use the first non-blank line as a shorter message.
-  def self.first_non_empty_line(string)
-    string.strip.split("\n").first.to_s
   end
 
   # Returns [Hash] of parameters to send to New Relic.
   def default_formatter
     Proc.new do |log|
-      short_message = self.class.first_non_empty_line(log.message)
-      metric        = log.metric || "#{log.name}/#{short_message}"
-
       custom_params            = {thread_name: log.thread_name}
-      # Only show the message under custom attributes if the error message uses an exception or shortened message (first non-empty line).
-      custom_params[:message]  = log.message if log.message && (log.exception || log.message != short_message)
       custom_params[:duration] = "#{log.duration} ms" if log.duration
       custom_params[:payload]  = log.payload if log.payload
       custom_params[:tags]     = log.tags if log.tags && (log.tags.size > 0)
 
-      {metric: metric, custom_params: custom_params}
+      {metric: log.metric, custom_params: custom_params}
     end
   end
 
@@ -95,10 +83,19 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
     # Ensure minimum log level is met, and check filter
     return false if (level_index > (log.level_index || 0)) || !include_message?(log)
 
+    # Send error messages as Runtime exceptions
+    exception =
+      if log.exception
+        log.exception
+      else
+        error = RuntimeError.new(log.message)
+        error.set_backtrace(log.backtrace) if log.backtrace
+        error
+      end
     # For more documentation on the NewRelic::Agent.notice_error method see:
     # http://rubydoc.info/github/newrelic/rpm/NewRelic/Agent#notice_error-instance_method
     # and https://docs.newrelic.com/docs/ruby/ruby-agent-api
-    NewRelic::Agent.notice_error(log.exception || self.class.first_non_empty_line(log.message), formatter.call(log))
+    NewRelic::Agent.notice_error(exception, formatter.call(log))
     true
   end
 

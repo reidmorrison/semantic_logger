@@ -10,5 +10,6 @@ require 'minitest/stub_any_instance'
 require 'semantic_logger'
 require 'logger'
 require_relative 'mock_logger'
+require 'awesome_print'
 
-Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
+#Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new

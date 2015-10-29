@@ -314,7 +314,10 @@ module SemanticLogger
     #
     # metric [Object]
     #   Object supplied when benchmark_x was called
-    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric)
+    #
+    # backtrace [Array<String>]
+    #   The backtrace captured at source when the log level >= SemanticLogger.backtrace_level
+    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace)
 
     # Whether to log the supplied message based on the current filter if any
     def include_message?(struct)
@@ -329,6 +332,7 @@ module SemanticLogger
 
     # Log message at the specified level
     def log_internal(level, index, message=nil, payload=nil, exception=nil, &block)
+      # Detect exception being logged
       if exception.nil? && payload.nil? && message.kind_of?(Exception)
         exception = message
         message   = exception.inspect
@@ -337,6 +341,7 @@ module SemanticLogger
         payload   = nil
       end
 
+      # Add result of block as message or payload if not nil
       if block && (result = block.call)
         if result.is_a?(String)
           message = message.nil? ? result : "#{message} -- #{result}"
@@ -351,13 +356,24 @@ module SemanticLogger
       if self.payload
         payload = payload.nil? ? self.payload : self.payload.merge(payload)
       end
-      struct = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception)
+
+      # Add caller stack trace
+      backtrace =
+        if !exception && (index >= SemanticLogger.backtrace_level_index)
+          trace = caller
+          # Remove call to this internal method
+          trace.shift(1)
+          trace
+        end
+
+      struct = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception, nil, backtrace)
       log(struct) if include_message?(struct)
     end
 
     # Measure the supplied block and log the message
     def benchmark_internal(level, index, message, params, &block)
-      start = Time.now
+      start     = Time.now
+      exception = nil
       begin
         if block
           result    =
@@ -394,6 +410,7 @@ module SemanticLogger
         end
         if exception
           logged_exception = exception
+          backtrace        = nil
           case log_exception
           when :full
             # On exception change the log level
@@ -409,16 +426,27 @@ module SemanticLogger
             end
             message          = "#{message} -- Exception: #{exception.class}: #{exception.message}"
             logged_exception = nil
+            backtrace        = exception.backtrace
           else
             # Log the message with its duration but leave out the exception that was raised
             logged_exception = nil
+            backtrace        = exception.backtrace
           end
-          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, logged_exception, metric)
+          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, logged_exception, metric, backtrace)
           log(struct) if include_message?(struct)
           raise exception
         elsif duration >= min_duration
           # Only log if the block took longer than 'min_duration' to complete
-          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric)
+          # Add caller stack trace
+          backtrace =
+            if index >= SemanticLogger.backtrace_level_index
+              trace = caller
+              # Remove call to this internal method
+              trace.shift(1)
+              trace
+            end
+
+          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric, backtrace)
           log(struct) if include_message?(struct)
         end
       end
