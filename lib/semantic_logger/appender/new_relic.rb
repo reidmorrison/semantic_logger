@@ -73,6 +73,7 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
       custom_params[:duration] = "#{log.duration} ms" if log.duration
       custom_params[:payload]  = log.payload if log.payload
       custom_params[:tags]     = log.tags if log.tags && (log.tags.size > 0)
+      custom_params[:message]  = log.message if log.exception
 
       {metric: log.metric, custom_params: custom_params}
     end

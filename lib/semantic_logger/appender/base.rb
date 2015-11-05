@@ -35,7 +35,7 @@ module SemanticLogger
           tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s.dup
-          message << ' -- ' << log.payload.inspect unless log.payload.nil? || log.payload.empty?
+          message << ' -- ' << log.payload.inspect unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
           message << ' -- Exception: ' << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
@@ -63,7 +63,7 @@ module SemanticLogger
           tags   = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
           message = log.message.to_s.dup
-          unless log.payload.nil? || log.payload.empty?
+          unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
             payload = log.payload
             payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
             message << ' -- ' << payload

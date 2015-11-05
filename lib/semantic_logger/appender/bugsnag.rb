@@ -57,6 +57,7 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   def default_formatter
     proc do |log|
       h = {severity: log_level(log), tags: log.tags, class: log.name}
+      h[:message] = log.message if log.exception
       h.merge!(log.payload) if log.payload
       h
     end

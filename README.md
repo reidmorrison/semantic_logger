@@ -1,5 +1,5 @@
 # semantic_logger
-![](https://img.shields.io/gem/v/semantic_logger.svg) ![](https://img.shields.io/travis/rocketjob/semantic_logger.svg) ![](https://img.shields.io/gem/dt/semantic_logger.svg) ![](https://img.shields.io/badge/status-production%20ready-blue.svg)
+[![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://travis-ci.org/rocketjob/semantic_logger.svg?branch=master)](https://travis-ci.org/rocketjob/semantic_logger) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg) [![Gitter chat](https://img.shields.io/badge/IRC%20(gitter)-Support-brightgreen.svg)](https://gitter.im/rocketjob/rocketjob)
 
 Low latency, high throughput, enterprise-scale logging system for Ruby
 
@@ -55,6 +55,20 @@ and are therefore not automatically included by this gem:
 ## Install
 
     gem install semantic_logger
+
+To configure a stand-alone application for Semantic Logger:
+
+```ruby
+require 'semantic_logger'
+
+# Set the global default log level
+SemanticLogger.default_level = :trace
+
+# Log to a file, and use the colorized formatter
+SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
+```
+
+If running rails, see: [Semantic Logger Rails](http://rocketjob.github.io/semantic_logger/rails.html)
 
 ## Author
 

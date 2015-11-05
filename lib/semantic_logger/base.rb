@@ -336,7 +336,9 @@ module SemanticLogger
       if exception.nil? && payload.nil? && message.kind_of?(Exception)
         exception = message
         message   = exception.inspect
-      elsif exception.nil? && payload && payload.is_a?(Exception)
+      elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
+        # Under JRuby a java exception is not a Ruby Exception
+        #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false
         exception = payload
         payload   = nil
       end
