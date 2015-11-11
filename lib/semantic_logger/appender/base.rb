@@ -36,16 +36,25 @@ module SemanticLogger
 
           message = log.message.to_s.dup
           message << ' -- ' << log.payload.inspect unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
-          message << ' -- Exception: ' << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          log.each_exception do |exception, i|
+            if i == 0
+              message << ' -- Exception: '
+            else
+              message << "\nCause: "
+            end
+            message << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          end
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
           file_name =
             if log.backtrace || log.exception
               backtrace  = log.backtrace || log.exception.backtrace
-              location   = backtrace[0].split('/').last
-              file, line = location.split(':')
-              " #{file}:#{line}"
+              if backtrace
+                location   = backtrace[0].split('/').last
+                file, line = location.split(':')
+                " #{file}:#{line}"
+              end
             end
 
           "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{'%.50s' % log.thread_name}#{file_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
@@ -54,7 +63,7 @@ module SemanticLogger
 
       # Optional log formatter to colorize log output
       # To use this formatter
-      #   SemanticLogger.add_appender($stdout, nil, &SemanticLogger::Logger.colorized_formatter)
+      #   SemanticLogger.add_appender($stdout, &SemanticLogger::Appender::Base.colorized_formatter)
       #
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def self.colorized_formatter
@@ -68,7 +77,14 @@ module SemanticLogger
             payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
             message << ' -- ' << payload
           end
-          message << ' -- Exception: ' << "#{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          log.each_exception do |exception, i|
+            if i == 0
+              message << ' -- Exception: '
+            else
+              message << "\nCause: "
+            end
+            message << "#{colors::BOLD}#{exception.class}: #{exception.message}#{colors::CLEAR}\n#{(exception.backtrace || []).join("\n")}"
+          end
 
           duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
 

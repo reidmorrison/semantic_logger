@@ -18,7 +18,7 @@ end
 desc 'Run Test Suite'
 task :test do
   Rake::TestTask.new(:functional) do |t|
-    t.test_files = FileList['test/*_test.rb']
+    t.test_files = FileList['test/**/*_test.rb']
     t.verbose    = true
   end
 

@@ -41,6 +41,20 @@ module Appender
           @appender.debug StandardError.new('StandardError')
           assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- #<StandardError: StandardError> -- Exception: StandardError: StandardError\n\n/, @io.string
         end
+
+        it 'handle nested exception' do
+          begin
+            raise StandardError, 'NestedError'
+          rescue Exception => e
+            begin
+              raise StandardError, 'TopError'
+            rescue Exception => e
+              @appender.debug e
+            end
+          end
+          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name} file_test.rb:\d+\] SemanticLogger::Appender::File -- #<StandardError: TopError> -- Exception: StandardError: TopError\n/, @io.string
+          assert_match /^Cause: StandardError: NestedError\n/, @io.string if RUBY_VERSION >= '2.1'
+        end
       end
 
       describe 'for each log level' do

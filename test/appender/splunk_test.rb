@@ -1,4 +1,4 @@
-require_relative 'test_helper'
+require_relative '../test_helper'
 
 # Unit Test for SemanticLogger::Appender::Splunk
 #

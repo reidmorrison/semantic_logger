@@ -239,7 +239,14 @@ module SemanticLogger
 
           message = log.message.to_s
           message << ' -- ' << log.payload.inspect if log.payload
-          message << ' -- ' << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
+          log.each_exception do |exception, i|
+            if i == 0
+              message << ' -- '
+            else
+              message << "\nCause: "
+            end
+            message << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          end
 
           duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
 
