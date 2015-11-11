@@ -326,20 +326,6 @@ module SemanticLogger
         exceptions = []
         ex         = exception
         while ex != nil && !exceptions.include?(ex) && exceptions.length < MAX_EXCEPTIONS_TO_UNWRAP
-
-          unless ex.is_a? Exception
-            if ex.respond_to?(:to_exception)
-              ex = ex.to_exception
-            elsif ex.respond_to?(:exception)
-              ex = ex.exception
-            end
-          end
-
-          unless ex.is_a?(Exception) || (defined?(Java::JavaLang::Throwable) && ex.is_a?(Java::JavaLang::Throwable))
-            ex = RuntimeError.new(ex.to_s)
-            ex.set_backtrace caller
-          end
-
           exceptions << ex
           yield ex, i
           i += 1
