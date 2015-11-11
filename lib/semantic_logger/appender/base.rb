@@ -81,7 +81,7 @@ module SemanticLogger
             if i == 0
               message << ' -- Exception: '
             else
-              message << "\nCause Exception: "
+              message << "\nCause: "
             end
             message << "#{colors::BOLD}#{exception.class}: #{exception.message}#{colors::CLEAR}\n#{(exception.backtrace || []).join("\n")}"
           end
