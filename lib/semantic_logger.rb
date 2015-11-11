@@ -5,6 +5,7 @@ require 'semantic_logger/semantic_logger'
 # @formatter:off
 module SemanticLogger
   autoload :Base,               'semantic_logger/base'
+  autoload :Log,                'semantic_logger/log'
   autoload :Logger,             'semantic_logger/logger'
   autoload :Loggable,           'semantic_logger/loggable'
   autoload :DebugAsTraceLogger, 'semantic_logger/debug_as_trace_logger'

@@ -154,31 +154,30 @@ module SemanticLogger
             level_index: log.level_index,
           }
           document[:application] = application if application
-          document[:message]     = self.class.strip_colorizing(log.message) if log.message
+          document[:message]     = log.cleansed_message if log.message
           document[:duration]    = log.duration if log.duration
           document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
           document[:payload]     = log.payload if log.payload
           if log.exception
-            document[:exception] = {
-              name:        log.exception.class.name,
-              message:     log.exception.message,
-              stack_trace: log.exception.backtrace
-            }
+            root = document
+            log.each_exception do |exception, i|
+              name       = i == 0 ? :exception : :cause
+              root[name] = {
+                name:        exception.class.name,
+                message:     exception.message,
+                stack_trace: exception.backtrace
+              }
+              root       = root[name]
+            end
           end
-          if log.backtrace || log.exception
-            backtrace              = log.backtrace || log.exception.backtrace
-            location               = backtrace[0].split('/').last
-            file, line             = location.split(':')
+
+          file, line = log.file_name_and_line
+          if file
             document[:file_name]   = file
             document[:line_number] = line.to_i
           end
           document
         end
-      end
-
-      # Strip the standard Rails colorizing from the logged message
-      def self.strip_colorizing(message)
-        message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, '').strip
       end
 
       # Default host_name to use if none is supplied to the appenders initializer

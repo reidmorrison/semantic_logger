@@ -58,7 +58,7 @@ module SemanticLogger
     def self.flush
       return false unless appender_thread_active?
 
-      logger.debug "Flushing appenders with #{queue_size} log messages on the queue"
+      logger.trace "Flushing appenders with #{queue_size} log messages on the queue"
       reply_queue = Queue.new
       queue << {command: :flush, reply_queue: reply_queue}
       reply_queue.pop
@@ -174,7 +174,7 @@ module SemanticLogger
       # Should any appender fail to log or flush, the exception is logged and
       # other appenders will still be called
       Thread.current.name = 'SemanticLogger::AppenderThread'
-      logger.debug "V#{VERSION} Appender thread active"
+      logger.trace "V#{VERSION} Appender thread active"
       begin
         count = 0
         while message = queue.pop
@@ -200,7 +200,7 @@ module SemanticLogger
             when :flush
               SemanticLogger.appenders.each do |appender|
                 begin
-                  logger.debug "Appender thread: Flushing appender: #{appender.name}"
+                  logger.trace "Appender thread: Flushing appender: #{appender.name}"
                   appender.flush
                 rescue Exception => exc
                   logger.error "Appender thread: Failed to flush appender: #{appender.inspect}", exc
@@ -208,7 +208,7 @@ module SemanticLogger
               end
 
               message[:reply_queue] << true if message[:reply_queue]
-              logger.debug 'Appender thread: All appenders flushed'
+              logger.trace 'Appender thread: All appenders flushed'
             else
               logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
             end
@@ -226,7 +226,7 @@ module SemanticLogger
         @@appender_thread = nil
         # This block may be called after the file handles have been released by Ruby
         begin
-          logger.debug 'Appender thread has stopped'
+          logger.trace 'Appender thread has stopped'
         rescue Exception
           nil
         end

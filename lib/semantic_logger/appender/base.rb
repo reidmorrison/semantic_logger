@@ -11,16 +11,27 @@ module SemanticLogger
 
     # Formatting & colors used by optional colorized_formatter
     module AnsiColors
-      CLEAR   = "\e[0m"
-      BOLD    = "\e[1m"
-      BLACK   = "\e[30m"
-      RED     = "\e[31m"
-      GREEN   = "\e[32m"
-      YELLOW  = "\e[33m"
-      BLUE    = "\e[34m"
-      MAGENTA = "\e[35m"
-      CYAN    = "\e[36m"
-      WHITE   = "\e[37m"
+      CLEAR     = "\e[0m"
+      BOLD      = "\e[1m"
+      BLACK     = "\e[30m"
+      RED       = "\e[31m"
+      GREEN     = "\e[32m"
+      YELLOW    = "\e[33m"
+      BLUE      = "\e[34m"
+      MAGENTA   = "\e[35m"
+      CYAN      = "\e[36m"
+      WHITE     = "\e[37m"
+
+      # Maps the log level to a color for colorized formatters
+      # Since this map is not frozen, it can be modified as needed
+      LEVEL_MAP = {
+        trace: MAGENTA,
+        debug: GREEN,
+        info:  CYAN,
+        warn:  BOLD,
+        error: RED,
+        fatal: RED
+      }
     end
 
     class Base < SemanticLogger::Base
@@ -32,32 +43,32 @@ module SemanticLogger
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def default_formatter
         Proc.new do |log|
-          tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
+          # Header with date, time, log level and process info
+          entry = "#{log.formatted_time} #{log.level_to_s} [#{log.process_info}]"
 
-          message = log.message.to_s.dup
-          message << ' -- ' << log.payload.inspect unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
-          log.each_exception do |exception, i|
-            if i == 0
-              message << ' -- Exception: '
-            else
-              message << "\nCause: "
-            end
-            message << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          # Tags
+          entry << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
+
+          # Duration
+          entry << " (#{log.duration_human})" if log.duration
+
+          # Class / app name
+          entry << " #{log.name}"
+
+          # Log message
+          entry << " -- #{log.message}" if log.message
+
+          # Payload
+          unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
+            entry << ' -- ' << log.payload.inspect
           end
 
-          duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
-
-          file_name =
-            if log.backtrace || log.exception
-              backtrace  = log.backtrace || log.exception.backtrace
-              if backtrace
-                location   = backtrace[0].split('/').last
-                file, line = location.split(':')
-                " #{file}:#{line}"
-              end
-            end
-
-          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{'%.50s' % log.thread_name}#{file_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+          # Exceptions
+          log.each_exception do |exception, i|
+            entry << (i == 0 ? ' -- Exception: ' : "\nCause: ")
+            entry << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          end
+          entry
         end
       end
 
@@ -68,49 +79,37 @@ module SemanticLogger
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def self.colorized_formatter
         Proc.new do |log|
-          colors = SemanticLogger::Appender::AnsiColors
-          tags   = log.tags.collect { |tag| "[#{colors::CYAN}#{tag}#{colors::CLEAR}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
+          colors      = SemanticLogger::Appender::AnsiColors
+          level_color = colors::LEVEL_MAP[log.level]
 
-          message = log.message.to_s.dup
+          # Header with date, time, log level and process info
+          entry = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
+
+          # Tags
+          entry << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
+
+          # Duration
+          entry << " (#{colors::BOLD}#{log.duration_human}#{colors::CLEAR})" if log.duration
+
+          # Class / app name
+          entry << " #{level_color}#{log.name}#{colors::CLEAR}"
+
+          # Log message
+          entry << " -- #{log.message}" if log.message
+
+          # Payload
           unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
             payload = log.payload
             payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
-            message << ' -- ' << payload
+            entry << ' -- ' << payload
           end
+
+          # Exceptions
           log.each_exception do |exception, i|
-            if i == 0
-              message << ' -- Exception: '
-            else
-              message << "\nCause: "
-            end
-            message << "#{colors::BOLD}#{exception.class}: #{exception.message}#{colors::CLEAR}\n#{(exception.backtrace || []).join("\n")}"
+            entry << (i == 0 ? ' -- Exception: ' : "\nCause: ")
+            entry << "#{colors::BOLD}#{exception.class}: #{exception.message}#{colors::CLEAR}\n#{(exception.backtrace || []).join("\n")}"
           end
-
-          duration_str = log.duration ? "(#{colors::BOLD}#{'%.1f' % log.duration}ms#{colors::CLEAR}) " : ''
-
-          level_color =
-            case log.level
-            when :trace
-              colors::MAGENTA
-            when :debug
-              colors::GREEN
-            when :info
-              colors::CYAN
-            when :warn
-              colors::BOLD
-            when :error, :fatal
-              colors::RED
-            end
-
-          file_name =
-            if log.backtrace || log.exception
-              backtrace = log.backtrace || log.exception.backtrace
-              location = backtrace[0].split('/').last
-              file, line = location.split(':')
-              " #{level_color}#{file}:#{line}#{colors::CLEAR}"
-            end
-
-          "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{level_color}#{colors::BOLD}#{log.level.to_s[0..0].upcase}#{colors::CLEAR} [#{$$}:#{'%.30s' % log.thread_name}#{file_name}] #{tags}#{duration_str}#{level_color}#{log.name}#{colors::CLEAR} -- #{message}"
+          entry
         end
       end
 
@@ -155,17 +154,18 @@ module SemanticLogger
         @level_index || 0
       end
 
-      # For JRuby include the Thread name rather than its id
       if defined? Java
         # Return the Time as a formatted string
         # JRuby only supports time in ms
         def self.formatted_time(time)
+          warn '[deprecated] SemanticLogger::Base.formatted_time is deprecated please use log.formatted_time'
           "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%03d' % (time.usec/1000)}"
         end
       else
         # Return the Time as a formatted string
         # Ruby MRI supports micro seconds
         def self.formatted_time(time)
+          warn '[deprecated] SemanticLogger::Base.formatted_time is deprecated please use log.formatted_time'
           "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%06d' % (time.usec)}"
         end
       end

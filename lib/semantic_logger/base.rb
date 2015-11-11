@@ -279,70 +279,6 @@ module SemanticLogger
       @level_index || SemanticLogger.default_level_index
     end
 
-    # Struct Log
-    #
-    # level
-    #   Log level of the supplied log call
-    #   :trace, :debug, :info, :warn, :error, :fatal
-    #
-    # thread_name
-    #   Name of the thread in which the logging call was called
-    #
-    # name
-    #   Class name supplied to the logging instance
-    #
-    # message
-    #   Text message to be logged
-    #
-    # payload
-    #   Optional Hash or Ruby Exception object to be logged
-    #
-    # time
-    #   The time at which the log entry was created
-    #
-    # duration
-    #   The time taken to complete a benchmark call
-    #
-    # tags
-    #   Any tags active on the thread when the log call was made
-    #
-    # level_index
-    #   Internal index of the log level
-    #
-    # exception
-    #   Ruby Exception object to log
-    #
-    # metric [Object]
-    #   Object supplied when benchmark_x was called
-    #
-    # backtrace [Array<String>]
-    #   The backtrace captured at source when the log level >= SemanticLogger.backtrace_level
-    Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace) do
-      MAX_EXCEPTIONS_TO_UNWRAP = 5
-      # Call the block for exception and any nested exception
-      def each_exception(&block)
-        # Code mostly ripped off from bugsnag (See https://github.com/bugsnag/bugsnag-ruby/blob/6348306e44323eee347896843d16c690cd7c4362/lib/bugsnag/notification.rb#L81)
-        i          = 0
-        exceptions = []
-        ex         = exception
-        while ex != nil && !exceptions.include?(ex) && exceptions.length < MAX_EXCEPTIONS_TO_UNWRAP
-          exceptions << ex
-          yield ex, i
-          i += 1
-
-          if ex.respond_to?(:cause) && ex.cause
-            ex = ex.cause
-          elsif ex.respond_to?(:continued_exception) && ex.continued_exception
-            ex = ex.continued_exception
-          elsif ex.respond_to?(:original_exception) && ex.original_exception
-            ex = ex.original_exception
-          else
-            ex = nil
-          end
-        end
-      end
-    end
-
     # Whether to log the supplied message based on the current filter if any
     def include_message?(struct)
       return true if @filter.nil?
@@ -359,7 +295,7 @@ module SemanticLogger
       # Detect exception being logged
       if exception.nil? && payload.nil? && message.kind_of?(Exception)
         exception = message
-        message   = exception.inspect
+        message   = nil
       elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
         # Under JRuby a java exception is not a Ruby Exception
         #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false

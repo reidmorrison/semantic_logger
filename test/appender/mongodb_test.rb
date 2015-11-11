@@ -66,7 +66,7 @@ module Appender
         end
 
         it "handle message without payload" do
-          log = SemanticLogger::Base::Log.new(:debug)
+          log = SemanticLogger::Log.new(:debug)
           @appender.debug('hello world')
 
           document = @appender.collection.find_one

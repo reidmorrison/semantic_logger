@@ -133,13 +133,13 @@ class LoggerTest < Minitest::Test
               it "log #{level} info" do
                 assert_equal 'result', @logger.send("benchmark_#{level}".to_sym, 'hello world') { 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
               end
 
               it "log #{level} info with payload" do
                 assert_equal 'result', @logger.send("benchmark_#{level}".to_sym, 'hello world', payload: @hash) { 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
               end
 
               it "not log #{level} info when block is faster than :min_duration" do
@@ -151,7 +151,7 @@ class LoggerTest < Minitest::Test
               it "log #{level} info when block duration exceeds :min_duration" do
                 assert_equal 'result', @logger.send("benchmark_#{level}".to_sym, 'hello world', min_duration: 200, payload: @hash) { sleep 0.5; 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
               end
 
               it "log #{level} info with an exception" do
@@ -159,7 +159,7 @@ class LoggerTest < Minitest::Test
                   @logger.send("benchmark_#{level}", 'hello world', payload: @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
                 end
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
               end
 
               it "change log #{level} info with an exception" do
@@ -167,14 +167,14 @@ class LoggerTest < Minitest::Test
                   @logger.send("benchmark_#{level}", 'hello world', payload: @hash, on_exception_level: :fatal) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
                 end
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
               end
 
               it "log #{level} info with metric" do
                 metric_name = '/my/custom/metric'
                 assert_equal 'result', @logger.send("benchmark_#{level}".to_sym, 'hello world', metric: metric_name) { 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
                 assert metric_name, $last_metric.metric
               end
 
@@ -182,7 +182,7 @@ class LoggerTest < Minitest::Test
                 SemanticLogger.stub(:backtrace_level_index, 0) do
                   assert_equal 'result', @logger.send("benchmark_#{level}".to_sym, 'hello world') { 'result' }
                   SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
                 end
               end
             end
@@ -191,13 +191,13 @@ class LoggerTest < Minitest::Test
               it "log #{level} info" do
                 assert_equal 'result', @logger.benchmark(level, 'hello world') { 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
               end
 
               it "log #{level} info with payload" do
                 assert_equal 'result', @logger.benchmark(level, 'hello world', payload: @hash) { 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
               end
 
               it "not log #{level} info when block is faster than :min_duration" do
@@ -209,7 +209,7 @@ class LoggerTest < Minitest::Test
               it "log #{level} info when block duration exceeds :min_duration" do
                 assert_equal 'result', @logger.benchmark(level, 'hello world', min_duration: 200, payload: @hash) { sleep 0.5; 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
               end
 
               it "log #{level} info with an exception" do
@@ -217,14 +217,14 @@ class LoggerTest < Minitest::Test
                   @logger.benchmark(level, 'hello world', payload: @hash) { raise RuntimeError.new('Test') } # Measure duration of the supplied block
                 end
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \(\d+\.\dms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message
               end
 
               it "log #{level} info with metric" do
                 metric_name = '/my/custom/metric'
                 assert_equal 'result', @logger.benchmark(level, 'hello world', metric: metric_name) { 'result' } # Measure duration of the supplied block
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
                 assert metric_name, $last_metric.metric
               end
 
@@ -232,7 +232,7 @@ class LoggerTest < Minitest::Test
                 SemanticLogger.stub(:backtrace_level_index, 0) do
                   assert_equal 'result', @logger.benchmark(level, 'hello world') { 'result' }
                   SemanticLogger.flush
-                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+                  assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
                 end
               end
             end
@@ -241,7 +241,7 @@ class LoggerTest < Minitest::Test
           it 'log when the block performs a return' do
             assert_equal 'Good', function_with_return(@logger)
             SemanticLogger.flush
-            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- #{@hash_str}/, @mock_logger.message
           end
 
           it 'not log at a level below the silence level' do
@@ -250,7 +250,7 @@ class LoggerTest < Minitest::Test
               @logger.warn "don't log me"
             end
             SemanticLogger.flush
-            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
           end
 
           it 'log at a silence level below the default level' do
@@ -264,7 +264,7 @@ class LoggerTest < Minitest::Test
             assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, first_message
             SemanticLogger.flush
             # Only the last log message is kept in mock logger
-            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \(\d+\.\dms\) LoggerTest -- hello world/, @mock_logger.message
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world/, @mock_logger.message
           end
         end
 

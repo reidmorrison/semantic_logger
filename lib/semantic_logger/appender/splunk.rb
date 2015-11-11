@@ -40,8 +40,8 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   def parse_options(options)
     @config = {
       scheme:   options[:scheme] || :https,
-      host:     options[:host]   || 'localhost',
-      port:     options[:port]   || 8089,
+      host:     options[:host] || 'localhost',
+      port:     options[:port] || 8089,
       username: options[:username],
       password: options[:password]
     }
