@@ -97,7 +97,7 @@ class LoggerTest < Minitest::Test
             end
           end
 
-          it 'add payload to log entries' do
+          it 'logs tagged payload' do
             hash     = {tracking_number: "123456", even: 2, more: "data"}
             hash_str = hash.inspect.sub("{", "\\{").sub("}", "\\}")
             @logger.with_payload(tracking_number: '123456') do
@@ -107,6 +107,21 @@ class LoggerTest < Minitest::Test
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
               end
             end
+          end
+
+          it 'logs payload' do
+            hash     = {tracking_number: "123456", even: 2, more: "data"}
+            hash_str = hash.inspect.sub("{", "\\{").sub("}", "\\}")
+            @logger.info('Hello world', hash)
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+          end
+
+          it 'does not log an empty payload' do
+            hash     = {}
+            @logger.info('Hello world', hash)
+            SemanticLogger.flush
+            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] LoggerTest -- Hello world/, @mock_logger.message
           end
         end
 

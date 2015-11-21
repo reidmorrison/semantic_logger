@@ -1,4 +1,4 @@
-require 'thread_safe'
+require 'concurrent'
 module SemanticLogger
   # Logging levels in order of most detailed to most severe
   LEVELS = [:trace, :debug, :info, :warn, :error, :fatal]
@@ -249,7 +249,7 @@ module SemanticLogger
   ############################################################################
   protected
 
-  @@appenders = ThreadSafe::Array.new
+  @@appenders = Concurrent::Array.new
 
   ############################################################################
   private

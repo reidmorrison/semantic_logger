@@ -124,6 +124,16 @@ module SemanticLogger
       message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, '').strip
     end
 
+    # Return the payload in text form
+    # Returns nil if payload is missing or empty
+    def payload_to_s(colorized = false)
+      return if payload.nil? || (payload.respond_to?(:empty?) && payload.empty?)
+      return payload.inspect if !colorized || !defined?(AwesomePrint) || !payload.respond_to?(:ai)
+
+      # Colorize the payload if the AwesomePrint gem is loaded
+      payload.ai(multiline: false) rescue payload.inspect
+    end
+
     if defined? JRuby
       # Return the Time as a formatted string
       # JRuby only supports time in ms

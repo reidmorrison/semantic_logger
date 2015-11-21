@@ -1,22 +1,8 @@
-require 'thread_safe'
-
-# Logger stores the class name to be used for all log messages so that every
-# log message written by this instance will include the class name
+require 'concurrent'
 module SemanticLogger
+  # Logger stores the class name to be used for all log messages so that every
+  # log message written by this instance will include the class name
   class Logger < Base
-
-    # DO NOT USE. Adding unused formatter to support Rails 4 logging
-    # Formatters must be set at the appender level, not at the logger level
-    #
-    # Due to the following code in Rails::Server#start that cannot be changed
-    # without patching the entire method
-    #    console = ActiveSupport::Logger.new($stdout)
-    #    console.formatter = Rails.logger.formatter
-    #    console.level = Rails.logger.level
-    #
-    #    Rails.logger.extend(ActiveSupport::Logger.broadcast(console))
-    attr_accessor :formatter
-
     # Returns a Logger instance
     #
     # Return the logger for a specific class, supports class specific log levels
@@ -120,7 +106,7 @@ module SemanticLogger
     #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
     #   end
     def self.on_metric(&block)
-      (@@metric_subscribers ||= ThreadSafe::Array.new) << block
+      (@@metric_subscribers ||= Concurrent::Array.new) << block
     end
 
     ############################################################################

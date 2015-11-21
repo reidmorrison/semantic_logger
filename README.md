@@ -11,7 +11,7 @@ Low latency, high throughput, enterprise-scale logging system for Ruby
 
 [Reference Documentation](http://www.rubydoc.info/gems/semantic_logger/)
 
-## Supports
+## Logging Destinations
 
 Logging to the following destinations are all supported "out-of-the-box":
 

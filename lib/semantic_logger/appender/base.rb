@@ -59,8 +59,8 @@ module SemanticLogger
           entry << " -- #{log.message}" if log.message
 
           # Payload
-          unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
-            entry << ' -- ' << log.payload.inspect
+          if payload = log.payload_to_s(false)
+            entry << ' -- ' << payload
           end
 
           # Exceptions
@@ -83,7 +83,7 @@ module SemanticLogger
           level_color = colors::LEVEL_MAP[log.level]
 
           # Header with date, time, log level and process info
-          entry = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
+          entry       = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
 
           # Tags
           entry << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
@@ -98,9 +98,7 @@ module SemanticLogger
           entry << " -- #{log.message}" if log.message
 
           # Payload
-          unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
-            payload = log.payload
-            payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
+          if payload = log.payload_to_s(true)
             entry << ' -- ' << payload
           end
 
