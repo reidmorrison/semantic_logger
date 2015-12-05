@@ -237,8 +237,7 @@ module SemanticLogger
       SemanticLogger.default_level
     end
 
-    ############################################################################
-    protected
+    private
 
     # Initializer for Abstract Class SemanticLogger::Base
     #

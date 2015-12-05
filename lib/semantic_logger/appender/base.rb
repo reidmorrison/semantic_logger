@@ -121,8 +121,7 @@ module SemanticLogger
         @level || :trace
       end
 
-      ############################################################################
-      protected
+      private
 
       # Initializer for Abstract Class SemanticLogger::Appender
       #

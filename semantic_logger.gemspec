@@ -17,6 +17,5 @@ Gem::Specification.new do |spec|
   spec.files       = Dir['lib/**/*', 'LICENSE.txt', 'Rakefile', 'README.md']
   spec.test_files  = Dir['test/**/*']
   spec.license     = 'Apache License V2.0'
-  spec.add_dependency 'sync_attr', '~> 2.0'
   spec.add_dependency 'concurrent-ruby', '~> 1.0'
 end

@@ -1,5 +1,3 @@
-require 'sync_attr'
-
 # Logger class variable mix-in
 #
 #   Lazy initialize a logger class variable with instance accessor
@@ -31,9 +29,8 @@ module SemanticLogger
 
     def self.included(base)
       base.class_eval do
-        # Thread safe logger class variable initializer
-        sync_cattr_reader :logger do
-          SemanticLogger[self]
+        def self.logger
+          @semantic_logger ||= SemanticLogger[self]
         end
       end
     end

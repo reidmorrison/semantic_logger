@@ -246,13 +246,9 @@ module SemanticLogger
     true
   end
 
-  ############################################################################
-  protected
+  private
 
   @@appenders = Concurrent::Array.new
-
-  ############################################################################
-  private
 
   def self.default_level_index
     Thread.current[:semantic_logger_silence] || @@default_level_index

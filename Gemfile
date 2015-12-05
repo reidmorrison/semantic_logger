@@ -8,7 +8,7 @@ gem 'minitest-reporters'
 gem 'minitest-stub_any_instance'
 
 # [optional] MongoDB Appender
-gem 'mongo_ha', '>= 1.11.0.rc1'
+gem 'mongo_ha', '>= 1.11'
 gem 'bson_ext', platform: 'ruby'
 
 # [optional] Syslog appender

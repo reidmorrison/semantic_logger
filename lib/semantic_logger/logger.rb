@@ -109,8 +109,7 @@ module SemanticLogger
       (@@metric_subscribers ||= Concurrent::Array.new) << block
     end
 
-    ############################################################################
-    protected
+    private
 
     @@appender_thread    = nil
     @@queue              = Queue.new
