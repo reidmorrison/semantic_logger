@@ -8,11 +8,25 @@ end
 # Unit Test for SemanticLogger::Appender::File
 #
 class AppenderFileTest < Minitest::Test
+  module Perform
+    def perform
+      logger.info 'perform'
+    end
+  end
+
   class Base
     include SemanticLogger::Loggable
+    include Perform
+  end
+
+  module Process
+    def process
+      logger.info 'process'
+    end
   end
 
   class Subclass < Base
+    include Process
   end
 
   describe SemanticLogger::Loggable do
@@ -35,6 +49,26 @@ class AppenderFileTest < Minitest::Test
         child_logger = subclass.logger
         refute_equal child_logger, base.logger
         assert_equal child_logger.object_id, subclass.logger.object_id
+      end
+
+      it 'should allow mixins to call parent logger' do
+        base = Base.new
+        base.perform
+        called = false
+        Base.logger.stub(:info, -> description { called = true if description == 'perform' }) do
+          base.perform
+        end
+        assert called, 'Did not call the correct logger'
+      end
+
+      it 'should allow child mixins to call parent logger' do
+        subclass = Subclass.new
+        subclass.process
+        called = false
+        Subclass.logger.stub(:info, -> description { called = true if description == 'process' }) do
+          subclass.process
+        end
+        assert called, 'Did not call the correct logger'
       end
     end
 
