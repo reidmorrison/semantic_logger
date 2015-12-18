@@ -64,7 +64,7 @@ class LoggerTest < Minitest::Test
               end
             end
 
-            it "logs #{level} info with backtrace" do
+            it 'logs with backtrace' do
               SemanticLogger.stub(:backtrace_level_index, 0) do
                 @logger.send(level, 'hello world', @hash) { 'Calculations' }
                 SemanticLogger.flush
@@ -72,10 +72,34 @@ class LoggerTest < Minitest::Test
               end
             end
 
+            it 'logs with backtrace and exception' do
+              SemanticLogger.stub(:backtrace_level_index, 0) do
+                exc = RuntimeError.new("Test")
+                @logger.send(level, 'hello world', exc)
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] LoggerTest -- hello world -- Exception: RuntimeError: Test/, @mock_logger.message
+              end
+            end
+
+            it 'logs payload' do
+              hash     = {tracking_number: '123456', even: 2, more: 'data'}
+              hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+              @logger.send(level, 'Hello world', hash)
+              SemanticLogger.flush
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+            end
+
+            it 'does not log an empty payload' do
+              hash = {}
+              @logger.send(level, 'Hello world', hash)
+              SemanticLogger.flush
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world/, @mock_logger.message
+            end
+
           end
         end
 
-        describe 'tagged logging' do
+        describe '#tagged' do
           it 'add tags to log entries' do
             @logger.tagged('12345', 'DJHSFK') do
               @logger.info('Hello world')
@@ -96,7 +120,9 @@ class LoggerTest < Minitest::Test
               assert_equal 'tags', @logger.tags.last
             end
           end
+        end
 
+        describe '#with_payload' do
           it 'logs tagged payload' do
             hash     = {tracking_number: "123456", even: 2, more: "data"}
             hash_str = hash.inspect.sub("{", "\\{").sub("}", "\\}")
@@ -108,24 +134,19 @@ class LoggerTest < Minitest::Test
               end
             end
           end
+        end
 
-          it 'logs payload' do
-            hash     = {tracking_number: "123456", even: 2, more: "data"}
-            hash_str = hash.inspect.sub("{", "\\{").sub("}", "\\}")
-            @logger.info('Hello world', hash)
-            SemanticLogger.flush
-            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
-          end
-
-          it 'does not log an empty payload' do
-            hash     = {}
-            @logger.info('Hello world', hash)
-            SemanticLogger.flush
-            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] LoggerTest -- Hello world/, @mock_logger.message
+        describe '#fast_tag' do
+          it 'add string tag to log entries' do
+            @logger.fast_tag('12345') do
+              @logger.info('Hello world')
+              SemanticLogger.flush
+              assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[12345\] LoggerTest -- Hello world/, @mock_logger.message
+            end
           end
         end
 
-        describe 'Ruby Logger' do
+        describe 'Ruby Logger level' do
           # Ensure that any log level can be logged
           Logger::Severity.constants.each do |level|
             it "log Ruby logger #{level} info" do
