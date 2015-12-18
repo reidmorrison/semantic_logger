@@ -329,7 +329,7 @@ module SemanticLogger
 
       # Add caller stack trace
       backtrace =
-        if !exception && (index >= SemanticLogger.backtrace_level_index)
+        if index >= SemanticLogger.backtrace_level_index
           trace = caller
           # Remove call to this internal method
           trace.shift(1)

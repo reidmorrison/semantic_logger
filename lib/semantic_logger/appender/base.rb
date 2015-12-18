@@ -1,3 +1,9 @@
+# Load AwesomePrint if available
+begin
+  require 'awesome_print'
+rescue LoadError
+end
+
 # Base appender
 #
 #   Abstract base class for appenders
