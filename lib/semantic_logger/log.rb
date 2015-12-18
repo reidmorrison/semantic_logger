@@ -43,14 +43,14 @@ module SemanticLogger
 
     MAX_EXCEPTIONS_TO_UNWRAP = 5
     # Call the block for exception and any nested exception
-    def each_exception(&block)
+    def each_exception
       # With thanks to https://github.com/bugsnag/bugsnag-ruby/blob/6348306e44323eee347896843d16c690cd7c4362/lib/bugsnag/notification.rb#L81
       depth      = 0
       exceptions = []
       ex         = exception
       while ex != nil && !exceptions.include?(ex) && exceptions.length < MAX_EXCEPTIONS_TO_UNWRAP
         exceptions << ex
-        block.call(ex, depth)
+        yield(ex, depth)
 
         depth += 1
         ex    =

@@ -108,6 +108,15 @@ module SemanticLogger
       end
     end
 
+    # If the tag being supplied is definitely a string then this fast
+    # tag api can be used for short lived tags
+    def fast_tag(tag)
+      (Thread.current[:semantic_logger_tags] ||= []) << tag
+      yield
+    ensure
+      Thread.current[:semantic_logger_tags].pop
+    end
+
     # Add the supplied tags to the list of tags to log for this thread whilst
     # the supplied block is active
     # Returns nil if no tags are currently set
@@ -290,7 +299,7 @@ module SemanticLogger
     end
 
     # Log message at the specified level
-    def log_internal(level, index, message=nil, payload=nil, exception=nil, &block)
+    def log_internal(level, index, message=nil, payload=nil, exception=nil)
       # Detect exception being logged
       if exception.nil? && payload.nil? && message.kind_of?(Exception)
         exception = message
@@ -303,7 +312,7 @@ module SemanticLogger
       end
 
       # Add result of block as message or payload if not nil
-      if block && (result = block.call)
+      if block_given? && (result = yield)
         if result.is_a?(String)
           message = message.nil? ? result : "#{message} -- #{result}"
         elsif payload && payload.respond_to?(:merge)
@@ -332,18 +341,18 @@ module SemanticLogger
     end
 
     # Measure the supplied block and log the message
-    def benchmark_internal(level, index, message, params, &block)
+    def benchmark_internal(level, index, message, params)
       start     = Time.now
       exception = nil
       begin
-        if block
+        if block_given?
           result    =
             if silence_level = params[:silence]
               # In case someone accidentally sets `silence: true` instead of `silence: :error`
               silence_level = :error if silence_level == true
-              silence(silence_level) { block.call(params) }
+              silence(silence_level) { yield(params) }
             else
-              block.call(params)
+              yield(params)
             end
           exception = params[:exception]
           result

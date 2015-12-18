@@ -1,12 +1,10 @@
 language: ruby
 bundler_args: --without development
 rvm:
-  - 1.9
   - 2.0
   - 2.2
   - jruby-1.7
   - jruby-9
-  - rbx
 services:
   - mongodb
 sudo: false

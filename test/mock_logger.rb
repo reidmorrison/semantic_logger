@@ -5,11 +5,11 @@ class MockLogger
 
   Logger::Severity.constants.each do |level|
     class_eval <<-EOT, __FILE__, __LINE__
-        def #{level.downcase}(message = nil, progname = nil, &block)
+        def #{level.downcase}(message = nil, progname = nil)
           if message
             self.message = message
-          elsif block
-            self.message = block.call
+          elsif block_given?
+            self.message = yield
           else
             self.message = progname
           end
