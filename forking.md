@@ -70,4 +70,4 @@ if defined?(Spring)
 end
 ```
 
-### [Next: Filtering ==>](filtering.html)
+### [Next: Log Rotation ==>](log_rotation.html)
