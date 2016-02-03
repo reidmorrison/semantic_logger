@@ -328,16 +328,21 @@ module SemanticLogger
       end
 
       # Add caller stack trace
-      backtrace =
-        if index >= SemanticLogger.backtrace_level_index
-          trace = caller
-          # Remove call to this internal method
-          trace.shift(1)
-          trace
-        end
+      backtrace = extract_backtrace if index >= SemanticLogger.backtrace_level_index
 
       struct = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception, nil, backtrace)
       log(struct) if include_message?(struct)
+    end
+
+    SELF_PATTERN = File.join('lib', 'semantic_logger')
+
+    # Extract the callers backtrace leaving out Semantic Logger
+    def extract_backtrace
+      stack = caller
+      while (first = stack.first) && first.include?(SELF_PATTERN)
+        stack.shift
+      end
+      stack
     end
 
     # Measure the supplied block and log the message
@@ -408,15 +413,7 @@ module SemanticLogger
         elsif duration >= min_duration
           # Only log if the block took longer than 'min_duration' to complete
           # Add caller stack trace
-          backtrace =
-            if index >= SemanticLogger.backtrace_level_index
-              trace = caller
-              # Remove call to this internal method
-              trace.shift
-              # Ruby 1.9 has additional stack entry for parent that calls this method
-              trace.shift if RUBY_VERSION.to_f <= 2.0
-              trace
-            end
+          backtrace = extract_backtrace if index >= SemanticLogger.backtrace_level_index
 
           struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric, backtrace)
           log(struct) if include_message?(struct)

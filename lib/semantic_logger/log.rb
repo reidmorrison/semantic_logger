@@ -89,7 +89,7 @@ module SemanticLogger
       elsif seconds >= 60.0 # 1 minute
         Time.at(seconds).strftime('%-Mm %-Ss')
       elsif seconds >= 1.0 # 1 second
-        Time.at(seconds).strftime('%-Ss %Lms')
+        "#{'%.3f' % seconds}s"
       else
         duration_to_s
       end
@@ -104,18 +104,26 @@ module SemanticLogger
     # Example:
     #    18934:thread 23 test_logging.rb:51
     def process_info(thread_name_length = 30)
-      file, line = file_name_and_line
+      file, line = file_name_and_line(true)
       file_name  = " #{file}:#{line}" if file
 
       "#{$$}:#{"%.#{thread_name_length}s" % thread_name}#{file_name}"
     end
 
+    CALLER_REGEXP = /^(.*):(\d+).*/
+
+    # Extract the filename and line number from the last entry in the supplied backtrace
+    def extract_file_and_line(stack, short_name = false)
+      match = CALLER_REGEXP.match(stack.first)
+      [short_name ? File.basename(match[1]) : match[1], match[2].to_i]
+    end
+
     # Returns [String, String] the file_name and line_number from the backtrace supplied
     # in either the backtrace or exception
-    def file_name_and_line
+    def file_name_and_line(short_name = false)
       if backtrace || (exception && exception.backtrace)
-        stacktrace = backtrace || exception.backtrace
-        stacktrace[0].split('/').last.split(':')[0..1] if stacktrace && stacktrace.size > 0
+        stack = backtrace || exception.backtrace
+        extract_file_and_line(stack, short_name) if stack && stack.size > 0
       end
     end
 

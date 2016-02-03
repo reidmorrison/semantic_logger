@@ -19,5 +19,7 @@ gem 'net_tcp_client'
 gem 'splunk-sdk-ruby'
 # [optional] Bugsnag appender
 gem 'bugsnag'
+# [optional] Graylog appender
+gem 'gelf'
 
 gem 'awesome_print'

@@ -1,3 +1,9 @@
+begin
+  require 'newrelic_rpm'
+rescue LoadError
+  raise 'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
+end
+
 =begin
 New Relic appender for SemanticLogger
 
@@ -54,9 +60,6 @@ sleep 10
 # New Relic shutdown - should send any queued data before exiting
 ::NewRelic::Agent.shutdown
 =end
-
-
-require 'newrelic_rpm'
 
 class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
   # Allow the level for this appender to be overwritten

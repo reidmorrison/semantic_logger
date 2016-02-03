@@ -5,20 +5,21 @@ require 'semantic_logger/semantic_logger'
 # @formatter:off
 module SemanticLogger
   autoload :Base,               'semantic_logger/base'
+  autoload :DebugAsTraceLogger, 'semantic_logger/debug_as_trace_logger'
   autoload :Log,                'semantic_logger/log'
   autoload :Logger,             'semantic_logger/logger'
   autoload :Loggable,           'semantic_logger/loggable'
-  autoload :DebugAsTraceLogger, 'semantic_logger/debug_as_trace_logger'
 
   module Appender
     autoload :Base,     'semantic_logger/appender/base'
+    autoload :Bugsnag,  'semantic_logger/appender/bugsnag'
     autoload :File,     'semantic_logger/appender/file'
-    autoload :Wrapper,  'semantic_logger/appender/wrapper'
+    autoload :Graylog,  'semantic_logger/appender/graylog'
     autoload :MongoDB,  'semantic_logger/appender/mongodb'
-    autoload :Syslog,   'semantic_logger/appender/syslog'
     autoload :NewRelic, 'semantic_logger/appender/new_relic'
     autoload :Splunk,   'semantic_logger/appender/splunk'
-    autoload :Bugsnag,   'semantic_logger/appender/bugsnag'
+    autoload :Syslog,   'semantic_logger/appender/syslog'
+    autoload :Wrapper,  'semantic_logger/appender/wrapper'
   end
   # @formatter:on
 

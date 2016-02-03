@@ -1,5 +1,10 @@
 require 'socket'
-require 'mongo'
+begin
+  require 'mongo'
+rescue LoadError
+  raise 'Gem mongo is required for logging to MongoDB. Please add the gem "mongo" to your Gemfile.'
+end
+
 module SemanticLogger
   module Appender
     # The Mongo Appender for the SemanticLogger

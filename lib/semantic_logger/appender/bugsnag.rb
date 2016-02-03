@@ -1,3 +1,9 @@
+begin
+  require 'bugsnag'
+rescue LoadError
+  raise 'Gem bugsnag is required for logging purposes. Please add the gem "bugsnag" to your Gemfile.'
+end
+
 =begin
 Bugsnag appender for SemanticLogger
 
@@ -40,8 +46,6 @@ logger.error 'This is written to application.log and will also be sent to Bugsna
 # The appender will send payloads to Bugsnag
 logger.error 'Something bad happened', info: 'Related information'
 =end
-
-require 'bugsnag'
 
 class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   # Allow the level for this appender to be overwritten

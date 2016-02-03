@@ -26,7 +26,7 @@ class LoggerTest < Minitest::Test
           @hash              = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
           @hash_str          = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
           @thread_name       = Thread.current.name
-          @file_name_reg_exp = RUBY_VERSION.to_f <= 2.0 ? ' (mock|logger_test).rb:\d+' : ' logger_test.rb:\d+'
+          @file_name_reg_exp = ' logger_test.rb:\d+'
 
           assert_equal [], @logger.tags
           assert_equal 65535, SemanticLogger.backtrace_level_index
