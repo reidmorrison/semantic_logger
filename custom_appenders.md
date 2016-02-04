@@ -58,12 +58,12 @@ logger = SemanticLogger['Hello']
 logger.info "Hello World"
 ~~~
 
-Look at the [existing appenders](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
+Look at the [existing appenders](https://github.com/rocketjob/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
 
 ### Contribute
 
 To have your custom appender included in the standard list of appenders, submit it along
 with complete working tests.
-See the [MongoDB Appender Test](https://github.com/reidmorrison/semantic_logger/blob/master/test/appender_mongodb_test.rb) for an example.
+See the [Graylog Appender Test](https://github.com/rocketjob/semantic_logger/blob/master/test/appender/graylog_test.rb) for an example.
 
 ### [Next: Log Struct ==>](log_struct.html)

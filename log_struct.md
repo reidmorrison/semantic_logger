@@ -22,6 +22,7 @@ Log = Struct.new(
   :exception,
   :metric)
 ~~~
+
 level [Symbol]
 
 * Log level of the supplied log call
@@ -39,7 +40,7 @@ message [String]
 
 * Text message to be logged
 
-payload [Hash|Exception]
+payload [Hash\|Exception]
 
 * Optional Hash or Ruby Exception object to be logged
 
