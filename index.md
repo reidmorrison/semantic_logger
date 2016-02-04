@@ -39,19 +39,19 @@ Send logs to one or more of:
 
 Example:
 
-```ruby
+~~~ruby
 logger.info("Queried users table in #{duration} ms, with a result code of #{result}")
-```
+~~~
 
 Example, including semantic information:
 
-```ruby
+~~~ruby
 logger.info('Queried table',
   duration: duration,
   result:   result,
   table:    'users',
   action:   'query')
-```
+~~~
 
 ## Features
 
@@ -147,7 +147,7 @@ logger.info('Queried table',
 
 ## Example:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 # Set the global default log level
@@ -159,58 +159,58 @@ SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.c
 # Create an instance of a logger
 # Add the application/class name to every log message
 logger = SemanticLogger['MyClass']
-```
+~~~
 
 Informational logging
 
-```ruby
+~~~ruby
 logger.info("Calling Supplier")
-```
+~~~
 
 Error information
 
-```ruby
+~~~ruby
 logger.error("Oops external call failed", :result => :failed, :reason_code => -10)
-```
+~~~
 
 Set this thread's name for when multiple threads are all logging at the same time
 
-```ruby
+~~~ruby
 Thread.current.name = "main"
-```
+~~~
 
 Debug information
 
-```ruby
+~~~ruby
 results = [ 5, 7, 2, 10 ]
 logger.debug { "A total of #{results.inject(0) {|sum, i| i+sum }} were processed" }
-```
+~~~
 
 New level for logging low level trace information such as data sent or received
 
-```ruby
+~~~ruby
 raw_response = "<xml><user>jbloggs</user><lastname>Bloggs</lastname><firstname>Joe</firstname></xml>"
 logger.trace "Raw data received from Supplier:", raw_response
-```
+~~~
 
 Measure and log how long it takes to execute a block of code
 
-```ruby
+~~~ruby
 logger.benchmark_info "Called external interface" do
   # Code to call external service ...
   sleep 0.75
 end
-```
+~~~
 
 Add tags to every log entry within the code block. For example login, session id, source ip address, username, etc.
 
-```ruby
+~~~ruby
 logger.tagged('jbloggs') do
   # All log entries in this block will include the tag 'jbloggs'
   logger.info("Hello World")
   logger.debug("More messages")
 end
-```
+~~~
 
 Output:
 

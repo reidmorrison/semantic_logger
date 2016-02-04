@@ -20,15 +20,15 @@ at the same time, so that for example log messages can be written to all of the 
 
 Log to file with the standard formatter:
 
-```ruby
+~~~ruby
 SemanticLogger.add_appender('development.log')
-```
+~~~
 
 Log to file with the standard colorized formatter:
 
-```ruby
+~~~ruby
 SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
-```
+~~~
 
 For performance reasons the log file is not re-opened with every call.
 When the log file needs to be rotated, use a copy-truncate operation rather
@@ -38,22 +38,22 @@ than deleting the file.
 
 Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdout
 
-```ruby
+~~~ruby
 # Log errors and above to standard error:
 SemanticLogger.add_appender($stderror, :error)
-```
+~~~
 
 ### Syslog or SyslogNG
 
-```ruby
+~~~ruby
 # Log to a local Syslog daemon
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
-```
+~~~
 
-```ruby
+~~~ruby
 # Log to a remote Syslog server such as syslog-ng over TCP:
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(server: 'tcp://myloghost:514'))
-```
+~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
 
@@ -67,21 +67,21 @@ had the log information been converted to text.)
 
 For Rails applications, or running bundler, add the following line to the file `Gemfile`:
 
-```ruby
+~~~ruby
 gem 'gelf'
-```
+~~~
 
 Install gems:
 
-```
+~~~
 bundle install
-```
+~~~
 
 If not using Bundler:
 
-```
+~~~
 gem install gelf
-```
+~~~
 
 To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
 create a file called `<Rails Root>/config/initializers/graylog.rb` with
@@ -89,7 +89,7 @@ the following contents and restart the application.
 
 To use the UDP Protocol:
 
-```ruby
+~~~ruby
 unless Rails.env.test? || Rails.env.development?
   appender        = SemanticLogger::Appender::Graylog.new(
     server:   'localhost',
@@ -102,10 +102,10 @@ unless Rails.env.test? || Rails.env.development?
   SemanticLogger.add_appender(appender)
   SemanticLogger.backtrace_level = SemanticLogger.default_level
 end
-```
+~~~
 Or, to use the TCP Protocol:
 
-```ruby
+~~~ruby
 unless Rails.env.test? || Rails.env.development?
   appender        = SemanticLogger::Appender::Graylog.new(
     server:   'localhost',
@@ -119,7 +119,7 @@ unless Rails.env.test? || Rails.env.development?
   SemanticLogger.add_appender(appender)
   SemanticLogger.backtrace_level = SemanticLogger.default_level
 end
-```
+~~~
 
 If not using Rails, the `facility` can be removed, or set to a custom string describing the application.
 
@@ -136,27 +136,27 @@ information when logging with tags or a payload.
 
 For Rails applications, or running bundler, add the following line to the file `Gemfile`:
 
-```ruby
+~~~ruby
 gem 'splunk-sdk-ruby'
-```
+~~~
 
 Install gems:
 
-```
+~~~
 bundle install
-```
+~~~
 
 If not using Bundler:
 
-```
+~~~
 gem install splunk-sdk-ruby
-```
+~~~
 
 To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
 create a file called `<Rails Root>/config/initializers/splunk.rb` with
 the following contents and restart the application.
 
-```ruby
+~~~ruby
 unless Rails.env.test? || Rails.env.development?
   appender = SemanticLogger::Appender::Splunk.new(
     host:     'localhost',
@@ -167,7 +167,7 @@ unless Rails.env.test? || Rails.env.development?
   )
   SemanticLogger.add_appender(appender)
 end
-```
+~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
 
@@ -183,31 +183,31 @@ information when logging with tags or a payload.
 
 For Rails applications, or running bundler, add the following line to the bottom of the file `Gemfile`:
 
-```ruby
+~~~ruby
 gem 'newrelic_rpm'
-```
+~~~
 
 Install gems:
 
-```
+~~~
 bundle install
-```
+~~~
 
 If not using Bundler:
 
-```
+~~~
 gem install newrelic_rpm
-```
+~~~
 
 To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
 create a file called `<Rails Root>/config/initializers/new_relic.rb` with
 the following contents and restart the application.
 
-```ruby
+~~~ruby
 unless Rails.env.test? || Rails.env.development?
   SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
 end
-```
+~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
 
@@ -217,27 +217,27 @@ Write log messages as documents into a MongoDB capped collection.
 
 For Rails applications, or running bundler, add the following line to the file `Gemfile`:
 
-```ruby
+~~~ruby
 gem 'mongo'
-```
+~~~
 
 Install gems:
 
-```
+~~~
 bundle install
-```
+~~~
 
 If not using Bundler:
 
-```
+~~~
 gem install mongo
-```
+~~~
 
 To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
 create a file called `<Rails Root>/config/initializers/mongodb.rb` with
 the following contents and restart the application.
 
-```ruby
+~~~ruby
 unless Rails.env.test? || Rails.env.development?
   client   = Mongo::MongoClient.new('localhost', 27017)
   database = client['test']
@@ -249,11 +249,11 @@ unless Rails.env.test? || Rails.env.development?
   )
   SemanticLogger.add_appender(appender)
 end
-```
+~~~
 
 The following is written to Mongo:
 
-```javascript
+~~~javascript
 > db.semantic_logger.findOne()
 {
 	"_id" : ObjectId("53a8d5b99b9eb4f282000001"),
@@ -267,7 +267,7 @@ The following is written to Mongo:
 	"application" : "my_application",
 	"message" : "This message is written to mongo as a document"
 }
-```
+~~~
 
 ### Logger, log4r, etc.
 
@@ -277,12 +277,12 @@ Semantic Logger can log to other logging libraries:
 while still writing to the existing destinations.
 * Or, write to a destination not currently supported by Semantic Logger.
 
-```ruby
+~~~ruby
 ruby_logger = Logger.new(STDOUT)
 
 # Log to an existing Ruby Logger instance
 SemanticLogger.add_appender(ruby_logger)
-```
+~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
 
@@ -292,12 +292,12 @@ Messages can be logged to multiple appenders at the same time.
 
 Example, log to a local file and to a remote Syslog server such as syslog-ng over TCP:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 SemanticLogger.add_appender('development.log')
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(:server => 'tcp://myloghost:514'))
-```
+~~~
 
 ### Appender Logging Levels
 
@@ -309,7 +309,7 @@ The logging level for each appender can be set explicitly. This supports:
 
 Stand alone example:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 # Set default log level for new logger instances
@@ -326,11 +326,11 @@ logger.level = :trace
 logger.trace "This is a trace message"
 logger.info "This is an info message"
 logger.warn "This is a warning message"
-```
+~~~
 
 The output is as follows:
 
-```bash
+~~~bash
 ==> trace.log <==
 2013-08-02 14:15:56.733532 T [35669:70176909690580] MyClass -- This is a trace message
 2013-08-02 14:15:56.734273 I [35669:70176909690580] MyClass -- This is an info message
@@ -338,7 +338,7 @@ The output is as follows:
 
 ==> warnings.log <==
 2013-08-02 14:15:56.735273 W [35669:70176909690580] MyClass -- This is a warning message
-```
+~~~
 
 ### Standalone
 
@@ -348,7 +348,7 @@ being written to the appenders that have been registered in Semantic Logger.
 
 Example:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 appender = SemanticLogger::Appender::File.new('separate.log', :info)
@@ -359,7 +359,7 @@ appender.warn 'Only send this to separate.log'
 appender.benchmark_info 'Called supplier' do
   # Call supplier ...
 end
-```
+~~~
 
 Note: Once an appender has been registered with Semantic Logger it must not be called
       directly, otherwise non-deterministic concurrency issues will arise when it is used across threads.

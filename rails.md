@@ -15,7 +15,7 @@ Rails, ActiveRecord::Base, ActionController::Base, and ActiveResource::Base
 
 Extract from a Rails log file after adding the semantic_logger gem:
 
-```
+~~~
 2012-10-19 12:05:46.736 I [35940:JRubyWorker-10] Rails --
 
 Started GET "/" for 127.0.0.1 at 2012-10-19 12:05:46 +0000
@@ -31,7 +31,7 @@ Started GET "/" for 127.0.0.1 at 2012-10-19 12:05:46 +0000
 2012-10-19 12:05:51.109 I [35940:JRubyWorker-10] ActionController -- Rendered layouts/_footer.html.erb (16.0ms)
 2012-10-19 12:05:51.109 I [35940:JRubyWorker-10] ActionController -- Rendered admin/index.html.erb within layouts/base (1329.0ms)
 2012-10-19 12:05:51.113 I [35940:JRubyWorker-10] ActionController -- Completed 200 OK in 3795ms (Views: 1349.0ms | ActiveRecord: 88.0ms | Mongo: 0.0ms)
-```
+~~~
 
 ### Rails Support
 
@@ -41,9 +41,9 @@ Started GET "/" for 127.0.0.1 at 2012-10-19 12:05:46 +0000
 
 Add the following line to Gemfile
 
-```ruby
+~~~ruby
 gem 'rails_semantic_logger'
-```
+~~~
 
 Install required gems with bundler
 
@@ -60,18 +60,18 @@ By default Semantic Logger will detect the log level from Rails. To set the
 log level explicitly, add the following line to
 config/environments/production.rb inside the Application.configure block
 
-```ruby
+~~~ruby
 config.log_level = :trace
-```
+~~~
 
 #### Colorized Logging
 
 If the Rails colorized logging is enabled, then the colorized formatter will be used
 by default. To disable colorized logging in both Rails and Semantic Logger:
 
-```ruby
+~~~ruby
 config.colorize_logging = false
-```
+~~~
 
 ### Process Forking
 
@@ -82,7 +82,7 @@ Also see [Process Forking](forking.html) if you use Unicorn or Puma
 To log to both the Rails log file and MongoDB add the following lines to
 config/environments/production.rb inside the Application.configure block
 
-```ruby
+~~~ruby
 require 'mongo'
 config.after_initialize do
   # Re-use the existing MongoDB connection, or create a new one here
@@ -95,25 +95,25 @@ config.after_initialize do
     collection_size: 25.gigabytes
   )
 end
-```
+~~~
 
 #### Logging to Syslog
 
 Configuring rails to also log to a local Syslog:
 
-```ruby
+~~~ruby
 config.after_initialize do
   config.semantic_logger.add_appender(SemanticLogger::Appender::Syslog.new)
 end
-```
+~~~
 
 Configuring rails to also log to a remote Syslog server such as syslog-ng over TCP:
 
-```ruby
+~~~ruby
 config.after_initialize do
   config.semantic_logger.add_appender(SemanticLogger::Appender::Syslog.new(:server => 'tcp://myloghost:514'))
 end
-```
+~~~
 
 ### Log Rotation
 
@@ -122,7 +122,7 @@ to be rotated, use a copy-truncate operation over deleting the file.
 
 Sample Log rotation file for Linux:
 
-```
+~~~
 /var/www/rails/my_rails_app/shared/log/*.log {
         daily
         missingok
@@ -132,7 +132,7 @@ Sample Log rotation file for Linux:
         delaycompress
         notifempty
 }
-```
+~~~
 
 ### Custom Appenders and Formatters
 
@@ -141,7 +141,7 @@ The format of data logged by Semantic Logger is specific to each appender.
 To change the text file log format in Rails Semantic Logger, create a rails initializer with the following code and customize as needed.
 For example: 'config/initializers/semantic_logger_formatter.rb'
 
-```ruby
+~~~ruby
 # Replace the format of the existing log file appender
 SemanticLogger.appenders.first.formatter = Proc.new do |log|
   tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
@@ -154,7 +154,7 @@ SemanticLogger.appenders.first.formatter = Proc.new do |log|
 
   "#{SemanticLogger::Appender::Base.formatted_time(log.time)} #{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} : #{message}"
 end
-```
+~~~
 
 ### Replacing Existing loggers
 

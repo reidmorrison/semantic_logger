@@ -8,7 +8,7 @@ Internally all log messages are passed around in a Log Struct. In order
 to write your own custom formatter or log appender it is necessary to understand
 the fields:
 
-```ruby
+~~~ruby
 Log = Struct.new(
   :level,
   :thread_name,
@@ -21,7 +21,7 @@ Log = Struct.new(
   :level_index,
   :exception,
   :metric)
-```
+~~~
 level [Symbol]
 
 * Log level of the supplied log call

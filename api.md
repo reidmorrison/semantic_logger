@@ -23,7 +23,7 @@ in the development environment for low level trace logging of methods calls etc.
 By default Semantic Logger will only log `:info` and above, to log everything to
 the log file set the global default log level to `:trace`:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 # Override the default log level of :info so that :debug and :trace are also logged
@@ -34,7 +34,7 @@ SemanticLogger.add_appender('development.log')
 logger = SemanticLogger['MyClass']
 logger.info "Hello World"
 logger.trace "Low level trace information"
-```
+~~~
 
 All loggers and appenders will by default use the global `SemanticLogger.default_level`
 unless they have been explicity set to another level. In which case changing
@@ -44,15 +44,15 @@ unless they have been explicity set to another level. In which case changing
 
 To create a stand-alone logger instance by supplying the name of the class/application:
 
-```ruby
+~~~ruby
 logger = SemanticLogger['MyClass']
-```
+~~~
 
 Or, even better, pass the actual class itself:
 
-```ruby
+~~~ruby
 logger = SemanticLogger[MyClass]
-```
+~~~
 
 A logger instance should be created for every class so that it's log entries
 can be uniquely identified from logging entries from other classes.
@@ -66,13 +66,13 @@ Appenders.
 Rather than creating logger instances above inside classes it is recommended to
 use the SemanticLogger::Loggable Mixin by adding the following include:
 
-```ruby
+~~~ruby
   include SemanticLogger::Loggable
-```
+~~~
 
 For Example:
 
-```ruby
+~~~ruby
 class Supplier
   # Include class and instance logger variables
   include SemanticLogger::Loggable
@@ -85,7 +85,7 @@ class Supplier
     logger.debug "logger is accessible from instance methods"
   end
 end
-```
+~~~
 
 This will result in the log output identifying the log entry as from the `Supplier` class
 
@@ -96,32 +96,32 @@ This will result in the log output identifying the log entry as from the `Suppli
 The Semantic Logger logging API supports the existing logging interface for
 the Rails and Ruby Loggers. For example:
 
-```ruby
+~~~ruby
 logger.info("Hello World")
-```
+~~~
 
 Or to query whether a specific log level is set
 
-```ruby
+~~~ruby
 logger.info?
-```
+~~~
 
 The following traditional logging methods are available
 
-```ruby
+~~~ruby
 logger.trace("Low level trace information such as data sent over a socket")
 logger.debug("Debugging information to aid with problem determination")
 logger.info("Informational message such as request received")
 logger.warn("Warn about something in the system")
 logger.error("An error occurred during processing")
 logger.fatal("Oh no something really bad happened")
-```
+~~~
 
 Each of the above calls can take additional parameters, for example:
 
-```ruby
+~~~ruby
 log.info(message, payload_or_exception=nil, exception=nil, &block)
-```
+~~~
 
 Parameters
 
@@ -135,20 +135,20 @@ This can be used to prevent the block from being evaluated in production environ
 
 Examples:
 
-```ruby
+~~~ruby
 logger.debug("Calling Supplier")
 
 logger.debug("Calling Supplier", :request => 'update', :user => 'Jack')
 
 logger.trace { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
-```
+~~~
 
 ### Exceptions
 
 The Semantic Logger adds an optional parameter to the existing log methods so that
 a corresponding Exception can be logged in a standard way
 
-```ruby
+~~~ruby
 begin
   # ... Code that can raise an exception
 rescue Exception => exception
@@ -159,16 +159,16 @@ rescue Exception => exception
   # Re-raise or handle the exception
   raise exception
 end
-```
+~~~
 
 ### Payload
 
 The Semantic Logger adds an extra parameter to the existing log methods so that
 additional payload can be logged, such as a Hash or a Ruby Exception object.
 
-```ruby
+~~~ruby
 logger.info("Oops external call failed", result: :failed, reason_code: -10)
-```
+~~~
 
 The additional payload is machine readable so that we don't have to write complex
 regular expressions so that a program can analyze log output. With the MongoDB
@@ -180,11 +180,11 @@ is therefore fully searchable
 Another common logging requirement is to measure the time it takes to execute a block
 of code based on the log level. For example:
 
-```ruby
+~~~ruby
 logger.benchmark_info "Called external interface" do
   # Code to call external service ...
 end
-```
+~~~
 
 The following output will be written to file:
 
@@ -199,28 +199,28 @@ After logging the exception is re-raised unchanged.
 
 The following benchmarking methods are available:
 
-```ruby
+~~~ruby
 logger.benchmark_trace("Low level trace information such as data sent over a socket")
 logger.benchmark_debug("Debugging information to aid with problem determination")
 logger.benchmark_info("Informational message such as request received")
 logger.benchmark_warn("Warn about something in the system")
 logger.benchmark_error("An error occurred during processing")
 logger.benchmark_fatal("Oh no something really bad happened")
-```
+~~~
 
 The log level can be supplied dynamically as the first parameter to:
 
-```ruby
+~~~ruby
 logger.benchmark(:info, "Informational message such as request received")
-```
+~~~
 
 Each of the above calls take additional optional parameters:
 
-```ruby
+~~~ruby
 log.benchmark_info(message, params=nil) do
   # Measure how long it takes to run this block of code
 end
-```
+~~~
 
 Benchmark calls take two parameters, the first is a mandatory text message, the
 second is a Hash of settings:
@@ -277,23 +277,23 @@ Optional, If an exception is raised, increase the log level to this level
 
 Example
 
-```ruby
+~~~ruby
 logger.benchmark_info "Called external interface",
     log_exception: :full,
     min_duration:  100,
     metric:        'Custom/Supplier/process' do
   # Code to call external service ...
 end
-```
+~~~
 
 If the duration is already available, it is possible to use the same benchmark logging
 and manually supply the duration without a block. This ensures that the duration is
 logged in a semantic way rather than inserting the duration into the text message itself.
 
-```ruby
+~~~ruby
 duration = Time.now - start_time
 logger.benchmark_info "Called external interface", duration: duration
-```
+~~~
 
 Note: Either a code block or `:duration` must be supplied on all benchmark calls
 
@@ -309,14 +309,14 @@ new thread.
 Using Tagged logging is critical in any highly concurrent environment so that
 one can quickly find all related log entries across all levels of code, and threads.
 
-```ruby
+~~~ruby
 tracking_number = '15354128'
 
 logger.tagged(tracking_number) do
   # All log entries in this block will include the 'tracking_number' logging tag
   logger.debug("Hello World")
 end
-```
+~~~
 
 ### Beyond Tagged Logging
 
@@ -324,12 +324,12 @@ Blocks of code can be tagged with not only values, but can be tagged with
 entire hashes of data. The additional hash of data will be merged into
 the payload of every log entry
 
-```ruby
+~~~ruby
 logger.with_payload(:user => 'Jack', :zip_code => 12345) do
   # All log entries in this block will include the above payload hash
   logger.debug("Hello World")
 end
-```
+~~~
 
 ### Named threads
 
@@ -337,21 +337,21 @@ Semantic Logger logs the name or id of the thread in every log message.
 
 On Ruby MRI the thread name is by default the thread's object_id, For example: 70184354571980
 
-```
+~~~
 2013-11-07 16:25:14.279627 I [35841:70184354571980] (0.0ms) ExternalSupplier -- Calling external interface
-```
+~~~
 
 To set a custom name for any thread so that it shows up in the logger:
 
-```ruby
+~~~ruby
 Thread.current.name = "User calculation thread 32"
-```
+~~~
 
 Sample output:
 
-```
+~~~
 2013-11-07 16:26:02.744139 I [35841:User calculation thread 32] (0.0ms) ExternalSupplier -- Calling external interface
-```
+~~~
 
 When running JRuby, `Thread.current.name` will also set the underlying thread name in the JVM
 which is very useful when monitoring the JVM via JMX using tools such as jconsole.
@@ -363,9 +363,9 @@ to distinguish between concurrently running threads if they have the same name.
 
 For example, use the current thread object_id to ensure uniqueness:
 
-```ruby
+~~~ruby
 Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
-```
+~~~
 
 ### Silencing noisy logs
 
@@ -375,19 +375,19 @@ This setting is thread-safe and only applies to the current thread
 
 Any threads spawned from within the block will not be affected by `silence`
 
-```ruby
+~~~ruby
 # Silence all logging below :error level
 logger.silence do
  logger.info "this will _not_ be logged"
  logger.warn "this neither"
  logger.error "but errors will be logged"
 end
-```
+~~~
 
 `silence` can also lower the log level within the supplied block. For example
 to increase log information in diagnosing a specific issue.
 
-```ruby
+~~~ruby
 # Perform trace level logging within the block, even when the default is higher
 SemanticLogger.default_level = :info
 
@@ -396,7 +396,7 @@ logger.debug 'this will _not_ be logged'
 logger.silence(:trace) do
  logger.debug "this will be logged"
 end
-```
+~~~
 
 #### Note
 
@@ -412,20 +412,20 @@ logging.
 To map the `:debug` logging calls for these existing libraries to `:trace`, replace
 its logger with an instance of `DebugAsTraceLogger::SemanticLogger`
 
-```ruby
+~~~ruby
 # Example, log debug level messages as trace:
 logger = SemanticLogger::DebugAsTraceLogger.new('NoisyLibrary')
 
 # This will be logged as :trace
 logger.debug 'Some very low level noisy message'
-```
+~~~
 
 ### Changing the log level for a single class at runtime
 
 Since the logger is class specific, its log level can be changed dynamically at runtime.
 For example, to temporarily set the log level to `:trace` to diagnose an issue:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 SemanticLogger.default_level = :info
@@ -457,38 +457,38 @@ supplier.call_supplier(100, 'Jack')
 
 # Change the log level back to the global default level
 ExternalSupplier.logger.level = nil
-```
+~~~
 
 Below is the output from the above example showing the `:trace` log level message
 that was written during the second call to the ExternalSupplier:
 
-```
+~~~
 2013-11-07 16:19:26.496 I [35674:main] (0.0ms) ExternalSupplier -- Calling external interface
 
 2013-11-07 16:19:26.683 T [35674:main] ExternalSupplier -- Calculating with amount -- {:amount=>100, :name=>"Jack"}
 2013-11-07 16:19:26.683 I [35674:main] (0.0ms) ExternalSupplier -- Calling external interface
-```
+~~~
 
 #### Change the log level without using signals
 
 If the application has another means of communicating without needing signals,
 the global default log level can be modified using `SemanticLogger.default_level=`
 
-```ruby
+~~~ruby
 # Change the global default logging level for active loggers
 SemanticLogger.default_level = :debug
-```
+~~~
 
 ### Metrics integration
 
 In production environments it is often necessary to not only measure the performance of a
 block of code using for example:
 
-```ruby
+~~~ruby
 logger.benchmark_info "Calling external interface" do
   # Code to call the external supplier ...
 end
-```
+~~~
 
 Subscriber can be defined to receive every log message that has a `:metric` option
 specified. The subscribers are called asynchronously from the Appender Thread so
@@ -497,20 +497,20 @@ as not to impact the orginal thread that logged the message.
 For example, to forward the metric to NewRelic for every benchmark call with the
 `:metric` option supplied:
 
-```ruby
+~~~ruby
 # config/initializers/semantic_logger_metrics.rb
 SemanticLogger.on_metric do |log_struct|
   ::NewRelic::Agent.record_metric(log_struct.metric, log_struct.duration)
 end
-```
+~~~
 
 Add the `:metric` option to the log entry as follows:
 
-```ruby
+~~~ruby
 logger.benchmark_info "Calling external interface", metric: 'Custom/slow_action/beginning_work' do
   # Code to call the external supplier ...
 end
-```
+~~~
 
 For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 
@@ -525,10 +525,10 @@ many logging instances, sometimes one per class.
 To perform a global flush of all appenders and to wait for any outstanding queued
 messages to be written:
 
-```ruby
+~~~ruby
 # Flush all appenders and wait for them to complete flushing
 SemanticLogger.flush
-```
+~~~
 
 ### Replacing loggers for other Gems
 
@@ -536,7 +536,7 @@ Rails Semantic Logger already replaces the loggers for the following Gems, but
 if Semantic Logger is being used stand-alone, then these need to be called from
 within your code as needed:
 
-```ruby
+~~~ruby
 # Replace the Resque Logger
 Resque.logger = SemanticLogger[Resque] if defined?(Resque) && Resque.respond_to?(:logger)
 
@@ -546,6 +546,6 @@ Sidekiq::Logging.logger = SemanticLogger[Sidekiq] if defined?(Sidekiq)
 # Replace the Mongoid Logger
 Mongoid.logger = SemanticLogger[Mongoid] if defined?(Mongoid)
 Moped.logger   = SemanticLogger[Moped] if defined?(Moped)
-```
+~~~
 
 ### [Next: Appenders ==>](appenders.html)

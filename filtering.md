@@ -25,7 +25,7 @@ For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 Example. Using a regular expression filter, log everything to one file,
 log _only_ messages from a particular class to the second file:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 # Log everything to development.log
@@ -41,12 +41,12 @@ logger1.info "This will _only_ be logged to 'my_class.log'"
 
 logger2 = SemanticLogger['OtherClass']
 logger2.info "This will be logged to development.log and 'my_class.log'"
-```
+~~~
 
 Example2. Using a Proc filter, log everything to one file, log everything except
 messages from a particular class to the second file:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 # Log everything to development.log
@@ -64,7 +64,7 @@ logger1.info "This will _not_ be logged to summary.log"
 
 logger2 = SemanticLogger['OtherClass']
 logger2.info "This will be logged to summary.log"
-```
+~~~
 
 ### Logger specific filtering
 
@@ -74,7 +74,7 @@ a library when it allows its logger to be replaced.
 
 For example, filter out all the `*** Checking` log messages from Resque:
 
-```ruby
+~~~ruby
 logger = SemanticLogger[Resque]
 # Filter out all messages containing the text beginning with '*** Checking'
 logger.filter = Proc.new {|log| log.message !~ /\A\*\*\* Checking/ }
@@ -82,6 +82,6 @@ logger.filter = Proc.new {|log| log.message !~ /\A\*\*\* Checking/ }
 # Give Resque its own logger with the custom filter qpplied to reduce it's verbosity
 # when logging to all registered appenders
 Resque.logger = logger
-```
+~~~
 
 ### [Next: Customize ==>](customize.html)

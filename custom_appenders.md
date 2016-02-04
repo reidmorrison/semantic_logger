@@ -17,7 +17,7 @@ For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 
 Basic outline for an Appender:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 class SimpleAppender < SemanticLogger::Appender::Base
@@ -43,11 +43,11 @@ class SimpleAppender < SemanticLogger::Appender::Base
     puts "Flush :)"
   end
 end
-```
+~~~
 
 Sample program calling the above appender:
 
-```ruby
+~~~ruby
 SemanticLogger.default_level = :trace
 # Log to file dev.log
 SemanticLogger.add_appender('dev.log')
@@ -56,7 +56,7 @@ SemanticLogger.add_appender(SimpleAppender.new)
 
 logger = SemanticLogger['Hello']
 logger.info "Hello World"
-```
+~~~
 
 Look at the [existing appenders](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
 

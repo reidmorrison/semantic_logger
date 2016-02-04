@@ -12,7 +12,7 @@ For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 
 #### Example: Formatter that just returns the Log Struct
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 SemanticLogger.default_level = :trace
@@ -24,7 +24,7 @@ end
 
 logger = SemanticLogger['Hello']
 logger.info "Hello World"
-```
+~~~
 Output:
 
     #<struct SemanticLogger::Log level=:info, thread_name=70167090649820, name="Hello", message="Hello World", payload=nil, time=2012-10-24 10:09:33 -0400, duration=nil, tags=nil, level_index=2>
@@ -32,7 +32,7 @@ Output:
 
 #### Example: Replace the default log file formatter
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
@@ -64,11 +64,11 @@ SemanticLogger.add_appender('development.log') do |log|
   end
   entry
 end
-```
+~~~
 
 #### Example: Replace the colorized log file formatter
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
@@ -105,7 +105,7 @@ SemanticLogger.add_appender('development.log') do |log|
   end
   entry
 end
-```
+~~~
 
 #### Example: Replacing the format for an active logger, such as in Rails:
 
@@ -113,7 +113,7 @@ This example assumes you have `gem 'rails_semantic_logger'` in your Gemfile.
 
 Create a file called `config/initializers/semantic_logger.rb`:
 
-```ruby
+~~~ruby
 SemanticLogger.appenders.first.formatter = lambda do |log|
   colors      = SemanticLogger::Appender::AnsiColors
   level_color = colors::LEVEL_MAP[log.level]
@@ -147,7 +147,7 @@ SemanticLogger.appenders.first.formatter = lambda do |log|
   end
   entry
 end
-```
+~~~
 
 Modify the code above as needed to meet your requirements.
 

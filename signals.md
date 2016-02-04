@@ -13,16 +13,16 @@ registered by calling `SemanticLogger.add_signal_handler`
 
 Add a Rails initializer:
 
-```ruby
+~~~ruby
 # config/initializers/semantic_logger.rb
 SemanticLogger.add_signal_handler
-```
+~~~
 Or, enabling Log Level Signal handler for a stand-alone application:
 
-```ruby
+~~~ruby
 # Enable signal handling for this process
 SemanticLogger.add_signal_handler
-```
+~~~
 
 The following capabilities are available by using the corresponding signal:
 
@@ -34,17 +34,17 @@ signal without having to restart the process.
 When the signal is sent, the global default log level rotates through the following
 log levels in the following order, starting from the current global default level:
 
-```ruby
+~~~ruby
   :warn, :info, :debug, :trace
-```
+~~~
 
 If the current level is `:trace` it wraps around back to `:warn`
 
 Example (where the target ruby process id is 1234) :
 
-```
+~~~
 kill -SIGUSR2 1234
-```
+~~~
 
 Note: The changes to the logging level will not change for any classes where the
 level was set explicity within the application itself. The above signal only changes
@@ -61,15 +61,15 @@ Java thread dump which includes system threads and Java stack traces.
 
 It is recommended to name any threads you create in the application, by
 calling the following from within the thread itself:
-```ruby
+~~~ruby
 Thread.current.name = 'My Worker'
-```
+~~~
 
 Example (where the target ruby process id is 1234) :
 
-```
+~~~
 kill -TTIN 1234
-```
+~~~
 
 ![development.log](images/thread_dump.png)
 
@@ -88,11 +88,11 @@ Garbage Collection that could affect active web requests or other processing.
 To only register one of the signal handlers, set the other to nil
 Set gc_log_microseconds to nil to not enable JRuby Garbage collections
 
-```ruby
+~~~ruby
 # Set the log level change signal to USR1
 # Set the thread dump signal to 'USR2'
 # Set the Garbage collection minimum threshold to 100,000 micro-seconds
 SemanticLogger.add_signal_handler('USR1', 'USR2', 100000)
-```
+~~~
 
 ### [Next: Forking ==>](forking.html)

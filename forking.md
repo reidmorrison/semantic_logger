@@ -17,26 +17,26 @@ to do so that Semantic Logger can continue to function after a fork:
 
 With Unicorn, add the following code to you Unicorn configuration:
 
-```ruby
+~~~ruby
 # config/unicorn.conf.rb
 after_fork do |server, worker|
   # Re-open appenders after forking the process
   SemanticLogger.reopen
 end
-```
+~~~
 
 ### Puma
 
 If running Puma 2 in Clustered mode and you're preloading your application,
 add the following to your worker boot code:
 
-```ruby
+~~~ruby
 # config/puma.rb
 on_worker_boot do
   # Re-open appenders after forking the process
   SemanticLogger.reopen
 end
-```
+~~~
 
 ### Auto-detected Frameworks
 
@@ -50,7 +50,7 @@ so the custom code below is only necessary when using Semantic Logger stand-alon
 Add the following code only if Rails Semantic Logger gem is not being used and
 you are using these frameworks:
 
-```ruby
+~~~ruby
 # Passenger provides the :starting_worker_process event for executing
 # code after it has forked, so we use that and reconnect immediately.
 if defined?(PhusionPassenger)
@@ -68,6 +68,6 @@ end
 if defined?(Spring)
   Spring.after_fork { |job| ::SemanticLogger.reopen }
 end
-```
+~~~
 
 ### [Next: Log Rotation ==>](log_rotation.html)
