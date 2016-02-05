@@ -15,6 +15,7 @@ at the same time, so that for example log messages can be written to all of the 
 * New Relic
 * Bug Snag
 * MongoDB
+* HTTP(S)
 
 ### Text File
 
@@ -90,35 +91,29 @@ the following contents and restart the application.
 To use the UDP Protocol:
 
 ~~~ruby
-unless Rails.env.test? || Rails.env.development?
-  appender        = SemanticLogger::Appender::Graylog.new(
-    server:   'localhost',
-    port:     12201,
-    facility: Rails.application.class.name
-  )
-  # Optional: Add filter to exclude health_check, or other log entries
-  appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+appender        = SemanticLogger::Appender::Graylog.new(
+  server:   'localhost',
+  port:     12201,
+  facility: Rails.application.class.name
+)
+# Optional: Add filter to exclude health_check, or other log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
 
-  SemanticLogger.add_appender(appender)
-  SemanticLogger.backtrace_level = SemanticLogger.default_level
-end
+SemanticLogger.add_appender(appender)
 ~~~
 Or, to use the TCP Protocol:
 
 ~~~ruby
-unless Rails.env.test? || Rails.env.development?
-  appender        = SemanticLogger::Appender::Graylog.new(
-    server:   'localhost',
-    port:     12201,
-    protocol: :tcp,
-    facility: Rails.application.class.name
-  )
-  # Optional: Add filter to exclude health_check, or other log entries
-  appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+appender        = SemanticLogger::Appender::Graylog.new(
+  server:   'localhost',
+  port:     12201,
+  protocol: :tcp,
+  facility: Rails.application.class.name
+)
+# Optional: Add filter to exclude health_check, or other log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
 
-  SemanticLogger.add_appender(appender)
-  SemanticLogger.backtrace_level = SemanticLogger.default_level
-end
+SemanticLogger.add_appender(appender)
 ~~~
 
 If not using Rails, the `facility` can be removed, or set to a custom string describing the application.
@@ -127,49 +122,36 @@ Note: `:trace` level messages are mapped to `:debug`.
 
 ### Splunk
 
-Send all `:error` and `:fatal` log entries to [Splunk](http://www.splunk.com) as text only messages.
-All semantic information and exception traces will be converted to plain
-text before being submitted to [Splunk](http://www.splunk.com).
-
-Note: Payload information is not filtered, so take care not to push any sensitive
-information when logging with tags or a payload.
-
-For Rails applications, or running bundler, add the following line to the file `Gemfile`:
+In order to write messages to the Splunk HTTP Collector, follow the Splunk instructions
+to enable the [HTTP Event Collector](http://dev.splunk.com/view/event-collector/SP-CAAAE7F).
+The instructions also include information on how to generate a token that needs to be supplied below.
 
 ~~~ruby
-gem 'splunk-sdk-ruby'
+appender = SemanticLogger::Appender::SplunkHttp.new(
+  url:   'http://localhost:8088/services/collector/event',
+  token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+)
+# Optional: Exclude health_check log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
+
+SemanticLogger.add_appender(appender)
 ~~~
 
-Install gems:
+Once log messages have been sent, open the Splunk web interface and select Search.
+To start with limit the message source to the newly added host:
 
-~~~
-bundle install
-~~~
+If the machine's name generating the messages is `hostname`, Search for: `host=hostname`
 
-If not using Bundler:
+Then change the output list to table view and select only these "interesting columns": `time, host, duration, name, level, message`
 
-~~~
-gem install splunk-sdk-ruby
-~~~
-
-To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
-create a file called `<Rails Root>/config/initializers/splunk.rb` with
-the following contents and restart the application.
+If HTTPS is being used for the Splunk HTTP Collector, update the url accordingly:
 
 ~~~ruby
-unless Rails.env.test? || Rails.env.development?
-  appender = SemanticLogger::Appender::Splunk.new(
-    host:     'localhost',
-    port:     8089,
-    username: 'username',
-    password: 'password',
-    index:    'main'
-  )
-  SemanticLogger.add_appender(appender)
-end
+appender = SemanticLogger::Appender::SplunkHttp.new(
+  url:   'https://localhost:8088/services/collector/event',
+  token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+)
 ~~~
-
-Note: `:trace` level messages are mapped to `:debug`.
 
 ### NewRelic
 
@@ -204,9 +186,7 @@ create a file called `<Rails Root>/config/initializers/new_relic.rb` with
 the following contents and restart the application.
 
 ~~~ruby
-unless Rails.env.test? || Rails.env.development?
-  SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
-end
+SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
 ~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
@@ -238,17 +218,15 @@ create a file called `<Rails Root>/config/initializers/mongodb.rb` with
 the following contents and restart the application.
 
 ~~~ruby
-unless Rails.env.test? || Rails.env.development?
-  client   = Mongo::MongoClient.new('localhost', 27017)
-  database = client['test']
+client   = Mongo::MongoClient.new('localhost', 27017)
+database = client['test']
 
-  appender = SemanticLogger::Appender::MongoDB.new(
-    db:              database,
-    collection_size: 1024**3, # 1.gigabyte
-    application:     Rails.application.class.name
-  )
-  SemanticLogger.add_appender(appender)
-end
+appender = SemanticLogger::Appender::MongoDB.new(
+  db:              database,
+  collection_size: 1024**3, # 1.gigabyte
+  application:     Rails.application.class.name
+)
+SemanticLogger.add_appender(appender)
 ~~~
 
 The following is written to Mongo:
@@ -268,6 +246,32 @@ The following is written to Mongo:
 	"message" : "This message is written to mongo as a document"
 }
 ~~~
+
+### HTTP(S)
+
+The HTTP appender supports sending JSON messages to most services that can accept log messages
+in JSON format via HTTP or HTTPS.
+
+~~~ruby
+appender = SemanticLogger::Appender::Http.new(
+  url: 'http://localhost:8088/path'
+)
+# Optional: Exclude health_check log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
+
+SemanticLogger.add_appender(appender)
+~~~
+
+To send messages via HTTPS, change the url to:
+
+~~~ruby
+appender = SemanticLogger::Appender::Http.new(
+  url: 'https://localhost:8088/path'
+)
+~~~
+
+To change the layout of the JSON message, see [adding custom formatters](customize.html).
+The format of the current formatter can be seen on [Github](https://github.com/rocketjob/semantic_logger/blob/master/lib/semantic_logger/appender/http.rb).
 
 ### Logger, log4r, etc.
 
