@@ -40,7 +40,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   #   max_size: [String]
   #     Ignored when protocol is :tcp
   #     Default: "WAN"
-  #   source: [String]
+  #   hostname: [String]
   #     Name of this host to appear in graylog
   #     Default: Socket.gethostname
   #   facility: [String]
@@ -58,7 +58,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
       raise(ArgumentError, "Invalid protocol value: #{protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(protocol)
       @options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
     end
-    if source = @options.delete(:source)
+    if source = @options.delete(:hostname)
       @options[:host] = source
     end
     @options[:facility] ||= 'Semantic Logger'
@@ -100,29 +100,27 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
       h[:short_message] = log.cleansed_message if log.message
 
       # Payload
-      h.merge!(log.payload) if log.payload
+      if log.payload
+        if log.payload.is_a?(Hash)
+          h.merge!(log.payload)
+        else
+          h[:payload] = log.payload
+        end
+      end
 
       # Exceptions
       if log.exception
-        trace = ''
-        log.each_exception do |exception, i|
-          if i == 0
-            if log.message
-              h[:short_message] << " -- "
-            else
-              h[:short_message] = ''
-            end
-            h[:short_message] << "#{exception.class.name}: #{exception.message}"
-            trace = (exception.backtrace || []).join("\n")
-          else
-            trace << "\nCause: #{exception.class.name}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
-          end
+        if log.message
+          h[:short_message] << " -- "
+        else
+          h[:short_message] = ''
         end
-        h[:backtrace] = trace
+        h[:short_message] << "#{log.exception.class.name}: #{log.exception.message}"
+        h[:backtrace] = log.backtrace_to_s
       end
 
       # Metric
-      h[:metric] = log.metric
+      h[:metric] = log.metric if log.metric
       h
     end
   end

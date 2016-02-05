@@ -64,6 +64,19 @@ module SemanticLogger
       end
     end
 
+    # Returns [String] the exception backtrace including all of the child / caused by exceptions
+    def backtrace_to_s
+      trace = ''
+      each_exception do |exception, i|
+        if i == 0
+          trace = (exception.backtrace || []).join("\n")
+        else
+          trace << "\nCause: #{exception.class.name}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+        end
+      end
+      trace
+    end
+
     # Returns [String] duration of the log entry as a string
     # Returns nil if their is no duration
     # Java time precision does not include microseconds

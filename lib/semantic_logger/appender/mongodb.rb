@@ -37,6 +37,24 @@ module SemanticLogger
     #    file_name: 'my_class.rb'
     #    line_number: 42
     #
+    # Example:
+    #   require 'semantic_logger'
+    #   require 'mongo'
+    #
+    #   client   = Mongo::MongoClient.new
+    #   database = client['test']
+    #
+    #   mongodb_appender = SemanticLogger::Appender::MongoDB.new(
+    #     db:              database,
+    #     collection_size: 1024**3, # 1.gigabyte
+    #     application:     'my_application'
+    #   )
+    #   SemanticLogger.add_appender(mongodb_appender)
+    #
+    #   logger = SemanticLogger['Example']
+    #
+    #   # Log some messages
+    #   logger.info 'This message is written to mongo as a document'
     class MongoDB < SemanticLogger::Appender::Base
       attr_reader :db, :collection_name, :collection
       attr_accessor :host_name, :write_concern, :application

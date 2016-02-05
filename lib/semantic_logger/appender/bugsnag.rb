@@ -62,7 +62,13 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
     proc do |log|
       h           = {severity: log_level(log), tags: log.tags, class: log.name}
       h[:message] = log.message if log.exception
-      h.merge!(log.payload) if log.payload
+      if log.payload
+        if log.payload.is_a?(Hash)
+          h.merge!(log.payload)
+        else
+          h[:payload] = log.payload
+        end
+      end
       h
     end
   end

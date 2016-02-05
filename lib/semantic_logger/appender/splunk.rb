@@ -4,7 +4,7 @@ rescue LoadError
   raise 'Gem splunk-sdk-ruby is required for logging to Splunk. Please add the gem "splunk-sdk-ruby" to your Gemfile.'
 end
 
-# Note: Not recommended to use the colorized formatter.
+# Note: This appender is Deprecated. Use: SemanticLogger::Appender::SplunkHttp
 class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   attr_reader :config, :index, :service, :service_index
 
