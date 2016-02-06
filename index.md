@@ -26,16 +26,19 @@ Additional information captured by Semantic Logger:
 * Custom Fields
     * For example, user id, login, session id, roles, etc.
 
-Send logs to one or more of:
+Log messages can be written to one or more of the following destinations at the same time:
 
-* File
-* Stdout, Stderr
-* Bugsnag
-* Graylog
-* MongoDB
-* Splunk
+* Text File
+* $stderr or $stdout ( any IO stream )
 * Syslog
-* NewRelic
+* Graylog
+* Splunk
+* Loggly
+* New Relic
+* Bugsnag
+* MongoDB
+* HTTP(S)
+* Logger, log4r, etc.
 
 Example:
 

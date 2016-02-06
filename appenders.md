@@ -4,18 +4,25 @@ layout: default
 
 ### Appenders
 
-Appenders are destinations that log messages can be written to. Several appenders can be active
-at the same time, so that for example log messages can be written to all of the following destinations at once:
+Appenders are destinations that log messages can be written to.
+
+Log messages can be written to one or more of the following destinations at the same time:
 
 * Text File
 * $stderr or $stdout ( any IO stream )
 * Syslog
 * Graylog
 * Splunk
+* Loggly
 * New Relic
-* Bug Snag
+* Bugsnag
 * MongoDB
 * HTTP(S)
+* Logger, log4r, etc.
+
+To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
+Due to the architecture of Semantic Logger any performance difference between TCP and UDP will not
+impact the performance of you application.
 
 ### Text File
 
@@ -31,6 +38,12 @@ Log to file with the standard colorized formatter:
 SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
 ~~~
 
+Log to file in JSON format:
+
+~~~ruby
+SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.json_formatter)
+~~~
+
 For performance reasons the log file is not re-opened with every call.
 When the log file needs to be rotated, use a copy-truncate operation rather
 than deleting the file.
@@ -44,16 +57,51 @@ Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdo
 SemanticLogger.add_appender($stderror, :error)
 ~~~
 
-### Syslog or SyslogNG
+### Syslog
+
+Log to a local Syslog daemon
 
 ~~~ruby
-# Log to a local Syslog daemon
 SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
 ~~~
 
+Log to a remote Syslog server using TCP:
+
 ~~~ruby
-# Log to a remote Syslog server such as syslog-ng over TCP:
-SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(server: 'tcp://myloghost:514'))
+appender        = SemanticLogger::Appender::Syslog.new(
+  server: 'tcp://myloghost:514'
+)
+
+# Optional: Add filter to exclude health_check, or other log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+
+SemanticLogger.add_appender(appender)
+~~~
+
+Log to a remote Syslog server using UDP:
+
+~~~ruby
+appender        = SemanticLogger::Appender::Syslog.new(
+  server: 'udp://myloghost:514'
+)
+
+# Optional: Add filter to exclude health_check, or other log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+
+SemanticLogger.add_appender(appender)
+~~~
+
+If logging to a remote Syslog server using UDP, add the following line to your `Gemfile`:
+
+~~~ruby
+gem 'syslog_protocol'
+~~~
+
+If logging to a remote Syslog server using TCP, add the following lines to your `Gemfile`:
+
+~~~ruby
+gem 'syslog_protocol'
+gem 'net_tcp_client'
 ~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
@@ -88,12 +136,13 @@ To add to a Rails application that already uses [Rails Semantic Logger](rails.ht
 create a file called `<Rails Root>/config/initializers/graylog.rb` with
 the following contents and restart the application.
 
-To use the UDP Protocol:
+To use the TCP Protocol:
 
 ~~~ruby
 appender        = SemanticLogger::Appender::Graylog.new(
   server:   'localhost',
   port:     12201,
+  protocol: :tcp,
   facility: Rails.application.class.name
 )
 # Optional: Add filter to exclude health_check, or other log entries
@@ -101,13 +150,14 @@ appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/
 
 SemanticLogger.add_appender(appender)
 ~~~
-Or, to use the TCP Protocol:
+
+Or, to use the UDP Protocol:
 
 ~~~ruby
 appender        = SemanticLogger::Appender::Graylog.new(
   server:   'localhost',
   port:     12201,
-  protocol: :tcp,
+  protocol: :udp,
   facility: Rails.application.class.name
 )
 # Optional: Add filter to exclude health_check, or other log entries
@@ -142,7 +192,13 @@ To start with limit the message source to the newly added host:
 
 If the machine's name generating the messages is `hostname`, Search for: `host=hostname`
 
-Then change the output list to table view and select only these "interesting columns": `time, host, duration, name, level, message`
+Then change the output list to table view and select only these "interesting columns":
+
+* host
+* duration
+* name
+* level
+* message
 
 If HTTPS is being used for the Splunk HTTP Collector, update the url accordingly:
 
@@ -151,6 +207,77 @@ appender = SemanticLogger::Appender::SplunkHttp.new(
   url:   'https://localhost:8088/services/collector/event',
   token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 )
+~~~
+
+### Loggly
+
+After signing up with Loggly obtain the token by logging into Loggly.com
+Navigate to `Source Setup` -> `Customer Tokens` and copy the token
+
+Replace `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` below with the above token.
+
+~~~ruby
+appender = SemanticLogger::Appender::Http.new(
+  url: 'http://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
+)
+
+# Optional: Exclude health_check log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
+
+SemanticLogger.add_appender(appender)
+~~~
+
+Once log messages have been sent, open the Loggly web interface and select Search.
+To isolate the new messages start with the following search: `tag:"semantic_logger"`
+
+In the Field Explorer change to Grid view and add the following fields using `Add as column to Grid`:
+
+* host
+* duration
+* name
+* level
+* message
+
+If HTTPS is being used for the Splunk HTTP Collector, update the url accordingly:
+
+~~~ruby
+appender = SemanticLogger::Appender::SplunkHttp.new(
+  url:   'https://localhost:8088/services/collector/event',
+  token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+)
+~~~
+
+### Bugsnag
+
+Forward `:info`, `:warn`, or `:error` log messages to Bugsnag.
+
+Note: Payload information is not filtered, so take care not to push any sensitive
+information when logging with tags or a payload.
+
+Configure Bugsnag following the [Ruby Bugsnag documentation](https://bugsnag.com/docs/notifiers/ruby#sending-handled-exceptions).
+
+To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
+create a file called `<Rails Root>/config/initializers/bugsnag.rb` with
+the following contents and restart the application.
+
+Send `:error` messages to Bugsnag:
+
+~~~ruby
+SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new)
+~~~
+
+Or, for a standalone installation add the code above after initializing Semantic Logger.
+
+Send `:warn` and `:error` messages to Bugsnag:
+
+~~~ruby
+SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new(:warn))
+~~~
+
+Send `:info`, `:warn` and `:error` messages to Bugsnag:
+
+~~~ruby
+SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new(:info))
 ~~~
 
 ### NewRelic
@@ -189,7 +316,11 @@ the following contents and restart the application.
 SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
 ~~~
 
-Note: `:trace` level messages are mapped to `:debug`.
+To also send warnings to Bugsnag:
+
+~~~ruby
+SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new(:warn))
+~~~
 
 ### MongoDB
 
@@ -270,8 +401,25 @@ appender = SemanticLogger::Appender::Http.new(
 )
 ~~~
 
-To change the layout of the JSON message, see [adding custom formatters](customize.html).
-The format of the current formatter can be seen on [Github](https://github.com/rocketjob/semantic_logger/blob/master/lib/semantic_logger/appender/http.rb).
+The JSON being sent can be modified as needed.
+
+Example, customize the JSON being sent:
+
+~~~ruby
+appender = SemanticLogger::Appender::Http.new(
+  url: 'https://localhost:8088/path'
+) do |log, request, logger|
+  h = log.to_h
+  h[:application] = logger.application_name
+  h[:host]        = logger.host_name
+
+  # Change time from iso8601 to seconds since epoch
+  h[:timestamp] = log.time.utc.to_f
+
+  # Render to JSON
+  h.to_json
+end
+~~~
 
 ### Logger, log4r, etc.
 
@@ -346,7 +494,7 @@ The output is as follows:
 
 ### Standalone
 
-Appenders can be created at logged to directly with the same API as for all other logging.
+Appenders can be created and logged to directly with the same API as for all other logging.
 Supports logging specific activity in the current thread to a separate appender without it
 being written to the appenders that have been registered in Semantic Logger.
 

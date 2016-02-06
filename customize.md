@@ -77,7 +77,7 @@ SemanticLogger.add_appender('development.log') do |log|
   level_color = colors::LEVEL_MAP[log.level]
 
   # Header with date, time, log level and process info
-  entry = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
+  entry       = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
 
   # Tags
   entry << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
@@ -92,16 +92,14 @@ SemanticLogger.add_appender('development.log') do |log|
   entry << " -- #{log.message}" if log.message
 
   # Payload
-  unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
-    payload = log.payload
-    payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
+  if payload = log.payload_to_s(true)
     entry << ' -- ' << payload
   end
 
   # Exceptions
-  log.each_exception do |exception, i|
-    entry << (i == 0 ? ' -- Exception: ' : "\nCause: ")
-    entry << "#{colors::BOLD}#{exception.class}: #{exception.message}#{colors::CLEAR}\n#{(exception.backtrace || []).join("\n")}"
+  if log.exception
+    entry << " -- Exception: #{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n"
+    entry << log.backtrace_to_s
   end
   entry
 end
@@ -114,12 +112,14 @@ This example assumes you have `gem 'rails_semantic_logger'` in your Gemfile.
 Create a file called `config/initializers/semantic_logger.rb`:
 
 ~~~ruby
-SemanticLogger.appenders.first.formatter = lambda do |log|
+# Find file appender:
+appender = SemanticLogger.appenders.find{ |a| a.is_a?(SemanticLogger::Appender::File) }
+appender.formatter = Proc.new do |log|
   colors      = SemanticLogger::Appender::AnsiColors
   level_color = colors::LEVEL_MAP[log.level]
 
   # Header with date, time, log level and process info
-  entry = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
+  entry       = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
 
   # Tags
   entry << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
@@ -134,16 +134,14 @@ SemanticLogger.appenders.first.formatter = lambda do |log|
   entry << " -- #{log.message}" if log.message
 
   # Payload
-  unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
-    payload = log.payload
-    payload = (defined?(AwesomePrint) && payload.respond_to?(:ai)) ? payload.ai(multiline: false) : payload.inspect
+  if payload = log.payload_to_s(true)
     entry << ' -- ' << payload
   end
 
   # Exceptions
-  log.each_exception do |exception, i|
-    entry << (i == 0 ? ' -- Exception: ' : "\nCause: ")
-    entry << "#{colors::BOLD}#{exception.class}: #{exception.message}#{colors::CLEAR}\n#{(exception.backtrace || []).join("\n")}"
+  if log.exception
+    entry << " -- Exception: #{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n"
+    entry << log.backtrace_to_s
   end
   entry
 end
