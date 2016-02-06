@@ -37,7 +37,7 @@ module Appender
           assert_equal @message, exception.message
           assert_equal ['test'], hash[:custom_params][:tags]
           assert_nil hash[:custom_params][:duration]
-          assert hash[:custom_params][:thread_name], hash.inspect
+          assert hash[:custom_params][:thread], hash.inspect
         end
       end
 
@@ -55,9 +55,10 @@ module Appender
         assert_equal 'RuntimeError', exception.class.to_s
         assert_equal @message, exception.message
         assert_equal ['test'], hash[:custom_params][:tags], hash
-        assert_equal({key1: 1, key2: 'a'}, hash[:custom_params][:payload], hash)
+        assert_equal 1, hash[:custom_params][:key1], hash
+        assert_equal 'a', hash[:custom_params][:key2], hash
         assert hash[:custom_params][:duration], hash
-        assert hash[:custom_params][:thread_name], hash
+        assert hash[:custom_params][:thread], hash
       end
     end
   end

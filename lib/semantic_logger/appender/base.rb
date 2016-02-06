@@ -70,9 +70,9 @@ module SemanticLogger
           end
 
           # Exceptions
-          log.each_exception do |exception, i|
-            entry << (i == 0 ? ' -- Exception: ' : "\nCause: ")
-            entry << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          if log.exception
+            entry << " -- Exception: #{log.exception.class}: #{log.exception.message}\n"
+            entry << log.backtrace_to_s
           end
           entry
         end
@@ -109,11 +109,23 @@ module SemanticLogger
           end
 
           # Exceptions
-          log.each_exception do |exception, i|
-            entry << (i == 0 ? ' -- Exception: ' : "\nCause: ")
-            entry << "#{colors::BOLD}#{exception.class}: #{exception.message}#{colors::CLEAR}\n#{(exception.backtrace || []).join("\n")}"
+          if log.exception
+            entry << " -- Exception: #{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n"
+            entry << log.backtrace_to_s
           end
           entry
+        end
+      end
+
+      # Optional log formatter to output data in a hash format
+      # To use this formatter
+      #   SemanticLogger.add_appender($stdout, &SemanticLogger::Appender::Base.json_formatter)
+      def self.json_formatter
+        Proc.new do |log|
+          h = log.to_h
+          h.delete(:time)
+          h[:timestamp] = log.time.utc.iso8601(defined?(JRuby) ? 3 : 6)
+          h.to_json
         end
       end
 

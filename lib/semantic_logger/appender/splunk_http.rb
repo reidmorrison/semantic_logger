@@ -6,8 +6,8 @@
 #   http://dev.splunk.com/view/event-collector/SP-CAAAE7F
 #
 # Example
-#   appender = SemanticLogger::Appender::SplunkHttp(
-#     url: 'http://cltlog1:8088'
+#   appender = SemanticLogger::Appender::SplunkHttp.new(
+#     url:   'http://localhost:8080',
 #     token: '70CA900C-3D7E-42A4-9C79-7975D1C422A8'
 #   )
 #   SemanticLogger.add_appender(appender)
@@ -24,13 +24,19 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   #
   #   index: [String]
   #     Optional: Name of a valid index for this message in Splunk.
+  #
+  #   compress: [true|false]
+  #     Whether to compress the JSON string with GZip
+  #     Default: true
   def initialize(options, &block)
     options      = options.dup
     @source_type = options.delete(:source_type)
     @index       = options.delete(:index)
     token        = options.delete(:token)
-    raise(ArgumentError, 'Missing mandatory parameter :url') unless token
+    raise(ArgumentError, 'Missing mandatory parameter :token') unless token
 
+    # Splunk supports HTTP Compression, enable by default
+    options[:compress] ||= true
     super(options, &block)
 
     @header['Authorization'] = "Splunk #{token}"
@@ -40,8 +46,9 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
   def default_formatter
-    proc do |log|
-      h                     = {}
+    Proc.new do |log|
+      h = log.to_h
+      h.delete(:time)
       message               = {
         source: @application_name,
         host:   @hostname,
@@ -50,51 +57,6 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
       }
       message[:source_type] = @source_type if @source_type
       message[:index]       = @index if @index
-
-      # Header
-      h[:pid]               = $$
-      h[:thread]            = log.thread_name
-      file, line            = log.file_name_and_line
-      if file
-        h[:file] = file
-        h[:line] = line
-      end
-      h[:level]    = log.level.to_s
-
-      # Tags
-      h[:tags]     = log.tags if log.tags && (log.tags.size > 0)
-
-      # Duration
-      h[:duration] = log.duration_human if log.duration
-
-      # Class / app name
-      h[:name]     = log.name
-
-      # Log message
-      h[:message]  = log.cleansed_message if log.message
-
-      # Payload
-      if log.payload
-        if log.payload.is_a?(Hash)
-          h.merge!(log.payload)
-        else
-          h[:payload] = log.payload
-        end
-      end
-
-      # Exceptions
-      if log.exception
-        if log.message
-          h[:message] << ' -- '
-        else
-          h[:message] = ''
-        end
-        h[:message] << "#{log.exception.class.name}: #{log.exception.message}"
-        h[:backtrace] = log.backtrace_to_s
-      end
-
-      # Metric
-      h[:metric] = log.metric if log.metric
 
       # Render to JSON
       message.to_json

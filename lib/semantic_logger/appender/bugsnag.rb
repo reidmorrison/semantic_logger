@@ -4,54 +4,18 @@ rescue LoadError
   raise 'Gem bugsnag is required for logging purposes. Please add the gem "bugsnag" to your Gemfile.'
 end
 
-=begin
-Bugsnag appender for SemanticLogger
-
-Skips the fatal log level because unrescued exceptions get logged as fatal and will be reported automatically by Bugsnag.
-
-Note: Payload information is not filtered, so take care not to push any sensitive information when logging with tags or a payload.
-
-Example 1
-
-Adding the Bugsnag appender will send :error log entries to Bugsnag with the error severity.
-
-For a Rails application already configured to use SemanticLogger and Bugsnag, create a file called <Rails Root>/config/initializers/bugsnag_appender.rb with the following contents and restart the application:
-
-# Send :error and log messages to Bugsnag
-SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new)
-Rails.logger.info 'SemanticLogger Bugsnag Appender added.'
-
-Example 2
-
-For a non-Rails application, send :info and more severe log entries to a file called application.log and also send :error log entries to Bugsnag.
-
-require 'semantic_logger'
-require 'bugsnag'
-
-# Bugsnag setup
-Bugsnag.configure do |config|
-  config.api_key = 'abc123'
-end
-
-# SemanticLogger setup
-SemanticLogger.default_level = :info
-SemanticLogger.add_appender('application.log')
-SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new)
-logger = SemanticLogger['Example']
-
-# Log some messages
-logger.info  'This is only written to application.log'
-logger.error 'This is written to application.log and will also be sent to Bugsnag as an error event'
-
-# The appender will send payloads to Bugsnag
-logger.error 'Something bad happened', info: 'Related information'
-=end
-
+# Send log messages to Bugsnag
+#
+# Example:
+#   SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new)
+#
 class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   # Allow the level for this appender to be overwritten
   #   Default: :error
-  #   Note: Not recommended to set the log level to :info, :debug, or :trace as that would flood Bugsnag with Error notices
+  #   Note: Not recommended to set the log level to :info, :debug, or :trace as it could flood Bugsnag with Error notices
   def initialize(level = :error, &block)
+    raise 'Bugsnag only supports :info, :warn, or :error log levels' unless [:info, :warn, :error].include?(level)
+
     # Replace the Bugsnag logger so that we can identify its log messages and not forward them to Bugsnag
     Bugsnag.configure { |config| config.logger = SemanticLogger[Bugsnag] }
     super(level, &block)
@@ -59,16 +23,11 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
 
   # Returns [Hash] of parameters to send to Bugsnag.
   def default_formatter
-    proc do |log|
-      h           = {severity: log_level(log), tags: log.tags, class: log.name}
-      h[:message] = log.message if log.exception
-      if log.payload
-        if log.payload.is_a?(Hash)
-          h.merge!(log.payload)
-        else
-          h[:payload] = log.payload
-        end
-      end
+    Proc.new do |log|
+      h = log.to_h
+      h[:severity] = log_level(log)
+      h.delete(:time)
+      h.delete(:exception)
       h
     end
   end
@@ -78,7 +37,7 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
     # Only log if level is warn, or error.
     return false if (level_index > (log.level_index || 0)) ||
       # We don't want to send fatal as those are already captured by Bugsnag.
-      (log.level == :fatal) ||
+      #(log.level == :fatal) ||
       # Ignore logs coming from Bugsnag itself
       (log.name == 'Bugsnag') ||
       # Filtered out?
@@ -93,9 +52,10 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
         error.set_backtrace(log.backtrace) if log.backtrace
         error
       end
+
     # For more documentation on the Bugsnag.notify method see:
     # https://bugsnag.com/docs/notifiers/ruby#sending-handled-exceptions
-    Bugsnag.notify(exception, formatter.call(log))
+    Bugsnag.notify(exception, formatter.call(log, self))
     true
   end
 

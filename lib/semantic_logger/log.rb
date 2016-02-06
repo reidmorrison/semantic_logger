@@ -169,6 +169,63 @@ module SemanticLogger
       end
     end
 
+    # Returns [Hash] representation of this log entry
+    def to_h
+      # Header
+      h          = {
+        name:        name,
+        pid:         $$,
+        thread:      thread_name,
+        time:        time,
+        level:       level,
+        level_index: level_index,
+      }
+      file, line = file_name_and_line
+      if file
+        h[:file] = file
+        h[:line] = line.to_i
+      end
+
+      # Tags
+      h[:tags] = tags if tags && (tags.size > 0)
+
+      # Duration
+      if duration
+        h[:duration_ms] = duration
+        h[:duration]    = duration_human
+      end
+
+      # Log message
+      h[:message] = cleansed_message if message
+
+      # Payload
+      if payload
+        if payload.is_a?(Hash)
+          h.merge!(payload)
+        else
+          h[:payload] = payload
+        end
+      end
+
+      # Exceptions
+      if exception
+        root = h
+        each_exception do |exception, i|
+          name       = i == 0 ? :exception : :cause
+          root[name] = {
+            name:        exception.class.name,
+            message:     exception.message,
+            stack_trace: exception.backtrace
+          }
+          root       = root[name]
+        end
+      end
+
+      # Metric
+      h[:metric] = metric if metric
+      h
+    end
+
   end
 
 end

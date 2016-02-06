@@ -1,36 +1,31 @@
-# syslog appender for SemanticLogger - Supports local and remote syslog (over TCP or UDP)
-#
-# Example 1
-# Log to the local syslog.
-#
-# require 'semantic_logger'
-# SemanticLogger.default_level = :trace
-#
-# syslog_appender = SemanticLogger::Appender::Syslog.new
-# SemanticLogger.add_appender(syslog_appender)
-#
-# logger = SemanticLogger['SyslogAppenderExample']
-# logger.info  "Info Hello! - This message should appear in the local syslog!"
-#
-#
-# Example 2
-# Send to a remote syslog appender - myloghost - over TCP on port 514.
-# Tested with syslog-ng as part of an ELSA installation.
-# https://code.google.com/p/enterprise-log-search-and-archive/
-#
-# require 'semantic_logger'
-# # Only log warn and above messages to the remote syslog.
-# syslog_appender = SemanticLogger::Appender::Syslog.new(level: :warn, server: 'tcp://myloghost:514')
-# SemanticLogger.add_appender(syslog_appender)
-#
-# logger = SemanticLogger['SyslogAppenderExample']
-# logger.info  "Info Hello!   - The log level is too low and will not be logged."
-# logger.error "Error! Error! - This message should appear in the remote syslog!"
-#
 require 'syslog'
 require 'uri'
 require 'socket'
 
+# Send log messages to local syslog, or remote syslog servers over TCP or UDP.
+#
+# Example: Log to a local Syslog daemon
+#   SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
+#
+# Example: Log to a remote Syslog server using TCP:
+#   appender        = SemanticLogger::Appender::Syslog.new(
+#     server: 'tcp://myloghost:514'
+#   )
+#
+#   # Optional: Add filter to exclude health_check, or other log entries
+#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+#
+#   SemanticLogger.add_appender(appender)
+#
+# Example: Log to a remote Syslog server using UDP:
+#   appender        = SemanticLogger::Appender::Syslog.new(
+#     server: 'udp://myloghost:514'
+#   )
+#
+#   # Optional: Add filter to exclude health_check, or other log entries
+#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+#
+#   SemanticLogger.add_appender(appender)
 module SemanticLogger
   module Appender
     class Syslog < SemanticLogger::Appender::Base
@@ -142,28 +137,28 @@ module SemanticLogger
       #     Specify custom parameters to pass into Net::TCPClient.new
       #     For a list of options see the net_tcp_client documentation:
       #       https://www.omniref.com/ruby/gems/net_tcp_client/1.0.0/symbols/Net::TCPClient/initialize
-      def initialize(params = {}, &block)
-        params     = params.dup
-        @ident     = params.delete(:ident) || 'ruby'
-        @options   = params.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
-        @facility  = params.delete(:facility) || ::Syslog::LOG_USER
-        filter     = params.delete(:filter)
-        level      = params.delete(:level)
-        level_map  = params.delete(:level_map)
-        @level_map = DEFAULT_LEVEL_MAP.dup
-        @level_map.update(level_map) if level_map
-        @server   = params.delete(:server) || 'syslog://localhost'
-        uri       = URI(@server)
-        @host     = uri.host || 'localhost'
-        @protocol = (uri.scheme || :syslog).to_sym
-        raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
+      def initialize(options = {}, &block)
+        options             = options.dup
+        @ident              = options.delete(:ident) || 'ruby'
+        @options            = options.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
+        @facility           = options.delete(:facility) || ::Syslog::LOG_USER
+        filter              = options.delete(:filter)
+        level               = options.delete(:level)
+        level_map           = options.delete(:level_map)
+        @server             = options.delete(:server) || 'syslog://localhost'
+        uri                 = URI(@server)
+        @host               = uri.host || 'localhost'
+        @protocol           = (uri.scheme || :syslog).to_sym
         @host               = 'localhost' if @protocol == :syslog
         @port               = URI(@server).port || 514
-        @local_hostname     = params.delete(:local_hostname) || Socket.gethostname || `hostname`.strip
-        @tcp_client_options = params.delete(:tcp_client)
+        @local_hostname     = options.delete(:local_hostname) || Socket.gethostname || `hostname`.strip
+        @tcp_client_options = options.delete(:tcp_client)
 
-        # Warn about any unknown configuration options.
-        params.each_pair { |key, val| SemanticLogger::Logger.logger.warn "Ignoring unknown configuration option: #{key.inspect} => #{val.inspect}" }
+        raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
+        raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
+
+        @level_map = DEFAULT_LEVEL_MAP.dup
+        @level_map.update(level_map) if level_map
 
         # The syslog_protocol gem is required when logging over TCP or UDP.
         if [:tcp, :udp].include?(@protocol)
@@ -215,7 +210,7 @@ module SemanticLogger
         case @protocol
         when :syslog
           # Since the Ruby Syslog API supports sprintf format strings, double up all existing '%'
-          message = formatter.call(log).gsub '%', '%%'
+          message = formatter.call(log, self).gsub '%', '%%'
           ::Syslog.log @level_map[log.level], message
         when :tcp
           @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{syslog_packet_formatter(log)}\r\n") }
@@ -232,25 +227,36 @@ module SemanticLogger
         @remote_syslog.flush if @remote_syslog && @remote_syslog.respond_to?(:flush)
       end
 
-      # Custom log formatter for syslog
+      # Custom log formatter for syslog.
+      # Only difference is the removal of the timestamp string since it is in the syslog packet.
       def default_formatter
         Proc.new do |log|
-          tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags && (log.tags.size > 0)
+          # Header with date, time, log level and process info
+          entry = "#{log.level_to_s} [#{log.process_info}]"
 
-          message = log.message.to_s
-          message << ' -- ' << log.payload.inspect if log.payload
-          log.each_exception do |exception, i|
-            if i == 0
-              message << ' -- '
-            else
-              message << "\nCause: "
-            end
-            message << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          # Tags
+          entry << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
+
+          # Duration
+          entry << " (#{log.duration_human})" if log.duration
+
+          # Class / app name
+          entry << " #{log.name}"
+
+          # Log message
+          entry << " -- #{log.message}" if log.message
+
+          # Payload
+          if payload = log.payload_to_s(false)
+            entry << ' -- ' << payload
           end
 
-          duration_str = log.duration ? "(#{'%.1f' % log.duration}ms) " : ''
-
-          "#{log.level.to_s[0..0].upcase} [#{$$}:#{log.thread_name}] #{tags}#{duration_str}#{log.name} -- #{message}"
+          # Exceptions
+          if log.exception
+            entry << " -- Exception: #{log.exception.class}: #{log.exception.message}\n"
+            entry << log.backtrace_to_s
+          end
+          entry
         end
       end
 
@@ -261,7 +267,8 @@ module SemanticLogger
         packet.facility = @facility
         packet.severity = @level_map[log.level]
         packet.tag      = @ident
-        packet.content  = default_formatter.call(log)
+        packet.content  = default_formatter.call(log, self)
+        packet.time     = log.time
         packet.to_s
       end
     end

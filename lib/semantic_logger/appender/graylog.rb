@@ -7,7 +7,17 @@ end
 # Forward log entries to a Graylog server.
 #
 # Example:
-#   SemanticLogger.add_appender(SemanticLogger::Appender::Graylog.new)
+#   appender        = SemanticLogger::Appender::Graylog.new(
+#     server:   'localhost',
+#     port:     12201,
+#     protocol: :tcp,
+#     facility: Rails.application.class.name
+#   )
+#
+#   # Optional: Add filter to exclude health_check, or other log entries
+#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+#
+#   SemanticLogger.add_appender(appender)
 #
 # Notes:
 # * trace is not supported by Graylog, so trace level logging will appear as debug in Graylog.
@@ -44,7 +54,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   #     Name of this host to appear in graylog
   #     Default: Socket.gethostname
   #   facility: [String]
-  #     Default: "gelf-rb"
+  #     Default: 'Semantic Logger'
   #   protocol: Symbol
   #     :tcp or :udp
   #     Default: :udp
@@ -74,53 +84,13 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
 
   # Returns [Hash] of parameters to send
   def default_formatter
-    proc do |log|
-      h          = {}
-      # Header
-      h[:pid]    = $$
-      h[:thread] = log.thread_name
-      file, line = log.file_name_and_line
-      if file
-        h[:file] = file
-        h[:line] = line
-      end
+    Proc.new do |log|
+      h = log.to_h
+      h.delete(:time)
       h[:timestamp]     = log.time.utc.to_f
       h[:level]         = SemanticLogger::Appender::Graylog::LEVEL_MAP[log.level]
-
-      # Tags
-      h[:tags]          = log.tags if log.tags && (log.tags.size > 0)
-
-      # Duration
-      h[:duration]      = log.duration_human if log.duration
-
-      # Class / app name
-      h[:name]          = log.name
-
-      # Log message
-      h[:short_message] = log.cleansed_message if log.message
-
-      # Payload
-      if log.payload
-        if log.payload.is_a?(Hash)
-          h.merge!(log.payload)
-        else
-          h[:payload] = log.payload
-        end
-      end
-
-      # Exceptions
-      if log.exception
-        if log.message
-          h[:short_message] << " -- "
-        else
-          h[:short_message] = ''
-        end
-        h[:short_message] << "#{log.exception.class.name}: #{log.exception.message}"
-        h[:backtrace] = log.backtrace_to_s
-      end
-
-      # Metric
-      h[:metric] = log.metric if log.metric
+      h[:level_str]     = log.level.to_s
+      h[:short_message] = h.delete(:message) if log.message
       h
     end
   end
@@ -130,7 +100,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
     return false if (level_index > (log.level_index || 0)) ||
       !include_message?(log) # Filtered out?
 
-    @notifier.notify!(formatter.call(log))
+    @notifier.notify!(formatter.call(log, self))
     true
   end
 

@@ -35,7 +35,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
     # Ensure minimum log level is met, and check filter
     return false if (level_index > (log.level_index || 0)) || !include_message?(log)
     # Submit the log message
-    @service_index.submit(formatter.call(log))
+    @service_index.submit(formatter.call(log, self))
     true
   end
 

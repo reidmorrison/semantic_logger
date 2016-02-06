@@ -1,6 +1,6 @@
-# Wrapper appender
+# Send log messages to any standard Ruby logging class.
 #
-#   Wraps the Rails log, log4r, or Ruby Logger with the SemanticLogger API's
+#  Forwards logging call to loggers such as Logger, log4r, etc.
 #
 module SemanticLogger
   module Appender
@@ -12,8 +12,10 @@ module SemanticLogger
       # Ruby Logger
       #    require 'logger'
       #    require 'semantic_logger'
+      #
       #    ruby_logger = Logger.new(STDOUT)
       #    SemanticLogger.add_appender(ruby_logger)
+      #
       #    logger =  SemanticLogger['test']
       #    logger.info('Hello World', some: :payload)
       #
@@ -25,10 +27,9 @@ module SemanticLogger
       #    # Make ActiveRecord logging include its class name in every log entry
       #    ActiveRecord::Base.logger = SemanticLogger['ActiveRecord']
       #
-      # Note: Since the log level is controlled by setting the Ruby or Rails logger directly
-      #   the level is ignored for this appender
+      # Install the `rails_semantic_logger` gem to replace the Rails logger with Semantic Logger.
       def initialize(logger, filter=nil, &block)
-        raise 'logger cannot be null when initiailizing the SemanticLogging::Appender::Wrapper' unless logger
+        raise 'logger cannot be null when initializing the SemanticLogging::Appender::Wrapper' unless logger
         @logger    = logger
 
         # Set the formatter to the supplied block
@@ -44,7 +45,7 @@ module SemanticLogger
         return false unless include_message?(log)
 
         # Underlying wrapper logger implements log level, so don't check here
-        @logger.send(log.level == :trace ? :debug : log.level, @formatter.call(log))
+        @logger.send(log.level == :trace ? :debug : log.level, @formatter.call(log, self))
         true
       end
 

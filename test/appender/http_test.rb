@@ -17,10 +17,10 @@ module Appender
           @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, @message)
           end
-          message = JSON.parse(request.body)
-          assert_equal @message, message['message']
-          assert_equal level.to_s, message['level']
-          refute message['backtrace']
+          hash = JSON.parse(request.body)
+          assert_equal @message, hash['message']
+          assert_equal level.to_s, hash['level']
+          refute hash['stack_trace']
         end
 
         it "send #{level} exceptions" do
@@ -34,10 +34,12 @@ module Appender
           @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, 'Reading File', exc)
           end
-          message = JSON.parse(request.body)
-          assert message['message'].include?('Reading File -- NameError: undefined local variable or method'), message['message']
-          assert_equal level.to_s, message['level']
-          assert message['backtrace'].include?(__FILE__), message['backtrace']
+          hash = JSON.parse(request.body)
+          assert 'Reading File', hash['message']
+          assert 'NameError', hash['exception']['name']
+          assert 'undefined local variable or method', hash['exception']['message']
+          assert_equal level.to_s, hash['level'], 'Should be error level (3)'
+          assert hash['exception']['stack_trace'].first.include?(__FILE__), hash['exception']
         end
 
         it "send #{level} custom attributes" do
@@ -45,12 +47,12 @@ module Appender
           @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, @message, {key1: 1, key2: 'a'})
           end
-          message = JSON.parse(request.body)
-          assert_equal @message, message['message']
-          assert_equal level.to_s, message['level']
-          refute message['backtrace']
-          assert_equal(1, message['key1'], message)
-          assert_equal('a', message['key2'], message)
+          hash = JSON.parse(request.body)
+          assert_equal @message, hash['message']
+          assert_equal level.to_s, hash['level']
+          refute hash['stack_trace']
+          assert_equal 1, hash['key1'], hash
+          assert_equal 'a', hash['key2'], hash
         end
 
       end

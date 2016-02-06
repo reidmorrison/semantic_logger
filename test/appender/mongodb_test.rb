@@ -22,14 +22,13 @@ module Appender
         @appender.purge_all if @appender
       end
 
-      describe "format logs into documents" do
-
-        it "handle nil name, message and hash" do
+      describe 'format logs into documents' do
+        it 'handle nil name, message and hash' do
           @appender.debug
           document = @appender.collection.find_one
           assert_equal :debug, document['level']
           assert_equal nil, document['message']
-          assert_equal 'thread', document['thread_name']
+          assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
           assert_equal nil, document['payload']
           assert_equal $$, document['pid']
@@ -43,7 +42,7 @@ module Appender
           document = @appender.collection.find_one
           assert_equal :debug, document['level']
           assert_equal @hash.inspect, document['message']
-          assert_equal 'thread', document['thread_name']
+          assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
           assert_nil document['payload']
           assert_equal $$, document['pid']
@@ -51,30 +50,30 @@ module Appender
           assert_equal 'test_application', document['application']
         end
 
-        it "handle message and payload" do
+        it 'handle message and payload' do
           @appender.debug('hello world', @hash)
 
           document = @appender.collection.find_one
           assert_equal :debug, document['level']
           assert_equal 'hello world', document['message']
-          assert_equal 'thread', document['thread_name']
+          assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
-          assert_equal({"tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
+          assert_equal 12345, document['tracking_number']
+          assert_equal 'HSSKLEU@JDK767', document['session_id']
           assert_equal $$, document['pid']
           assert_equal 'test', document['host_name']
           assert_equal 'test_application', document['application']
         end
 
-        it "handle message without payload" do
+        it 'handle message without payload' do
           log = SemanticLogger::Log.new(:debug)
           @appender.debug('hello world')
 
           document = @appender.collection.find_one
           assert_equal :debug, document['level']
           assert_equal 'hello world', document['message']
-          assert_equal 'thread', document['thread_name']
+          assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
-          assert_equal nil, document['payload']
           assert_equal $$, document['pid']
           assert_equal 'test', document['host_name']
           assert_equal 'test_application', document['application']
@@ -84,14 +83,15 @@ module Appender
       describe "for each log level" do
         # Ensure that any log level can be logged
         SemanticLogger::LEVELS.each do |level|
-          it "log #{level} information" do
+          it 'log #{level} information' do
             @appender.send(level, 'hello world -- Calculations', @hash)
             document = @appender.collection.find_one
             assert_equal level, document['level']
             assert_equal 'hello world -- Calculations', document['message']
-            assert_equal 'thread', document['thread_name']
+            assert_equal 'thread', document['thread']
             assert document['time'].is_a?(Time)
-            assert_equal({"tracking_number" => 12345, "session_id" => 'HSSKLEU@JDK767'}, document['payload'])
+            assert_equal 12345, document['tracking_number']
+            assert_equal 'HSSKLEU@JDK767', document['session_id']
             assert_equal $$, document['pid']
             assert_equal 'test', document['host_name']
             assert_equal 'test_application', document['application']

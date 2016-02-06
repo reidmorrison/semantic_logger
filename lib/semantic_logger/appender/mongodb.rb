@@ -39,17 +39,16 @@ module SemanticLogger
     #
     # Example:
     #   require 'semantic_logger'
-    #   require 'mongo'
     #
     #   client   = Mongo::MongoClient.new
     #   database = client['test']
     #
-    #   mongodb_appender = SemanticLogger::Appender::MongoDB.new(
+    #   appender = SemanticLogger::Appender::MongoDB.new(
     #     db:              database,
     #     collection_size: 1024**3, # 1.gigabyte
     #     application:     'my_application'
     #   )
-    #   SemanticLogger.add_appender(mongodb_appender)
+    #   SemanticLogger.add_appender(appender)
     #
     #   logger = SemanticLogger['Example']
     #
@@ -78,7 +77,7 @@ module SemanticLogger
       # :write_concern [Integer]
       #   Write concern to use
       #   see: http://docs.mongodb.org/manual/reference/write-concern/
-      #   Default: 1
+      #   Default: 0
       #
       # :application [String]
       #   Name of the application to include in the document written to mongo
@@ -105,17 +104,20 @@ module SemanticLogger
       #    regular expression. All other messages will be ignored
       #    Proc: Only include log messages where the supplied Proc returns true
       #          The Proc must return true or false
-      def initialize(params={}, &block)
-        @db              = params[:db] || raise('Missing mandatory parameter :db')
-        @collection_name = params[:collection_name] || 'semantic_logger'
-        @host_name       = params[:host_name] || Socket.gethostname.split('.').first
-        @write_concern   = params[:write_concern] || 1
-        @application     = params[:application]
-        filter           = params[:filter]
+      def initialize(options = {}, &block)
+        options          = options.dup
+        @db              = options.delete(:db) || raise('Missing mandatory parameter :db')
+        @collection_name = options.delete(:collection_name) || 'semantic_logger'
+        @host_name       = options.delete(:host_name) || Socket.gethostname.split('.').first
+        @write_concern   = options.delete(:write_concern) || 0
+        @application     = options.delete(:application)
+        filter           = options.delete(:filter)
+        level            = options.delete(:level)
 
         # Create a collection that will hold the lesser of 1GB space or 10K documents
-        @collection_size = params[:collection_size] || 1024**3
-        @collection_max  = params[:collection_max]
+        @collection_size = options.delete(:collection_size) || 1024**3
+        @collection_max  = options.delete(:collection_max)
+        raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
 
         reopen
 
@@ -123,7 +125,7 @@ module SemanticLogger
         create_indexes
 
         # Set the log level and formatter
-        super(params[:level], filter, &block)
+        super(level, filter, &block)
       end
 
       # After forking an active process call #reopen to re-open
@@ -167,38 +169,9 @@ module SemanticLogger
       #  Replace this formatter by supplying a Block to the initializer
       def default_formatter
         Proc.new do |log|
-          document               = {
-            time:        log.time,
-            host_name:   host_name,
-            pid:         $$,
-            thread_name: log.thread_name,
-            name:        log.name,
-            level:       log.level,
-            level_index: log.level_index,
-          }
+          document               = log.to_h
+          document[:host_name]   = host_name
           document[:application] = application if application
-          document[:message]     = log.cleansed_message if log.message
-          document[:duration]    = log.duration if log.duration
-          document[:tags]        = log.tags if log.tags && (log.tags.size > 0)
-          document[:payload]     = log.payload if log.payload
-          if log.exception
-            root = document
-            log.each_exception do |exception, i|
-              name       = i == 0 ? :exception : :cause
-              root[name] = {
-                name:        exception.class.name,
-                message:     exception.message,
-                stack_trace: exception.backtrace
-              }
-              root       = root[name]
-            end
-          end
-
-          file, line = log.file_name_and_line
-          if file
-            document[:file_name]   = file
-            document[:line_number] = line.to_i
-          end
           document
         end
       end
@@ -219,7 +192,7 @@ module SemanticLogger
         return false if (level_index > (log.level_index || 0)) || !include_message?(log)
 
         # Insert log entry into Mongo
-        collection.insert(formatter.call(log), w: @write_concern)
+        collection.insert(formatter.call(log, self), w: @write_concern)
         true
       end
 
