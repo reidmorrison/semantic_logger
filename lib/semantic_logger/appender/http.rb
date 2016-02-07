@@ -20,7 +20,7 @@ require 'json'
 #
 #   SemanticLogger.add_appender(appender)
 class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
-  attr_accessor :application_name, :host_name, :compress
+  attr_accessor :url, :username, :application_name, :host_name, :compress, :header, :url, :host, :port, :request_uri
   attr_reader :http
 
   # Create HTTP(S) log appender
@@ -79,6 +79,15 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     }
     @header['Content-Encoding'] = 'gzip' if @compress
 
+    uri                             = URI.parse(@url)
+    (@ssl_options ||= {})[:use_ssl] = true if uri.scheme == 'https'
+
+    @host        = uri.host
+    @port        = uri.port
+    @username    = uri.user if !@username && uri.user
+    @password    = uri.password if !@password && uri.password
+    @request_uri = uri.request_uri
+
     reopen
 
     # Pass on the level and custom formatter if supplied
@@ -87,20 +96,8 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
 
   # Re-open after process fork
   def reopen
-    uri                             = URI.parse(@url)
-    (@ssl_options ||= {})[:use_ssl] = true if uri.scheme == 'https'
-
-    @http = @ssl_options ? Net::HTTP.new(uri.host, uri.port, @ssl_options) : Net::HTTP.new(uri.host, uri.port)
-
-    @request_uri = uri.request_uri
-  end
-
-  # Used for testing the JSON format
-  def test(json)
-    request      = Net::HTTP::Post.new(@request_uri, @header)
-    request.body = json
-    request.basic_auth(@username, @password) if @username
-    response = @http.request(request)
+    # On Ruby v2.0 and greater, Net::HTTP.new uses a persistent connection if the server allows it
+    @http = @ssl_options ? Net::HTTP.new(host, port, @ssl_options) : Net::HTTP.new(host, port)
   end
 
   # Forward log messages to HTTP Server
@@ -108,23 +105,11 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     return false if (level_index > (log.level_index || 0)) ||
       !include_message?(log) # Filtered out?
 
-    # Exceptions will be logged to the global semantic logger failsafe logger (Usually stderr or file)
-    request      = Net::HTTP::Post.new(@request_uri, @header)
-    body         = formatter.call(log, self, request)
-    body         = compress_data(body) if compress
-    request.body = body
-    request.basic_auth(@username, @password) if @username
-    response = @http.request(request)
-    if response.code == '200'
-      true
-    else
-      SemanticLogger::Logger.logger.error("Bad response code #{response.code} from Splunk: #{response.body}")
-      false
-    end
+    post(formatter.call(log, self))
   end
 
   def default_formatter
-    Proc.new do |log, logger, request|
+    Proc.new do |log, logger|
       h = log.to_h
       h.delete(:time)
       h[:application] = logger.application_name
@@ -144,6 +129,41 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     gz << data
     gz.close
     str.string
+  end
+
+  # HTTP Post
+  def post(body, request_uri = nil)
+    request = Net::HTTP::Post.new(request_uri || @request_uri, @header)
+    process_request(request, body)
+  end
+
+  # HTTP Put
+  def put(body, request_uri = nil)
+    request = Net::HTTP::Put.new(request_uri || @request_uri, @header)
+    process_request(request, body)
+  end
+
+  # HTTP Delete
+  def delete(request_uri = nil)
+    request = Net::HTTP::Delete.new(request_uri || @request_uri, @header)
+    process_request(request)
+  end
+
+  # Process HTTP Request
+  def process_request(request, body = nil)
+    if body
+      body         = compress_data(body) if compress
+      request.body = body
+    end
+    request.basic_auth(@username, @password) if @username
+    response = @http.request(request)
+    if response.code == '200' || response.code == '201'
+      true
+    else
+      # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
+      SemanticLogger::Logger.logger.error("Bad HTTP response code: #{response.code}, #{response.body}")
+      false
+    end
   end
 
 end
