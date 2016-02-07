@@ -2,7 +2,7 @@
 layout: default
 ---
 
-### Application Programming Interface
+## Programming Guide
 
 ### Logging levels
 

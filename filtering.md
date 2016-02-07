@@ -2,7 +2,7 @@
 layout: default
 ---
 
-### Filtering
+## Filtering
 
 Filtering is useful to reduce log output for excessive log messages. It is can
 be used for example where a Library is logging messages and we do not want to modify

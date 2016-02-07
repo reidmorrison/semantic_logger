@@ -81,6 +81,11 @@ logger.info('Queried table',
   all registered metrics listeners.
 * Metrics can be rendered in New Relic, statsd / graphite, and/or other dashboards.
 
+### Centralized Logging
+
+* Centralized log data store.
+* Analytics and search dashboard.
+
 ### Dynamic
 
 * Increase the log level at runtime, or for just one class at a time.

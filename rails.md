@@ -168,4 +168,4 @@ after they have been initialized:
 - Moped
 - Bugsnag
 
-### [Next: API ==>](api.html)
+### [Next: Centralized Logging ==>](centralized_logging.html)

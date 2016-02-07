@@ -2,7 +2,7 @@
 layout: default
 ---
 
-### Write your own Custom Appender
+## Write your own Custom Appender
 
 To write your own appender it should meet the following requirements:
 

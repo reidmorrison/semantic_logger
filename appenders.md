@@ -2,7 +2,7 @@
 layout: default
 ---
 
-### Appenders
+## Appenders
 
 Appenders are destinations that log messages can be written to.
 
@@ -12,12 +12,14 @@ Log messages can be written to one or more of the following destinations at the 
 * $stderr or $stdout ( any IO stream )
 * Syslog
 * Graylog
+* Elasticsearch
 * Splunk
 * Loggly
+* Logstash
 * New Relic
 * Bugsnag
-* MongoDB
 * HTTP(S)
+* MongoDB
 * Logger, log4r, etc.
 
 To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
@@ -209,6 +211,23 @@ appender = SemanticLogger::Appender::SplunkHttp.new(
 )
 ~~~
 
+### Elasticsearch
+
+Forward all log messages to Elasticsearch.
+
+Example:
+
+~~~ruby
+appender = SemanticLogger::Appender::Elasticsearch.new(
+  url:   'http://localhost:9200'
+)
+
+# Optional: Exclude health_check log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
+
+SemanticLogger.add_appender(appender)
+~~~
+
 ### Loggly
 
 After signing up with Loggly obtain the token by logging into Loggly.com
@@ -246,6 +265,48 @@ appender = SemanticLogger::Appender::SplunkHttp.new(
   token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 )
 ~~~
+
+### Logstash
+
+Forward log messages to Logstash.
+
+For Rails applications, or running bundler, add the following line to the file `Gemfile`:
+
+~~~ruby
+gem 'logstash-logger'
+~~~
+
+Install gems:
+
+~~~
+bundle install
+~~~
+
+If not using Bundler:
+
+~~~
+gem install logstash-logger
+~~~
+
+If running Rails create an initializer with the following code, otherwise add the code
+to your program:
+
+~~~ruby
+require 'logstash-logger'
+
+# Use the TCP logger
+# See https://github.com/dwbutler/logstash-logger for further options
+log_stash       = LogStashLogger.new(type: :tcp, host: 'localhost', port: 5229)
+
+appender        = SemanticLogger::Appender::Wrapper.new(log_stash)
+
+# Optional: Add filter to exclude health_check, or other log entries
+appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+
+SemanticLogger.add_appender(appender)
+~~~
+
+Note: `:trace` level messages are mapped to `:debug`.
 
 ### Bugsnag
 

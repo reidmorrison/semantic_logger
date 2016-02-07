@@ -2,7 +2,7 @@
 layout: default
 ---
 
-### Custom Formatters
+## Custom Formatters
 
 The formatting for each appender can be replaced with custom code. To replace the
 existing formatter supply a block of code when creating the appender.

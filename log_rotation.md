@@ -2,7 +2,7 @@
 layout: default
 ---
 
-### Log Rotation
+## Log Rotation
 
 Linux has exceptional support for log rotation using `logrotate`.
 

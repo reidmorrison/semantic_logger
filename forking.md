@@ -2,7 +2,7 @@
 layout: default
 ---
 
-### Process Forking
+## Process Forking
 
 In Ruby it is common for Frameworks such Puma and Resque to fork a copy of the
 process so that it can run independently from the parent process.
