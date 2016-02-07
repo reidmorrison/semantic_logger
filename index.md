@@ -32,12 +32,14 @@ Log messages can be written to one or more of the following destinations at the 
 * $stderr or $stdout ( any IO stream )
 * Syslog
 * Graylog
+* Elasticsearch
 * Splunk
 * Loggly
+* Logstash
 * New Relic
 * Bugsnag
-* MongoDB
 * HTTP(S)
+* MongoDB
 * Logger, log4r, etc.
 
 Example:
