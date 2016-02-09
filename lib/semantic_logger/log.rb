@@ -173,6 +173,8 @@ module SemanticLogger
     def to_h
       # Header
       h          = {
+        host:        SemanticLogger.host,
+        application: SemanticLogger.application,
         name:        name,
         pid:         $$,
         thread:      thread_name,

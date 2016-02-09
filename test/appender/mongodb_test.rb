@@ -10,7 +10,7 @@ module Appender
         @appender           = SemanticLogger::Appender::MongoDB.new(
           db:              @db,
           collection_size: 10*1024**2, # 10MB
-          host_name:       'test',
+          host:            'test',
           application:     'test_application',
           level:           :trace
         )
@@ -32,7 +32,7 @@ module Appender
           assert document['time'].is_a?(Time)
           assert_equal nil, document['payload']
           assert_equal $$, document['pid']
-          assert_equal 'test', document['host_name']
+          assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
         end
 
@@ -46,7 +46,7 @@ module Appender
           assert document['time'].is_a?(Time)
           assert_nil document['payload']
           assert_equal $$, document['pid']
-          assert_equal 'test', document['host_name']
+          assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
         end
 
@@ -61,7 +61,7 @@ module Appender
           assert_equal 12345, document['tracking_number']
           assert_equal 'HSSKLEU@JDK767', document['session_id']
           assert_equal $$, document['pid']
-          assert_equal 'test', document['host_name']
+          assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
         end
 
@@ -75,7 +75,7 @@ module Appender
           assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
           assert_equal $$, document['pid']
-          assert_equal 'test', document['host_name']
+          assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
         end
       end
@@ -93,7 +93,7 @@ module Appender
             assert_equal 12345, document['tracking_number']
             assert_equal 'HSSKLEU@JDK767', document['session_id']
             assert_equal $$, document['pid']
-            assert_equal 'test', document['host_name']
+            assert_equal 'test', document['host']
             assert_equal 'test_application', document['application']
           end
         end

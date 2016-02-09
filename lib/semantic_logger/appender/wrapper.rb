@@ -7,7 +7,21 @@ module SemanticLogger
     class Wrapper < SemanticLogger::Appender::Base
       attr_reader :logger
 
-      # Create a Logger or Rails Logger appender instance
+      # Forward all logging calls to the supplied logging instance.
+      #
+      # Parameters
+      #   logger: [Object]
+      #     Instance of an existing logger conforming to the Ruby Logger methods.
+      #
+      #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+      #     Override the log level for this appender.
+      #     Default: SemanticLogger.default_level
+      #
+      #   filter: [Regexp|Proc]
+      #     RegExp: Only include log messages where the class name matches the supplied.
+      #     regular expression. All other messages will be ignored.
+      #     Proc: Only include log messages where the supplied Proc returns true
+      #           The Proc must return true or false.
       #
       # Ruby Logger
       #    require 'logger'
@@ -28,21 +42,21 @@ module SemanticLogger
       #    ActiveRecord::Base.logger = SemanticLogger['ActiveRecord']
       #
       # Install the `rails_semantic_logger` gem to replace the Rails logger with Semantic Logger.
-      def initialize(logger, filter=nil, &block)
+      def initialize(logger, level = nil, filter = nil, &block)
         raise 'logger cannot be null when initializing the SemanticLogging::Appender::Wrapper' unless logger
         @logger    = logger
 
         # Set the formatter to the supplied block
         @formatter = block || self.default_formatter
-        super(nil, filter, &block)
+        super(level, filter, &block)
       end
 
       # Pass log calls to the underlying Rails, log4j or Ruby logger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
       def log(log)
-        # Check filter
-        return false unless include_message?(log)
+        # Ensure minimum log level is met, and check filter
+        return false if (level_index > (log.level_index || 0)) || !include_message?(log)
 
         # Underlying wrapper logger implements log level, so don't check here
         @logger.send(log.level == :trace ? :debug : log.level, @formatter.call(log, self))

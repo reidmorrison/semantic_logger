@@ -1,4 +1,6 @@
 require 'concurrent'
+require 'socket'
+
 module SemanticLogger
   # Logging levels in order of most detailed to most severe
   LEVELS = [:trace, :debug, :info, :warn, :error, :fatal]
@@ -45,6 +47,28 @@ module SemanticLogger
   # For internal use only
   def self.backtrace_level_index #:nodoc
     @@backtrace_level_index
+  end
+
+  # Returns [String] name of this host for logging purposes
+  # Note: Not all appenders use `host`
+  def self.host
+    @@host ||= Socket.gethostname
+  end
+
+  # Override the default host name
+  def self.host=(host)
+    @@host = host
+  end
+
+  # Returns [String] name of this application for logging purposes
+  # Note: Not all appenders use `application`
+  def self.application
+    @@application ||= 'Semantic Logger'
+  end
+
+  # Override the default application
+  def self.application=(application)
+    @@application = application
   end
 
   # Add a new logging appender as a new destination for all log messages

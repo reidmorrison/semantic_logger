@@ -10,10 +10,24 @@ end
 #   SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new)
 #
 class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
-  # Allow the level for this appender to be overwritten
-  #   Default: :error
-  #   Note: Not recommended to set the log level to :info, :debug, or :trace as it could flood Bugsnag with Error notices
-  def initialize(level = :error, &block)
+  # Create Appender
+  #
+  # Parameters
+  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+  #     Override the log level for this appender.
+  #     Default: :error
+  #
+  #   filter: [Regexp|Proc]
+  #     RegExp: Only include log messages where the class name matches the supplied.
+  #     regular expression. All other messages will be ignored.
+  #     Proc: Only include log messages where the supplied Proc returns true
+  #           The Proc must return true or false.
+  def initialize(options = {}, &block)
+    options  = {level: options} unless options.is_a?(Hash)
+    @options  = options.dup
+    level     = @options.delete(:level) || :error
+    filter    = @options.delete(:filter)
+
     raise 'Bugsnag only supports :info, :warn, or :error log levels' unless [:info, :warn, :error].include?(level)
 
     # Replace the Bugsnag logger so that we can identify its log messages and not forward them to Bugsnag
@@ -24,7 +38,7 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   # Returns [Hash] of parameters to send to Bugsnag.
   def default_formatter
     Proc.new do |log|
-      h = log.to_h
+      h            = log.to_h
       h[:severity] = log_level(log)
       h.delete(:time)
       h.delete(:exception)

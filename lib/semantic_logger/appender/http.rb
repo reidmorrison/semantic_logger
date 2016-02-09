@@ -20,8 +20,8 @@ require 'json'
 #
 #   SemanticLogger.add_appender(appender)
 class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
-  attr_accessor :url, :username, :application_name, :host_name, :compress, :header, :url, :host, :port, :request_uri
-  attr_reader :http
+  attr_accessor :username, :application, :host, :compress, :header
+  attr_reader :http, :url, :server, :port, :request_uri, :ssl_options
 
   # Create HTTP(S) log appender
   #
@@ -33,16 +33,13 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   #       Example: https://example.com/some_path
   #       verify_mode will default: OpenSSL::SSL::VERIFY_PEER
   #
-  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
-  #     Override the log level for this appender
-  #     Default: SemanticLogger.default_level
-  #
-  #   application_name: [String]
+  #   application: [String]
   #     Name of this application to appear in log messages.
+  #     Default: SemanticLogger.application
   #
-  #   host_name: [String]
+  #   host: [String]
   #     Name of this host to appear in log messages.
-  #     Default: Socket.gethostname
+  #     Default: SemanticLogger.host
   #
   #   username: [String]
   #     User name for basic Authentication.
@@ -52,37 +49,48 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   #     Password for basic Authentication.
   #
   #   compress: [true|false]
-  #     Whether to compress the JSON string with GZip
+  #     Whether to compress the JSON string with GZip.
   #     Default: false
   #
   #   ssl: [Hash]
   #     Specific SSL options: For more details see NET::HTTP.start
   #       ca_file, ca_path, cert, cert_store, ciphers, key, open_timeout, read_timeout, ssl_timeout,
   #       ssl_version, use_ssl, verify_callback, verify_depth and verify_mode.
+  #
+  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+  #     Override the log level for this appender.
+  #     Default: SemanticLogger.default_level
+  #
+  #   filter: [Regexp|Proc]
+  #     RegExp: Only include log messages where the class name matches the supplied.
+  #     regular expression. All other messages will be ignored.
+  #     Proc: Only include log messages where the supplied Proc returns true
+  #           The Proc must return true or false.
   def initialize(options, &block)
-    options           = options.dup
-    level             = options.delete(:level)
-    @url              = options.delete(:url)
-    @ssl_options      = options.delete(:ssl)
-    @username         = options.delete(:username)
-    @password         = options.delete(:password)
-    @application_name = options.delete(:application_name) || 'Semantic Logger'
-    @host_name        = options.delete(:host_name) || Socket.gethostname
-    @compress         = options.delete(:compress) || false
+    @options     = options.dup
+    level        = @options.delete(:level)
+    filter       = @options.delete(:filter)
+    @url         = options.delete(:url)
+    @ssl_options = options.delete(:ssl)
+    @username    = options.delete(:username)
+    @password    = options.delete(:password)
+    @application = options.delete(:application) || 'Semantic Logger'
+    @host        = options.delete(:host) || SemanticLogger.host
+    @compress    = options.delete(:compress) || false
     raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
 
     raise(ArgumentError, 'Missing mandatory parameter :url') unless @url
 
     @header                     = {
       'Accept'       => 'application/json',
-      'Content-Type' => 'application/json',
+      'Content-Type' => 'application/json'
     }
     @header['Content-Encoding'] = 'gzip' if @compress
 
     uri                             = URI.parse(@url)
     (@ssl_options ||= {})[:use_ssl] = true if uri.scheme == 'https'
 
-    @host        = uri.host
+    @server      = uri.host
     @port        = uri.port
     @username    = uri.user if !@username && uri.user
     @password    = uri.password if !@password && uri.password
@@ -91,13 +99,13 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     reopen
 
     # Pass on the level and custom formatter if supplied
-    super(level, &block)
+    super(level, filter, &block)
   end
 
   # Re-open after process fork
   def reopen
     # On Ruby v2.0 and greater, Net::HTTP.new uses a persistent connection if the server allows it
-    @http = @ssl_options ? Net::HTTP.new(host, port, @ssl_options) : Net::HTTP.new(host, port)
+    @http = @ssl_options ? Net::HTTP.new(server, port, @ssl_options) : Net::HTTP.new(server, port)
   end
 
   # Forward log messages to HTTP Server
@@ -108,17 +116,9 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     post(formatter.call(log, self))
   end
 
+  # Use the JSON formatter
   def default_formatter
-    Proc.new do |log, logger|
-      h = log.to_h
-      h.delete(:time)
-      h[:application] = logger.application_name
-      h[:host]        = logger.host_name
-      h[:timestamp]   = log.time.utc.iso8601(defined?(JRuby) ? 3 : 6)
-
-      # Render to JSON
-      h.to_json
-    end
+    self.class.json_formatter
   end
 
   private

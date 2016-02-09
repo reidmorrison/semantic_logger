@@ -25,9 +25,39 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   #   index: [String]
   #     Optional: Name of a valid index for this message in Splunk.
   #
+  #   url: [String]
+  #     Valid URL to post to.
+  #       Example: http://example.com
+  #     To enable SSL include https in the URL.
+  #       Example: https://example.com
+  #       verify_mode will default: OpenSSL::SSL::VERIFY_PEER
+  #
+  #   application: [String]
+  #     Name of this application to appear in log messages.
+  #     Default: SemanticLogger.application
+  #
+  #   host: [String]
+  #     Name of this host to appear in log messages.
+  #     Default: SemanticLogger.host
+  #
   #   compress: [true|false]
-  #     Whether to compress the JSON string with GZip
+  #     Whether to compress the JSON string with GZip.
   #     Default: true
+  #
+  #   ssl: [Hash]
+  #     Specific SSL options: For more details see NET::HTTP.start
+  #       ca_file, ca_path, cert, cert_store, ciphers, key, open_timeout, read_timeout, ssl_timeout,
+  #       ssl_version, use_ssl, verify_callback, verify_depth and verify_mode.
+  #
+  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+  #     Override the log level for this appender.
+  #     Default: SemanticLogger.default_level
+  #
+  #   filter: [Regexp|Proc]
+  #     RegExp: Only include log messages where the class name matches the supplied.
+  #     regular expression. All other messages will be ignored.
+  #     Proc: Only include log messages where the supplied Proc returns true
+  #           The Proc must return true or false.
   def initialize(options, &block)
     options      = options.dup
     @source_type = options.delete(:source_type)
@@ -36,7 +66,8 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
     raise(ArgumentError, 'Missing mandatory parameter :token') unless token
 
     # Splunk supports HTTP Compression, enable by default
-    options[:compress] ||= true
+    options[:compress] = true unless options.key?(:compress)
+
     super(options, &block)
 
     @header['Authorization'] = "Splunk #{token}"
@@ -46,12 +77,14 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
   def default_formatter
-    Proc.new do |log|
+    Proc.new do |log, logger|
       h = log.to_h
+      h.delete(:application)
+      h.delete(:host)
       h.delete(:time)
       message               = {
-        source: @application_name,
-        host:   @hostname,
+        source: logger.application,
+        host:   logger.host,
         time:   log.time.utc.to_f,
         event:  h
       }

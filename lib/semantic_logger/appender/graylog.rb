@@ -1,3 +1,4 @@
+require 'uri'
 begin
   require 'gelf'
 rescue LoadError
@@ -8,10 +9,7 @@ end
 #
 # Example:
 #   appender        = SemanticLogger::Appender::Graylog.new(
-#     server:   'localhost',
-#     port:     12201,
-#     protocol: :tcp,
-#     facility: Rails.application.class.name
+#     url: 'udp://localhost:12201'
 #   )
 #
 #   # Optional: Add filter to exclude health_check, or other log entries
@@ -22,7 +20,7 @@ end
 # Notes:
 # * trace is not supported by Graylog, so trace level logging will appear as debug in Graylog.
 #
-# In the Graylog search, it is recommended to turn on / include the following fields:
+# In the Graylog Web UI search screen, it is recommended to include the following fields:
 #  `duration`, `level`, `message`, `metric`, `name`, `tags
 class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   # Map Semantic Logger levels to Graylog levels
@@ -40,40 +38,53 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   # Create Graylog log appender.
   #
   # Options:
-  #   level: [Symbol]
-  #     Any valid SemanticLogger log level, for example :trace, :debug, :info, :warn, :error, :fatal
-  #     Default: SemanticLogger.default_level
-  #   server: [String]
-  #     Default: "localhost"
-  #   port: [Integer]
-  #     Default: 12201
-  #   max_size: [String]
-  #     Ignored when protocol is :tcp
-  #     Default: "WAN"
-  #   hostname: [String]
-  #     Name of this host to appear in graylog
+  #   url: [String]
+  #     Valid URL to post to.
+  #     Log to UDP Example:
+  #       'udp://localhost:12201'
+  #     Log to TCP Example:
+  #       'tcp://localhost:12201'
+  #     Default: 'udp://localhost:12201'
+  #
+  #   host: [String]
+  #     Name of this host to appear in log messages.
   #     Default: Socket.gethostname
-  #   facility: [String]
-  #     Default: 'Semantic Logger'
-  #   protocol: Symbol
-  #     :tcp or :udp
-  #     Default: :udp
-  def initialize(options={}, &block)
+  #
+  #   application: [String]
+  #     Name of this application to appear in log messages.
+  #     Default: SemanticLogger.application
+  #
+  #   max_size: [String]
+  #     Max udp packet size. Ignored when protocol is :tcp
+  #     Default: "WAN"
+  #
+  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+  #     Override the log level for this appender.
+  #     Default: SemanticLogger.default_level
+  #
+  #   filter: [Regexp|Proc]
+  #     RegExp: Only include log messages where the class name matches the supplied.
+  #     regular expression. All other messages will be ignored.
+  #     Proc: Only include log messages where the supplied Proc returns true
+  #           The Proc must return true or false.
+  def initialize(options = {}, &block)
     @options  = options.dup
     level     = @options.delete(:level)
-    @server   = @options.delete(:server) || 'localhost'
-    @port     = (@options.delete(:port) || 12201).to_i
+    filter    = @options.delete(:filter)
+    @url      = options.delete(:url) || 'udp://localhost:12201'
     @max_size = @options.delete(:max_size) || 'WAN'
-    if protocol = @options.delete(:protocol)
-      raise(ArgumentError, "Invalid protocol value: #{protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(protocol)
-      @options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
-    end
-    if source = @options.delete(:hostname)
-      @options[:host] = source
-    end
-    @options[:facility] ||= 'Semantic Logger'
+
+    uri      = URI.parse(@url)
+    @server  = uri.host
+    @port    = uri.port
+    protocol = uri.scheme.to_sym
+
+    raise(ArgumentError, "Invalid protocol value: #{protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(protocol)
+
+    @options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
+    @options[:facility] = @options.delete(:application) || SemanticLogger.application
     reopen
-    super(level, &block)
+    super(level, filter, &block)
   end
 
   # Re-open after process fork
@@ -84,11 +95,11 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
 
   # Returns [Hash] of parameters to send
   def default_formatter
-    Proc.new do |log|
+    Proc.new do |log, logger|
       h = log.to_h
       h.delete(:time)
       h[:timestamp]     = log.time.utc.to_f
-      h[:level]         = SemanticLogger::Appender::Graylog::LEVEL_MAP[log.level]
+      h[:level]         = logger.map_level(log)
       h[:level_str]     = log.level.to_s
       h[:short_message] = h.delete(:message) if log.message
       h
@@ -102,6 +113,11 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
 
     @notifier.notify!(formatter.call(log, self))
     true
+  end
+
+  # Returns the Graylog level for the supplied log message
+  def map_level(log)
+    LEVEL_MAP[log.level]
   end
 
 end

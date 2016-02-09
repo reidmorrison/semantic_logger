@@ -48,7 +48,7 @@ module SemanticLogger
       #  Generates logs of the form:
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def default_formatter
-        Proc.new do |log|
+        Proc.new do |log, logger|
           # Header with date, time, log level and process info
           entry = "#{log.formatted_time} #{log.level_to_s} [#{log.process_info}]"
 
@@ -84,7 +84,7 @@ module SemanticLogger
       #
       #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
       def self.colorized_formatter
-        Proc.new do |log|
+        Proc.new do |log, logger|
           colors      = SemanticLogger::Appender::AnsiColors
           level_color = colors::LEVEL_MAP[log.level]
 
@@ -121,7 +121,7 @@ module SemanticLogger
       # To use this formatter
       #   SemanticLogger.add_appender($stdout, &SemanticLogger::Appender::Base.json_formatter)
       def self.json_formatter
-        Proc.new do |log|
+        Proc.new do |log, logger|
           h = log.to_h
           h.delete(:time)
           h[:timestamp] = log.time.utc.iso8601(defined?(JRuby) ? 3 : 6)
@@ -167,22 +167,6 @@ module SemanticLogger
       # set for this instance
       def level_index
         @level_index || 0
-      end
-
-      if defined? Java
-        # Return the Time as a formatted string
-        # JRuby only supports time in ms
-        def self.formatted_time(time)
-          warn '[deprecated] SemanticLogger::Base.formatted_time is deprecated please use log.formatted_time'
-          "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%03d' % (time.usec/1000)}"
-        end
-      else
-        # Return the Time as a formatted string
-        # Ruby MRI supports micro seconds
-        def self.formatted_time(time)
-          warn '[deprecated] SemanticLogger::Base.formatted_time is deprecated please use log.formatted_time'
-          "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%06d' % (time.usec)}"
-        end
       end
 
     end

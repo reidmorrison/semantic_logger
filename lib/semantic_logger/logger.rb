@@ -227,7 +227,7 @@ module SemanticLogger
         begin
           subscriber.call(log_struct)
         rescue Exception => exc
-          logger.error 'Exception calling subscriber', exc
+          logger.error 'Exception calling metrics subscriber', exc
         end
       end
     end

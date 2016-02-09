@@ -6,7 +6,22 @@ module SemanticLogger
   module Appender
     class File < SemanticLogger::Appender::Base
 
-      # Create a File Logger appender instance
+      # Create a File Logger appender instance.
+      #
+      # Parameters
+      #  filename [String|IO]
+      #    Name of file to write to.
+      #    Or, an IO stream to which to write the log message to.
+      #
+      #  level [:trace | :debug | :info | :warn | :error | :fatal]
+      #    Override the log level for this appender.
+      #    Default: SemanticLogger.default_level
+      #
+      #  filter [Regexp|Proc]
+      #    RegExp: Only include log messages where the class name matches the supplied
+      #    regular expression. All other messages will be ignored.
+      #    Proc: Only include log messages where the supplied Proc returns true
+      #          The Proc must return true or false.
       #
       # Example
       #    require 'semantic_logger'
@@ -38,7 +53,6 @@ module SemanticLogger
       #
       #    logger =  SemanticLogger['test']
       #    logger.info 'Hello World'
-      #
       def initialize(filename, level=nil, filter=nil, &block)
         raise 'filename cannot be null when initializing the SemanticLogging::Appender::File' unless filename
         @log =

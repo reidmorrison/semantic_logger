@@ -9,7 +9,7 @@ require 'socket'
 #
 # Example: Log to a remote Syslog server using TCP:
 #   appender        = SemanticLogger::Appender::Syslog.new(
-#     server: 'tcp://myloghost:514'
+#     url: 'tcp://myloghost:514'
 #   )
 #
 #   # Optional: Add filter to exclude health_check, or other log entries
@@ -19,7 +19,7 @@ require 'socket'
 #
 # Example: Log to a remote Syslog server using UDP:
 #   appender        = SemanticLogger::Appender::Syslog.new(
-#     server: 'udp://myloghost:514'
+#     url: 'udp://myloghost:514'
 #   )
 #
 #   # Optional: Add filter to exclude health_check, or other log entries
@@ -30,7 +30,7 @@ module SemanticLogger
   module Appender
     class Syslog < SemanticLogger::Appender::Base
 
-      attr_reader :remote_syslog, :server, :host, :port, :protocol, :facility, :local_hostname
+      attr_reader :remote_syslog, :url, :server, :port, :protocol, :facility, :host, :application
 
       # Default mapping of ruby log levels to syslog log levels
       #
@@ -51,14 +51,47 @@ module SemanticLogger
         trace: ::Syslog::LOG_DEBUG
       }
 
-      # For more information on the Syslog constants used below see http://ruby-doc.org/stdlib-2.0.0/libdoc/syslog/rdoc/Syslog.html
+      # Create a Syslog appender instance.
+      #
       # Parameters
+      #   url: [String]
+      #     Default: 'syslog://localhost'
+      #     For writing logs to a remote syslog server
+      #     URL of server: protocol://host:port
+      #     Uses port 514 by default for TCP and UDP.
+      #     local syslog example:          'syslog://localhost'
+      #     TCP example with default port: 'tcp://logger'
+      #     TCP example with custom port:  'tcp://logger:8514'
+      #     UDP example with default port: 'udp://logger'
+      #     UDP example with custom port:  'udp://logger:8514'
+      #     When using the :syslog protocol, logs will always be sent to the localhost syslog
       #
-      #   :ident [String]
-      #     Identity of the program
-      #     Default: 'ruby'
+      #   host: [String]
+      #     Host name to provide to the remote syslog.
+      #     Default: SemanticLogger.host
       #
-      #   :options [Integer]
+      #   tcp_client: [Hash]
+      #     Default: {}
+      #     Only used with the TCP protocol.
+      #     Specify custom parameters to pass into Net::TCPClient.new
+      #     For a list of options see the net_tcp_client documentation:
+      #       https://www.omniref.com/ruby/gems/net_tcp_client/1.0.0/symbols/Net::TCPClient/initialize
+      #
+      #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+      #     Override the log level for this appender.
+      #     Default: SemanticLogger.default_level
+      #
+      #   filter: [Regexp|Proc]
+      #     RegExp: Only include log messages where the class name matches the supplied.
+      #     regular expression. All other messages will be ignored.
+      #     Proc: Only include log messages where the supplied Proc returns true
+      #           The Proc must return true or false.
+      #
+      #   application: [String]
+      #     Identity of the program.
+      #     Default: SemanticLogger.application
+      #
+      #   options: [Integer]
       #     Default: ::Syslog::LOG_PID | ::Syslog::LOG_CONS
       #     Any of the following (options can be logically OR'd together)
       #       ::Syslog::LOG_CONS
@@ -68,7 +101,7 @@ module SemanticLogger
       #       ::Syslog::LOG_PERROR
       #       ::Syslog::LOG_PID
       #
-      #   :facility [Integer]
+      #   facility: [Integer]
       #     Default: ::Syslog::LOG_USER
       #     Type of program (can be logically OR'd together)
       #       ::Syslog::LOG_AUTH
@@ -95,11 +128,7 @@ module SemanticLogger
       #       ::Syslog::LOG_LOCAL6
       #       ::Syslog::LOG_LOCAL7
       #
-      #   :level [Symbol]
-      #     Default: SemanticLogger's log level.
-      #     The minimum level at which this appender will write logs. Any log messages below this level will be ignored.
-      #
-      #   :level_map [Hash]
+      #   level_map: [Hash]
       #     Supply a custom map of SemanticLogger levels to syslog levels.
       #     For example, passing in { warn: ::Syslog::LOG_NOTICE }
       #       would result in a log mapping that matches the default level map,
@@ -114,44 +143,21 @@ module SemanticLogger
       #         debug:   ::Syslog::LOG_INFO,
       #         trace:   ::Syslog::LOG_DEBUG
       #       }
-      #
-      #   :local_hostname [String]
-      #     Default: Socket.gethostname || `hostname`.strip
-      #     Hostname to provide to the remote syslog.
-      #
-      #   :server [String]
-      #     Default: 'syslog://localhost'
-      #     For writing logs to a remote syslog server
-      #     URI of server: protocol://host:port
-      #     Uses port 514 by default for TCP and UDP.
-      #     local syslog example:          'syslog://localhost'
-      #     TCP example with default port: 'tcp://logger'
-      #     TCP example with custom port:  'tcp://logger:8514'
-      #     UDP example with default port: 'udp://logger'
-      #     UDP example with custom port:  'udp://logger:8514'
-      #     When using the :syslog protocol, logs will always be sent to the localhost syslog
-      #
-      #   :tcp_client [Hash]
-      #     Default: {}
-      #     Only used with the TCP protocol.
-      #     Specify custom parameters to pass into Net::TCPClient.new
-      #     For a list of options see the net_tcp_client documentation:
-      #       https://www.omniref.com/ruby/gems/net_tcp_client/1.0.0/symbols/Net::TCPClient/initialize
       def initialize(options = {}, &block)
         options             = options.dup
-        @ident              = options.delete(:ident) || 'ruby'
+        level               = options.delete(:level)
+        filter              = options.delete(:filter)
+        @application        = options.delete(:application) || options.delete(:ident) || 'ruby'
         @options            = options.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
         @facility           = options.delete(:facility) || ::Syslog::LOG_USER
-        filter              = options.delete(:filter)
-        level               = options.delete(:level)
         level_map           = options.delete(:level_map)
-        @server             = options.delete(:server) || 'syslog://localhost'
-        uri                 = URI(@server)
-        @host               = uri.host || 'localhost'
+        @url                = options.delete(:url) || options.delete(:server) || 'syslog://localhost'
+        uri                 = URI(@url)
+        @server             = uri.host || 'localhost'
         @protocol           = (uri.scheme || :syslog).to_sym
-        @host               = 'localhost' if @protocol == :syslog
-        @port               = URI(@server).port || 514
-        @local_hostname     = options.delete(:local_hostname) || Socket.gethostname || `hostname`.strip
+        @port               = uri.port || 514
+        @server             = 'localhost' if @protocol == :syslog
+        @host               = options.delete(:host) || options.delete(:local_hostname) || SemanticLogger.host
         @tcp_client_options = options.delete(:tcp_client)
 
         raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
@@ -171,7 +177,7 @@ module SemanticLogger
           # The net_tcp_client gem is required when logging over TCP.
           if protocol == :tcp
             @tcp_client_options          ||= {}
-            @tcp_client_options[:server] = "#{@host}:#{@port}"
+            @tcp_client_options[:server] = "#{@server}:#{@port}"
             begin
               require 'net/tcp_client'
             rescue LoadError
@@ -190,7 +196,7 @@ module SemanticLogger
       def reopen
         case @protocol
         when :syslog
-          ::Syslog.open(@ident, @options, @facility)
+          ::Syslog.open(@application, @options, @facility)
         when :tcp
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
           @tcp_client_options[:logger] = SemanticLogger::Logger.logger
@@ -202,7 +208,7 @@ module SemanticLogger
         end
       end
 
-      # Write the log using the specified protocol and host.
+      # Write the log using the specified protocol and server.
       def log(log)
         # Ensure minimum log level is met, and check filter
         return false if (level_index > (log.level_index || 0)) || !include_message?(log)
@@ -215,7 +221,7 @@ module SemanticLogger
         when :tcp
           @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{syslog_packet_formatter(log)}\r\n") }
         when :udp
-          @remote_syslog.send syslog_packet_formatter(log), 0, @host, @port
+          @remote_syslog.send syslog_packet_formatter(log), 0, @server, @port
         else
           raise "Unsupported protocol: #{protocol}"
         end
@@ -263,10 +269,10 @@ module SemanticLogger
       # Format the syslog packet so it can be sent over TCP or UDP
       def syslog_packet_formatter(log)
         packet          = SyslogProtocol::Packet.new
-        packet.hostname = @local_hostname
+        packet.hostname = @host
         packet.facility = @facility
         packet.severity = @level_map[log.level]
-        packet.tag      = @ident
+        packet.tag      = @application
         packet.content  = default_formatter.call(log, self)
         packet.time     = log.time
         packet.to_s

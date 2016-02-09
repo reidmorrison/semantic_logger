@@ -8,9 +8,10 @@ end
 class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   attr_reader :config, :index, :service, :service_index
 
-  # Allow the level for this appender to be overwritten
-  #   Default: :error
+  # DEPRECATED, Please use SemanticLogger::Appender::SplunkHttp
   def initialize(options, level=:error, &block)
+    Kernel.warn('Splunk Appender is deprecated, please use SemanticLogger::Appender::SplunkHttp')
+
     # Parse input options for setting up splunk connection
     parse_options(options)
 
