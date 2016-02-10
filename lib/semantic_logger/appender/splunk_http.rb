@@ -1,3 +1,4 @@
+require 'json'
 # Splunk log appender.
 #
 # Use the newer, faster and more complete JSON over HTTP interface for Splunk.

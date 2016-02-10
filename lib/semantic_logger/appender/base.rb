@@ -1,3 +1,4 @@
+require 'json'
 # Load AwesomePrint if available
 begin
   require 'awesome_print'

@@ -18,8 +18,10 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
   #
   # Parameters:
   #   index: [String]
-  #     Index to store the logs in Elasticsearch.
-  #     Default: 'semantic_logger-YYYY.MM.DD'
+  #     Prefix of the index to store the logs in Elasticsearch.
+  #     The final index appends the date so that indexes are used per day.
+  #       I.e. The final index will look like 'semantic_logger-YYYY.MM.DD'
+  #     Default: 'semantic_logger'
   #
   #   type: [String]
   #     Document type to associate with logs when they are written.
@@ -36,18 +38,24 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
   #           The Proc must return true or false.
   def initialize(options, &block)
     options       = options.dup
-    @index        = options.delete(:index) || "semantic_logger-#{Date.today.to_s.gsub('-', '.')}"
+    @index        = options.delete(:index) || "semantic_logger"
     @type         = options.delete(:type) || 'log'
     options[:url] ||= 'http://localhost:9200'
 
     super(options, &block)
-
-    @request_uri = "#{@index}/#{@type}"
   end
 
-  # Deletes all log data captured for this index
-  def delete_all
-    delete(index)
+  # Log to the index for today
+  def log(log)
+    return false if (level_index > (log.level_index || 0)) ||
+      !include_message?(log) # Filtered out?
+
+    post(formatter.call(log, self), "#{index}-#{log.time.strftime('%Y.%m.%d')}/#{type}")
+  end
+
+  # Deletes all log data captured for a day
+  def delete_all(date = Date.today)
+    "#{index}-#{date.strftime('%Y.%m.%d')}/#{type}"
   end
 
 end

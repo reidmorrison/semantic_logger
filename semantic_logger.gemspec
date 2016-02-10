@@ -18,5 +18,4 @@ Gem::Specification.new do |spec|
   spec.test_files  = Dir['test/**/*']
   spec.license     = 'Apache License V2.0'
   spec.add_dependency 'concurrent-ruby', '~> 1.0'
-  spec.add_dependency 'json', '~> 1.7'
 end

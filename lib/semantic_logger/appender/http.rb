@@ -21,7 +21,7 @@ require 'json'
 #   SemanticLogger.add_appender(appender)
 class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   attr_accessor :username, :application, :host, :compress, :header
-  attr_reader :http, :url, :server, :port, :request_uri, :ssl_options
+  attr_reader :http, :url, :server, :port, :path, :ssl_options
 
   # Create HTTP(S) log appender
   #
@@ -90,11 +90,13 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     uri                             = URI.parse(@url)
     (@ssl_options ||= {})[:use_ssl] = true if uri.scheme == 'https'
 
-    @server      = uri.host
-    @port        = uri.port
-    @username    = uri.user if !@username && uri.user
-    @password    = uri.password if !@password && uri.password
-    @request_uri = uri.request_uri
+    @server = uri.host
+    raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'") unless @url
+
+    @port     = uri.port
+    @username = uri.user if !@username && uri.user
+    @password = uri.password if !@password && uri.password
+    @path     = uri.request_uri
 
     reopen
 
@@ -132,20 +134,20 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   end
 
   # HTTP Post
-  def post(body, request_uri = nil)
-    request = Net::HTTP::Post.new(request_uri || @request_uri, @header)
+  def post(body, request_uri = path)
+    request = Net::HTTP::Post.new(request_uri, @header)
     process_request(request, body)
   end
 
   # HTTP Put
-  def put(body, request_uri = nil)
-    request = Net::HTTP::Put.new(request_uri || @request_uri, @header)
+  def put(body, request_uri = path)
+    request = Net::HTTP::Put.new(request_uri, @header)
     process_request(request, body)
   end
 
   # HTTP Delete
-  def delete(request_uri = nil)
-    request = Net::HTTP::Delete.new(request_uri || @request_uri, @header)
+  def delete(request_uri = path)
+    request = Net::HTTP::Delete.new(request_uri, @header)
     process_request(request)
   end
 

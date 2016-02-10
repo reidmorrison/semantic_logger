@@ -40,9 +40,6 @@ module Appender
           end
           body = decompress_data(request.body)
           hash = JSON.parse(body)
-          # assert message['event']['message'].include?('Reading File -- NameError: undefined local variable or method'), message['message']
-          # assert_equal level.to_s, message['event']['level']
-          # assert message['event']['backtrace'].include?(__FILE__), message['event']['backtrace']
           assert 'Reading File', hash['message']
           assert exception = hash['event']['exception']
           assert 'NameError', exception['name']
@@ -60,7 +57,7 @@ module Appender
           message = JSON.parse(body)
           assert_equal @message, message['event']['message']
           assert_equal level.to_s, message['event']['level']
-          refute message['event']['backtrace']
+          refute message['event']['stack_trace']
           assert_equal(1, message['event']['key1'], message)
           assert_equal('a', message['event']['key2'], message)
         end
