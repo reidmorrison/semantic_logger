@@ -71,7 +71,7 @@ Log to a remote Syslog server using TCP:
 
 ~~~ruby
 appender        = SemanticLogger::Appender::Syslog.new(
-  server: 'tcp://myloghost:514'
+  url: 'tcp://myloghost:514'
 )
 
 # Optional: Add filter to exclude health_check, or other log entries
@@ -84,7 +84,7 @@ Log to a remote Syslog server using UDP:
 
 ~~~ruby
 appender        = SemanticLogger::Appender::Syslog.new(
-  server: 'udp://myloghost:514'
+  url: 'udp://myloghost:514'
 )
 
 # Optional: Add filter to exclude health_check, or other log entries
@@ -142,10 +142,7 @@ To use the TCP Protocol:
 
 ~~~ruby
 appender        = SemanticLogger::Appender::Graylog.new(
-  server:   'localhost',
-  port:     12201,
-  protocol: :tcp,
-  facility: Rails.application.class.name
+  url: 'tcp://localhost:12201'
 )
 # Optional: Add filter to exclude health_check, or other log entries
 appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
@@ -157,10 +154,7 @@ Or, to use the UDP Protocol:
 
 ~~~ruby
 appender        = SemanticLogger::Appender::Graylog.new(
-  server:   'localhost',
-  port:     12201,
-  protocol: :udp,
-  facility: Rails.application.class.name
+  url: 'udp://localhost:12201'
 )
 # Optional: Add filter to exclude health_check, or other log entries
 appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
@@ -257,12 +251,11 @@ In the Field Explorer change to Grid view and add the following fields using `Ad
 * level
 * message
 
-If HTTPS is being used for the Splunk HTTP Collector, update the url accordingly:
+If HTTPS is being used for Loggly, update the url accordingly:
 
 ~~~ruby
-appender = SemanticLogger::Appender::SplunkHttp.new(
-  url:   'https://localhost:8088/services/collector/event',
-  token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+appender = SemanticLogger::Appender::Http.new(
+  url: 'https://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
 )
 ~~~
 
@@ -471,8 +464,8 @@ appender = SemanticLogger::Appender::Http.new(
   url: 'https://localhost:8088/path'
 ) do |log, request, logger|
   h = log.to_h
-  h[:application] = logger.application_name
-  h[:host]        = logger.host_name
+  h[:application] = logger.application
+  h[:host]        = logger.host
 
   # Change time from iso8601 to seconds since epoch
   h[:timestamp] = log.time.utc.to_f
@@ -509,7 +502,7 @@ Example, log to a local file and to a remote Syslog server such as syslog-ng ove
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 SemanticLogger.add_appender('development.log')
-SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(:server => 'tcp://myloghost:514'))
+SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(url: 'tcp://myloghost:514'))
 ~~~
 
 ### Appender Logging Levels
