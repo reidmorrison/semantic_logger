@@ -300,13 +300,13 @@ module SemanticLogger
 
     # Log message at the specified level
     def log_internal(level, index, message=nil, payload=nil, exception=nil)
-      # Detect exception being logged
-      if exception.nil? && payload.nil? && message.kind_of?(Exception)
+      # Exception being logged?
+      # Under JRuby a java exception is not a Ruby Exception
+      #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false
+      if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
         exception = message
         message   = nil
       elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
-        # Under JRuby a java exception is not a Ruby Exception
-        #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false
         exception = payload
         payload   = nil
       end
@@ -331,6 +331,23 @@ module SemanticLogger
       backtrace = extract_backtrace if index >= SemanticLogger.backtrace_level_index
 
       struct = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception, nil, backtrace)
+
+      # Logging Hash only?
+      # logger.info(name: 'value')
+      if payload.nil? && exception.nil? && message.is_a?(Hash)
+        payload              = message.dup
+        min_duration         = payload.delete(:min_duration) || 0.0
+        struct.exception     = payload.delete(:exception)
+        struct.message       = payload.delete(:message)
+        struct.metric        = payload.delete(:metric)
+        struct.metric_amount = payload.delete(:metric_amount) || 1
+        if duration = payload.delete(:duration)
+          return false if duration <= min_duration
+          struct.duration = duration
+        end
+        struct.payload = payload if payload.size > 0
+      end
+
       log(struct) if include_message?(struct)
     end
 

@@ -96,6 +96,56 @@ class LoggerTest < Minitest::Test
               assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world/, @mock_logger.message
             end
 
+            describe 'hash only argument' do
+              it 'logs message' do
+                @logger.send(level, message: 'Hello world')
+                SemanticLogger.flush
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world/, @mock_logger.message
+              end
+
+              it 'logs payload and message' do
+                @logger.send(level, message: 'Hello world', tracking_number: '123456', even: 2, more: 'data')
+                hash = {tracking_number: '123456', even: 2, more: 'data'}
+                SemanticLogger.flush
+                hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+              end
+
+              it 'logs payload only' do
+                hash     = {tracking_number: '123456', even: 2, more: 'data'}
+                @logger.send(level, hash)
+                SemanticLogger.flush
+                hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- #{hash_str}/, @mock_logger.message
+              end
+
+              it 'logs duration' do
+                @logger.send(level, duration: 123.45, message: 'Hello world', tracking_number: '123456', even: 2, more: 'data')
+                hash = {tracking_number: '123456', even: 2, more: 'data'}
+                SemanticLogger.flush
+                hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(123\.5ms\) LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+              end
+
+              it 'does not log when below min_duration' do
+                @logger.send(level, min_duration: 200, duration: 123.45, message: 'Hello world', tracking_number: '123456', even: 2, more: 'data')
+                hash = {tracking_number: '123456', even: 2, more: 'data'}
+                SemanticLogger.flush
+                assert_nil @mock_logger.message
+              end
+
+              it 'logs metric' do
+                metric_name = '/my/custom/metric'
+                @logger.send(level, metric: metric_name, duration: 123.45, message: 'Hello world', tracking_number: '123456', even: 2, more: 'data')
+                hash = {tracking_number: '123456', even: 2, more: 'data'}
+                SemanticLogger.flush
+                hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(123\.5ms\) LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+                assert metric_name, $last_metric.metric
+              end
+
+            end
+
           end
         end
 
