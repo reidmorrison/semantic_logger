@@ -105,8 +105,9 @@ module SemanticLogger
     #   SemanticLogger.on_metric do |log_struct|
     #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
     #   end
-    def self.on_metric(&block)
-      (@@metric_subscribers ||= Concurrent::Array.new) << block
+    def self.on_metric(object = nil, &block)
+      raise('When supplying an object, it must support the #call method') if object && !object.respond_to?(:call)
+      (@@metric_subscribers ||= Concurrent::Array.new) << (object || block)
     end
 
     private

@@ -198,8 +198,8 @@ module SemanticLogger
   #   SemanticLogger.on_metric do |log_struct|
   #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
   #   end
-  def self.on_metric(&block)
-    SemanticLogger::Logger.on_metric(&block)
+  def self.on_metric(object = nil, &block)
+    SemanticLogger::Logger.on_metric(object, &block)
   end
 
   # Add signal handlers for Semantic Logger

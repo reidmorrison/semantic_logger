@@ -96,7 +96,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     @port     = uri.port
     @username = uri.user if !@username && uri.user
     @password = uri.password if !@password && uri.password
-    @path     = uri.request_uri
+    @path     = uri.path
 
     reopen
 

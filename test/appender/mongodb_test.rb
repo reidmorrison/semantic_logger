@@ -23,7 +23,7 @@ module Appender
       end
 
       describe 'format logs into documents' do
-        it 'handle nil name, message and hash' do
+        it 'handle no arguments' do
           @appender.debug
           document = @appender.collection.find_one
           assert_equal :debug, document['level']
@@ -36,15 +36,16 @@ module Appender
           assert_equal 'test_application', document['application']
         end
 
-        it "handle nil message and payload" do
+        it 'handle hash message' do
           @appender.debug(@hash)
 
           document = @appender.collection.find_one
           assert_equal :debug, document['level']
-          assert_equal @hash.inspect, document['message']
+          assert_equal nil, document['message']
           assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
-          assert_nil document['payload']
+          assert_equal 12345, document['tracking_number']
+          assert_equal 'HSSKLEU@JDK767', document['session_id']
           assert_equal $$, document['pid']
           assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
@@ -80,7 +81,7 @@ module Appender
         end
       end
 
-      describe "for each log level" do
+      describe 'for each log level' do
         # Ensure that any log level can be logged
         SemanticLogger::LEVELS.each do |level|
           it 'log #{level} information' do
