@@ -124,7 +124,8 @@ class LoggerTest < Minitest::Test
                 hash = {tracking_number: '123456', even: 2, more: 'data'}
                 SemanticLogger.flush
                 hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(123\.5ms\) LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+                duration_match = defined?(JRuby) ? '\(123ms\)' : '\(123\.5ms\)'
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
               end
 
               it 'does not log when below min_duration' do
@@ -140,7 +141,8 @@ class LoggerTest < Minitest::Test
                 hash = {tracking_number: '123456', even: 2, more: 'data'}
                 SemanticLogger.flush
                 hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] \(123\.5ms\) LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+                duration_match = defined?(JRuby) ? '\(123ms\)' : '\(123\.5ms\)'
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
                 assert metric_name, $last_metric.metric
               end
 
