@@ -16,6 +16,6 @@ Gem::Specification.new do |spec|
   spec.description = 'Next generation logging system for Ruby to support highly concurrent, high throughput, low latency enterprise systems'
   spec.files       = Dir['lib/**/*', 'LICENSE.txt', 'Rakefile', 'README.md']
   spec.test_files  = Dir['test/**/*']
-  spec.license     = 'Apache License V2.0'
+  spec.license     = 'Apache-2.0'
   spec.add_dependency 'concurrent-ruby', '~> 1.0'
 end

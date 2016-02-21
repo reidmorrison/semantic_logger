@@ -50,8 +50,6 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   def log(log)
     # Only log if level is warn, or error.
     return false if (level_index > (log.level_index || 0)) ||
-      # We don't want to send fatal as those are already captured by Bugsnag.
-      #(log.level == :fatal) ||
       # Ignore logs coming from Bugsnag itself
       (log.name == 'Bugsnag') ||
       # Filtered out?
@@ -75,7 +73,15 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
 
   private
 
+  # Bugsnag supports: error, warning or info
   def log_level(log)
-    log.level == :warn ? 'warning' : log.level.to_s
+    case log.level
+    when :error, :fatal
+      'error'
+    when :warn
+      'warning'
+    else
+      'info'
+    end
   end
 end

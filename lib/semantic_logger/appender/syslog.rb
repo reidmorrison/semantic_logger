@@ -143,6 +143,13 @@ module SemanticLogger
       #         debug:   ::Syslog::LOG_INFO,
       #         trace:   ::Syslog::LOG_DEBUG
       #       }
+      #
+      #   format: [Symbol]
+      #     Format for the Syslog message
+      #       :syslog uses the default syslog format
+      #       :json uses the CEE JSON Syslog format
+      #          Example: "@cee: #{JSON.dump(data)}"
+      #     Default: :syslog
       def initialize(options = {}, &block)
         options             = options.dup
         level               = options.delete(:level)
