@@ -9,9 +9,18 @@ module Appender
         @message  = 'AppenderBugsnagTest log message'
       end
 
-      (SemanticLogger::LEVELS - [:warn, :error]).each do |level|
+      SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
-          exception = hash = nil
+          bugsnag_level =
+            case level
+            when :warn
+              'warning'
+            when :fatal
+              'error'
+            else
+              level.to_s
+            end
+          exception     = hash = nil
           Bugsnag.stub(:notify, -> exc, h { exception = exc; hash = h }) do
             @appender.send(level, @message)
           end
@@ -21,7 +30,7 @@ module Appender
           else
             assert_equal 'RuntimeError', exception.class.to_s
             assert_equal @message, exception.message
-            assert_equal level.to_s, hash[:severity]
+            assert_equal bugsnag_level.to_s, hash[:severity]
           end
         end
 

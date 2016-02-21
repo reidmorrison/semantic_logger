@@ -11,8 +11,12 @@ module SemanticLogger
       trace?
     end
 
+    def measure_debug(*args, &block)
+      measure_trace(*args, &block)
+    end
+
     def benchmark_debug(*args, &block)
-      benchmark_trace(*args, &block)
+      measure_trace(*args, &block)
     end
   end
 end

@@ -19,7 +19,7 @@
 #      logger.debug "Calculating with amount", { amount: amount, name: name }
 #
 #      # Measure and log on completion how long the call took to the external supplier
-#      logger.benchmark_info "Calling external interface" do
+#      logger.measure_info "Calling external interface" do
 #        # Code to call the external supplier ...
 #      end
 #    end

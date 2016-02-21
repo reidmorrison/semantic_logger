@@ -88,9 +88,17 @@ module SemanticLogger
           level_index <= #{index}
         end
 
+        def measure_#{level}(message, params = {}, &block)
+          if level_index <= #{index}
+            measure_internal(:#{level}, #{index}, message, params, &block)
+          else
+            block.call(params) if block
+          end
+        end
+
         def benchmark_#{level}(message, params = {}, &block)
           if level_index <= #{index}
-            benchmark_internal(:#{level}, #{index}, message, params, &block)
+            measure_internal(:#{level}, #{index}, message, params, &block)
           else
             block.call(params) if block
           end
@@ -98,15 +106,17 @@ module SemanticLogger
       EOT
     end
 
-    # Dynamically supply the log level with every benchmark call
-    def benchmark(level, message, params = {}, &block)
+    # Dynamically supply the log level with every measurement call
+    def measure(level, message, params = {}, &block)
       index = SemanticLogger.level_to_index(level)
       if level_index <= index
-        benchmark_internal(level, index, message, params, &block)
+        measure_internal(level, index, message, params, &block)
       else
         block.call(params) if block
       end
     end
+
+    alias_method :benchmark, :measure
 
     # If the tag being supplied is definitely a string then this fast
     # tag api can be used for short lived tags
@@ -363,7 +373,7 @@ module SemanticLogger
     end
 
     # Measure the supplied block and log the message
-    def benchmark_internal(level, index, message, params)
+    def measure_internal(level, index, message, params)
       start     = Time.now
       exception = nil
       begin

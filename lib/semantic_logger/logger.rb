@@ -95,7 +95,7 @@ module SemanticLogger
       queue_size
     end
 
-    # Supply a block to be called whenever a metric is seen during benchmark logging
+    # Supply a block to be called whenever a metric is seen during measure logging
     #
     #  Parameters
     #    block

@@ -46,7 +46,7 @@ module Appender
         NewRelic::Agent.stub(:notice_error, -> exc, h { exception = exc; hash = h }) do
           @appender.tagged('test') do
             @appender.with_payload({key1: 1, key2: 'a'}) do
-              @appender.benchmark(:error, @message) do
+              @appender.measure(:error, @message) do
                 sleep 0.001
               end
             end

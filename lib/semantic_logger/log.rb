@@ -23,7 +23,7 @@ module SemanticLogger
   #   The time at which the log entry was created
   #
   # duration
-  #   The time taken to complete a benchmark call
+  #   The time taken to complete a measure call
   #
   # tags
   #   Any tags active on the thread when the log call was made
@@ -35,7 +35,7 @@ module SemanticLogger
   #   Ruby Exception object to log
   #
   # metric [Object]
-  #   Object supplied when benchmark_x was called
+  #   Object supplied when measure_x was called
   #
   # backtrace [Array<String>]
   #   The backtrace captured at source when the log level >= SemanticLogger.backtrace_level

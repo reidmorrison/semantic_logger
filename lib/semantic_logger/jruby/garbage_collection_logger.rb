@@ -18,7 +18,7 @@ module SemanticLogger
         gc_info  = info.gc_info
         duration = gc_info.duration
         if duration >= @min_microseconds
-          SemanticLogger['GarbageCollector'].benchmark_warn "Garbage Collection completed: #{info.gc_name} ##{gc_info.id}", duration: duration.to_f / 1000
+          SemanticLogger['GarbageCollector'].measure_warn "Garbage Collection completed: #{info.gc_name} ##{gc_info.id}", duration: duration.to_f / 1000
         end
       end
     end
