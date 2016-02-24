@@ -72,7 +72,9 @@ module SemanticLogger
         options    = options.dup
         level      = options.delete(:level)
         filter     = options.delete(:filter)
-        @formatter = options.delete(:formatter) || block
+        @formatter = options.delete(:formatter)
+        @formatter = self.class.extract_formatter(@formatter) if @formatter.is_a?(Symbol)
+        @formatter ||= block
         # Default to #call method for formatting if defined for an appender
         @formatter ||= (respond_to?(:call) ? self : SemanticLogger::Formatters::Default.new)
         raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
@@ -87,6 +89,11 @@ module SemanticLogger
       # set for this instance
       def level_index
         @level_index || 0
+      end
+
+      # Return formatter for supplied Symbol
+      def self.extract_formatter(formatter, &block)
+        SemanticLogger.send(:named_formatter, formatter).new
       end
 
     end

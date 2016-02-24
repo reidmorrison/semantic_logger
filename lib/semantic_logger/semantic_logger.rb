@@ -107,10 +107,13 @@ module SemanticLogger
   #     Override the log level for this appender.
   #     Default: SemanticLogger.default_level
   #
-  #   formatter: [Object|Proc]
-  #     An instance of a class that implements #call, or a Proc to be used to format
-  #     the output from this appender
-  #     Default: Use the built-in formatter (See: #call)
+  #   formatter: [Symbol|Object|Proc]
+  #     Any of the following symbol values: :default, :colorize, :json
+  #       Or,
+  #     An instance of a class that implements #call
+  #       Or,
+  #     A Proc to be used to format the output from this appender
+  #     Default: :default
   #
   #   filter: [Regexp|Proc]
   #     RegExp: Only include log messages where the class name matches the supplied.
@@ -349,6 +352,17 @@ module SemanticLogger
       appender.respond_to?(:constantize) ? appender.constantize : eval(klass)
     rescue NameError
       raise(ArgumentError, "Unknown appender: #{appender}")
+    end
+  end
+
+  def self.named_formatter(formatter)
+    formatter = formatter.to_s
+    klass     = formatter.respond_to?(:camelize) ? formatter.camelize : camelize(formatter)
+    klass     = "SemanticLogger::Formatters::#{klass}"
+    begin
+      formatter.respond_to?(:constantize) ? formatter.constantize : eval(klass)
+    rescue NameError
+      raise(ArgumentError, "Unknown formatter: #{formatter}")
     end
   end
 

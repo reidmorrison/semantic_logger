@@ -12,6 +12,14 @@ class LoggerTest < Minitest::Test
         @appender = SemanticLogger.add_appender(file_name: 'sample.log')
         assert @appender.is_a?(SemanticLogger::Appender::File)
         assert SemanticLogger.appenders.include?(@appender)
+        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Default)
+      end
+
+      it 'adds file appender with json format' do
+        @appender = SemanticLogger.add_appender(file_name: 'sample.log', formatter: :json)
+        assert @appender.is_a?(SemanticLogger::Appender::File)
+        assert SemanticLogger.appenders.include?(@appender)
+        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Json)
       end
 
       it 'adds stream appender' do
@@ -31,6 +39,15 @@ class LoggerTest < Minitest::Test
         assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
         assert @appender.logger.is_a?(::Logger)
         assert SemanticLogger.appenders.include?(@appender)
+        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Default)
+      end
+
+      it 'adds logger wrapper appender with colorize formatter' do
+        @appender = SemanticLogger.add_appender(logger: ::Logger.new(STDOUT), formatter: :colorize)
+        assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
+        assert @appender.logger.is_a?(::Logger)
+        assert SemanticLogger.appenders.include?(@appender)
+        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Colorize)
       end
 
       it 'adds appender' do
