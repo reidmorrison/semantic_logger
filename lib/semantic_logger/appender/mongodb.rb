@@ -91,25 +91,27 @@ module SemanticLogger
       #     Override the log level for this appender.
       #     Default: SemanticLogger.default_level
       #
+      #   formatter: [Object|Proc]
+      #     An instance of a class that implements #call, or a Proc to be used to format
+      #     the output from this appender
+      #     Default: Use the built-in formatter (See: #call)
+      #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(options = {}, &block)
-        options          = options.dup
-        level            = options.delete(:level)
-        filter           = options.delete(:filter)
-        @db              = options.delete(:db) || raise('Missing mandatory parameter :db')
-        @collection_name = options.delete(:collection_name) || 'semantic_logger'
-        @host            = options.delete(:host) || options.delete(:host_name) || SemanticLogger.host
-        @write_concern   = options.delete(:write_concern) || 0
-        @application     = options.delete(:application) || SemanticLogger.application
+        options             = options.dup
+        @db                 = options.delete(:db) || raise('Missing mandatory parameter :db')
+        @collection_name    = options.delete(:collection_name) || 'semantic_logger'
+        @host               = options.delete(:host) || options.delete(:host_name) || SemanticLogger.host
+        @write_concern      = options.delete(:write_concern) || 0
+        @application        = options.delete(:application) || SemanticLogger.application
 
         # Create a collection that will hold the lesser of 1GB space or 10K documents
-        @collection_size = options.delete(:collection_size) || 1024**3
-        @collection_max  = options.delete(:collection_max)
-        raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
+        @collection_size    = options.delete(:collection_size) || 1024**3
+        @collection_max     = options.delete(:collection_max)
 
         reopen
 
@@ -117,7 +119,7 @@ module SemanticLogger
         create_indexes
 
         # Set the log level and formatter
-        super(level, filter, &block)
+        super(options, &block)
       end
 
       # After forking an active process call #reopen to re-open
@@ -160,13 +162,11 @@ module SemanticLogger
 
       # Default log formatter
       #  Replace this formatter by supplying a Block to the initializer
-      def default_formatter
-        Proc.new do |log|
-          h               = log.to_h
-          h[:host]        = host
-          h[:application] = application
-          h
-        end
+      def call(log, logger)
+        h               = log.to_h
+        h[:host]        = host
+        h[:application] = application
+        h
       end
 
       # Log the message to MongoDB

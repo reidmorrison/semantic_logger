@@ -29,9 +29,9 @@ module SemanticLogger
         @statsd.namespace = path.sub('/', '') if path != ''
       end
 
-      def call(log_struct)
-        metric = log_struct.metric
-        if duration = log_struct.duration
+      def call(log)
+        metric = log.metric
+        if duration = log.duration
           $statsd.timing(metric, duration)
         else
           amount = (log.metric_amount || 1).round

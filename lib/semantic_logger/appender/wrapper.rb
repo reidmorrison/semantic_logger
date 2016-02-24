@@ -17,6 +17,11 @@ module SemanticLogger
       #     Override the log level for this appender.
       #     Default: SemanticLogger.default_level
       #
+      #   formatter: [Object|Proc]
+      #     An instance of a class that implements #call, or a Proc to be used to format
+      #     the output from this appender
+      #     Default: Use the built-in formatter (See: #call)
+      #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
       #     regular expression. All other messages will be ignored.
@@ -28,27 +33,33 @@ module SemanticLogger
       #    require 'semantic_logger'
       #
       #    ruby_logger = Logger.new(STDOUT)
-      #    SemanticLogger.add_appender(ruby_logger)
+      #    SemanticLogger.add_appender(logger: ruby_logger)
       #
       #    logger =  SemanticLogger['test']
       #    logger.info('Hello World', some: :payload)
       #
       # Enhance the Rails Logger
       #    # Add the Rails logger to the list of appenders
-      #    SemanticLogger.add_appender(Rails.logger)
+      #    SemanticLogger.add_appender(logger: Rails.logger)
       #    Rails.logger = SemanticLogger['Rails']
       #
       #    # Make ActiveRecord logging include its class name in every log entry
       #    ActiveRecord::Base.logger = SemanticLogger['ActiveRecord']
       #
       # Install the `rails_semantic_logger` gem to replace the Rails logger with Semantic Logger.
-      def initialize(logger, level = nil, filter = nil, &block)
-        raise 'logger cannot be null when initializing the SemanticLogging::Appender::Wrapper' unless logger
-        @logger    = logger
+      def initialize(options, &block)
+        # Backward compatibility
+        options = {logger: options} unless options.is_a?(Hash)
+        options = options.dup
+        @logger = options.delete(:logger)
 
-        # Set the formatter to the supplied block
-        @formatter = block || self.default_formatter
-        super(level, filter, &block)
+        # Check if the custom appender responds to all the log levels. For example Ruby ::Logger
+        if does_not_implement = LEVELS[1..-1].find { |i| !@logger.respond_to?(i) }
+          raise(ArgumentError, "Supplied logger does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..-1].inspect}")
+        end
+
+        raise 'SemanticLogging::Appender::Wrapper missing mandatory parameter :logger' unless @logger
+        super(options, &block)
       end
 
       # Pass log calls to the underlying Rails, log4j or Ruby logger
@@ -58,8 +69,7 @@ module SemanticLogger
         # Ensure minimum log level is met, and check filter
         return false if (level_index > (log.level_index || 0)) || !include_message?(log)
 
-        # Underlying wrapper logger implements log level, so don't check here
-        @logger.send(log.level == :trace ? :debug : log.level, @formatter.call(log, self))
+        @logger.send(log.level == :trace ? :debug : log.level, formatter.call(log, self))
         true
       end
 

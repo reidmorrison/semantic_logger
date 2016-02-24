@@ -61,15 +61,18 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   #     Override the log level for this appender.
   #     Default: SemanticLogger.default_level
   #
+  #   formatter: [Object|Proc]
+  #     An instance of a class that implements #call, or a Proc to be used to format
+  #     the output from this appender
+  #     Default: Use the built-in formatter (See: #call)
+  #
   #   filter: [Regexp|Proc]
   #     RegExp: Only include log messages where the class name matches the supplied.
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
   def initialize(options, &block)
-    @options     = options.dup
-    level        = @options.delete(:level)
-    filter       = @options.delete(:filter)
+    options      = options.dup
     @url         = options.delete(:url)
     @ssl_options = options.delete(:ssl)
     @username    = options.delete(:username)
@@ -77,7 +80,9 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     @application = options.delete(:application) || 'Semantic Logger'
     @host        = options.delete(:host) || SemanticLogger.host
     @compress    = options.delete(:compress) || false
-    raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
+    unless options.has_key?(:formatter)
+      options[:formatter] = block || (respond_to?(:call) ? self : SemanticLogger::Formatters::Json.new)
+    end
 
     raise(ArgumentError, 'Missing mandatory parameter :url') unless @url
 
@@ -101,7 +106,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     reopen
 
     # Pass on the level and custom formatter if supplied
-    super(level, filter, &block)
+    super(options)
   end
 
   # Re-open after process fork
@@ -114,13 +119,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   def log(log)
     return false if (level_index > (log.level_index || 0)) ||
       !include_message?(log) # Filtered out?
-
     post(formatter.call(log, self))
-  end
-
-  # Use the JSON formatter
-  def default_formatter
-    self.class.json_formatter
   end
 
   private

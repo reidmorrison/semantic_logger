@@ -102,12 +102,20 @@ module SemanticLogger
     #      The block to be called
     #
     # Example:
-    #   SemanticLogger.on_metric do |log_struct|
-    #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
+    #   SemanticLogger.on_metric do |log|
+    #     puts "#{log.metric} was received. Log Struct: #{log.inspect}"
     #   end
     def self.on_metric(object = nil, &block)
       raise('When supplying an object, it must support the #call method') if object && !object.respond_to?(:call)
       (@@metric_subscribers ||= Concurrent::Array.new) << (object || block)
+    end
+
+    protected
+
+    # Place log request on the queue for the Appender thread to write to each
+    # appender in the order that they were registered
+    def log(log)
+      self.class.queue << log if @@appender_thread
     end
 
     private
@@ -119,12 +127,6 @@ module SemanticLogger
     # Queue to hold messages that need to be logged to the various appenders
     def self.queue
       @@queue
-    end
-
-    # Place log request on the queue for the Appender thread to write to each
-    # appender in the order that they were registered
-    def log(log)
-      self.class.queue << log if @@appender_thread
     end
 
     # Internal logger for SemanticLogger
@@ -220,13 +222,13 @@ module SemanticLogger
     end
 
     # Call Metric subscribers
-    def self.call_metric_subscribers(log_struct)
+    def self.call_metric_subscribers(log)
       # If no subscribers registered, then return immediately
       return unless @@metric_subscribers
 
       @@metric_subscribers.each do |subscriber|
         begin
-          subscriber.call(log_struct)
+          subscriber.call(log)
         rescue Exception => exc
           logger.error 'Exception calling metrics subscriber', exc
         end

@@ -81,6 +81,11 @@ module SemanticLogger
       #     Override the log level for this appender.
       #     Default: SemanticLogger.default_level
       #
+      #   formatter: [Object|Proc]
+      #     An instance of a class that implements #call, or a Proc to be used to format
+      #     the output from this appender
+      #     Default: Use the built-in formatter (See: #call)
+      #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
       #     regular expression. All other messages will be ignored.
@@ -152,8 +157,6 @@ module SemanticLogger
       #     Default: :syslog
       def initialize(options = {}, &block)
         options             = options.dup
-        level               = options.delete(:level)
-        filter              = options.delete(:filter)
         @application        = options.delete(:application) || options.delete(:ident) || 'ruby'
         @options            = options.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
         @facility           = options.delete(:facility) || ::Syslog::LOG_USER
@@ -168,7 +171,6 @@ module SemanticLogger
         @tcp_client_options = options.delete(:tcp_client)
 
         raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
-        raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
 
         @level_map = DEFAULT_LEVEL_MAP.dup
         @level_map.update(level_map) if level_map
@@ -195,7 +197,7 @@ module SemanticLogger
 
         reopen
 
-        super(level, filter, &block)
+        super(options, &block)
       end
 
       # After forking an active process call #reopen to re-open
@@ -242,35 +244,33 @@ module SemanticLogger
 
       # Custom log formatter for syslog.
       # Only difference is the removal of the timestamp string since it is in the syslog packet.
-      def default_formatter
-        Proc.new do |log|
-          # Header with date, time, log level and process info
-          entry = "#{log.level_to_s} [#{log.process_info}]"
+      def call(log, logger)
+        # Header with date, time, log level and process info
+        message = "#{log.level_to_s} [#{log.process_info}]"
 
-          # Tags
-          entry << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
+        # Tags
+        message << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
 
-          # Duration
-          entry << " (#{log.duration_human})" if log.duration
+        # Duration
+        message << " (#{log.duration_human})" if log.duration
 
-          # Class / app name
-          entry << " #{log.name}"
+        # Class / app name
+        message << " #{log.name}"
 
-          # Log message
-          entry << " -- #{log.message}" if log.message
+        # Log message
+        message << " -- #{log.message}" if log.message
 
-          # Payload
-          if payload = log.payload_to_s(false)
-            entry << ' -- ' << payload
-          end
-
-          # Exceptions
-          if log.exception
-            entry << " -- Exception: #{log.exception.class}: #{log.exception.message}\n"
-            entry << log.backtrace_to_s
-          end
-          entry
+        # Payload
+        if payload = log.payload_to_s
+          message << ' -- ' << payload
         end
+
+        # Exceptions
+        if log.exception
+          message << " -- Exception: #{log.exception.class}: #{log.exception.message}\n"
+          message << log.backtrace_to_s
+        end
+        message
       end
 
       # Format the syslog packet so it can be sent over TCP or UDP
@@ -280,7 +280,7 @@ module SemanticLogger
         packet.facility = @facility
         packet.severity = @level_map[log.level]
         packet.tag      = @application
-        packet.content  = default_formatter.call(log, self)
+        packet.content  = formatter.call(log, self)
         packet.time     = log.time
         packet.to_s
       end

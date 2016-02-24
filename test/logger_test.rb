@@ -3,6 +3,86 @@ require_relative 'test_helper'
 # Unit Test for SemanticLogger::Logger
 class LoggerTest < Minitest::Test
   describe SemanticLogger::Logger do
+    describe '.add_appender' do
+      after do
+        SemanticLogger.remove_appender(@appender) if @appender
+      end
+
+      it 'adds file appender' do
+        @appender = SemanticLogger.add_appender(file_name: 'sample.log')
+        assert @appender.is_a?(SemanticLogger::Appender::File)
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds stream appender' do
+        @appender = SemanticLogger.add_appender(io: STDOUT)
+        assert @appender.is_a?(SemanticLogger::Appender::File)
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds symbol appender' do
+        @appender = SemanticLogger.add_appender(appender: :http, url: 'http://localhost:8088/path')
+        assert @appender.is_a?(SemanticLogger::Appender::Http), @appender.ai
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds logger wrapper appender' do
+        @appender = SemanticLogger.add_appender(logger: ::Logger.new(STDOUT))
+        assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
+        assert @appender.logger.is_a?(::Logger)
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds appender' do
+        @appender = SemanticLogger.add_appender(appender: SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path'))
+        assert @appender.is_a?(SemanticLogger::Appender::Http), @appender.ai
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'fails to add invalid logger appender' do
+        assert_raises do
+          SemanticLogger.add_appender(logger: 'blah')
+        end
+      end
+    end
+
+    describe '.add_appender DEPRECATED' do
+      after do
+        SemanticLogger.remove_appender(@appender) if @appender
+      end
+
+      it 'adds file appender' do
+        @appender = SemanticLogger.add_appender('sample.log')
+        assert @appender.is_a?(SemanticLogger::Appender::File)
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds stream appender' do
+        @appender = SemanticLogger.add_appender(STDOUT)
+        assert @appender.is_a?(SemanticLogger::Appender::File)
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds appender' do
+        @appender = SemanticLogger.add_appender(SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path'))
+        assert @appender.is_a?(SemanticLogger::Appender::Http), @appender.ai
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds logger wrapper appender' do
+        @appender = SemanticLogger.add_appender(::Logger.new(STDOUT))
+        assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
+        assert @appender.logger.is_a?(::Logger)
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'fails to add invalid logger appender' do
+        assert_raises do
+          SemanticLogger.add_appender(logger: 'blah')
+        end
+      end
+    end
+
     # Test each filter
     [nil, /\ALogger/, Proc.new { |l| (/\AExclude/ =~ l.message).nil? }].each do |filter|
       describe "filter: #{filter.class.name}" do
@@ -12,13 +92,13 @@ class LoggerTest < Minitest::Test
           SemanticLogger.default_level   = :trace
           SemanticLogger.backtrace_level = nil
           @mock_logger                   = MockLogger.new
-          @appender                      = SemanticLogger.add_appender(@mock_logger)
+          @appender                      = SemanticLogger.add_appender(logger: @mock_logger)
           @appender.filter               = filter
 
           # Add mock metric subscriber
           $last_metric                   = nil
-          SemanticLogger.on_metric do |log_struct|
-            $last_metric = log_struct.dup
+          SemanticLogger.on_metric do |log|
+            $last_metric = log.dup
           end
 
           # Use this test's class name as the application name in the log output
@@ -111,8 +191,16 @@ class LoggerTest < Minitest::Test
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
               end
 
+              it 'logs payload and message from block' do
+                @logger.send(level) { {message: 'Hello world', tracking_number: '123456', even: 2, more: 'data'} }
+                hash = {tracking_number: '123456', even: 2, more: 'data'}
+                SemanticLogger.flush
+                hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
+              end
+
               it 'logs payload only' do
-                hash     = {tracking_number: '123456', even: 2, more: 'data'}
+                hash = {tracking_number: '123456', even: 2, more: 'data'}
                 @logger.send(level, hash)
                 SemanticLogger.flush
                 hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
@@ -123,7 +211,7 @@ class LoggerTest < Minitest::Test
                 @logger.send(level, duration: 123.45, message: 'Hello world', tracking_number: '123456', even: 2, more: 'data')
                 hash = {tracking_number: '123456', even: 2, more: 'data'}
                 SemanticLogger.flush
-                hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+                hash_str       = hash.inspect.sub('{', '\{').sub('}', '\}')
                 duration_match = defined?(JRuby) ? '\(123ms\)' : '\(123\.5ms\)'
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
               end
@@ -140,7 +228,7 @@ class LoggerTest < Minitest::Test
                 @logger.send(level, metric: metric_name, duration: 123.45, message: 'Hello world', tracking_number: '123456', even: 2, more: 'data')
                 hash = {tracking_number: '123456', even: 2, more: 'data'}
                 SemanticLogger.flush
-                hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
+                hash_str       = hash.inspect.sub('{', '\{').sub('}', '\}')
                 duration_match = defined?(JRuby) ? '\(123ms\)' : '\(123\.5ms\)'
                 assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message
                 assert metric_name, $last_metric.metric

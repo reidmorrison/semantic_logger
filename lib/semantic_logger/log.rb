@@ -151,12 +151,13 @@ module SemanticLogger
 
     # Return the payload in text form
     # Returns nil if payload is missing or empty
-    def payload_to_s(colorized = false)
-      return if payload.nil? || (payload.respond_to?(:empty?) && payload.empty?)
-      return payload.inspect if !colorized || !defined?(AwesomePrint) || !payload.respond_to?(:ai)
+    def payload_to_s
+      payload.inspect if has_payload?
+    end
 
-      # Colorize the payload if the AwesomePrint gem is loaded
-      payload.ai(multiline: false) rescue payload.inspect
+    # Returns [true|false] whether the log entry has a payload
+    def has_payload?
+      !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
     end
 
     if defined? JRuby

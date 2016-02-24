@@ -18,7 +18,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
     reopen
 
     # Pass on the level and custom formatter if supplied
-    super(level, &block)
+    super(level: level, &block)
   end
 
   # After forking an active process call #reopen to re-open

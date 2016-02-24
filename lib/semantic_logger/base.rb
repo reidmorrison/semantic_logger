@@ -256,6 +256,13 @@ module SemanticLogger
       SemanticLogger.default_level
     end
 
+    protected
+
+    # Write log data to underlying data storage
+    def log(log_)
+      raise NotImplementedError.new('Logging Appender must implement #log(log)')
+    end
+
     private
 
     # Initializer for Abstract Class SemanticLogger::Base
@@ -285,11 +292,6 @@ module SemanticLogger
       self.level = level unless level.nil?
     end
 
-    # Write log data to underlying data storage
-    def log(log_)
-      raise NotImplementedError.new('Logging Appender must implement #log(log)')
-    end
-
     # Return the level index for fast comparisons
     # Returns the global default level index if the level has not been explicitly
     # set for this instance
@@ -298,13 +300,13 @@ module SemanticLogger
     end
 
     # Whether to log the supplied message based on the current filter if any
-    def include_message?(struct)
+    def include_message?(log)
       return true if @filter.nil?
 
       if @filter.is_a?(Regexp)
-        (@filter =~ struct.name) != nil
+        (@filter =~ log.name) != nil
       elsif @filter.is_a?(Proc)
-        @filter.call(struct) == true
+        @filter.call(log) == true
       end
     end
 
@@ -325,6 +327,8 @@ module SemanticLogger
       if block_given? && (result = yield)
         if result.is_a?(String)
           message = message.nil? ? result : "#{message} -- #{result}"
+        elsif message.nil? && result.is_a?(Hash)
+          message = result
         elsif payload && payload.respond_to?(:merge)
           payload.merge(result)
         else
@@ -340,25 +344,25 @@ module SemanticLogger
       # Add caller stack trace
       backtrace = extract_backtrace if index >= SemanticLogger.backtrace_level_index
 
-      struct = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception, nil, backtrace)
+      log = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception, nil, backtrace)
 
       # Logging Hash only?
       # logger.info(name: 'value')
       if payload.nil? && exception.nil? && message.is_a?(Hash)
-        payload              = message.dup
-        min_duration         = payload.delete(:min_duration) || 0.0
-        struct.exception     = payload.delete(:exception)
-        struct.message       = payload.delete(:message)
-        struct.metric        = payload.delete(:metric)
-        struct.metric_amount = payload.delete(:metric_amount) || 1
+        payload           = message.dup
+        min_duration      = payload.delete(:min_duration) || 0.0
+        log.exception     = payload.delete(:exception)
+        log.message       = payload.delete(:message)
+        log.metric        = payload.delete(:metric)
+        log.metric_amount = payload.delete(:metric_amount) || 1
         if duration = payload.delete(:duration)
           return false if duration <= min_duration
-          struct.duration = duration
+          log.duration = duration
         end
-        struct.payload = payload if payload.size > 0
+        log.payload = payload if payload.size > 0
       end
 
-      log(struct) if include_message?(struct)
+      self.log(log) if include_message?(log)
     end
 
     SELF_PATTERN = File.join('lib', 'semantic_logger')
@@ -434,16 +438,16 @@ module SemanticLogger
             logged_exception = nil
             backtrace        = exception.backtrace
           end
-          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, logged_exception, metric, backtrace)
-          log(struct) if include_message?(struct)
+          log = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, logged_exception, metric, backtrace)
+          self.log(log) if include_message?(log)
           raise exception
         elsif duration >= min_duration
           # Only log if the block took longer than 'min_duration' to complete
           # Add caller stack trace
           backtrace = extract_backtrace if index >= SemanticLogger.backtrace_level_index
 
-          struct = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric, backtrace)
-          log(struct) if include_message?(struct)
+          log = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric, backtrace)
+          self.log(log) if include_message?(log)
         end
       end
     end

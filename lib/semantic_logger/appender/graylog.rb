@@ -62,17 +62,20 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   #     Override the log level for this appender.
   #     Default: SemanticLogger.default_level
   #
+  #   formatter: [Object|Proc]
+  #     An instance of a class that implements #call, or a Proc to be used to format
+  #     the output from this appender
+  #     Default: Use the built-in formatter (See: #call)
+  #
   #   filter: [Regexp|Proc]
   #     RegExp: Only include log messages where the class name matches the supplied.
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
   def initialize(options = {}, &block)
-    @options  = options.dup
-    level     = @options.delete(:level)
-    filter    = @options.delete(:filter)
-    @url      = options.delete(:url) || 'udp://localhost:12201'
-    @max_size = @options.delete(:max_size) || 'WAN'
+    @gelf_options = options.dup
+    @url          = @gelf_options.delete(:url) || 'udp://localhost:12201'
+    @max_size     = @gelf_options.delete(:max_size) || 'WAN'
 
     uri      = URI.parse(@url)
     @server  = uri.host
@@ -81,29 +84,34 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
 
     raise(ArgumentError, "Invalid protocol value: #{protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(protocol)
 
-    @options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
-    @options[:facility] = @options.delete(:application) || SemanticLogger.application
+    @gelf_options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
+    @gelf_options[:facility] = @gelf_options.delete(:application) || SemanticLogger.application
+
+    options = {
+      level:     @gelf_options.delete(:level),
+      filter:    @gelf_options.delete(:filter),
+      formatter: @gelf_options.delete(:formatter)
+    }
     reopen
-    super(level, filter, &block)
+
+    super(options, &block)
   end
 
   # Re-open after process fork
   def reopen
-    @notifier                       = GELF::Notifier.new(@server, @port, @max_size, @options)
+    @notifier                       = GELF::Notifier.new(@server, @port, @max_size, @gelf_options)
     @notifier.collect_file_and_line = false
   end
 
   # Returns [Hash] of parameters to send
-  def default_formatter
-    Proc.new do |log, logger|
-      h = log.to_h
-      h.delete(:time)
-      h[:timestamp]     = log.time.utc.to_f
-      h[:level]         = logger.map_level(log)
-      h[:level_str]     = log.level.to_s
-      h[:short_message] = h.delete(:message) if log.message
-      h
-    end
+  def call(log, logger)
+    h = log.to_h
+    h.delete(:time)
+    h[:timestamp]     = log.time.utc.to_f
+    h[:level]         = logger.map_level(log)
+    h[:level_str]     = log.level.to_s
+    h[:short_message] = h.delete(:message) if log.message
+    h
   end
 
   # Forward log messages

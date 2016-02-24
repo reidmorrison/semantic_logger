@@ -20,6 +20,11 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
   #     Override the log level for this appender.
   #     Default: :error
   #
+  #   formatter: [Object|Proc]
+  #     An instance of a class that implements #call, or a Proc to be used to format
+  #     the output from this appender
+  #     Default: Use the built-in formatter (See: #call)
+  #
   #   filter: [Regexp|Proc]
   #     RegExp: Only include log messages where the class name matches the supplied.
   #     regular expression. All other messages will be ignored.
@@ -27,22 +32,18 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
   #           The Proc must return true or false.
   def initialize(options = {}, &block)
     # Backward compatibility
-    options  = {level: options} unless options.is_a?(Hash)
-    @options = options.dup
-    level    = @options.delete(:level) || :error
-    filter   = @options.delete(:filter)
-
-    super(level, filter, &block)
+    options         = {level: options} unless options.is_a?(Hash)
+    options         = options.dup
+    options[:level] = :error unless options.has_key?(:level)
+    super(options)
   end
 
   # Returns [Hash] of parameters to send to New Relic.
-  def default_formatter
-    Proc.new do |log, logger|
-      h = log.to_h
-      h.delete(:time)
-      h.delete(:exception)
-      {metric: log.metric, custom_params: h}
-    end
+  def call(log, logger)
+    h = log.to_h
+    h.delete(:time)
+    h.delete(:exception)
+    {metric: log.metric, custom_params: h}
   end
 
   # Send an error notification to New Relic

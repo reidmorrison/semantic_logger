@@ -9,15 +9,20 @@ module SemanticLogger
       # Create a File Logger appender instance.
       #
       # Parameters
-      #  filename [String|IO]
+      #  :file_name [String|IO]
       #    Name of file to write to.
       #    Or, an IO stream to which to write the log message to.
       #
-      #  level [:trace | :debug | :info | :warn | :error | :fatal]
+      #  :level [:trace | :debug | :info | :warn | :error | :fatal]
       #    Override the log level for this appender.
       #    Default: SemanticLogger.default_level
       #
-      #  filter [Regexp|Proc]
+      #  :formatter: [Object|Proc]
+      #    An instance of a class that implements #call, or a Proc to be used to format
+      #    the output from this appender
+      #    Default: Use the built-in formatter (See: #call)
+      #
+      #  :filter [Regexp|Proc]
       #    RegExp: Only include log messages where the class name matches the supplied
       #    regular expression. All other messages will be ignored.
       #    Proc: Only include log messages where the supplied Proc returns true
@@ -33,7 +38,7 @@ module SemanticLogger
       #    SemanticLogger.add_appender(STDOUT)
       #
       #    # And log to a file at the same time
-      #    SemanticLogger::Logger.add_appender('application.log')
+      #    SemanticLogger::Logger.add_appender(file_name: 'application.log')
       #
       #    logger = SemanticLogger['test']
       #    logger.info 'Hello World'
@@ -46,36 +51,53 @@ module SemanticLogger
       #    SemanticLogger.default_level = :trace
       #
       #    # Log to screen but only display :info and above
-      #    SemanticLogger.add_appender(STDOUT, :info)
+      #    SemanticLogger.add_appender(io: STDOUT, level: :info)
       #
       #    # And log to a file at the same time, including all :trace level data
-      #    SemanticLogger.add_appender('application.log')
+      #    SemanticLogger.add_appender(file_name: 'application.log')
       #
       #    logger =  SemanticLogger['test']
       #    logger.info 'Hello World'
-      def initialize(filename, level=nil, filter=nil, &block)
-        raise 'filename cannot be null when initializing the SemanticLogging::Appender::File' unless filename
-        @log =
-          if filename.respond_to?(:write) and filename.respond_to?(:close)
-            filename
+      def initialize(options={}, deprecated_level = nil, deprecated_filter = nil, &block)
+        # Old style arguments: (file_name, level=nil, filter=nil, &block)
+        options =
+          if options.is_a?(Hash)
+            options.dup
           else
-            @filename = filename
-            reopen
+            file_name = options
+            opts      = {}
+            if file_name.respond_to?(:write) && file_name.respond_to?(:close)
+              opts[:io] = file_name
+            else
+              opts[:file_name] = file_name
+            end
+            opts[:level]  = deprecated_level if deprecated_level
+            opts[:filter] = deprecated_filter if deprecated_filter
+            opts
           end
 
+        if io = options.delete(:io)
+          @log = io
+        else
+          @file_name = options.delete(:file_name)
+          raise 'SemanticLogging::Appender::File missing mandatory parameter :file_name or :io' unless @file_name
+          reopen
+        end
+
         # Set the log level and formatter if supplied
-        super(level, filter, &block)
+        super(options, &block)
       end
 
       # After forking an active process call #reopen to re-open
       # open the file handles etc to resources
       #
-      # Note: This method will only work if a String filename was supplied
+      # Note: This method will only work if :file_name was supplied
       #       on the initializer.
+      #       If :io was supplied, it will need to be re-opened manually.
       def reopen
-        return unless @filename
+        return unless @file_name
 
-        @log      = open(@filename, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
+        @log      = open(@file_name, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @log.sync = true

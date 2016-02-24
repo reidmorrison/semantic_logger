@@ -31,6 +31,11 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
   #     Override the log level for this appender.
   #     Default: SemanticLogger.default_level
   #
+  #   formatter: [Object|Proc]
+  #     An instance of a class that implements #call, or a Proc to be used to format
+  #     the output from this appender
+  #     Default: Use the built-in formatter (See: #call)
+  #
   #   filter: [Regexp|Proc]
   #     RegExp: Only include log messages where the class name matches the supplied.
   #     regular expression. All other messages will be ignored.
@@ -38,7 +43,7 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
   #           The Proc must return true or false.
   def initialize(options, &block)
     options       = options.dup
-    @index        = options.delete(:index) || "semantic_logger"
+    @index        = options.delete(:index) || 'semantic_logger'
     @type         = options.delete(:type) || 'log'
     options[:url] ||= 'http://localhost:9200'
 

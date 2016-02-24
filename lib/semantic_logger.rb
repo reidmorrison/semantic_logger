@@ -4,6 +4,7 @@ require 'semantic_logger/semantic_logger'
 
 # @formatter:off
 module SemanticLogger
+  autoload :AnsiColors,         'semantic_logger/ansi_colors'
   autoload :Base,               'semantic_logger/base'
   autoload :DebugAsTraceLogger, 'semantic_logger/debug_as_trace_logger'
   autoload :Log,                'semantic_logger/log'
@@ -25,11 +26,16 @@ module SemanticLogger
     autoload :Wrapper,          'semantic_logger/appender/wrapper'
   end
 
+  module Formatters
+    autoload :Colorize,        'semantic_logger/formatters/colorize'
+    autoload :Default,          'semantic_logger/formatters/default'
+    autoload :Json,             'semantic_logger/formatters/json'
+  end
+
   module Metrics
     autoload :NewRelic,         'semantic_logger/metrics/new_relic'
     autoload :Statsd,           'semantic_logger/metrics/statsd'
   end
-  # @formatter:on
 
   if defined?(JRuby)
     module JRuby
@@ -37,6 +43,7 @@ module SemanticLogger
     end
   end
 end
+# @formatter:on
 
 # Flush all appenders at exit, waiting for outstanding messages on the queue
 # to be written first

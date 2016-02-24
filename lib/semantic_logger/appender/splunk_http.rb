@@ -54,16 +54,21 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   #     Override the log level for this appender.
   #     Default: SemanticLogger.default_level
   #
+  #   formatter: [Object|Proc]
+  #     An instance of a class that implements #call, or a Proc to be used to format
+  #     the output from this appender
+  #     Default: Use the built-in formatter (See: #call)
+  #
   #   filter: [Regexp|Proc]
   #     RegExp: Only include log messages where the class name matches the supplied.
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
   def initialize(options, &block)
-    options      = options.dup
-    @source_type = options.delete(:source_type)
-    @index       = options.delete(:index)
-    token        = options.delete(:token)
+    options             = options.dup
+    @source_type        = options.delete(:source_type)
+    @index              = options.delete(:index)
+    token               = options.delete(:token)
     raise(ArgumentError, 'Missing mandatory parameter :token') unless token
 
     # Splunk supports HTTP Compression, enable by default
@@ -77,24 +82,22 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   # Returns [String] JSON to send to Splunk
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
-  def default_formatter
-    Proc.new do |log, logger|
-      h = log.to_h
-      h.delete(:application)
-      h.delete(:host)
-      h.delete(:time)
-      message               = {
-        source: logger.application,
-        host:   logger.host,
-        time:   log.time.utc.to_f,
-        event:  h
-      }
-      message[:source_type] = @source_type if @source_type
-      message[:index]       = @index if @index
+  def call(log, logger)
+    h = log.to_h
+    h.delete(:application)
+    h.delete(:host)
+    h.delete(:time)
+    message               = {
+      source: logger.application,
+      host:   logger.host,
+      time:   log.time.utc.to_f,
+      event:  h
+    }
+    message[:source_type] = @source_type if @source_type
+    message[:index]       = @index if @index
 
-      # Render to JSON
-      message.to_json
-    end
+    # Render to JSON
+    message.to_json
   end
 
 end

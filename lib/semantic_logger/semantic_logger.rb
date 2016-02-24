@@ -81,40 +81,56 @@ module SemanticLogger
   # more information on custom formatters
   #
   # Parameters
-  #   appender [String|IO|SemanticLogger::Appender::Base|::Logger]
-  #     Filename to write log messages to
-  #        Or,
-  #     STDOUT, STDERR, or any IO stream to write log messages to
-  #        Or,
-  #     Any SemanticLogger::Appender instance such as
-  #       SemanticLogger::Appender::File
-  #       SemanticLogger::Appender::Wrapper
-  #       SemanticLogger::Appender::Mongodb
-  #        Or,
-  #     A custom appender derived from SemanticLogger::Appender::Base
-  #        Or,
-  #     Ruby built-in Logger, or any logger that implements the following methods:
-  #       :debug, :info, :warn, :error, :fatal
+  #   file_name: [String]
+  #     File name to write log messages to.
   #
-  #   level [Symbol]
-  #     Optional
-  #     By setting the level higher than the SemanticLogger::default_level
-  #     this appender can exclude lower level log messages
-  #     Any one of SemanticLogger::LEVELS. For example: :trace, :debug, :info, :warn, :error, :fatal
+  #   Or,
+  #   io: [IO]
+  #     An IO Stream to log to.
+  #     For example STDOUT, STDERR, etc.
+  #
+  #   Or,
+  #   appender: [Symbol|SemanticLogger::Appender::Base]
+  #     A symbol identifying the appender to create.
+  #     For example:
+  #       :bugsnag, :elasticsearch, :graylog, :http, :mongodb, :new_relic, :splunk_http, :syslog, :wrapper
+  #          Or,
+  #     An instance of an appender derived from SemanticLogger::Appender::Base
+  #     For example:
+  #       SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path')
+  #
+  #   Or,
+  #   logger: [Logger|Log4r]
+  #     An instance of a Logger or a Log4r logger.
+  #
+  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+  #     Override the log level for this appender.
+  #     Default: SemanticLogger.default_level
+  #
+  #   formatter: [Object|Proc]
+  #     An instance of a class that implements #call, or a Proc to be used to format
+  #     the output from this appender
+  #     Default: Use the built-in formatter (See: #call)
+  #
+  #   filter: [Regexp|Proc]
+  #     RegExp: Only include log messages where the class name matches the supplied.
+  #     regular expression. All other messages will be ignored.
+  #     Proc: Only include log messages where the supplied Proc returns true
+  #           The Proc must return true or false.
   #
   # Examples:
   #
   #   # Send all logging output to Standard Out (Screen)
-  #   SemanticLogger.add_appender(STDOUT)
+  #   SemanticLogger.add_appender(io: STDOUT)
   #
   #   # Send all logging output to a file
-  #   SemanticLogger.add_appender('logfile.log')
+  #   SemanticLogger.add_appender(file_name: 'logfile.log')
   #
   #   # Send all logging output to a file and only :info and above to standard output
-  #   SemanticLogger.add_appender('logfile.log')
-  #   SemanticLogger.add_appender(STDOUT, :info)
+  #   SemanticLogger.add_appender(file_name: 'logfile.log')
+  #   SemanticLogger.add_appender(io: STDOUT, level: :info)
   #
-  # Log to an existing logger:
+  # Log to log4r, Logger, etc.:
   #
   #   # Send Semantic logging output to an existing logger
   #   require 'logger'
@@ -130,32 +146,14 @@ module SemanticLogger
   #   logger = SemanticLogger['Example']
   #   logger.info "Hello World"
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
-  #
-  def self.add_appender(appender, level=nil, &block)
-    appender_instance =
-      if appender.is_a?(String) || appender.is_a?(IO)
-        # $stderr, STDOUT, other IO, or a filename
-        SemanticLogger::Appender::File.new(appender, level, &block)
-      elsif appender.is_a? Appender::Base
-        # Already an instance of an appender
-        appender.level     = level if level
-        appender.formatter = block if block
-        appender
-      else
-        # Check if the custom appender responds to all the log levels. For example Ruby ::Logger
-        if does_not_implement = LEVELS[1..-1].find { |i| !appender.respond_to?(i) }
-          raise "Supplied appender does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..-1].inspect}"
-        end
-
-        raise "Change the log level to #{level}, update the log level directly against the supplied appender" if level
-        SemanticLogger::Appender::Wrapper.new(appender, &block)
-      end
-    @@appenders << appender_instance
+  def self.add_appender(options, deprecated_level = nil, &block)
+    options  = options.is_a?(Hash) ? options.dup : convert_old_appender_args(options, deprecated_level)
+    appender = appender_from_options(options, &block)
+    @@appenders << appender
 
     # Start appender thread if it is not already running
     SemanticLogger::Logger.start_appender_thread
-
-    appender_instance
+    appender
   end
 
   # Remove an existing appender
@@ -195,8 +193,8 @@ module SemanticLogger
   #      The block to be called
   #
   # Example:
-  #   SemanticLogger.on_metric do |log_struct|
-  #     puts "#{log_struct.metric} was received. Log Struct: #{log_struct.inspect}"
+  #   SemanticLogger.on_metric do |log|
+  #     puts "#{log.metric} was received. Log Struct: #{log.inspect}"
   #   end
   def self.on_metric(object = nil, &block)
     SemanticLogger::Logger.on_metric(object, &block)
@@ -307,6 +305,60 @@ module SemanticLogger
       end
     raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
     index
+  end
+
+  # Backward compatibility
+  def self.convert_old_appender_args(appender, level)
+    options         = {}
+    options[:level] = level if level
+
+    if appender.is_a?(String)
+      options[:file_name] = appender
+    elsif appender.is_a?(IO)
+      options[:io] = appender
+    elsif appender.is_a?(Symbol) || appender.is_a?(Appender::Base)
+      options[:appender] = appender
+    else
+      options[:logger] = appender
+    end
+    options
+  end
+
+  # Returns [SemanticLogger::Appender::Base] appender for the supplied options
+  def self.appender_from_options(options, &block)
+    if options[:io] || options[:file_name]
+      SemanticLogger::Appender::File.new(options, &block)
+    elsif appender = options.delete(:appender)
+      if appender.is_a?(Symbol)
+        named_appender(appender).new(options)
+      elsif appender.is_a?(Appender::Base)
+        appender
+      else
+        raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Appender::Base, not: #{appender.inspect}")
+      end
+    elsif options[:logger]
+      SemanticLogger::Appender::Wrapper.new(options, &block)
+    end
+  end
+
+  def self.named_appender(appender)
+    appender = appender.to_s
+    klass    = appender.respond_to?(:camelize) ? appender.camelize : camelize(appender)
+    klass    = "SemanticLogger::Appender::#{klass}"
+    begin
+      appender.respond_to?(:constantize) ? appender.constantize : eval(klass)
+    rescue NameError
+      raise(ArgumentError, "Unknown appender: #{appender}")
+    end
+  end
+
+  # Borrow from Rails, when not running Rails
+  def self.camelize(term)
+    string = term.to_s
+    string = string.sub(/^[a-z\d]*/) { |match| match.capitalize }
+    string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{$1}#{inflections.acronyms[$2] || $2.capitalize}" }
+    string.gsub!('/'.freeze, '::'.freeze)
+    string
   end
 
   # Initial default Level for all new instances of SemanticLogger::Logger
