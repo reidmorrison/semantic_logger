@@ -108,7 +108,7 @@ module SemanticLogger
   #     Default: SemanticLogger.default_level
   #
   #   formatter: [Symbol|Object|Proc]
-  #     Any of the following symbol values: :default, :colorize, :json
+  #     Any of the following symbol values: :default, :color, :json
   #       Or,
   #     An instance of a class that implements #call
   #       Or,
@@ -360,8 +360,8 @@ module SemanticLogger
     klass     = formatter.respond_to?(:camelize) ? formatter.camelize : camelize(formatter)
     klass     = "SemanticLogger::Formatters::#{klass}"
     begin
-      formatter.respond_to?(:constantize) ? formatter.constantize : eval(klass)
-    rescue NameError
+      formatter.respond_to?(:constantize) ? klass.constantize : eval(klass)
+    rescue NameError => exc
       raise(ArgumentError, "Unknown formatter: #{formatter}")
     end
   end

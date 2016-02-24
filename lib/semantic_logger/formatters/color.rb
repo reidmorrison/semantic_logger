@@ -6,10 +6,22 @@ end
 
 module SemanticLogger
   module Formatters
-    class Colorize
+    class Color
+      # Parameters:
+      #  Any valid AwesomePrint option for rendering data.
+      #  These options can also be changed be creating a `~/.aprc` file.
+      #  See: https://github.com/michaeldv/awesome_print
+      #
+      #  Note: The option :multiline is set to false if not supplied.
+      #  Note: Has no effect if Awesome Print is not installed.
+      def initialize(options={})
+        @ai_options             = options.dup
+        @ai_options[:multiline] = false unless @ai_options.has_key?(:multiline)
+      end
+
       # Adds color to the default log formatter
       # Example:
-      #   SemanticLogger.add_appender($stdout, SemanticLogger::Formatters::Colorize.new)
+      #   SemanticLogger.add_appender(io: $stdout, formatter: color)
       def call(log, logger)
         colors      = SemanticLogger::AnsiColors
         level_color = colors::LEVEL_MAP[log.level]
@@ -30,12 +42,13 @@ module SemanticLogger
         message << " -- #{log.message}" if log.message
 
         # Payload: Colorize the payload if the AwesomePrint gem is loaded
-        if has_payload?
+        if log.has_payload?
+          payload = log.payload
           message << ' -- ' <<
             if !defined?(AwesomePrint) || !payload.respond_to?(:ai)
               payload.inspect
             else
-              payload.ai(multiline: false) rescue payload.inspect
+              payload.ai(@ai_options) rescue payload.inspect
             end
         end
 

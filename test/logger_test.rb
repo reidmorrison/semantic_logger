@@ -42,12 +42,12 @@ class LoggerTest < Minitest::Test
         assert @appender.formatter.is_a?(SemanticLogger::Formatters::Default)
       end
 
-      it 'adds logger wrapper appender with colorize formatter' do
-        @appender = SemanticLogger.add_appender(logger: ::Logger.new(STDOUT), formatter: :colorize)
+      it 'adds logger wrapper appender with color formatter' do
+        @appender = SemanticLogger.add_appender(logger: ::Logger.new(STDOUT), formatter: :color)
         assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
         assert @appender.logger.is_a?(::Logger)
         assert SemanticLogger.appenders.include?(@appender)
-        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Colorize)
+        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Color)
       end
 
       it 'adds appender' do

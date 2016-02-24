@@ -33,10 +33,10 @@ module SemanticLogger
         Proc.new { |log, logger| formatter.call(log, logger) }
       end
 
-      # DEPRECATED: use SemanticLogger::Formatters::Colorize.new
+      # DEPRECATED: use SemanticLogger::Formatters::Color.new
       def self.colorized_formatter
-        warn '[DEPRECATION] SemanticLogger::Appender::Base.colorized_formatter is deprecated.  Please use SemanticLogger::Formatters::Colorize.new instead.'
-        formatter = SemanticLogger::Formatters::Colorize.new
+        warn '[DEPRECATION] SemanticLogger::Appender::Base.colorized_formatter is deprecated.  Please use SemanticLogger::Formatters::Color.new instead.'
+        formatter = SemanticLogger::Formatters::Color.new
         Proc.new { |log, logger| formatter.call(log, logger) }
       end
 

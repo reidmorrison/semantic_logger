@@ -27,7 +27,7 @@ module SemanticLogger
   end
 
   module Formatters
-    autoload :Colorize,        'semantic_logger/formatters/colorize'
+    autoload :Color,            'semantic_logger/formatters/color'
     autoload :Default,          'semantic_logger/formatters/default'
     autoload :Json,             'semantic_logger/formatters/json'
   end
