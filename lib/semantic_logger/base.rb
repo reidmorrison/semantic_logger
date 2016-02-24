@@ -194,12 +194,6 @@ module SemanticLogger
       Thread.current[:semantic_logger_payload]
     end
 
-    # Semantic Logging does not support :unknown level since these
-    # are not understood by the majority of the logging providers
-    # Map it to :error
-    alias :unknown :error
-    alias :unknown? :error?
-
     # Silence noisy log levels by changing the default_level within the block
     #
     # This setting is thread-safe and only applies to the current thread
