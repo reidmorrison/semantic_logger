@@ -21,7 +21,7 @@ module SemanticLogger
     # nil if this logger instance should use the global default level
     def level=(level)
       @level_index = SemanticLogger.level_to_index(level)
-      @level       = level
+      @level       = SemanticLogger.send(:index_to_level, @level_index)
     end
 
     # Returns the current log level if set, otherwise it returns the global

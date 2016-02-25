@@ -280,7 +280,7 @@ module SemanticLogger
   end
 
   # Returns the symbolic level for the supplied level index
-  def index_to_level(level_index)
+  def self.index_to_level(level_index)
     LEVELS[level_index]
   end
 

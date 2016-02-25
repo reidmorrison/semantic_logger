@@ -26,6 +26,10 @@ module SemanticLogger
     autoload :Wrapper,          'semantic_logger/appender/wrapper'
   end
 
+  module Concerns
+    autoload :Compatibility,    'semantic_logger/concerns/compatibility'
+  end
+
   module Formatters
     autoload :Color,            'semantic_logger/formatters/color'
     autoload :Default,          'semantic_logger/formatters/default'

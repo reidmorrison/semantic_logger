@@ -3,6 +3,8 @@ module SemanticLogger
   # Logger stores the class name to be used for all log messages so that every
   # log message written by this instance will include the class name
   class Logger < Base
+    include SemanticLogger::Concerns::Compatibility
+
     # Returns a Logger instance
     #
     # Return the logger for a specific class, supports class specific log levels
@@ -110,47 +112,11 @@ module SemanticLogger
       (@@metric_subscribers ||= Concurrent::Array.new) << (object || block)
     end
 
-    #
-    # For compatibility with Ruby Logger only.
-    #
-    # Map :unknown to :error
-    alias_method :unknown, :error  # :nodoc:
-    alias_method :unknown?, :error? # :nodoc:
-
-    alias_method :<<, :info # :nodoc:
-
-    alias_method :progname, :name # :nodoc:
-    alias_method :progname=, :name= # :nodoc:
-
-    alias_method :sev_threshold, :level # :nodoc:
-    alias_method :sev_threshold=, :level= # :nodoc:
-
-    attr_accessor :formatter # :nodoc:
-    attr_accessor :datetime_format # :nodoc:
-
-    # :nodoc:
-    def close; end
-
-    # :nodoc:
-    def reopen(logdev = nil); end
-
-    # :nodoc:
-    def add(severity, message = nil, progname = nil)
-      index = SemanticLogger.send(:level_to_index, severity)
-      if level_index <= index
-        level = SemanticLogger.send(:index_to_level, level_index)
-        log_internal(level, index, message, progname, &block)
-        true
-      else
-        false
-      end
-    end
-
-    protected
-
     # Place log request on the queue for the Appender thread to write to each
     # appender in the order that they were registered
-    def log(log)
+    def log(log, message = nil, progname = nil, &block)
+      # Compatibility with ::Logger
+      return add(log, message, progname, &block) unless log.is_a?(SemanticLogger::Log)
       self.class.queue << log if @@appender_thread
     end
 

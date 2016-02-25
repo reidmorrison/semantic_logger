@@ -6,6 +6,7 @@ class LoggerTest < Minitest::Test
     describe '.add_appender' do
       after do
         SemanticLogger.remove_appender(@appender) if @appender
+        File.delete('sample.log') if File.exists?('sample.log')
       end
 
       it 'adds file appender' do
@@ -66,6 +67,7 @@ class LoggerTest < Minitest::Test
     describe '.add_appender DEPRECATED' do
       after do
         SemanticLogger.remove_appender(@appender) if @appender
+        File.delete('sample.log') if File.exists?('sample.log')
       end
 
       it 'adds file appender' do
