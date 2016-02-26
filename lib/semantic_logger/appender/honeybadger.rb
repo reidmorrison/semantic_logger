@@ -25,7 +25,7 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
   def initialize(options = {}, &block)
     options  = {level: options} unless options.is_a?(Hash)
     @options  = options.dup
-    level     = @options.delete(:level) || :fatal
+    level     = @options.delete(:level) || :error
 
     super(level, &block)
   end
