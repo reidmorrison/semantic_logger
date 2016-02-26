@@ -17,6 +17,7 @@ module SemanticLogger
     autoload :Elasticsearch,    'semantic_logger/appender/elasticsearch'
     autoload :File,             'semantic_logger/appender/file'
     autoload :Graylog,          'semantic_logger/appender/graylog'
+    autoload :Honeybadger,      'semantic_logger/appender/honeybadger'
     autoload :Http,             'semantic_logger/appender/http'
     autoload :MongoDB,          'semantic_logger/appender/mongodb'
     autoload :NewRelic,         'semantic_logger/appender/new_relic'
