@@ -31,19 +31,19 @@ impact the performance of you application.
 Log to file with the standard formatter:
 
 ~~~ruby
-SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender(file_name: 'development.log')
 ~~~
 
 Log to file with the standard colorized formatter:
 
 ~~~ruby
-SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
+SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
 ~~~
 
 Log to file in JSON format:
 
 ~~~ruby
-SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.json_formatter)
+SemanticLogger.add_appender(file_name: 'development.log', formatter: :json)
 ~~~
 
 For performance reasons the log file is not re-opened with every call.
@@ -56,7 +56,7 @@ Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdo
 
 ~~~ruby
 # Log errors and above to standard error:
-SemanticLogger.add_appender($stderror, :error)
+SemanticLogger.add_appender(io: $stderror, level: :error)
 ~~~
 
 ### Syslog
@@ -64,33 +64,35 @@ SemanticLogger.add_appender($stderror, :error)
 Log to a local Syslog daemon
 
 ~~~ruby
-SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
+SemanticLogger.add_appender(appender: :syslog)
 ~~~
 
 Log to a remote Syslog server using TCP:
 
 ~~~ruby
-appender        = SemanticLogger::Appender::Syslog.new(
-  url: 'tcp://myloghost:514'
+SemanticLogger.add_appender(
+  appender: :syslog,
+  url:      'tcp://myloghost:514'
 )
-
-# Optional: Add filter to exclude health_check, or other log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
-
-SemanticLogger.add_appender(appender)
 ~~~
 
 Log to a remote Syslog server using UDP:
 
 ~~~ruby
-appender        = SemanticLogger::Appender::Syslog.new(
-  url: 'udp://myloghost:514'
+SemanticLogger.add_appender(
+  appender: :syslog,
+  url:      'udp://myloghost:514'
 )
+~~~
 
-# Optional: Add filter to exclude health_check, or other log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+Optional: Add filter to exclude health_check, or other log entries:
 
-SemanticLogger.add_appender(appender)
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :syslog,
+  url:      'udp://myloghost:514',
+  filter:   Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
+)
 ~~~
 
 If logging to a remote Syslog server using UDP, add the following line to your `Gemfile`:
@@ -141,25 +143,19 @@ the following contents and restart the application.
 To use the TCP Protocol:
 
 ~~~ruby
-appender        = SemanticLogger::Appender::Graylog.new(
-  url: 'tcp://localhost:12201'
+SemanticLogger.add_appender(
+  appender: :graylog,
+  url:      'tcp://localhost:12201'
 )
-# Optional: Add filter to exclude health_check, or other log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
-
-SemanticLogger.add_appender(appender)
 ~~~
 
 Or, to use the UDP Protocol:
 
 ~~~ruby
-appender        = SemanticLogger::Appender::Graylog.new(
-  url: 'udp://localhost:12201'
+SemanticLogger.add_appender(
+  appender: :graylog,
+  udp:      'tcp://localhost:12201'
 )
-# Optional: Add filter to exclude health_check, or other log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
-
-SemanticLogger.add_appender(appender)
 ~~~
 
 If not using Rails, the `facility` can be removed, or set to a custom string describing the application.
@@ -173,14 +169,11 @@ to enable the [HTTP Event Collector](http://dev.splunk.com/view/event-collector/
 The instructions also include information on how to generate a token that needs to be supplied below.
 
 ~~~ruby
-appender = SemanticLogger::Appender::SplunkHttp.new(
-  url:   'http://localhost:8088/services/collector/event',
-  token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+SemanticLogger.add_appender(
+  appender: :splunk_http,
+  url:      'http://localhost:8088/services/collector/event',
+  token:    'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 )
-# Optional: Exclude health_check log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
-
-SemanticLogger.add_appender(appender)
 ~~~
 
 Once log messages have been sent, open the Splunk web interface and select Search.
@@ -199,9 +192,10 @@ Then change the output list to table view and select only these "interesting col
 If HTTPS is being used for the Splunk HTTP Collector, update the url accordingly:
 
 ~~~ruby
-appender = SemanticLogger::Appender::SplunkHttp.new(
-  url:   'https://localhost:8088/services/collector/event',
-  token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+SemanticLogger.add_appender(
+  appender: :splunk_http,
+  url:      'https://localhost:8088/services/collector/event',
+  token:    'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 )
 ~~~
 
@@ -212,14 +206,10 @@ Forward all log messages to Elasticsearch.
 Example:
 
 ~~~ruby
-appender = SemanticLogger::Appender::Elasticsearch.new(
-  url:   'http://localhost:9200'
+SemanticLogger.add_appender(
+  appender: :elasticsearch,
+  url:      'http://localhost:9200'
 )
-
-# Optional: Exclude health_check log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
-
-SemanticLogger.add_appender(appender)
 ~~~
 
 ### Loggly
@@ -230,14 +220,10 @@ Navigate to `Source Setup` -> `Customer Tokens` and copy the token
 Replace `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` below with the above token.
 
 ~~~ruby
-appender = SemanticLogger::Appender::Http.new(
-  url: 'http://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
+SemanticLogger.add_appender(
+  appender: :http,
+  url:      'http://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
 )
-
-# Optional: Exclude health_check log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
-
-SemanticLogger.add_appender(appender)
 ~~~
 
 Once log messages have been sent, open the Loggly web interface and select Search.
@@ -254,8 +240,9 @@ In the Field Explorer change to Grid view and add the following fields using `Ad
 If HTTPS is being used for Loggly, update the url accordingly:
 
 ~~~ruby
-appender = SemanticLogger::Appender::Http.new(
-  url: 'https://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
+SemanticLogger.add_appender(
+  appender: :http,
+  url:      'https://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
 )
 ~~~
 
@@ -289,14 +276,9 @@ require 'logstash-logger'
 
 # Use the TCP logger
 # See https://github.com/dwbutler/logstash-logger for further options
-log_stash       = LogStashLogger.new(type: :tcp, host: 'localhost', port: 5229)
+log_stash = LogStashLogger.new(type: :tcp, host: 'localhost', port: 5229)
 
-appender        = SemanticLogger::Appender::Wrapper.new(log_stash)
-
-# Optional: Add filter to exclude health_check, or other log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
-
-SemanticLogger.add_appender(appender)
+SemanticLogger.add_appender(logger: log_stash)
 ~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
@@ -317,7 +299,7 @@ the following contents and restart the application.
 Send `:error` messages to Bugsnag:
 
 ~~~ruby
-SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new)
+SemanticLogger.add_appender(appender: :bugsnag)
 ~~~
 
 Or, for a standalone installation add the code above after initializing Semantic Logger.
@@ -325,13 +307,13 @@ Or, for a standalone installation add the code above after initializing Semantic
 Send `:warn` and `:error` messages to Bugsnag:
 
 ~~~ruby
-SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new(:warn))
+SemanticLogger.add_appender(appender: :bugsnag, level: :warn)
 ~~~
 
 Send `:info`, `:warn` and `:error` messages to Bugsnag:
 
 ~~~ruby
-SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new(:info))
+SemanticLogger.add_appender(appender: :bugsnag, level: :info)
 ~~~
 
 ### NewRelic
@@ -367,13 +349,13 @@ create a file called `<Rails Root>/config/initializers/new_relic.rb` with
 the following contents and restart the application.
 
 ~~~ruby
-SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
+SemanticLogger.add_appender(appender: :new_relic)
 ~~~
 
-To also send warnings to Bugsnag:
+To also send warnings to NewRelic:
 
 ~~~ruby
-SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new(:warn))
+SemanticLogger.add_appender(appender: :new_relic, level: :warn)
 ~~~
 
 ### MongoDB
@@ -411,7 +393,7 @@ appender = SemanticLogger::Appender::MongoDB.new(
   collection_size: 1024**3, # 1.gigabyte
   application:     Rails.application.class.name
 )
-SemanticLogger.add_appender(appender)
+SemanticLogger.add_appender(appender: appender)
 ~~~
 
 The following is written to Mongo:
@@ -438,20 +420,18 @@ The HTTP appender supports sending JSON messages to most services that can accep
 in JSON format via HTTP or HTTPS.
 
 ~~~ruby
-appender = SemanticLogger::Appender::Http.new(
-  url: 'http://localhost:8088/path'
+SemanticLogger.add_appender(
+  appender: :http,
+  url:      'http://localhost:8088/path'
 )
-# Optional: Exclude health_check log entries
-appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
-
-SemanticLogger.add_appender(appender)
 ~~~
 
 To send messages via HTTPS, change the url to:
 
 ~~~ruby
-appender = SemanticLogger::Appender::Http.new(
-  url: 'https://localhost:8088/path'
+SemanticLogger.add_appender(
+  appender: :http,
+  url:      'https://localhost:8088/path'
 )
 ~~~
 
@@ -460,9 +440,7 @@ The JSON being sent can be modified as needed.
 Example, customize the JSON being sent:
 
 ~~~ruby
-appender = SemanticLogger::Appender::Http.new(
-  url: 'https://localhost:8088/path'
-) do |log, request, logger|
+formatter = Proc.new do |log, logger|
   h = log.to_h
   h[:application] = logger.application
   h[:host]        = logger.host
@@ -473,6 +451,12 @@ appender = SemanticLogger::Appender::Http.new(
   # Render to JSON
   h.to_json
 end
+
+SemanticLogger.add_appender(
+  appender:  :http,
+  url:       'https://localhost:8088/path',
+  formatter: formatter
+)
 ~~~
 
 ### Logger, log4r, etc.
@@ -487,7 +471,7 @@ while still writing to the existing destinations.
 ruby_logger = Logger.new(STDOUT)
 
 # Log to an existing Ruby Logger instance
-SemanticLogger.add_appender(ruby_logger)
+SemanticLogger.add_appender(logger: ruby_logger)
 ~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
@@ -501,8 +485,8 @@ Example, log to a local file and to a remote Syslog server such as syslog-ng ove
 ~~~ruby
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
-SemanticLogger.add_appender('development.log')
-SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new(url: 'tcp://myloghost:514'))
+SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
+SemanticLogger.add_appender(appender: :syslog, url: 'tcp://myloghost:514')
 ~~~
 
 ### Appender Logging Levels
@@ -522,10 +506,10 @@ require 'semantic_logger'
 SemanticLogger.default_level = :info
 
 # Log all warning messages and above to warnings.log
-SemanticLogger.add_appender('log/warnings.log', :warn)
+SemanticLogger.add_appender(file_name: 'log/warnings.log', level: :warn)
 
 # Log all trace messages and above to trace.log
-SemanticLogger.add_appender('log/trace.log', :trace)
+SemanticLogger.add_appender(file_name: 'log/trace.log', level: :warn)
 
 logger = SemanticLogger['MyClass']
 logger.level = :trace
@@ -557,12 +541,12 @@ Example:
 ~~~ruby
 require 'semantic_logger'
 
-appender = SemanticLogger::Appender::File.new('separate.log', :info)
+appender = SemanticLogger::Appender::File.new(file_name: 'separate.log', level: :info, formatter: :color)
 
 # Use appender directly, without using global Semantic Logger
 appender.warn 'Only send this to separate.log'
 
-appender.benchmark_info 'Called supplier' do
+appender.measure_info 'Called supplier' do
   # Call supplier ...
 end
 ~~~
@@ -570,4 +554,4 @@ end
 Note: Once an appender has been registered with Semantic Logger it must not be called
       directly, otherwise non-deterministic concurrency issues will arise when it is used across threads.
 
-### [Next: Signals ==>](signals.html)
+### [Next: Metrics ==>](metrics.html)

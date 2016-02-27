@@ -50,9 +50,9 @@ Sample program calling the above appender:
 ~~~ruby
 SemanticLogger.default_level = :trace
 # Log to file dev.log
-SemanticLogger.add_appender('dev.log')
+SemanticLogger.add_appender(file_name: 'dev.log')
 # Also log the above sample appender
-SemanticLogger.add_appender(SimpleAppender.new)
+SemanticLogger.add_appender(appender: SimpleAppender.new)
 
 logger = SemanticLogger['Hello']
 logger.info "Hello World"

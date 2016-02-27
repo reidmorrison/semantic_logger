@@ -45,10 +45,10 @@ Add the following code to a Rails initializer if running rails with the `rails_s
 or add the code directly to your application:
 
 ~~~ruby
-appender = SemanticLogger::Appender::Elasticsearch.new(
-  url: 'http://localhost:9200'
+SemanticLogger.add_appender(
+  appender: :elasticsearch,
+  url:      'http://localhost:9200'
 )
-SemanticLogger.add_appender(appender)
 ~~~
 
 Restart the application and let it run to generate several log messages.

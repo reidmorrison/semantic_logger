@@ -17,10 +17,11 @@ require 'semantic_logger'
 
 SemanticLogger.default_level = :trace
 
-SemanticLogger.add_appender(STDOUT) do |log|
- # This formatter just returns the log struct as a string
+formatter = Proc.new do |log|
+  # This formatter just returns the log struct as a string
   log.inspect
 end
+SemanticLogger.add_appender(io: STDOUT, formatter: formatter)
 
 logger = SemanticLogger['Hello']
 logger.info "Hello World"
@@ -36,34 +37,36 @@ Output:
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
-SemanticLogger.add_appender('development.log') do |log|
+formatter = Proc.new do |log|
   # Header with date, time, log level and process info
-  entry = "#{log.formatted_time} #{log.level_to_s} [#{log.process_info}]"
+  message = "#{log.formatted_time} #{log.level_to_s} [#{log.process_info}]"
 
   # Tags
-  entry << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
+  message << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
 
   # Duration
-  entry << " (#{log.duration_human})" if log.duration
+  message << " (#{log.duration_human})" if log.duration
 
   # Class / app name
-  entry << " #{log.name}"
+  message << " #{log.name}"
 
   # Log message
-  entry << " -- #{log.message}" if log.message
+  message << " -- #{log.message}" if log.message
 
   # Payload
-  unless log.payload.nil? || (log.payload.respond_to?(:empty?) && log.payload.empty?)
-    entry << ' -- ' << log.payload.inspect
+  if payload = log.payload_to_s
+    message << ' -- ' << payload
   end
 
   # Exceptions
-  log.each_exception do |exception, i|
-    entry << (i == 0 ? ' -- Exception: ' : "\nCause: ")
-    entry << "#{exception.class}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+  if log.exception
+    message << " -- Exception: #{log.exception.class}: #{log.exception.message}\n"
+    message << log.backtrace_to_s
   end
-  entry
+  message
 end
+
+SemanticLogger.add_appender(file_name: 'development.log', formatter: formatter)
 ~~~
 
 #### Example: Replace the colorized log file formatter
@@ -72,37 +75,45 @@ end
 require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
-SemanticLogger.add_appender('development.log') do |log|
-  colors      = SemanticLogger::Appender::AnsiColors
+formatter = Proc.new do |log|
+  colors      = SemanticLogger::AnsiColors
   level_color = colors::LEVEL_MAP[log.level]
 
   # Header with date, time, log level and process info
-  entry       = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
+  message     = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
 
   # Tags
-  entry << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
+  message << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
 
   # Duration
-  entry << " (#{colors::BOLD}#{log.duration_human}#{colors::CLEAR})" if log.duration
+  message << " (#{colors::BOLD}#{log.duration_human}#{colors::CLEAR})" if log.duration
 
   # Class / app name
-  entry << " #{level_color}#{log.name}#{colors::CLEAR}"
+  message << " #{level_color}#{log.name}#{colors::CLEAR}"
 
   # Log message
-  entry << " -- #{log.message}" if log.message
+  message << " -- #{log.message}" if log.message
 
-  # Payload
-  if payload = log.payload_to_s(true)
-    entry << ' -- ' << payload
+  # Payload: Colorize the payload if the AwesomePrint gem is loaded
+  if log.has_payload?
+    payload = log.payload
+    message << ' -- ' <<
+      if !defined?(AwesomePrint) || !payload.respond_to?(:ai)
+        payload.inspect
+      else
+        payload.ai(@ai_options) rescue payload.inspect
+      end
   end
 
   # Exceptions
   if log.exception
-    entry << " -- Exception: #{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n"
-    entry << log.backtrace_to_s
+    message << " -- Exception: #{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n"
+    message << log.backtrace_to_s
   end
-  entry
+  message
 end
+
+SemanticLogger.add_appender(file_name: 'development.log', formatter: formatter)
 ~~~
 
 #### Example: Replacing the format for an active logger, such as in Rails:
@@ -114,36 +125,43 @@ Create a file called `config/initializers/semantic_logger.rb`:
 ~~~ruby
 # Find file appender:
 appender = SemanticLogger.appenders.find{ |a| a.is_a?(SemanticLogger::Appender::File) }
+
 appender.formatter = Proc.new do |log|
-  colors      = SemanticLogger::Appender::AnsiColors
+  colors      = SemanticLogger::AnsiColors
   level_color = colors::LEVEL_MAP[log.level]
 
   # Header with date, time, log level and process info
-  entry       = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
+  message     = "#{log.formatted_time} #{level_color}#{log.level_to_s}#{colors::CLEAR} [#{log.process_info}]"
 
   # Tags
-  entry << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
+  message << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
 
   # Duration
-  entry << " (#{colors::BOLD}#{log.duration_human}#{colors::CLEAR})" if log.duration
+  message << " (#{colors::BOLD}#{log.duration_human}#{colors::CLEAR})" if log.duration
 
   # Class / app name
-  entry << " #{level_color}#{log.name}#{colors::CLEAR}"
+  message << " #{level_color}#{log.name}#{colors::CLEAR}"
 
   # Log message
-  entry << " -- #{log.message}" if log.message
+  message << " -- #{log.message}" if log.message
 
-  # Payload
-  if payload = log.payload_to_s(true)
-    entry << ' -- ' << payload
+  # Payload: Colorize the payload if the AwesomePrint gem is loaded
+  if log.has_payload?
+    payload = log.payload
+    message << ' -- ' <<
+      if !defined?(AwesomePrint) || !payload.respond_to?(:ai)
+        payload.inspect
+      else
+        payload.ai(@ai_options) rescue payload.inspect
+      end
   end
 
   # Exceptions
   if log.exception
-    entry << " -- Exception: #{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n"
-    entry << log.backtrace_to_s
+    message << " -- Exception: #{colors::BOLD}#{log.exception.class}: #{log.exception.message}#{colors::CLEAR}\n"
+    message << log.backtrace_to_s
   end
-  entry
+  message
 end
 ~~~
 

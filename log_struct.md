@@ -50,7 +50,7 @@ time [Time]
 
 duration [Float]
 
-* The time taken in milli-seconds to complete a benchmark call
+* The time taken in milli-seconds to complete a measure call
 
 tags [Array<String>]
 
@@ -66,6 +66,6 @@ exception [Object]
 
 metric [Object]
 
-* Object supplied when the benchmark api was called
+* Object supplied when the measure api was called
 
 ### [Next: View on Github ==>](https://github.com/rocketjob/semantic_logger)

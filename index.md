@@ -60,7 +60,7 @@ logger.info('Queried table',
 
 ## Features
 
-### Colorized log files
+### Colorize log files
 
 * Use color to quickly identify error messages from amongst many info or debug messages.
 
@@ -73,13 +73,13 @@ logger.info('Queried table',
 ### Benchmarking
 
 * Measure and log the duration of a block of code.
-* Set a duration threshold that needs to be exceeded before a benchmark message is logged.
+* Set a duration threshold that needs to be exceeded before a measure message is logged.
     * Quickly identify the cause of system slowdowns when these log messages start appearing.
-* Automatically log unhandled exceptions raised during benchmarked blocks.
+* Automatically log unhandled exceptions raised during measureed blocks.
 
 ### Metrics
 
-* Supply metrics to any benchmarked block and have the metric automatically forwarded to
+* Supply metrics to any measureed block and have the metric automatically forwarded to
   all registered metrics listeners.
 * Metrics can be rendered in New Relic, statsd / graphite, and/or other dashboards.
 
@@ -164,7 +164,7 @@ require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
 # Log to a file, and use the colorized formatter
-SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
+SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
 
 # Create an instance of a logger
 # Add the application/class name to every log message
@@ -206,7 +206,7 @@ logger.trace "Raw data received from Supplier:", raw_response
 Measure and log how long it takes to execute a block of code
 
 ~~~ruby
-logger.benchmark_info "Called external interface" do
+logger.measure_info "Called external interface" do
   # Code to call external service ...
   sleep 0.75
 end

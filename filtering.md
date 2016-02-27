@@ -29,12 +29,14 @@ log _only_ messages from a particular class to the second file:
 require 'semantic_logger'
 
 # Log everything to development.log
-SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender(file_name: 'development.log')
 
 # Log everything except any messages from 'MyClass' to summary.log
-appender = SemanticLogger.add_appender('my_class.log')
-# Filter out log entries where the class name is 'MyClass'
-appender.filter = /MyClass/
+appender = SemanticLogger.add_appender(
+  file_name: 'my_class.log',
+  # Filter out log entries where the class name is 'MyClass'
+  filter:    /MyClass/
+)
 
 logger1 = SemanticLogger['MyClass']
 logger1.info "This will _only_ be logged to 'my_class.log'"
@@ -50,14 +52,14 @@ messages from a particular class to the second file:
 require 'semantic_logger'
 
 # Log everything to development.log
-SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender(file_name: 'development.log')
 
-# Log everything except any messages from 'MyClass' to summary.log
-appender = SemanticLogger.add_appender('summary.log')
-# Filter out log entries where the class name is 'MyClass'
-appender.filter = Proc.new do |log|
-  log.name != 'MyClass'
-end
+# Log all messages from 'MyClass' to summary.log
+appender = SemanticLogger.add_appender(
+  file_name: 'my_class.log',
+  # Filter out log entries where the class name is _not_ 'MyClass'
+  filter:    -> log { log.name != 'MyClass' }
+)
 
 logger1 = SemanticLogger['MyClass']
 logger1.info "This will _not_ be logged to summary.log"

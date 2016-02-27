@@ -29,7 +29,7 @@ require 'semantic_logger'
 # Override the default log level of :info so that :debug and :trace are also logged
 SemanticLogger.default_level = :trace
 
-SemanticLogger.add_appender('development.log')
+SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
 
 logger = SemanticLogger['MyClass']
 logger.info "Hello World"
@@ -181,7 +181,7 @@ Another common logging requirement is to measure the time it takes to execute a 
 of code based on the log level. For example:
 
 ~~~ruby
-logger.benchmark_info "Called external interface" do
+logger.measure_info "Called external interface" do
   # Code to call external service ...
 end
 ~~~
@@ -194,30 +194,30 @@ The log message is only written once the block completes and includes how long i
 took to complete.
 
 If an exception is raised during the block, the exception message will be logged
-at the same log level as the benchmark along with the duration and message.
+at the same log level as the measure along with the duration and message.
 After logging the exception is re-raised unchanged.
 
-The following benchmarking methods are available:
+The following measureing methods are available:
 
 ~~~ruby
-logger.benchmark_trace("Low level trace information such as data sent over a socket")
-logger.benchmark_debug("Debugging information to aid with problem determination")
-logger.benchmark_info("Informational message such as request received")
-logger.benchmark_warn("Warn about something in the system")
-logger.benchmark_error("An error occurred during processing")
-logger.benchmark_fatal("Oh no something really bad happened")
+logger.measure_trace("Low level trace information such as data sent over a socket")
+logger.measure_debug("Debugging information to aid with problem determination")
+logger.measure_info("Informational message such as request received")
+logger.measure_warn("Warn about something in the system")
+logger.measure_error("An error occurred during processing")
+logger.measure_fatal("Oh no something really bad happened")
 ~~~
 
 The log level can be supplied dynamically as the first parameter to:
 
 ~~~ruby
-logger.benchmark(:info, "Informational message such as request received")
+logger.measure(:info, "Informational message such as request received")
 ~~~
 
 Each of the above calls take additional optional parameters:
 
 ~~~ruby
-log.benchmark_info(message, params=nil) do
+log.measure_info(message, params=nil) do
   # Measure how long it takes to run this block of code
 end
 ~~~
@@ -278,7 +278,7 @@ Optional, If an exception is raised, increase the log level to this level
 Example
 
 ~~~ruby
-logger.benchmark_info "Called external interface",
+logger.measure_info "Called external interface",
     log_exception: :full,
     min_duration:  100,
     metric:        'Custom/Supplier/process' do
@@ -286,16 +286,16 @@ logger.benchmark_info "Called external interface",
 end
 ~~~
 
-If the duration is already available, it is possible to use the same benchmark logging
+If the duration is already available, it is possible to use the same measure logging
 and manually supply the duration without a block. This ensures that the duration is
 logged in a semantic way rather than inserting the duration into the text message itself.
 
 ~~~ruby
 duration = Time.now - start_time
-logger.benchmark_info "Called external interface", duration: duration
+logger.measure_info "Called external interface", duration: duration
 ~~~
 
-Note: Either a code block or `:duration` must be supplied on all benchmark calls
+Note: Either a code block or `:duration` must be supplied on all measure calls
 
 ### Tagged Logging
 
@@ -429,7 +429,7 @@ For example, to temporarily set the log level to `:trace` to diagnose an issue:
 require 'semantic_logger'
 
 SemanticLogger.default_level = :info
-SemanticLogger.add_appender('example.log')
+SemanticLogger.add_appender(file_name: 'example.log', formatter: :color)
 
 class ExternalSupplier
   # Lazy load logger class variable on first use
@@ -439,7 +439,7 @@ class ExternalSupplier
     logger.trace "Calculating with amount", { :amount => amount, :name => name }
 
     # Measure and log on completion how long the call took to the external supplier
-    logger.benchmark_info "Calling external interface" do
+    logger.measure_info "Calling external interface" do
       # Code to call the external supplier ...
     end
   end
@@ -478,41 +478,6 @@ the global default log level can be modified using `SemanticLogger.default_level
 # Change the global default logging level for active loggers
 SemanticLogger.default_level = :debug
 ~~~
-
-### Metrics integration
-
-In production environments it is often necessary to not only measure the performance of a
-block of code using for example:
-
-~~~ruby
-logger.benchmark_info "Calling external interface" do
-  # Code to call the external supplier ...
-end
-~~~
-
-Subscriber can be defined to receive every log message that has a `:metric` option
-specified. The subscribers are called asynchronously from the Appender Thread so
-as not to impact the orginal thread that logged the message.
-
-For example, to forward the metric to NewRelic for every benchmark call with the
-`:metric` option supplied:
-
-~~~ruby
-# config/initializers/semantic_logger_metrics.rb
-SemanticLogger.on_metric do |log_struct|
-  ::NewRelic::Agent.record_metric(log_struct.metric, log_struct.duration)
-end
-~~~
-
-Add the `:metric` option to the log entry as follows:
-
-~~~ruby
-logger.benchmark_info "Calling external interface", metric: 'Custom/slow_action/beginning_work' do
-  # Code to call the external supplier ...
-end
-~~~
-
-For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 
 ### Flushing the logs
 
