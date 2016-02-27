@@ -79,7 +79,7 @@ class AppenderFileTest < Minitest::Test
         @appender                    = SemanticLogger::Appender::File.new(@io)
         SemanticLogger.default_level = :trace
         @mock_logger                 = MockLogger.new
-        @appender                    = SemanticLogger.add_appender(@mock_logger)
+        @appender                    = SemanticLogger.add_appender(logger: @mock_logger)
         @hash                        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
         @hash_str                    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
         @thread_name                 = Thread.current.name

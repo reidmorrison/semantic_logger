@@ -92,7 +92,7 @@ module SemanticLogger
       end
 
       # Return formatter for supplied Symbol
-      def self.extract_formatter(formatter, &block)
+      def self.extract_formatter(formatter)
         SemanticLogger.send(:named_formatter, formatter).new
       end
 

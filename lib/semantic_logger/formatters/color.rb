@@ -21,7 +21,7 @@ module SemanticLogger
 
       # Adds color to the default log formatter
       # Example:
-      #   SemanticLogger.add_appender(io: $stdout, formatter: color)
+      #   SemanticLogger.add_appender(io: $stdout, formatter: :color)
       def call(log, logger)
         colors      = SemanticLogger::AnsiColors
         level_color = colors::LEVEL_MAP[log.level]

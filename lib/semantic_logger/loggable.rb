@@ -9,7 +9,7 @@
 #
 #  require 'semantic_logger'
 #  SemanticLogger.default_level = :debug
-#  SemanticLogger.add_appender(STDOUT)
+#  SemanticLogger.add_appender(io: STDOUT, formatter: :color)
 #
 #  class ExternalSupplier
 #    # Create class and instance logger methods

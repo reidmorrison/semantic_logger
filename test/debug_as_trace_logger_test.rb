@@ -11,7 +11,7 @@ class DebugAsTraceLoggerTest < Minitest::Test
           # variable
           SemanticLogger.default_level = :trace
           @mock_logger                 = MockLogger.new
-          appender                     = SemanticLogger.add_appender(@mock_logger)
+          appender                     = SemanticLogger.add_appender(logger: @mock_logger)
           appender.filter              = filter
 
           # Use this test's class name as the application name in the log output

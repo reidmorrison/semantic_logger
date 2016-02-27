@@ -2,15 +2,10 @@ require 'date'
 # Forward all log messages to Elasticsearch.
 #
 # Example:
-#   appender = SemanticLogger::Appender::Elasticsearch.new(
-#     url:   'http://localhost:9200'
+#   SemanticLogger.add_appender(
+#     appender: :elasticsearch,
+#     url:      'http://localhost:9200'
 #   )
-#
-#   # Optional: Exclude health_check log entries
-#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
-#
-#   SemanticLogger.add_appender(appender)
-#
 class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
   attr_accessor :index, :type
 

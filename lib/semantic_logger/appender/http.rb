@@ -11,14 +11,10 @@ require 'json'
 # * SSL encryption (https).
 #
 # Example:
-#   appender = SemanticLogger::Appender::Http.new(
-#     url: 'http://localhost:8088/path'
+#   SemanticLogger.add_appender(
+#     appender: :http,
+#     url:      'http://localhost:8088/path'
 #   )
-#
-#   # Optional: Exclude health_check log entries, etc.
-#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/}
-#
-#   SemanticLogger.add_appender(appender)
 class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   attr_accessor :username, :application, :host, :compress, :header
   attr_reader :http, :url, :server, :port, :path, :ssl_options

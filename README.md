@@ -65,7 +65,7 @@ require 'semantic_logger'
 SemanticLogger.default_level = :trace
 
 # Log to a file, and use the colorized formatter
-SemanticLogger.add_appender('development.log', &SemanticLogger::Appender::Base.colorized_formatter)
+SemanticLogger.add_appender(file: 'development.log', formatter: :color)
 ```
 
 If running rails, see: [Semantic Logger Rails](http://rocketjob.github.io/semantic_logger/rails.html)

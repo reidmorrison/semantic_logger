@@ -42,7 +42,7 @@ module SemanticLogger
     #     db:              database,
     #     collection_size: 1024**3 # 1.gigabyte
     #   )
-    #   SemanticLogger.add_appender(appender)
+    #   SemanticLogger.add_appender(appender: appender)
     #
     #   logger = SemanticLogger['Example']
     #

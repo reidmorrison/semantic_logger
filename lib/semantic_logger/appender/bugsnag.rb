@@ -7,7 +7,7 @@ end
 # Send log messages to Bugsnag
 #
 # Example:
-#   SemanticLogger.add_appender(SemanticLogger::Appender::Bugsnag.new)
+#   SemanticLogger.add_appender(appender: :bugsnag)
 #
 class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
   # Create Bugsnag Error / Exception Appender

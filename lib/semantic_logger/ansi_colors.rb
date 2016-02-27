@@ -1,5 +1,5 @@
 module SemanticLogger
-  # Formatting & colors used by optional colorized_formatter
+  # Formatting & colors used by optional color formatter
   module AnsiColors
     CLEAR     = "\e[0m"
     BOLD      = "\e[1m"

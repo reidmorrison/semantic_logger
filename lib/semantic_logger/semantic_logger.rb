@@ -144,7 +144,7 @@ module SemanticLogger
   #   log.level = Logger::DEBUG
   #
   #   SemanticLogger.default_level = :debug
-  #   SemanticLogger.add_appender(log)
+  #   SemanticLogger.add_appender(logger: log)
   #
   #   logger = SemanticLogger['Example']
   #   logger.info "Hello World"
@@ -324,6 +324,7 @@ module SemanticLogger
     else
       options[:logger] = appender
     end
+    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}"
     options
   end
 
@@ -349,9 +350,9 @@ module SemanticLogger
     klass    = appender.respond_to?(:camelize) ? appender.camelize : camelize(appender)
     klass    = "SemanticLogger::Appender::#{klass}"
     begin
-      appender.respond_to?(:constantize) ? appender.constantize : eval(klass)
+      appender.respond_to?(:constantize) ? klass.constantize : eval(klass)
     rescue NameError
-      raise(ArgumentError, "Unknown appender: #{appender}")
+      raise(ArgumentError, "Could not find appender class: #{klass} for #{appender}")
     end
   end
 
@@ -362,7 +363,7 @@ module SemanticLogger
     begin
       formatter.respond_to?(:constantize) ? klass.constantize : eval(klass)
     rescue NameError => exc
-      raise(ArgumentError, "Unknown formatter: #{formatter}")
+      raise(ArgumentError, "Could not find formatter class: #{klass} for #{appender}")
     end
   end
 

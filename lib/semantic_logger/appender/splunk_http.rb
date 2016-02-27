@@ -7,11 +7,11 @@ require 'json'
 #   http://dev.splunk.com/view/event-collector/SP-CAAAE7F
 #
 # Example
-#   appender = SemanticLogger::Appender::SplunkHttp.new(
-#     url:   'http://localhost:8080',
-#     token: '70CA900C-3D7E-42A4-9C79-7975D1C422A8'
+#   SemanticLogger.add_appender(
+#     appender: :splunk_http,
+#     url:      'http://localhost:8080',
+#     token:    '70CA900C-3D7E-42A4-9C79-7975D1C422A8'
 #   )
-#   SemanticLogger.add_appender(appender)
 class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   # Create Splunk appender over persistent HTTP(S)
   #

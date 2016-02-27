@@ -59,10 +59,10 @@ module SemanticLogger
     #    SemanticLogger.default_level = :info
     #
     #    # Log to screen
-    #    SemanticLogger.add_appender(STDOUT)
+    #    SemanticLogger.add_appender(io: STDOUT, formatter: :color)
     #
     #    # And log to a file at the same time
-    #    SemanticLogger.add_appender('application.log')
+    #    SemanticLogger.add_appender(file: 'application.log', formatter: :color)
     #
     #    logger = SemanticLogger['MyApplication']
     #    logger.debug("Only display this if log level is set to Debug or lower")

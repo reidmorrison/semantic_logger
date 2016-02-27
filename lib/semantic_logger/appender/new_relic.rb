@@ -10,8 +10,7 @@ end
 # "Applications" > "Application Name" > "Events" > "Errors" in New Relic.
 #
 # Example:
-#   SemanticLogger.add_appender(SemanticLogger::Appender::NewRelic.new)
-#
+#   SemanticLogger.add_appender(appender: :new_relic)
 class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
   # Create Appender
   #

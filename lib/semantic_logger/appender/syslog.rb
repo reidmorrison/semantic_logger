@@ -5,27 +5,19 @@ require 'socket'
 # Send log messages to local syslog, or remote syslog servers over TCP or UDP.
 #
 # Example: Log to a local Syslog daemon
-#   SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
+#   SemanticLogger.add_appender(appender: :syslog)
 #
 # Example: Log to a remote Syslog server using TCP:
-#   appender        = SemanticLogger::Appender::Syslog.new(
-#     url: 'tcp://myloghost:514'
+#   SemanticLogger.add_appender(
+#     appender: :syslog,
+#     url:      'tcp://myloghost:514'
 #   )
-#
-#   # Optional: Add filter to exclude health_check, or other log entries
-#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
-#
-#   SemanticLogger.add_appender(appender)
 #
 # Example: Log to a remote Syslog server using UDP:
-#   appender        = SemanticLogger::Appender::Syslog.new(
-#     url: 'udp://myloghost:514'
+#   SemanticLogger.add_appender(
+#     appender: :syslog,
+#     url:      'udp://myloghost:514'
 #   )
-#
-#   # Optional: Add filter to exclude health_check, or other log entries
-#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
-#
-#   SemanticLogger.add_appender(appender)
 module SemanticLogger
   module Appender
     class Syslog < SemanticLogger::Appender::Base

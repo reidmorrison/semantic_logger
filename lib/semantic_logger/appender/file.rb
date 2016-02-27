@@ -35,10 +35,10 @@ module SemanticLogger
       #    SemanticLogger.default_level = :info
       #
       #    # Log to screen
-      #    SemanticLogger.add_appender(STDOUT)
+      #    SemanticLogger.add_appender(io: STDOUT, formatter: :color)
       #
       #    # And log to a file at the same time
-      #    SemanticLogger::Logger.add_appender(file_name: 'application.log')
+      #    SemanticLogger::Logger.add_appender(file_name: 'application.log', formatter: :color)
       #
       #    logger = SemanticLogger['test']
       #    logger.info 'Hello World'

@@ -8,14 +8,10 @@ end
 # Forward log entries to a Graylog server.
 #
 # Example:
-#   appender        = SemanticLogger::Appender::Graylog.new(
-#     url: 'udp://localhost:12201'
+#   SemanticLogger.add_appender(
+#     appender: :graylog,
+#     url:      'udp://localhost:12201'
 #   )
-#
-#   # Optional: Add filter to exclude health_check, or other log entries
-#   appender.filter = Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
-#
-#   SemanticLogger.add_appender(appender)
 #
 # Notes:
 # * trace is not supported by Graylog, so trace level logging will appear as debug in Graylog.

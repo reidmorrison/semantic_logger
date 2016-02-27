@@ -38,14 +38,6 @@ module SemanticLogger
       #    logger =  SemanticLogger['test']
       #    logger.info('Hello World', some: :payload)
       #
-      # Enhance the Rails Logger
-      #    # Add the Rails logger to the list of appenders
-      #    SemanticLogger.add_appender(logger: Rails.logger)
-      #    Rails.logger = SemanticLogger['Rails']
-      #
-      #    # Make ActiveRecord logging include its class name in every log entry
-      #    ActiveRecord::Base.logger = SemanticLogger['ActiveRecord']
-      #
       # Install the `rails_semantic_logger` gem to replace the Rails logger with Semantic Logger.
       def initialize(options, &block)
         # Backward compatibility
