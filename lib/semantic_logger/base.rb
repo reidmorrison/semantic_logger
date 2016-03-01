@@ -118,51 +118,37 @@ module SemanticLogger
 
     alias_method :benchmark, :measure
 
-    # If the tag being supplied is definitely a string then this fast
-    # tag api can be used for short lived tags
-    def fast_tag(tag)
-      (Thread.current[:semantic_logger_tags] ||= []) << tag
-      yield
-    ensure
-      Thread.current[:semantic_logger_tags].pop
+    # :nodoc:
+    def tagged(*tags, &block)
+      SemanticLogger.tagged(*tags, &block)
     end
 
-    # Add the supplied tags to the list of tags to log for this thread whilst
-    # the supplied block is active
-    # Returns nil if no tags are currently set
-    #   To support: ActiveSupport::TaggedLogging V3 and above
-    def tagged(*tags)
-      new_tags = push_tags(*tags)
-      yield self
-    ensure
-      pop_tags(new_tags.size)
-    end
-
-    # Previous method for supplying tags
+    # :nodoc:
     alias_method :with_tags, :tagged
 
-    # Returns a copy of the [Array] of [String] tags currently active for this thread
-    # Returns nil if no tags are set
+    # :nodoc:
     def tags
-      # Since tags are stored on a per thread basis this list is thread-safe
-      t = Thread.current[:semantic_logger_tags]
-      t.nil? ? [] : t.clone
+      SemanticLogger.tags
     end
 
-    # Add tags to the current scope
-    # Returns the list of tags pushed after flattening them out and removing blanks
-    def push_tags *tags
-      # Need to flatten and reject empties to support calls from Rails 4
-      new_tags                              = tags.flatten.collect(&:to_s).reject(&:empty?)
-      t                                     = Thread.current[:semantic_logger_tags]
-      Thread.current[:semantic_logger_tags] = t.nil? ? new_tags : t.concat(new_tags)
-      new_tags
+    # :nodoc:
+    def push_tags(*tags)
+      SemanticLogger.push_tags(*tags)
     end
 
-    # Remove specified number of tags from the current tag list
-    def pop_tags(quantity=1)
-      t = Thread.current[:semantic_logger_tags]
-      t.pop(quantity) unless t.nil?
+    # :nodoc:
+    def pop_tags(quantity = 1)
+      SemanticLogger.pop_tags(quantity)
+    end
+
+    # :nodoc:
+    def silence(new_level = :error, &block)
+      SemanticLogger.silence(new_level, &block)
+    end
+
+    # :nodoc:
+    def fast_tag(tag, &block)
+      SemanticLogger.fast_tag(tag, &block)
     end
 
     # Thread specific context information to be logged with every log entry
@@ -192,62 +178,6 @@ module SemanticLogger
     # Returns nil if no payload is currently set
     def payload
       Thread.current[:semantic_logger_payload]
-    end
-
-    # Silence noisy log levels by changing the default_level within the block
-    #
-    # This setting is thread-safe and only applies to the current thread
-    #
-    # Any threads spawned within the block will not be affected by this setting
-    #
-    # #silence can be used to both raise and lower the log level within
-    # the supplied block.
-    #
-    # Example:
-    #
-    #   # Perform trace level logging within the block when the default is higher
-    #   SemanticLogger.default_level = :info
-    #
-    #   logger.debug 'this will _not_ be logged'
-    #
-    #   logger.silence(:trace) do
-    #     logger.debug "this will be logged"
-    #   end
-    #
-    # Parameters
-    #   new_level
-    #     The new log level to apply within the block
-    #     Default: :error
-    #
-    # Example:
-    #   # Silence all logging below :error level
-    #   logger.silence do
-    #     logger.info "this will _not_ be logged"
-    #     logger.warn "this neither"
-    #     logger.error "but errors will be logged"
-    #   end
-    #
-    # Note:
-    #   #silence does not affect any loggers which have had their log level set
-    #   explicitly. I.e. That do not rely on the global default level
-    def silence(new_level = :error)
-      current_index                            = Thread.current[:semantic_logger_silence]
-      Thread.current[:semantic_logger_silence] = SemanticLogger.level_to_index(new_level)
-      yield
-    ensure
-      Thread.current[:semantic_logger_silence] = current_index
-    end
-
-    # DEPRECATED See SemanticLogger.default_level=
-    def self.default_level=(level)
-      warn '[DEPRECATION] SemanticLogger::Logger.default_level= is deprecated.  Please use SemanticLogger.default_level= instead.'
-      SemanticLogger.default_level = level
-    end
-
-    # DEPRECATED See SemanticLogger.default_level
-    def self.default_level
-      warn '[DEPRECATION] SemanticLogger::Logger.default_level is deprecated.  Please use SemanticLogger.default_level instead.'
-      SemanticLogger.default_level
     end
 
     protected

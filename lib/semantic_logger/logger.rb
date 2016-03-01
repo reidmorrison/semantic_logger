@@ -85,21 +85,14 @@ module SemanticLogger
       @@logger = logger
     end
 
-    # DEPRECATED See SemanticLogger.add_appender
-    def self.appenders
-      warn '[DEPRECATION] SemanticLogger::Logger.appenders is deprecated.  Please use SemanticLogger.add_appender instead.'
-      SemanticLogger.appenders
-    end
-
-    # DEPRECATED: Please use queue_size instead.
-    def self.cache_count
-      warn '[DEPRECATION] SemanticLogger::Logger.cache_count is deprecated.  Please use SemanticLogger::Logger.queue_size instead.'
-      queue_size
-    end
-
-    # Supply a block to be called whenever a metric is seen during measure logging
+    # Supply a metrics appender to be called whenever a logging metric is encountered
     #
     #  Parameters
+    #    appender: [Symbol | Object | Proc]
+    #      [Proc] the block to call.
+    #      [Object] the block on which to call #call.
+    #      [Symbol] :new_relic, or :statsd to forward metrics to
+    #
     #    block
     #      The block to be called
     #
@@ -107,9 +100,21 @@ module SemanticLogger
     #   SemanticLogger.on_metric do |log|
     #     puts "#{log.metric} was received. Log Struct: #{log.inspect}"
     #   end
-    def self.on_metric(object = nil, &block)
-      raise('When supplying an object, it must support the #call method') if object && !object.respond_to?(:call)
-      (@@metric_subscribers ||= Concurrent::Array.new) << (object || block)
+    #
+    # Note:
+    # * This callback is called in the logging thread.
+    # * Does not slow down the application.
+    # * Only context is what is passed in the log struct, the original thread context is not available.
+    def self.on_metric(options = {}, &block)
+      # Backward compatibility
+      options  = options.is_a?(Hash) ? options.dup : {appender: options}
+      appender = block || options.delete(:appender)
+
+      # Convert symbolized metrics appender to an actual object
+      appender = named_appender(appender, 'SemanticLogger::Appender::Metrics').new(options) if appender.is_a?(Symbol)
+
+      raise('When supplying a metrics appender, it must support the #call method') unless appender.is_a?(Proc) || appender.respond_to?(:call)
+      (@@metric_subscribers ||= Concurrent::Array.new) << appender
     end
 
     # Place log request on the queue for the Appender thread to write to each

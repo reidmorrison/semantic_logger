@@ -7,7 +7,7 @@ end
 # Send log messages to honeybadger
 #
 # Example:
-#   SemanticLogger.add_appender(SemanticLogger::Appender::honeybadger.new)
+#   SemanticLogger.add_appender(appender: :honeybadger)
 #
 class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
   # Create Appender
@@ -17,6 +17,11 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
   #     Override the log level for this appender.
   #     Default: :error
   #
+  #   formatter: [Object|Proc]
+  #     An instance of a class that implements #call, or a Proc to be used to format
+  #     the output from this appender
+  #     Default: Use the built-in formatter (See: #call)
+  #
   #   filter: [Regexp|Proc]
   #     RegExp: Only include log messages where the class name matches the supplied.
   #     regular expression. All other messages will be ignored.
@@ -24,8 +29,8 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
   #           The Proc must return true or false.
   def initialize(options = {}, &block)
     options  = {level: options} unless options.is_a?(Hash)
-    @options  = options.dup
-    level     = @options.delete(:level) || :error
+    @options = options.dup
+    level    = @options.delete(:level) || :error
 
     super(level, &block)
   end

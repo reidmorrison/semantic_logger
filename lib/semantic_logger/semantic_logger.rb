@@ -192,6 +192,11 @@ module SemanticLogger
   # Supply a block to be called whenever a metric is seen during measure logging
   #
   #  Parameters
+  #    appender: [Symbol | Object | Proc]
+  #      [Proc] the block to call.
+  #      [Object] the block on which to call #call.
+  #      [Symbol] :new_relic, or :statsd to forward metrics to
+  #
   #    block
   #      The block to be called
   #
@@ -199,8 +204,13 @@ module SemanticLogger
   #   SemanticLogger.on_metric do |log|
   #     puts "#{log.metric} was received. Log Struct: #{log.inspect}"
   #   end
-  def self.on_metric(object = nil, &block)
-    SemanticLogger::Logger.on_metric(object, &block)
+  #
+  # Note:
+  # * This callback is called in the logging thread.
+  # * Does not slow down the application.
+  # * Only context is what is passed in the log struct, the original thread context is not available.
+  def self.on_metric(options = {}, &block)
+    SemanticLogger::Logger.on_metric(options, &block)
   end
 
   # Add signal handlers for Semantic Logger
@@ -269,6 +279,106 @@ module SemanticLogger
     end
 
     true
+  end
+
+  # If the tag being supplied is definitely a string then this fast
+  # tag api can be used for short lived tags
+  def self.fast_tag(tag)
+    (Thread.current[:semantic_logger_tags] ||= []) << tag
+    yield
+  ensure
+    Thread.current[:semantic_logger_tags].pop
+  end
+
+  # Add the supplied named tags to the list of tags to log for this thread whilst
+  # the supplied block is active.
+  #
+  # Returns result of block
+  #
+  # Example:
+  def self.named_tags(tag)
+    (Thread.current[:semantic_logger_tags] ||= []) << tag
+    yield
+  ensure
+    Thread.current[:semantic_logger_tags].pop
+  end
+
+  # Add the supplied tags to the list of tags to log for this thread whilst
+  # the supplied block is active.
+  # Returns result of block
+  def self.tagged(*tags)
+    new_tags = push_tags(*tags)
+    yield self
+  ensure
+    pop_tags(new_tags.size)
+  end
+
+  # Returns a copy of the [Array] of [String] tags currently active for this thread
+  # Returns nil if no tags are set
+  def self.tags
+    # Since tags are stored on a per thread basis this list is thread-safe
+    t = Thread.current[:semantic_logger_tags]
+    t.nil? ? [] : t.clone
+  end
+
+  # Add tags to the current scope
+  # Returns the list of tags pushed after flattening them out and removing blanks
+  def self.push_tags(*tags)
+    # Need to flatten and reject empties to support calls from Rails 4
+    new_tags                              = tags.flatten.collect(&:to_s).reject(&:empty?)
+    t                                     = Thread.current[:semantic_logger_tags]
+    Thread.current[:semantic_logger_tags] = t.nil? ? new_tags : t.concat(new_tags)
+    new_tags
+  end
+
+  # Remove specified number of tags from the current tag list
+  def self.pop_tags(quantity=1)
+    t = Thread.current[:semantic_logger_tags]
+    t.pop(quantity) unless t.nil?
+  end
+
+  # Silence noisy log levels by changing the default_level within the block
+  #
+  # This setting is thread-safe and only applies to the current thread
+  #
+  # Any threads spawned within the block will not be affected by this setting
+  #
+  # #silence can be used to both raise and lower the log level within
+  # the supplied block.
+  #
+  # Example:
+  #
+  #   # Perform trace level logging within the block when the default is higher
+  #   SemanticLogger.default_level = :info
+  #
+  #   logger.debug 'this will _not_ be logged'
+  #
+  #   SemanticLogger.silence(:trace) do
+  #     logger.debug "this will be logged"
+  #   end
+  #
+  # Parameters
+  #   new_level
+  #     The new log level to apply within the block
+  #     Default: :error
+  #
+  # Example:
+  #   # Silence all logging for this thread below :error level
+  #   SemanticLogger.silence do
+  #     logger.info "this will _not_ be logged"
+  #     logger.warn "this neither"
+  #     logger.error "but errors will be logged"
+  #   end
+  #
+  # Note:
+  #   #silence does not affect any loggers which have had their log level set
+  #   explicitly. I.e. That do not rely on the global default level
+  def self.silence(new_level = :error)
+    current_index                            = Thread.current[:semantic_logger_silence]
+    Thread.current[:semantic_logger_silence] = SemanticLogger.level_to_index(new_level)
+    yield
+  ensure
+    Thread.current[:semantic_logger_silence] = current_index
   end
 
   private
@@ -345,14 +455,14 @@ module SemanticLogger
     end
   end
 
-  def self.named_appender(appender)
+  def self.named_appender(appender, root = 'SemanticLogger::Appender')
     appender = appender.to_s
     klass    = appender.respond_to?(:camelize) ? appender.camelize : camelize(appender)
-    klass    = "SemanticLogger::Appender::#{klass}"
+    klass    = "#{root}::#{klass}"
     begin
       appender.respond_to?(:constantize) ? klass.constantize : eval(klass)
     rescue NameError
-      raise(ArgumentError, "Could not find appender class: #{klass} for #{appender}")
+      raise(ArgumentError, "Could not find #{root} class: #{klass} for #{appender}")
     end
   end
 

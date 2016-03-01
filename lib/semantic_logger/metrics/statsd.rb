@@ -32,13 +32,13 @@ module SemanticLogger
       def call(log)
         metric = log.metric
         if duration = log.duration
-          $statsd.timing(metric, duration)
+          @statsd.timing(metric, duration)
         else
           amount = (log.metric_amount || 1).round
           if amount < 0
-            amount.times { $statsd.decrement(metric) }
+            amount.times { @statsd.decrement(metric) }
           else
-            amount.times { $statsd.increment(metric) }
+            amount.times { @statsd.increment(metric) }
           end
         end
       end

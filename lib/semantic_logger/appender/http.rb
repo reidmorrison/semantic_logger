@@ -16,7 +16,8 @@ require 'json'
 #     url:      'http://localhost:8088/path'
 #   )
 class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
-  attr_accessor :username, :application, :host, :compress, :header
+  attr_accessor :username, :application, :host, :compress, :header,
+    :open_timeout, :read_timeout, :continue_timeout
   attr_reader :http, :url, :server, :port, :path, :ssl_options
 
   # Create HTTP(S) log appender
@@ -67,15 +68,28 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
+  #
+  #   open_timeout: [Float]
+  #     Default: 2.0
+  #
+  #   read_timeout: [Float]
+  #     Default: 1.0
+  #
+  #   continue_timeout: [Float]
+  #     Default: 1.0
   def initialize(options, &block)
-    options      = options.dup
-    @url         = options.delete(:url)
-    @ssl_options = options.delete(:ssl)
-    @username    = options.delete(:username)
-    @password    = options.delete(:password)
-    @application = options.delete(:application) || 'Semantic Logger'
-    @host        = options.delete(:host) || SemanticLogger.host
-    @compress    = options.delete(:compress) || false
+    options           = options.dup
+    @url              = options.delete(:url)
+    @ssl_options      = options.delete(:ssl)
+    @username         = options.delete(:username)
+    @password         = options.delete(:password)
+    @application      = options.delete(:application) || 'Semantic Logger'
+    @host             = options.delete(:host) || SemanticLogger.host
+    @compress         = options.delete(:compress) || false
+    @open_timeout     = options.delete(:open_timeout) || 2.0
+    @read_timeout     = options.delete(:read_timeout) || 1.0
+    @continue_timeout = options.delete(:continue_timeout) || 1.0
+
     unless options.has_key?(:formatter)
       options[:formatter] = block || (respond_to?(:call) ? self : SemanticLogger::Formatters::Json.new)
     end
@@ -109,6 +123,10 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   def reopen
     # On Ruby v2.0 and greater, Net::HTTP.new uses a persistent connection if the server allows it
     @http = @ssl_options ? Net::HTTP.new(server, port, @ssl_options) : Net::HTTP.new(server, port)
+
+    @http.open_timeout     = @open_timeout
+    @http.read_timeout     = @read_timeout
+    @http.continue_timeout = @continue_timeout
   end
 
   # Forward log messages to HTTP Server
@@ -158,7 +176,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
       true
     else
       # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
-      SemanticLogger::Logger.logger.error("Bad HTTP response code: #{response.code}, #{response.body}")
+      SemanticLogger::Logger.logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
       false
     end
   end
