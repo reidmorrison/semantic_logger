@@ -21,6 +21,8 @@ gem 'splunk-sdk-ruby'
 gem 'bugsnag'
 # [optional] Graylog appender
 gem 'gelf'
+# [optional] Honeybadger appender
+gem 'honeybadger'
 # [optional] Statsd metrics
 gem 'statsd-ruby'
 
