@@ -234,6 +234,12 @@ module SemanticLogger
       end
     end
 
+    # Whether the log message should be logged for the current logger or appender
+    def should_log?(log)
+      # Ensure minimum log level is met, and check filter
+      (level_index <= (log.level_index || 0)) && include_message?(log)
+    end
+
     # Log message at the specified level
     def log_internal(level, index, message=nil, payload=nil, exception=nil)
       # Exception being logged?

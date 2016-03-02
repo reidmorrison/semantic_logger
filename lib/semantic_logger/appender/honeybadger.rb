@@ -37,8 +37,7 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
 
   # Send an error notification to honeybadger
   def log(log)
-    return false if (level_index > (log.level_index || 0)) ||
-      !include_message?(log) # Filtered out?
+    return false unless should_log?(log)
 
     if log.exception
       Honeybadger.notify(log.exception, log.to_h)

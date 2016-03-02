@@ -173,7 +173,7 @@ module SemanticLogger
       begin
         count = 0
         while message = queue.pop
-          if message.is_a? Log
+          if message.is_a?(Log)
             SemanticLogger.appenders.each do |appender|
               begin
                 appender.log(message)

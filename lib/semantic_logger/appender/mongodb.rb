@@ -171,8 +171,7 @@ module SemanticLogger
 
       # Log the message to MongoDB
       def log(log)
-        # Ensure minimum log level is met, and check filter
-        return false if (level_index > (log.level_index || 0)) || !include_message?(log)
+        return false unless should_log?(log)
 
         # Insert log entry into Mongo
         collection.insert(formatter.call(log, self), w: @write_concern)

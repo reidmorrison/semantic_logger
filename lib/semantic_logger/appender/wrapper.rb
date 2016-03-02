@@ -58,8 +58,7 @@ module SemanticLogger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
       def log(log)
-        # Ensure minimum log level is met, and check filter
-        return false if (level_index > (log.level_index || 0)) || !include_message?(log)
+        return false unless should_log?(log)
 
         @logger.send(log.level == :trace ? :debug : log.level, formatter.call(log, self))
         true

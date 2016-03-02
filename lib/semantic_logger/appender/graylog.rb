@@ -112,8 +112,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
 
   # Forward log messages
   def log(log)
-    return false if (level_index > (log.level_index || 0)) ||
-      !include_message?(log) # Filtered out?
+    return false unless should_log?(log)
 
     @notifier.notify!(formatter.call(log, self))
     true

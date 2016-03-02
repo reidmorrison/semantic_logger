@@ -131,8 +131,8 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
 
   # Forward log messages to HTTP Server
   def log(log)
-    return false if (level_index > (log.level_index || 0)) ||
-      !include_message?(log) # Filtered out?
+    return false unless should_log?(log)
+
     post(formatter.call(log, self))
   end
 

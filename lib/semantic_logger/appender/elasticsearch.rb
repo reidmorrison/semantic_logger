@@ -47,8 +47,7 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
 
   # Log to the index for today
   def log(log)
-    return false if (level_index > (log.level_index || 0)) ||
-      !include_message?(log) # Filtered out?
+    return false unless should_log?(log)
 
     post(formatter.call(log, self), "#{index}-#{log.time.strftime('%Y.%m.%d')}/#{type}")
   end

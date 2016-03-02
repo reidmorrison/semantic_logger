@@ -52,12 +52,9 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
 
   # Send an error notification to Bugsnag
   def log(log)
-    # Only log if level is warn, or error.
-    return false if (level_index > (log.level_index || 0)) ||
-      # Ignore logs coming from Bugsnag itself
-      (log.name == 'Bugsnag') ||
-      # Filtered out?
-      !include_message?(log)
+    return false unless should_log?(log)
+    # Ignore logs coming from Bugsnag itself
+    return false if log.name == 'Bugsnag'
 
     # Send error messages as Runtime exceptions
     exception =

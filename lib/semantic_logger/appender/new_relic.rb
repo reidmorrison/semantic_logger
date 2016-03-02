@@ -47,8 +47,7 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
 
   # Send an error notification to New Relic
   def log(log)
-    # Ensure minimum log level is met, and check filter
-    return false if (level_index > (log.level_index || 0)) || !include_message?(log)
+    return false unless should_log?(log)
 
     # Send error messages as Runtime exceptions
     exception =
