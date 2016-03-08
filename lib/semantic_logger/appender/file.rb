@@ -114,7 +114,7 @@ module SemanticLogger
         # Since only one appender thread will be writing to the file at a time
         # it is not necessary to protect access to the file with a semaphore
         # Allow this logger to filter out log levels lower than it's own
-        @log.write(@formatter.call(log, self) << "\n")
+        @log.write(formatter.call(log, self) << "\n")
         true
       end
 

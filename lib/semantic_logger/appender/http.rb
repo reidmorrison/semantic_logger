@@ -51,8 +51,8 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   #
   #   ssl: [Hash]
   #     Specific SSL options: For more details see NET::HTTP.start
-  #       ca_file, ca_path, cert, cert_store, ciphers, key, open_timeout, read_timeout, ssl_timeout,
-  #       ssl_version, use_ssl, verify_callback, verify_depth and verify_mode.
+  #       ca_file, ca_path, cert, cert_store, ciphers, key, ssl_timeout,
+  #       ssl_version, verify_callback, verify_depth and verify_mode.
   #
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
   #     Override the log level for this appender.
@@ -102,9 +102,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     }
     @header['Content-Encoding'] = 'gzip' if @compress
 
-    uri                             = URI.parse(@url)
-    (@ssl_options ||= {})[:use_ssl] = true if uri.scheme == 'https'
-
+    uri     = URI.parse(@url)
     @server = uri.host
     raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'") unless @url
 
@@ -112,6 +110,15 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     @username = uri.user if !@username && uri.user
     @password = uri.password if !@password && uri.password
     @path     = uri.path
+
+    if uri.scheme == 'https'
+      @ssl_options               ||= {}
+      @ssl_options[:use_ssl]     = true
+      @ssl_options[:verify_mode] ||= OpenSSL::SSL::VERIFY_PEER
+      @port                      ||= HTTP.https_default_port
+    else
+      @port ||= HTTP.http_default_port
+    end
 
     reopen
 
@@ -122,7 +129,15 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   # Re-open after process fork
   def reopen
     # On Ruby v2.0 and greater, Net::HTTP.new uses a persistent connection if the server allows it
-    @http = @ssl_options ? Net::HTTP.new(server, port, @ssl_options) : Net::HTTP.new(server, port)
+    @http = Net::HTTP.new(server, port)
+
+    if @ssl_options
+      @http.methods.grep(/\A(\w+)=\z/) do |meth|
+        key = $1.to_sym
+        @ssl_options.key?(key) or next
+        @http.__send__(meth, @ssl_options[key])
+      end
+    end
 
     @http.open_timeout     = @open_timeout
     @http.read_timeout     = @read_timeout
