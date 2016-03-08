@@ -111,7 +111,7 @@ module SemanticLogger
       appender = block || options.delete(:appender)
 
       # Convert symbolized metrics appender to an actual object
-      appender = named_appender(appender, 'SemanticLogger::Appender::Metrics').new(options) if appender.is_a?(Symbol)
+      appender = SemanticLogger.named_appender(appender, 'SemanticLogger::Metrics').new(options) if appender.is_a?(Symbol)
 
       raise('When supplying a metrics appender, it must support the #call method') unless appender.is_a?(Proc) || appender.respond_to?(:call)
       (@@metric_subscribers ||= Concurrent::Array.new) << appender
