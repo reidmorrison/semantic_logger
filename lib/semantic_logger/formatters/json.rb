@@ -4,7 +4,7 @@ module SemanticLogger
     class Json
       # Returns log messages in JSON format
       def call(log, logger)
-        h = log.to_h
+        h = log.to_h(logger.host, logger.application)
         h.delete(:time)
         h[:timestamp] = log.time.utc.iso8601(defined?(JRuby) ? 3 : 6)
         h.to_json

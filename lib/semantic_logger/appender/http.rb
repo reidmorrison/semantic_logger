@@ -83,13 +83,12 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     @ssl_options      = options.delete(:ssl)
     @username         = options.delete(:username)
     @password         = options.delete(:password)
-    @application      = options.delete(:application) || 'Semantic Logger'
-    @host             = options.delete(:host) || SemanticLogger.host
     @compress         = options.delete(:compress) || false
     @open_timeout     = options.delete(:open_timeout) || 2.0
     @read_timeout     = options.delete(:read_timeout) || 1.0
     @continue_timeout = options.delete(:continue_timeout) || 1.0
 
+    # Use Default JSON Formatter unless another was supplied
     unless options.has_key?(:formatter)
       options[:formatter] = block || (respond_to?(:call) ? self : SemanticLogger::Formatters::Json.new)
     end
@@ -98,7 +97,10 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
 
     @header                     = {
       'Accept'       => 'application/json',
-      'Content-Type' => 'application/json'
+      'Content-Type' => 'application/json',
+      # On Ruby v2.0 and greater, Net::HTTP.new already uses a persistent connection if the server allows it
+      'Connection'   => 'keep-alive',
+      'Keep-Alive'   => '300'
     }
     @header['Content-Encoding'] = 'gzip' if @compress
 
@@ -128,7 +130,12 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
 
   # Re-open after process fork
   def reopen
-    # On Ruby v2.0 and greater, Net::HTTP.new uses a persistent connection if the server allows it
+    # Close open connection if any
+    begin
+      @http.finish if @http
+    rescue IOError
+    end
+
     @http = Net::HTTP.new(server, port)
 
     if @ssl_options
@@ -142,6 +149,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     @http.open_timeout     = @open_timeout
     @http.read_timeout     = @read_timeout
     @http.continue_timeout = @continue_timeout
+    @http.start
   end
 
   # Forward log messages to HTTP Server

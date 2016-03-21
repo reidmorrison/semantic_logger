@@ -46,7 +46,15 @@ module SemanticLogger
     def self.flush
       return false unless appender_thread_active?
 
-      logger.trace "Flushing appenders with #{queue_size} log messages on the queue"
+      msg = "Flushing appenders with #{queue_size} log messages on the queue"
+      if queue_size > 1_000
+        logger.warn msg
+      elsif queue_size > 100
+        logger.info msg
+      elsif queue_size > 0
+        logger.trace msg
+      end
+
       reply_queue = Queue.new
       queue << {command: :flush, reply_queue: reply_queue}
       reply_queue.pop
@@ -71,10 +79,6 @@ module SemanticLogger
     # to determine if the appender thread is falling behind
     def self.lag_threshold_s
       @@lag_threshold_s
-    end
-
-    def self.time_threshold_s=(time_threshold_s)
-      @@lag_threshold_s = time_threshold_s
     end
 
     # Allow the internal logger to be overridden from its default to STDERR
@@ -111,7 +115,7 @@ module SemanticLogger
       appender = block || options.delete(:appender)
 
       # Convert symbolized metrics appender to an actual object
-      appender = SemanticLogger.named_appender(appender, 'SemanticLogger::Metrics').new(options) if appender.is_a?(Symbol)
+      appender = SemanticLogger.constantize_symbol(appender, 'SemanticLogger::Metrics').new(options) if appender.is_a?(Symbol)
 
       raise('When supplying a metrics appender, it must support the #call method') unless appender.is_a?(Proc) || appender.respond_to?(:call)
       (@@metric_subscribers ||= Concurrent::Array.new) << appender

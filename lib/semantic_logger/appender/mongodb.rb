@@ -50,7 +50,7 @@ module SemanticLogger
     #   logger.info 'This message is written to mongo as a document'
     class MongoDB < SemanticLogger::Appender::Base
       attr_reader :db, :collection_name, :collection
-      attr_accessor :host, :write_concern, :application
+      attr_accessor :write_concern
 
       # Create a MongoDB Appender instance
       #
@@ -66,14 +66,6 @@ module SemanticLogger
       #     Write concern to use
       #     see: http://docs.mongodb.org/manual/reference/write-concern/
       #     Default: 0
-      #
-      #   host: [String]
-      #     host name to include in the document logged to Mongo
-      #     Default: SemanticLogger.host_name
-      #
-      #   application: [String]
-      #     Name of the application to include in the document written to mongo
-      #     Default: nil (None)
       #
       #   collection_size: [Integer]
       #     The size of the MongoDB capped collection to create in bytes
@@ -91,7 +83,7 @@ module SemanticLogger
       #     Override the log level for this appender.
       #     Default: SemanticLogger.default_level
       #
-      #   formatter: [Object|Proc]
+      #   formatter: [Object|Proc|Symbol]
       #     An instance of a class that implements #call, or a Proc to be used to format
       #     the output from this appender
       #     Default: Use the built-in formatter (See: #call)
@@ -101,17 +93,25 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
+      #
+      #   host: [String]
+      #     Name of this host to appear in log messages.
+      #     Default: SemanticLogger.host
+      #
+      #   application: [String]
+      #     Name of this application to appear in log messages.
+      #     Default: SemanticLogger.application
       def initialize(options = {}, &block)
-        options             = options.dup
-        @db                 = options.delete(:db) || raise('Missing mandatory parameter :db')
-        @collection_name    = options.delete(:collection_name) || 'semantic_logger'
-        @host               = options.delete(:host) || options.delete(:host_name) || SemanticLogger.host
-        @write_concern      = options.delete(:write_concern) || 0
-        @application        = options.delete(:application) || SemanticLogger.application
+        options          = options.dup
+        @db              = options.delete(:db) || raise('Missing mandatory parameter :db')
+        @collection_name = options.delete(:collection_name) || 'semantic_logger'
+        @write_concern   = options.delete(:write_concern) || 0
 
         # Create a collection that will hold the lesser of 1GB space or 10K documents
-        @collection_size    = options.delete(:collection_size) || 1024**3
-        @collection_max     = options.delete(:collection_max)
+        @collection_size = options.delete(:collection_size) || 1024**3
+        @collection_max  = options.delete(:collection_max)
+
+        options[:formatter] ||= :raw
 
         reopen
 
@@ -158,15 +158,6 @@ module SemanticLogger
       #  Waits for all sent documents to be written to disk
       def flush
         db.get_last_error
-      end
-
-      # Default log formatter
-      #  Replace this formatter by supplying a Block to the initializer
-      def call(log, logger)
-        h               = log.to_h
-        h[:host]        = host
-        h[:application] = application
-        h
       end
 
       # Log the message to MongoDB

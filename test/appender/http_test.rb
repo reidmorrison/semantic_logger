@@ -7,8 +7,10 @@ module Appender
 
     describe SemanticLogger::Appender::Http do
       before do
-        @appender = SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path')
-        @message  = 'AppenderHttpTest log message'
+        Net::HTTP.stub_any_instance(:start, true) do
+          @appender = SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path')
+        end
+        @message = 'AppenderHttpTest log message'
       end
 
       SemanticLogger::LEVELS.each do |level|

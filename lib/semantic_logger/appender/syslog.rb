@@ -22,8 +22,6 @@ module SemanticLogger
   module Appender
     class Syslog < SemanticLogger::Appender::Base
 
-      attr_reader :remote_syslog, :url, :server, :port, :protocol, :facility, :host, :application
-
       # Default mapping of ruby log levels to syslog log levels
       #
       # ::Syslog::LOG_EMERG   - "System is unusable"
@@ -42,6 +40,7 @@ module SemanticLogger
         debug: ::Syslog::LOG_INFO,
         trace: ::Syslog::LOG_DEBUG
       }
+      attr_reader :remote_syslog, :url, :server, :port, :protocol, :facility
 
       # Create a Syslog appender instance.
       #
@@ -149,7 +148,6 @@ module SemanticLogger
       #     Default: :syslog
       def initialize(options = {}, &block)
         options             = options.dup
-        @application        = options.delete(:application) || options.delete(:ident) || 'ruby'
         @options            = options.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
         @facility           = options.delete(:facility) || ::Syslog::LOG_USER
         level_map           = options.delete(:level_map)
@@ -159,7 +157,6 @@ module SemanticLogger
         @protocol           = (uri.scheme || :syslog).to_sym
         @port               = uri.port || 514
         @server             = 'localhost' if @protocol == :syslog
-        @host               = options.delete(:host) || options.delete(:local_hostname) || SemanticLogger.host
         @tcp_client_options = options.delete(:tcp_client)
 
         raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
@@ -197,7 +194,7 @@ module SemanticLogger
       def reopen
         case @protocol
         when :syslog
-          ::Syslog.open(@application, @options, @facility)
+          ::Syslog.open(application, @options, @facility)
         when :tcp
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
           @tcp_client_options[:logger] = SemanticLogger::Logger.logger
@@ -267,10 +264,10 @@ module SemanticLogger
       # Format the syslog packet so it can be sent over TCP or UDP
       def syslog_packet_formatter(log)
         packet          = SyslogProtocol::Packet.new
-        packet.hostname = @host
+        packet.hostname = host
         packet.facility = @facility
         packet.severity = @level_map[log.level]
-        packet.tag      = @application
+        packet.tag      = application.gsub(' ', '')
         packet.content  = formatter.call(log, self)
         packet.time     = log.time
         packet.to_s

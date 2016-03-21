@@ -27,6 +27,14 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
+  #
+  #   host: [String]
+  #     Name of this host to appear in log messages.
+  #     Default: SemanticLogger.host
+  #
+  #   application: [String]
+  #     Name of this application to appear in log messages.
+  #     Default: SemanticLogger.application
   def initialize(options = {}, &block)
     options  = {level: options} unless options.is_a?(Hash)
     @options = options.dup
@@ -40,13 +48,13 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
     return false unless should_log?(log)
 
     if log.exception
-      Honeybadger.notify(log.exception, log.to_h)
+      Honeybadger.notify(log.exception, log.to_h(host, application))
     else
       message = {
         error_class:   log.name,
         error_message: log.message,
         backtrace:     log.backtrace,
-        context:       log.to_h,
+        context:       log.to_h(host, application),
       }
       Honeybadger.notify(message)
     end

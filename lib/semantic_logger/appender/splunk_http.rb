@@ -83,9 +83,7 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
   def call(log, logger)
-    h = log.to_h
-    h.delete(:application)
-    h.delete(:host)
+    h = log.to_h(nil, nil)
     h.delete(:time)
     message               = {
       source: logger.application,

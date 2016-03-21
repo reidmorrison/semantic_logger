@@ -30,7 +30,7 @@ class LoggerTest < Minitest::Test
       end
 
       it 'adds symbol appender' do
-        @appender = SemanticLogger.add_appender(appender: :http, url: 'http://localhost:8088/path')
+        @appender = SemanticLogger.add_appender(appender: :syslog)
         assert @appender.is_a?(SemanticLogger::Appender::Http), @appender.ai
         assert SemanticLogger.appenders.include?(@appender)
       end
@@ -52,7 +52,7 @@ class LoggerTest < Minitest::Test
       end
 
       it 'adds appender' do
-        @appender = SemanticLogger.add_appender(appender: SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path'))
+        @appender = SemanticLogger.add_appender(appender: SemanticLogger::Appender::Syslog.new)
         assert @appender.is_a?(SemanticLogger::Appender::Http), @appender.ai
         assert SemanticLogger.appenders.include?(@appender)
       end
@@ -83,7 +83,7 @@ class LoggerTest < Minitest::Test
       end
 
       it 'adds appender' do
-        @appender = SemanticLogger.add_appender(SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path'))
+        @appender = SemanticLogger.add_appender(SemanticLogger::Appender::Syslog.new)
         assert @appender.is_a?(SemanticLogger::Appender::Http), @appender.ai
         assert SemanticLogger.appenders.include?(@appender)
       end

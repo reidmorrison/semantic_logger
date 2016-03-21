@@ -444,7 +444,7 @@ module SemanticLogger
       SemanticLogger::Appender::File.new(options, &block)
     elsif appender = options.delete(:appender)
       if appender.is_a?(Symbol)
-        named_appender(appender).new(options)
+        constantize_symbol(appender).new(options)
       elsif appender.is_a?(Appender::Base)
         appender
       else
@@ -455,25 +455,14 @@ module SemanticLogger
     end
   end
 
-  def self.named_appender(appender, root = 'SemanticLogger::Appender')
-    appender = appender.to_s
-    klass    = appender.respond_to?(:camelize) ? appender.camelize : camelize(appender)
-    klass    = "#{root}::#{klass}"
+  def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
+    symbol = symbol.to_s
+    klass  = symbol.respond_to?(:camelize) ? symbol.camelize : camelize(symbol)
+    klass  = "#{namespace}::#{klass}"
     begin
-      appender.respond_to?(:constantize) ? klass.constantize : eval(klass)
+      symbol.respond_to?(:constantize) ? klass.constantize : eval(klass)
     rescue NameError
-      raise(ArgumentError, "Could not find #{root} class: #{klass} for #{appender}")
-    end
-  end
-
-  def self.named_formatter(formatter)
-    formatter = formatter.to_s
-    klass     = formatter.respond_to?(:camelize) ? formatter.camelize : camelize(formatter)
-    klass     = "SemanticLogger::Formatters::#{klass}"
-    begin
-      formatter.respond_to?(:constantize) ? klass.constantize : eval(klass)
-    rescue NameError => exc
-      raise(ArgumentError, "Could not find formatter class: #{klass} for #{appender}")
+      raise(ArgumentError, "Could not convert symbol: #{symbol} to a class in: #{namespace}. Looking for: #{klass}")
     end
   end
 

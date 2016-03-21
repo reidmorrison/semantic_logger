@@ -42,14 +42,6 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   #       'tcp://localhost:12201'
   #     Default: 'udp://localhost:12201'
   #
-  #   host: [String]
-  #     Name of this host to appear in log messages.
-  #     Default: Socket.gethostname
-  #
-  #   application: [String]
-  #     Name of this application to appear in log messages.
-  #     Default: SemanticLogger.application
-  #
   #   max_size: [String]
   #     Max udp packet size. Ignored when protocol is :tcp
   #     Default: "WAN"
@@ -68,6 +60,14 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
+  #
+  #   host: [String]
+  #     Name of this host to appear in log messages.
+  #     Default: SemanticLogger.host
+  #
+  #   application: [String]
+  #     Name of this application to appear in log messages.
+  #     Default: SemanticLogger.application
   def initialize(options = {}, &block)
     @gelf_options = options.dup
     @url          = @gelf_options.delete(:url) || 'udp://localhost:12201'
@@ -81,7 +81,6 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
     raise(ArgumentError, "Invalid protocol value: #{protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(protocol)
 
     @gelf_options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
-    @gelf_options[:facility] = @gelf_options.delete(:application) || SemanticLogger.application
 
     options = {
       level:     @gelf_options.delete(:level),
@@ -95,13 +94,14 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
 
   # Re-open after process fork
   def reopen
+    @gelf_options[:facility]        = application
     @notifier                       = GELF::Notifier.new(@server, @port, @max_size, @gelf_options)
     @notifier.collect_file_and_line = false
   end
 
   # Returns [Hash] of parameters to send
   def call(log, logger)
-    h = log.to_h
+    h = log.to_h(host, application)
     h.delete(:time)
     h[:timestamp]     = log.time.utc.to_f
     h[:level]         = logger.map_level(log)

@@ -36,6 +36,14 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
+  #
+  #   host: [String]
+  #     Name of this host to appear in log messages.
+  #     Default: SemanticLogger.host
+  #
+  #   application: [String]
+  #     Name of this application to appear in log messages.
+  #     Default: SemanticLogger.application
   def initialize(options, &block)
     options       = options.dup
     @index        = options.delete(:index) || 'semantic_logger'

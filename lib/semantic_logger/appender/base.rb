@@ -15,6 +15,7 @@ module SemanticLogger
     class Base < SemanticLogger::Base
       # Every logger has its own formatter
       attr_accessor :formatter
+      attr_writer :application, :host
 
       # Returns the current log level if set, otherwise it logs everything it receives
       def level
@@ -47,6 +48,16 @@ module SemanticLogger
         Proc.new { |log, logger| formatter.call(log, logger) }
       end
 
+      # Allow application name to be set globally or per appender
+      def application
+        @application || SemanticLogger.application
+      end
+
+      # Allow host name to be set globally or per appender
+      def host
+        @host || SemanticLogger.host
+      end
+
       private
 
       # Initializer for Abstract Class SemanticLogger::Appender
@@ -66,17 +77,23 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
+      #
+      #   host: [String]
+      #     Name of this host to appear in log messages.
+      #     Default: SemanticLogger.host
+      #
+      #   application: [String]
+      #     Name of this application to appear in log messages.
+      #     Default: SemanticLogger.application
       def initialize(options={}, &block)
         # Backward compatibility
-        options    = {level: options} unless options.is_a?(Hash)
-        options    = options.dup
-        level      = options.delete(:level)
-        filter     = options.delete(:filter)
-        @formatter = options.delete(:formatter)
-        @formatter = self.class.extract_formatter(@formatter) if @formatter.is_a?(Symbol)
-        @formatter ||= block
-        # Default to #call method for formatting if defined for an appender
-        @formatter ||= (respond_to?(:call) ? self : SemanticLogger::Formatters::Default.new)
+        options      = {level: options} unless options.is_a?(Hash)
+        options      = options.dup
+        level        = options.delete(:level)
+        filter       = options.delete(:filter)
+        @formatter   = self.class.extract_formatter(options.delete(:formatter), &block)
+        @application = options.delete(:application)
+        @host        = options.delete(:host)
         raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
 
         # Appenders don't take a class name, so use this class name if an appender
@@ -91,9 +108,29 @@ module SemanticLogger
         @level_index || 0
       end
 
-      # Return formatter for supplied Symbol
-      def self.extract_formatter(formatter)
-        SemanticLogger.send(:named_formatter, formatter).new
+      # Return formatter that responds to call
+      def self.extract_formatter(formatter, &block)
+        case
+        when formatter.is_a?(Symbol)
+          SemanticLogger.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
+        when formatter.respond_to?(:call)
+          formatter
+        when block
+          block
+        when respond_to?(:call)
+          self
+        else
+          SemanticLogger::Formatters::Default.new
+        end
+      end
+
+      APPENDER_OPTIONS = [:level, :formatter, :filter, :application, :host].freeze
+
+      # Returns [Hash] the appender common options from the supplied Hash
+      def extract_appender_options!(options)
+        appender_options = {}
+        options.each_pair { |key, value| appender_options[key] = value if APPENDER_OPTIONS.include?(key) }
+        appender_options
       end
 
     end

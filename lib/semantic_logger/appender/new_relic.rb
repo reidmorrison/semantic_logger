@@ -39,7 +39,7 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
 
   # Returns [Hash] of parameters to send to New Relic.
   def call(log, logger)
-    h = log.to_h
+    h = log.to_h(host, application)
     h.delete(:time)
     h.delete(:exception)
     {metric: log.metric, custom_params: h}

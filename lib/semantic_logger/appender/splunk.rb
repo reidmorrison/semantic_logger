@@ -37,7 +37,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   #     Not required if username and password are supplied.
   #
   #   :host [String]
-  #      Splunk host name.
+  #      Splunk server host name.
   #      Default: 'localhost'
   #
   #   :port [Integer]
@@ -61,6 +61,17 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   #   :ssl_client_key [OpenSSL::PKey::RSA | OpenSSL::PKey::DSA]
   #     Client key.
   #
+  #   source_type: [String]
+  #     Optional: Source type to display in Splunk
+  #
+  #   application: [String]
+  #     The :source forwarded to Splunk
+  #     Default: SemanticLogger.application
+  #
+  #   host: [String]
+  #     Name of this host to appear in log messages.
+  #     Default: SemanticLogger.host
+  #
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
   #     Override the log level for this appender.
   #     Default: SemanticLogger.default_level
@@ -79,13 +90,9 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
     @config         = options.dup
     @config[:level] = _deprecated_level if _deprecated_level
     @index          = @config.delete(:index) || 'main'
+    @source_type    = options.delete(:source_type)
 
-    options = {
-      level:     @config.delete(:level) || :error,
-      formatter: @config.delete(:formatter),
-      filter:    @config.delete(:filter)
-    }
-
+    options = extract_appender_options!(@config)
     reopen
 
     # Pass on the level and custom formatter if supplied
@@ -96,7 +103,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   # open the handles to resources
   def reopen
     # Connect to splunk. Connect is a synonym for creating a Service by hand and calling login.
-    self.service       = Splunk::connect(config)
+    self.service       = Splunk::connect(@config)
 
     # The index we are logging to
     self.service_index = service.indexes[index]
@@ -105,7 +112,12 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   # Log the message to Splunk
   def log(log)
     return false unless should_log?(log)
-
+    msg               = {
+      source: logger.application,
+      host:   logger.host,
+      time:   log.time.utc.to_f
+    }
+    msg[:source_type] = @source_type if @source_type
     service_index.submit(log.message, formatter.call(log, self))
     true
   end
@@ -114,11 +126,6 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
   def call(log, _logger)
-    h = log.to_h
-    h.delete(:message)
-    h.delete(:application)
-    h.delete(:host)
-    h.delete(:time)
-    h
+    log.to_h(nil, nil)
   end
 end

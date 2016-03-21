@@ -175,11 +175,9 @@ module SemanticLogger
     end
 
     # Returns [Hash] representation of this log entry
-    def to_h
+    def to_h(host = SemanticLogger.host, application = SemanticLogger.application)
       # Header
-      h          = {
-        host:        SemanticLogger.host,
-        application: SemanticLogger.application,
+      h               = {
         name:        name,
         pid:         $$,
         thread:      thread_name,
@@ -187,7 +185,9 @@ module SemanticLogger
         level:       level,
         level_index: level_index,
       }
-      file, line = file_name_and_line
+      h[:host]        = host if host
+      h[:application] = application if application
+      file, line      = file_name_and_line
       if file
         h[:file] = file
         h[:line] = line.to_i

@@ -211,9 +211,14 @@ module SemanticLogger
       # or Proc
       raise ':filter must be a Regexp or Proc' unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
 
-      @filter    = filter.is_a?(Regexp) ? filter.freeze : filter
-      @name      = klass.is_a?(String) ? klass : klass.name
-      self.level = level unless level.nil?
+      @filter = filter.is_a?(Regexp) ? filter.freeze : filter
+      @name   = klass.is_a?(String) ? klass : klass.name
+      if level.nil?
+        # Allow the global default level to determine this loggers log level
+        @level_index = nil
+      else
+        self.level = level
+      end
     end
 
     # Return the level index for fast comparisons

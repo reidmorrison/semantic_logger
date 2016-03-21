@@ -43,7 +43,7 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
 
   # Returns [Hash] of parameters to send to Bugsnag.
   def call(log, logger)
-    h            = log.to_h
+    h            = log.to_h(host, application)
     h[:severity] = log_level(log)
     h.delete(:time)
     h.delete(:exception)
