@@ -7,10 +7,12 @@ module Appender
 
     describe SemanticLogger::Appender::Elasticsearch do
       before do
-        @appender = SemanticLogger::Appender::Elasticsearch.new(
-          url: 'http://localhost:9200'
-        )
-        @message  = 'AppenderElasticsearchTest log message'
+        Net::HTTP.stub_any_instance(:start, true) do
+          @appender = SemanticLogger::Appender::Elasticsearch.new(
+            url: 'http://localhost:9200'
+          )
+        end
+        @message = 'AppenderElasticsearchTest log message'
       end
 
       it 'logs to daily indexes' do
