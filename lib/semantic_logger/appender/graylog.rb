@@ -69,9 +69,9 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(options = {}, &block)
-    @gelf_options = options.dup
-    @url          = @gelf_options.delete(:url) || 'udp://localhost:12201'
-    @max_size     = @gelf_options.delete(:max_size) || 'WAN'
+    options   = options.dup
+    @url      = options.delete(:url) || 'udp://localhost:12201'
+    @max_size = options.delete(:max_size) || 'WAN'
 
     uri      = URI.parse(@url)
     @server  = uri.host
@@ -80,16 +80,13 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
 
     raise(ArgumentError, "Invalid protocol value: #{protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(protocol)
 
-    @gelf_options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
+    options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
 
-    options = {
-      level:     @gelf_options.delete(:level),
-      filter:    @gelf_options.delete(:filter),
-      formatter: @gelf_options.delete(:formatter)
-    }
-    reopen
+    @gelf_options = options
+    options       = extract_appender_options!(options)
 
     super(options, &block)
+    reopen
   end
 
   # Re-open after process fork

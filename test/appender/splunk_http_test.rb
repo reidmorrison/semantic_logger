@@ -7,10 +7,12 @@ module Appender
 
     describe SemanticLogger::Appender::SplunkHttp do
       before do
-        @appender = SemanticLogger::Appender::SplunkHttp.new(
-          url:   'http://localhost:8088/path',
-          token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-        )
+        Net::HTTP.stub_any_instance(:start, true) do
+          @appender = SemanticLogger::Appender::SplunkHttp.new(
+            url:   'http://localhost:8088/path',
+            token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+          )
+        end
         @message  = 'AppenderSplunkHttpTest log message'
       end
 
@@ -20,7 +22,7 @@ module Appender
           @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, @message)
           end
-          body = decompress_data(request.body)
+          body    = decompress_data(request.body)
           message = JSON.parse(body)
           assert_equal @message, message['event']['message']
           assert_equal level.to_s, message['event']['level']
@@ -53,7 +55,7 @@ module Appender
           @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, @message, {key1: 1, key2: 'a'})
           end
-          body = decompress_data(request.body)
+          body    = decompress_data(request.body)
           message = JSON.parse(body)
           assert message['event'], message.ai
           assert_equal @message, message['event']['message']

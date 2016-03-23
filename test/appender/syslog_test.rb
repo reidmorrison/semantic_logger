@@ -15,7 +15,7 @@ module Appender
             syslog_appender.debug 'AppenderSyslogTest log message'
           end
         end
-        assert_match /D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message
+        assert_match(/D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
       it 'handle remote syslog over TCP' do
@@ -28,7 +28,7 @@ module Appender
             end
           end
         end
-        assert_match /<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message
+        assert_match(/<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message)
       end
 
       it 'handle remote syslog over UDP' do
@@ -37,7 +37,7 @@ module Appender
         UDPSocket.stub_any_instance(:send, -> msg, num, host, port { message = msg }) do
           syslog_appender.debug 'AppenderSyslogTest log message'
         end
-        assert_match /<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message
+        assert_match(/<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
       # Should be able to log each level.

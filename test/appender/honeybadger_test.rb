@@ -7,6 +7,7 @@ module Appender
       before do
         @appender = SemanticLogger::Appender::Honeybadger.new(:trace)
         @message  = 'AppenderHoneybadgerTest log message'
+        SemanticLogger.backtrace_level = :error
       end
 
       SemanticLogger::LEVELS.each do |level|
@@ -17,7 +18,12 @@ module Appender
           end
           assert_equal @message, hash[:error_message]
           assert_equal 'SemanticLogger::Appender::Honeybadger', hash[:error_class]
-          assert_equal true, hash.has_key?(:backtrace)
+
+          if [:error, :fatal].include?(level)
+            assert hash.has_key?(:backtrace)
+          else
+            refute hash.has_key?(:backtrace)
+          end
           assert_equal true, hash.has_key?(:context)
           assert_equal level, hash[:context][:level]
         end

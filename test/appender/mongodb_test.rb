@@ -67,7 +67,6 @@ module Appender
         end
 
         it 'handle message without payload' do
-          log = SemanticLogger::Log.new(:debug)
           @appender.debug('hello world')
 
           document = @appender.collection.find_one
@@ -94,7 +93,7 @@ module Appender
             assert_equal 12345, document['tracking_number']
             assert_equal 'HSSKLEU@JDK767', document['session_id']
             assert_equal $$, document['pid']
-            assert_equal 'test', document['host']
+            assert_equal 'test', document['host'], document.ai
             assert_equal 'test_application', document['application']
           end
         end

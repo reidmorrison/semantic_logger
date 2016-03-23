@@ -1,12 +1,19 @@
 require 'json'
 module SemanticLogger
   module Formatters
-    class Json
+    class Json < Raw
+      # Default JSON time format is ISO8601
+      def initialize(options = {})
+        options               = options.dup
+        options[:time_format] = :iso_8601 unless options.has_key?(:time_format)
+        super(options)
+      end
+
       # Returns log messages in JSON format
       def call(log, logger)
-        h = log.to_h(logger.host, logger.application)
+        h = super(log, logger)
         h.delete(:time)
-        h[:timestamp] = log.time.utc.iso8601(defined?(JRuby) ? 3 : 6)
+        h[:timestamp] = format_time(log.time)
         h.to_json
       end
 

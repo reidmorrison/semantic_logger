@@ -23,19 +23,19 @@ class CompatibilityTest < Minitest::Test
     it '#add' do
       @logger.add(Logger::INFO, 'hello world', 'progname') { 'Data' }
       SemanticLogger.flush
-      assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data -- \"progname\"/, @mock_logger.message
+      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data -- \"progname\"/, @mock_logger.message)
     end
 
     it '#log' do
       @logger.log(Logger::FATAL, 'hello world', 'progname') { 'Data' }
       SemanticLogger.flush
-      assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data -- \"progname\"/, @mock_logger.message
+      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data -- \"progname\"/, @mock_logger.message)
     end
 
     it '#unknown' do
       @logger.unknown('hello world') { 'Data' }
       SemanticLogger.flush
-      assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message
+      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message)
     end
 
     it '#unknown? as error?' do
@@ -51,7 +51,7 @@ class CompatibilityTest < Minitest::Test
     it '#<< as info' do
       @logger << 'hello world'
       SemanticLogger.flush
-      assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world/, @mock_logger.message
+      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world/, @mock_logger.message)
     end
 
     it '#progname= as #name=' do
@@ -92,14 +92,14 @@ class CompatibilityTest < Minitest::Test
       @logger.close
       @logger.info('hello world') { 'Data' }
       SemanticLogger.flush
-      assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message
+      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message)
     end
 
     it '#reopen NOOP' do
       @logger.reopen
       @logger.info('hello world') { 'Data' }
       SemanticLogger.flush
-      assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message
+      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message)
     end
 
   end

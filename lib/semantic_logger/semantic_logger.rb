@@ -63,13 +63,15 @@ module SemanticLogger
   # Returns [String] name of this application for logging purposes
   # Note: Not all appenders use `application`
   def self.application
-    @@application ||= 'Semantic Logger'
+    @@application
   end
 
   # Override the default application
   def self.application=(application)
     @@application = application
   end
+
+  @@application = 'Semantic Logger'
 
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger
@@ -434,7 +436,7 @@ module SemanticLogger
     else
       options[:logger] = appender
     end
-    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}"
+    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}" if $VERBOSE
     options
   end
 

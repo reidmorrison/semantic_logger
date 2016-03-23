@@ -19,7 +19,7 @@ end
 #     index:    'main'
 #   )
 class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
-  attr_reader :config, :index, :service, :service_index
+  attr_reader :config, :index, :service, :service_index, :source_type
 
   # Write to Splunk.
   #
@@ -86,24 +86,23 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
-  def initialize(options, _deprecated_level = nil, &block)
+  def initialize(options = {}, _deprecated_level = nil, &block)
     @config         = options.dup
     @config[:level] = _deprecated_level if _deprecated_level
     @index          = @config.delete(:index) || 'main'
     @source_type    = options.delete(:source_type)
 
     options = extract_appender_options!(@config)
-    reopen
-
     # Pass on the level and custom formatter if supplied
     super(options, &block)
+    reopen
   end
 
   # After forking an active process call #reopen to re-open
   # open the handles to resources
   def reopen
     # Connect to splunk. Connect is a synonym for creating a Service by hand and calling login.
-    self.service       = Splunk::connect(@config)
+    self.service       = Splunk::connect(config)
 
     # The index we are logging to
     self.service_index = service.indexes[index]
@@ -112,20 +111,25 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
   # Log the message to Splunk
   def log(log)
     return false unless should_log?(log)
-    msg               = {
-      source: logger.application,
-      host:   logger.host,
-      time:   log.time.utc.to_f
-    }
-    msg[:source_type] = @source_type if @source_type
-    service_index.submit(log.message, formatter.call(log, self))
+    event = formatter.call(log, self)
+    service_index.submit(event.delete(:message), event)
     true
   end
 
-  # Returns [String] JSON to send to Splunk
+  # Returns [Hash] To send to Splunk
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
-  def call(log, _logger)
-    log.to_h(nil, nil)
+  def call(log, logger)
+    h = log.to_h(nil, nil)
+    h.delete(:time)
+    message               = {
+      source:  logger.application,
+      host:    logger.host,
+      time:    log.time.utc.to_f,
+      message: h.delete(:message),
+      event:   h
+    }
+    message[:source_type] = source_type if source_type
+    message
   end
 end

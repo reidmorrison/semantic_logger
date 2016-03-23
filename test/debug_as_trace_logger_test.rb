@@ -81,14 +81,14 @@ class DebugAsTraceLoggerTest < Minitest::Test
           @logger.level = :trace
           @logger.debug('hello world', @hash) { "Calculations" }
           SemanticLogger.flush
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
         end
 
         it 'log trace as trace' do
           @logger.level = :trace
           @logger.trace('hello world', @hash) { "Calculations" }
           SemanticLogger.flush
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
         end
       end
     end

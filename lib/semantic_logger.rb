@@ -24,6 +24,7 @@ module SemanticLogger
     autoload :Splunk,           'semantic_logger/appender/splunk'
     autoload :SplunkHttp,       'semantic_logger/appender/splunk_http'
     autoload :Syslog,           'semantic_logger/appender/syslog'
+    autoload :Tcp,              'semantic_logger/appender/tcp'
     autoload :Wrapper,          'semantic_logger/appender/wrapper'
   end
 
@@ -32,10 +33,12 @@ module SemanticLogger
   end
 
   module Formatters
+    autoload :Base,             'semantic_logger/formatters/base'
     autoload :Color,            'semantic_logger/formatters/color'
     autoload :Default,          'semantic_logger/formatters/default'
     autoload :Json,             'semantic_logger/formatters/json'
     autoload :Raw,              'semantic_logger/formatters/raw'
+    autoload :Syslog,           'semantic_logger/formatters/syslog'
   end
 
   module Metrics

@@ -27,25 +27,19 @@ module SemanticLogger
         # NOOP
       end
 
-      # DEPRECATED: use SemanticLogger::Formatters::Default.new
+      # Returns [SemanticLogger::Formatters::Default] formatter default for this Appender
       def default_formatter
-        warn '[DEPRECATION] SemanticLogger::Appender::Base.default_level is deprecated.  Please use SemanticLogger::Formatters::Default.new instead.'
-        formatter = SemanticLogger::Formatters::Default.new
-        Proc.new { |log, logger| formatter.call(log, logger) }
+        SemanticLogger::Formatters::Default.new
       end
 
       # DEPRECATED: use SemanticLogger::Formatters::Color.new
       def self.colorized_formatter
-        warn '[DEPRECATION] SemanticLogger::Appender::Base.colorized_formatter is deprecated.  Please use SemanticLogger::Formatters::Color.new instead.'
-        formatter = SemanticLogger::Formatters::Color.new
-        Proc.new { |log, logger| formatter.call(log, logger) }
+        SemanticLogger::Formatters::Color.new
       end
 
       # DEPRECATED: use SemanticLogger::Formatters::Json.new
       def self.json_formatter
-        warn '[DEPRECATION] SemanticLogger::Appender::Base.json_formatter is deprecated.  Please use SemanticLogger::Formatters::Json.new instead.'
-        formatter = SemanticLogger::Formatters::Json.new
-        Proc.new { |log, logger| formatter.call(log, logger) }
+        SemanticLogger::Formatters::Json.new
       end
 
       # Allow application name to be set globally or per appender
@@ -91,7 +85,7 @@ module SemanticLogger
         options      = options.dup
         level        = options.delete(:level)
         filter       = options.delete(:filter)
-        @formatter   = self.class.extract_formatter(options.delete(:formatter), &block)
+        @formatter   = extract_formatter(options.delete(:formatter), &block)
         @application = options.delete(:application)
         @host        = options.delete(:host)
         raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
@@ -109,10 +103,21 @@ module SemanticLogger
       end
 
       # Return formatter that responds to call
-      def self.extract_formatter(formatter, &block)
+      # Supports formatter supplied as:
+      # - Symbol
+      # - Hash ( Symbol => { options })
+      # - Instance of any of SemanticLogger::Formatters
+      # - Proc
+      # - Any object that responds to :call
+      # - If none of the above apply, then the supplied block is returned as the formatter.
+      # - Otherwise an instance of the default formatter is returned.
+      def extract_formatter(formatter, &block)
         case
         when formatter.is_a?(Symbol)
           SemanticLogger.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
+        when formatter.is_a?(Hash) && formatter.size > 0
+          fmt, options = formatter.first
+          SemanticLogger.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
         when formatter.respond_to?(:call)
           formatter
         when block
@@ -120,7 +125,7 @@ module SemanticLogger
         when respond_to?(:call)
           self
         else
-          SemanticLogger::Formatters::Default.new
+          default_formatter
         end
       end
 

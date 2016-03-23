@@ -88,11 +88,6 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     @read_timeout     = options.delete(:read_timeout) || 1.0
     @continue_timeout = options.delete(:continue_timeout) || 1.0
 
-    # Use Default JSON Formatter unless another was supplied
-    unless options.has_key?(:formatter)
-      options[:formatter] = block || (respond_to?(:call) ? self : SemanticLogger::Formatters::Json.new)
-    end
-
     raise(ArgumentError, 'Missing mandatory parameter :url') unless @url
 
     @header                     = {
@@ -121,11 +116,11 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
     else
       @port ||= HTTP.http_default_port
     end
-
-    reopen
+    @http = nil
 
     # Pass on the level and custom formatter if supplied
     super(options)
+    reopen
   end
 
   # Re-open after process fork
@@ -160,6 +155,11 @@ class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
   end
 
   private
+
+  # Use JSON Formatter by default
+  def default_formatter
+    SemanticLogger::Formatters::Json.new
+  end
 
   def compress_data(data)
     str = StringIO.new

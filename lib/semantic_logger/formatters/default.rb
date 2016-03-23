@@ -1,12 +1,15 @@
 module SemanticLogger
   module Formatters
-    class Default
-      # Default log formatter
+    class Default < Base
+      # Default text log format
       #  Generates logs of the form:
-      #    2011-07-19 14:36:15.660 D [1149:ScriptThreadProcess] Rails -- Hello World
+      #    2011-07-19 14:36:15.660235 D [1149:ScriptThreadProcess] Rails -- Hello World
       def call(log, logger)
-        # Header with date, time, log level and process info
-        message = "#{log.formatted_time} #{log.level_to_s} [#{log.process_info}]"
+        # Date & time
+        message = time_format.nil? ? '' : "#{format_time(log.time)} "
+
+        # Log level and process info
+        message << "#{log.level_to_s} [#{log.process_info}]"
 
         # Tags
         message << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)

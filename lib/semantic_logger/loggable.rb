@@ -34,6 +34,11 @@ module SemanticLogger
           @semantic_logger ||= SemanticLogger[self]
         end
 
+        # Replace instance class level logger
+        def self.logger=(logger)
+          @semantic_logger = logger
+        end
+
         # Returns [SemanticLogger::Logger] instance level logger
         def logger
           @semantic_logger ||= self.class.logger

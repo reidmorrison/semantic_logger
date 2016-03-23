@@ -9,7 +9,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - Consolidate formatter argument extraction.
-- Log warning at 1,000 and info at 100 if logging appenders back up.
+- Log warning at 1,000 and info at 100 queued messages if logging appenders back up.
 
 ### Fixed
 - `SemanticLogger.on_metric` when using a Symbol was not resolving to the correct namespace.

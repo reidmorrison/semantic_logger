@@ -111,15 +111,12 @@ module SemanticLogger
         @collection_size = options.delete(:collection_size) || 1024**3
         @collection_max  = options.delete(:collection_max)
 
-        options[:formatter] ||= :raw
-
-        reopen
-
         # Create the collection and necessary indexes
         create_indexes
 
         # Set the log level and formatter
         super(options, &block)
+        reopen
       end
 
       # After forking an active process call #reopen to re-open
@@ -169,6 +166,11 @@ module SemanticLogger
         true
       end
 
+      private
+
+      def default_formatter
+        SemanticLogger::Formatters::Raw.new
+      end
     end
   end
 end

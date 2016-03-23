@@ -17,7 +17,7 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
   #     Override the log level for this appender.
   #     Default: :error
   #
-  #   formatter: [Object|Proc]
+  #   formatter: [Object|Proc|Symbol|Hash]
   #     An instance of a class that implements #call, or a Proc to be used to format
   #     the output from this appender
   #     Default: Use the built-in formatter (See: #call)
@@ -36,29 +36,36 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(options = {}, &block)
-    options  = {level: options} unless options.is_a?(Hash)
-    @options = options.dup
-    level    = @options.delete(:level) || :error
-
-    super(level, &block)
+    options         = options.is_a?(Hash) ? options.dup : {level: options}
+    options[:level] ||= :error
+    super(options, &block)
   end
 
   # Send an error notification to honeybadger
   def log(log)
     return false unless should_log?(log)
 
+    context = formatter.call(log, self)
     if log.exception
-      Honeybadger.notify(log.exception, log.to_h(host, application))
+      context.delete(:exception)
+      Honeybadger.notify(log.exception, context)
     else
       message = {
-        error_class:   log.name,
-        error_message: log.message,
-        backtrace:     log.backtrace,
-        context:       log.to_h(host, application),
+        error_class:   context.delete(:name),
+        error_message: context.delete(:message),
+        context:       context
       }
+      message[:backtrace] = log.backtrace if log.backtrace
       Honeybadger.notify(message)
     end
     true
+  end
+
+  private
+
+  # Use Raw Formatter by default
+  def default_formatter
+    SemanticLogger::Formatters::Raw.new
   end
 
 end

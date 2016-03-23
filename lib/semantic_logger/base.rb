@@ -216,6 +216,7 @@ module SemanticLogger
       if level.nil?
         # Allow the global default level to determine this loggers log level
         @level_index = nil
+        @level       = nil
       else
         self.level = level
       end

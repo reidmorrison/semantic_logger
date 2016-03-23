@@ -97,7 +97,7 @@ class AppenderFileTest < Minitest::Test
               SemanticLogger.stub(:appenders, [@appender]) do
                 TestAttribute.logger.send(level, "hello #{level}", @hash)
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name} loggable_test.rb:\d+\] TestAttribute -- hello #{level} -- #{@hash_str}/, @mock_logger.message
+                assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name} loggable_test.rb:\d+\] TestAttribute -- hello #{level} -- #{@hash_str}/, @mock_logger.message)
               end
             end
           end
@@ -107,7 +107,7 @@ class AppenderFileTest < Minitest::Test
               SemanticLogger.stub(:appenders, [@appender]) do
                 TestAttribute.new.logger.send(level, "hello #{level}", @hash)
                 SemanticLogger.flush
-                assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name} loggable_test.rb:\d+\] TestAttribute -- hello #{level} -- #{@hash_str}/, @mock_logger.message
+                assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name} loggable_test.rb:\d+\] TestAttribute -- hello #{level} -- #{@hash_str}/, @mock_logger.message)
               end
             end
           end

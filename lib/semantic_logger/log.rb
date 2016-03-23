@@ -163,12 +163,14 @@ module SemanticLogger
     if defined? JRuby
       # Return the Time as a formatted string
       # JRuby only supports time in ms
+      # DEPRECATED
       def formatted_time
         "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%03d' % (time.usec/1000)}"
       end
     else
       # Return the Time as a formatted string
       # Ruby MRI supports micro seconds
+      # DEPRECATED
       def formatted_time
         "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%06d' % (time.usec)}"
       end

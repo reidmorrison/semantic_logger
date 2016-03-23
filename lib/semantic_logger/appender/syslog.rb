@@ -184,9 +184,8 @@ module SemanticLogger
           end
         end
 
-        reopen
-
         super(options, &block)
+        reopen
       end
 
       # After forking an active process call #reopen to re-open
@@ -259,6 +258,25 @@ module SemanticLogger
           message << log.backtrace_to_s
         end
         message
+      end
+
+      private
+
+      # Extract Syslog formatter options
+      def format_options(options, protocol, &block)
+        opts      = options.delete(:options)
+        facility  = options.delete(:facility)
+        level_map = options.delete(:level_map)
+        if formatter = options.delete(:formatter)
+          extract_formatter(formatter)
+        else
+          case protocol
+          when :syslog
+            extract_formatter(syslog: {options: opts, facility: facility, level_map: level_map})
+          when :tcp, :udp
+            extract_formatter(syslog: {options: opts, facility: facility, level_map: level_map})
+          end
+        end
       end
 
       # Format the syslog packet so it can be sent over TCP or UDP

@@ -19,7 +19,7 @@ module Appender
           log.time  = Time.now
           log.level = :debug
           @appender.log(log)
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] /, @mock_logger.message
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] /, @mock_logger.message)
         end
 
         it 'handle nil message and payload' do
@@ -28,7 +28,7 @@ module Appender
           log.level = :debug
           log.name  = 'class'
           @appender.log(log)
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class/, @mock_logger.message
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class/, @mock_logger.message)
         end
 
         it 'handle nil payload' do
@@ -38,7 +38,7 @@ module Appender
           log.name    = 'class'
           log.message = 'hello world'
           @appender.log(log)
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world/, @mock_logger.message
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world/, @mock_logger.message)
         end
 
         it 'handle payload' do
@@ -49,7 +49,7 @@ module Appender
           log.message = 'hello world'
           log.payload = @hash
           @appender.log(log)
-          assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world -- #{@hash_str}/, @mock_logger.message
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\] class -- hello world -- #{@hash_str}/, @mock_logger.message)
         end
       end
 
@@ -58,7 +58,7 @@ module Appender
         Logger::Severity.constants.each do |level|
           it "log #{level.downcase.to_sym} info" do
             @appender.log SemanticLogger::Log.new(level.downcase.to_sym, 'thread', 'class', 'hello world', @hash, Time.now)
-            assert_match /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:thread\] class -- hello world -- #{@hash_str}/, @mock_logger.message
+            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:thread\] class -- hello world -- #{@hash_str}/, @mock_logger.message)
           end
         end
       end
