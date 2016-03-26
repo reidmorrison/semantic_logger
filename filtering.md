@@ -45,7 +45,7 @@ logger2 = SemanticLogger['OtherClass']
 logger2.info "This will be logged to development.log and 'my_class.log'"
 ~~~
 
-Example2. Using a Proc filter, log everything to one file, log everything except
+Example Using a Proc filter, log everything to one file, log everything except
 messages from a particular class to the second file:
 
 ~~~ruby
@@ -67,6 +67,24 @@ logger1.info "This will _not_ be logged to summary.log"
 logger2 = SemanticLogger['OtherClass']
 logger2.info "This will be logged to summary.log"
 ~~~
+
+Example using filter to change log messages.
+
+Resque logs the entire job payload which may contain private information.
+Strip out the job data since from the following log messages:
+* log "got: #{job.inspect}"
+* log "done: #{job.inspect}"
+
+~~~ruby
+Resque.logger.filter = -> log do
+  if (log.name == 'Resque') && (match = log.message.to_s.match(/\A(got|done): /))
+    log.message = match[1]
+  end
+  # After the message has been modified, make sure it is logged:
+  true
+end
+~~~
+
 
 ### Logger specific filtering
 
