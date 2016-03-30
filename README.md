@@ -38,7 +38,7 @@ instead of Semantic Logger directly since it will automatically replace the Rail
 ## Supports
 
 Semantic Logger is tested and supported on the following Ruby platforms:
-- Ruby 2.0 and above
+- Ruby 2.1 and above
 - JRuby 1.7 and above
 - JRuby 9.0 and above
 - Rubinius 2.5 and above

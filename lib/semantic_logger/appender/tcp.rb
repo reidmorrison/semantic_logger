@@ -180,8 +180,6 @@ module SemanticLogger
         # Use the internal logger so that errors with remote logging are only written locally.
         Net::TCPClient.logger              = SemanticLogger::Logger.logger.dup
         Net::TCPClient.logger.name         = 'Net::TCPClient'
-        Net::TCPClient::Socket.logger      = SemanticLogger::Logger.logger.dup
-        Net::TCPClient::Socket.logger.name = 'Net::TCPClient::Socket'
 
         options = extract_appender_options!(@options)
         super(options, &block)
