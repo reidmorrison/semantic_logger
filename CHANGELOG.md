@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Add Raw Formatter.
 - Add standard application and host variables for all appenders.
+- Add TCP log appender, with support for SSL connections.
 
 ### Changed
 - Consolidate formatter argument extraction.

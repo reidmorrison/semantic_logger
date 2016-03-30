@@ -2,7 +2,7 @@ source 'http://rubygems.org'
 
 gemspec
 
-gem 'rake'
+gem 'rake', '~> 10.0'
 gem 'minitest'
 gem 'minitest-reporters'
 gem 'minitest-stub_any_instance'
@@ -14,7 +14,8 @@ gem 'bson_ext', platform: 'ruby'
 # [optional] Syslog appender
 gem 'syslog_protocol'
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
-gem 'net_tcp_client'
+# [optional] TCP appender
+gem 'net_tcp_client', git: 'https://github.com/rocketjob/net_tcp_client'
 # [optional] Splunk appender
 gem 'splunk-sdk-ruby'
 # [optional] Bugsnag appender
