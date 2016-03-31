@@ -134,7 +134,7 @@ module SemanticLogger
       # Returns [Hash] the appender common options from the supplied Hash
       def extract_appender_options!(options)
         appender_options = {}
-        options.each_pair { |key, value| appender_options[key] = value if APPENDER_OPTIONS.include?(key) }
+        APPENDER_OPTIONS.each { |key| appender_options[key] = options.delete(key) if options.has_key?(key) }
         appender_options
       end
 
