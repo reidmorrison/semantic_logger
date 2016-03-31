@@ -4,13 +4,9 @@ layout: default
 
 ## Rails
 
-By including the `rails_semantic_logger` gem, Rails Semantic Logger will
-replace the default Rails logger with Semantic Logger. Without further
-configuration it will log to the existing Rails log file in a more efficient
-multi-threaded way.
-
-By default `rails_semantic_logger` will also change the verbose Rails logging output so that
-in production the Rails output is reduced to a single line.
+The `rails_semantic_logger` gem replaces the default Rails logger with Semantic Logger.
+It also reduces Rails logging output in production to almost a single line
+for every Controller-Action call.
 
 #### Standard Rails log output for a single page request
 
@@ -64,7 +60,8 @@ gem 'awesome_print'
 gem 'rails_semantic_logger'
 ~~~
 
-The gem `awesome_print` is optional, but is recommended to get colorized output of semantic data.
+The gem `awesome_print` is optional, but is recommended to get colorized output of semantic data
+(Hash output).
 
 Install required gems with bundler
 
@@ -98,7 +95,7 @@ config.colorize_logging = false
 
 #### Semantic log output
 
-By default Action Controller and Active Record text messages are converted to semantic data:
+By default Action Controller and Active Record text messages are converted to semantic data (Hash):
 
 ~~~
 Rails -- Started -- { :ip => "127.0.0.1", :method => "GET", :path => "/users" }
@@ -168,6 +165,23 @@ Notes:
 
 * The option :multiline is set to false if not supplied.
 * Has no effect if Awesome Print is not installed.
+
+#### Adding custom data to the Rails Completed log message
+
+During Controller-action processing custom data can be added to the Rails Completed message.
+
+Add a method called `append_info_to_payload` to the controller to modify the payload that is logged:
+
+~~~ruby
+class ThingController
+  private
+
+  def append_info_to_payload(payload)
+    super
+    payload[:user_id] = 42
+  end
+end
+~~~
 
 #### Log file name and line number
 
