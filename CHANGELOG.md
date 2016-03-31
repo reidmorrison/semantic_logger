@@ -3,10 +3,13 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [3.3.0]
 ### Added
 - Add Raw Formatter.
 - Add standard application and host variables for all appenders.
 - Add TCP log appender, with support for SSL connections.
+- Add UDP log appender.
 
 ### Changed
 - Consolidate formatter argument extraction.

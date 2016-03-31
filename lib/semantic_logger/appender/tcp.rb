@@ -15,7 +15,7 @@ module SemanticLogger
     #
     # Features:
     # * JSON Formatted messages.
-    # * Future: SSL encryption.
+    # * SSL encryption.
     # * Transparently reconnect when a connection is lost.
     #
     # Example:
@@ -31,6 +31,14 @@ module SemanticLogger
     #     connect_retry_interval: 0.1,
     #     connect_retry_count:    5
     #   )
+    #
+    # Example, with SSL enabled:
+    #   SemanticLogger.add_appender(
+    #     appender: :tcp,
+    #     server:   'server:3300',
+    #     ssl:      true
+    #   )
+    #
     class Tcp < SemanticLogger::Appender::Base
       attr_accessor :separator
       attr_reader :tcp_client
