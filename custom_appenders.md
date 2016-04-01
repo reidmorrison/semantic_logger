@@ -20,7 +20,7 @@ Basic outline for an Appender:
 ~~~ruby
 require 'semantic_logger'
 
-class SimpleAppender < SemanticLogger::Appender::Base
+class SimpleAppender < SemanticLogger::Subscriber
   def initialize(level=nil, &block)
     # Set the log level and formatter if supplied
     super(level, &block)

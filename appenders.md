@@ -19,6 +19,8 @@ Log messages can be written to one or more of the following destinations at the 
 * New Relic
 * Bugsnag
 * HTTP(S)
+* TCP (+ SSL)
+* UDP
 * MongoDB
 * Logger, log4r, etc.
 
@@ -162,7 +164,7 @@ If not using Rails, the `facility` can be removed, or set to a custom string des
 
 Note: `:trace` level messages are mapped to `:debug`.
 
-### Splunk
+### Splunk HTTP
 
 In order to write messages to the Splunk HTTP Collector, follow the Splunk instructions
 to enable the [HTTP Event Collector](http://dev.splunk.com/view/event-collector/SP-CAAAE7F).
@@ -198,6 +200,12 @@ SemanticLogger.add_appender(
   token:    'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 )
 ~~~
+
+#### Splunk HTTP Performance
+
+In testing against a local Splunk instance the performance was only about 30 log messages per second.
+For much better performance consider using the TCP appender to write to Splunk, it achieved 1,400 messages
+per second with non-ssl. With SSL over TCP to Splunk it was logging just over 1,200 log messages per second.
 
 ### Elasticsearch
 
@@ -441,9 +449,7 @@ Example, customize the JSON being sent:
 
 ~~~ruby
 formatter = Proc.new do |log, logger|
-  h = log.to_h
-  h[:application] = logger.application
-  h[:host]        = logger.host
+  h = log.to_h(logger.host, logger.application)
 
   # Change time from iso8601 to seconds since epoch
   h[:timestamp] = log.time.utc.to_f
@@ -455,6 +461,97 @@ end
 SemanticLogger.add_appender(
   appender:  :http,
   url:       'https://localhost:8088/path',
+  formatter: formatter
+)
+~~~
+
+### TCP Appender (+SSL)
+
+The TCP appender supports sending JSON or other formatted messages to services that can accept log messages
+via TCP or TCP with SSL.
+
+Send messages in JSON format over TCP:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :tcp,
+  server:   'localhost:8088'
+)
+~~~
+
+Send messages in JSON format over TCP with SSL enabled:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :tcp,
+  server:   'localhost:8088',
+  ssl:      true
+)
+~~~
+
+When using self-signed certificates, or to disable verification of the server SSL certificate:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :tcp,
+  server:   'localhost:8088',
+  ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE}
+)
+~~~
+
+Example, customize the message being sent:
+
+~~~ruby
+formatter = Proc.new do |log, logger|
+  h = log.to_h(logger.host, logger.application)
+
+  # Change time from iso8601 to seconds since epoch
+  h[:timestamp] = log.time.utc.to_f
+
+  # Render to JSON
+  h.to_json
+end
+
+SemanticLogger.add_appender(
+  appender: :tcp,
+  server:   'localhost:8088',
+  ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE},
+  formatter: formatter
+)
+~~~
+
+See [Net::TCPClient](https://github.com/rocketjob/net_tcp_client) for the remaining options that can be set when the appender is added.
+
+### UDP Appender
+
+The UDP appender supports sending JSON or other formatted messages to services that can accept log messages
+via UDP.
+
+Send messages in JSON format over UDP:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :udp,
+  server:   'localhost:8088'
+)
+~~~
+
+Example, customize the message being sent:
+
+~~~ruby
+formatter = Proc.new do |log, logger|
+  h = log.to_h(logger.host, logger.application)
+
+  # Change time from iso8601 to seconds since epoch
+  h[:timestamp] = log.time.utc.to_f
+
+  # Render to JSON
+  h.to_json
+end
+
+SemanticLogger.add_appender(
+  appender:  :udp,
+  server:    'localhost:8088',
   formatter: formatter
 )
 ~~~
