@@ -73,7 +73,7 @@ module SemanticLogger
         close
         @socket    = UDPSocket.new
         host, port = server.split(':')
-        @socket.connect(host, port)
+        @socket.connect(host, port.to_i)
       end
 
       # Write the log using the specified protocol and server.
