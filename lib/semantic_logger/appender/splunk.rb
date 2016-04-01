@@ -18,7 +18,7 @@ end
 #     scheme:   :https,
 #     index:    'main'
 #   )
-class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
+class SemanticLogger::Appender::Splunk < SemanticLogger::Subscriber
   attr_reader :config, :index, :service, :service_index, :source_type
 
   # Write to Splunk.
@@ -92,7 +92,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Appender::Base
     @index          = @config.delete(:index) || 'main'
     @source_type    = options.delete(:source_type)
 
-    options = extract_appender_options!(@config)
+    options = extract_subscriber_options!(@config)
     # Pass on the level and custom formatter if supplied
     super(options, &block)
     reopen

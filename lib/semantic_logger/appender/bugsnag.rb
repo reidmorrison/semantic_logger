@@ -9,7 +9,7 @@ end
 # Example:
 #   SemanticLogger.add_appender(appender: :bugsnag)
 #
-class SemanticLogger::Appender::Bugsnag < SemanticLogger::Appender::Base
+class SemanticLogger::Appender::Bugsnag < SemanticLogger::Subscriber
   # Create Bugsnag Error / Exception Appender
   #
   # Parameters

@@ -20,7 +20,7 @@ require 'socket'
 #   )
 module SemanticLogger
   module Appender
-    class Syslog < SemanticLogger::Appender::Base
+    class Syslog < SemanticLogger::Subscriber
 
       # Default mapping of ruby log levels to syslog log levels
       #

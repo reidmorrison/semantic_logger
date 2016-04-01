@@ -4,7 +4,7 @@
 #
 module SemanticLogger
   module Appender
-    class File < SemanticLogger::Appender::Base
+    class File < SemanticLogger::Subscriber
 
       # Create a File Logger appender instance.
       #

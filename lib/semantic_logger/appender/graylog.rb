@@ -18,7 +18,7 @@ end
 #
 # In the Graylog Web UI search screen, it is recommended to include the following fields:
 #  `duration`, `level`, `message`, `metric`, `name`, `tags
-class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
+class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
   # Map Semantic Logger levels to Graylog levels
   LEVEL_MAP = {
     fatal: GELF::FATAL,
@@ -83,7 +83,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Appender::Base
     options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
 
     @gelf_options = options
-    options       = extract_appender_options!(options)
+    options       = extract_subscriber_options!(options)
 
     super(options, &block)
     reopen

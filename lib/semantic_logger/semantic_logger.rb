@@ -92,12 +92,12 @@ module SemanticLogger
   #     For example STDOUT, STDERR, etc.
   #
   #   Or,
-  #   appender: [Symbol|SemanticLogger::Appender::Base]
+  #   appender: [Symbol|SemanticLogger::Subscriber]
   #     A symbol identifying the appender to create.
   #     For example:
   #       :bugsnag, :elasticsearch, :graylog, :http, :mongodb, :new_relic, :splunk_http, :syslog, :wrapper
   #          Or,
-  #     An instance of an appender derived from SemanticLogger::Appender::Base
+  #     An instance of an appender derived from SemanticLogger::Subscriber
   #     For example:
   #       SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path')
   #
@@ -167,7 +167,7 @@ module SemanticLogger
     @@appenders.delete(appender)
   end
 
-  # Returns [SemanticLogger::Appender::Base] a copy of the list of active
+  # Returns [SemanticLogger::Subscriber] a copy of the list of active
   # appenders for debugging etc.
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
@@ -179,6 +179,11 @@ module SemanticLogger
   # appenders
   def self.flush
     SemanticLogger::Logger.flush
+  end
+
+  # Close and flush all appenders
+  def self.close
+    SemanticLogger::Logger.close
   end
 
   # After forking an active process call SemanticLogger.reopen to re-open
@@ -431,7 +436,7 @@ module SemanticLogger
       options[:file_name] = appender
     elsif appender.is_a?(IO)
       options[:io] = appender
-    elsif appender.is_a?(Symbol) || appender.is_a?(Appender::Base)
+    elsif appender.is_a?(Symbol) || appender.is_a?(Subscriber)
       options[:appender] = appender
     else
       options[:logger] = appender
@@ -440,17 +445,17 @@ module SemanticLogger
     options
   end
 
-  # Returns [SemanticLogger::Appender::Base] appender for the supplied options
+  # Returns [SemanticLogger::Subscriber] appender for the supplied options
   def self.appender_from_options(options, &block)
     if options[:io] || options[:file_name]
       SemanticLogger::Appender::File.new(options, &block)
     elsif appender = options.delete(:appender)
       if appender.is_a?(Symbol)
         constantize_symbol(appender).new(options)
-      elsif appender.is_a?(Appender::Base)
+      elsif appender.is_a?(Subscriber)
         appender
       else
-        raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Appender::Base, not: #{appender.inspect}")
+        raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
       end
     elsif options[:logger]
       SemanticLogger::Appender::Wrapper.new(options, &block)

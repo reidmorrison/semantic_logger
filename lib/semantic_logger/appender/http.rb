@@ -15,7 +15,7 @@ require 'json'
 #     appender: :http,
 #     url:      'http://localhost:8088/path'
 #   )
-class SemanticLogger::Appender::Http < SemanticLogger::Appender::Base
+class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   attr_accessor :username, :application, :host, :compress, :header,
     :open_timeout, :read_timeout, :continue_timeout
   attr_reader :http, :url, :server, :port, :path, :ssl_options

@@ -10,9 +10,22 @@ module SemanticLogger
   autoload :Log,                'semantic_logger/log'
   autoload :Logger,             'semantic_logger/logger'
   autoload :Loggable,           'semantic_logger/loggable'
+  autoload :Subscriber,         'semantic_logger/subscriber'
 
   module Appender
-    autoload :Base,             'semantic_logger/appender/base'
+    # DEPRECATED, use SemanticLogger::AnsiColors
+    AnsiColors = SemanticLogger::AnsiColors
+
+    # DEPRECATED: use SemanticLogger::Formatters::Color.new
+    def self.colorized_formatter
+      SemanticLogger::Formatters::Color.new
+    end
+
+    # DEPRECATED: use SemanticLogger::Formatters::Json.new
+    def self.json_formatter
+      SemanticLogger::Formatters::Json.new
+    end
+
     autoload :Bugsnag,          'semantic_logger/appender/bugsnag'
     autoload :Elasticsearch,    'semantic_logger/appender/elasticsearch'
     autoload :File,             'semantic_logger/appender/file'
@@ -45,6 +58,7 @@ module SemanticLogger
   module Metrics
     autoload :NewRelic,         'semantic_logger/metrics/new_relic'
     autoload :Statsd,           'semantic_logger/metrics/statsd'
+    autoload :Udp,              'semantic_logger/metrics/udp'
   end
 
   if defined?(JRuby)
@@ -55,8 +69,9 @@ module SemanticLogger
 end
 # @formatter:on
 
-# Flush all appenders at exit, waiting for outstanding messages on the queue
+# Close and flush all appenders at exit, waiting for outstanding messages on the queue
 # to be written first
 at_exit do
+  # Cannot call #close since test frameworks use at_exit to run loaded tests
   SemanticLogger.flush
 end

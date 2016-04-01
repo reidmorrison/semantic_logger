@@ -39,7 +39,7 @@ module SemanticLogger
     #     ssl:      true
     #   )
     #
-    class Tcp < SemanticLogger::Appender::Base
+    class Tcp < SemanticLogger::Subscriber
       attr_accessor :separator
       attr_reader :tcp_client
 
@@ -189,7 +189,7 @@ module SemanticLogger
         Net::TCPClient.logger              = SemanticLogger::Logger.logger.dup
         Net::TCPClient.logger.name         = 'Net::TCPClient'
 
-        options = extract_appender_options!(@options)
+        options = extract_subscriber_options!(@options)
         super(options, &block)
         reopen
       end

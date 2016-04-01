@@ -11,7 +11,7 @@ end
 #
 # Example:
 #   SemanticLogger.add_appender(appender: :new_relic)
-class SemanticLogger::Appender::NewRelic < SemanticLogger::Appender::Base
+class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
   # Create Appender
   #
   # Parameters

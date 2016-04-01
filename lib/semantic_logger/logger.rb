@@ -44,8 +44,6 @@ module SemanticLogger
     # Flush all queued log entries disk, database, etc.
     #  All queued log messages are written and then each appender is flushed in turn
     def self.flush
-      return false unless appender_thread_active?
-
       msg = "Flushing appenders with #{queue_size} log messages on the queue"
       if queue_size > 1_000
         logger.warn msg
@@ -54,10 +52,20 @@ module SemanticLogger
       elsif queue_size > 0
         logger.trace msg
       end
+      process_request(:flush)
+    end
 
-      reply_queue = Queue.new
-      queue << {command: :flush, reply_queue: reply_queue}
-      reply_queue.pop
+    # Close all appenders and flush any outstanding messages
+    def self.close
+      msg = "Closing appenders with #{queue_size} log messages on the queue"
+      if queue_size > 1_000
+        logger.warn msg
+      elsif queue_size > 100
+        logger.info msg
+      elsif queue_size > 0
+        logger.trace msg
+      end
+      process_request(:close)
     end
 
     @@lag_check_interval = 5000
@@ -208,6 +216,20 @@ module SemanticLogger
 
               message[:reply_queue] << true if message[:reply_queue]
               logger.trace 'Appender thread: All appenders flushed'
+            when :close
+              SemanticLogger.appenders.each do |appender|
+                begin
+                  logger.trace "Appender thread: Closing appender: #{appender.name}"
+                  appender.flush
+                  appender.close
+                  SemanticLogger.remove_appender(appender)
+                rescue Exception => exc
+                  logger.error "Appender thread: Failed to close appender: #{appender.inspect}", exc
+                end
+              end
+
+              message[:reply_queue] << true if message[:reply_queue]
+              logger.trace 'Appender thread: All appenders flushed'
             else
               logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
             end
@@ -244,6 +266,15 @@ module SemanticLogger
           logger.error 'Exception calling metrics subscriber', exc
         end
       end
+    end
+
+    # Close all appenders and flush any outstanding messages
+    def self.process_request(command)
+      return false unless appender_thread_active?
+
+      reply_queue = Queue.new
+      queue << {command: command, reply_queue: reply_queue}
+      reply_queue.pop
     end
 
   end

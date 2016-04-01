@@ -48,7 +48,7 @@ module SemanticLogger
     #
     #   # Log some messages
     #   logger.info 'This message is written to mongo as a document'
-    class MongoDB < SemanticLogger::Appender::Base
+    class MongoDB < SemanticLogger::Subscriber
       attr_reader :db, :collection_name, :collection
       attr_accessor :write_concern
 

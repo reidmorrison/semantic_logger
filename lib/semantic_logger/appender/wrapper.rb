@@ -4,7 +4,7 @@
 #
 module SemanticLogger
   module Appender
-    class Wrapper < SemanticLogger::Appender::Base
+    class Wrapper < SemanticLogger::Subscriber
       attr_reader :logger
 
       # Forward all logging calls to the supplied logging instance.

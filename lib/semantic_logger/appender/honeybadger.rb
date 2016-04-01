@@ -9,7 +9,7 @@ end
 # Example:
 #   SemanticLogger.add_appender(appender: :honeybadger)
 #
-class SemanticLogger::Appender::Honeybadger < SemanticLogger::Appender::Base
+class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
   # Create Appender
   #
   # Parameters

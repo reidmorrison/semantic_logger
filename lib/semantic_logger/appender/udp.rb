@@ -11,19 +11,14 @@ module SemanticLogger
     #     appender: :udp,
     #     server:   'server:3300',
     #   )
-    class Udp < SemanticLogger::Appender::Base
-      attr_accessor :server, :separator, :udp_flags
+    class Udp < SemanticLogger::Subscriber
+      attr_accessor :server, :udp_flags
       attr_reader :socket
 
       # Create UDP log appender.
       #
       #   server: [String]
       #     URL of the server to write UDP messages to.
-      #
-      #   separator: [String]
-      #     Separator between every message
-      #     Default: "\n"
-      #     Note: The separator should not be something that could be output in the formatted log message.
       #
       #   udp_flags: [Integer]
       #     Should be a bitwise OR of Socket::MSG_* constants.
