@@ -15,7 +15,7 @@ gem 'bson_ext', platform: 'ruby'
 gem 'syslog_protocol'
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
 # [optional] TCP appender
-gem 'net_tcp_client', git: 'https://github.com/rocketjob/net_tcp_client'
+gem 'net_tcp_client'
 # [optional] Splunk appender
 gem 'splunk-sdk-ruby'
 # [optional] Bugsnag appender

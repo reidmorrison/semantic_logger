@@ -4,7 +4,7 @@ rescue LoadError
   raise 'Gem net_tcp_client is required for logging over TCP. Please add the gem "net_tcp_client" to your Gemfile.'
 end
 
-raise 'Net::TCPClient v1.1 or greater is required to log over TCP' unless Net::TCPClient::VERSION.to_f >= 1.1
+raise 'Net::TCPClient v2.0 or greater is required to log over TCP' unless Net::TCPClient::VERSION.to_f >= 2.0
 
 module SemanticLogger
   module Appender
