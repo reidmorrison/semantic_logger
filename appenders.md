@@ -14,7 +14,8 @@ Log messages can be written to one or more of the following destinations at the 
 * Graylog
 * Elasticsearch
 * Splunk
-* Loggly
+* logentries.com
+* loggly.com
 * Logstash
 * New Relic
 * Bugsnag
@@ -220,7 +221,33 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-### Loggly
+### logentries.com
+
+Follow the instructions on [logentries](https://logentries.com/doc/input-token/)
+to obtain a token.
+
+Replace `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` below with the above token.
+
+~~~ruby
+module Logentries
+  class Formatter < SemanticLogger::Formatters::Json
+    attr_accessor :token
+
+    def initialize(token)
+      @token = token
+    end
+
+    def call(log, logger)
+      "#{token} #{super(log, logger)}"
+    end
+  end
+end
+
+formatter = Logentries::Formatter.new('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')
+SemanticLogger.add_appender(appender: :tcp, server: 'api.logentries.com:20000', ssl: true, formatter: formatter)
+~~~
+
+### loggly.com
 
 After signing up with Loggly obtain the token by logging into Loggly.com
 Navigate to `Source Setup` -> `Customer Tokens` and copy the token
