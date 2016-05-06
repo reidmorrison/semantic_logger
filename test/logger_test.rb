@@ -177,7 +177,7 @@ class LoggerTest < Minitest::Test
 
             it 'logs with backtrace and exception' do
               SemanticLogger.stub(:backtrace_level_index, 0) do
-                exc = RuntimeError.new("Test")
+                exc = RuntimeError.new('Test')
                 @logger.send(level, 'hello world', exc)
                 SemanticLogger.flush
                 assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] LoggerTest -- hello world -- Exception: RuntimeError: Test/, @mock_logger.message)
@@ -286,7 +286,7 @@ class LoggerTest < Minitest::Test
 
         describe '#with_payload' do
           it 'logs tagged payload' do
-            hash     = {tracking_number: "123456", even: 2, more: "data"}
+            hash     = {tracking_number: '123456', even: 2, more: 'data'}
             hash_str = hash.inspect.sub("{", "\\{").sub("}", "\\}")
             @logger.with_payload(tracking_number: '123456') do
               @logger.with_payload(even: 2, more: 'data') do
@@ -354,7 +354,7 @@ class LoggerTest < Minitest::Test
 
               it "log #{level} info with an exception" do
                 assert_raises RuntimeError do
-                  @logger.send("measure_#{level}", 'hello world', payload: @hash) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
+                  @logger.send("measure_#{level}", 'hello world', payload: @hash) { raise RuntimeError.new('Test') } # Measure duration of the supplied block
                 end
                 SemanticLogger.flush
                 assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message)
@@ -362,7 +362,7 @@ class LoggerTest < Minitest::Test
 
               it "change log #{level} info with an exception" do
                 assert_raises RuntimeError do
-                  @logger.send("measure_#{level}", 'hello world', payload: @hash, on_exception_level: :fatal) { raise RuntimeError.new("Test") } # Measure duration of the supplied block
+                  @logger.send("measure_#{level}", 'hello world', payload: @hash, on_exception_level: :fatal) { raise RuntimeError.new('Test') } # Measure duration of the supplied block
                 end
                 SemanticLogger.flush
                 assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:#{@thread_name}#{@file_name_reg_exp}\] \((\d+\.\d+)|(\d+)ms\) LoggerTest -- hello world -- Exception: RuntimeError: Test -- #{@hash_str}/, @mock_logger.message)

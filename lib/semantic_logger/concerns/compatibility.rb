@@ -14,6 +14,8 @@ module SemanticLogger
           alias_method :unknown?, :error? # :nodoc:
 
           alias_method :<<, :info # :nodoc:
+          # Active Record's Session Store calls silence_logger
+          alias_method :silence_logger, :silence # :nodoc:
 
           alias_method :progname, :name # :nodoc:
           alias_method :progname=, :name= # :nodoc:

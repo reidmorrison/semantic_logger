@@ -48,6 +48,14 @@ class CompatibilityTest < Minitest::Test
       refute @logger.unknown?
     end
 
+    it '#silence_logger' do
+      @logger.silence_logger do
+        @logger.info 'hello world'
+      end
+      SemanticLogger.flush
+      refute @mock_logger.message
+    end
+
     it '#<< as info' do
       @logger << 'hello world'
       SemanticLogger.flush

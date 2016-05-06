@@ -65,28 +65,28 @@ class DebugAsTraceLoggerTest < Minitest::Test
 
         it 'not log trace when level is debug' do
           @logger.level = :debug
-          @logger.trace('hello world', @hash) { "Calculations" }
+          @logger.trace('hello world', @hash) { 'Calculations' }
           SemanticLogger.flush
           assert_nil @mock_logger.message
         end
 
         it 'not log debug when level is debug' do
           @logger.level = :debug
-          @logger.debug('hello world', @hash) { "Calculations" }
+          @logger.debug('hello world', @hash) { 'Calculations' }
           SemanticLogger.flush
           assert_nil @mock_logger.message
         end
 
         it 'map trace to debug' do
           @logger.level = :trace
-          @logger.debug('hello world', @hash) { "Calculations" }
+          @logger.debug('hello world', @hash) { 'Calculations' }
           SemanticLogger.flush
           assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
         end
 
         it 'log trace as trace' do
           @logger.level = :trace
-          @logger.trace('hello world', @hash) { "Calculations" }
+          @logger.trace('hello world', @hash) { 'Calculations' }
           SemanticLogger.flush
           assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
         end

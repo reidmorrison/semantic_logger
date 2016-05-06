@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+- Add silence_logger for Active Record's Session Store
 
 ## [3.3.0]
 ### Added
