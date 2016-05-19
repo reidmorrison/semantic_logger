@@ -90,8 +90,9 @@ class SemanticLogger::Appender::Riemann < SemanticLogger::Subscriber
 
   # Send an event to Riemann
   def log(log)
-    return false unless should_log?(log)
+    #return false unless should_log?(log)
     event = formatter.call(log, self)
+    event[:should_log] = should_log?(log).to_s
 
     # For more documentation on sending events to Riemann, see:
     # https://github.com/riemann/riemann-ruby-client
