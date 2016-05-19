@@ -26,5 +26,7 @@ gem 'gelf'
 gem 'honeybadger'
 # [optional] Statsd metrics
 gem 'statsd-ruby'
+# [optional] Riemann metrics and appender
+gem 'riemann-client'
 
 gem 'awesome_print'
