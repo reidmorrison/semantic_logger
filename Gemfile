@@ -27,6 +27,6 @@ gem 'honeybadger'
 # [optional] Statsd metrics
 gem 'statsd-ruby'
 # [optional] Riemann metrics and appender
-gem 'riemann-client'
+gem 'riemann-ruby-experiments'
 
 gem 'awesome_print'
