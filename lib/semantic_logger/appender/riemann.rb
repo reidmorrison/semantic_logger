@@ -84,11 +84,44 @@ class SemanticLogger::Appender::Riemann < SemanticLogger::Subscriber
     h = log.to_h(host, application)
     # Standard keys
     h[:service] = h.delete(:name) || @riemann_opts[:service]
-    h[:description] = h.delete(:message)
     h[:time] = h[:time].to_i unless h[:time].nil? # will be included by client if not.
     h[:state] = h.delete(:level).to_s
-    h.delete(:tags) if h[:tags].nil? || (h[:tags].length == 0)
-    h.delete(:metric) if h[:metric].nil?
+    h[:payload] = h[:payload].to_s unless h[:payload].nil?
+    h[:exception] = h[:exception].to_s unless h[:exception].nil?
+    h[:backtrace] = h[:backtrace].to_s unless h[:backtrace].nil?
+
+    tags = h.delete(:tags) || []
+
+    if h[:duration_ms]
+      h[:duration] = h[:duration_ms]
+      h.delete(:duration_ms)
+    end
+
+    # If you're changing this, remember that:
+    # to SemanticLogger, the value of 'metric' is a string, the name of the metric.
+    # to Riemann, the value of 'metric' is a number.
+    #
+    if log.message&.is_a?(Hash) # A metric counter
+      description = log.message[:message]
+      h[:service] = [h[:service], log.message[:metric]].join("/")
+      tags.push("counter")
+      if log.message[:metric_amount]
+        h[:metric] = log.message[:metric_amount]
+      end
+      h.delete(:message)
+    else
+      description = h.delete(:message)
+      if !h[:duration].nil? # A metric, but not a metric conuter.
+        h[:service] = [h[:service], h[:metric]].join("/")
+        h[:metric] = h[:duration_ms] || h[:duration]
+        h.delete(:duration)
+        h.delete(:duration_ms)
+        tags.push("metric")
+      end
+    end
+
+    h[:tags] = tags unless tags.length == 0
+    h[:description] = description
     h
   end
 
@@ -96,7 +129,6 @@ class SemanticLogger::Appender::Riemann < SemanticLogger::Subscriber
   def log(log)
     return false unless should_log?(log)
     event = formatter.call(log, self)
-    # event[:should_log] = should_log?(log).to_s
 
     # For more documentation on sending events to Riemann, see:
     # https://github.com/riddochc/riemann-ruby-experiments

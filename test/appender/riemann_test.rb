@@ -6,19 +6,22 @@ module Appender
   class Riemann < MiniTest::Test
     describe SemanticLogger::Appender::Riemann do
       before do
-        @appender = SemanticLogger::Appender::Riemann.new()
+        @appender = SemanticLogger::Appender::Riemann.new(riemann_server: "localhost:5555")
         SemanticLogger.default_level = :info
-        SemanticLogger.add_appender(appender: :riemann)
-        SemanticLogger.application = "MiniTest"
-        @logger = SemanticLogger['RiemannTest']
-        # @reciever = Riemann::Client.new(host: "localhost", port: 5555, timeout: 5)
-        #SemanticLogger.add_appender(appender: @appender)
-        #@logger = SemanticLogger["RiemannTest"]
+        SemanticLogger.add_appender(appender: @appender)
+        SemanticLogger.application = "SomeApp"
+        @logger = SemanticLogger["RiemannTest"]
       end
 
       it "sends info" do
-        @appender.send(:debug, "Halp!")
-        #@logger.debug("Halp!")
+        @logger.info("Halp!")
+      end
+
+      it "measures things" do
+        @logger.measure_info("sleeping a tiny bit") do
+          sleep 0.1
+          42
+        end
       end
     end
   end
