@@ -132,6 +132,7 @@ class SemanticLogger::Appender::Riemann < SemanticLogger::Subscriber
 
     # For more documentation on sending events to Riemann, see:
     # https://github.com/riddochc/riemann-ruby-experiments
-    @riemann.send_event(event).ok
+    @riemann.add_event(event)
+    @riemann.send_message(ok: true)
   end
 end
