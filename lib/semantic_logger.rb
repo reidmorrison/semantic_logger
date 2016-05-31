@@ -34,6 +34,7 @@ module SemanticLogger
     autoload :Http,             'semantic_logger/appender/http'
     autoload :MongoDB,          'semantic_logger/appender/mongodb'
     autoload :NewRelic,         'semantic_logger/appender/new_relic'
+    autoload :Riemann,          'semantic_logger/appender/riemann'
     autoload :Splunk,           'semantic_logger/appender/splunk'
     autoload :SplunkHttp,       'semantic_logger/appender/splunk_http'
     autoload :Syslog,           'semantic_logger/appender/syslog'
