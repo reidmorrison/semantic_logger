@@ -69,17 +69,21 @@ logger.info('Queried table',
 * Simple drop-in replacement for the Ruby, or the Rails loggers.
 * Supports current common logging interface.
 * No changes to existing to code to use new logger, other than replacing the logger itself.
+* Fully compatible in 99.9% of use-cases.
+   * Semantic Logger is a much richer implementation when compared to existing Ruby loggers.
+   * There is a new appender creation API.
+   * Additional log levels.
 
 ### Benchmarking
 
 * Measure and log the duration of a block of code.
 * Set a duration threshold that needs to be exceeded before a measure message is logged.
     * Quickly identify the cause of system slowdowns when these log messages start appearing.
-* Automatically log unhandled exceptions raised during measureed blocks.
+* Automatically log unhandled exceptions raised during measured blocks.
 
 ### Metrics
 
-* Supply metrics to any measureed block and have the metric automatically forwarded to
+* Supply metrics to any measured block and have the metric automatically forwarded to
   all registered metrics listeners.
 * Metrics can be rendered in New Relic, statsd / graphite, and/or other dashboards.
 
