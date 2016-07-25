@@ -63,9 +63,9 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
 
   private
 
-  # Use Raw Formatter by default
+  # Use Honeybadger formatter by default
   def default_formatter
-    SemanticLogger::Formatters::Raw.new
+    SemanticLogger::Formatters::Honeybadger.new
   end
 
 end

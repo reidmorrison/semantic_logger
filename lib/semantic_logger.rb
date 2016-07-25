@@ -50,6 +50,7 @@ module SemanticLogger
     autoload :Base,             'semantic_logger/formatters/base'
     autoload :Color,            'semantic_logger/formatters/color'
     autoload :Default,          'semantic_logger/formatters/default'
+    autoload :Honeybadger,      'semantic_logger/formatters/honeybadger'
     autoload :Json,             'semantic_logger/formatters/json'
     autoload :Raw,              'semantic_logger/formatters/raw'
     autoload :Syslog,           'semantic_logger/formatters/syslog'
