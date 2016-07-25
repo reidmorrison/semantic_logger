@@ -6,13 +6,16 @@ class SemanticLogger::Formatters::Honeybadger < SemanticLogger::Formatters::Raw
     context = super
     callee = thread_by_name(log.thread_name)
 
-    if callee
+    if callee && callee.respond_to?(:[])
       request = callee[:__honeybadger_request]
-      hash = ::Honeybadger::Rack::RequestHash.new(request)
 
-      unless hash.nil?
-        payload = ::Honeybadger::Util::RequestPayload.build(hash)
-        context = payload.merge(context) if payload.respond_to?(:merge)
+      if request && request.respond_to?(:env)
+        hash = ::Honeybadger::Rack::RequestHash.new(request)
+
+        unless hash.nil?
+          payload = ::Honeybadger::Util::RequestPayload.build(hash)
+          context = payload.merge(context) if payload.respond_to?(:merge)
+        end
       end
     end
 
