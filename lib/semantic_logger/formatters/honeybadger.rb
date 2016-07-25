@@ -1,15 +1,19 @@
+require 'honeybadger/util/request_payload'
+
 # Formatter to be used with the Honeybadger appender
 class SemanticLogger::Formatters::Honeybadger < SemanticLogger::Formatters::Raw
+  CONTEXT_KEY = :__honeybadger_request
+
   # Merges existing context with a ::Honeybadger::Util::RequestPayload hash
   # See: https://github.com/honeybadger-io/honeybadger-ruby/blob/master/lib/honeybadger/util/request_payload.rb
   def call(log, appender)
     context = super
-    callee = thread_by_name(log.thread_name)
+    caller = Thread.find_by_name(log.thread_name)
 
-    if callee && callee.respond_to?(:[])
-      request = callee[:__honeybadger_request]
+    if caller && caller.respond_to?(:[])
+      request = caller[CONTEXT_KEY]
 
-      if request && request.respond_to?(:env)
+      if request && request.respond_to?(:env) && request.respond_to?(:session)
         hash = ::Honeybadger::Rack::RequestHash.new(request)
 
         unless hash.nil?
@@ -20,10 +24,5 @@ class SemanticLogger::Formatters::Honeybadger < SemanticLogger::Formatters::Raw
     end
 
     return context
-  end
-
-  # Extracts a named thread from the list of all threads.
-  def thread_by_name(name)
-    return Thread.list.find { |t| t.name == name }
   end
 end

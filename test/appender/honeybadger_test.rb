@@ -28,6 +28,10 @@ module Appender
           assert_equal level, hash[:context][:level]
         end
 
+        it 'should use a SemanticLogger::Formatters::Honeybadger formatter by default' do
+          assert @appender.formatter.is_a?(SemanticLogger::Formatters::Honeybadger)
+        end
+
         it "sends #{level} exceptions" do
           error     = RuntimeError.new('Oh no, Error.')
           exception = hash = nil

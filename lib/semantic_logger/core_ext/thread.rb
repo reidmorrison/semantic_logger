@@ -25,4 +25,9 @@ class Thread
       @name = name.to_s
     end
   end
+
+  # Finds the thread with the given name
+  def self.find_by_name(name)
+    self.list.find { |t| t.name == name }
+  end
 end
