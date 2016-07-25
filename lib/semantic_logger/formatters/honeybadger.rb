@@ -6,6 +6,7 @@ class SemanticLogger::Formatters::Honeybadger < SemanticLogger::Formatters::Raw
 
   # Merges existing context with a ::Honeybadger::Util::RequestPayload hash
   # See: https://github.com/honeybadger-io/honeybadger-ruby/blob/master/lib/honeybadger/util/request_payload.rb
+  # Keep in mind this only works if the caller thread is still alive, which should be the case for a standard Rails app
   def call(log, appender)
     context = super
     caller = Thread.find_by_name(log.thread_name)
