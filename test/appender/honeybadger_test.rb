@@ -13,7 +13,7 @@ module Appender
           also_passed: true
         }
 
-        appender = SemanticLogger::Appender::Honeybadger.new(level: :trace, formatter: -> (_, _) { formatted.dup })
+        appender = SemanticLogger::Appender::Honeybadger.new(level: :trace, formatter: lambda { |_, _| formatted.dup })
         hash = nil
         context = nil
         request = nil
