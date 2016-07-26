@@ -27,7 +27,13 @@ class Thread
   end
 
   # Finds the thread with the given name
-  def self.find_by_name(name)
-    self.list.find { |t| t.name == name }
+  if defined? JRuby
+    def self.find_by_name(name)
+      self.list.find { |t| JRuby.reference(t).native_thread.name == name }
+    end
+  else
+    def self.find_by_name(name)
+      self.list.find { |t| t.name == name }
+    end
   end
 end
