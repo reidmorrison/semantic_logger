@@ -68,6 +68,32 @@ class LoggerTest < Minitest::Test
       end
     end
 
+    describe '.log' do
+      it 'should add thread context information to the Log struct at log time based on its appenders' do
+        klass = Class.new(SemanticLogger::Subscriber) do
+          def thread_context_keys
+            [:test_context_key]
+          end
+
+          def log(*args)
+          end
+        end
+
+        log = SemanticLogger::Log.new
+        assert_nil log.thread_context
+
+        appender = SemanticLogger.add_appender(appender: klass.new)
+        thread = Thread.new do
+          Thread.current[:test_context_key] = 'foo'
+          SemanticLogger['Test'].log(log)
+        end
+        thread.join
+
+        assert_equal 'foo', log.thread_context[:test_context_key]
+        SemanticLogger.remove_appender(appender)
+      end
+    end
+
     describe '.add_appender DEPRECATED' do
       after do
         SemanticLogger.remove_appender(@appender) if @appender

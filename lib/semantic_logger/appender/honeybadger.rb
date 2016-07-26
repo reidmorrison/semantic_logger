@@ -36,36 +36,37 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(options = {}, &block)
-    options         = options.is_a?(Hash) ? options.dup : {level: options}
+    options = options.is_a?(Hash) ? options.dup : { level: options }
     options[:level] ||= :error
     super(options, &block)
   end
 
   # Send an error notification to honeybadger
+  # Takes into account the request/context set on the caller thread
   def log(log)
     return false unless should_log?(log)
 
-    context = formatter.call(log, self)
-    if log.exception
-      context.delete(:exception)
-      Honeybadger.notify(log.exception, context)
-    else
-      message = {
-        error_class:   context.delete(:name),
-        error_message: context.delete(:message),
-        context:       context
-      }
-      message[:backtrace] = log.backtrace if log.backtrace
-      Honeybadger.notify(message)
+    options = formatter.call(log, self)
+
+    context = options.delete(:context)
+    Honeybadger.context(context) if context
+    Honeybadger::Agent.config.with_request(options.delete(:request)) do
+      Honeybadger.notify(options)
     end
-    true
+
+    return true
+  ensure
+    Honeybadger.context.clear!
+  end
+
+  def thread_context_keys
+    [SemanticLogger::Formatters::Honeybadger::THREAD_VARIABLE_REQUEST, SemanticLogger::Formatters::Honeybadger::THREAD_VARIABLE_CONTEXT]
   end
 
   private
 
   # Use Honeybadger formatter by default
   def default_formatter
-    SemanticLogger::Formatters::Honeybadger.new
+    return SemanticLogger::Formatters::Honeybadger.new
   end
-
 end

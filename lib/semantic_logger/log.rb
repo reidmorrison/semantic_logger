@@ -43,7 +43,12 @@ module SemanticLogger
   # metric_amount [Numeric]
   #   Used for numeric or counter metrics.
   #   For example, the number of inquiries or, the amount purchased etc.
-  Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount) do
+  #
+  # thread_context [Hash]
+  #   Used for various appenders/integrations which require a snapshot of thread local variables at log time.
+  #   For example, Honeybadger, Sidekiq, and many other gems temporarily story context/request information as a
+  #   thread local variables, and the only way to obtain them is to take snapshot of their values at log time.
+  Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :thread_context) do
 
     MAX_EXCEPTIONS_TO_UNWRAP = 5
     # Call the block for exception and any nested exception
