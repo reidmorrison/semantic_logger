@@ -27,9 +27,8 @@ module SemanticLogger
       SemanticLogger::Formatters::Default.new
     end
 
-    # Returns [Array<Object>] optional list of keys of thread local variables that should be saved at log time from the logging thread, so that they can be reused in the appender thread.
-    def thread_context_keys
-      []
+    # Called before a log is pushed onto the appender message queue, allowing subscribers to add context to it
+    def before_log(log)
     end
 
     # Allow application name to be set globally or per subscriber

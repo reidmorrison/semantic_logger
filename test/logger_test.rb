@@ -69,27 +69,21 @@ class LoggerTest < Minitest::Test
     end
 
     describe '.log' do
-      it 'should add thread context information to the Log struct at log time based on its appenders' do
+      it 'should call before_log on each registered appender' do
         klass = Class.new(SemanticLogger::Subscriber) do
-          def thread_context_keys
-            [:test_context_key]
+          attr_reader :logged
+
+          def log(_)
           end
 
-          def log(*args)
+          def before_log(log)
+            @logged = log
           end
         end
-
-        log = SemanticLogger::Log.new
-        assert_nil log.thread_context
 
         appender = SemanticLogger.add_appender(appender: klass.new)
-        thread = Thread.new do
-          Thread.current[:test_context_key] = 'foo'
-          SemanticLogger['Test'].log(log)
-        end
-        thread.join
-
-        assert_equal 'foo', log.thread_context[:test_context_key]
+        SemanticLogger['Test'].info('testing')
+        assert_equal 'testing', appender.logged.message
         SemanticLogger.remove_appender(appender)
       end
     end

@@ -59,13 +59,16 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
     Honeybadger.context.clear!
   end
 
-  def thread_context_keys
-    [SemanticLogger::Formatters::Honeybadger::THREAD_VARIABLE_REQUEST, SemanticLogger::Formatters::Honeybadger::THREAD_VARIABLE_CONTEXT]
+  def before_log(log)
+    if should_log?(log)
+      context = {}
+      context[:request] = Honeybadger::Agent.config.request.dup unless Honeybadger::Agent.config.request.nil?
+      context[:context] = Honeybadger.get_context.dup unless Honeybadger.get_context.nil?
+
+      log.appender_context[self.class] = context unless context.empty?
+    end
   end
 
-  private
-
-  # Use Honeybadger formatter by default
   def default_formatter
     return SemanticLogger::Formatters::Honeybadger.new
   end

@@ -44,11 +44,10 @@ module SemanticLogger
   #   Used for numeric or counter metrics.
   #   For example, the number of inquiries or, the amount purchased etc.
   #
-  # thread_context [Hash]
-  #   Used for various appenders/integrations which require a snapshot of thread local variables at log time.
-  #   For example, Honeybadger, Sidekiq, and many other gems temporarily story context/request information as a
-  #   thread local variables, and the only way to obtain them is to take snapshot of their values at log time.
-  Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :thread_context) do
+  # appender_context [Hash]
+  #   To be used by appenders to store context sensitive information. It is suggested to use the appender's class as
+  #   a key to namespace what the appender needs to capture.
+  Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :appender_context) do
 
     MAX_EXCEPTIONS_TO_UNWRAP = 5
     # Call the block for exception and any nested exception
@@ -163,6 +162,16 @@ module SemanticLogger
     # Returns [true|false] whether the log entry has a payload
     def has_payload?
       !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
+    end
+
+    # Returns [true|false] whether or not there is context info stored for a given appender ID
+    # Appender ID is typically the appender class, but could be parametrized depending on the appender.
+    def has_context?(appender_id)
+      return appender_context.is_a?(Hash) && appender_context.key?(appender_id)
+    end
+
+    def appender_context
+      return @appender_context ||= {}
     end
 
     if defined? JRuby

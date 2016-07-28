@@ -136,22 +136,12 @@ module SemanticLogger
       return add(log, message, progname, &block) unless log.is_a?(SemanticLogger::Log)
 
       if @@appender_thread
-        log.thread_context = thread_context_snapshot
+        SemanticLogger.appenders.each { |appender| appender.before_log(log) }
         self.class.queue << log
       end
     end
 
     private
-
-    # TODO: The thread local variable is not duplicated, and can potentially change after we get a reference to it.
-    # But I feel using .dup might lead to memory consumption issues.
-    def thread_context_snapshot
-      thread = Thread.current
-      return SemanticLogger.appenders.reduce({}) do |acc, appender|
-        appender_context = Hash[appender.thread_context_keys.map { |key| [key, thread[key]] }]
-        acc.merge(appender_context)
-      end
-    end
 
     @@appender_thread    = nil
     @@queue              = Queue.new
