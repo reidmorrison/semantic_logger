@@ -513,4 +513,80 @@ Mongoid.logger = SemanticLogger[Mongoid] if defined?(Mongoid)
 Moped.logger   = SemanticLogger[Moped] if defined?(Moped)
 ~~~
 
+### Wrapped Exceptions
+
+Sometimes libraries wrap exceptions such as IOError with their own exceptions so that these exceptions
+are easily identified as coming from that library. To do this the library exception should include
+an attribute called `cause` in which to hold the original exception, such as an IOError instance.
+
+In the library, include the `cause` attribute to any wrapping exceptions:
+
+~~~ruby
+class ALibraryIOException < StandardError
+  attr_reader :cause
+
+  def initialize(message, cause)
+    @cause = cause
+    super(message)
+  end
+end
+~~~
+
+In the library, when an exception is raised, include the causing exception:
+
+~~~ruby
+class ALibrary
+  def oh_no
+    f = File.new('filename', 'w')
+    # Will raise: IOError: not opened for reading
+    f.read
+  rescue IOError => exception
+    message = 'Failed to write to file'
+    # Pass the causing exception to the wrapping exception 
+    raise ALibraryIOException.new(message, exception)
+  end
+end
+~~~
+
+Example Application Code:
+
+~~~ruby
+class MyApp
+  include SemanticLogger::Loggable
+
+  def perform
+    lib = ALibrary.new
+    lib.oh_no
+  rescue ALibraryIOException => exc
+    # Semantic Logger will log both the exception and the causing exception
+    logger.error('Failed calling library', exc)
+  end
+end
+~~~
+
+Call the application:
+
+~~~ruby
+SemanticLogger.add_appender(io: STDOUT, formatter: :color)
+MyApp.new.perform
+~~~
+
+Creates the following output
+
+~~~
+$ ruby wrapped_exception.rb 
+2016-07-29 16:24:21.020279 E [60288:70307486628360 wrapped_exception.rb:40] MyApp -- Failed calling library -- Exception: ALibraryIOException: Failed to write to file
+wrapped_exception.rb:25:in `rescue in oh_no'
+wrapped_exception.rb:20:in `oh_no'
+wrapped_exception.rb:38:in `perform'
+wrapped_exception.rb:45:in `<main>'
+Cause: IOError: not opened for reading
+wrapped_exception.rb:22:in `read'
+wrapped_exception.rb:22:in `oh_no'
+wrapped_exception.rb:38:in `perform'
+wrapped_exception.rb:45:in `<main>'
+~~~
+
+Note that the stack trace for the original exception starts after the line containing `Cause: IOError: not opened for reading`.
+
 ### [Next: Appenders ==>](appenders.html)

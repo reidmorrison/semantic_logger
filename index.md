@@ -72,7 +72,7 @@ logger.info('Queried table',
 * Fully compatible in 99.9% of use-cases.
    * Semantic Logger is a much richer implementation when compared to existing Ruby loggers.
    * There is a new appender creation API.
-   * Additional log levels.
+   * Additional trace level logging.
 
 ### Benchmarking
 
