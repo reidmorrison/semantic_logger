@@ -47,6 +47,24 @@ config.semantic_logger.backtrace_level = :info
 
 The above output shows 3 web requests where the source file name was `log_subscriber.rb` and line number `11`.
 
+### Disable default Rails file logging
+
+When running in an environment where local file logging is not available, or to completely replace the file logger,
+disable the default rails file logging by setting:
+
+~~~ruby
+config.rails_semantic_logger.add_file_appender = true
+~~~
+
+After disabling the default file logging another appender needs to be added before any logging will be sent anywhere.
+For example to create a JSON only log file:
+
+~~~ruby
+config.semantic_logger.add_appender(file_name: 'log/json.log', formatter: :json)
+~~~
+
+Note: If the default file logger is not used then any logging failures will be written to stderror.
+
 ### Rails Support
 
 * Supports Rails 3.2, 4, & 5 ( or above )
