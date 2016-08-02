@@ -101,7 +101,7 @@ formatter = Proc.new do |log|
       if !defined?(AwesomePrint) || !payload.respond_to?(:ai)
         payload.inspect
       else
-        payload.ai(@ai_options) rescue payload.inspect
+        payload.ai(multiline: false) rescue payload.inspect
       end
   end
 
@@ -152,7 +152,7 @@ appender.formatter = Proc.new do |log|
       if !defined?(AwesomePrint) || !payload.respond_to?(:ai)
         payload.inspect
       else
-        payload.ai(@ai_options) rescue payload.inspect
+        payload.ai(multiline: false) rescue payload.inspect
       end
   end
 
