@@ -26,5 +26,7 @@ gem 'gelf'
 gem 'honeybadger'
 # [optional] Statsd metrics
 gem 'statsd-ruby'
+# [optional] Sentry appender
+gem 'sentry-raven'
 
 gem 'awesome_print'
