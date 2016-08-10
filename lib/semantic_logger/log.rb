@@ -232,6 +232,7 @@ module SemanticLogger
 
       # Metric
       h[:metric] = metric if metric
+      h[:metric_amount] = metric_amount if metric_amount
       h
     end
 
