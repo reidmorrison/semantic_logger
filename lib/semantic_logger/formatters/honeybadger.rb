@@ -28,11 +28,12 @@ class SemanticLogger::Formatters::Honeybadger < SemanticLogger::Formatters::Raw
     if log.exception.is_a?(Exception)
       formatted[:exception] = log.exception
       formatted[:context].delete(:exception) # remove from context info
+      formatted[:backtrace] = log.exception.backtrace
     else
       formatted[:error_class] = formatted[:context].delete(:name)
       formatted[:error_message] = formatted[:context].delete(:message)
+      formatted[:backtrace] = log.backtrace if log.backtrace
     end
-    formatted[:backtrace] = log.backtrace if log.backtrace
   end
   private :format_error
 
