@@ -19,7 +19,8 @@ module Formatters
 
       it 'should add the exception if there was one' do
         @log.exception = StandardError.new('test')
-        expected = { tags: @log.tags, context: SemanticLogger::Formatters::Raw.new.call(@log, @appender).reject { |key, _| [:exception].include?(key) }, exception: @log.exception }
+        @log.exception.set_backtrace(['prog.rb:2:in `a'])
+        expected = { tags: @log.tags, context: SemanticLogger::Formatters::Raw.new.call(@log, @appender).reject { |key, _| [:exception].include?(key) }, exception: @log.exception, backtrace: ['prog.rb:2:in `a'] }
         assert_equal expected, @formatter.call(@log, @appender)
       end
 
