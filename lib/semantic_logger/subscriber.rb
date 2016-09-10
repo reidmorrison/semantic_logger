@@ -99,10 +99,10 @@ module SemanticLogger
     def extract_formatter(formatter, &block)
       case
       when formatter.is_a?(Symbol)
-        SemanticLogger.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
+        SemanticLogger::Appender.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
       when formatter.is_a?(Hash) && formatter.size > 0
         fmt, options = formatter.first
-        SemanticLogger.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
+        SemanticLogger::Appender.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
       when formatter.respond_to?(:call)
         formatter
       when block

@@ -50,7 +50,7 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
       context.delete(:exception)
       Honeybadger.notify(log.exception, context)
     else
-      message = {
+      message             = {
         error_class:   context.delete(:name),
         error_message: context.delete(:message),
         context:       context

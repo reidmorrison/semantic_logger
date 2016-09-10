@@ -2,15 +2,13 @@ source 'http://rubygems.org'
 
 gemspec
 
-gem 'rake', '~> 10.0'
+gem 'rake'
 gem 'minitest'
 gem 'minitest-reporters'
 gem 'minitest-stub_any_instance'
 
-# [optional] MongoDB Appender
-gem 'mongo_ha', '>= 1.11'
-gem 'bson_ext', platform: 'ruby'
-
+# [optional] MongoDB appender
+gem 'mongo'
 # [optional] Syslog appender
 gem 'syslog_protocol'
 # [optional] Syslog appender when communicating with a remote syslogd over TCP

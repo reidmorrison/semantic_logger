@@ -1,6 +1,6 @@
 module SemanticLogger
   module Metrics
-    class NewRelic
+    class NewRelic < Subscriber
       attr_accessor :prefix
 
       # Parameters:

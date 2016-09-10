@@ -4,8 +4,6 @@
 #
 #   Implements common behavior such as log level, default text formatter etc
 #
-#   Note: Do not create instances of this class directly
-#
 module SemanticLogger
   class Base
     # Class name to be logged
@@ -151,33 +149,16 @@ module SemanticLogger
       SemanticLogger.fast_tag(tag, &block)
     end
 
-    # Thread specific context information to be logged with every log entry
-    #
-    # Add a payload to all log calls on This Thread within the supplied block
-    #
-    #   logger.with_payload(tracking_number: 12345) do
-    #     logger.debug('Hello World')
-    #   end
-    #
-    # If a log call already includes a pyload, this payload will be merged with
-    # the supplied payload, with the supplied payload taking precedence
-    #
-    #   logger.with_payload(tracking_number: 12345) do
-    #     logger.debug('Hello World', result: 'blah')
-    #   end
+    # :nodoc:
     def with_payload(payload)
-      current_payload                          = self.payload
-      Thread.current[:semantic_logger_payload] = current_payload ? current_payload.merge(payload) : payload
-      yield
-    ensure
-      Thread.current[:semantic_logger_payload] = current_payload
+      warn '#with_payload is deprecated, use SemanticLogger.named_tagged'
+      SemanticLogger.named_tagged(payload)
     end
 
-    # Returns [Hash] payload to be added to every log entry in the current scope
-    # on this thread.
-    # Returns nil if no payload is currently set
+    # :nodoc:
     def payload
-      Thread.current[:semantic_logger_payload]
+      warn '#payload is deprecated, use SemanticLogger.named_tags'
+      SemanticLogger.named_tags
     end
 
     protected
@@ -206,9 +187,8 @@ module SemanticLogger
     #    regular expression. All other messages will be ignored
     #    Proc: Only include log messages where the supplied Proc returns true
     #          The Proc must return true or false
-    def initialize(klass, level=nil, filter=nil)
-      # Support filtering all messages to this logger using a Regular Expression
-      # or Proc
+    def initialize(klass, level = nil, filter = nil)
+      # Support filtering all messages to this logger using a Regular Expression or Proc
       raise ':filter must be a Regexp or Proc' unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
 
       @filter = filter.is_a?(Regexp) ? filter.freeze : filter
@@ -247,78 +227,31 @@ module SemanticLogger
     end
 
     # Log message at the specified level
-    def log_internal(level, index, message=nil, payload=nil, exception=nil)
-      # Exception being logged?
-      # Under JRuby a java exception is not a Ruby Exception
-      #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false
-      if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
-        exception = message
-        message   = nil
-      elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
-        exception = payload
-        payload   = nil
-      end
-
-      # Add result of block as message or payload if not nil
-      if block_given? && (result = yield)
-        if result.is_a?(String)
-          message = message.nil? ? result : "#{message} -- #{result}"
-        elsif message.nil? && result.is_a?(Hash)
-          message = result
-        elsif payload && payload.respond_to?(:merge)
-          payload.merge(result)
+    def log_internal(level, index, message = nil, payload = nil, exception = nil, &block)
+      log        = Log.new(name, level, index)
+      should_log =
+        if payload.nil? && exception.nil? && message.is_a?(Hash)
+          log.assign(message)
         else
-          payload = result
+          log.assign_positional(message, payload, exception, &block)
         end
-      end
 
-      # Add scoped payload
-      if self.payload
-        payload = payload.nil? ? self.payload : self.payload.merge(payload)
-      end
-
-      # Add caller stack trace
-      backtrace = extract_backtrace if index >= SemanticLogger.backtrace_level_index
-
-      log = Log.new(level, Thread.current.name, name, message, payload, Time.now, nil, tags, index, exception, nil, backtrace)
-
-      # Logging Hash only?
-      # logger.info(name: 'value')
-      if payload.nil? && exception.nil? && message.is_a?(Hash)
-        payload           = message.dup
-        min_duration      = payload.delete(:min_duration) || 0.0
-        log.exception     = payload.delete(:exception)
-        log.message       = payload.delete(:message)
-        log.metric        = payload.delete(:metric)
-        log.metric_amount = payload.delete(:metric_amount) || 1
-        if duration = payload.delete(:duration)
-          return false if duration <= min_duration
-          log.duration = duration
-        end
-        log.payload = payload if payload.size > 0
-      end
-
-      self.log(log) if include_message?(log)
-    end
-
-    SELF_PATTERN = File.join('lib', 'semantic_logger')
-
-    # Extract the callers backtrace leaving out Semantic Logger
-    def extract_backtrace
-      stack = caller
-      while (first = stack.first) && first.include?(SELF_PATTERN)
-        stack.shift
-      end
-      stack
+      self.log(log) if should_log && include_message?(log)
     end
 
     # Measure the supplied block and log the message
     def measure_internal(level, index, message, params)
-      start     = Time.now
       exception = nil
+      result    = nil
+      # Single parameter is a hash
+      if params.empty? && message.is_a?(Hash)
+        params  = message
+        message = nil
+      end
+      start = Time.now
       begin
         if block_given?
-          result    =
+          result =
             if silence_level = params[:silence]
               # In case someone accidentally sets `silence: true` instead of `silence: :error`
               silence_level = :error if silence_level == true
@@ -326,65 +259,40 @@ module SemanticLogger
             else
               yield(params)
             end
-          exception = params[:exception]
-          result
         end
       rescue Exception => exc
         exception = exc
       ensure
-        end_time           = Time.now
-        # Extract options after block completes so that block can modify any of the options
-        log_exception      = params[:log_exception] || :partial
-        on_exception_level = params[:on_exception_level]
-        min_duration       = params[:min_duration] || 0.0
-        payload            = params[:payload]
-        metric             = params[:metric]
-        duration           =
+        # Must use ensure block otherwise a `return` in the yield above will skip the log entry
+        log       = Log.new(name, level, index)
+        exception ||= params[:exception]
+        message   = params[:message] if params[:message]
+        duration  =
           if block_given?
-            1000.0 * (end_time - start)
+            1000.0 * (Time.now - start)
           else
             params[:duration] || raise('Mandatory block missing when :duration option is not supplied')
           end
 
-        # Add scoped payload
-        if self.payload
-          payload = payload.nil? ? self.payload : self.payload.merge(payload)
-        end
-        if exception
-          logged_exception = exception
-          backtrace        = nil
-          case log_exception
-          when :full
-            # On exception change the log level
-            if on_exception_level
-              level = on_exception_level
-              index = SemanticLogger.level_to_index(level)
-            end
-          when :partial
-            # On exception change the log level
-            if on_exception_level
-              level = on_exception_level
-              index = SemanticLogger.level_to_index(level)
-            end
-            message          = "#{message} -- Exception: #{exception.class}: #{exception.message}"
-            logged_exception = nil
-            backtrace        = exception.backtrace
-          else
-            # Log the message with its duration but leave out the exception that was raised
-            logged_exception = nil
-            backtrace        = exception.backtrace
-          end
-          log = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, logged_exception, metric, backtrace)
-          self.log(log) if include_message?(log)
-          raise exception
-        elsif duration >= min_duration
-          # Only log if the block took longer than 'min_duration' to complete
-          # Add caller stack trace
-          backtrace = extract_backtrace if index >= SemanticLogger.backtrace_level_index
+        # Extract options after block completes so that block can modify any of the options
+        payload   = params[:payload]
 
-          log = Log.new(level, Thread.current.name, name, message, payload, end_time, duration, tags, index, nil, metric, backtrace)
-          self.log(log) if include_message?(log)
-        end
+        should_log = log.assign(
+          message:            message,
+          payload:            payload,
+          min_duration:       params[:min_duration] || 0.0,
+          exception:          exception,
+          metric:             params[:metric],
+          metric_amount:      1,
+          duration:           duration,
+          backtrace:          nil,
+          log_exception:      params[:log_exception] || :partial,
+          on_exception_level: params[:on_exception_level]
+        )
+
+        self.log(log) if should_log && include_message?(log)
+        raise exception if exception
+        result
       end
     end
 

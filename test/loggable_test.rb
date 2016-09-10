@@ -42,7 +42,7 @@ class AppenderFileTest < Minitest::Test
 
       it 'should give child objects their own logger' do
         subclass = Subclass.new
-        base = Base.new
+        base     = Base.new
         assert_equal subclass.class.name, subclass.logger.name
         assert_equal base.class.name, base.logger.name
         assert_equal subclass.class.name, subclass.logger.name

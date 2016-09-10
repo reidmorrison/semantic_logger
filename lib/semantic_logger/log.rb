@@ -1,7 +1,7 @@
 module SemanticLogger
-  # Log Struct
+  # Log
   #
-  #   Structure for holding all log entries
+  #   Class to hold all log entry information
   #
   # level
   #   Log level of the supplied log call
@@ -43,7 +43,103 @@ module SemanticLogger
   # metric_amount [Numeric]
   #   Used for numeric or counter metrics.
   #   For example, the number of inquiries or, the amount purchased etc.
-  Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount) do
+  class Log
+    attr_accessor :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :named_tags
+
+    def initialize(name, level, index = nil)
+      @level       = level
+      @thread_name = Thread.current.name
+      @name        = name
+      @time        = Time.now
+      @tags        = SemanticLogger.tags
+      @named_tags  = SemanticLogger.named_tags
+      @level_index = index.nil? ? SemanticLogger.level_to_index(level) : index
+    end
+
+    # Assign named arguments to this log entry, supplying defaults where applicable
+    #
+    # Returns [true|false] whether this log entry should be logged
+    #
+    # Example:
+    #   logger.info(name: 'value')
+    def assign(message: nil, payload: nil, min_duration: 0.0, exception: nil, metric: nil, metric_amount: 1, duration: nil, backtrace: nil, log_exception: :full, on_exception_level: nil)
+      # Elastic logging: Log when :duration exceeds :min_duration
+      # Except if there is an exception when it will always be logged
+      if duration
+        self.duration = duration
+        return false if (duration <= min_duration) && exception.nil?
+      end
+
+      self.message = message
+      self.payload = payload
+
+      if exception
+        case log_exception
+        when :full
+          self.exception = exception
+        when :partial
+          self.message = "#{message} -- Exception: #{exception.class}: #{exception.message}"
+        when nil, :none
+          # Log the message without the exception that was raised
+        else
+          raise(ArgumentError, "Invalid value:#{log_exception.inspect} for argument :log_exception")
+        end
+        # On exception change the log level
+        if on_exception_level
+          self.level       = on_exception_level
+          self.level_index = SemanticLogger.level_to_index(level)
+        end
+      end
+
+      if backtrace
+        self.backtrace = backtrace
+      elsif level_index >= SemanticLogger.backtrace_level_index
+        self.backtrace = self.class.extract_backtrace
+      end
+
+      if metric
+        self.metric        = metric
+        self.metric_amount = metric_amount
+      end
+
+      self.payload = payload if payload && (payload.size > 0)
+      true
+    end
+
+    # Assign positional arguments to this log entry, supplying defaults where applicable
+    #
+    # Returns [true|false] whether this log entry should be logged
+    #
+    # Example:
+    #   logger.info('value', :debug, 0, "hello world")
+    def assign_positional(message = nil, payload = nil, exception = nil)
+      # Exception being logged?
+      # Under JRuby a java exception is not a Ruby Exception
+      #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false
+      if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
+        exception = message
+        message   = nil
+      elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
+        exception = payload
+        payload   = nil
+      end
+
+      # Add result of block as message or payload if not nil
+      if block_given? && (result = yield)
+        if result.is_a?(String)
+          message = message.nil? ? result : "#{message} -- #{result}"
+          assign(message: message, payload: payload, exception: exception)
+        elsif message.nil? && result.is_a?(Hash)
+          assign(result)
+        elsif payload && payload.respond_to?(:merge)
+          assign(message: message, payload: payload.merge(result), exception: exception)
+        else
+          assign(message: message, payload: result, exception: exception)
+        end
+      else
+        assign(message: message, payload: payload, exception: exception)
+      end
+    end
 
     MAX_EXCEPTIONS_TO_UNWRAP = 5
     # Call the block for exception and any nested exception
@@ -196,7 +292,8 @@ module SemanticLogger
       end
 
       # Tags
-      h[:tags] = tags if tags && (tags.size > 0)
+      h[:tags]       = tags if tags && !tags.empty?
+      h[:named_tags] = named_tags if named_tags && !named_tags.empty?
 
       # Duration
       if duration
@@ -208,13 +305,7 @@ module SemanticLogger
       h[:message] = cleansed_message if message
 
       # Payload
-      if payload
-        if payload.is_a?(Hash)
-          h.merge!(payload)
-        else
-          h[:payload] = payload
-        end
-      end
+      h[:payload] = payload if payload && payload.respond_to?(:empty?) && !payload.empty?
 
       # Exceptions
       if exception
@@ -231,9 +322,22 @@ module SemanticLogger
       end
 
       # Metric
-      h[:metric] = metric if metric
+      h[:metric]        = metric if metric
       h[:metric_amount] = metric_amount if metric_amount
       h
+    end
+
+    private
+
+    SELF_PATTERN = File.join('lib', 'semantic_logger')
+
+    # Extract the callers backtrace leaving out Semantic Logger
+    def self.extract_backtrace
+      stack = caller
+      while (first = stack.first) && first.include?(SELF_PATTERN)
+        stack.shift
+      end
+      stack
     end
 
   end

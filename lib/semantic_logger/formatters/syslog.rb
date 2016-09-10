@@ -88,7 +88,7 @@ module SemanticLogger
         @options   = options.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
         @facility  = options.delete(:facility) || ::Syslog::LOG_USER
         @level_map = DEFAULT_LEVEL_MAP.dup
-        if level_map  = options.delete(:level_map)
+        if level_map = options.delete(:level_map)
           @level_map.update(level_map)
         end
         # Time is already part of Syslog packet

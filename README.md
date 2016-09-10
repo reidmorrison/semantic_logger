@@ -50,6 +50,16 @@ and are therefore not automatically included by this gem:
 - Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
 
+## V4 Upgrade notes
+
+The following changes need to be made when upgrading to V4:
+- Ruby V2.1 / JRuby V9.1 is now the minimum runtime version.
+- Replace calls to Logger#with_payload with SemanticLogger.named_tagged.
+- Replace calls to Logger#payload with SemanticLogger.named_tags.
+- Appenders now write payload data in a seperate :payload tag instead of mixing them.
+  directly into the root elements to avoid name clashes.
+- MongoDB Appender requires Mongo Ruby Client V2 or greater.
+
 ## Install
 
     gem install semantic_logger

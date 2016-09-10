@@ -58,6 +58,7 @@ module SemanticLogger
       #     server:   'server:3300'
       #   )
       def initialize(options = {}, &block)
+        @socket    = nil
         options    = options.dup
         @server    = options.delete(:server)
         @udp_flags = options.delete(:udp_flags) || 0

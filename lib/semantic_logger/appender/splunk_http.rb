@@ -65,10 +65,10 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
   def initialize(options, &block)
-    options             = options.dup
-    @source_type        = options.delete(:source_type)
-    @index              = options.delete(:index)
-    token               = options.delete(:token)
+    options      = options.dup
+    @source_type = options.delete(:source_type)
+    @index       = options.delete(:index)
+    token        = options.delete(:token)
     raise(ArgumentError, 'Missing mandatory parameter :token') unless token
 
     # Splunk supports HTTP Compression, enable by default

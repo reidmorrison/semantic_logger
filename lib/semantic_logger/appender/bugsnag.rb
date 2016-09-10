@@ -29,9 +29,9 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Subscriber
   #           The Proc must return true or false.
   def initialize(options = {}, &block)
     # Backward compatibility
-    options             = {level: options} unless options.is_a?(Hash)
-    options             = options.dup
-    options[:level]     = :error unless options.has_key?(:level)
+    options         = {level: options} unless options.is_a?(Hash)
+    options         = options.dup
+    options[:level] = :error unless options.has_key?(:level)
 
     raise 'Bugsnag only supports :info, :warn, or :error log levels' unless [:info, :warn, :error].include?(options[:level])
 

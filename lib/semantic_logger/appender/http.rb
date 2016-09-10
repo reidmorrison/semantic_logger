@@ -199,7 +199,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
       true
     else
       # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
-      SemanticLogger::Logger.logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
+      SemanticLogger::Processor.logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
       false
     end
   end

@@ -21,7 +21,7 @@ module Appender
 
       it 'send exception notifications to Graylog with severity' do
         hash = nil
-        exc = nil
+        exc  = nil
         begin
           Uh oh
         rescue Exception => e
@@ -55,8 +55,9 @@ module Appender
         assert_equal @message, hash[:short_message]
         assert_equal 3, hash[:level]
         refute hash[:stack_trace]
-        assert_equal(1, hash[:key1], hash)
-        assert_equal('a', hash[:key2], hash)
+        assert payload = hash[:payload], hash
+        assert_equal 1, payload[:key1], payload
+        assert_equal 'a', payload[:key2], payload
       end
     end
   end
