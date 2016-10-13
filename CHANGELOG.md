@@ -2,8 +2,25 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
-- Add silence_logger for Active Record's Session Store
+## [4.0.0 - Unreleased]
+### Added
+- #backtrace to log the backtrace for a thread.
+
+### Changed
+- Ruby V2.1 is now the minimum runtime version.
+- Replaced Logger#with_payload with SemanticLogger.named_tagged.
+- Replaced Logger#payload with SemanticLogger.named_tags.
+- Any payload elements passed into the log line must now be specified in a separate :payload tag.
+- For JSON and Hash appender format, payload is now in its own :payload tag instead of being merged into the hash.
+- Text and Color formatters now include named_tags in their output.
+- MongoDB Appender has been upgraded to support Mongo Ruby Client V2.
+- Replaced hash arguments with keyword arguments.
+
+## [3.4.0]
+### Added
+- Sentry Logging Appender.
+- :metric_amount in JSON and Hash output.
+- Add silence_logger for Active Record's Session Store.
 
 ## [3.3.0]
 ### Added
