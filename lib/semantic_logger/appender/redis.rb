@@ -8,75 +8,35 @@ end
 module SemanticLogger
   module Appender
     # The Redis Appender for the SemanticLogger
+    # Each level represents a topic list and logs are appended to the list.
     #
-    # Mongo Document Schema:
-    #    _id:         ObjectId("4d9cbcbf7abb3abdaf9679cd"),
-    #    time:        ISODate("2011-04-06T19:19:27.006Z"),
-    #    host:        'Name of the host on which this log entry originated',
-    #    application  'Name of application or service logging the data - clarity_base, nginx, tomcat',
-    #    pid:         process id
-    #    thread:      "name or id of thread",
-    #    name:        "com.clarity.MyClass",
-    #    level:       'trace|debug|info|warn|error|fatal'
-    #    level_index: 0|1|2|3|4|5
-    #    message:     "Message supplied to the logging call",
-    #    duration:    'human readable duration',
-    #    duration_ms: ms,
-    #    tags:        ["id1", "id2"]
-    #    exception: {
-    #      name:        'MyException',
-    #      message:     'Invalid value',
-    #      stack_trace: []
-    #    }
-    #    # When a backtrace is captured
-    #    file_name:   'my_class.rb'
-    #    line_number: 42
+    # Parameters
+    #  :db
+    #     Redis db connection
     #
     # Example:
     #   require 'semantic_logger'
     #
-    #   client   = Mongo::MongoClient.new
-    #   database = client['test']
+    #   client   = Redis.new
     #
-    #   appender = SemanticLogger::Appender::MongoDB.new(
-    #     db:              database,
-    #     collection_size: 1024**3 # 1.gigabyte
+    #   appender = SemanticLogger::Appender::Redis.new(
+    #     db:              client,
     #   )
     #   SemanticLogger.add_appender(appender: appender)
     #
     #   logger = SemanticLogger['Example']
     #
     #   # Log some messages
-    #   logger.info 'This message is written to mongo as a document'
+    #   logger.info 'This message is written to a Redis list as a json string
+    #   under the 'info' key'
     class Redis < SemanticLogger::Subscriber
       attr_reader :db, :max_logs
 
       # Create a MongoDB Appender instance
       #
       # Parameters:
-      #   db: [Mongo::Database]
-      #     The MongoDB database connection to use, not the database name
-      #
-      #   collection_name: [String]
-      #     Name of the collection to store log data in
-      #     Default: semantic_logger
-      #
-      #   write_concern: [Integer]
-      #     Write concern to use
-      #     see: http://docs.mongodb.org/manual/reference/write-concern/
-      #     Default: 0
-      #
-      #   collection_size: [Integer]
-      #     The size of the MongoDB capped collection to create in bytes
-      #     Default: 1 GB
-      #     Examples:
-      #       Prod: 25GB (.5GB per day across 4 servers over 10 days)
-      #       Dev: .5GB
-      #       Test: File
-      #       Release: 4GB
-      #
-      #   collection_max: [Integer]
-      #     Maximum number of log entries that the capped collection will hold.
+      #   db: [Redis]
+      #     The Redis database connection to use
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
@@ -103,7 +63,6 @@ module SemanticLogger
       def initialize(options = {}, &block)
         options          = options.dup
         @db              = options.delete(:db) || raise('Missing mandatory parameter :db')
-        @max_logs = options.delete(:max_logs) || 5000
 
         # Set the log level and formatter
         super(options, &block)
@@ -113,13 +72,13 @@ module SemanticLogger
       # After forking an active process call #reopen to re-open
       # open the handles to resources
       def reopen
-        #@collection = db[@collection_name]
+        # nothing to do
       end
 
       # Flush all pending logs to disk.
       #  Waits for all sent documents to be written to disk
       def flush
-        #db.get_last_error
+        # nothing to do
       end
 
       def purge_all
@@ -130,8 +89,7 @@ module SemanticLogger
       def log(log)
         return false unless should_log?(log)
 
-        # Insert log entry into Mongo
-        
+        # Insert log entry into Redis
         @db.rpush log.level.to_s, formatter.call(log, self)
         true
       end

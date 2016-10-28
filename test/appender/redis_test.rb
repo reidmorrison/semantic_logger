@@ -10,7 +10,6 @@ module Appender
         @db                 = Redis.new
         @appender           = SemanticLogger::Appender::Redis.new(
           db:              @db,
-          max_logs: 5000
         )
         @hash               = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
         @thread_name = Thread.current.name
