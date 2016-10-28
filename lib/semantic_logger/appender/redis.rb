@@ -1,6 +1,7 @@
 begin
   require 'redis'
   require 'json'
+  require 'time'
 rescue LoadError
   raise 'Gem redis is required for logging to Redis. Please add the gem "redis" to your Gemfile.'
 end
@@ -8,7 +9,7 @@ end
 module SemanticLogger
   module Appender
     # The Redis Appender for the SemanticLogger
-    # Each level represents a topic list and logs are appended to the list.
+    # Each level represents a topic that is published to
     #
     # Parameters
     #  :db
@@ -30,9 +31,9 @@ module SemanticLogger
     #   logger.info 'This message is written to a Redis list as a json string
     #   under the 'info' key'
     class Redis < SemanticLogger::Subscriber
-      attr_reader :db, :max_logs
+      attr_reader :db
 
-      # Create a MongoDB Appender instance
+      # Create a Redis Appender instance
       #
       # Parameters:
       #   db: [Redis]
@@ -90,7 +91,7 @@ module SemanticLogger
         return false unless should_log?(log)
 
         # Insert log entry into Redis
-        @db.rpush log.level.to_s, formatter.call(log, self)
+        @db.publish log.level.to_s, formatter.call(log, self)
         true
       end
 
