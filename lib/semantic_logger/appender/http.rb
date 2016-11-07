@@ -204,9 +204,10 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
     end
   end
 
+  protected
   # This method can be usefull for subclasses that need to change request uri format.
-  protected def format_request_uri(request_uri)
-    request_uri
+  def format_request_uri(request_uri)
+    return request_uri
   end
 
 end
