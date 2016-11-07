@@ -171,19 +171,19 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
 
   # HTTP Post
   def post(body, request_uri = path)
-    request = Net::HTTP::Post.new(request_uri, @header)
+    request = Net::HTTP::Post.new(format_request_uri(request_uri), @header)
     process_request(request, body)
   end
 
   # HTTP Put
   def put(body, request_uri = path)
-    request = Net::HTTP::Put.new(request_uri, @header)
+    request = Net::HTTP::Put.new(format_request_uri(request_uri), @header)
     process_request(request, body)
   end
 
   # HTTP Delete
   def delete(request_uri = path)
-    request = Net::HTTP::Delete.new(request_uri, @header)
+    request = Net::HTTP::Delete.new(format_request_uri(request_uri), @header)
     process_request(request)
   end
 
@@ -202,6 +202,11 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
       SemanticLogger::Logger.logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
       false
     end
+  end
+
+  # This method can be usefull for subclasses that need to change request uri format.
+  protected def format_request_uri(request_uri)
+    request_uri
   end
 
 end
