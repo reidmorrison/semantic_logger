@@ -157,7 +157,7 @@ Or, to use the UDP Protocol:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :graylog,
-  udp:      'tcp://localhost:12201'
+  url:      'udp://localhost:12201'
 )
 ~~~
 
