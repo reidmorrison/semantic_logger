@@ -24,8 +24,8 @@ module Appender
           else
             refute hash.has_key?(:backtrace)
           end
-          assert_equal true, hash.has_key?(:context)
-          assert_equal level, hash[:context][:level]
+          assert_equal true, hash.has_key?(:extra)
+          assert_equal level, hash[:extra][:level]
         end
 
         it "sends #{level} exceptions" do

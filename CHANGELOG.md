@@ -4,9 +4,6 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [4.0.0 - Unreleased]
 ### Added
-- Sentry Logging Appender.
-- :metric_amount in JSON and Hash output.
-- Add silence_logger for Active Record's Session Store.
 - #backtrace to log the backtrace for a thread.
 
 ### Changed
@@ -18,6 +15,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Text and Color formatters now include named_tags in their output.
 - MongoDB Appender has been upgraded to support Mongo Ruby Client V2.
 - Replaced hash arguments with keyword arguments.
+  - For example, the Bugsnag Appender now only accepts the level as follows:
+~~~ruby
+SemanticLogger::Appender::Bugsnag.new(level: :info)
+~~~
 
 ### Fixed
 
@@ -25,6 +26,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Rails 3.2
 - Ruby 1.9 & 2.0
 - JRuby 1.7
+
+## [3.4.0]
+### Added
+- Sentry Logging Appender.
+- :metric_amount in JSON and Hash output.
+- Add silence_logger for Active Record's Session Store.
 
 ## [3.3.0]
 ### Added

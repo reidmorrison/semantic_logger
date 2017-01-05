@@ -5,7 +5,7 @@ module Appender
   class BugsnagTest < Minitest::Test
     describe SemanticLogger::Appender::Bugsnag do
       before do
-        @appender = SemanticLogger::Appender::Bugsnag.new(:info)
+        @appender = SemanticLogger::Appender::Bugsnag.new(level: :info)
         @message  = 'AppenderBugsnagTest log message'
       end
 
