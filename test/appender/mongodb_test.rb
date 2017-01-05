@@ -25,10 +25,10 @@ module Appender
           @appender.debug
           document = @appender.collection.find.first
           assert_equal :debug, document['level']
-          assert_equal nil, document['message']
+          assert_nil document['message']
           assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
-          assert_equal nil, document['payload']
+          assert_nil document['payload']
           assert_equal $$, document['pid']
           assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
@@ -39,7 +39,7 @@ module Appender
 
           document = @appender.collection.find.first
           assert_equal :debug, document['level']
-          assert_equal nil, document['message']
+          assert_nil document['message']
           assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
           assert payload = document['payload']

@@ -25,8 +25,8 @@ module Appender
             @appender.send(level, @message)
           end
           if [:trace, :debug].include?(level)
-            assert_equal nil, exception
-            assert_equal nil, hash
+            assert_nil exception
+            assert_nil hash
           else
             assert_equal 'RuntimeError', exception.class.to_s
             assert_equal @message, exception.message
@@ -40,8 +40,8 @@ module Appender
             @appender.send(level, @message, {key1: 1, key2: 'a'})
           end
           if [:trace, :debug].include?(level)
-            assert_equal nil, exception
-            assert_equal nil, hash
+            assert_nil exception
+            assert_nil hash
           else
             assert_equal 'RuntimeError', exception.class.to_s
             assert_equal @message, exception.message
@@ -58,8 +58,8 @@ module Appender
             @appender.send(level, @message, error)
           end
           if [:trace, :debug].include?(level)
-            assert_equal nil, exception
-            assert_equal nil, hash
+            assert_nil exception
+            assert_nil hash
           else
             assert_equal error.class.to_s, exception.class.to_s
             assert_equal error.message, exception.message

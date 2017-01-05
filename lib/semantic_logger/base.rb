@@ -114,7 +114,32 @@ module SemanticLogger
       end
     end
 
+    # Backward compatibility
     alias_method :benchmark, :measure
+
+    # Log a thread backtrace
+    def backtrace(thread: Thread.current, level: :warn, message: 'Backtrace:', payload: nil, metric: nil, metric_amount: 1)
+      log       = Log.new(name, level)
+      backtrace =
+        if thread == Thread.current
+          self.class.cleanse_backtrace
+        else
+          log.thread_name = thread.name
+          log.tags        = thread[:semantic_logger_tags].clone
+          log.named_tags  = thread[:semantic_logger_named_tags].clone
+          thread.backtrace
+        end
+      # TODO: Keep backtrace instead of transforming into a text message at this point
+      # Maybe log_backtrace: true
+      if backtrace
+        message += "\n"
+        message << backtrace.join("\n")
+      end
+
+      if log.assign(message: message, backtrace: backtrace, payload: payload, metric: metric, metric_amount: metric_amount) && should_log?(log)
+        self.log(log)
+      end
+    end
 
     # :nodoc:
     def tagged(*tags, &block)

@@ -92,9 +92,9 @@ module SemanticLogger
       end
 
       if backtrace
-        self.backtrace = backtrace
+        self.backtrace = self.class.cleanse_backtrace(backtrace)
       elsif level_index >= SemanticLogger.backtrace_level_index
-        self.backtrace = self.class.extract_backtrace
+        self.backtrace = self.class.cleanse_backtrace
       end
 
       if metric
@@ -331,9 +331,8 @@ module SemanticLogger
 
     SELF_PATTERN = File.join('lib', 'semantic_logger')
 
-    # Extract the callers backtrace leaving out Semantic Logger
-    def self.extract_backtrace
-      stack = caller
+    # Extract the backtrace leaving out Semantic Logger
+    def self.cleanse_backtrace(stack = caller)
       while (first = stack.first) && first.include?(SELF_PATTERN)
         stack.shift
       end
