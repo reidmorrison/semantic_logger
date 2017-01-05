@@ -16,6 +16,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - MongoDB Appender has been upgraded to support Mongo Ruby Client V2.
 - Replaced hash arguments with keyword arguments.
 
+## [3.4.1]
+### Fixed
+- Failed to load appender when symbolic name includes an underscore, for example: 
+~~~ruby
+SemanticLogger.add_appender(appender: :new_relic)
+~~~
+
 ## [3.4.0]
 ### Added
 - Sentry Logging Appender.
