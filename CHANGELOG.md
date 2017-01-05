@@ -27,6 +27,13 @@ SemanticLogger::Appender::Bugsnag.new(level: :info)
 - Ruby 1.9 & 2.0
 - JRuby 1.7
 
+## [3.4.1]
+### Fixed
+- Failed to load appender when symbolic name includes an underscore, for example: 
+~~~ruby
+SemanticLogger.add_appender(appender: :new_relic)
+~~~
+
 ## [3.4.0]
 ### Added
 - Sentry Logging Appender.

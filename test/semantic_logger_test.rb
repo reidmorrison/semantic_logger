@@ -34,7 +34,13 @@ class SemanticLoggerTest < Minitest::Test
 
       it 'adds symbol appender' do
         @appender = SemanticLogger.add_appender(appender: :wrapper, logger: Logger.new(STDOUT))
-        assert @appender.is_a?(SemanticLogger::Appender::Wrapper), @appender.ai
+        assert @appender.is_a?(SemanticLogger::Appender::Wrapper), -> { @appender.ai }
+        assert SemanticLogger.appenders.include?(@appender)
+      end
+
+      it 'adds symbol appender with underscores' do
+        @appender = SemanticLogger.add_appender(appender: :new_relic)
+        assert @appender.is_a?(SemanticLogger::Appender::NewRelic), -> { @appender.ai }
         assert SemanticLogger.appenders.include?(@appender)
       end
 
