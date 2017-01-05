@@ -11,6 +11,24 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Replaced Logger#with_payload with SemanticLogger.named_tagged.
 - Replaced Logger#payload with SemanticLogger.named_tags.
 - Any payload elements passed into the log line must now be specified in a separate :payload tag.
+    - For example any occurrences of:
+    ~~~ruby
+    logger.error(message: 'Hello', response: response_message)
+    ~~~
+
+    - Must be changed to use the payload tag:
+    
+    ~~~ruby
+    logger.error(message: 'Hello', payload: {response: response_message} )
+    ~~~
+    
+    - Otherwise Ruby will raise the following error:
+    
+    ~~~
+    ArgumentError: unknown keywords: response
+    semantic_logger/lib/semantic_logger/log.rb:65:in `assign'
+    ~~~
+
 - For JSON and Hash appender format, payload is now in its own :payload tag instead of being merged into the hash.
 - Text and Color formatters now include named_tags in their output.
 - MongoDB Appender has been upgraded to support Mongo Ruby Client V2.
