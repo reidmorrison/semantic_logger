@@ -52,7 +52,7 @@ module SemanticLogger
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
-    @@host ||= Socket.gethostname
+    @@host ||= Socket.gethostname.force_encoding("UTF-8")
   end
 
   # Override the default host name
@@ -153,11 +153,11 @@ module SemanticLogger
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
   def self.add_appender(options, deprecated_level = nil, &block)
     options  = options.is_a?(Hash) ? options.dup : convert_old_appender_args(options, deprecated_level)
-    appender = appender_from_options(options, &block)
+    appender = SemanticLogger::Appender.create(options, &block)
     @@appenders << appender
 
     # Start appender thread if it is not already running
-    SemanticLogger::Logger.start_appender_thread
+    SemanticLogger::Processor.start
     appender
   end
 
@@ -193,7 +193,7 @@ module SemanticLogger
   def self.reopen
     @@appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
     # After a fork the appender thread is not running, start it if it is not running
-    SemanticLogger::Logger.start_appender_thread
+    SemanticLogger::Processor.start
   end
 
   # Supply a block to be called whenever a metric is seen during measure logging
@@ -209,7 +209,7 @@ module SemanticLogger
   #
   # Example:
   #   SemanticLogger.on_metric do |log|
-  #     puts "#{log.metric} was received. Log Struct: #{log.inspect}"
+  #     puts "#{log.metric} was received. Log: #{log.inspect}"
   #   end
   #
   # Note:
@@ -217,7 +217,7 @@ module SemanticLogger
   # * Does not slow down the application.
   # * Only context is what is passed in the log struct, the original thread context is not available.
   def self.on_metric(options = {}, &block)
-    SemanticLogger::Logger.on_metric(options, &block)
+    SemanticLogger::Processor.on_metric(options, &block)
   end
 
   # Add signal handlers for Semantic Logger
@@ -267,14 +267,7 @@ module SemanticLogger
       logger = SemanticLogger['Thread Dump']
       Thread.list.each do |thread|
         next if thread == Thread.current
-        message = thread.name
-        if backtrace = thread.backtrace
-          message += "\n"
-          message << backtrace.join("\n")
-        end
-        tags = thread[:semantic_logger_tags]
-        tags = tags.nil? ? [] : tags.clone
-        logger.tagged(tags) { logger.warn(message) }
+        logger.backtrace(thread: thread)
       end
     end if thread_dump_signal
 
@@ -291,19 +284,6 @@ module SemanticLogger
   # If the tag being supplied is definitely a string then this fast
   # tag api can be used for short lived tags
   def self.fast_tag(tag)
-    (Thread.current[:semantic_logger_tags] ||= []) << tag
-    yield
-  ensure
-    Thread.current[:semantic_logger_tags].pop
-  end
-
-  # Add the supplied named tags to the list of tags to log for this thread whilst
-  # the supplied block is active.
-  #
-  # Returns result of block
-  #
-  # Example:
-  def self.named_tags(tag)
     (Thread.current[:semantic_logger_tags] ||= []) << tag
     yield
   ensure
@@ -342,6 +322,36 @@ module SemanticLogger
   def self.pop_tags(quantity=1)
     t = Thread.current[:semantic_logger_tags]
     t.pop(quantity) unless t.nil?
+  end
+
+  # Add the supplied named tags to the list of tags to log for this thread whilst
+  # the supplied block is active.
+  #
+  # Add a payload to all log calls on This Thread within the supplied block
+  #
+  #   SemanticLogger.named_tagged(tracking_number: 12345) do
+  #     logger.debug('Hello World')
+  #   end
+  #
+  # Returns result of block
+  def self.named_tagged(hash)
+    raise(ArgumentError, '#named_tagged only accepts named parameters (Hash)') unless hash.is_a?(Hash)
+    (Thread.current[:semantic_logger_named_tags] ||= []) << hash
+    yield
+  ensure
+    Thread.current[:semantic_logger_named_tags].pop
+  end
+
+  # Returns a copy of the [Hash] of named tags currently active for this thread
+  # Returns nil if no named tags are set
+  def self.named_tags
+    if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
+      if list.size > 1
+        list.inject({}) { |h, sum| sum.merge(h) }
+      else
+        list.first.clone
+      end
+    end
   end
 
   # Silence noisy log levels by changing the default_level within the block
@@ -443,45 +453,6 @@ module SemanticLogger
     end
     warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}" if $VERBOSE
     options
-  end
-
-  # Returns [SemanticLogger::Subscriber] appender for the supplied options
-  def self.appender_from_options(options, &block)
-    if options[:io] || options[:file_name]
-      SemanticLogger::Appender::File.new(options, &block)
-    elsif appender = options.delete(:appender)
-      if appender.is_a?(Symbol)
-        constantize_symbol(appender).new(options)
-      elsif appender.is_a?(Subscriber)
-        appender
-      else
-        raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
-      end
-    elsif options[:logger]
-      SemanticLogger::Appender::Wrapper.new(options, &block)
-    end
-  end
-
-  def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
-    klass = "#{namespace}::#{camelize(symbol.to_s)}"
-    begin
-      if RUBY_VERSION.to_i >= 2
-        Object.const_get(klass)
-      else
-        klass.split('::').inject(Object) { |o, name| o.const_get(name) }
-      end
-    rescue NameError
-      raise(ArgumentError, "Could not convert symbol: #{symbol} to a class in: #{namespace}. Looking for: #{klass}")
-    end
-  end
-
-  # Borrow from Rails, when not running Rails
-  def self.camelize(term)
-    string = term.to_s
-    string = string.sub(/^[a-z\d]*/) { |match| match.capitalize }
-    string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{$1}#{$2.capitalize}" }
-    string.gsub!('/'.freeze, '::'.freeze)
-    string
   end
 
   # Initial default Level for all new instances of SemanticLogger::Logger

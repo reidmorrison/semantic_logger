@@ -20,7 +20,7 @@ module Appender
         @appender.stub(:post, -> json, ind { index = ind }) do
           @appender.info @message
         end
-        assert_equal "semantic_logger-#{Time.now.utc.strftime('%Y.%m.%d')}/log", index
+        assert_equal "/semantic_logger-#{Time.now.utc.strftime('%Y.%m.%d')}/log", index
       end
 
       SemanticLogger::LEVELS.each do |level|
@@ -64,8 +64,9 @@ module Appender
           assert_equal @message, message['message']
           assert_equal level.to_s, message['level']
           refute message['stack_trace']
-          assert_equal(1, message['key1'], message)
-          assert_equal('a', message['key2'], message)
+          assert payload = message['payload'], message
+          assert_equal 1, payload['key1'], message
+          assert_equal 'a', payload['key2'], message
         end
       end
 

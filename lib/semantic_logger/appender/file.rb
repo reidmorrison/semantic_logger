@@ -38,7 +38,7 @@ module SemanticLogger
       #    SemanticLogger.add_appender(io: STDOUT, formatter: :color)
       #
       #    # And log to a file at the same time
-      #    SemanticLogger::Logger.add_appender(file_name: 'application.log', formatter: :color)
+      #    SemanticLogger.add_appender(file_name: 'application.log', formatter: :color)
       #
       #    logger = SemanticLogger['test']
       #    logger.info 'Hello World'

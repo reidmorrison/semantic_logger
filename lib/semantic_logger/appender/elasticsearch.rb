@@ -49,20 +49,21 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
     @index        = options.delete(:index) || 'semantic_logger'
     @type         = options.delete(:type) || 'log'
     options[:url] ||= 'http://localhost:9200'
-
     super(options, &block)
+    @request_path = "#{@path.end_with?('/') ? @path : "#{@path}/"}#{@index}-%Y.%m.%d"
+    @logging_path = "#{@request_path}/#{type}"
   end
 
   # Log to the index for today
   def log(log)
     return false unless should_log?(log)
 
-    post(formatter.call(log, self), "#{index}-#{log.time.strftime('%Y.%m.%d')}/#{type}")
+    post(formatter.call(log, self), log.time.strftime(@logging_path))
   end
 
   # Deletes all log data captured for a day
   def delete_all(date = Date.today)
-    "#{index}-#{date.strftime('%Y.%m.%d')}/#{type}"
+    delete(date.strftime(@request_path))
   end
 
 end

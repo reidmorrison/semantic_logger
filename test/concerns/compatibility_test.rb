@@ -85,13 +85,13 @@ class CompatibilityTest < Minitest::Test
     end
 
     it '#formatter NOOP' do
-      assert_equal nil, @logger.formatter
+      assert_nil @logger.formatter
       @logger.formatter = 'blah'
       assert_equal 'blah', @logger.formatter
     end
 
     it '#datetime_format NOOP' do
-      assert_equal nil, @logger.datetime_format
+      assert_nil @logger.datetime_format
       @logger.datetime_format = 'blah'
       assert_equal 'blah', @logger.datetime_format
     end

@@ -14,6 +14,13 @@ module SemanticLogger
         # Tags
         message << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
 
+        # Named Tags
+        if (named_tags = log.named_tags) && !named_tags.empty?
+          list = []
+          named_tags.each_pair { |name, value| list << "[#{name}: #{value}]" }
+          message << ' ' << list.join(' ')
+        end
+
         # Duration
         message << " (#{log.duration_human})" if log.duration
 

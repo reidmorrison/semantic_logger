@@ -35,6 +35,13 @@ module SemanticLogger
         # Tags
         message << ' ' << log.tags.collect { |tag| "[#{level_color}#{tag}#{colors::CLEAR}]" }.join(' ') if log.tags && (log.tags.size > 0)
 
+        # Named Tags
+        if (named_tags = log.named_tags) && !named_tags.empty?
+          list = {}
+          named_tags.each_pair { |name, value| list << "[#{level_color}#{name}: #{value}#{colors::CLEAR}]" }
+          message << ' ' << list.join(' ')
+        end
+
         # Duration
         message << " (#{colors::BOLD}#{log.duration_human}#{colors::CLEAR})" if log.duration
 

@@ -1,10 +1,10 @@
 language: ruby
 
 rvm:
-  - 2.1.8
-  - 2.2.4
-  - jruby-1.7.23
-  - jruby-9.0.6.0
+  - 2.1.10
+  - 2.2.6
+  - 2.3.3
+  - jruby-9.1.6.0
 
 services:
   - mongodb

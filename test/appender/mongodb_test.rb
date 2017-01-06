@@ -1,14 +1,12 @@
 require_relative '../test_helper'
 
 # Unit Test for SemanticLogger::Appender::MongoDB
-#
 module Appender
   class MongoDBTest < Minitest::Test
     describe SemanticLogger::Appender::MongoDB do
       before do
-        @db                 = Mongo::Connection.new['test']
         @appender           = SemanticLogger::Appender::MongoDB.new(
-          db:              @db,
+          uri:             'mongodb://127.0.0.1:27017/test',
           collection_size: 10*1024**2, # 10MB
           host:            'test',
           application:     'test_application',
@@ -25,27 +23,28 @@ module Appender
       describe 'format logs into documents' do
         it 'handle no arguments' do
           @appender.debug
-          document = @appender.collection.find_one
+          document = @appender.collection.find.first
           assert_equal :debug, document['level']
-          assert_equal nil, document['message']
+          assert_nil document['message']
           assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
-          assert_equal nil, document['payload']
+          assert_nil document['payload']
           assert_equal $$, document['pid']
           assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
         end
 
-        it 'handle hash message' do
-          @appender.debug(@hash)
+        it 'handle named parameters' do
+          @appender.debug(payload: @hash)
 
-          document = @appender.collection.find_one
+          document = @appender.collection.find.first
           assert_equal :debug, document['level']
-          assert_equal nil, document['message']
+          assert_nil document['message']
           assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
-          assert_equal 12345, document['tracking_number']
-          assert_equal 'HSSKLEU@JDK767', document['session_id']
+          assert payload = document['payload']
+          assert_equal 12345, payload['tracking_number'], payload
+          assert_equal 'HSSKLEU@JDK767', payload['session_id']
           assert_equal $$, document['pid']
           assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
@@ -54,13 +53,14 @@ module Appender
         it 'handle message and payload' do
           @appender.debug('hello world', @hash)
 
-          document = @appender.collection.find_one
+          document = @appender.collection.find.first
           assert_equal :debug, document['level']
           assert_equal 'hello world', document['message']
           assert_equal 'thread', document['thread']
           assert document['time'].is_a?(Time)
-          assert_equal 12345, document['tracking_number']
-          assert_equal 'HSSKLEU@JDK767', document['session_id']
+          assert payload = document['payload']
+          assert_equal 12345, payload['tracking_number'], payload
+          assert_equal 'HSSKLEU@JDK767', payload['session_id']
           assert_equal $$, document['pid']
           assert_equal 'test', document['host']
           assert_equal 'test_application', document['application']
@@ -69,7 +69,7 @@ module Appender
         it 'handle message without payload' do
           @appender.debug('hello world')
 
-          document = @appender.collection.find_one
+          document = @appender.collection.find.first
           assert_equal :debug, document['level']
           assert_equal 'hello world', document['message']
           assert_equal 'thread', document['thread']
@@ -80,18 +80,19 @@ module Appender
         end
       end
 
-      describe 'for each log level' do
-        # Ensure that any log level can be logged
-        SemanticLogger::LEVELS.each do |level|
-          it 'log #{level} information' do
+      # Ensure that any log level can be logged
+      SemanticLogger::LEVELS.each do |level|
+        describe "##{level}" do
+          it 'logs' do
             @appender.send(level, 'hello world -- Calculations', @hash)
-            document = @appender.collection.find_one
+            document = @appender.collection.find.first
             assert_equal level, document['level']
             assert_equal 'hello world -- Calculations', document['message']
             assert_equal 'thread', document['thread']
             assert document['time'].is_a?(Time)
-            assert_equal 12345, document['tracking_number']
-            assert_equal 'HSSKLEU@JDK767', document['session_id']
+            assert payload = document['payload']
+            assert_equal 12345, payload['tracking_number'], payload
+            assert_equal 'HSSKLEU@JDK767', payload['session_id']
             assert_equal $$, document['pid']
             assert_equal 'test', document['host'], document.ai
             assert_equal 'test_application', document['application']

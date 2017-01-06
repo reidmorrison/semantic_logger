@@ -13,7 +13,7 @@ module Appender
             token: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
           )
         end
-        @message  = 'AppenderSplunkHttpTest log message'
+        @message = 'AppenderSplunkHttpTest log message'
       end
 
       SemanticLogger::LEVELS.each do |level|
@@ -57,12 +57,13 @@ module Appender
           end
           body    = decompress_data(request.body)
           message = JSON.parse(body)
-          assert message['event'], message.ai
-          assert_equal @message, message['event']['message']
-          assert_equal level.to_s, message['event']['level']
-          refute message['event']['stack_trace']
-          assert_equal(1, message['event']['key1'], message)
-          assert_equal('a', message['event']['key2'], message)
+          assert event = message['event'], message.ai
+          assert_equal @message, event['message']
+          assert_equal level.to_s, event['level']
+          refute event['stack_trace']
+          assert payload = event['payload'], event
+          assert_equal(1, payload['key1'], message)
+          assert_equal('a', payload['key2'], message)
         end
       end
 

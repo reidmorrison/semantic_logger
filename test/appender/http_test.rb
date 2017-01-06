@@ -53,8 +53,9 @@ module Appender
           assert_equal @message, hash['message']
           assert_equal level.to_s, hash['level']
           refute hash['stack_trace']
-          assert_equal 1, hash['key1'], hash
-          assert_equal 'a', hash['key2'], hash
+          assert payload = hash['payload'], hash
+          assert_equal 1, payload['key1'], payload
+          assert_equal 'a', payload['key2'], payload
         end
 
       end

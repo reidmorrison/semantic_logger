@@ -182,12 +182,13 @@ module SemanticLogger
       #     connect_retry_count:    5
       #   )
       def initialize(options = {}, &block)
-        @options                           = options.dup
-        @separator                         = @options.delete(:separator) || "\n"
+        @tcp_client                = nil
+        @options                   = options.dup
+        @separator                 = @options.delete(:separator) || "\n"
 
         # Use the internal logger so that errors with remote logging are only written locally.
-        Net::TCPClient.logger              = SemanticLogger::Logger.logger.dup
-        Net::TCPClient.logger.name         = 'Net::TCPClient'
+        Net::TCPClient.logger      = SemanticLogger::Processor.logger.clone
+        Net::TCPClient.logger.name = 'Net::TCPClient'
 
         options = extract_subscriber_options!(@options)
         super(options, &block)
@@ -205,7 +206,10 @@ module SemanticLogger
       def log(log)
         return false unless should_log?(log)
 
-        @tcp_client.retry_on_connection_failure { @tcp_client.write("#{formatter.call(log, self)}#{separator}") }
+        message = formatter.call(log, self)
+        @tcp_client.retry_on_connection_failure do
+          @tcp_client.write("#{message}#{separator}")
+        end
         true
       end
 

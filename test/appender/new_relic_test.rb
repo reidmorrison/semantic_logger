@@ -44,9 +44,9 @@ module Appender
       it 'send notification to New Relic with custom attributes' do
         exception = hash = nil
         NewRelic::Agent.stub(:notice_error, -> exc, h { exception = exc; hash = h }) do
-          @appender.tagged('test') do
-            @appender.with_payload({key1: 1, key2: 'a'}) do
-              @appender.measure(:error, @message) do
+          SemanticLogger.tagged('test') do
+            SemanticLogger.named_tagged(key1: 1, key2: 'a') do
+              @appender.measure_error(message: @message, payload: {key3: 4}) do
                 sleep 0.001
               end
             end
@@ -54,11 +54,18 @@ module Appender
         end
         assert_equal 'RuntimeError', exception.class.to_s
         assert_equal @message, exception.message
-        assert_equal ['test'], hash[:custom_params][:tags], hash
-        assert_equal 1, hash[:custom_params][:key1], hash
-        assert_equal 'a', hash[:custom_params][:key2], hash
-        assert hash[:custom_params][:duration], hash
-        assert hash[:custom_params][:thread], hash
+        assert params = hash[:custom_params], hash
+        assert params[:duration], params
+        assert params[:thread], params
+
+        assert_equal ['test'], params[:tags], params
+
+        assert named_tags = params[:named_tags], params
+        assert_equal 1, named_tags[:key1], named_tags
+        assert_equal 'a', named_tags[:key2], named_tags
+
+        assert payload = params[:payload], params
+        assert_equal 4, payload[:key3], payload
       end
     end
   end

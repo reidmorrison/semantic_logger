@@ -7,7 +7,7 @@ end
 
 module SemanticLogger
   module Metrics
-    class Statsd
+    class Statsd < Subscriber
       # Create Statsd metrics subscriber
       #
       # Parameters:
@@ -18,6 +18,10 @@ module SemanticLogger
       #     Example, send all metrics to a particular namespace:
       #       udp://localhost:8125/namespace
       #     Default: udp://localhost:8125
+      #
+      # Example:
+      #   subscriber = SemanticLogger::Metrics::Statsd.new(url: 'udp://localhost:8125')
+      #   SemanticLogger.on_metric(subscriber)
       def initialize(options = {})
         options = options.dup
         @url    = options.delete(:url) || 'udp://localhost:8125'
