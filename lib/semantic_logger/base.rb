@@ -175,9 +175,9 @@ module SemanticLogger
     end
 
     # :nodoc:
-    def with_payload(payload)
+    def with_payload(payload, &block)
       warn '#with_payload is deprecated, use SemanticLogger.named_tagged'
-      SemanticLogger.named_tagged(payload)
+      SemanticLogger.named_tagged(payload, &block)
     end
 
     # :nodoc:

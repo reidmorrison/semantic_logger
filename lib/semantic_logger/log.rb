@@ -67,7 +67,7 @@ module SemanticLogger
       # Except if there is an exception when it will always be logged
       if duration
         self.duration = duration
-        return false if (duration <= min_duration) && exception.nil?
+        return false if (duration < min_duration) && exception.nil?
       end
 
       self.message = message
