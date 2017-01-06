@@ -65,4 +65,11 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Appender::Http
     "#{index}-#{date.strftime('%Y.%m.%d')}/#{type}"
   end
 
+  protected
+  # basically appends slash in the beggining of the path
+  # eg: "users/1" becomes "/users/1"
+  def format_request_uri(request_uri)
+    "/" + request_uri.gsub(/\A\//, '')
+  end
+
 end
