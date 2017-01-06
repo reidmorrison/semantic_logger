@@ -52,7 +52,7 @@ module SemanticLogger
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
-    @@host ||= Socket.gethostname
+    @@host ||= Socket.gethostname.force_encoding("UTF-8")
   end
 
   # Override the default host name
