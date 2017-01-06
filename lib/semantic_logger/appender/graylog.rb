@@ -103,6 +103,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
     h[:timestamp]     = log.time.utc.to_f
     h[:level]         = logger.map_level(log)
     h[:level_str]     = log.level.to_s
+    h[:duration_str]  = h.delete(:duration)
     h[:short_message] = h.delete(:message) if log.message
     h
   end
