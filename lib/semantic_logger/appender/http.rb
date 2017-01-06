@@ -101,12 +101,14 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
 
     uri     = URI.parse(@url)
     @server = uri.host
-    raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'") unless @url
+    raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'") unless @server
 
     @port     = uri.port
     @username = uri.user if !@username && uri.user
     @password = uri.password if !@password && uri.password
     @path     = uri.path
+    # Path cannot be empty
+    @path     = '/' if @path == ''
 
     if uri.scheme == 'https'
       @ssl_options               ||= {}
