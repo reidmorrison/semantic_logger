@@ -266,7 +266,8 @@ module SemanticLogger
     Signal.trap(thread_dump_signal) do
       logger = SemanticLogger['Thread Dump']
       Thread.list.each do |thread|
-        next if thread == Thread.current
+        # MRI re-uses the main thread for signals, JRuby uses `SIGTTIN handler` thread.
+        next if defined?(JRuby) && (thread == Thread.current)
         logger.backtrace(thread: thread)
       end
     end if thread_dump_signal
