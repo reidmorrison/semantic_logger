@@ -37,7 +37,7 @@ module SemanticLogger
 
         # Named Tags
         if (named_tags = log.named_tags) && !named_tags.empty?
-          list = {}
+          list = []
           named_tags.each_pair { |name, value| list << "[#{level_color}#{name}: #{value}#{colors::CLEAR}]" }
           message << ' ' << list.join(' ')
         end
