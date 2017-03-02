@@ -18,8 +18,14 @@ module SemanticLogger
     # Must be one of the values in SemanticLogger::LEVELS, or
     # nil if this logger instance should use the global default level
     def level=(level)
-      @level_index = SemanticLogger.level_to_index(level)
-      @level       = SemanticLogger.send(:index_to_level, @level_index)
+      if level.nil?
+        # Use the global default level for this logger
+        @level_index = nil
+        @level       = nil
+      else
+        @level_index = SemanticLogger.level_to_index(level)
+        @level       = SemanticLogger.send(:index_to_level, @level_index)
+      end
     end
 
     # Returns the current log level if set, otherwise it returns the global

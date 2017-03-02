@@ -5,9 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [4.0.0 - Unreleased]
 ### Added
 - #backtrace to log the backtrace for a thread.
+- `named_tags` to support hash like tagging of log messages.
 
 ### Changed
 - Ruby V2.1 is now the minimum runtime version.
+- Switch from Hash arguments to Ruby keyword arguments, for better performance, validation and defaults.
 - Replaced Logger#with_payload with SemanticLogger.named_tagged.
 - Replaced Logger#payload with SemanticLogger.named_tags.
 - Any payload elements passed into the log line must now be specified in a separate :payload tag.
@@ -39,6 +41,8 @@ SemanticLogger::Appender::Bugsnag.new(level: :info)
 ~~~
 
 ### Fixed
+- Graylog appender when logger is called with only an exception object.
+- During a backtrace dump, include the current thread on Ruby MRI.
 
 ### Dropped Support for
 - Rails 3.2
