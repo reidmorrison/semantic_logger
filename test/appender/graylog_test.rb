@@ -30,9 +30,27 @@ module Appender
         @appender.notifier.stub(:notify!, -> h { hash = h }) do
           @appender.error 'Reading File', exc
         end
-        assert 'Reading File', hash[:short_message]
-        assert 'NameError', hash[:exception][:name]
-        assert 'undefined local variable or method', hash[:exception][:message]
+        assert_equal 'Reading File', hash[:short_message]
+        assert_equal 'NameError', hash[:exception][:name]
+        assert_match 'undefined local variable or method', hash[:exception][:message]
+        assert_equal 3, hash[:level], 'Should be error level (3)'
+        assert hash[:exception][:stack_trace].first.include?(__FILE__), hash[:exception]
+      end
+
+      it 'send exception notifications to Graylog without log message' do
+        hash = nil
+        exc  = nil
+        begin
+          raise StandardError, 'Reading File'
+        rescue Exception => e
+          exc = e
+        end
+        @appender.notifier.stub(:notify!, -> h { hash = h }) do
+          @appender.error exc
+        end
+        assert_equal exc.message, hash[:short_message]
+        assert_equal exc.class.to_s, hash[:exception][:name]
+        assert_match exc.message, hash[:exception][:message]
         assert_equal 3, hash[:level], 'Should be error level (3)'
         assert hash[:exception][:stack_trace].first.include?(__FILE__), hash[:exception]
       end

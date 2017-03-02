@@ -100,11 +100,14 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
   def call(log, logger)
     h = log.to_h(host, application)
     h.delete(:time)
+    h.delete(:message) if log.message
+
+    short_message = log.message || log.exception.message
     h[:timestamp]     = log.time.utc.to_f
     h[:level]         = logger.map_level(log)
     h[:level_str]     = log.level.to_s
     h[:duration_str]  = h.delete(:duration)
-    h[:short_message] = h.delete(:message) if log.message
+    h[:short_message] = short_message
     h
   end
 
