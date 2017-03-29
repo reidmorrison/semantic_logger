@@ -336,22 +336,27 @@ module SemanticLogger
   #
   # Returns result of block
   def self.named_tagged(hash)
+    return yield if hash.nil? || hash.empty?
     raise(ArgumentError, '#named_tagged only accepts named parameters (Hash)') unless hash.is_a?(Hash)
-    (Thread.current[:semantic_logger_named_tags] ||= []) << hash
-    yield
-  ensure
-    Thread.current[:semantic_logger_named_tags].pop
+
+    begin
+      (Thread.current[:semantic_logger_named_tags] ||= []) << hash
+      yield
+    ensure
+      Thread.current[:semantic_logger_named_tags].pop
+    end
   end
 
-  # Returns a copy of the [Hash] of named tags currently active for this thread
-  # Returns nil if no named tags are set
+  # Returns [Hash] a copy of the named tags currently active for this thread.
   def self.named_tags
     if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
       if list.size > 1
-        list.inject({}) { |h, sum| sum.merge(h) }
+        list.reduce({}) { |h, sum| sum.merge(h) }
       else
         list.first.clone
       end
+    else
+      {}
     end
   end
 
