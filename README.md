@@ -56,9 +56,21 @@ The following changes need to be made when upgrading to V4:
 - Ruby V2.1 / JRuby V9.1 is now the minimum runtime version.
 - Replace calls to Logger#with_payload with SemanticLogger.named_tagged.
 - Replace calls to Logger#payload with SemanticLogger.named_tags.
+- MongoDB Appender requires Mongo Ruby Client V2 or greater.
 - Appenders now write payload data in a seperate :payload tag instead of mixing them.
   directly into the root elements to avoid name clashes.
-- MongoDB Appender requires Mongo Ruby Client V2 or greater.
+
+As a result any calls like the following:
+
+~~~ruby
+logger.debug foo: 'foo', bar: 'bar'
+~~~
+
+Must be replaced with the following in v4:
+
+~~~ruby
+logger.debug payload: {foo: 'foo', bar: 'bar'}
+~~~
 
 ## Install
 
@@ -66,7 +78,7 @@ The following changes need to be made when upgrading to V4:
 
 To configure a stand-alone application for Semantic Logger:
 
-```ruby
+~~~ruby
 require 'semantic_logger'
 
 # Set the global default log level
@@ -74,7 +86,7 @@ SemanticLogger.default_level = :trace
 
 # Log to a file, and use the colorized formatter
 SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
-```
+~~~
 
 If running rails, see: [Semantic Logger Rails](http://rocketjob.github.io/semantic_logger/rails.html)
 
