@@ -9,24 +9,34 @@ module SemanticLogger
     class Syslog < Default
       attr_accessor :level_map, :options, :facility
 
-      # Default mapping of ruby log levels to syslog log levels
+      # Default level map for every log level
       #
+      # :fatal   => ::Syslog::LOG_CRIT    - "A critical condition has occurred"
+      # :error   => ::Syslog::LOG_ERR     - "An error occurred"
+      # :warning =>::Syslog::LOG_WARNING  - "Warning of a possible problem"
+      # :info    => ::Syslog::LOG_NOTICE  - "A normal but significant condition occurred"
+      # :debug   => ::Syslog::LOG_INFO    - "Informational message"
+      # :trace   => ::Syslog::LOG_DEBUG   - "Debugging information"
+      #
+      # The following levels are not used by default.
       # ::Syslog::LOG_EMERG   - "System is unusable"
       # ::Syslog::LOG_ALERT   - "Action needs to be taken immediately"
-      # ::Syslog::LOG_CRIT    - "A critical condition has occurred"
-      # ::Syslog::LOG_ERR     - "An error occurred"
-      # ::Syslog::LOG_WARNING - "Warning of a possible problem"
-      # ::Syslog::LOG_NOTICE  - "A normal but significant condition occurred"
-      # ::Syslog::LOG_INFO    - "Informational message"
-      # ::Syslog::LOG_DEBUG   - "Debugging information"
-      DEFAULT_LEVEL_MAP = {
-        fatal: ::Syslog::LOG_CRIT,
-        error: ::Syslog::LOG_ERR,
-        warn:  ::Syslog::LOG_WARNING,
-        info:  ::Syslog::LOG_NOTICE,
-        debug: ::Syslog::LOG_INFO,
-        trace: ::Syslog::LOG_DEBUG
-      }.freeze
+      class LevelMap
+        attr_accessor :trace, :debug, :info, :warn, :error, :fatal
+
+        def initialize(trace: ::Syslog::LOG_DEBUG, debug: ::Syslog::LOG_INFO, info: ::Syslog::LOG_NOTICE, warn: ::Syslog::LOG_WARNING, error: ::Syslog::LOG_ERR, fatal: ::Syslog::LOG_CRIT)
+          @trace = trace
+          @debug = debug
+          @info  = info
+          @warn  = warn
+          @error = error
+          @fatal = fatal
+        end
+
+        def [](level)
+          public_send(level)
+        end
+      end
 
       # Create a Syslog Log Formatter
       #
@@ -68,32 +78,17 @@ module SemanticLogger
       #       ::Syslog::LOG_LOCAL6
       #       ::Syslog::LOG_LOCAL7
       #
-      #   level_map: [Hash]
+      #   level_map: [Hash | SemanticLogger::Formatters::Syslog::LevelMap]
       #     Supply a custom map of SemanticLogger levels to syslog levels.
-      #     For example, passing in { warn: ::Syslog::LOG_NOTICE }
-      #       would result in a log mapping that matches the default level map,
-      #       except for :warn, which ends up with a LOG_NOTICE level instead of a
-      #       LOG_WARNING one.
-      #     Without overriding any parameters, the level map will be
-      #       LEVEL_MAP = {
-      #         fatal:   ::Syslog::LOG_CRIT,
-      #         error:   ::Syslog::LOG_ERR,
-      #         warn:    ::Syslog::LOG_WARNING,
-      #         info:    ::Syslog::LOG_NOTICE,
-      #         debug:   ::Syslog::LOG_INFO,
-      #         trace:   ::Syslog::LOG_DEBUG
-      #       }
-      def initialize(options = {})
-        options    = options.dup
-        @options   = options.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
-        @facility  = options.delete(:facility) || ::Syslog::LOG_USER
-        @level_map = DEFAULT_LEVEL_MAP.dup
-        if level_map = options.delete(:level_map)
-          @level_map.update(level_map)
-        end
-        # Time is already part of Syslog packet
-        options[:time_format] = nil unless options.has_key?(:time_format)
-        super(options)
+      #
+      #   Example:
+      #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
+      #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
+      def initialize(options: ::Syslog::LOG_PID|::Syslog::LOG_CONS, facility: ::Syslog::LOG_USER, level_map: LevelMap.new)
+        @options   = options
+        @facility  = facility
+        @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(level_map)
+        super
       end
 
       def call(log, logger)
@@ -111,6 +106,11 @@ module SemanticLogger
         packet.time     = log.time
         packet.severity = level_map[log.level]
         packet.to_s
+      end
+
+      # time is part of the packet and is not included in the formatted message
+      def time
+        nil
       end
 
     end

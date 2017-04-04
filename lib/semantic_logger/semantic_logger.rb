@@ -351,7 +351,7 @@ module SemanticLogger
   def self.named_tags
     if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
       if list.size > 1
-        list.reduce({}) { |h, sum| sum.merge(h) }
+        list.reduce({}) { |sum, h| sum.merge(h) }
       else
         list.first.clone
       end

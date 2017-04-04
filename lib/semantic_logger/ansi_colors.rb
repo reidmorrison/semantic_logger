@@ -12,8 +12,7 @@ module SemanticLogger
     CYAN      = "\e[36m"
     WHITE     = "\e[37m"
 
-    # Maps the log level to a color for colorized formatters
-    # Since this map is not frozen, it can be modified as needed
+    # DEPRECATED - NOT USED
     LEVEL_MAP = {
       trace: MAGENTA,
       debug: GREEN,

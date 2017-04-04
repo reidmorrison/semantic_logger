@@ -1,46 +1,76 @@
 module SemanticLogger
   module Formatters
+    # Default non-colored text log output
     class Default < Base
+      attr_accessor :log, :logger
+
+      # Formatting methods, must return nil, or a string
+      # Nil values are ignored
+
+      # Date & time
+      def time
+        format_time(log.time) if time_format
+      end
+
+      # Log level
+      def level
+        log.level_to_s
+      end
+
+      # Process info
+      def process_info
+        "[#{log.process_info}]"
+      end
+
+      # Tags
+      def tags
+        "[#{log.tags.join('] [')}]" if log.tags && (log.tags.size > 0)
+      end
+
+      # Named Tags
+      def named_tags
+        if (named_tags = log.named_tags) && !named_tags.empty?
+          list = []
+          named_tags.each_pair { |name, value| list << "#{name}: #{value}" }
+          "{#{list.join(', ')}}"
+        end
+      end
+
+      # Duration
+      def duration
+        "(#{log.duration_human})" if log.duration
+      end
+
+      # Class / app name
+      def name
+        log.name
+      end
+
+      # Log message
+      def message
+        "-- #{log.message}" if log.message
+      end
+
+      # Payload
+      def payload
+        if pl = log.payload_to_s
+          "-- #{pl}"
+        end
+      end
+
+      # Exception
+      def exception
+        "-- Exception: #{log.exception.class}: #{log.exception.message}\n#{log.backtrace_to_s}" if log.exception
+      end
+
       # Default text log format
       #  Generates logs of the form:
       #    2011-07-19 14:36:15.660235 D [1149:ScriptThreadProcess] Rails -- Hello World
       def call(log, logger)
-        # Date & time
-        message = time_format.nil? ? '' : "#{format_time(log.time)} "
+        self.log    = log
+        self.logger = logger
 
-        # Log level and process info
-        message << "#{log.level_to_s} [#{log.process_info}]"
-
-        # Tags
-        message << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
-
-        # Named Tags
-        if (named_tags = log.named_tags) && !named_tags.empty?
-          list = []
-          named_tags.each_pair { |name, value| list << "[#{name}: #{value}]" }
-          message << ' ' << list.join(' ')
-        end
-
-        # Duration
-        message << " (#{log.duration_human})" if log.duration
-
-        # Class / app name
-        message << " #{log.name}"
-
-        # Log message
-        message << " -- #{log.message}" if log.message
-
-        # Payload
-        if payload = log.payload_to_s
-          message << ' -- ' << payload
-        end
-
-        # Exceptions
-        if log.exception
-          message << " -- Exception: #{log.exception.class}: #{log.exception.message}\n"
-          message << log.backtrace_to_s
-        end
-        message
+        [time, level, process_info, duration, tags, named_tags, name, message, payload, exception].compact.join(' ')
       end
 
     end

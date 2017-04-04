@@ -158,13 +158,29 @@ class SemanticLoggerTest < Minitest::Test
         end
       end
 
+      describe '.named_tags' do
+        it 'returns named tags in creation order' do
+          SemanticLogger.named_tagged(level1: 1) do
+            assert_equal({level1: 1}, SemanticLogger.named_tags)
+            SemanticLogger.named_tagged(level2: 2, more: 'data') do
+              assert_equal({level1: 1, level2: 2, more: 'data'}, SemanticLogger.named_tags)
+              SemanticLogger.named_tagged(level3: 3) do
+                assert_equal({level1: 1, level2: 2, more: 'data', level3: 3}, SemanticLogger.named_tags)
+              end
+            end
+          end
+        end
+      end
+
       describe '.named_tagged' do
-        it 'logs named tags' do
-          SemanticLogger.named_tagged(tracking_number: '123456') do
-            SemanticLogger.named_tagged(even: 2, more: 'data') do
-              @logger.info('Hello world')
-              SemanticLogger.flush
-              assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[even: 2\] \[more: data\] \[tracking_number: 123456\] LoggerTest -- Hello world/, @mock_logger.message)
+        it 'logs named tags in creation order' do
+          SemanticLogger.named_tagged(level1: 1) do
+            SemanticLogger.named_tagged(level2: 2, more: 'data') do
+              SemanticLogger.named_tagged(level3: 3) do
+                @logger.info('Hello world')
+                SemanticLogger.flush
+                assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \{level1: 1, level2: 2, more: data, level3: 3\} LoggerTest -- Hello world/, @mock_logger.message)
+              end
             end
           end
         end
