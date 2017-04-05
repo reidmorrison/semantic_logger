@@ -20,7 +20,7 @@ module SemanticLogger
         end
 
         let(:expected_time) do
-          defined?(JRuby) ? '2017-01-14 08:32:05.375' : '2017-01-14 08:32:05.375276'
+          SemanticLogger::Formatters::Base::PRECISION == 3 ? '2017-01-14 08:32:05.375' : '2017-01-14 08:32:05.375276'
         end
 
         let(:set_exception) do
@@ -33,7 +33,7 @@ module SemanticLogger
 
         let(:backtrace) do
           [
-            "test/formatters/default_test.rb:35:in `block (2 levels) in <class:DefaultTest>'",
+            "test/formatters/default_test.rb:99:in `block (2 levels) in <class:DefaultTest>'",
             "gems/ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/spec.rb:247:in `instance_eval'",
             "gems/ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/spec.rb:247:in `block (2 levels) in let'",
             "gems/ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/spec.rb:247:in `fetch'",
@@ -76,7 +76,7 @@ module SemanticLogger
           it 'logs pid, thread name, and file name' do
             set_exception
             log.backtrace = backtrace
-            assert_equal "[#{$$}:#{Thread.current.name} default_test.rb:35]", formatter.process_info
+            assert_equal "[#{$$}:#{Thread.current.name} default_test.rb:99]", formatter.process_info
           end
         end
 
@@ -102,7 +102,8 @@ module SemanticLogger
 
           it 'logs short duration' do
             log.duration = 1.34567
-            assert_equal "(1.346ms)", formatter.duration
+            duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "(1ms)" : "(1.346ms)"
+            assert_equal duration, formatter.duration
           end
         end
 
@@ -152,7 +153,7 @@ module SemanticLogger
 
         describe 'call' do
           it 'returns minimal elements' do
-            assert_equal "2017-01-14 08:32:05.375276 D [#{$$}:#{Thread.current.name}] DefaultTest", formatter.call(log, nil)
+            assert_equal "#{expected_time} D [#{$$}:#{Thread.current.name}] DefaultTest", formatter.call(log, nil)
           end
 
           it 'retuns all elements' do
@@ -161,8 +162,10 @@ module SemanticLogger
             log.duration   = 1.34567
             log.message    = "Hello World"
             log.payload    = {first: 1, second: 2, third: 3}
+            log.backtrace  = backtrace
             set_exception
-            str = "2017-01-14 08:32:05.375276 D [#{$$}:#{Thread.current.name} default_test.rb:28] (1.346ms) [first] [second] [third] {first: 1, second: 2, third: 3} DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
+            duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? '1' : '1.346'
+            str = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] (#{duration}ms) [first] [second] [third] {first: 1, second: 2, third: 3} DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end

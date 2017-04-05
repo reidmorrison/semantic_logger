@@ -20,7 +20,7 @@ module SemanticLogger
         end
 
         let(:expected_time) do
-          defined?(JRuby) ? '2017-01-14 08:32:05.375' : '2017-01-14 08:32:05.375276'
+          SemanticLogger::Formatters::Base::PRECISION == 3 ? '2017-01-14 08:32:05.375' : '2017-01-14 08:32:05.375276'
         end
 
         let(:set_exception) do
@@ -90,7 +90,8 @@ module SemanticLogger
 
           it 'logs short duration' do
             log.duration = 1.34567
-            assert_equal "(#{bold}1.346ms#{clear})", formatter.duration
+            duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "(#{bold}1ms#{clear})" : "(#{bold}1.346ms#{clear})"
+            assert_equal duration, formatter.duration
           end
         end
 
@@ -130,7 +131,7 @@ module SemanticLogger
 
         describe 'call' do
           it 'returns minimal elements' do
-            assert_equal "2017-01-14 08:32:05.375276 #{color}D#{clear} [#{$$}:#{Thread.current.name}] #{color}ColorTest#{clear}", formatter.call(log, nil)
+            assert_equal "#{expected_time} #{color}D#{clear} [#{$$}:#{Thread.current.name}] #{color}ColorTest#{clear}", formatter.call(log, nil)
           end
 
           it 'retuns all elements' do
@@ -141,7 +142,8 @@ module SemanticLogger
             log.payload    = {first: 1, second: 2, third: 3}
             log.backtrace  = backtrace
             set_exception
-            str = "2017-01-14 08:32:05.375276 #{color}D#{clear} [#{$$}:#{Thread.current.name} default_test.rb:35] (#{bold}1.346ms#{clear}) [#{color}first#{clear}] [#{color}second#{clear}] [#{color}third#{clear}] {#{color}first: 1#{clear}, #{color}second: 2#{clear}, #{color}third: 3#{clear}} #{color}ColorTest#{clear} -- Hello World -- #{{:first => 1, :second => 2, :third => 3}.ai(multiline: false)} -- Exception: #{color}RuntimeError: Oh no#{clear}\n"
+            duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? '1' : '1.346'
+            str = "#{expected_time} #{color}D#{clear} [#{$$}:#{Thread.current.name} default_test.rb:35] (#{bold}#{duration}ms#{clear}) [#{color}first#{clear}] [#{color}second#{clear}] [#{color}third#{clear}] {#{color}first: 1#{clear}, #{color}second: 2#{clear}, #{color}third: 3#{clear}} #{color}ColorTest#{clear} -- Hello World -- #{{:first => 1, :second => 2, :third => 3}.ai(multiline: false)} -- Exception: #{color}RuntimeError: Oh no#{clear}\n"
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end

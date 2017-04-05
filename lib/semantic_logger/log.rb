@@ -183,7 +183,7 @@ module SemanticLogger
     # Returns [String] duration of the log entry as a string
     # Returns nil if their is no duration
     # Java time precision does not include microseconds
-    if defined? JRuby
+    if Formatters::Base::PRECISION == 3
       def duration_to_s
         "#{duration.to_i}ms" if duration
       end
@@ -259,20 +259,9 @@ module SemanticLogger
       !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
     end
 
-    if defined? JRuby
-      # Return the Time as a formatted string
-      # JRuby only supports time in ms
-      # DEPRECATED
-      def formatted_time
-        "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%03d' % (time.usec/1000)}"
-      end
-    else
-      # Return the Time as a formatted string
-      # Ruby MRI supports micro seconds
-      # DEPRECATED
-      def formatted_time
-        "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%06d' % (time.usec)}"
-      end
+    # DEPRECATED
+    def formatted_time
+      time.strftime(Formatters::Base::TIME_FORMAT)
     end
 
     # Returns [Hash] representation of this log entry

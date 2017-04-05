@@ -109,11 +109,11 @@ class LoggerTest < Minitest::Test
           end
 
           it 'logs duration' do
-            @logger.send(level, duration: 123.45, message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'})
+            @logger.send(level, duration: 123.44, message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'})
             hash = {tracking_number: '123456', even: 2, more: 'data'}
             SemanticLogger.flush
             hash_str       = hash.inspect.sub('{', '\{').sub('}', '\}')
-            duration_match = defined?(JRuby) ? '\(123ms\)' : '\(123\.5ms\)'
+            duration_match = SemanticLogger::Formatters::Base::PRECISION == 3 ? '\(123ms\)' : '\(123\.4ms\)'
             assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message)
           end
 
@@ -131,11 +131,11 @@ class LoggerTest < Minitest::Test
             end
 
             metric_name = '/my/custom/metric'
-            @logger.send(level, metric: metric_name, duration: 123.45, message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'})
+            @logger.send(level, metric: metric_name, duration: 123.44, message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'})
             hash = {tracking_number: '123456', even: 2, more: 'data'}
             SemanticLogger.flush
             hash_str       = hash.inspect.sub('{', '\{').sub('}', '\}')
-            duration_match = defined?(JRuby) ? '\(123ms\)' : '\(123\.5ms\)'
+            duration_match = SemanticLogger::Formatters::Base::PRECISION == 3 ? '\(123ms\)' : '\(123\.4ms\)'
             assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message)
             assert metric_name, $last_metric.metric
           end

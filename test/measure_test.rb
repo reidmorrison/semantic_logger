@@ -44,7 +44,7 @@ class MeasureTest < Minitest::Test
 
         describe ':min_duration' do
           it 'not log when faster' do
-            assert_equal 'result', @logger.send(measure_level, 'hello world', min_duration: 1000) { 'result' } # Measure duration of the supplied block
+            assert_equal 'result', @logger.send(measure_level, 'hello world', min_duration: 2000) { 'result' } # Measure duration of the supplied block
             SemanticLogger.flush
             assert_nil @mock_logger.message
           end
@@ -156,7 +156,7 @@ class MeasureTest < Minitest::Test
 
         describe ':min_duration' do
           it 'not log when faster' do
-            assert_equal 'result', @logger.send(measure_level, message: 'hello world', min_duration: 1000) { 'result' } # Measure duration of the supplied block
+            assert_equal 'result', @logger.send(measure_level, message: 'hello world', min_duration: 2000) { 'result' } # Measure duration of the supplied block
             SemanticLogger.flush
             assert_nil @mock_logger.message
           end
