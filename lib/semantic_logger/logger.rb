@@ -13,7 +13,7 @@ module SemanticLogger
     #   logger = SemanticLogger::Logger.new('MyClass')
     #
     # Parameters:
-    #  application
+    #  klass
     #    A class, module or a string with the application/class name
     #    to be used in the logger
     #
@@ -26,38 +26,8 @@ module SemanticLogger
     #    regular expression. All other messages will be ignored
     #    Proc: Only include log messages where the supplied Proc returns true
     #          The Proc must return true or false
-    def initialize(klass, level=nil, filter=nil)
-      super
-    end
-
-    # Returns [Integer] the number of log entries that have not been written
-    # to the appenders
-    #
-    # When this number grows it is because the logging appender thread is not
-    # able to write to the appenders fast enough. Either reduce the amount of
-    # logging, increase the log level, reduce the number of appenders, or
-    # look into speeding up the appenders themselves
-    def self.queue_size
-      Processor.queue_size
-    end
-
-    # Flush all queued log entries disk, database, etc.
-    #  All queued log messages are written and then each appender is flushed in turn
-    def self.flush
-      Processor.submit_request(:flush)
-    end
-
-    # Close all appenders and flush any outstanding messages
-    def self.close
-      Processor.submit_request(:close)
-    end
-
-    # Allow the internal logger to be overridden from its default of STDERR
-    #   Can be replaced with another Ruby logger or Rails logger, but never to
-    #   SemanticLogger::Logger itself since it is for reporting problems
-    #   while trying to log to the various appenders
-    def self.logger=(logger)
-      Processor.logger = logger
+    def initialize(klass, level = nil, filter = nil)
+      super(klass, level, filter)
     end
 
     # Place log request on the queue for the Appender thread to write to each
@@ -66,6 +36,26 @@ module SemanticLogger
       # Compatibility with ::Logger
       return add(log, message, progname, &block) unless log.is_a?(SemanticLogger::Log)
       Processor << log
+    end
+
+    # DEPRECATED
+    def self.queue_size
+      Processor.queue_size
+    end
+
+    # DEPRECATED
+    def self.flush
+      Processor.flush
+    end
+
+    # DEPRECATED
+    def self.close
+      Processor.close
+    end
+
+    # DEPRECATED
+    def self.logger=(logger)
+      Processor.logger = logger
     end
 
   end

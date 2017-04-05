@@ -14,14 +14,33 @@ module SemanticLogger
       @@thread && @@thread.alive?
     end
 
-    # Returns [Integer] the number of log entries waiting to be written to the appenders
+    # Returns [Integer] the number of log entries waiting to be written to the appenders.
+    #
+    # When this number grows it is because the logging appender thread is not
+    # able to write to the appenders fast enough. Either reduce the amount of
+    # logging, increase the log level, reduce the number of appenders, or
+    # look into speeding up the appenders themselves
     def self.queue_size
       queue.size
     end
 
-    # Add log request to the queue for processing
+    # Flush all queued log entries disk, database, etc.
+    #  All queued log messages are written and then each appender is flushed in turn.
+    def self.flush
+      submit_request(:flush)
+    end
+
+    # Close all appenders and flush any outstanding messages.
+    def self.close
+      submit_request(:close)
+    end
+
+    # Add log request to the queue for processing.
     def self.<<(log)
-      queue << log if active?
+      return unless active?
+
+      call_log_subscribers(log)
+      queue << log
     end
 
     # Submit command and wait for reply
@@ -68,36 +87,25 @@ module SemanticLogger
       @@lag_threshold_s
     end
 
-    # Supply a metrics appender to be called whenever a logging metric is encountered
-    #
-    #  Parameters
-    #    appender: [Symbol | Object | Proc]
-    #      [Proc] the block to call.
-    #      [Object] the block on which to call #call.
-    #      [Symbol] :new_relic, or :statsd to forward metrics to
-    #
-    #    block
-    #      The block to be called
-    #
-    # Example:
-    #   SemanticLogger.on_metric do |log|
-    #     puts "#{log.metric} was received. Log: #{log.inspect}"
-    #   end
-    #
-    # Note:
-    # * This callback is called in the logging thread.
-    # * Does not slow down the application.
-    # * Only context is what is passed in the log struct, the original thread context is not available.
     def self.on_metric(options = {}, &block)
       # Backward compatibility
-      options  = options.is_a?(Hash) ? options.dup : {appender: options}
-      appender = block || options.delete(:appender)
+      options    = options.is_a?(Hash) ? options.dup : {appender: options}
+      subscriber = block || options.delete(:appender)
 
       # Convert symbolized metrics appender to an actual object
-      appender = SemanticLogger::Appender.constantize_symbol(appender, 'SemanticLogger::Metrics').new(options) if appender.is_a?(Symbol)
+      subscriber = SemanticLogger::Appender.constantize_symbol(subscriber, 'SemanticLogger::Metrics').new(options) if subscriber.is_a?(Symbol)
 
-      raise('When supplying a metrics appender, it must support the #call method') unless appender.is_a?(Proc) || appender.respond_to?(:call)
-      (@@metric_subscribers ||= Concurrent::Array.new) << appender
+      raise('When supplying a metrics subscriber, it must support the #call method') unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
+      subscribers = (@@metric_subscribers ||= Concurrent::Array.new)
+      subscribers << subscriber unless subscribers.include?(subscriber)
+    end
+
+    def self.on_log(object = nil, &block)
+      subscriber = block || object
+
+      raise('When supplying an on_log subscriber, it must support the #call method') unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
+      subscribers = (@@log_subscribers ||= Concurrent::Array.new)
+      subscribers << subscriber unless subscribers.include?(subscriber)
     end
 
     private
@@ -107,6 +115,7 @@ module SemanticLogger
     @@lag_check_interval = 5000
     @@lag_threshold_s    = 30
     @@metric_subscribers = nil
+    @@log_subscribers    = nil
 
     # Queue to hold messages that need to be logged to the various appenders
     def self.queue
@@ -190,6 +199,20 @@ module SemanticLogger
           subscriber.call(log)
         rescue Exception => exc
           logger.error 'Exception calling metrics subscriber', exc
+        end
+      end
+    end
+
+    # Call on_log subscribers
+    def self.call_log_subscribers(log)
+      # If no subscribers registered, then return immediately
+      return unless @@log_subscribers
+
+      @@log_subscribers.each do |subscriber|
+        begin
+          subscriber.call(log)
+        rescue Exception => exc
+          logger.error 'Exception calling :on_log subscriber', exc
         end
       end
     end

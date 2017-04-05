@@ -43,8 +43,11 @@ module SemanticLogger
   # metric_amount [Numeric]
   #   Used for numeric or counter metrics.
   #   For example, the number of inquiries or, the amount purchased etc.
+  #
+  # context [Hash]
+  #   Named contexts that were captured when the log entry was created.
   class Log
-    attr_accessor :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :named_tags
+    attr_accessor :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :named_tags, :context
 
     def initialize(name, level, index = nil)
       @level       = level
@@ -325,6 +328,11 @@ module SemanticLogger
       h[:metric]        = metric if metric
       h[:metric_amount] = metric_amount if metric_amount
       h
+    end
+
+    # Lazy initializes the context hash and assigns a key value pair.
+    def set_context(key, value)
+      (self.context ||= {})[key] = value
     end
 
     private

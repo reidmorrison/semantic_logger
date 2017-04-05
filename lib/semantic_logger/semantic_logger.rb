@@ -175,28 +175,30 @@ module SemanticLogger
     @@appenders.clone
   end
 
-  # Wait until all queued log messages have been written and flush all active
-  # appenders
+  # Flush all queued log entries disk, database, etc.
+  #  All queued log messages are written and then each appender is flushed in turn.
   def self.flush
-    SemanticLogger::Logger.flush
+    SemanticLogger::Processor.flush
   end
 
-  # Close and flush all appenders
+  # Close all appenders and flush any outstanding messages.
   def self.close
-    SemanticLogger::Logger.close
+    SemanticLogger::Processor.close
   end
 
   # After forking an active process call SemanticLogger.reopen to re-open
-  # any open file handles etc to resources
+  # any open file handles etc to resources.
   #
-  # Note: Only appenders that implement the reopen method will be called
+  # Note:
+  #   Not all appenders implement reopen.
+  #   Check the code for each appender you are using before relying on this behavior.
   def self.reopen
     @@appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
-    # After a fork the appender thread is not running, start it if it is not running
+    # After a fork the appender thread is not running, start it if it is not running.
     SemanticLogger::Processor.start
   end
 
-  # Supply a block to be called whenever a metric is seen during measure logging
+  # Supply a metrics appender to be called whenever a logging metric is encountered
   #
   #  Parameters
   #    appender: [Symbol | Object | Proc]
@@ -213,11 +215,39 @@ module SemanticLogger
   #   end
   #
   # Note:
-  # * This callback is called in the logging thread.
+  # * This callback is called in the separate logging thread.
   # * Does not slow down the application.
   # * Only context is what is passed in the log struct, the original thread context is not available.
   def self.on_metric(options = {}, &block)
     SemanticLogger::Processor.on_metric(options, &block)
+  end
+
+  # Supply a callback to be called whenever a log entry is created.
+  # Useful for capturing appender specific context information.
+  #
+  #  Parameters
+  #    object: [Object | Proc]
+  #      [Proc] the block to call.
+  #      [Object] any object on which to call #call.
+  #
+  # Example:
+  #   SemanticLogger.on_log do |log|
+  #     log.set_context(:honeybadger, Honeybadger.get_context)
+  #   end
+  #
+  # Example:
+  #   module CaptureContext
+  #     def call(log)
+  #       log.set_context(:honeybadger, Honeybadger.get_context)
+  #     end
+  #   end
+  #   SemanticLogger.on_log(CaptureContext)
+  #
+  # Note:
+  # * This callback is called within the thread of the application making the logging call.
+  # * If these callbacks are slow they will slow down the application.
+  def self.on_log(object = nil, &block)
+    Processor.on_log(object, &block)
   end
 
   # Add signal handlers for Semantic Logger
