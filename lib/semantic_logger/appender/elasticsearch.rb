@@ -6,6 +6,14 @@ end
 
 require 'date'
 
+# Forward all log messages to Elasticsearch.
+#
+# Example:
+#
+#   SemanticLogger.add_appender(   
+#     appender: :elasticsearch,   
+#     url:      'http://localhost:9200'   
+#   )
 class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   attr_accessor :index, :type, :client, :messages, :messages_mutex
 
@@ -62,7 +70,6 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   #     Default: SemanticLogger.application
   def initialize(options, &block)
     options       = options.dup
-    options[:formatter] ||= :raw_json
 
     @index        = options.delete(:index) || 'semantic_logger'
     @type         = options.delete(:type) || 'log'
@@ -82,32 +89,45 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   def reopen
     @client = Elasticsearch::Client.new(url: @url)
 
+    @messages_mutex.synchronize do
+      @messages = []
+    end
+
     @flush_task = Concurrent::TimerTask.new(execution_interval: @flush_interval, timeout_interval: @timeout_interval) do |task|
       flush
     end.execute
   end
 
   def close
-    @client.close()
+    @client.close
+    @flush_task.shutdown
   end
 
-  def flush()
+  def call(log, logger)
+    h = log.to_h(host, application)
+    h.delete(:time)
+    h[:timestamp] = log.time.utc.iso8601(SemanticLogger::Formatters::Base::PRECISION)
+    h
+  end
+
+  def flush
+    collected_messages = nil
     @messages_mutex.synchronize do
       if @messages.length > 0
-        messages_shallow_copy = @messages.dup
-        @messages.clear
-
-        # raise messages_shallow_copy.inspect
-
-        bulk_result = @client.bulk({:body => messages_shallow_copy})
-        if bulk_result["errors"]
-          failed = bulk_result["items"].select{|x| x["status"] != 201 }
-          puts "failed to write to elasticsearch: #{failed}"
-        end
+        collected_messages = @messages
+        @messages          = []
       end
     end
-  rescue => e
-    puts "failed to bulk insert: #{e}"
+
+    if collected_messages
+      bulk_result = @client.bulk(body: collected_messages)
+      if bulk_result["errors"]
+        failed = bulk_result["items"].select { |x| x["status"] != 201 }
+        SemanticLogger::Processor.logger.error("ElasticSearch: Write failed. Messages discarded. : #{failed}")
+      end
+    end
+  rescue Exception => exc
+    SemanticLogger::Processor.logger.error('ElasticSearch: Failed to bulk insert log messages', exc)
   end
 
   # Log to the index for today
