@@ -7,6 +7,9 @@ rvm:
   - 2.4.1
   - jruby-9.1.8.0
 
+jdk:
+  - oraclejdk8
+
 services:
   - mongodb
 
