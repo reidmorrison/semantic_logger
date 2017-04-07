@@ -12,6 +12,9 @@ module SemanticLogger
         h = super(log, logger)
         h.delete(:time)
         h[:timestamp] = format_time(log.time)
+         # host names may contain non UTF-8 characters
+         # that will cause JSON serialization to fail
+        h[:host] = h[:host].force_encoding('UTF-8')
         h.to_json
       end
 
