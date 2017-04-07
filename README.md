@@ -22,6 +22,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * NewRelic
 * Splunk
 * Syslog
+* Elasticsearch
 * Roll-your-own
 
 Semantic Logger is capable of logging thousands of lines per second without slowing
@@ -49,6 +50,7 @@ and are therefore not automatically included by this gem:
 - Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
 - Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
+- Elasticsearch Appender: gem 'elasticsearch'
 
 ## V4 Upgrade notes
 

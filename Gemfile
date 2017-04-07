@@ -26,5 +26,7 @@ gem 'honeybadger'
 gem 'statsd-ruby'
 # [optional] Sentry appender
 gem 'sentry-raven'
+# [optional] Elasticsearch appender
+gem 'elasticsearch'
 
 gem 'awesome_print'
