@@ -91,10 +91,8 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
     @messages_mutex.synchronize { @messages = [] }
 
     @flush_task = Concurrent::TimerTask.new(execution_interval: flush_interval, timeout_interval: timeout_interval) do
-      #flush
-      puts "TIMER"
+      flush
     end.execute
-    sleep 10
   end
 
   def close
