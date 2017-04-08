@@ -1,46 +1,37 @@
 require 'syslog'
 require 'uri'
 require 'socket'
-
 # Send log messages to local syslog, or remote syslog servers over TCP or UDP.
 #
-# Example: Log to a local Syslog daemon
+# Example:
+#   # Log to a local Syslog daemon
 #   SemanticLogger.add_appender(appender: :syslog)
 #
-# Example: Log to a remote Syslog server using TCP:
+# Example:
+#   # Log to a remote Syslog server over TCP:
 #   SemanticLogger.add_appender(
 #     appender: :syslog,
 #     url:      'tcp://myloghost:514'
 #   )
 #
-# Example: Log to a remote Syslog server using UDP:
+# Example:
+#   # Log to a remote Syslog server over UDP:
 #   SemanticLogger.add_appender(
 #     appender: :syslog,
 #     url:      'udp://myloghost:514'
 #   )
+#
+# Example:
+#   # Log to a remote Syslog server using the CEE format over TCP:
+#   SemanticLogger.add_appender(
+#     appender: :syslog,
+#     url:      'tcp://myloghost:514'
+#   )
+#
 module SemanticLogger
   module Appender
     class Syslog < SemanticLogger::Subscriber
-
-      # Default mapping of ruby log levels to syslog log levels
-      #
-      # ::Syslog::LOG_EMERG   - "System is unusable"
-      # ::Syslog::LOG_ALERT   - "Action needs to be taken immediately"
-      # ::Syslog::LOG_CRIT    - "A critical condition has occurred"
-      # ::Syslog::LOG_ERR     - "An error occurred"
-      # ::Syslog::LOG_WARNING - "Warning of a possible problem"
-      # ::Syslog::LOG_NOTICE  - "A normal but significant condition occurred"
-      # ::Syslog::LOG_INFO    - "Informational message"
-      # ::Syslog::LOG_DEBUG   - "Debugging information"
-      DEFAULT_LEVEL_MAP = {
-        fatal: ::Syslog::LOG_CRIT,
-        error: ::Syslog::LOG_ERR,
-        warn:  ::Syslog::LOG_WARNING,
-        info:  ::Syslog::LOG_NOTICE,
-        debug: ::Syslog::LOG_INFO,
-        trace: ::Syslog::LOG_DEBUG
-      }
-      attr_reader :remote_syslog, :url, :server, :port, :protocol, :facility
+      attr_reader :remote_syslog, :url, :server, :port, :protocol, :facility, :options, :level_map
 
       # Create a Syslog appender instance.
       #
@@ -72,11 +63,6 @@ module SemanticLogger
       #     Override the log level for this appender.
       #     Default: SemanticLogger.default_level
       #
-      #   formatter: [Object|Proc]
-      #     An instance of a class that implements #call, or a Proc to be used to format
-      #     the output from this appender
-      #     Default: Use the built-in formatter (See: #call)
-      #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
       #     regular expression. All other messages will be ignored.
@@ -96,6 +82,9 @@ module SemanticLogger
       #       ::Syslog::LOG_ODELAY
       #       ::Syslog::LOG_PERROR
       #       ::Syslog::LOG_PID
+      #    Note:
+      #      - Only applicable when logging to a local syslog instance.
+      #        I.e. When `url: 'syslog://localhost'`
       #
       #   facility: [Integer]
       #     Default: ::Syslog::LOG_USER
@@ -124,45 +113,29 @@ module SemanticLogger
       #       ::Syslog::LOG_LOCAL6
       #       ::Syslog::LOG_LOCAL7
       #
-      #   level_map: [Hash]
+      #   level_map: [Hash | SemanticLogger::Formatters::Syslog::LevelMap]
       #     Supply a custom map of SemanticLogger levels to syslog levels.
-      #     For example, passing in { warn: ::Syslog::LOG_NOTICE }
-      #       would result in a log mapping that matches the default level map,
-      #       except for :warn, which ends up with a LOG_NOTICE level instead of a
-      #       LOG_WARNING one.
-      #     Without overriding any parameters, the level map will be
-      #       LEVEL_MAP = {
-      #         fatal:   ::Syslog::LOG_CRIT,
-      #         error:   ::Syslog::LOG_ERR,
-      #         warn:    ::Syslog::LOG_WARNING,
-      #         info:    ::Syslog::LOG_NOTICE,
-      #         debug:   ::Syslog::LOG_INFO,
-      #         trace:   ::Syslog::LOG_DEBUG
-      #       }
       #
-      #   format: [Symbol]
-      #     Format for the Syslog message
-      #       :syslog uses the default syslog format
-      #       :json uses the CEE JSON Syslog format
-      #          Example: "@cee: #{JSON.dump(data)}"
-      #     Default: :syslog
-      def initialize(options = {}, &block)
-        options             = options.dup
-        @options            = options.delete(:options) || (::Syslog::LOG_PID | ::Syslog::LOG_CONS)
-        @facility           = options.delete(:facility) || ::Syslog::LOG_USER
-        level_map           = options.delete(:level_map)
-        @url                = options.delete(:url) || options.delete(:server) || 'syslog://localhost'
+      #   Example:
+      #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
+      #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
+      def initialize(url: 'syslog://localhost',
+        facility: ::Syslog::LOG_USER, level_map: SemanticLogger::Formatters::Syslog::LevelMap.new, options: ::Syslog::LOG_PID|::Syslog::LOG_CONS,
+        tcp_client: {},
+        level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+
+        @options            = options
+        @facility           = facility
+        @level_map          = level_map
+        @url                = url
         uri                 = URI(@url)
         @server             = uri.host || 'localhost'
         @protocol           = (uri.scheme || :syslog).to_sym
         @port               = uri.port || 514
         @server             = 'localhost' if @protocol == :syslog
-        @tcp_client_options = options.delete(:tcp_client)
+        @tcp_client_options = tcp_client
 
         raise "Unknown protocol #{@protocol}!" unless [:syslog, :tcp, :udp].include?(@protocol)
-
-        @level_map = DEFAULT_LEVEL_MAP.dup
-        @level_map.update(level_map) if level_map
 
         # The syslog_protocol gem is required when logging over TCP or UDP.
         if [:tcp, :udp].include?(@protocol)
@@ -174,8 +147,6 @@ module SemanticLogger
 
           # The net_tcp_client gem is required when logging over TCP.
           if protocol == :tcp
-            @tcp_client_options          ||= {}
-            @tcp_client_options[:server] = "#{@server}:#{@port}"
             begin
               require 'net/tcp_client'
             rescue LoadError
@@ -184,7 +155,7 @@ module SemanticLogger
           end
         end
 
-        super(options, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
         reopen
       end
 
@@ -193,10 +164,11 @@ module SemanticLogger
       def reopen
         case @protocol
         when :syslog
-          ::Syslog.open(application, @options, @facility)
+          ::Syslog.open(application, options, facility)
         when :tcp
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
           @tcp_client_options[:logger] = SemanticLogger::Processor.logger.clone
+          @tcp_client_options[:server] = "#{@server}:#{@port}"
           @remote_syslog               = Net::TCPClient.new(@tcp_client_options)
         when :udp
           @remote_syslog = UDPSocket.new
@@ -215,9 +187,9 @@ module SemanticLogger
           message = formatter.call(log, self).gsub '%', '%%'
           ::Syslog.log @level_map[log.level], message
         when :tcp
-          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{syslog_packet_formatter(log)}\r\n") }
+          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{formatter.call(log, self)}\r\n") }
         when :udp
-          @remote_syslog.send syslog_packet_formatter(log), 0, @server, @port
+          @remote_syslog.send(formatter.call(log, self), 0, @server, @port)
         else
           raise "Unsupported protocol: #{protocol}"
         end
@@ -229,67 +201,16 @@ module SemanticLogger
         @remote_syslog.flush if @remote_syslog && @remote_syslog.respond_to?(:flush)
       end
 
-      # Custom log formatter for syslog.
-      # Only difference is the removal of the timestamp string since it is in the syslog packet.
-      def call(log, logger)
-        # Header with date, time, log level and process info
-        message = "#{log.level_to_s} [#{log.process_info}]"
-
-        # Tags
-        message << ' ' << log.tags.collect { |tag| "[#{tag}]" }.join(' ') if log.tags && (log.tags.size > 0)
-
-        # Duration
-        message << " (#{log.duration_human})" if log.duration
-
-        # Class / app name
-        message << " #{log.name}"
-
-        # Log message
-        message << " -- #{log.message}" if log.message
-
-        # Payload
-        if payload = log.payload_to_s
-          message << ' -- ' << payload
-        end
-
-        # Exceptions
-        if log.exception
-          message << " -- Exception: #{log.exception.class}: #{log.exception.message}\n"
-          message << log.backtrace_to_s
-        end
-        message
-      end
-
-      private
-
-      # Extract Syslog formatter options
-      def format_options(options, protocol, &block)
-        opts      = options.delete(:options)
-        facility  = options.delete(:facility)
-        level_map = options.delete(:level_map)
-        if formatter = options.delete(:formatter)
-          extract_formatter(formatter)
+      # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender depending on the protocal selected
+      def default_formatter
+        if protocol == :syslog
+          # Format is text output without the time
+          SemanticLogger::Formatters::Default.new(time_format: nil)
         else
-          case protocol
-          when :syslog
-            extract_formatter(syslog: {options: opts, facility: facility, level_map: level_map})
-          when :tcp, :udp
-            extract_formatter(syslog: {options: opts, facility: facility, level_map: level_map})
-          end
+          SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map)
         end
       end
 
-      # Format the syslog packet so it can be sent over TCP or UDP
-      def syslog_packet_formatter(log)
-        packet          = SyslogProtocol::Packet.new
-        packet.hostname = host
-        packet.facility = @facility
-        packet.severity = @level_map[log.level]
-        packet.tag      = application.gsub(' ', '')
-        packet.content  = formatter.call(log, self)
-        packet.time     = log.time
-        packet.to_s
-      end
     end
   end
 end

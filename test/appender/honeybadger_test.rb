@@ -5,7 +5,7 @@ module Appender
   class HoneybadgerTest < Minitest::Test
     describe SemanticLogger::Appender::Honeybadger do
       before do
-        @appender                      = SemanticLogger::Appender::Honeybadger.new(:trace)
+        @appender                      = SemanticLogger::Appender::Honeybadger.new(level: :trace)
         @message                       = 'AppenderHoneybadgerTest log message'
         SemanticLogger.backtrace_level = :error
       end

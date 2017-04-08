@@ -8,7 +8,7 @@ module Appender
     describe SemanticLogger::Appender::NewRelic do
 
       before do
-        @appender = SemanticLogger::Appender::NewRelic.new(:error)
+        @appender = SemanticLogger::Appender::NewRelic.new
         @message  = 'AppenderNewRelicTest log message'
       end
 

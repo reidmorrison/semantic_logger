@@ -104,7 +104,8 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       def initialize(uri:, collection_name: 'semantic_logger', write_concern: 0, collection_size: 1024**3, collection_max: nil,
-        level: nil, formatter: nil, filter: nil, host: SemanticLogger.host, application: SemanticLogger.application, &block)
+        level: nil, formatter: nil, filter: nil, host: nil, application: nil, &block)
+
         @client          = Mongo::Client.new(uri, logger: SemanticLogger::Processor.logger.clone)
         @collection_name = collection_name
         @options         = {
@@ -119,8 +120,7 @@ module SemanticLogger
         # Create the collection and necessary indexes
         create_indexes
 
-        # Set the log level and formatter
-        super(level: level, formatter: formatter, filter: filter, host: host, application: application, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
       end
 
       # After forking an active process call #reopen to re-open

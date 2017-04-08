@@ -76,7 +76,7 @@ class AppenderFileTest < Minitest::Test
       before do
         @time                        = Time.new
         @io                          = StringIO.new
-        @appender                    = SemanticLogger::Appender::File.new(@io)
+        @appender                    = SemanticLogger::Appender::File.new(io: @io)
         SemanticLogger.default_level = :trace
         @mock_logger                 = MockLogger.new
         @appender                    = SemanticLogger.add_appender(logger: @mock_logger)

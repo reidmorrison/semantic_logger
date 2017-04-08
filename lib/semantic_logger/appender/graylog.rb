@@ -20,16 +20,25 @@ end
 #  `duration`, `level`, `message`, `metric`, `name`, `tags
 class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
   # Map Semantic Logger levels to Graylog levels
-  LEVEL_MAP = {
-    fatal: GELF::FATAL,
-    error: GELF::ERROR,
-    warn:  GELF::WARN,
-    info:  GELF::INFO,
-    debug: GELF::DEBUG,
-    trace: GELF::DEBUG
-  }
+  class LevelMap
+    attr_accessor :trace, :debug, :info, :warn, :error, :fatal
 
-  attr_reader :notifier
+    def initialize(trace: GELF::DEBUG, debug: GELF::DEBUG, info: GELF::INFO, warn: GELF::WARN, error: GELF::ERROR, fatal: GELF::FATAL)
+      @trace = trace
+      @debug = debug
+      @info  = info
+      @warn  = warn
+      @error = error
+      @fatal = fatal
+    end
+
+    def [](level)
+      public_send(level)
+    end
+  end
+
+  attr_accessor :url, :max_size, :gelf_options, :level_map
+  attr_reader :notifier, :server, :port, :protocol
 
   # Create Graylog log appender.
   #
@@ -45,6 +54,9 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
   #   max_size: [String]
   #     Max udp packet size. Ignored when protocol is :tcp
   #     Default: "WAN"
+  #
+  #   gelf_options: [Hash]
+  #     Custom gelf options. See Graylog documentation.
   #
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
   #     Override the log level for this appender.
@@ -68,46 +80,44 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
   #   application: [String]
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
-  def initialize(options = {}, &block)
-    options   = options.dup
-    @url      = options.delete(:url) || 'udp://localhost:12201'
-    @max_size = options.delete(:max_size) || 'WAN'
+  def initialize(url: 'udp://localhost:12201', max_size: 'WAN', gelf_options: {}, level_map: LevelMap.new,
+    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
-    uri      = URI.parse(@url)
-    @server  = uri.host
-    @port    = uri.port
-    protocol = uri.scheme.to_sym
+    @url          = url
+    @max_size     = max_size
+    @gelf_options = gelf_options
+    @level_map    = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(level_map)
 
-    raise(ArgumentError, "Invalid protocol value: #{protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(protocol)
-
-    options[:protocol] = protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP
-
-    @gelf_options = options
-    options       = extract_subscriber_options!(options)
-
-    super(options, &block)
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
   end
 
   # Re-open after process fork
   def reopen
-    @gelf_options[:facility]        = application
-    @notifier                       = GELF::Notifier.new(@server, @port, @max_size, @gelf_options)
+    uri       = URI.parse(@url)
+    @server   = uri.host
+    @port     = uri.port
+    @protocol = uri.scheme.to_sym
+
+    raise(ArgumentError, "Invalid protocol value: #{@protocol}. Must be :udp or :tcp") unless [:udp, :tcp].include?(@protocol)
+
+    gelf_options[:protocol] ||= (@protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP)
+    gelf_options[:facility] ||= application
+
+    @notifier                       = GELF::Notifier.new(server, port, max_size, gelf_options)
     @notifier.collect_file_and_line = false
   end
 
   # Returns [Hash] of parameters to send
   def call(log, logger)
-    h = log.to_h(host, application)
+    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
     h.delete(:time)
-    h.delete(:message) if log.message
 
-    short_message = log.message || log.exception.message
+    h[:short_message] = h.delete(:message) || log.exception.message
     h[:timestamp]     = log.time.utc.to_f
-    h[:level]         = logger.map_level(log)
+    h[:level]         = logger.level_map[log.level]
     h[:level_str]     = log.level.to_s
     h[:duration_str]  = h.delete(:duration)
-    h[:short_message] = short_message
     h
   end
 
@@ -115,13 +125,8 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
   def log(log)
     return false unless should_log?(log)
 
-    @notifier.notify!(formatter.call(log, self))
+    notifier.notify!(formatter.call(log, self))
     true
-  end
-
-  # Returns the Graylog level for the supplied log message
-  def map_level(log)
-    LEVEL_MAP[log.level]
   end
 
 end

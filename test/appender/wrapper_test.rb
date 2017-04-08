@@ -11,7 +11,7 @@ module Appender
 
         @time              = Time.new
         @mock_logger       = MockLogger.new
-        @appender          = SemanticLogger::Appender::Wrapper.new(@mock_logger)
+        @appender          = SemanticLogger::Appender::Wrapper.new(logger: @mock_logger)
         @hash              = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
         @hash_str          = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
         @thread_name       = Thread.current.name

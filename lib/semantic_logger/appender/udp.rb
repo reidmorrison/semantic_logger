@@ -57,14 +57,11 @@ module SemanticLogger
       #     appender: :udp,
       #     server:   'server:3300'
       #   )
-      def initialize(options = {}, &block)
-        @socket    = nil
-        options    = options.dup
-        @server    = options.delete(:server)
-        @udp_flags = options.delete(:udp_flags) || 0
-        raise(ArgumentError, 'Missing mandatory argument: :server') unless @server
+      def initialize(server:, udp_flags: 0, level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+        @server    = server
+        @udp_flags = udp_flags
 
-        super(options, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
         reopen
       end
 

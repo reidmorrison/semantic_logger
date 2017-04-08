@@ -10,12 +10,12 @@ require 'date'
 #
 # Example:
 #
-#   SemanticLogger.add_appender(   
-#     appender: :elasticsearch,   
-#     url:      'http://localhost:9200'   
+#   SemanticLogger.add_appender(
+#     appender: :elasticsearch,
+#     url:      'http://localhost:9200'
 #   )
 class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
-  attr_accessor :index, :type, :client, :messages, :messages_mutex
+  attr_accessor :url, :index, :type, :client, :flush_interval, :timeout_interval, :batch_size
 
   # Create Elasticsearch appender over persistent HTTP(S)
   #
@@ -23,7 +23,7 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   #   url: [String]
   #     Fully qualified address to the Elasticsearch service.
   #     Default: 'http://localhost:9200'
-  # 
+  #
   #   index: [String]
   #     Prefix of the index to store the logs in Elasticsearch.
   #     The final index appends the date so that indexes are used per day.
@@ -68,43 +68,45 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   #   application: [String]
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
-  def initialize(options, &block)
-    options       = options.dup
+  def initialize(url: 'http://localhost:9200', index: 'semantic_logger', type: 'log', flush_interval: 1, timeout_interval: 10, batch_size: 500,
+    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
-    @index        = options.delete(:index) || 'semantic_logger'
-    @type         = options.delete(:type) || 'log'
-    @flush_interval = options.delete(:flush_interval) || 1
-    @timeout_interval = options.delete(:timeout_interval) || 10
-    @batch_size     = options.delete(:batch_size) || 500
+    @url              = url
+    @index            = index
+    @type             = type
+    @flush_interval   = flush_interval
+    @timeout_interval = timeout_interval
+    @batch_size       = batch_size
+
     @messages_mutex = Mutex.new
     @messages       = Array.new
 
-    @url = options.delete(:url) || 'http://localhost:9200'
-
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
-
-    super(options, &block)
   end
 
   def reopen
-    @client = Elasticsearch::Client.new(url: @url)
+    @client = Elasticsearch::Client.new(url: url, logger: SemanticLogger::Processor.logger.clone)
 
-    @messages_mutex.synchronize do
-      @messages = []
-    end
+    @messages_mutex.synchronize { @messages = [] }
 
-    @flush_task = Concurrent::TimerTask.new(execution_interval: @flush_interval, timeout_interval: @timeout_interval) do |task|
-      flush
+    @flush_task = Concurrent::TimerTask.new(execution_interval: flush_interval, timeout_interval: timeout_interval) do
+      #flush
+      puts "TIMER"
     end.execute
+    sleep 10
   end
 
   def close
-    @client.close
-    @flush_task.shutdown
+    @flush_task.shutdown if @flush_task
+    @flush_task = nil
+    # No api to close connections in the elasticsearch client!
+    #@client.close if @client
+    #@client = nil
   end
 
   def call(log, logger)
-    h = log.to_h(host, application)
+    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
     h.delete(:time)
     h[:timestamp] = log.time.utc.iso8601(SemanticLogger::Formatters::Base::PRECISION)
     h
@@ -136,30 +138,20 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
 
     daily_index = log.time.strftime("#{@index}-%Y.%m.%d")
 
-    bulk_index = {'index' => { '_index' => daily_index, '_type' => @type } }
+    bulk_index   = {'index' => {'_index' => daily_index, '_type' => @type}}
     bulk_payload = formatter.call(log, self)
 
     enqueue(bulk_index, bulk_payload)
   end
 
-  def enqueue(bulk_index,bulk_payload)
-    messages_len = 0
+  def enqueue(bulk_index, bulk_payload)
+    messages_len =
+      @messages_mutex.synchronize do
+        @messages.push(bulk_index)
+        @messages.push(bulk_payload)
+        @messages.length
+      end
 
-    @messages_mutex.synchronize do
-      @messages.push(bulk_index)
-      @messages.push(bulk_payload)
-
-      messages_len = @messages.length
-    end
-
-    if messages_len >= @batch_size
-      flush 
-    end
+    flush if messages_len >= batch_size
   end
-
-  # Deletes all log data captured for a day
-  def delete_all(date = Date.today)
-    delete(date.strftime(@request_path))
-  end
-
 end

@@ -5,7 +5,7 @@ module Appender
   class SentryTest < Minitest::Test
     describe SemanticLogger::Appender::Sentry do
       before do
-        @appender                      = SemanticLogger::Appender::Sentry.new(:trace)
+        @appender                      = SemanticLogger::Appender::Sentry.new(level: :trace)
         @message                       = 'AppenderRavenTest log message'
         SemanticLogger.backtrace_level = :error
       end

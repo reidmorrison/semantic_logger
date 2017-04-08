@@ -10,7 +10,7 @@ module Appender
         SemanticLogger.default_level = :trace
         @time                        = Time.new
         @io                          = StringIO.new
-        @appender                    = SemanticLogger::Appender::File.new(@io)
+        @appender                    = SemanticLogger::Appender::File.new(io: @io)
         @hash                        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
         @hash_str                    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
         @thread_name                 = Thread.current.name
@@ -86,7 +86,7 @@ module Appender
 
       describe 'custom formatter' do
         before do
-          @appender = SemanticLogger::Appender::File.new(@io) do |log|
+          @appender = SemanticLogger::Appender::File.new(io: @io) do |log|
             tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
             message = log.message.to_s

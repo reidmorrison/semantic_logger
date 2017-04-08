@@ -22,7 +22,7 @@ module Appender
         message = nil
         Net::TCPClient.stub_any_instance(:closed?, false) do
           Net::TCPClient.stub_any_instance(:connect, nil) do
-            syslog_appender = SemanticLogger::Appender::Syslog.new(server: 'tcp://localhost:88888', level: :debug)
+            syslog_appender = SemanticLogger::Appender::Syslog.new(url: 'tcp://localhost:88888', level: :debug)
             syslog_appender.remote_syslog.stub(:write, Proc.new { |data| message = data }) do
               syslog_appender.debug 'AppenderSyslogTest log message'
             end
@@ -33,7 +33,7 @@ module Appender
 
       it 'handle remote syslog over UDP' do
         message         = nil
-        syslog_appender = SemanticLogger::Appender::Syslog.new(server: 'udp://localhost:88888', level: :debug)
+        syslog_appender = SemanticLogger::Appender::Syslog.new(url: 'udp://localhost:88888', level: :debug)
         UDPSocket.stub_any_instance(:send, -> msg, num, host, port { message = msg }) do
           syslog_appender.debug 'AppenderSyslogTest log message'
         end

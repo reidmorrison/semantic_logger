@@ -7,7 +7,7 @@ end
 module SemanticLogger
   module Formatters
     class Syslog < Default
-      attr_accessor :level_map, :options, :facility
+      attr_accessor :level_map, :facility
 
       # Default level map for every log level
       #
@@ -41,42 +41,8 @@ module SemanticLogger
       # Create a Syslog Log Formatter
       #
       # Parameters:
-      #   options: [Integer]
-      #     Default: ::Syslog::LOG_PID | ::Syslog::LOG_CONS
-      #     Any of the following (options can be logically OR'd together)
-      #       ::Syslog::LOG_CONS
-      #       ::Syslog::LOG_NDELAY
-      #       ::Syslog::LOG_NOWAIT
-      #       ::Syslog::LOG_ODELAY
-      #       ::Syslog::LOG_PERROR
-      #       ::Syslog::LOG_PID
-      #
       #   facility: [Integer]
       #     Default: ::Syslog::LOG_USER
-      #     Type of program (can be logically OR'd together)
-      #       ::Syslog::LOG_AUTH
-      #       ::Syslog::LOG_AUTHPRIV
-      #       ::Syslog::LOG_CONSOLE
-      #       ::Syslog::LOG_CRON
-      #       ::Syslog::LOG_DAEMON
-      #       ::Syslog::LOG_FTP
-      #       ::Syslog::LOG_KERN
-      #       ::Syslog::LOG_LRP
-      #       ::Syslog::LOG_MAIL
-      #       ::Syslog::LOG_NEWS
-      #       ::Syslog::LOG_NTP
-      #       ::Syslog::LOG_SECURITY
-      #       ::Syslog::LOG_SYSLOG
-      #       ::Syslog::LOG_USER
-      #       ::Syslog::LOG_UUCP
-      #       ::Syslog::LOG_LOCAL0
-      #       ::Syslog::LOG_LOCAL1
-      #       ::Syslog::LOG_LOCAL2
-      #       ::Syslog::LOG_LOCAL3
-      #       ::Syslog::LOG_LOCAL4
-      #       ::Syslog::LOG_LOCAL5
-      #       ::Syslog::LOG_LOCAL6
-      #       ::Syslog::LOG_LOCAL7
       #
       #   level_map: [Hash | SemanticLogger::Formatters::Syslog::LevelMap]
       #     Supply a custom map of SemanticLogger levels to syslog levels.
@@ -84,35 +50,35 @@ module SemanticLogger
       #   Example:
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
-      def initialize(options: ::Syslog::LOG_PID|::Syslog::LOG_CONS, facility: ::Syslog::LOG_USER, level_map: LevelMap.new)
-        @options   = options
+      def initialize(facility: ::Syslog::LOG_USER, level_map: LevelMap.new)
         @facility  = facility
         @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(level_map)
-        super
+        super()
+      end
+
+      # Time is part of the syslog packet and is not included in the formatted message.
+      def time
+        nil
       end
 
       def call(log, logger)
         message = super(log, logger)
-        create_syslog_packet(log, message)
+        create_syslog_packet(message)
       end
 
+      private
+
       # Create Syslog Packet
-      def create_syslog_packet(log, message)
+      def create_syslog_packet(message)
         packet          = SyslogProtocol::Packet.new
-        packet.hostname = host
+        packet.hostname = logger.host
         packet.facility = facility
-        packet.tag      = application.gsub(' ', '')
+        packet.tag      = logger.application.gsub(' ', '')
         packet.content  = message
         packet.time     = log.time
         packet.severity = level_map[log.level]
         packet.to_s
       end
-
-      # time is part of the packet and is not included in the formatted message
-      def time
-        nil
-      end
-
     end
   end
 end

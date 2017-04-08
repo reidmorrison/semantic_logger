@@ -77,18 +77,17 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   #
   #   continue_timeout: [Float]
   #     Default: 1.0
-  def initialize(options, &block)
-    options           = options.dup
-    @url              = options.delete(:url)
-    @ssl_options      = options.delete(:ssl)
-    @username         = options.delete(:username)
-    @password         = options.delete(:password)
-    @compress         = options.delete(:compress) || false
-    @open_timeout     = options.delete(:open_timeout) || 2.0
-    @read_timeout     = options.delete(:read_timeout) || 1.0
-    @continue_timeout = options.delete(:continue_timeout) || 1.0
+  def initialize(url:, compress: false, ssl: {}, username: nil, password: nil, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
+    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
-    raise(ArgumentError, 'Missing mandatory parameter :url') unless @url
+    @url              = url
+    @ssl_options      = ssl
+    @username         = username
+    @password         = password
+    @compress         = compress
+    @open_timeout     = open_timeout
+    @read_timeout     = read_timeout
+    @continue_timeout = continue_timeout
 
     @header                     = {
       'Accept'       => 'application/json',
@@ -111,7 +110,6 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
     @path     = '/' if @path == ''
 
     if uri.scheme == 'https'
-      @ssl_options               ||= {}
       @ssl_options[:use_ssl]     = true
       @ssl_options[:verify_mode] ||= OpenSSL::SSL::VERIFY_PEER
       @port                      ||= HTTP.https_default_port
@@ -120,8 +118,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
     end
     @http = nil
 
-    # Pass on the level and custom formatter if supplied
-    super(options)
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
   end
 

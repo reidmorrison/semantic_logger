@@ -1,3 +1,4 @@
+require 'time'
 module SemanticLogger
   module Formatters
     class Base
@@ -29,6 +30,13 @@ module SemanticLogger
         @log_host        = log_host
         @log_application = log_application
       end
+
+      # Date & time
+      def time
+        format_time(log.time) if time_format
+      end
+
+      private
 
       # Return the Time as a formatted string
       def format_time(time)

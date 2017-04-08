@@ -264,59 +264,12 @@ module SemanticLogger
       time.strftime(Formatters::Base::TIME_FORMAT)
     end
 
-    # Returns [Hash] representation of this log entry
+    DeprecatedLogger = Struct.new(:host, :application)
+
+    # DEPRECATED: Use SemanticLogger::Formatters::Raw
     def to_h(host = SemanticLogger.host, application = SemanticLogger.application)
-      # Header
-      h               = {
-        name:        name,
-        pid:         $$,
-        thread:      thread_name,
-        time:        time,
-        level:       level,
-        level_index: level_index,
-      }
-      h[:host]        = host if host
-      h[:application] = application if application
-      file, line      = file_name_and_line
-      if file
-        h[:file] = file
-        h[:line] = line.to_i
-      end
-
-      # Tags
-      h[:tags]       = tags if tags && !tags.empty?
-      h[:named_tags] = named_tags if named_tags && !named_tags.empty?
-
-      # Duration
-      if duration
-        h[:duration_ms] = duration
-        h[:duration]    = duration_human
-      end
-
-      # Log message
-      h[:message] = cleansed_message if message
-
-      # Payload
-      h[:payload] = payload if payload && payload.respond_to?(:empty?) && !payload.empty?
-
-      # Exceptions
-      if exception
-        root = h
-        each_exception do |exception, i|
-          name       = i == 0 ? :exception : :cause
-          root[name] = {
-            name:        exception.class.name,
-            message:     exception.message,
-            stack_trace: exception.backtrace
-          }
-          root       = root[name]
-        end
-      end
-
-      # Metric
-      h[:metric]        = metric if metric
-      h[:metric_amount] = metric_amount if metric_amount
-      h
+      logger = DeprecatedLogger.new(host, application)
+      SemanticLogger::Formatters::Raw.new.call(self, logger)
     end
 
     # Lazy initializes the context hash and assigns a key value pair.

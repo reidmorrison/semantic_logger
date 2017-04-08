@@ -7,12 +7,13 @@ module SemanticLogger
         super(time_format: time_format, log_host: log_host, log_application: log_application)
       end
 
+      def time
+        hash[:timestamp] = format_time(log.time)
+      end
+
       # Returns log messages in JSON format
       def call(log, logger)
-        h = super(log, logger)
-        h.delete(:time)
-        h[:timestamp] = format_time(log.time)
-        h.to_json
+        super(log, logger).to_json
       end
 
     end

@@ -10,7 +10,7 @@ end
 #   SemanticLogger.add_appender(appender: :honeybadger)
 #
 class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
-  # Create Appender
+  # Honeybadger Appender
   #
   # Parameters
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
@@ -35,10 +35,8 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
   #   application: [String]
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
-  def initialize(options = {}, &block)
-    options         = options.is_a?(Hash) ? options.dup : {level: options}
-    options[:level] ||= :error
-    super(options, &block)
+  def initialize(level: :error, formatter: nil, filter: nil, application: nil, host: nil, &block)
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
   end
 
   # Send an error notification to honeybadger

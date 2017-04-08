@@ -9,9 +9,11 @@ module SemanticLogger
       # Create a File Logger appender instance.
       #
       # Parameters
-      #  :file_name [String|IO]
+      #  :file_name [String]
       #    Name of file to write to.
-      #    Or, an IO stream to which to write the log message to.
+      #  Or,
+      #  :io [IO]
+      #    An IO stream to which to write the log messages to.
       #
       #  :level [:trace | :debug | :info | :warn | :error | :fatal]
       #    Override the log level for this appender.
@@ -58,34 +60,16 @@ module SemanticLogger
       #
       #    logger =  SemanticLogger['test']
       #    logger.info 'Hello World'
-      def initialize(options={}, deprecated_level = nil, deprecated_filter = nil, &block)
-        # Old style arguments: (file_name, level=nil, filter=nil, &block)
-        options =
-          if options.is_a?(Hash)
-            options.dup
-          else
-            file_name = options
-            opts      = {}
-            if file_name.respond_to?(:write) && file_name.respond_to?(:close)
-              opts[:io] = file_name
-            else
-              opts[:file_name] = file_name
-            end
-            opts[:level]  = deprecated_level if deprecated_level
-            opts[:filter] = deprecated_filter if deprecated_filter
-            opts
-          end
-
-        if io = options.delete(:io)
+      def initialize(io: nil, file_name: nil, level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+        if io
           @log = io
         else
-          @file_name = options.delete(:file_name)
-          raise 'SemanticLogging::Appender::File missing mandatory parameter :file_name or :io' unless @file_name
+          @file_name = file_name
+          raise 'SemanticLogging::Appender::File missing mandatory parameter :file_name or :io' unless file_name
           reopen
         end
 
-        # Set the log level and formatter if supplied
-        super(options, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
       end
 
       # After forking an active process call #reopen to re-open

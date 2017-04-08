@@ -7,11 +7,6 @@ module SemanticLogger
       # Formatting methods, must return nil, or a string
       # Nil values are ignored
 
-      # Date & time
-      def time
-        format_time(log.time) if time_format
-      end
-
       # Log level
       def level
         log.level_to_s
@@ -24,7 +19,7 @@ module SemanticLogger
 
       # Tags
       def tags
-        "[#{log.tags.join('] [')}]" if log.tags && (log.tags.size > 0)
+        "[#{log.tags.join('] [')}]" if log.tags && !log.tags.empty?
       end
 
       # Named Tags

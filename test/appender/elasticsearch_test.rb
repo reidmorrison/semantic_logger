@@ -3,8 +3,6 @@ require_relative '../test_helper'
 # Unit Test for SemanticLogger::Appender::Elasticsearch
 module Appender
   class ElasticsearchTest < Minitest::Test
-    response_mock = Struct.new(:code, :body)
-
     describe SemanticLogger::Appender::Elasticsearch do
       before do
         Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
@@ -14,6 +12,10 @@ module Appender
           )
         end
         @message = 'AppenderElasticsearchTest log message'
+      end
+
+      after do
+        @appender.close if @appender
       end
 
       it 'logs to daily indexes' do

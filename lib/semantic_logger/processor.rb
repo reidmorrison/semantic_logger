@@ -127,7 +127,7 @@ module SemanticLogger
     #   By default logs to STDERR
     def self.logger
       @@logger ||= begin
-        l      = SemanticLogger::Appender::File.new(STDERR, :warn)
+        l      = SemanticLogger::Appender::File.new(io:STDERR, level: :warn)
         l.name = name
         l
       end

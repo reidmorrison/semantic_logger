@@ -1,7 +1,7 @@
 # semantic_logger
 [![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://travis-ci.org/rocketjob/semantic_logger.svg?branch=master)](https://travis-ci.org/rocketjob/semantic_logger) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg) [![Gitter chat](https://img.shields.io/badge/IRC%20(gitter)-Support-brightgreen.svg)](https://gitter.im/rocketjob/support)
 
-Low latency, high throughput, enterprise-scale logging system for Ruby
+Low latency, high throughput, enterprise-scale logging system for Ruby.
 
 * http://github.com/rocketjob/semantic_logger
 
@@ -17,30 +17,44 @@ Logging to the following destinations are all supported "out-of-the-box":
 
 * File
 * Screen
-* MongoDB
+* ElasticSearch. (Use with Kibana for Dashboards and Visualizations)
+* Graylog
 * BugSnag
 * NewRelic
 * Splunk
+* MongoDB
+* Honeybadger
+* Sentry
+* HTTP
+* TCP
+* UDP
 * Syslog
-* Elasticsearch
+* Add any existing Ruby logger as another destination.
 * Roll-your-own
 
 Semantic Logger is capable of logging thousands of lines per second without slowing
 down the application. Traditional logging systems make the application wait while
 the log information is being saved. Semantic Logger avoids this slowdown by pushing
 log events to an in-memory queue that is serviced by a separate thread that only
-handles saving log information to multiple destinations at the same time.
+handles saving log information to multiple destinations / appenders.
 
 ## Rails
 
 When running Rails, use [rails_semantic_logger](http://github.com/rocketjob/rails_semantic_logger)
 instead of Semantic Logger directly since it will automatically replace the Rails default logger with Semantic Logger.
 
+## Rocket Job
+
+Checkout the sister project [Rocket Job](http://rocketjob.io): Ruby's missing batch system.
+
+Fully supports Semantic Logger when running jobs in the background. Complete support for job metrics
+sent via Semantic Logger to your favorite dashboards.
+
 ## Supports
 
 Semantic Logger is tested and supported on the following Ruby platforms:
-- Ruby 2.1, 2.2, 2.3, and above
-- JRuby 1.7.23, 9.0.5 and above
+- Ruby 2.1 and higher.
+- JRuby 9.1 and higher.
 
 The following gems are only required when their corresponding appenders are being used,
 and are therefore not automatically included by this gem:

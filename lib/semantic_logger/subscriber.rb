@@ -7,7 +7,7 @@ module SemanticLogger
     attr_accessor :formatter
     attr_writer :application, :host
 
-    # Returns the current log level if set, otherwise it logs everything it receives
+    # Returns the current log level if set, otherwise it logs everything it receives.
     def level
       @level || :trace
     end
@@ -22,17 +22,17 @@ module SemanticLogger
       # NOOP
     end
 
-    # Returns [SemanticLogger::Formatters::Default] formatter default for this subscriber
+    # Returns [SemanticLogger::Formatters::Default] default formatter for this subscriber.
     def default_formatter
       SemanticLogger::Formatters::Default.new
     end
 
-    # Allow application name to be set globally or per subscriber
+    # Allow application name to be set globally or on a per subscriber basis.
     def application
       @application || SemanticLogger.application
     end
 
-    # Allow host name to be set globally or per subscriber
+    # Allow host name to be set globally or on a per subscriber basis.
     def host
       @host || SemanticLogger.host
     end
@@ -57,37 +57,32 @@ module SemanticLogger
     #     Proc: Only include log messages where the supplied Proc returns true
     #           The Proc must return true or false.
     #
-    #   host: [String]
-    #     Name of this host to appear in log messages.
-    #     Default: SemanticLogger.host
-    #
     #   application: [String]
     #     Name of this application to appear in log messages.
     #     Default: SemanticLogger.application
-    def initialize(options={}, &block)
-      # Backward compatibility
-      options      = {level: options} unless options.is_a?(Hash)
-      options      = options.dup
-      level        = options.delete(:level)
-      filter       = options.delete(:filter)
-      @formatter   = extract_formatter(options.delete(:formatter), &block)
-      @application = options.delete(:application)
-      @host        = options.delete(:host)
-      raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
+    #
+    #   host: [String]
+    #     Name of this host to appear in log messages.
+    #     Default: SemanticLogger.host
+    def initialize(level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+      @formatter   = extract_formatter(formatter, &block)
+      @application = application
+      @host        = host
 
-      # Subscribers don't take a class name, so use this class name if an subscriber
-      # is logged to directly
+      # Subscribers don't take a class name, so use this class name if a subscriber
+      # is logged to directly.
       super(self.class, level, filter)
     end
 
-    # Return the level index for fast comparisons
+    # Return the level index for fast comparisons.
     # Returns the lowest level index if the level has not been explicitly
-    # set for this instance
+    # set for this instance.
     def level_index
       @level_index || 0
     end
 
-    # Return formatter that responds to call
+    # Return formatter that responds to call.
+    #
     # Supports formatter supplied as:
     # - Symbol
     # - Hash ( Symbol => { options })
@@ -112,15 +107,6 @@ module SemanticLogger
       else
         default_formatter
       end
-    end
-
-    SUBSCRIBER_OPTIONS = [:level, :formatter, :filter, :application, :host].freeze
-
-    # Returns [Hash] the subscriber common options from the supplied Hash
-    def extract_subscriber_options!(options)
-      subscriber_options = {}
-      SUBSCRIBER_OPTIONS.each { |key| subscriber_options[key] = options.delete(key) if options.has_key?(key) }
-      subscriber_options
     end
 
   end

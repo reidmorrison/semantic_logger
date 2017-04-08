@@ -61,7 +61,7 @@ module SemanticLogger
       end
 
       def tags
-        "[#{color}#{log.tags.join("#{color_map.clear}] [#{color}")}#{color_map.clear}]" if log.tags && (log.tags.size > 0)
+        "[#{color}#{log.tags.join("#{color_map.clear}] [#{color}")}#{color_map.clear}]" if log.tags && !log.tags.empty?
       end
 
       # Named Tags

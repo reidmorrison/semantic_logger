@@ -27,18 +27,18 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Subscriber
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
-  def initialize(level: :error, formatter: nil, filter: nil, host: SemanticLogger.host, application: SemanticLogger.application, &block)
-    raise 'Bugsnag only supports :info, :warn, or :error log levels' unless [:info, :warn, :error].include?(level)
+  def initialize(level: :error, formatter: nil, filter: nil, application: nil, host: nil, &block)
+    raise 'Bugsnag only supports :info, :warn, or :error log levels' unless [:info, :warn, :error, :fatal].include?(level)
 
     # Replace the Bugsnag logger so that we can identify its log messages and not forward them to Bugsnag
     Bugsnag.configure { |config| config.logger = SemanticLogger[Bugsnag] }
 
-    super(level: level, formatter: formatter, filter: filter, host: host, application: application, &block)
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
   end
 
   # Returns [Hash] of parameters to send to Bugsnag.
   def call(log, logger)
-    h            = log.to_h(host, application)
+    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
     h[:severity] = log_level(log)
     h.delete(:time)
     h.delete(:exception)

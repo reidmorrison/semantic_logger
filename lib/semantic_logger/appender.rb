@@ -1,21 +1,22 @@
 module SemanticLogger
   module Appender
     # @formatter:off
-    autoload :Bugsnag,          'semantic_logger/appender/bugsnag'
-    autoload :Elasticsearch,    'semantic_logger/appender/elasticsearch'
-    autoload :File,             'semantic_logger/appender/file'
-    autoload :Graylog,          'semantic_logger/appender/graylog'
-    autoload :Honeybadger,      'semantic_logger/appender/honeybadger'
-    autoload :Sentry,           'semantic_logger/appender/sentry'
-    autoload :Http,             'semantic_logger/appender/http'
-    autoload :MongoDB,          'semantic_logger/appender/mongodb'
-    autoload :NewRelic,         'semantic_logger/appender/new_relic'
-    autoload :Splunk,           'semantic_logger/appender/splunk'
-    autoload :SplunkHttp,       'semantic_logger/appender/splunk_http'
-    autoload :Syslog,           'semantic_logger/appender/syslog'
-    autoload :Tcp,              'semantic_logger/appender/tcp'
-    autoload :Udp,              'semantic_logger/appender/udp'
-    autoload :Wrapper,          'semantic_logger/appender/wrapper'
+    autoload :Bugsnag,           'semantic_logger/appender/bugsnag'
+    autoload :Elasticsearch,     'semantic_logger/appender/elasticsearch'
+    autoload :ElasticsearchHttp, 'semantic_logger/appender/elasticsearch_http'
+    autoload :File,              'semantic_logger/appender/file'
+    autoload :Graylog,           'semantic_logger/appender/graylog'
+    autoload :Honeybadger,       'semantic_logger/appender/honeybadger'
+    autoload :Sentry,            'semantic_logger/appender/sentry'
+    autoload :Http,              'semantic_logger/appender/http'
+    autoload :MongoDB,           'semantic_logger/appender/mongodb'
+    autoload :NewRelic,          'semantic_logger/appender/new_relic'
+    autoload :Splunk,            'semantic_logger/appender/splunk'
+    autoload :SplunkHttp,        'semantic_logger/appender/splunk_http'
+    autoload :Syslog,            'semantic_logger/appender/syslog'
+    autoload :Tcp,               'semantic_logger/appender/tcp'
+    autoload :Udp,               'semantic_logger/appender/udp'
+    autoload :Wrapper,           'semantic_logger/appender/wrapper'
     # @formatter:on
 
     # DEPRECATED, use SemanticLogger::AnsiColors

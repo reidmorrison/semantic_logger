@@ -181,22 +181,41 @@ module SemanticLogger
       #     connect_retry_interval: 0.1,
       #     connect_retry_count:    5
       #   )
-      def initialize(options = {}, &block)
-        @tcp_client                = nil
-        @options                   = options.dup
-        @separator                 = @options.delete(:separator) || "\n"
+      def initialize(server: nil, servers: nil, separator: "\n",
+        policy: :ordered, buffered: true, #keepalive: true,
+        connect_timeout: 10.0, read_timeout: 60.0, write_timeout: 60.0,
+        connect_retry_count: 10, retry_count: 3, connect_retry_interval: 0.5, close_on_error: true,
+        on_connect: nil, proxy_server: nil, ssl: nil,
+        level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block
+      )
+        @separator                 = separator
+        @options                   = {
+          server:                 server,
+          servers:                servers,
+          policy:                 policy,
+          buffered:               buffered,
+          #keepalive:              keepalive,
+          connect_timeout:        connect_timeout,
+          read_timeout:           read_timeout,
+          write_timeout:          write_timeout,
+          connect_retry_count:    connect_retry_count,
+          retry_count:            retry_count,
+          connect_retry_interval: connect_retry_interval,
+          close_on_error:         close_on_error,
+          on_connect:             on_connect,
+          proxy_server:           proxy_server,
+          ssl:                    ssl
+        }
 
         # Use the internal logger so that errors with remote logging are only written locally.
         Net::TCPClient.logger      = SemanticLogger::Processor.logger.clone
         Net::TCPClient.logger.name = 'Net::TCPClient'
 
-        options = extract_subscriber_options!(@options)
-        super(options, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
         reopen
       end
 
-      # After forking an active process call #reopen to re-open
-      # open the handles to resources
+      # After forking an active process call #reopen to re-open the handles to resources.
       def reopen
         close
         @tcp_client = Net::TCPClient.new(@options)
@@ -215,7 +234,7 @@ module SemanticLogger
 
       # Flush is called by the semantic_logger during shutdown.
       def flush
-        @tcp_client.flush if @tcp_client && @tcp_client.respond_to?(:flush)
+        @tcp_client.flush if @tcp_client
       end
 
       # Close is called during shutdown, or with reopen

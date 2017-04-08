@@ -86,15 +86,11 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Subscriber
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
-  def initialize(options = {}, _deprecated_level = nil, &block)
-    @config         = options.dup
-    @config[:level] = _deprecated_level if _deprecated_level
-    @index          = @config.delete(:index) || 'main'
-    @source_type    = options.delete(:source_type)
+  def initialize(index: 'main', source_type: nil, level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+    @index       = index
+    @source_type = source_type
 
-    options = extract_subscriber_options!(@config)
-    # Pass on the level and custom formatter if supplied
-    super(options, &block)
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
   end
 
@@ -116,11 +112,12 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Subscriber
     true
   end
 
-  # Returns [Hash] To send to Splunk
+  # Returns [Hash] To send to Splunk.
+  #
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
   def call(log, logger)
-    h = log.to_h(nil, nil)
+    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
     h.delete(:time)
     message               = {
       source:  logger.application,
