@@ -2,7 +2,31 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [4.0.0 - Unreleased]
+## [4.1.0]
+### Added
+- New log format customization mechanism.
+  Any element within the log format can be replaced without having to re-implement entire formatter.
+- Apache Kafka Appender.
+- Prototype Syslog CEE format.
+ 
+### Changed
+- Elasticsearch now uses a bulk load api to improve throughput. Thank you [Xavier Lange](https://github.com/xrl)
+- Replaced hash arguments with Ruby keyword arguments across all appenders and formatters.
+- Removed deprecated arguments.
+- Refactored Syslog appender and moved format code out of appender and into Syslog formatter.
+
+### Upgrade notes:
+- As noted above deprecated arguments have been removed, so the following code, if any:
+~~~ruby
+SemanticLogger::Appender::File.new(STDERR, :warn)
+~~~
+
+Needs to be replaced with keyword arguments:
+~~~ruby
+SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
+~~~
+
+## [4.0.0]
 ### Added
 - #backtrace to log the backtrace for a thread.
 - `named_tags` to support hash like tagging of log messages.

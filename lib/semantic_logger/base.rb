@@ -132,7 +132,7 @@ module SemanticLogger
         else
           log.thread_name = thread.name
           log.tags        = (thread[:semantic_logger_tags] || []).clone
-          log.named_tags  = (thread[:semantic_logger_named_tags] || []).clone
+          log.named_tags  = (thread[:semantic_logger_named_tags] || {}).clone
           thread.backtrace
         end
       # TODO: Keep backtrace instead of transforming into a text message at this point

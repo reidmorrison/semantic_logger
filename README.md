@@ -65,6 +65,7 @@ and are therefore not automatically included by this gem:
 - Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
 - Elasticsearch Appender: gem 'elasticsearch'
+- Kafka Appender: gem 'ruby-kafka'
 
 ## V4 Upgrade notes
 

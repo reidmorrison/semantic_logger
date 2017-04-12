@@ -28,5 +28,7 @@ gem 'statsd-ruby'
 gem 'sentry-raven'
 # [optional] Elasticsearch appender
 gem 'elasticsearch'
+# [optional] Kafka appender
+gem 'ruby-kafka'
 
 gem 'awesome_print'
