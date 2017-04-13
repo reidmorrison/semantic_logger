@@ -14,6 +14,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Replaced hash arguments with Ruby keyword arguments across all appenders and formatters.
 - Removed deprecated arguments.
 - Refactored Syslog appender and moved format code out of appender and into Syslog formatter.
+- When the process exits `SemanticLogger.close` is now called instead of `SemanticLogger.flush`.
+  Earlier test fameworks had issues where the `at_exit` was called and shutdown Semantic Logger
+  before tests were run.
 
 ### Upgrade notes:
 - As noted above deprecated arguments have been removed, so the following code, if any:

@@ -44,6 +44,5 @@ end
 # Close and flush all appenders at exit, waiting for outstanding messages on the queue
 # to be written first
 at_exit do
-  # Cannot call #close since test frameworks use at_exit to run loaded tests
-  SemanticLogger.flush
+  SemanticLogger.close
 end

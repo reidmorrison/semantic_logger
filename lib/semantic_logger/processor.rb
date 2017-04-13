@@ -4,14 +4,14 @@ module SemanticLogger
     # Start the appender thread
     def self.start
       return false if active?
-      @@thread = Thread.new { process_requests }
-      raise 'Failed to start Appender Thread' unless @@thread
+      @thread = Thread.new { process_requests }
+      raise 'Failed to start Appender Thread' unless @thread
       true
     end
 
     # Returns true if the appender_thread is active
     def self.active?
-      @@thread && @@thread.alive?
+      @thread && @thread.alive?
     end
 
     # Returns [Integer] the number of log entries waiting to be written to the appenders.
@@ -66,25 +66,25 @@ module SemanticLogger
     #   SemanticLogger::Logger itself since it is for reporting problems
     #   while trying to log to the various appenders
     def self.logger=(logger)
-      @@logger = logger
+      @logger = logger
     end
 
     # Returns the check_interval which is the number of messages between checks
     # to determine if the appender thread is falling behind
     def self.lag_check_interval
-      @@lag_check_interval
+      @lag_check_interval
     end
 
     # Set the check_interval which is the number of messages between checks
     # to determine if the appender thread is falling behind
     def self.lag_check_interval=(lag_check_interval)
-      @@lag_check_interval = lag_check_interval
+      @lag_check_interval = lag_check_interval
     end
 
     # Returns the amount of time in seconds
     # to determine if the appender thread is falling behind
     def self.lag_threshold_s
-      @@lag_threshold_s
+      @lag_threshold_s
     end
 
     def self.on_metric(options = {}, &block)
@@ -96,7 +96,7 @@ module SemanticLogger
       subscriber = SemanticLogger::Appender.constantize_symbol(subscriber, 'SemanticLogger::Metrics').new(options) if subscriber.is_a?(Symbol)
 
       raise('When supplying a metrics subscriber, it must support the #call method') unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
-      subscribers = (@@metric_subscribers ||= Concurrent::Array.new)
+      subscribers = (@metric_subscribers ||= Concurrent::Array.new)
       subscribers << subscriber unless subscribers.include?(subscriber)
     end
 
@@ -104,29 +104,29 @@ module SemanticLogger
       subscriber = block || object
 
       raise('When supplying an on_log subscriber, it must support the #call method') unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
-      subscribers = (@@log_subscribers ||= Concurrent::Array.new)
+      subscribers = (@log_subscribers ||= Concurrent::Array.new)
       subscribers << subscriber unless subscribers.include?(subscriber)
     end
 
     private
 
-    @@thread             = nil
-    @@queue              = Queue.new
-    @@lag_check_interval = 5000
-    @@lag_threshold_s    = 30
-    @@metric_subscribers = nil
-    @@log_subscribers    = nil
+    @thread             = nil
+    @queue              = Queue.new
+    @lag_check_interval = 5000
+    @lag_threshold_s    = 30
+    @metric_subscribers = nil
+    @log_subscribers    = nil
 
     # Queue to hold messages that need to be logged to the various appenders
     def self.queue
-      @@queue
+      @queue
     end
 
     # Internal logger for SemanticLogger
     #   For example when an appender is not working etc..
     #   By default logs to STDERR
     def self.logger
-      @@logger ||= begin
+      @logger ||= begin
         l      = SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
         l.name = name
         l
@@ -165,6 +165,7 @@ module SemanticLogger
             when :close
               close_appenders
               message[:reply_queue] << true if message[:reply_queue]
+              break
             else
               logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
             end
@@ -179,7 +180,7 @@ module SemanticLogger
         end
         retry
       ensure
-        @@thread = nil
+        @thread = nil
         # This block may be called after the file handles have been released by Ruby
         begin
           logger.trace 'Appender thread has stopped'
@@ -192,9 +193,9 @@ module SemanticLogger
     # Call Metric subscribers
     def self.call_metric_subscribers(log)
       # If no subscribers registered, then return immediately
-      return unless @@metric_subscribers
+      return unless @metric_subscribers
 
-      @@metric_subscribers.each do |subscriber|
+      @metric_subscribers.each do |subscriber|
         begin
           subscriber.call(log)
         rescue Exception => exc
@@ -206,9 +207,9 @@ module SemanticLogger
     # Call on_log subscribers
     def self.call_log_subscribers(log)
       # If no subscribers registered, then return immediately
-      return unless @@log_subscribers
+      return unless @log_subscribers
 
-      @@log_subscribers.each do |subscriber|
+      @log_subscribers.each do |subscriber|
         begin
           subscriber.call(log)
         rescue Exception => exc

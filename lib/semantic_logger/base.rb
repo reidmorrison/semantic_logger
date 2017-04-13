@@ -147,9 +147,19 @@ module SemanticLogger
       end
     end
 
-    # :nodoc:
+    # Add the supplied tags to the list of tags to log for this thread whilst
+    # the supplied block is active.
+    # Returns result of block
+    #
+    # Note:
+    # - This method is slow since it needs to flatten the tags and remove empty elements
+    #   to support Rails 4.
+    # - For better performance with clean tags, use `SemanticLogger.tagged`
     def tagged(*tags, &block)
-      SemanticLogger.tagged(*tags, &block)
+      new_tags = push_tags(*tags)
+      yield self
+    ensure
+      pop_tags(new_tags.size)
     end
 
     # :nodoc:
@@ -160,9 +170,16 @@ module SemanticLogger
       SemanticLogger.tags
     end
 
-    # :nodoc:
+    # Returns the list of tags pushed after flattening them out and removing blanks
+    #
+    # Note:
+    # - This method is slow since it needs to flatten the tags and remove empty elements
+    #   to support Rails 4.
+    # - For better performance with clean tags, use `SemanticLogger.push_tags`
     def push_tags(*tags)
-      SemanticLogger.push_tags(*tags)
+      # Need to flatten and reject empties to support calls from Rails 4
+      new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
+      SemanticLogger.push_tags(*new_tags)
     end
 
     # :nodoc:
@@ -175,7 +192,7 @@ module SemanticLogger
       SemanticLogger.silence(new_level, &block)
     end
 
-    # :nodoc:
+    # Deprecated. Use `SemanticLogger.tagged`
     def fast_tag(tag, &block)
       SemanticLogger.fast_tag(tag, &block)
     end
