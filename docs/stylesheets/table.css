@@ -1,0 +1,10 @@
+table#compare tr:nth-child(even) {
+  background-color: #eee;
+}
+table#compare tr:nth-child(odd) {
+  background-color: #fff;
+}
+table#compare th {
+  color: white;
+  background-color: black;
+}
