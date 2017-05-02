@@ -137,7 +137,7 @@ logger.info('Queried table',
 
 ### Trace Level
 
-* Log deatiled trace information such as data sent or received at `:trace` level
+* Log detailed trace information such as data sent or received at `:trace` level
 * Since `:trace` can be enabled on a per class basis it can be enabled
   in production to log what was actually sent to an external vendor to assist with
   problem determination.

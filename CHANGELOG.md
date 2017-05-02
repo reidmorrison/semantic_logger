@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Any element within the log format can be replaced without having to re-implement entire formatter.
 - Apache Kafka Appender.
 - Prototype Syslog CEE format.
+- `logger#tagged` now supports named tags. (Hash)
  
 ### Changed
 - Elasticsearch now uses a bulk load api to improve throughput. Thank you [Xavier Lange](https://github.com/xrl)

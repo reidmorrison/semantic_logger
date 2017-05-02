@@ -39,6 +39,22 @@ class SemanticLogger::Appender::Kafka < SemanticLogger::Subscriber
   #     The identifier for this application.
   #     Default: semantic-logger
   #
+  #   topic: [String]
+  #     Topic to publish log messages to.
+  #     Default: 'log_messages'
+  #
+  #   partition: [Integer]
+  #     The partition that the message should be written to.
+  #     Default: nil
+  #
+  #   partition_key: [String]
+  #     The key that should be used to assign a partition.
+  #     Default: nil
+  #
+  #   key: [String]
+  #     The message key.
+  #     Default: nil
+  #
   #   connect_timeout: [Integer]
   #     The timeout setting for connecting to brokers.
   #     Default: nil

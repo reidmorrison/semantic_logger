@@ -78,11 +78,11 @@ class Supplier
   include SemanticLogger::Loggable
 
   def self.some_class_method
-    logger.debug 'logger is accessible from class methods'
+    logger.debug('logger is accessible from class methods')
   end
 
   def call_supplier
-    logger.debug "logger is accessible from instance methods"
+    logger.debug ('logger is accessible from instance methods')
   end
 end
 ~~~
@@ -97,7 +97,7 @@ The Semantic Logger logging API supports the existing logging interface for
 the Rails and Ruby Loggers. For example:
 
 ~~~ruby
-logger.info("Hello World")
+logger.info('Hello World')
 ~~~
 
 Or to query whether a specific log level is set
@@ -109,39 +109,84 @@ logger.info?
 The following traditional logging methods are available
 
 ~~~ruby
-logger.trace("Low level trace information such as data sent over a socket")
-logger.debug("Debugging information to aid with problem determination")
-logger.info("Informational message such as request received")
-logger.warn("Warn about something in the system")
-logger.error("An error occurred during processing")
-logger.fatal("Oh no something really bad happened")
+logger.trace('Low level trace information such as data sent over a socket')
+logger.debug('Debugging information to aid with problem determination')
+logger.info('Informational message such as request received')
+logger.warn('Warn about something in the system')
+logger.error('An error occurred during processing')
+logger.fatal('Oh no something really bad happened')
 ~~~
 
 Each of the above calls can take additional parameters, for example:
 
 ~~~ruby
-log.info(message, payload_or_exception=nil, exception=nil, &block)
+log.info(message, payload_or_exception = nil, exception = nil, &block)
 ~~~
 
 Parameters
 
-- `message`:   The text message to log.
-  Mandatory only if no block is supplied
-- `payload_or_exception`:   Optional, either a Ruby Exception object or a Hash
-- `exception`: Optional, Ruby Exception object. Allows both an exception and a payload to be logged
-- `block`:     The optional block is executed only if the corresponding log level is active.
-By supplying a block, it is only evaluated when the log level meets or exceeds the supplied log level.
-This can be used to prevent the block from being evaluated in production environments.
+- message
+    - The text message to log.
+    - Mandatory only if no block is supplied
+- payload_or_exception
+    - Optional, either a Ruby Exception object or a Hash
+- exception
+    - Optional, Ruby Exception object. 
+    - Allows both an exception and a payload to be logged
+- block
+    - The optional block is executed only if the corresponding log level is active.
+    - By supplying a block, it is only evaluated when the log level meets or exceeds the supplied log level.
+    - This can be used to prevent the block from being evaluated in production environments.
 
 Examples:
 
 ~~~ruby
 logger.debug("Calling Supplier")
 
-logger.debug("Calling Supplier", :request => 'update', :user => 'Jack')
+logger.debug("Calling Supplier", request: 'update', user: 'Jack')
 
 logger.trace { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
 ~~~
+
+An alternative API is to pass everything in a Hash, including the message.
+
+~~~ruby
+logger.debug(message: 'Calling Supplier')
+
+logger.debug(message: 'Calling Supplier', payload: {request: 'update', user: 'Jack'})
+
+# Log a complete exception
+logger.error(message: 'Calling Supplier', exception: exception)
+
+# Add a 100ms duration to the log entry
+logger.error(message: 'Calling Supplier', duration: 100)
+
+# Add a count metric ( with a value of 1 )
+logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry')
+
+# Add a count metric with a value of 21
+logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry', metric_amount: 21)
+
+# Add a duration metric
+logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry', duration: 100)
+~~~
+
+
+which opens up the following options:  
+
+message: nil, payload: nil, min_duration: 0.0, exception: nil, metric: nil, metric_amount: 1, duration: nil, backtrace: nil, log_exception: :full, on_exception_level: nil
+
+          message:            message,
+          payload:            payload,
+          min_duration:       params[:min_duration] || 0.0,
+          exception:          exception,
+          metric:             params[:metric],
+          metric_amount:      1,
+          duration:           duration,
+          backtrace:          nil,
+          log_exception:      params[:log_exception] || :partial,
+          on_exception_level: params[:on_exception_level]
+
 
 ### Exceptions
 
@@ -175,10 +220,10 @@ regular expressions so that a program can analyze log output. With the MongoDB
 appender the payload is written directly to MongoDB as part of the document and
 is therefore fully searchable
 
-### Benchmarking
+### Measure Everything
 
-Another common logging requirement is to measure the time it takes to execute a block
-of code based on the log level. For example:
+It is important to "measure everything" in a production application so that when things slow
+down it is obvious where the slow down is coming from.
 
 ~~~ruby
 logger.measure_info "Called external interface" do
@@ -197,15 +242,38 @@ If an exception is raised during the block, the exception message will be logged
 at the same log level as the measure along with the duration and message.
 After logging the exception is re-raised unchanged.
 
-The following measureing methods are available:
+The following measuring methods are available:
 
 ~~~ruby
-logger.measure_trace("Low level trace information such as data sent over a socket")
-logger.measure_debug("Debugging information to aid with problem determination")
-logger.measure_info("Informational message such as request received")
-logger.measure_warn("Warn about something in the system")
-logger.measure_error("An error occurred during processing")
-logger.measure_fatal("Oh no something really bad happened")
+logger.measure_trace("Low level trace information such as data sent over a socket") do ... end
+logger.measure_debug("Debugging information to aid with problem determination") do ... end
+logger.measure_info("Informational message such as request received") do ... end
+logger.measure_warn("Warn about something in the system") do ... end
+logger.measure_error("An error occurred during processing") do ... end
+logger.measure_fatal("Oh no something really bad happened") do ... end
+~~~
+
+#### Elastic Logging
+
+With elastic logging the log message should only be logged when the minimum duration has been exceeded.
+
+For example, Memcache calls are usually very fast, log when it takes longer than 3 ms to complete:
+
+~~~ruby
+logger.measure_warn "Called memcache", min_duration: 3 do
+  # Code to call memcache ...
+end
+~~~
+
+#### Metrics / Dashboards
+
+By measuring the time taken to execute a block of code and then assigning a metric to it,
+the duration can be aggregated into a dashboard.
+
+~~~ruby
+logger.measure_info "Called external interface", metric: 'Supplier/inquiry' do
+  # Code to call external service ...
+end
 ~~~
 
 The log level can be supplied dynamically as the first parameter to:
@@ -222,58 +290,47 @@ log.measure_info(message, params=nil) do
 end
 ~~~
 
-Benchmark calls take two parameters, the first is a mandatory text message, the
+Measuring calls take two parameters, the first is a mandatory text message, the
 second is a Hash of settings:
 
-#### `:log_exception` [Symbol]
+- `:log_exception` [Symbol]
+    - Control whether or how an exception thrown in the block is
+      reported by Semantic Logger. 
+    - Values:
+        - `:full`
+            - Log the exception class, message, and backtrace.
+        - `:partial`
+            - Log the exception class and message. The backtrace will not be logged.
+        - `:off`
+            - Any unhandled exception raised in the block will not be logged.
+        - Default: `:partial`
 
-Control whether or how an exception thrown in the block is
-reported by Semantic Logger. Values:
+- `:min_duration` [Float]
+    - Only log if the block takes longer than this duration in `ms`.
+    - Very useful to make a log entry only appear when the specified minimum duration
+      has been exceeded, which is ideal for isolating the cause of application slow-downs.
+    - Default: 0.0 ( Always log )
 
-- `:full`
-     Log the exception class, message, and backtrace
-- `:partial`
-     Log the exception class and message. The backtrace will not be logged
-- `:off`
-     Any unhandled exception raised in the block will not be logged
-- Default: :partial
+- `:payload` [Hash]
+    - Optional, Hash payload
 
-#### `:min_duration` [Float]
+- `:exception` [Exception]
+    - Optional, Ruby Exception object to log along with the duration of the supplied block.
 
-Only log if the block takes longer than this duration in `ms`
+- `:duration` [Float]
+    - Optional, supply the duration in ms that is logged when a block is not supplied.
+    - If a block is not supplied then :duration is mandatory.
+    - If a block is supplied :duration is ignored.
 
-Very useful to make a log entry only appear when the specified minimum duration
-has been exceeded, which is ideal for isolating the cause of application slow-downs.
+- `:metric` [String]
+    - Optional, when this parameter is supplied all subscribers will be notified of this metric.
 
-Default: 0.0 ( Always log )
+- `:silence` [Symbol]
+    - Optional, the log level to silence all log messages to within the block.
+    - `silence` is thread-safe and only affects messages logged on the current thread.
 
-#### `:payload` [Hash]
-
-Optional, Hash payload
-
-#### `:exception` [Exception]
-
-Optional, Ruby Exception object to log along with the duration of the supplied block
-
-#### `:duration` [Float]
-
-- Optional, supply the duration in ms that is logged when a block is not supplied
-- If a block is not supplied then :duration is mandatory
-- If a block is supplied :duration is ignored
-
-#### `:metric` [Object]
-
-Optional, when this parameter is supplied all subscribers will be notified of this
-metric, along with the Log Struct described below
-
-#### `:silence` [Symbol]
-
-Optional, the log level to silence all log messages to within the block.
-`silence` is thread-safe and only affects messages logged on the current thread.
-
-#### `:on_exception_level` [Symbol]
-
-Optional, If an exception is raised, increase the log level to this level
+- `:on_exception_level` [Symbol]
+    - Optional, If an exception is raised, increase the log level to this level.
 
 Example
 
@@ -301,10 +358,9 @@ Note: Either a code block or `:duration` must be supplied on all measure calls
 
 Tagged logging adds the specified tags to every log message within the supplied block.
 If a new thread is created within the block the logging tags are not automatically
-copied to that thread. Look into [Parallel Minion](https://github.com/reidmorrison/parallel_minion)
+copied to that thread. See [Parallel Minion](https://github.com/reidmorrison/parallel_minion)
 for a library that creates threads and automatically copies across any logging tags to the
 new thread.
-
 
 Using Tagged logging is critical in any highly concurrent environment so that
 one can quickly find all related log entries across all levels of code, and threads.
@@ -367,11 +423,11 @@ Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
 
 ### Silencing noisy logs
 
-Silence noisy log levels by changing the default_level within the block
+Silence noisy log levels by changing the default_level within the block.
 
-This setting is thread-safe and only applies to the current thread
+This setting is thread-safe and only applies to the current thread.
 
-Any threads spawned from within the block will not be affected by `silence`
+Any threads spawned from within the block will not be affected by `silence`.
 
 ~~~ruby
 # Silence all logging below :error level
@@ -399,13 +455,12 @@ end
 #### Note
 
 `silence` does not affect any loggers which have had their log level set
-explicitly. I.e. That do not rely on the global default level
+explicitly. I.e. That do not rely on the global default level.
 
 ### Debug logging as Trace
 
-Some third party gems log a large amount of information at debug since they
-do not use Semantic Logger and do not have access to the `:trace` level for
-logging.
+Some third party gems log a large amount of information at debug level since they
+do not use Semantic Logger and do not have access to the `:trace` level for logging.
 
 To map the `:debug` logging calls for these existing libraries to `:trace`, replace
 its logger with an instance of `DebugAsTraceLogger::SemanticLogger`
@@ -511,80 +566,56 @@ Mongoid.logger = SemanticLogger[Mongoid] if defined?(Mongoid)
 Moped.logger   = SemanticLogger[Moped] if defined?(Moped)
 ~~~
 
-### Wrapped Exceptions
+### Causal Exceptions
 
-Sometimes libraries wrap exceptions such as IOError with their own exceptions so that these exceptions
-are easily identified as coming from that library. To do this the library exception should include
-an attribute called `cause` in which to hold the original exception, such as an IOError instance.
+When an exception is caught and then a new one is raised, Ruby automatically adds the original caught exception
+to the new exception as its cause.
 
-In the library, include the `cause` attribute to any wrapping exceptions:
+Example function that raises a new exception:
 
 ~~~ruby
-class ALibraryIOException < StandardError
-  attr_reader :cause
-
-  def initialize(message, cause)
-    @cause = cause
-    super(message)
-  end
+def oh_no
+  f = File.new('filename', 'w')
+  # Will raise: IOError: not opened for reading
+  f.read
+rescue IOError
+  raise RuntimeError.new('Failed to write to file')
 end
 ~~~
 
-In the library, when an exception is raised, include the causing exception:
+Calling the above function and then logging the exception:
 
 ~~~ruby
-class ALibrary
-  def oh_no
-    f = File.new('filename', 'w')
-    # Will raise: IOError: not opened for reading
-    f.read
-  rescue IOError => exception
-    message = 'Failed to write to file'
-    # Pass the causing exception to the wrapping exception 
-    raise ALibraryIOException.new(message, exception)
-  end
-end
-~~~
-
-Example Application Code:
-
-~~~ruby
-class MyApp
-  include SemanticLogger::Loggable
-
-  def perform
-    lib = ALibrary.new
-    lib.oh_no
-  rescue ALibraryIOException => exc
-    # Semantic Logger will log both the exception and the causing exception
-    logger.error('Failed calling library', exc)
-  end
-end
-~~~
-
-Call the application:
-
-~~~ruby
+require 'semantic_logger'
 SemanticLogger.add_appender(io: STDOUT, formatter: :color)
-MyApp.new.perform
+logger = SemanticLogger['Demo']
+
+begin
+  oh_no
+rescue StandardError => exception
+  # Semantic Logger will log both the exception and the causing exception
+  logger.error('Failed calling oh_no', exception)
+end
 ~~~
 
-Creates the following output
+Both the `RuntimeError` and the `IOError` will be logged:
 
 ~~~
-$ ruby wrapped_exception.rb 
-2016-07-29 16:24:21.020279 E [60288:70307486628360 wrapped_exception.rb:40] MyApp -- Failed calling library -- Exception: ALibraryIOException: Failed to write to file
-wrapped_exception.rb:25:in `rescue in oh_no'
-wrapped_exception.rb:20:in `oh_no'
-wrapped_exception.rb:38:in `perform'
-wrapped_exception.rb:45:in `<main>'
+2017-05-02 17:53:33.601084 E [9082:70361765264380 (irb):37] Demo -- Failed calling oh_no -- Exception: RuntimeError: Failed to write to file
+(irb):7:in `rescue in oh_no'
+(irb):3:in `oh_no'
+(irb):34:in `irb_binding'
+  ...
+/Users/rmorrison/.rvm/rubies/ruby-2.1.10/bin/irb:11:in `<main>'
 Cause: IOError: not opened for reading
-wrapped_exception.rb:22:in `read'
-wrapped_exception.rb:22:in `oh_no'
-wrapped_exception.rb:38:in `perform'
-wrapped_exception.rb:45:in `<main>'
+(irb):5:in `read'
+(irb):5:in `oh_no'
+(irb):34:in `irb_binding'
+  ...
+/Users/rmorrison/.rvm/rubies/ruby-2.1.10/bin/irb:11:in `<main>'
 ~~~
 
-Note that the stack trace for the original exception starts after the line containing `Cause: IOError: not opened for reading`.
+The output above contains 2 stack traces, with the second stack trace starting at 
+`Cause: IOError: not opened for readingCause: IOError: not opened for reading`. 
 
 ### [Next: Appenders ==>](appenders.html)

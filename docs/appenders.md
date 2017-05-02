@@ -17,8 +17,10 @@ Log messages can be written to one or more of the following destinations at the 
 * logentries.com
 * loggly.com
 * Logstash
+* Papertrail
 * New Relic
 * Bugsnag
+* Apache Kafka
 * HTTP(S)
 * TCP (+ SSL)
 * UDP
@@ -318,6 +320,26 @@ SemanticLogger.add_appender(logger: log_stash)
 
 Note: `:trace` level messages are mapped to `:debug`.
 
+### Papertrail
+
+Papertrail accepts log messages via TLS TCP in syslog format.
+
+Sample configuration:
+
+~~~ruby
+config.semantic_logger.add_appender(
+    appender: :syslog,
+    url:      'tcp://something.papertrailapp.com:1234',
+    tcp_client: {
+      ssl: {
+        ca_file: File.join(Rails.root, 'config', 'papertrail-bundle.pem')
+      }
+    }
+  )
+~~~
+
+For more information see the following section from [Papertrail's documentation](http://help.papertrailapp.com/kb/configuration/encrypting-remote-syslog-with-tls-ssl/). 
+
 ### Bugsnag
 
 Forward `:info`, `:warn`, or `:error` log messages to Bugsnag.
@@ -447,6 +469,17 @@ The following is written to Mongo:
 	"application" : "my_application",
 	"message" : "This message is written to mongo as a document"
 }
+~~~
+
+### Apache Kafka
+
+Publish log messages to an Apache Kafka broker.
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:     :kafka,
+  seed_brokers: ["kafka1:9092", "kafka2:9092"],
+)
 ~~~
 
 ### HTTP(S)
