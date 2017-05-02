@@ -193,7 +193,7 @@ module SemanticLogger
   #   Not all appenders implement reopen.
   #   Check the code for each appender you are using before relying on this behavior.
   def self.reopen
-    @appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
+    @appenders.each {|appender| appender.reopen if appender.respond_to?(:reopen)}
     # After a fork the appender thread is not running, start it if it is not running.
     SemanticLogger::Processor.start
   end
@@ -312,24 +312,52 @@ module SemanticLogger
     true
   end
 
-  # Deprecated: Use `SemanticLogger.tagged`
-  def self.fast_tag(tag, &block)
-    tagged(tag, &block)
+  # If the tag being supplied is definitely a string then this fast
+  # tag api can be used for short lived tags
+  def self.fast_tag(tag)
+    return yield if tag.nil? || tag == ''
+
+    t = Thread.current[:semantic_logger_tags] ||= []
+    begin
+      t << tag
+      yield
+    ensure
+      t.pop
+    end
   end
 
-  # Add the supplied tags to the list of tags to log for this thread whilst the supplied block is active.
+  # Add the tags or named tags to the list of tags to log for this thread whilst the supplied block is active.
+  #
   # Returns result of block.
   #
+  # Tagged example:
+  #   SemanticLogger.tagged(12345, 'jack') do
+  #     logger.debug('Hello World')
+  #   end
+  #
+  # Named Tags (Hash) example:
+  #   SemanticLogger.tagged(tracking_number: 12345) do
+  #     logger.debug('Hello World')
+  #   end
+  #
   # Notes:
-  # - This method does not flatten the array, remove any empty elements, or duplicates
-  #   since the performance penalty is excessive.
-  # - To get the flattening behavior use the slower api:
-  #     `logger.tagged`
-  def self.tagged(*tags)
+  # - Tags should be a list without any empty values, or contain any array.
+  #   - `logger.tagged` is a slower api that will flatten the example below:
+  #     `logger.tagged([['first', nil], nil, ['more'], 'other'])`
+  #   to the equivalent of:
+  #     `logger.tagged('first', 'more', 'other')`
+  def self.tagged(*tags, &block)
     return yield if tags.empty?
+
+    # Allow named tags to be passed into the logger
+    if tags.size == 1
+      tag = tags[0]
+      return tag.is_a?(Hash) ? named_tagged(tag, &block) : fast_tag(tag, &block)
+    end
+
     begin
       push_tags(*tags)
-      yield self
+      yield
     ensure
       pop_tags(tags.size)
     end
@@ -361,22 +389,17 @@ module SemanticLogger
     t.pop(quantity) unless t.nil?
   end
 
-  # Add named tags to all logging calls on this Thread whilst within the supplied block.
-  #
-  #   SemanticLogger.named_tagged(tracking_number: 12345) do
-  #     logger.debug('Hello World')
-  #   end
-  #
-  # Returns result of block
+  # :nodoc
   def self.named_tagged(hash)
     return yield if hash.nil? || hash.empty?
     raise(ArgumentError, '#named_tagged only accepts named parameters (Hash)') unless hash.is_a?(Hash)
 
+    t = Thread.current[:semantic_logger_named_tags] ||= []
     begin
-      (Thread.current[:semantic_logger_named_tags] ||= []) << hash
+      t << hash
       yield
     ensure
-      Thread.current[:semantic_logger_named_tags].pop
+      t.pop
     end
   end
 
@@ -384,7 +407,7 @@ module SemanticLogger
   def self.named_tags
     if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
       if list.size > 1
-        list.reduce({}) { |sum, h| sum.merge(h) }
+        list.reduce({}) {|sum, h| sum.merge(h)}
       else
         list.first.clone
       end

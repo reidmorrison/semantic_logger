@@ -165,7 +165,7 @@ module SemanticLogger
             log.backtrace  = backtrace
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? '1' : '1.346'
-            str = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] (#{duration}ms) [first] [second] [third] {first: 1, second: 2, third: 3} DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
+            str = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end

@@ -147,19 +147,42 @@ module SemanticLogger
       end
     end
 
-    # Add the supplied tags to the list of tags to log for this thread whilst
-    # the supplied block is active.
-    # Returns result of block
+    # Add the tags or named tags to the list of tags to log for this thread whilst the supplied block is active.
     #
-    # Note:
-    # - This method is slow since it needs to flatten the tags and remove empty elements
-    #   to support Rails 4.
-    # - For better performance with clean tags, use `SemanticLogger.tagged`
+    # Returns result of block.
+    #
+    # Tagged example:
+    #   SemanticLogger.tagged(12345, 'jack') do
+    #     logger.debug('Hello World')
+    #   end
+    #
+    # Named Tags (Hash) example:
+    #   SemanticLogger.tagged(tracking_number: 12345) do
+    #     logger.debug('Hello World')
+    #   end
+    #
+    # Notes:
+    # - Named tags are the recommended approach since the tag consists of a name value pair this is more useful
+    #   than just a string value in the logs, or centralized logging system.
+    # - This method is slow when using multiple text tags since it needs to flatten the tags and
+    #   remove empty elements to support Rails 4.
+    # - It is recommended to keep tags as a list without any empty values, or contain any child arrays.
+    #   However, this api will convert:
+    #     `logger.tagged([['first', nil], nil, ['more'], 'other'])`
+    #   to:
+    #     `logger.tagged('first', 'more', 'other')`
+    # - For better performance with clean tags, see `SemanticLogger.tagged`.
     def tagged(*tags, &block)
-      new_tags = push_tags(*tags)
-      yield self
-    ensure
-      pop_tags(new_tags.size)
+      # Allow named tags to be passed into the logger
+      if tags.size == 1
+        tag = tags[0]
+        return yield if tag.nil? || tag == ''
+        return tag.is_a?(Hash) ? named_tagged(tag, &block) : fast_tag(tag.to_s, &block)
+      end
+
+      # Need to flatten and reject empties to support calls from Rails 4
+      new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
+      SemanticLogger.tagged(*new_tags, &block)
     end
 
     # :nodoc:
@@ -303,7 +326,7 @@ module SemanticLogger
             if silence_level = params[:silence]
               # In case someone accidentally sets `silence: true` instead of `silence: :error`
               silence_level = :error if silence_level == true
-              silence(silence_level) { yield(params) }
+              silence(silence_level) {yield(params)}
             else
               yield(params)
             end

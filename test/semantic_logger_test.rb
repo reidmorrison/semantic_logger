@@ -156,6 +156,18 @@ class SemanticLoggerTest < Minitest::Test
             assert_equal 'tags', SemanticLogger.tags.last
           end
         end
+
+        it 'also supports named tagging' do
+          SemanticLogger.tagged(level1: 1) do
+            assert_equal({level1: 1}, SemanticLogger.named_tags)
+            SemanticLogger.tagged(level2: 2, more: 'data') do
+              assert_equal({level1: 1, level2: 2, more: 'data'}, SemanticLogger.named_tags)
+              SemanticLogger.tagged(level3: 3) do
+                assert_equal({level1: 1, level2: 2, more: 'data', level3: 3}, SemanticLogger.named_tags)
+              end
+            end
+          end
+        end
       end
 
       describe '.named_tags' do
