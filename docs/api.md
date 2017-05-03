@@ -171,23 +171,6 @@ logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry', metric_amo
 logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry', duration: 100)
 ~~~
 
-
-which opens up the following options:  
-
-message: nil, payload: nil, min_duration: 0.0, exception: nil, metric: nil, metric_amount: 1, duration: nil, backtrace: nil, log_exception: :full, on_exception_level: nil
-
-          message:            message,
-          payload:            payload,
-          min_duration:       params[:min_duration] || 0.0,
-          exception:          exception,
-          metric:             params[:metric],
-          metric_amount:      1,
-          duration:           duration,
-          backtrace:          nil,
-          log_exception:      params[:log_exception] || :partial,
-          on_exception_level: params[:on_exception_level]
-
-
 ### Exceptions
 
 The Semantic Logger adds an optional parameter to the existing log methods so that
@@ -616,6 +599,6 @@ Cause: IOError: not opened for reading
 ~~~
 
 The output above contains 2 stack traces, with the second stack trace starting at 
-`Cause: IOError: not opened for readingCause: IOError: not opened for reading`. 
+`Cause: IOError: not opened for reading`. 
 
 ### [Next: Appenders ==>](appenders.html)

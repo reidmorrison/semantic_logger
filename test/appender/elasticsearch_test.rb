@@ -5,6 +5,7 @@ module Appender
   class ElasticsearchTest < Minitest::Test
     describe SemanticLogger::Appender::Elasticsearch do
       before do
+        skip('Concurrent::TimerTask issue is preventing the process from stopping.') if defined? JRuby
         Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
           @appender = SemanticLogger::Appender::Elasticsearch.new(
             url: 'http://localhost:9200',
