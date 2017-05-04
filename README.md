@@ -89,6 +89,24 @@ Must be replaced with the following in v4:
 logger.debug payload: {foo: 'foo', bar: 'bar'}
 ~~~
 
+Similarly, for measure blocks:
+
+~~~ruby
+logger.measure_info('How long is the sleep', foo: 'foo', bar: 'bar') { sleep 1 } 
+~~~
+
+Must be replaced with the following in v4:
+
+~~~ruby
+logger.measure_info('How long is the sleep', payload: {foo: 'foo', bar: 'bar'}) { sleep 1 } 
+~~~
+
+The common log call has not changed, and the payload is still logged directly: 
+
+~~~ruby
+logger.debug('log this', foo: 'foo', bar: 'bar')
+~~~
+
 ## Install
 
     gem install semantic_logger

@@ -40,6 +40,7 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Subscriber
   def call(log, logger)
     h = SemanticLogger::Formatters::Raw.new.call(log, logger)
     h[:severity] = log_level(log)
+    h.delete(:message)
     h.delete(:time)
     h.delete(:exception)
     h

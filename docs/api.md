@@ -11,8 +11,8 @@ The following logging levels are available through Semantic Logger
     :trace, :debug, :info, :warn, :error, :fatal
 
 The log levels are listed above in the order of precedence with the most detail to the least.
-For example `:debug` would include `:info`, `:warn`, `:error`, `:fatal` levels but not `:trace`
-And `:fatal` would only log `:fatal` error messages and nothing else
+For example `:debug` would include `:info`, `:warn`, `:error`, `:fatal` levels but not `:trace`.
+`:fatal` only logs `:fatal` error messages and nothing else.
 
 `:trace` is a new level that is often used for tracing low level calls such
 as the data sent or received to external web services. It is also commonly used
@@ -20,7 +20,7 @@ in the development environment for low level trace logging of methods calls etc.
 
 ### Changing the global default log level
 
-By default Semantic Logger will only log `:info` and above, to log everything to
+By default Semantic Logger will only log `:info` and above. To log everything to
 the log file set the global default log level to `:trace`:
 
 ~~~ruby
@@ -36,7 +36,7 @@ logger.info "Hello World"
 logger.trace "Low level trace information"
 ~~~
 
-All loggers and appenders will by default use the global `SemanticLogger.default_level`
+All loggers and appenders use the global `SemanticLogger.default_level` by default
 unless they have been explicity set to another level. In which case changing
 `SemanticLogger.default_level` will not affect that particular logger or appender.
 
@@ -531,7 +531,7 @@ messages to be written:
 SemanticLogger.flush
 ~~~
 
-### Replacing loggers for other Gems
+### Replacing loggers in other Gems
 
 Rails Semantic Logger already replaces the loggers for the following Gems, but
 if Semantic Logger is being used stand-alone, then these need to be called from
@@ -584,18 +584,14 @@ end
 Both the `RuntimeError` and the `IOError` will be logged:
 
 ~~~
-2017-05-02 17:53:33.601084 E [9082:70361765264380 (irb):37] Demo -- Failed calling oh_no -- Exception: RuntimeError: Failed to write to file
-(irb):7:in `rescue in oh_no'
-(irb):3:in `oh_no'
-(irb):34:in `irb_binding'
-  ...
-/Users/rmorrison/.rvm/rubies/ruby-2.1.10/bin/irb:11:in `<main>'
+2017-05-03 09:45:38.948029 E [17641:70311685126260 demo.rb:17] Demo -- Failed calling oh_no -- Exception: RuntimeError: Failed to write to file
+demo.rb:6:in `rescue in oh_no'
+demo.rb:2:in `oh_no'
+demo.rb:14:in `<main>'
 Cause: IOError: not opened for reading
-(irb):5:in `read'
-(irb):5:in `oh_no'
-(irb):34:in `irb_binding'
-  ...
-/Users/rmorrison/.rvm/rubies/ruby-2.1.10/bin/irb:11:in `<main>'
+demo.rb:4:in `read'
+demo.rb:4:in `oh_no'
+demo.rb:14:in `<main>'
 ~~~
 
 The output above contains 2 stack traces, with the second stack trace starting at 
