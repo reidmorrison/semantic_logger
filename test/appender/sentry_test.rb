@@ -1,6 +1,6 @@
 require_relative '../test_helper'
 
-# Unit Test for SemanticLogger::Appender::Bugsnag
+# Unit Test for SemanticLogger::Appender::Sentry
 module Appender
   class SentryTest < Minitest::Test
     describe SemanticLogger::Appender::Sentry do
@@ -16,16 +16,16 @@ module Appender
           Raven.stub(:capture_message, -> msg, h { error_message = msg; hash = h }) do
             @appender.send(level, @message)
           end
-          assert_equal @message, hash[:error_message]
-          assert_equal 'SemanticLogger::Appender::Sentry', hash[:error_class]
+          assert_equal @message, error_message
+          assert_equal 'SemanticLogger::Appender::Sentry', hash[:extra][:name]
 
           if [:error, :fatal].include?(level)
-            assert hash.has_key?(:backtrace)
+            assert hash[:extra].has_key?(:backtrace)
           else
-            refute hash.has_key?(:backtrace)
+            refute hash[:extra].has_key?(:backtrace)
           end
           assert_equal true, hash.has_key?(:extra)
-          assert_equal level, hash[:extra][:level]
+          assert_equal level, hash[:level]
         end
 
         it "sends #{level} exceptions" do
