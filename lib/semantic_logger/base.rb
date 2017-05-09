@@ -177,7 +177,7 @@ module SemanticLogger
       if tags.size == 1
         tag = tags[0]
         return yield if tag.nil? || tag == ''
-        return tag.is_a?(Hash) ? named_tagged(tag, &block) : fast_tag(tag.to_s, &block)
+        return tag.is_a?(Hash) ? SemanticLogger.named_tagged(tag, &block) : SemanticLogger.fast_tag(tag.to_s, &block)
       end
 
       # Need to flatten and reject empties to support calls from Rails 4
