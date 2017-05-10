@@ -49,13 +49,13 @@ class SemanticLogger::Appender::ElasticsearchHttp < SemanticLogger::Appender::Ht
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(index: 'semantic_logger', type: 'log',
-    url: 'http://localhost:9200', compress: false, ssl: {}, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
-    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                 url: 'http://localhost:9200', compress: false, ssl: {}, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
+                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
     @index = index
     @type  = type
-    super(url: url, compress: compress, ssl: ssl, open_timeout: 2.0, read_timeout: open_timeout, continue_timeout: continue_timeout,
-      level:   level, formatter: formatter, filter: filter, application: application, host: host, &block)
+    super(url:   url, compress: compress, ssl: ssl, open_timeout: 2.0, read_timeout: open_timeout, continue_timeout: continue_timeout,
+          level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
 
     @request_path = "#{@path.end_with?('/') ? @path : "#{@path}/"}#{@index}-%Y.%m.%d"
     @logging_path = "#{@request_path}/#{type}"

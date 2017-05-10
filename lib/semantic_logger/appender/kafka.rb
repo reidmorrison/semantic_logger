@@ -21,9 +21,9 @@ require 'date'
 #   )
 class SemanticLogger::Appender::Kafka < SemanticLogger::Subscriber
   attr_accessor :seed_brokers, :client_id, :connect_timeout, :socket_timeout,
-    :ssl_ca_cert, :ssl_client_cert, :ssl_client_cert_key,
-    :delivery_threshold, :delivery_interval,
-    :topic, :partition, :partition_key, :key
+                :ssl_ca_cert, :ssl_client_cert, :ssl_client_cert_key,
+                :delivery_threshold, :delivery_interval,
+                :topic, :partition, :partition_key, :key
 
   # Send log messages to Kafka in JSON format.
   #
@@ -110,10 +110,10 @@ class SemanticLogger::Appender::Kafka < SemanticLogger::Subscriber
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(seed_brokers:, client_id: 'semantic-logger', connect_timeout: nil, socket_timeout: nil,
-    ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil,
-    topic: 'log_messages', partition: nil, partition_key: nil, key: nil,
-    delivery_threshold: 100, delivery_interval: 10,
-    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                 ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil,
+                 topic: 'log_messages', partition: nil, partition_key: nil, key: nil,
+                 delivery_threshold: 100, delivery_interval: 10,
+                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
     @seed_brokers        = seed_brokers
     @client_id           = @client_id

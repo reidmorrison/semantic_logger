@@ -120,9 +120,9 @@ module SemanticLogger
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
       def initialize(url: 'syslog://localhost',
-        facility: ::Syslog::LOG_USER, level_map: SemanticLogger::Formatters::Syslog::LevelMap.new, options: ::Syslog::LOG_PID|::Syslog::LOG_CONS,
-        tcp_client: {},
-        level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                     facility: ::Syslog::LOG_USER, level_map: SemanticLogger::Formatters::Syslog::LevelMap.new, options: ::Syslog::LOG_PID|::Syslog::LOG_CONS,
+                     tcp_client: {},
+                     level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
         @options            = options
         @facility           = facility

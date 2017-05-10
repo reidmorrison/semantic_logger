@@ -38,7 +38,7 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Subscriber
 
   # Returns [Hash] of parameters to send to Bugsnag.
   def call(log, logger)
-    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
+    h            = SemanticLogger::Formatters::Raw.new.call(log, logger)
     h[:severity] = log_level(log)
     h.delete(:message) if h[:exception] && (h[:message] == h[:exception][:message])
     h.delete(:time)

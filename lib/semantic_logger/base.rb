@@ -326,7 +326,7 @@ module SemanticLogger
             if silence_level = params[:silence]
               # In case someone accidentally sets `silence: true` instead of `silence: :error`
               silence_level = :error if silence_level == true
-              silence(silence_level) {yield(params)}
+              silence(silence_level) { yield(params) }
             else
               yield(params)
             end

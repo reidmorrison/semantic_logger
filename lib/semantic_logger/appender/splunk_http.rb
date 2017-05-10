@@ -67,14 +67,14 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
   def initialize(token: nil, source_type: nil, index: nil,
-    url:, compress: true, ssl: {}, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
-    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                 url:, compress: true, ssl: {}, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
+                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
-    @source_type       = source_type
-    @index             = index
+    @source_type = source_type
+    @index       = index
 
-    super(url: url, compress: compress, ssl: ssl, open_timeout: 2.0, read_timeout: open_timeout, continue_timeout: continue_timeout,
-      level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+    super(url:   url, compress: compress, ssl: ssl, open_timeout: 2.0, read_timeout: open_timeout, continue_timeout: continue_timeout,
+          level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
 
     # Put splunk auth token in the header of every HTTP post.
     @header['Authorization'] = "Splunk #{token}"

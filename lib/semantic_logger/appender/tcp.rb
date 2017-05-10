@@ -182,11 +182,11 @@ module SemanticLogger
       #     connect_retry_count:    5
       #   )
       def initialize(server: nil, servers: nil, separator: "\n",
-        policy: :ordered, buffered: true, #keepalive: true,
-        connect_timeout: 10.0, read_timeout: 60.0, write_timeout: 60.0,
-        connect_retry_count: 10, retry_count: 3, connect_retry_interval: 0.5, close_on_error: true,
-        on_connect: nil, proxy_server: nil, ssl: nil,
-        level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block
+                     policy: :ordered, buffered: true, #keepalive: true,
+                     connect_timeout: 10.0, read_timeout: 60.0, write_timeout: 60.0,
+                     connect_retry_count: 10, retry_count: 3, connect_retry_interval: 0.5, close_on_error: true,
+                     on_connect: nil, proxy_server: nil, ssl: nil,
+                     level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block
       )
         @separator                 = separator
         @options                   = {

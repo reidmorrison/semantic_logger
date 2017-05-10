@@ -81,7 +81,7 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(url: 'udp://localhost:12201', max_size: 'WAN', gelf_options: {}, level_map: LevelMap.new,
-    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
     @url          = url
     @max_size     = max_size
