@@ -41,8 +41,9 @@ module SemanticLogger
 end
 # @formatter:on
 
-# Close and flush all appenders at exit, waiting for outstanding messages on the queue
-# to be written first
+# Flush all appenders at exit, waiting for outstanding messages on the queue
+# to be written first.
 at_exit do
-  SemanticLogger.close
+  # Cannot close since test frameworks only run at exit, at which point the logging would already be closed.
+  SemanticLogger.flush
 end
