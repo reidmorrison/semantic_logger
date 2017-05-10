@@ -36,12 +36,16 @@ class SemanticLogger::Appender::Sentry < SemanticLogger::Subscriber
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(level: :error, formatter: nil, filter: nil, application: nil, host: nil, &block)
+    # Replace the Sentry Raven logger so that we can identify its log messages and not forward them to Sentry
+    Raven.configure { |config| config.logger = SemanticLogger[Raven] }
     super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
   end
 
   # Send an error notification to sentry
   def log(log)
     return false unless should_log?(log)
+    # Ignore logs coming from Ravent itself
+    return false if log.name == 'Raven'
 
     context = formatter.call(log, self)
     if log.exception
