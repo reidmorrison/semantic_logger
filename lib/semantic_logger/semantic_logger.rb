@@ -193,7 +193,7 @@ module SemanticLogger
   #   Not all appenders implement reopen.
   #   Check the code for each appender you are using before relying on this behavior.
   def self.reopen
-    @appenders.each {|appender| appender.reopen if appender.respond_to?(:reopen)}
+    @appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
     # After a fork the appender thread is not running, start it if it is not running.
     SemanticLogger::Processor.start
   end
@@ -407,7 +407,7 @@ module SemanticLogger
   def self.named_tags
     if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
       if list.size > 1
-        list.reduce({}) {|sum, h| sum.merge(h)}
+        list.reduce({}) { |sum, h| sum.merge(h) }
       else
         list.first.clone
       end

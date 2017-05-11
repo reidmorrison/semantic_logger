@@ -69,7 +69,7 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
   def initialize(url: 'http://localhost:9200', index: 'semantic_logger', type: 'log', flush_interval: 1, timeout_interval: 10, batch_size: 500,
-    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
     @url              = url
     @index            = index

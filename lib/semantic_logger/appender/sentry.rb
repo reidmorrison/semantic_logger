@@ -52,9 +52,9 @@ class SemanticLogger::Appender::Sentry < SemanticLogger::Subscriber
       context.delete(:exception)
       Raven.capture_exception(log.exception, context)
     else
-      attrs             = {
-        level:         context.delete(:level),
-        extra:         context
+      attrs                     = {
+        level: context.delete(:level),
+        extra: context
       }
       attrs[:extra][:backtrace] = log.backtrace if log.backtrace
       Raven.capture_message(context[:message], attrs)

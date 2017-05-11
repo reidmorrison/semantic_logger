@@ -17,7 +17,7 @@ require 'json'
 #   )
 class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   attr_accessor :username, :application, :host, :compress, :header,
-    :open_timeout, :read_timeout, :continue_timeout
+                :open_timeout, :read_timeout, :continue_timeout
   attr_reader :http, :url, :server, :port, :path, :ssl_options
 
   # Create HTTP(S) log appender
@@ -78,7 +78,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   #   continue_timeout: [Float]
   #     Default: 1.0
   def initialize(url:, compress: false, ssl: {}, username: nil, password: nil, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
-    level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
     @url              = url
     @ssl_options      = ssl

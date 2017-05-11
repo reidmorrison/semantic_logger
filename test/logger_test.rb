@@ -213,5 +213,48 @@ class LoggerTest < Minitest::Test
       end
     end
 
+    describe '.tagged' do
+      it 'add tags to log entries' do
+        @logger.tagged('12345', 'DJHSFK') do
+          @logger.info('Hello world')
+          SemanticLogger.flush
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world/, @mock_logger.message)
+        end
+      end
+
+      it 'add embedded tags to log entries' do
+        @logger.tagged('First Level', 'tags') do
+          @logger.tagged('Second Level') do
+            @logger.info('Hello world')
+            SemanticLogger.flush
+            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[First Level\] \[tags\] \[Second Level\] LoggerTest -- Hello world/, @mock_logger.message)
+          end
+          assert_equal 2, @logger.tags.count, @logger.tags
+          assert_equal 'First Level', @logger.tags.first
+          assert_equal 'tags', @logger.tags.last
+        end
+      end
+
+      it 'also supports named tagging' do
+        @logger.tagged(level1: 1) do
+          assert_equal({level1: 1}, SemanticLogger.named_tags)
+          @logger.tagged(level2: 2, more: 'data') do
+            assert_equal({level1: 1, level2: 2, more: 'data'}, SemanticLogger.named_tags)
+            @logger.tagged(level3: 3) do
+              assert_equal({level1: 1, level2: 2, more: 'data', level3: 3}, SemanticLogger.named_tags)
+            end
+          end
+        end
+      end
+
+      it 'is compatible with rails logging that uses arrays and nils' do
+        @logger.tagged('', ['12345', 'DJHSFK'], nil) do
+          @logger.info('Hello world')
+          SemanticLogger.flush
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world/, @mock_logger.message)
+        end
+      end
+    end
+
   end
 end

@@ -177,7 +177,7 @@ module SemanticLogger
       if tags.size == 1
         tag = tags[0]
         return yield if tag.nil? || tag == ''
-        return tag.is_a?(Hash) ? named_tagged(tag, &block) : fast_tag(tag.to_s, &block)
+        return tag.is_a?(Hash) ? SemanticLogger.named_tagged(tag, &block) : SemanticLogger.fast_tag(tag.to_s, &block)
       end
 
       # Need to flatten and reject empties to support calls from Rails 4
@@ -326,7 +326,7 @@ module SemanticLogger
             if silence_level = params[:silence]
               # In case someone accidentally sets `silence: true` instead of `silence: :error`
               silence_level = :error if silence_level == true
-              silence(silence_level) {yield(params)}
+              silence(silence_level) { yield(params) }
             else
               yield(params)
             end

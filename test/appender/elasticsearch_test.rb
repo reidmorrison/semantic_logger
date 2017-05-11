@@ -8,7 +8,7 @@ module Appender
         skip('Concurrent::TimerTask issue is preventing the process from stopping.') if defined? JRuby
         Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
           @appender = SemanticLogger::Appender::Elasticsearch.new(
-            url: 'http://localhost:9200',
+            url:        'http://localhost:9200',
             batch_size: 1 # immediate flush
           )
         end
@@ -21,7 +21,7 @@ module Appender
 
       it 'logs to daily indexes' do
         index = nil
-        @appender.stub(:enqueue, ->(ind, json){ index = ind['index']['_index'] } ) do
+        @appender.stub(:enqueue, ->(ind, json) { index = ind['index']['_index'] }) do
           @appender.info @message
         end
         assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
@@ -30,7 +30,7 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201 } }) do
+          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201} }) do
             @appender.send(level, @message)
           end
 
@@ -47,7 +47,7 @@ module Appender
             exc = e
           end
           request = nil
-          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201 } }) do
+          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201} }) do
             @appender.send(level, 'Reading File', exc)
           end
 
@@ -63,7 +63,7 @@ module Appender
 
         it "sends #{level} custom attributes" do
           request = nil
-          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201 } }) do
+          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201} }) do
             @appender.send(level, @message, {key1: 1, key2: 'a'})
           end
 
