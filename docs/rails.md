@@ -168,7 +168,7 @@ To show the Controller Processing message in production:
 config.rails_semantic_logger.processing = true
 ~~~
 
-#### Vew Rendering messages
+#### View Rendering messages
 
 By default the Action View rendering messages are logged at the debug level so that they do not appear in production.
 
