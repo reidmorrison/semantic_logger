@@ -2,10 +2,14 @@
 layout: default
 ---
 
-Semantic Logger adds contextual information to every log message to assist significantly in
-searching and processing large amounts of log messages.
+Semantic Logger is a comprehensive logging interface that enables human and machine readable logging outputs.
 
-Additional information captured by Semantic Logger:
+* Colorful text log files for humans to read.
+* JSON log files containing all Semantic information that machines can easily comsume. 
+* Write to multiple output destinations at the same time.
+* Forward logs to a centralized logging system, via JSON output or built-in appenders.
+
+Semantic Logger adds contextual information to every log entry:
 
 * Name
     * Name of the class that logged the message.
@@ -15,7 +19,7 @@ Additional information captured by Semantic Logger:
 * File line number
     * Line number in the Ruby source code file that logged the message.
 * Duration
-    * Benchmark how long a block of code takes to run.
+    * How long did a block of code take to complete.
 * Exceptions
     * Natively capture and forward exceptions in their original form along with the complete backtrace.
     * Include child or caused-by exception information.
@@ -23,24 +27,15 @@ Additional information captured by Semantic Logger:
     * Name threads so that their log messages can be easily isolated, or compared against other threads.
 * Process ID
     * Know which process wrote every log message.
+* Metrics
+    * Add named metrics to specific log messages.
+    * Forward metrics so that dashboards and alerts can be created based on specific metrics.
+    * Example, forward to NewRelic, Splunk, etc.
+* Tagging
+    * Tag all log entries within a block of code with common information.
+    * Example, all log entries for a specific web request, or user.
 * Custom Fields
     * For example, user id, login, session id, roles, etc.
-
-Log messages can be written to one or more of the following destinations at the same time:
-
-* Text File
-* $stderr or $stdout ( any IO stream )
-* Syslog
-* Graylog
-* Elasticsearch
-* Splunk
-* Loggly
-* Logstash
-* New Relic
-* Bugsnag
-* HTTP(S)
-* MongoDB
-* Logger, log4r, etc.
 
 Example:
 
@@ -62,17 +57,15 @@ logger.info('Queried table',
 
 ### Colorize log files
 
-* Use color to quickly identify error messages from amongst many info or debug messages.
+* Use color to quickly identify error messages vs informational messages.
 
-### Drop-in Replacement
+### Implementation
 
-* Simple drop-in replacement for the Ruby, or the Rails loggers.
-* Supports current common logging interface.
-* No changes to existing to code to use new logger, other than replacing the logger itself.
-* Fully compatible in 99.9% of use-cases.
-   * Semantic Logger is a much richer implementation when compared to existing Ruby loggers.
-   * There is a new appender creation API.
-   * Additional trace level logging.
+* Direct replacement for the Ruby, and Rails loggers.
+    * Conforms to the common logging interface.
+* Easy to switch to Semantic Logger. 
+    * Only change how the logger is created.
+    * For Rails, just add the `rails_semantic_logger` gem.
 
 ### Benchmarking
 
