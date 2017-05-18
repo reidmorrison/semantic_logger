@@ -82,7 +82,7 @@ class Supplier
   end
 
   def call_supplier
-    logger.debug ('logger is accessible from instance methods')
+    logger.debug('logger is accessible from instance methods')
   end
 end
 ~~~
