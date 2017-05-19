@@ -666,7 +666,7 @@ SemanticLogger.default_level = :info
 SemanticLogger.add_appender(file_name: 'log/warnings.log', level: :warn)
 
 # Log all trace messages and above to trace.log
-SemanticLogger.add_appender(file_name: 'log/trace.log', level: :warn)
+SemanticLogger.add_appender(file_name: 'log/trace.log', level: :trace)
 
 logger = SemanticLogger['MyClass']
 logger.level = :trace
