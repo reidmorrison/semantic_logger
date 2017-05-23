@@ -64,18 +64,24 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
                  filter: nil,
                  application: nil,
                  host: nil,
+                 **args,
                  &block)
 
-    @url   = url
-    @index = index
-    @type  = type
+    @url                = url
+    @index              = index
+    @type               = type
+    @elasticsearch_args = args[:elasticsearch]
 
     super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
   end
 
   def reopen
-    @client = Elasticsearch::Client.new(url: url, logger: logger)
+    if @elasticsearch_args
+      @client = Elasticsearch::Client.new(@elasticsearch_args.merge!(logger: logger))
+    else
+      @client = Elasticsearch::Client.new(url: url, logger: logger)
+    end
   end
 
   # Log to the index for today
