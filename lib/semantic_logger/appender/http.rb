@@ -2,6 +2,7 @@ require 'net/http'
 require 'uri'
 require 'socket'
 require 'json'
+require 'openssl'
 
 # Log to any HTTP(S) server that accepts log messages in JSON form
 #
@@ -77,8 +78,20 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   #
   #   continue_timeout: [Float]
   #     Default: 1.0
-  def initialize(url:, compress: false, ssl: {}, username: nil, password: nil, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
-                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+  def initialize(url:,
+                 compress: false,
+                 ssl: {},
+                 username: nil,
+                 password: nil,
+                 open_timeout: 2.0,
+                 read_timeout: 1.0,
+                 continue_timeout: 1.0,
+                 level: nil,
+                 formatter: nil,
+                 filter: nil,
+                 application: nil,
+                 host: nil,
+                 &block)
 
     @url              = url
     @ssl_options      = ssl
@@ -89,10 +102,10 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
     @read_timeout     = read_timeout
     @continue_timeout = continue_timeout
 
+    # On Ruby v2.0 and greater, Net::HTTP.new already uses a persistent connection if the server allows it
     @header                     = {
       'Accept'       => 'application/json',
       'Content-Type' => 'application/json',
-      # On Ruby v2.0 and greater, Net::HTTP.new already uses a persistent connection if the server allows it
       'Connection'   => 'keep-alive',
       'Keep-Alive'   => '300'
     }

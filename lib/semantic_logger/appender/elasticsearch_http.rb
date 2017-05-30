@@ -54,7 +54,7 @@ class SemanticLogger::Appender::ElasticsearchHttp < SemanticLogger::Appender::Ht
 
     @index = index
     @type  = type
-    super(url:   url, compress: compress, ssl: ssl, open_timeout: 2.0, read_timeout: open_timeout, continue_timeout: continue_timeout,
+    super(url:   url, compress: compress, ssl: ssl, read_timeout: read_timeout, open_timeout: open_timeout, continue_timeout: continue_timeout,
           level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
 
     @request_path = "#{@path.end_with?('/') ? @path : "#{@path}/"}#{@index}-%Y.%m.%d"

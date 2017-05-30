@@ -65,7 +65,16 @@ module SemanticLogger
     #
     # Example:
     #   logger.info(name: 'value')
-    def assign(message: nil, payload: nil, min_duration: 0.0, exception: nil, metric: nil, metric_amount: 1, duration: nil, backtrace: nil, log_exception: :full, on_exception_level: nil)
+    def assign(message: nil,
+               payload: nil,
+               min_duration: 0.0,
+               exception: nil,
+               metric: nil,
+               metric_amount: nil,
+               duration: nil,
+               backtrace: nil,
+               log_exception: :full,
+               on_exception_level: nil)
       # Elastic logging: Log when :duration exceeds :min_duration
       # Except if there is an exception when it will always be logged
       if duration

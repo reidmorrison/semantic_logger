@@ -21,8 +21,9 @@ module SemanticLogger
 
       # Parameters
       #   time_format: [String|Symbol|nil]
-      #     See Time#strftime for the format of this string
-      #     :iso_8601 Outputs an ISO8601 Formatted timestamp
+      #     See Time#strftime for the format of this string.
+      #     :iso_8601 Outputs an ISO8601 Formatted timestamp.
+      #     :ms       Output in miliseconds since epoch.
       #     nil:      Returns Empty string for time ( no time is output ).
       #     Default: '%Y-%m-%d %H:%M:%S.%6N'
       def initialize(time_format: TIME_FORMAT, log_host: true, log_application: true)
@@ -43,6 +44,8 @@ module SemanticLogger
         case time_format
         when :iso_8601
           time.utc.iso8601(PRECISION)
+        when :ms
+          (time.to_f * 1_000).to_i
         when nil
           ''
         else

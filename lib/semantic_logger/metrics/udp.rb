@@ -22,8 +22,10 @@ module SemanticLogger
       #   that the message has to traverse. See https://en.wikipedia.org/wiki/Maximum_transmission_unit
       #
       # Example:
-      #   subscriber = SemanticLogger::Metrics::Udp.new(server: 'localhost:8125')
-      #   SemanticLogger.on_metric(subscriber)
+      #   SemanticLogger.on_metric(
+      #     appender: :udp,
+      #     server:   'localhost:8125'
+      #   )
       def initialize(options = {}, &block)
         options    = options.dup
         @server    = options.delete(:server)

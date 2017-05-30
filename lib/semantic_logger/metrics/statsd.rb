@@ -20,12 +20,13 @@ module SemanticLogger
       #     Default: udp://localhost:8125
       #
       # Example:
-      #   subscriber = SemanticLogger::Metrics::Statsd.new(url: 'udp://localhost:8125')
-      #   SemanticLogger.on_metric(subscriber)
-      def initialize(options = {})
-        options = options.dup
-        @url    = options.delete(:url) || 'udp://localhost:8125'
-        uri     = URI.parse(@url)
+      #   SemanticLogger.on_metric(
+      #     appender: :statsd,
+      #     url:      'localhost:8125'
+      #   )
+      def initialize(url: 'udp://localhost:8125')
+        @url = url
+        uri  = URI.parse(@url)
         raise('Statsd only supports udp. Example: "udp://localhost:8125"') if uri.scheme != 'udp'
 
         @statsd           = ::Statsd.new(uri.host, uri.port)

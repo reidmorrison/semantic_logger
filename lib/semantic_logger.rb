@@ -24,6 +24,7 @@ module SemanticLogger
     autoload :Default,          'semantic_logger/formatters/default'
     autoload :Json,             'semantic_logger/formatters/json'
     autoload :Raw,              'semantic_logger/formatters/raw'
+    autoload :Signalfx,         'semantic_logger/formatters/signalfx'
     autoload :Syslog,           'semantic_logger/formatters/syslog'
   end
 

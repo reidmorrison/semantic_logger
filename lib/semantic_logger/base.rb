@@ -124,7 +124,13 @@ module SemanticLogger
     alias_method :benchmark, :measure
 
     # Log a thread backtrace
-    def backtrace(thread: Thread.current, level: :warn, message: 'Backtrace:', payload: nil, metric: nil, metric_amount: 1)
+    def backtrace(thread: Thread.current,
+                  level: :warn,
+                  message: 'Backtrace:',
+                  payload: nil,
+                  metric: nil,
+                  metric_amount: nil)
+
       log       = Log.new(name, level)
       backtrace =
         if thread == Thread.current
@@ -354,9 +360,8 @@ module SemanticLogger
           min_duration:       params[:min_duration] || 0.0,
           exception:          exception,
           metric:             params[:metric],
-          metric_amount:      1,
+          metric_amount:      params[:metric_amount],
           duration:           duration,
-          backtrace:          nil,
           log_exception:      params[:log_exception] || :partial,
           on_exception_level: params[:on_exception_level]
         )

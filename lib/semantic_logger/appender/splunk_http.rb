@@ -73,7 +73,7 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
     @source_type = source_type
     @index       = index
 
-    super(url:   url, compress: compress, ssl: ssl, open_timeout: 2.0, read_timeout: open_timeout, continue_timeout: continue_timeout,
+    super(url:   url, compress: compress, ssl: ssl, read_timeout: read_timeout, open_timeout: open_timeout, continue_timeout: continue_timeout,
           level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
 
     # Put splunk auth token in the header of every HTTP post.
