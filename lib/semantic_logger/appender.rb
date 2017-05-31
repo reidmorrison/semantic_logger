@@ -1,6 +1,7 @@
 module SemanticLogger
   module Appender
     # @formatter:off
+    autoload :Async,             'semantic_logger/appender/async'
     autoload :Bugsnag,           'semantic_logger/appender/bugsnag'
     autoload :Elasticsearch,     'semantic_logger/appender/elasticsearch'
     autoload :ElasticsearchHttp, 'semantic_logger/appender/elasticsearch_http'
@@ -36,19 +37,22 @@ module SemanticLogger
 
     # Returns [SemanticLogger::Subscriber] appender for the supplied options
     def self.create(options, &block)
-      if options[:io] || options[:file_name]
-        SemanticLogger::Appender::File.new(options, &block)
-      elsif appender = options.delete(:appender)
-        if appender.is_a?(Symbol)
-          constantize_symbol(appender).new(options)
-        elsif appender.is_a?(Subscriber)
-          appender
-        else
-          raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
+      async    = options.delete(:async)
+      appender =
+        if options[:io] || options[:file_name]
+          SemanticLogger::Appender::File.new(options, &block)
+        elsif appender = options.delete(:appender)
+          if appender.is_a?(Symbol)
+            constantize_symbol(appender).new(options)
+          elsif appender.is_a?(Subscriber)
+            appender
+          else
+            raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
+          end
+        elsif options[:logger]
+          SemanticLogger::Appender::Wrapper.new(options, &block)
         end
-      elsif options[:logger]
-        SemanticLogger::Appender::Wrapper.new(options, &block)
-      end
+      async == true ? Appender::Async.new(appender: appender) : appender
     end
 
     def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
