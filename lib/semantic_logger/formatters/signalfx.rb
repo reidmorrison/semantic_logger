@@ -61,7 +61,7 @@ module SemanticLogger
         hash[:dimensions] = dimensions
       end
 
-      # Returns log messages in Hash format
+      # Returns [Hash] log message in Signalfx format.
       def call(log, logger)
         self.hash   = {}
         self.log    = log
@@ -75,6 +75,32 @@ module SemanticLogger
           data[:gauge] = [hash]
         else
           data[:counter] = [hash]
+        end
+        data.to_json
+      end
+
+      # Returns [Hash] a batch of log messages.
+      def batch(logs, logger)
+        self.logger = logger
+
+        data = {}
+        logs.each do |log|
+          self.hash = {}
+          self.log  = log
+
+          metric; time; value; dimensions
+
+          if log.duration
+            (data[:gauge] ||= []) << hash
+          else
+            counters = (data[:counter] ||= [])
+            # Aggregate counters with the same name, using the timestamp of the first entry in this poll interval.
+            if existing = counters.find { |counter| counter[:metric] == hash[:metric] }
+              existing.value += hash[:value]
+            else
+              counters << hash
+            end
+          end
         end
         data.to_json
       end

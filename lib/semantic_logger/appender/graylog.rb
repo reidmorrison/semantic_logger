@@ -110,11 +110,9 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
 
   # Returns [Hash] of parameters to send
   def call(log, logger)
-    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
-    h.delete(:time)
+    h = default_formatter.call(log, logger)
 
     h[:short_message] = h.delete(:message) || log.exception.message
-    h[:timestamp]     = log.time.utc.to_f
     h[:level]         = logger.level_map[log.level]
     h[:level_str]     = log.level.to_s
     h[:duration_str]  = h.delete(:duration)
@@ -129,4 +127,9 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
     true
   end
 
+  private
+
+  def default_formatter
+    SemanticLogger::Formatters::Raw.new(time_format: :seconds, time_key: :timestamp)
+  end
 end

@@ -20,10 +20,11 @@ module Appender
       end
 
       it 'logs to daily indexes' do
-        index = nil
-        @appender.stub(:enqueue, ->(ind, json) { index = ind['index']['_index'] }) do
+        bulk_index = nil
+        @appender.stub(:write_to_elasticsearch, -> messages { bulk_index = messages.first }) do
           @appender.info @message
         end
+        index = bulk_index['index']['_index']
         assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
       end
 

@@ -34,18 +34,6 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   #     Document type to associate with logs when they are written.
   #     Default: 'log'
   #
-  #   batch_size: [Fixnum]
-  #     Size of list when sending to Elasticsearch. May be smaller if flush is triggered early.
-  #     Default: 500
-  #
-  #   flush_interval: [Fixnum]
-  #     Seconds to wait before attempting a flush to Elasticsearch. If no messages queued it's a NOOP.
-  #     Default: 1
-  #
-  #   timeout_interval: [Fixnum]
-  #     Seconds to allow the Elasticsearch client to flush the bulk message.
-  #     Default: 10
-  #
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
   #     Override the log level for this appender.
   #     Default: SemanticLogger.default_level
@@ -68,18 +56,19 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   #   application: [String]
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
-  def initialize(url: 'http://localhost:9200', index: 'semantic_logger', type: 'log', flush_interval: 1, timeout_interval: 10, batch_size: 500,
-                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+  def initialize(url: 'http://localhost:9200',
+                 index: 'semantic_logger',
+                 type: 'log',
+                 level: nil,
+                 formatter: nil,
+                 filter: nil,
+                 application: nil,
+                 host: nil,
+                 &block)
 
     @url              = url
     @index            = index
     @type             = type
-    @flush_interval   = flush_interval
-    @timeout_interval = timeout_interval
-    @batch_size       = batch_size
-
-    @messages_mutex = Mutex.new
-    @messages       = Array.new
 
     super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
@@ -87,69 +76,52 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
 
   def reopen
     @client = Elasticsearch::Client.new(url: url, logger: SemanticLogger::Processor.logger.clone)
-
-    @messages_mutex.synchronize { @messages = [] }
-
-    @flush_task = Concurrent::TimerTask.new(execution_interval: flush_interval, timeout_interval: timeout_interval) do
-      flush
-    end.execute
-  end
-
-  def close
-    @flush_task.shutdown if @flush_task
-    @flush_task = nil
-    # No api to close connections in the elasticsearch client!
-    #@client.close if @client
-    #@client = nil
-  end
-
-  def call(log, logger)
-    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
-    h.delete(:time)
-    h[:timestamp] = log.time.utc.iso8601(SemanticLogger::Formatters::Base::PRECISION)
-    h
-  end
-
-  def flush
-    collected_messages = nil
-    @messages_mutex.synchronize do
-      if @messages.length > 0
-        collected_messages = @messages
-        @messages          = []
-      end
-    end
-
-    if collected_messages
-      bulk_result = @client.bulk(body: collected_messages)
-      if bulk_result["errors"]
-        failed = bulk_result["items"].select { |x| x["status"] != 201 }
-        SemanticLogger::Processor.logger.error("ElasticSearch: Write failed. Messages discarded. : #{failed}")
-      end
-    end
-  rescue Exception => exc
-    SemanticLogger::Processor.logger.error('ElasticSearch: Failed to bulk insert log messages', exc)
   end
 
   # Log to the index for today
   def log(log)
     return false unless should_log?(log)
 
-    daily_index = log.time.strftime("#{@index}-%Y.%m.%d")
-
-    bulk_index   = {'index' => {'_index' => daily_index, '_type' => @type}}
     bulk_payload = formatter.call(log, self)
-
-    enqueue(bulk_index, bulk_payload)
+    write_to_elasticsearch([bulk_index(log), bulk_payload])
+    true
   end
 
-  def enqueue(bulk_index, bulk_payload)
-    messages_len =
-      @messages_mutex.synchronize do
-        @messages.push(bulk_index)
-        @messages.push(bulk_payload)
-        @messages.length
+  def batch(logs)
+    messages = []
+    day      = nil
+    logs.each do |log|
+      next unless should_log?(log)
+
+      # Only write the bulk index once per day per batch. Supports mixed dates in a batch.
+      if log.day != day
+        messages << bulk_index(log)
+        day = log.time.day
       end
+      messages << formatter.call(log, self)
+    end
 
-    flush if messages_len >= batch_size
+    write_to_elasticsearch(messages)
+    true
   end
+
+  private
+
+  def write_to_elasticsearch(messages)
+    bulk_result = @client.bulk(body: messages)
+    if bulk_result["errors"]
+      failed = bulk_result["items"].select { |x| x["status"] != 201 }
+      SemanticLogger::Processor.logger.error("ElasticSearch: Write failed. Messages discarded. : #{failed}")
+    end
+  end
+
+  def bulk_index(log)
+    daily_index = log.time.strftime("#{index}-%Y.%m.%d")
+    {'index' => {'_index' => daily_index, '_type' => type}}
+  end
+
+  def default_formatter
+    SemanticLogger::Formatters::Raw.new(time_format: :iso_8601, time_key: :timestamp)
+  end
+
 end

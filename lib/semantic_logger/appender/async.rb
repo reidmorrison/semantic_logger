@@ -30,7 +30,7 @@ module SemanticLogger
                      lag_threshold_s: 30)
 
         # Its own error logger instance
-        @logger      = Processor.send(:logger).dup
+        @logger      = Processor.logger.dup
         @logger.name = name
 
         @appender           = appender
@@ -57,7 +57,7 @@ module SemanticLogger
       # Starts the worker thread if not running.
       def thread
         return @thread if @thread && @thread.alive?
-        @thread = Thread.new { process_requests }
+        @thread = Thread.new { process }
       end
 
       # Returns true if the worker thread is active
@@ -85,54 +85,63 @@ module SemanticLogger
       private
 
       # Separate thread for batching up log messages before writing.
-      def process_requests
+      def process
         # This thread is designed to never go down unless the main thread terminates
         # or the appender is closed.
         Thread.current.name = logger.name
         logger.trace "Appender thread active"
         begin
-          count = 0
-          while message = queue.pop
-            if message.is_a?(Log)
-              appender.log(message)
-              count += 1
-              # Check every few log messages whether this appender thread is falling behind
-              if count > lag_check_interval
-                if (diff = Time.now - message.time) > lag_threshold_s
-                  logger.warn "Appender thread has fallen behind by #{diff} seconds with #{queue_size} messages queued up. Consider reducing the log level or changing the appenders"
-                end
-                count = 0
-              end
-            else
-              case message[:command]
-              when :flush
-                appender.flush
-                message[:reply_queue] << true if message[:reply_queue]
-              when :close
-                appender.close
-                message[:reply_queue] << true if message[:reply_queue]
-                break
-              else
-                logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
-              end
-            end
-          end
+          process_messages
+        rescue StandardError => exception
+          # This block may be called after the file handles have been released by Ruby
+          logger.error('Restarting due to exception', exception) rescue nil
+          retry
         rescue Exception => exception
           # This block may be called after the file handles have been released by Ruby
-          begin
-            logger.error 'Restarting due to exception', exception
-          rescue Exception
-            nil
-          end
-          retry
+          logger.error('Stopping due to fatal exception', exception) rescue nil
         ensure
           @thread = nil
           # This block may be called after the file handles have been released by Ruby
-          begin
-            logger.trace 'Thread has stopped'
-          rescue Exception
-            nil
+          logger.trace('Thread has stopped') rescue nil
+        end
+      end
+
+      def process_messages
+        count = 0
+        while message = queue.pop
+          if message.is_a?(Log)
+            appender.log(message)
+            count += 1
+            # Check every few log messages whether this appender thread is falling behind
+            if count > lag_check_interval
+              check_lag(log)
+              count = 0
+            end
+          else
+            break unless process_message(message)
           end
+        end
+      end
+
+      # Returns false when message processing should be stopped
+      def process_message(message)
+        case message[:command]
+        when :flush
+          appender.flush
+          message[:reply_queue] << true if message[:reply_queue]
+        when :close
+          appender.close
+          message[:reply_queue] << true if message[:reply_queue]
+          return false
+        else
+          logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
+        end
+        true
+      end
+
+      def check_lag(log)
+        if (diff = Time.now - log.time) > lag_threshold_s
+          logger.warn "Appender thread has fallen behind by #{diff} seconds with #{queue.size} messages queued up. Consider reducing the log level or changing the appenders"
         end
       end
 
@@ -141,7 +150,7 @@ module SemanticLogger
         return false unless active?
 
         queue_size = queue.size
-        msg = "Too many queued log messages: #{queue_size}, running command: #{command}"
+        msg        = "Too many queued log messages: #{queue_size}, running command: #{command}"
         if queue_size > 1_000
           logger.warn msg
         elsif queue_size > 100

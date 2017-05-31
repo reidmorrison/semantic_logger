@@ -84,4 +84,13 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
     post(formatter.call(log, self), full_url)
   end
 
+  # Logs in batches
+  def batch(logs)
+    # Check filter, ignoring log level.
+    logs.delete_if { |log| !include_message?(log) }
+
+    post(formatter.batch(logs, self), full_url)
+  end
+
 end
+

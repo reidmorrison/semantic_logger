@@ -4,7 +4,13 @@ module SemanticLogger
     class Raw < Base
 
       # Fields are added by populating this hash.
-      attr_accessor :hash, :log, :logger
+      attr_accessor :hash, :log, :logger, :time_key
+
+      # By default Raw formatter does not reformat the time
+      def initialize(time_format: :none, log_host: true, log_application: true, time_key: :time)
+        @time_key = time_key
+        super(time_format: time_format, log_host: log_host, log_application: log_application)
+      end
 
       # Host name
       def host
@@ -18,7 +24,7 @@ module SemanticLogger
 
       # Date & time
       def time
-        hash[:time] = log.time
+        hash[time_key] = format_time(log.time)
       end
 
       # Log level

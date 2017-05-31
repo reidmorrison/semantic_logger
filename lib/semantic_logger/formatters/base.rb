@@ -46,6 +46,10 @@ module SemanticLogger
           time.utc.iso8601(PRECISION)
         when :ms
           (time.to_f * 1_000).to_i
+        when :none
+          time
+        when :seconds
+          time.utc.to_f
         when nil
           ''
         else
