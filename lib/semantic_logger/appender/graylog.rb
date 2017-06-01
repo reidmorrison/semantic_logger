@@ -121,8 +121,6 @@ class SemanticLogger::Appender::Graylog < SemanticLogger::Subscriber
 
   # Forward log messages
   def log(log)
-    return false unless should_log?(log)
-
     notifier.notify!(formatter.call(log, self))
     true
   end

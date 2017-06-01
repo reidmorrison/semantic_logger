@@ -43,8 +43,7 @@ class SemanticLogger::Appender::Sentry < SemanticLogger::Subscriber
 
   # Send an error notification to sentry
   def log(log)
-    return false unless should_log?(log)
-    # Ignore logs coming from Ravent itself
+    # Ignore logs coming from Raven itself
     return false if log.name == 'Raven'
 
     context = formatter.call(log, self)

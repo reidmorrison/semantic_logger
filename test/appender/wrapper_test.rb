@@ -42,7 +42,7 @@ module Appender
 
       describe 'for each log level' do
         before do
-          @appender = SemanticLogger.add_appender(logger: @mock_logger)
+          @appender = SemanticLogger.add_appender(appender: @mock_logger)
           @logger   = SemanticLogger[WrapperTest]
         end
 

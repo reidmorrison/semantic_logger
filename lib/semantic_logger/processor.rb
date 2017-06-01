@@ -31,17 +31,6 @@ module SemanticLogger
       instance.queue.size
     end
 
-    # Flush all queued log entries disk, database, etc.
-    #  All queued log messages are written and then each appender is flushed in turn.
-    def self.flush
-      instance.flush
-    end
-
-    # Close all appenders and flush any outstanding messages.
-    def self.close
-      instance.close
-    end
-
     # Add log request to the queue for processing.
     # Log subscribers are called inline before handing off to the queue.
     def self.<<(log)
@@ -67,16 +56,6 @@ module SemanticLogger
       instance.lag_threshold_s
     end
 
-    # DEPRECATED
-    # Metrics subscribers should be implemented as appenders.
-    def self.on_metric(options = {}, &block)
-      instance.appender.on_metric(options, &block)
-    end
-
-    def self.on_log(object = nil, &block)
-      instance.appender.on_log(object, &block)
-    end
-
     # Allow the internal logger to be overridden from its default of STDERR
     #   Can be replaced with another Ruby logger or Rails logger, but never to
     #   SemanticLogger::Logger itself since it is for reporting problems
@@ -96,26 +75,12 @@ module SemanticLogger
       end
     end
 
-    attr_accessor :logger, :metric_subscribers, :log_subscribers
+    attr_accessor :logger, :log_subscribers
 
     def initialize
-      @metric_subscribers = nil
-      @log_subscribers    = nil
-      @logger             = self.class.logger.dup
-      @logger.name        = self.class.name
-    end
-
-    def on_metric(options = {}, &block)
-      # Backward compatibility
-      options    = options.is_a?(Hash) ? options.dup : {appender: options}
-      subscriber = block || options.delete(:appender)
-
-      # Convert symbolized metrics appender to an actual object
-      subscriber = SemanticLogger::Appender.constantize_symbol(subscriber, 'SemanticLogger::Metrics').new(options) if subscriber.is_a?(Symbol)
-
-      raise('When supplying a metrics subscriber, it must support the #call method') unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
-      subscribers = (@metric_subscribers ||= Concurrent::Array.new)
-      subscribers << subscriber unless subscribers.include?(subscriber)
+      @log_subscribers = nil
+      @logger          = self.class.logger.dup
+      @logger.name     = self.class.name
     end
 
     def on_log(object = nil, &block)
@@ -127,8 +92,13 @@ module SemanticLogger
     end
 
     def log(log)
-      call_appenders(log)
-      call_metric_subscribers(log) if log.metric
+      SemanticLogger.appenders.each do |appender|
+        begin
+          appender.log(log) if appender.should_log?(log)
+        rescue Exception => exc
+          logger.error "Appender thread: Failed to log to appender: #{appender.inspect}", exc
+        end
+      end
     end
 
     def flush
@@ -171,30 +141,6 @@ module SemanticLogger
           subscriber.call(log)
         rescue Exception => exc
           logger.error 'Exception calling :on_log subscriber', exc
-        end
-      end
-    end
-
-    # Call Appenders
-    def call_appenders(log)
-      SemanticLogger.appenders.each do |appender|
-        begin
-          appender.log(log)
-        rescue Exception => exc
-          logger.error "Appender thread: Failed to log to appender: #{appender.inspect}", exc
-        end
-      end
-    end
-
-    # Call Metric subscribers
-    def call_metric_subscribers(log)
-      return unless metric_subscribers
-
-      metric_subscribers.each do |subscriber|
-        begin
-          subscriber.call(log)
-        rescue Exception => exc
-          logger.error 'Exception calling metrics subscriber', exc
         end
       end
     end

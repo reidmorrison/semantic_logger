@@ -8,30 +8,16 @@ module SemanticLogger
   autoload :Appender,           'semantic_logger/appender'
   autoload :Base,               'semantic_logger/base'
   autoload :DebugAsTraceLogger, 'semantic_logger/debug_as_trace_logger'
+  autoload :Formatters,         'semantic_logger/formatters'
   autoload :Log,                'semantic_logger/log'
   autoload :Logger,             'semantic_logger/logger'
   autoload :Loggable,           'semantic_logger/loggable'
   autoload :Processor,          'semantic_logger/processor'
   autoload :Subscriber,         'semantic_logger/subscriber'
+  autoload :Utils,              'semantic_logger/utils'
 
   module Concerns
     autoload :Compatibility,    'semantic_logger/concerns/compatibility'
-  end
-
-  module Formatters
-    autoload :Base,             'semantic_logger/formatters/base'
-    autoload :Color,            'semantic_logger/formatters/color'
-    autoload :Default,          'semantic_logger/formatters/default'
-    autoload :Json,             'semantic_logger/formatters/json'
-    autoload :Raw,              'semantic_logger/formatters/raw'
-    autoload :Signalfx,         'semantic_logger/formatters/signalfx'
-    autoload :Syslog,           'semantic_logger/formatters/syslog'
-  end
-
-  module Metrics
-    autoload :NewRelic,         'semantic_logger/metrics/new_relic'
-    autoload :Statsd,           'semantic_logger/metrics/statsd'
-    autoload :Udp,              'semantic_logger/metrics/udp'
   end
 
   if defined?(JRuby)

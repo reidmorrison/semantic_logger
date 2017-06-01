@@ -66,9 +66,9 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
                  host: nil,
                  &block)
 
-    @url              = url
-    @index            = index
-    @type             = type
+    @url   = url
+    @index = index
+    @type  = type
 
     super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
@@ -80,8 +80,6 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
 
   # Log to the index for today
   def log(log)
-    return false unless should_log?(log)
-
     bulk_payload = formatter.call(log, self)
     write_to_elasticsearch([bulk_index(log), bulk_payload])
     true
@@ -91,8 +89,6 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
     messages = []
     day      = nil
     logs.each do |log|
-      next unless should_log?(log)
-
       # Only write the bulk index once per day per batch. Supports mixed dates in a batch.
       if log.day != day
         messages << bulk_index(log)

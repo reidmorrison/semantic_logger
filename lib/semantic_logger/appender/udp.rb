@@ -76,8 +76,6 @@ module SemanticLogger
 
       # Write the log using the specified protocol and server.
       def log(log)
-        return false unless should_log?(log)
-
         @socket.send(formatter.call(log, self), udp_flags)
         true
       end

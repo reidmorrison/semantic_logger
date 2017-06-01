@@ -78,18 +78,17 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
   end
 
   def log(log)
-    # Check filter, ignoring log level.
-    return false unless include_message?(log)
-
     post(formatter.call(log, self), full_url)
   end
 
   # Logs in batches
   def batch(logs)
-    # Check filter, ignoring log level.
-    logs.delete_if { |log| !include_message?(log) }
-
     post(formatter.batch(logs, self), full_url)
+  end
+
+  # Only forward log entries that contain metrics.
+  def should_log?(log)
+    log.metric && super
   end
 
 end

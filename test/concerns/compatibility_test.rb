@@ -9,11 +9,11 @@ class CompatibilityTest < Minitest::Test
       SemanticLogger.default_level   = :trace
       SemanticLogger.backtrace_level = nil
       @mock_logger                   = MockLogger.new
-      @appender                      = SemanticLogger.add_appender(logger: @mock_logger)
+      @appender                      = SemanticLogger.add_appender(appender: @mock_logger)
 
       # Use this test's class name as the application name in the log output
-      @logger                        = SemanticLogger[CompatibilityTest]
-      @thread_name                   = Thread.current.name
+      @logger      = SemanticLogger[CompatibilityTest]
+      @thread_name = Thread.current.name
     end
 
     after do

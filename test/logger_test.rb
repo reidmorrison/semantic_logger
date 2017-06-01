@@ -9,14 +9,14 @@ class LoggerTest < Minitest::Test
       SemanticLogger.default_level   = :trace
       SemanticLogger.backtrace_level = nil
       @mock_logger                   = MockLogger.new
-      @appender                      = SemanticLogger.add_appender(logger: @mock_logger)
+      @appender                      = SemanticLogger.add_appender(appender: @mock_logger)
 
       # Use this test's class name as the application name in the log output
-      @logger                        = SemanticLogger[LoggerTest]
-      @hash                          = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-      @hash_str                      = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
-      @thread_name                   = Thread.current.name
-      @file_name_reg_exp             = ' logger_test.rb:\d+'
+      @logger            = SemanticLogger[LoggerTest]
+      @hash              = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
+      @hash_str          = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+      @thread_name       = Thread.current.name
+      @file_name_reg_exp = ' logger_test.rb:\d+'
 
       assert_equal [], SemanticLogger.tags
       assert_equal 65535, SemanticLogger.backtrace_level_index
@@ -26,22 +26,42 @@ class LoggerTest < Minitest::Test
       SemanticLogger.remove_appender(@appender)
     end
 
-    # Ensure that any log level can be logged
+    # # Ensure that any log level can be logged
     SemanticLogger::LEVELS.each do |level|
-      level_char = level.to_s.upcase[0]
+      #level_char = level.to_s.upcase[0]
 
       describe "##{level}" do
         describe 'positional parameter' do
           it 'logs message' do
             @logger.send(level, 'hello world')
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- hello world/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:    'LoggerTest',
+              level:   level,
+              thread:  @thread_name,
+              pid:     $$,
+              message: 'hello world'
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'adds message from block' do
             @logger.send(level, 'hello world') { 'Calculations' }
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- hello world -- Calculations/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:    'LoggerTest',
+              level:   level,
+              thread:  @thread_name,
+              pid:     $$,
+              message: 'hello world -- Calculations'
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'logs message and payload' do
@@ -49,21 +69,36 @@ class LoggerTest < Minitest::Test
             hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
             @logger.send(level, 'Hello world', hash)
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message)
-          end
 
-          it 'does not log an empty payload' do
-            hash = {}
-            @logger.send(level, 'Hello world', hash)
-            SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world/, @mock_logger.message)
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:    'LoggerTest',
+              level:   level,
+              thread:  @thread_name,
+              pid:     $$,
+              message: 'Hello world',
+              payload: hash
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'logs with backtrace' do
             SemanticLogger.stub(:backtrace_level_index, 0) do
               @logger.send(level, 'hello world', @hash) { 'Calculations' }
               SemanticLogger.flush
-              assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
+
+              assert message = @mock_logger.message
+              assert message[:time].is_a?(Time)
+              expected = {
+                name:    'LoggerTest',
+                level:   level,
+                thread:  @thread_name,
+                pid:     $$,
+                message: 'hello world -- Calculations',
+                payload: @hash
+              }
+              assert_compare_hash(expected, message)
             end
           end
 
@@ -72,7 +107,19 @@ class LoggerTest < Minitest::Test
               exc = RuntimeError.new('Test')
               @logger.send(level, 'hello world', exc)
               SemanticLogger.flush
-              assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] LoggerTest -- hello world -- Exception: RuntimeError: Test/, @mock_logger.message)
+
+              assert message = @mock_logger.message
+              assert message[:time].is_a?(Time)
+              expected = {
+                name:      'LoggerTest',
+                level:     level,
+                thread:    @thread_name,
+                pid:       $$,
+                message:   'hello world',
+                payload:   nil,
+                exception: {name: 'RuntimeError', message: 'Test', stack_trace: nil}
+              }
+              assert_compare_hash(expected, message)
             end
           end
         end
@@ -81,40 +128,99 @@ class LoggerTest < Minitest::Test
           it 'logs message' do
             @logger.send(level, message: 'Hello world')
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:      'LoggerTest',
+              level:     level,
+              thread:    @thread_name,
+              pid:       $$,
+              message:   'Hello world',
+              payload:   nil,
+              exception: nil
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'logs payload and message' do
-            @logger.send(level, message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'})
+            payload = {tracking_number: '123456', even: 2, more: 'data'}
+            @logger.send(level, message: 'Hello world', payload: payload)
             hash = {tracking_number: '123456', even: 2, more: 'data'}
             SemanticLogger.flush
-            hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:      'LoggerTest',
+              level:     level,
+              thread:    @thread_name,
+              pid:       $$,
+              message:   'Hello world',
+              payload:   payload,
+              exception: nil
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'logs payload and message from block' do
-            @logger.send(level) { {message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'}} }
+            payload = {tracking_number: '123456', even: 2, more: 'data'}
+            @logger.send(level) { {message: 'Hello world', payload: payload} }
             hash = {tracking_number: '123456', even: 2, more: 'data'}
             SemanticLogger.flush
-            hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:      'LoggerTest',
+              level:     level,
+              thread:    @thread_name,
+              pid:       $$,
+              message:   'Hello world',
+              payload:   payload,
+              exception: nil
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'logs payload only' do
             hash = {tracking_number: '123456', even: 2, more: 'data'}
             @logger.send(level, payload: hash)
             SemanticLogger.flush
-            hash_str = hash.inspect.sub('{', '\{').sub('}', '\}')
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] LoggerTest -- #{hash_str}/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:      'LoggerTest',
+              level:     level,
+              thread:    @thread_name,
+              pid:       $$,
+              message:   nil,
+              payload:   hash,
+              exception: nil
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'logs duration' do
-            @logger.send(level, duration: 123.44, message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'})
-            hash = {tracking_number: '123456', even: 2, more: 'data'}
+            payload = {tracking_number: '123456', even: 2, more: 'data'}
+            @logger.send(level, duration: 123.44, message: 'Hello world', payload: payload)
             SemanticLogger.flush
-            hash_str       = hash.inspect.sub('{', '\{').sub('}', '\}')
-            duration_match = SemanticLogger::Formatters::Base::PRECISION == 3 ? '\(123ms\)' : '\(123\.4ms\)'
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:        'LoggerTest',
+              level:       level,
+              thread:      @thread_name,
+              pid:         $$,
+              message:     'Hello world',
+              payload:     payload,
+              exception:   nil,
+              duration:    SemanticLogger::Formatters::Base::PRECISION == 3 ? '123ms' : '123.4ms',
+              duration_ms: 123.44
+            }
+            assert_compare_hash(expected, message)
           end
 
           it 'does not log when below min_duration' do
@@ -124,27 +230,33 @@ class LoggerTest < Minitest::Test
           end
 
           it 'logs metric' do
-            # Add mock metric subscriber
-            $last_metric = nil
-            SemanticLogger.on_metric do |log|
-              $last_metric = log.dup
-            end
-
             metric_name = '/my/custom/metric'
-            @logger.send(level, metric: metric_name, duration: 123.44, message: 'Hello world', payload: {tracking_number: '123456', even: 2, more: 'data'})
-            hash = {tracking_number: '123456', even: 2, more: 'data'}
+            payload     = {tracking_number: '123456', even: 2, more: 'data'}
+            @logger.send(level, metric: metric_name, duration: 123.44, message: 'Hello world', payload: payload)
             SemanticLogger.flush
-            hash_str       = hash.inspect.sub('{', '\{').sub('}', '\}')
-            duration_match = SemanticLogger::Formatters::Base::PRECISION == 3 ? '\(123ms\)' : '\(123\.4ms\)'
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}\] #{duration_match} LoggerTest -- Hello world -- #{hash_str}/, @mock_logger.message)
-            assert metric_name, $last_metric.metric
-          end
 
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:        'LoggerTest',
+              level:       level,
+              thread:      @thread_name,
+              pid:         $$,
+              message:     'Hello world',
+              payload:     payload,
+              exception:   nil,
+              duration:    SemanticLogger::Formatters::Base::PRECISION == 3 ? '123ms' : '123.4ms',
+              duration_ms: 123.44,
+              metric:      metric_name
+            }
+            assert_compare_hash(expected, message)
+
+          end
         end
 
         describe '#filter' do
           it 'Proc' do
-            @appender.filter = Proc.new { |l| (/\AExclude/ =~ l.message).nil? }
+            @appender.filter = -> log { (/\AExclude/ =~ log.message).nil? }
             @logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
             SemanticLogger.flush
             assert_nil @mock_logger.message
@@ -159,6 +271,15 @@ class LoggerTest < Minitest::Test
             assert_nil @mock_logger.message
           end
         end
+      end
+    end
+
+    describe 'when level is too high' do
+      it 'does not log' do
+        SemanticLogger.default_level = :error
+        @logger.info('Exclude this log message')
+        SemanticLogger.flush
+        assert_nil @mock_logger.message
       end
     end
 
@@ -218,17 +339,39 @@ class LoggerTest < Minitest::Test
         @logger.tagged('12345', 'DJHSFK') do
           @logger.info('Hello world')
           SemanticLogger.flush
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world/, @mock_logger.message)
+          assert message = @mock_logger.message
+          assert message[:time].is_a?(Time)
+          expected = {
+            name:    'LoggerTest',
+            level:   :info,
+            thread:  @thread_name,
+            pid:     $$,
+            tags:    %w(12345 DJHSFK),
+            message: 'Hello world'
+          }
+          assert_compare_hash(expected, message)
         end
       end
 
       it 'add embedded tags to log entries' do
         @logger.tagged('First Level', 'tags') do
+
           @logger.tagged('Second Level') do
             @logger.info('Hello world')
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[First Level\] \[tags\] \[Second Level\] LoggerTest -- Hello world/, @mock_logger.message)
+            assert message = @mock_logger.message
+            assert message[:time].is_a?(Time)
+            expected = {
+              name:    'LoggerTest',
+              level:   :info,
+              thread:  @thread_name,
+              pid:     $$,
+              tags:    ['First Level', 'tags', 'Second Level'],
+              message: 'Hello world'
+            }
+            assert_compare_hash(expected, message)
           end
+
           assert_equal 2, @logger.tags.count, @logger.tags
           assert_equal 'First Level', @logger.tags.first
           assert_equal 'tags', @logger.tags.last
@@ -251,7 +394,17 @@ class LoggerTest < Minitest::Test
         @logger.tagged('', ['12345', 'DJHSFK'], nil) do
           @logger.info('Hello world')
           SemanticLogger.flush
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world/, @mock_logger.message)
+          assert message = @mock_logger.message
+          assert message[:time].is_a?(Time)
+          expected = {
+            name:    'LoggerTest',
+            level:   :info,
+            thread:  @thread_name,
+            pid:     $$,
+            tags:    %w(12345 DJHSFK),
+            message: 'Hello world'
+          }
+          assert_compare_hash(expected, message)
         end
       end
     end

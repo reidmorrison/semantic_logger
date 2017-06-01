@@ -38,25 +38,5 @@ module SemanticLogger
       Processor << log
     end
 
-    # DEPRECATED
-    def self.queue_size
-      Processor.queue_size
-    end
-
-    # DEPRECATED
-    def self.flush
-      Processor.flush
-    end
-
-    # DEPRECATED
-    def self.close
-      Processor.close
-    end
-
-    # DEPRECATED
-    def self.logger=(logger)
-      Processor.logger = logger
-    end
-
   end
 end

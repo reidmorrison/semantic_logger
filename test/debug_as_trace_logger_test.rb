@@ -4,20 +4,20 @@ require_relative 'test_helper'
 class DebugAsTraceLoggerTest < Minitest::Test
   describe SemanticLogger::Logger do
     # Test each filter
-    [nil, /\ADebugAsTraceLoggerTest/, Proc.new { |l| (/\AExclude/ =~ l.message).nil? }].each do |filter|
+    [nil, /\ADebugAsTraceLoggerTest/, -> log { (/\AExclude/ =~ log.message).nil? }].each do |filter|
       describe "filter: #{filter.class.name}" do
         before do
           # Use a mock logger that just keeps the last logged entry in an instance
           # variable
           SemanticLogger.default_level = :trace
           @mock_logger                 = MockLogger.new
-          appender                     = SemanticLogger.add_appender(logger: @mock_logger)
-          appender.filter              = filter
+          @appender                    = SemanticLogger.add_appender(appender: @mock_logger)
+          @appender.filter             = filter
 
           # Use this test's class name as the application name in the log output
-          @logger                      = SemanticLogger::DebugAsTraceLogger.new(DebugAsTraceLoggerTest)
-          @hash                        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-          @hash_str                    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+          @logger   = SemanticLogger::DebugAsTraceLogger.new(DebugAsTraceLoggerTest)
+          @hash     = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
+          @hash_str = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
           assert_equal [], @logger.tags
         end
 
@@ -81,14 +81,32 @@ class DebugAsTraceLoggerTest < Minitest::Test
           @logger.level = :trace
           @logger.debug('hello world', @hash) { 'Calculations' }
           SemanticLogger.flush
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
+
+          assert message = @mock_logger.message
+          assert message[:time].is_a?(Time)
+          expected = {
+            name:    'DebugAsTraceLoggerTest',
+            level:   :trace,
+            message: 'hello world -- Calculations',
+            payload: @hash
+          }
+          assert_compare_hash(expected, message)
         end
 
         it 'log trace as trace' do
           @logger.level = :trace
           @logger.trace('hello world', @hash) { 'Calculations' }
           SemanticLogger.flush
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:.+\] DebugAsTraceLoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
+
+          assert message = @mock_logger.message
+          assert message[:time].is_a?(Time)
+          expected = {
+            name:    'DebugAsTraceLoggerTest',
+            level:   :trace,
+            message: 'hello world -- Calculations',
+            payload: @hash
+          }
+          assert_compare_hash(expected, message)
         end
       end
     end

@@ -63,8 +63,6 @@ class SemanticLogger::Appender::ElasticsearchHttp < SemanticLogger::Appender::Ht
 
   # Log to the index for today.
   def log(log)
-    return false unless should_log?(log)
-
     post(formatter.call(log, self), log.time.strftime(@logging_path))
   end
 

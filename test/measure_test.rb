@@ -6,18 +6,12 @@ class MeasureTest < Minitest::Test
       SemanticLogger.default_level   = :trace
       SemanticLogger.backtrace_level = nil
       @mock_logger                   = MockLogger.new
-      @appender                      = SemanticLogger.add_appender(logger: @mock_logger)
+      @appender                      = SemanticLogger.add_appender(appender: @mock_logger)
       @logger                        = SemanticLogger['LoggerTest']
       @hash                          = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
       @hash_str                      = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
       @thread_name                   = Thread.current.name
       @file_name_reg_exp             = " #{File.basename(__FILE__)}:\d+"
-
-      # Add mock metric subscriber
-      $last_metric                   = nil
-      SemanticLogger.on_metric do |log|
-        $last_metric = log.dup
-      end
     end
 
     after do

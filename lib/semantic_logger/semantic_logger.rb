@@ -12,7 +12,7 @@ module SemanticLogger
 
   # Sets the global default log level
   def self.default_level=(level)
-    @default_level       = level
+    @default_level = level
     # For performance reasons pre-calculate the level index
     @default_level_index = level_to_index(level)
   end
@@ -33,7 +33,7 @@ module SemanticLogger
   #   Capturing backtraces is very expensive and should not be done all
   #   the time. It is recommended to run it at :error level in production.
   def self.backtrace_level=(level)
-    @backtrace_level       = level
+    @backtrace_level = level
     # For performance reasons pre-calculate the level index
     @backtrace_level_index = level.nil? ? 65535 : level_to_index(level)
   end
@@ -153,7 +153,7 @@ module SemanticLogger
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
   def self.add_appender(options, deprecated_level = nil, &block)
     options  = options.is_a?(Hash) ? options.dup : convert_old_appender_args(options, deprecated_level)
-    appender = SemanticLogger::Appender.create(options, &block)
+    appender = SemanticLogger::Appender.factory(options, &block)
     @appenders << appender
 
     # Start appender thread if it is not already running
@@ -178,12 +178,12 @@ module SemanticLogger
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
   def self.flush
-    SemanticLogger::Processor.flush
+    SemanticLogger::Processor.instance.flush
   end
 
   # Close all appenders and flush any outstanding messages.
   def self.close
-    SemanticLogger::Processor.close
+    SemanticLogger::Processor.instance.close
   end
 
   # After forking an active process call SemanticLogger.reopen to re-open
@@ -196,30 +196,6 @@ module SemanticLogger
     @appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
     # After a fork the appender thread is not running, start it if it is not running.
     SemanticLogger::Processor.start
-  end
-
-  # Supply a metrics appender to be called whenever a logging metric is encountered
-  #
-  #  Parameters
-  #    appender: [Symbol | Object | Proc]
-  #      [Proc] the block to call.
-  #      [Object] the block on which to call #call.
-  #      [Symbol] :new_relic, or :statsd to forward metrics to
-  #
-  #    block
-  #      The block to be called
-  #
-  # Example:
-  #   SemanticLogger.on_metric do |log|
-  #     puts "#{log.metric} was received. Log: #{log.inspect}"
-  #   end
-  #
-  # Note:
-  # * This callback is called in the separate logging thread.
-  # * Does not slow down the application.
-  # * Only context is what is passed in the log struct, the original thread context is not available.
-  def self.on_metric(options = {}, &block)
-    SemanticLogger::Processor.on_metric(options, &block)
   end
 
   # Supply a callback to be called whenever a log entry is created.
@@ -247,7 +223,7 @@ module SemanticLogger
   # * This callback is called within the thread of the application making the logging call.
   # * If these callbacks are slow they will slow down the application.
   def self.on_log(object = nil, &block)
-    Processor.on_log(object, &block)
+    Processor.instance.on_log(object, &block)
   end
 
   # Add signal handlers for Semantic Logger
@@ -513,7 +489,7 @@ module SemanticLogger
     else
       options[:logger] = appender
     end
-    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}" if $VERBOSE
+    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}"
     options
   end
 

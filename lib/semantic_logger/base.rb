@@ -131,7 +131,9 @@ module SemanticLogger
                   metric: nil,
                   metric_amount: nil)
 
-      log       = Log.new(name, level)
+      log = Log.new(name, level)
+      return false unless meets_log_level?(log)
+
       backtrace =
         if thread == Thread.current
           Log.cleanse_backtrace
@@ -148,8 +150,10 @@ module SemanticLogger
         message << backtrace.join("\n")
       end
 
-      if log.assign(message: message, backtrace: backtrace, payload: payload, metric: metric, metric_amount: metric_amount) && should_log?(log)
+      if log.assign(message: message, backtrace: backtrace, payload: payload, metric: metric, metric_amount: metric_amount) && !filtered?(log)
         self.log(log)
+      else
+        false
       end
     end
 
@@ -238,11 +242,14 @@ module SemanticLogger
       SemanticLogger.named_tags
     end
 
-    protected
-
     # Write log data to underlying data storage
     def log(log_)
       raise NotImplementedError.new('Logging Appender must implement #log(log)')
+    end
+
+    # Whether this log entry meets the criteria to be logged by this appender.
+    def should_log?(log)
+      meets_log_level?(log) && !filtered?(log)
     end
 
     private
@@ -287,20 +294,21 @@ module SemanticLogger
     end
 
     # Whether to log the supplied message based on the current filter if any
-    def include_message?(log)
-      return true if @filter.nil?
+    def filtered?(log)
+      return false if @filter.nil?
 
       if @filter.is_a?(Regexp)
-        (@filter =~ log.name) != nil
+        (@filter =~ log.name) == nil
       elsif @filter.is_a?(Proc)
-        @filter.call(log) == true
+        @filter.call(log) != true
+      else
+        raise(ArgumentError, "Unrecognized semantic logger filter: #{@filter.inspect}, must be a Regexp or a Proc")
       end
     end
 
-    # Whether the log message should be logged for the current logger or appender
-    def should_log?(log)
-      # Ensure minimum log level is met, and check filter
-      (level_index <= (log.level_index || 0)) && include_message?(log)
+    # Ensure minimum log level is met
+    def meets_log_level?(log)
+      (level_index <= (log.level_index || 0))
     end
 
     # Log message at the specified level
@@ -313,7 +321,8 @@ module SemanticLogger
           log.assign_positional(message, payload, exception, &block)
         end
 
-      self.log(log) if should_log && include_message?(log)
+      # Log level may change during assign due to :on_exception_level
+      self.log(log) if should_log && should_log?(log)
     end
 
     # Measure the supplied block and log the message
@@ -352,8 +361,9 @@ module SemanticLogger
           end
 
         # Extract options after block completes so that block can modify any of the options
-        payload   = params[:payload]
+        payload = params[:payload]
 
+        # May return false due to elastic logging
         should_log = log.assign(
           message:            message,
           payload:            payload,
@@ -366,7 +376,8 @@ module SemanticLogger
           on_exception_level: params[:on_exception_level]
         )
 
-        self.log(log) if should_log && include_message?(log)
+        # Log level may change during assign due to :on_exception_level
+        self.log(log) if should_log && should_log?(log)
         raise exception if exception
         result
       end

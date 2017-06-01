@@ -16,6 +16,7 @@ module SemanticLogger
     autoload :Signalfx,          'semantic_logger/appender/signalfx'
     autoload :Splunk,            'semantic_logger/appender/splunk'
     autoload :SplunkHttp,        'semantic_logger/appender/splunk_http'
+    autoload :Statsd,            'semantic_logger/appender/statsd'
     autoload :Syslog,            'semantic_logger/appender/syslog'
     autoload :Tcp,               'semantic_logger/appender/tcp'
     autoload :Udp,               'semantic_logger/appender/udp'
@@ -36,47 +37,50 @@ module SemanticLogger
     end
 
     # Returns [SemanticLogger::Subscriber] appender for the supplied options
-    def self.create(options, &block)
-      async    = options.delete(:async)
-      appender =
-        if options[:io] || options[:file_name]
-          SemanticLogger::Appender::File.new(options, &block)
-        elsif appender = options.delete(:appender)
-          if appender.is_a?(Symbol)
-            constantize_symbol(appender).new(options)
-          elsif appender.is_a?(Subscriber)
-            appender
-          else
-            raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
-          end
-        elsif options[:logger]
-          SemanticLogger::Appender::Wrapper.new(options, &block)
-        end
-      async == true ? Appender::Async.new(appender: appender) : appender
-    end
+    def self.factory(options, &block)
+      options = options.dup
+      async   = options.delete(:async)
+      batch   = options.delete(:batch)
 
-    def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
-      klass = "#{namespace}::#{camelize(symbol.to_s)}"
-      begin
-        if RUBY_VERSION.to_i >= 2
-          Object.const_get(klass)
-        else
-          klass.split('::').inject(Object) { |o, name| o.const_get(name) }
-        end
-      rescue NameError
-        raise(ArgumentError, "Could not convert symbol: #{symbol} to a class in: #{namespace}. Looking for: #{klass}")
+      # Extract batch and async options
+      facade_options = {}
+      ASYNC_OPTION_KEYS.each { |key| facade_options[key] = options.delete(key) if options.key?(key) }
+
+      appender = build(options, &block)
+
+      # If appender implements #batch, then it should use the batch facade by default.
+      batch    = true if batch.nil? && appender.respond_to?(:batch)
+
+      if batch == true
+        facade_options[:appender] = appender
+        Appender::AsyncBatch.new(facade_options)
+      elsif async == true
+        facade_options[:appender] = appender
+        Appender::Async.new(facade_options)
+      else
+        appender
       end
     end
 
     private
 
-    # Borrow from Rails, when not running Rails
-    def self.camelize(term)
-      string = term.to_s
-      string = string.sub(/^[a-z\d]*/) { |match| match.capitalize }
-      string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{$1}#{$2.capitalize}" }
-      string.gsub!('/'.freeze, '::'.freeze)
-      string
+    ASYNC_OPTION_KEYS = [:max_queue_size, :lag_threshold_s, :batch_size, :batch_seconds, :lag_check_interval]
+
+    # Returns [Subscriber] instance from the supplied options.
+    def self.build(options, &block)
+      if options[:io] || options[:file_name]
+        SemanticLogger::Appender::File.new(options, &block)
+      elsif appender = options.delete(:appender)
+        if appender.is_a?(Symbol)
+          SemanticLogger::Utils.constantize_symbol(appender).new(options)
+        elsif appender.is_a?(Subscriber)
+          appender
+        else
+          raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
+        end
+      elsif options[:logger]
+        SemanticLogger::Appender::Wrapper.new(options, &block)
+      end
     end
 
   end

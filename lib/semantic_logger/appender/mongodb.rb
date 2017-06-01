@@ -161,8 +161,6 @@ module SemanticLogger
 
       # Log the message to MongoDB
       def log(log)
-        return false unless should_log?(log)
-
         # Insert log entry into Mongo
         collection.insert_one(formatter.call(log, self))
         true

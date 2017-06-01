@@ -41,8 +41,6 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
 
   # Send an error notification to honeybadger
   def log(log)
-    return false unless should_log?(log)
-
     context = formatter.call(log, self)
     if log.exception
       context.delete(:exception)

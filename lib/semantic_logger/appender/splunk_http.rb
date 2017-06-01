@@ -85,12 +85,11 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
   def call(log, logger)
-    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
-    h.delete(:time)
+    h                     = SemanticLogger::Formatters::Raw.new(time_format: :seconds).call(log, logger)
     message               = {
       source: logger.application,
       host:   logger.host,
-      time:   log.time.utc.to_f,
+      time:   h.delete(:time),
       event:  h
     }
     message[:source_type] = source_type if source_type

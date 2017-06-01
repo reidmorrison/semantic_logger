@@ -79,7 +79,7 @@ class AppenderFileTest < Minitest::Test
         @appender                    = SemanticLogger::Appender::File.new(io: @io)
         SemanticLogger.default_level = :trace
         @mock_logger                 = MockLogger.new
-        @appender                    = SemanticLogger.add_appender(logger: @mock_logger)
+        @appender                    = SemanticLogger.add_appender(appender: @mock_logger)
         @hash                        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
         @hash_str                    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
         @thread_name                 = Thread.current.name
@@ -97,7 +97,15 @@ class AppenderFileTest < Minitest::Test
               SemanticLogger.stub(:appenders, [@appender]) do
                 TestAttribute.logger.send(level, "hello #{level}", @hash)
                 SemanticLogger.flush
-                assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name} loggable_test.rb:\d+\] TestAttribute -- hello #{level} -- #{@hash_str}/, @mock_logger.message)
+
+                assert message = @mock_logger.message
+                expected = {
+                  name:    'TestAttribute',
+                  level:   level,
+                  message: "hello #{level}",
+                  payload: @hash
+                }
+                assert_compare_hash(expected, message)
               end
             end
           end
@@ -107,7 +115,15 @@ class AppenderFileTest < Minitest::Test
               SemanticLogger.stub(:appenders, [@appender]) do
                 TestAttribute.new.logger.send(level, "hello #{level}", @hash)
                 SemanticLogger.flush
-                assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name} loggable_test.rb:\d+\] TestAttribute -- hello #{level} -- #{@hash_str}/, @mock_logger.message)
+
+                assert message = @mock_logger.message
+                expected = {
+                  name:    'TestAttribute',
+                  level:   level,
+                  message: "hello #{level}",
+                  payload: @hash
+                }
+                assert_compare_hash(expected, message)
               end
             end
           end

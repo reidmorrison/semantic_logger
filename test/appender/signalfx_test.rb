@@ -101,13 +101,13 @@ module Appender
         end
 
         it 'whitelists dimensions' do
-          @log.named_tags              = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
+          @log.named_tags                       = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
           appender.formatter.include_dimensions = [:user_id, :application]
           assert response
         end
 
         it 'blacklists dimensions' do
-          @log.named_tags              = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
+          @log.named_tags                       = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
           appender.formatter.exclude_dimensions = [:tracking_number, :session_id]
           assert response
         end

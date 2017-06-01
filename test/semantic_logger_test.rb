@@ -125,10 +125,10 @@ class SemanticLoggerTest < Minitest::Test
         @appender                      = SemanticLogger.add_appender(logger: @mock_logger)
 
         # Use this test's class name as the application name in the log output
-        @logger                        = SemanticLogger['LoggerTest']
-        @hash                          = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-        @hash_str                      = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
-        @thread_name                   = Thread.current.name
+        @logger      = SemanticLogger['LoggerTest']
+        @hash        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
+        @hash_str    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+        @thread_name = Thread.current.name
       end
 
       after do
@@ -140,7 +140,9 @@ class SemanticLoggerTest < Minitest::Test
           SemanticLogger.tagged('12345', 'DJHSFK') do
             @logger.info('Hello world')
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[12345\] \[DJHSFK\] LoggerTest -- Hello world/, @mock_logger.message)
+
+            assert message = @mock_logger.message
+            assert_equal %w(12345 DJHSFK), message[:tags]
           end
         end
 
@@ -149,7 +151,8 @@ class SemanticLoggerTest < Minitest::Test
             SemanticLogger.tagged('Second Level') do
               @logger.info('Hello world')
               SemanticLogger.flush
-              assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[First Level\] \[tags\] \[Second Level\] LoggerTest -- Hello world/, @mock_logger.message)
+              assert message = @mock_logger.message
+              assert_equal ['First Level', 'tags', 'Second Level'], message[:tags]
             end
             assert_equal 2, SemanticLogger.tags.count, SemanticLogger.tags
             assert_equal 'First Level', SemanticLogger.tags.first
@@ -191,7 +194,8 @@ class SemanticLoggerTest < Minitest::Test
               SemanticLogger.named_tagged(level3: 3) do
                 @logger.info('Hello world')
                 SemanticLogger.flush
-                assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \{level1: 1, level2: 2, more: data, level3: 3\} LoggerTest -- Hello world/, @mock_logger.message)
+                assert message = @mock_logger.message
+                assert_equal({level1: 1, level2: 2, more: data, level3: 3}, message[:named_tags])
               end
             end
           end
@@ -203,7 +207,8 @@ class SemanticLoggerTest < Minitest::Test
           @logger.fast_tag('12345') do
             @logger.info('Hello world')
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] \[12345\] LoggerTest -- Hello world/, @mock_logger.message)
+            assert message = @mock_logger.message
+            assert_equal(%w(12345), message[:tags])
           end
         end
       end
@@ -227,7 +232,9 @@ class SemanticLoggerTest < Minitest::Test
           assert_equal :trace, @logger.level
           @logger.trace('hello world', @hash) { 'Calculations' }
           SemanticLogger.flush
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:#{@thread_name}\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
+          assert message = @mock_logger.message
+          assert_equal :trace, message[:level]
+          assert_equal 'hello world', message[:level]
         end
 
         it 'not log at a level below the instance level' do
@@ -265,7 +272,9 @@ class SemanticLoggerTest < Minitest::Test
             @logger.trace('hello world', @hash) { 'Calculations' }
           end
           SemanticLogger.flush
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:#{@thread_name}\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
+          assert message = @mock_logger.message
+          assert_equal :trace, message[:level]
+          assert_equal 'hello world', message[:level]
         end
 
         it 'log at a silence level below the default level' do
@@ -275,7 +284,9 @@ class SemanticLoggerTest < Minitest::Test
             @logger.debug('hello world', @hash) { 'Calculations' }
           end
           SemanticLogger.flush
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] LoggerTest -- hello world -- Calculations -- #{@hash_str}/, @mock_logger.message)
+          assert message = @mock_logger.message
+          assert_equal :debug, message[:level]
+          assert_equal 'hello world', message[:level]
         end
       end
 

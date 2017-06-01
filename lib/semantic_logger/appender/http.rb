@@ -161,8 +161,6 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
 
   # Forward log messages to HTTP Server
   def log(log)
-    return false unless should_log?(log)
-
     post(formatter.call(log, self))
   end
 

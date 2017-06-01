@@ -65,7 +65,8 @@ module SemanticLogger
     #     Name of this host to appear in log messages.
     #     Default: SemanticLogger.host
     def initialize(level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
-      @formatter   = extract_formatter(formatter, &block)
+      @formatter   = Formatters.factory(formatter, &block) ||
+        respond_to?(:call) ? self : default_formatter
       @application = application
       @host        = host
 
@@ -79,34 +80,6 @@ module SemanticLogger
     # set for this instance.
     def level_index
       @level_index || 0
-    end
-
-    # Return formatter that responds to call.
-    #
-    # Supports formatter supplied as:
-    # - Symbol
-    # - Hash ( Symbol => { options })
-    # - Instance of any of SemanticLogger::Formatters
-    # - Proc
-    # - Any object that responds to :call
-    # - If none of the above apply, then the supplied block is returned as the formatter.
-    # - Otherwise an instance of the default formatter is returned.
-    def extract_formatter(formatter, &block)
-      case
-      when formatter.is_a?(Symbol)
-        SemanticLogger::Appender.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
-      when formatter.is_a?(Hash) && formatter.size > 0
-        fmt, options = formatter.first
-        SemanticLogger::Appender.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
-      when formatter.respond_to?(:call)
-        formatter
-      when block
-        block
-      when respond_to?(:call)
-        self
-      else
-        default_formatter
-      end
     end
 
   end

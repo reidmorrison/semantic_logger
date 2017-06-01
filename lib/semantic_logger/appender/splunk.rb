@@ -98,7 +98,7 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Subscriber
   # open the handles to resources
   def reopen
     # Connect to splunk. Connect is a synonym for creating a Service by hand and calling login.
-    self.service       = Splunk::connect(config)
+    self.service = Splunk::connect(config)
 
     # The index we are logging to
     self.service_index = service.indexes[index]
@@ -106,7 +106,6 @@ class SemanticLogger::Appender::Splunk < SemanticLogger::Subscriber
 
   # Log the message to Splunk
   def log(log)
-    return false unless should_log?(log)
     event = formatter.call(log, self)
     service_index.submit(event.delete(:message), event)
     true

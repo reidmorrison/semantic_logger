@@ -160,8 +160,6 @@ class SemanticLogger::Appender::Kafka < SemanticLogger::Subscriber
 
   # Forward log messages to Kafka producer thread.
   def log(log)
-    return false unless should_log?(log)
-
     json = formatter.call(log, self)
     @producer.produce(json, topic: topic, partition: partition, partition_key: partition_key, key: key)
   end

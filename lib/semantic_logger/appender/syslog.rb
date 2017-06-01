@@ -179,8 +179,6 @@ module SemanticLogger
 
       # Write the log using the specified protocol and server.
       def log(log)
-        return false unless should_log?(log)
-
         case @protocol
         when :syslog
           # Since the Ruby Syslog API supports sprintf format strings, double up all existing '%'

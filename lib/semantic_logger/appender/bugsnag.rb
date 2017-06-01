@@ -48,7 +48,6 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Subscriber
 
   # Send an error notification to Bugsnag
   def log(log)
-    return false unless should_log?(log)
     # Ignore logs coming from Bugsnag itself
     return false if log.name == 'Bugsnag'
 

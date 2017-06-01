@@ -188,12 +188,12 @@ module SemanticLogger
                      on_connect: nil, proxy_server: nil, ssl: nil,
                      level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block
       )
-        @separator                 = separator
-        @options                   = {
-          server:                 server,
-          servers:                servers,
-          policy:                 policy,
-          buffered:               buffered,
+        @separator = separator
+        @options   = {
+          server:   server,
+          servers:  servers,
+          policy:   policy,
+          buffered: buffered,
           #keepalive:              keepalive,
           connect_timeout:        connect_timeout,
           read_timeout:           read_timeout,
@@ -223,8 +223,6 @@ module SemanticLogger
 
       # Write the log using the specified protocol and server.
       def log(log)
-        return false unless should_log?(log)
-
         message = formatter.call(log, self)
         @tcp_client.retry_on_connection_failure do
           @tcp_client.write("#{message}#{separator}")

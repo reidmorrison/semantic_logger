@@ -81,7 +81,7 @@ module SemanticLogger
       def reopen
         return unless @file_name
 
-        @log      = open(@file_name, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
+        @log = open(@file_name, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @log.sync = true
@@ -93,8 +93,6 @@ module SemanticLogger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
       def log(log)
-        return false unless should_log?(log)
-
         # Since only one appender thread will be writing to the file at a time
         # it is not necessary to protect access to the file with a semaphore
         # Allow this logger to filter out log levels lower than it's own

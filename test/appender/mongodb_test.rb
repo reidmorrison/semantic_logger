@@ -8,9 +8,9 @@ module Appender
         @appender           = SemanticLogger::Appender::MongoDB.new(
           uri:             'mongodb://127.0.0.1:27017/test',
           collection_size: 10*1024**2, # 10MB
-          host:            'test',
-          application:     'test_application',
-          level:           :trace
+          host:        'test',
+          application: 'test_application',
+          level:       :trace
         )
         @hash               = {tracking_number: 12345, session_id: 'HSSKLEU@JDK767'}
         Thread.current.name = 'thread'
