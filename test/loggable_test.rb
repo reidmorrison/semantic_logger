@@ -73,59 +73,28 @@ class AppenderFileTest < Minitest::Test
     end
 
     describe 'logger' do
-      before do
-        @time                        = Time.new
-        @io                          = StringIO.new
-        @appender                    = SemanticLogger::Appender::File.new(io: @io)
-        SemanticLogger.default_level = :trace
-        @mock_logger                 = MockLogger.new
-        @appender                    = SemanticLogger.add_appender(appender: @mock_logger)
-        @hash                        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-        @hash_str                    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
-        @thread_name                 = Thread.current.name
-      end
-
-      after do
-        SemanticLogger.remove_appender(@appender)
-      end
+      include InMemoryAppenderHelper
 
       describe 'for each log level' do
         # Ensure that any log level can be logged
         SemanticLogger::LEVELS.each do |level|
-          it "log #{level} information with class attribute" do
-            SemanticLogger.stub(:backtrace_level_index, 0) do
-              SemanticLogger.stub(:appenders, [@appender]) do
-                TestAttribute.logger.send(level, "hello #{level}", @hash)
-                SemanticLogger.flush
+          it "logs #{level} information with class attribute" do
+            TestAttribute.logger.send(level, "hello #{level}", payload)
 
-                assert message = @mock_logger.message
-                expected = {
-                  name:    'TestAttribute',
-                  level:   level,
-                  message: "hello #{level}",
-                  payload: @hash
-                }
-                assert_compare_hash(expected, message)
-              end
-            end
+            assert log = log_message
+            assert_equal "hello #{level}", log.message
+            assert_equal level, log.level
+            assert_equal 'TestAttribute', log.name
+            assert_equal payload, log.payload
           end
 
           it "log #{level} information with instance attribute" do
-            SemanticLogger.stub(:backtrace_level_index, 0) do
-              SemanticLogger.stub(:appenders, [@appender]) do
-                TestAttribute.new.logger.send(level, "hello #{level}", @hash)
-                SemanticLogger.flush
-
-                assert message = @mock_logger.message
-                expected = {
-                  name:    'TestAttribute',
-                  level:   level,
-                  message: "hello #{level}",
-                  payload: @hash
-                }
-                assert_compare_hash(expected, message)
-              end
-            end
+            TestAttribute.new.logger.send(level, "hello #{level}", payload)
+            assert log = log_message
+            assert_equal "hello #{level}", log.message
+            assert_equal level, log.level
+            assert_equal 'TestAttribute', log.name
+            assert_equal payload, log.payload
           end
         end
       end

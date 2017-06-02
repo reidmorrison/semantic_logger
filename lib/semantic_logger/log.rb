@@ -73,7 +73,7 @@ module SemanticLogger
                metric_amount: nil,
                duration: nil,
                backtrace: nil,
-               log_exception: :full,
+               log_exception: :partial,
                on_exception_level: nil)
       # Elastic logging: Log when :duration exceeds :min_duration
       # Except if there is an exception when it will always be logged
@@ -134,6 +134,8 @@ module SemanticLogger
       elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
         exception = payload
         payload   = nil
+      elsif payload.is_a?(String)
+        message = message.nil? ? payload : "#{message} -- #{payload}"
       end
 
       # Add result of block as message or payload if not nil

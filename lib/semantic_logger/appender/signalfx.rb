@@ -19,10 +19,7 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
   #
   #   include_dimensions: [Array<String>]
   #     List of dimensions to include when forwarding metrics to SignalFx.
-  #     Example: [:user_id, :state]
-  #
-  #   exclude_dimensions: [Array<String>]
-  #     List of dimensions to exclude when forwarding metrics to SignalFx.
+  #     Dimensions are supplied in log messages using `named_tags`
   #     Example: [:user_id, :state]
   #
   #   filter: [Regexp|Proc]
@@ -48,7 +45,6 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
   # * Do not supply both include_dimensions & exclude_dimensions.
   def initialize(token:,
                  include_dimensions: nil,
-                 exclude_dimensions: nil,
                  url: 'https://ingest.signalfx.com',
                  open_timeout: 2.0,
                  read_timeout: 1.0,
@@ -59,7 +55,7 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
                  formatter: nil,
                  &block)
 
-    formatter ||= SemanticLogger::Formatters::Signalfx.new(token: token, include_dimensions: include_dimensions, exclude_dimensions: exclude_dimensions)
+    formatter ||= SemanticLogger::Formatters::Signalfx.new(token: token, include_dimensions: include_dimensions,)
 
     super(
       url:              url,

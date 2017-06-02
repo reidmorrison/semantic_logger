@@ -32,3 +32,5 @@ gem 'elasticsearch'
 gem 'ruby-kafka'
 
 gem 'awesome_print'
+
+gem 'minitest-shared_description'

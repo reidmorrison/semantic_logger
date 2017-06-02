@@ -3,20 +3,15 @@ module SemanticLogger
   module Formatters
     class Signalfx < Base
 
-      attr_accessor :token, :include_dimensions, :exclude_dimensions,
-                    :hash, :log, :logger
+      attr_accessor :token, :include_dimensions, :hash, :log, :logger
 
       def initialize(token:,
                      include_dimensions: nil,
-                     exclude_dimensions: nil,
                      log_host: true,
                      log_application: true)
 
-        raise(ArgumentError, 'Cannot supply both :include_dimensions and :exclude_dimensions') if include_dimensions && exclude_dimensions
-
         @token              = token
         @include_dimensions = include_dimensions.map(&:to_sym) if include_dimensions
-        @exclude_dimensions = exclude_dimensions.map(&:to_sym) if exclude_dimensions
 
         super(time_format: :ms, log_host: log_host, log_application: log_application)
       end
@@ -25,7 +20,7 @@ module SemanticLogger
       #   Strip leading '/'
       #   Convert remaining '/' to '.'
       def metric
-        name = log.metric.sub(/\A\/+/, '')
+        name = log.metric.to_s.sub(/\A\/+/, '')
         name.gsub!('/', '.')
         hash[:metric] = name
       end
@@ -52,13 +47,9 @@ module SemanticLogger
           name  = name.to_sym
           value = value.to_s
           next if value.empty?
-          if exclude_dimensions
-            dimensions[name] = value unless exclude_dimensions.include?(name)
-          else
-            dimensions[name] = value if include_dimensions.include?(name)
-          end
+          dimensions[name] = value if include_dimensions.include?(name)
         end
-        hash[:dimensions] = dimensions
+        hash[:dimensions] = dimensions unless dimensions.empty?
       end
 
       # Returns [Hash] log message in Signalfx format.

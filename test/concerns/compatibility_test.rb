@@ -1,113 +1,117 @@
 require_relative '../test_helper'
 
-# Unit Test for SemanticLogger::Logger
-class CompatibilityTest < Minitest::Test
+class TestLogger < Minitest::Test
   describe SemanticLogger::Logger do
-    before do
-      # Use a mock logger that just keeps the last logged entry in an instance
-      # variable
-      SemanticLogger.default_level   = :trace
-      SemanticLogger.backtrace_level = nil
-      @mock_logger                   = MockLogger.new
-      @appender                      = SemanticLogger.add_appender(appender: @mock_logger)
-
-      # Use this test's class name as the application name in the log output
-      @logger      = SemanticLogger[CompatibilityTest]
-      @thread_name = Thread.current.name
-    end
-
-    after do
-      SemanticLogger.remove_appender(@appender)
-    end
+    include InMemoryAppenderHelper
 
     it '#add' do
-      @logger.add(Logger::INFO, 'hello world', 'progname') { 'Data' }
-      SemanticLogger.flush
-      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data -- \"progname\"/, @mock_logger.message)
+      logger.add(Logger::INFO, 'hello world', 'progname') { 'Data' }
+
+      assert log = log_message
+      assert_equal 'hello world -- progname -- Data', log.message
+      assert_equal :info, log.level
     end
 
     it '#log' do
-      @logger.log(Logger::FATAL, 'hello world', 'progname') { 'Data' }
-      SemanticLogger.flush
-      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data -- \"progname\"/, @mock_logger.message)
+      logger.log(Logger::FATAL, 'hello world', 'progname') { 'Data' }
+
+      assert log = log_message
+      assert_equal 'hello world -- progname -- Data', log.message
+      assert_equal :fatal, log.level
     end
 
     it '#unknown' do
-      @logger.unknown('hello world') { 'Data' }
-      SemanticLogger.flush
-      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message)
+      logger.unknown('hello world') { 'Data' }
+
+      assert log = log_message
+      assert_equal 'hello world -- Data', log.message
+      assert_equal :error, log.level
+      assert_equal 'TestLogger', log.name
     end
 
     it '#unknown? as error?' do
       SemanticLogger.default_level = :error
-      assert @logger.unknown?
+      assert logger.unknown?
+      logger.log(Logger::UNKNOWN, 'hello world', 'progname') { 'Data' }
+
+      assert log = log_message
+      assert_equal 'hello world -- progname -- Data', log.message
+      assert_equal :error, log.level
     end
 
     it '#unknown? as error? when false' do
       SemanticLogger.default_level = :fatal
-      refute @logger.unknown?
+      refute logger.unknown?
+      logger.log(Logger::UNKNOWN, 'hello world', 'progname') { 'Data' }
+
+      refute log_message
     end
 
     it '#silence_logger' do
-      @logger.silence_logger do
-        @logger.info 'hello world'
+      logger.silence_logger do
+        logger.info 'hello world'
       end
-      SemanticLogger.flush
-      refute @mock_logger.message
+      refute log_message
     end
 
     it '#<< as info' do
-      @logger << 'hello world'
-      SemanticLogger.flush
-      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world/, @mock_logger.message)
+      logger << 'hello world'
+
+      assert log = log_message
+      assert_equal 'hello world', log.message
+      assert_equal :info, log.level
     end
 
     it '#progname= as #name=' do
-      assert_equal 'CompatibilityTest', @logger.name
-      @logger.progname = 'NewTest'
-      assert_equal 'NewTest', @logger.name
+      assert_equal 'TestLogger', logger.name
+      logger.progname = 'NewTest'
+      assert_equal 'NewTest', logger.name
     end
 
     it '#progname as #name' do
-      assert_equal 'CompatibilityTest', @logger.name
-      assert_equal 'CompatibilityTest', @logger.progname
+      assert_equal 'TestLogger', logger.name
+      assert_equal 'TestLogger', logger.progname
     end
 
     it '#sev_threshold= as #level=' do
-      assert_equal :trace, @logger.level
-      @logger.sev_threshold = Logger::DEBUG
-      assert_equal :debug, @logger.level
+      assert_equal :trace, logger.level
+      logger.sev_threshold = Logger::DEBUG
+      assert_equal :debug, logger.level
     end
 
     it '#sev_threshold as #level' do
-      assert_equal :trace, @logger.level
-      assert_equal :trace, @logger.sev_threshold
+      assert_equal :trace, logger.level
+      assert_equal :trace, logger.sev_threshold
     end
 
     it '#formatter NOOP' do
-      assert_nil @logger.formatter
-      @logger.formatter = 'blah'
-      assert_equal 'blah', @logger.formatter
+      assert_nil logger.formatter
+      logger.formatter = 'blah'
+      assert_equal 'blah', logger.formatter
     end
 
     it '#datetime_format NOOP' do
-      assert_nil @logger.datetime_format
-      @logger.datetime_format = 'blah'
-      assert_equal 'blah', @logger.datetime_format
+      assert_nil logger.datetime_format
+      logger.datetime_format = 'blah'
+      assert_equal 'blah', logger.datetime_format
     end
 
     it '#close NOOP' do
-      @logger.close
-      @logger.info('hello world') { 'Data' }
-      SemanticLogger.flush
-      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message)
+      logger.close
+      logger.info('hello world')
+
+      assert log = log_message
+      assert_equal 'hello world', log.message
+      assert_equal :info, log.level
     end
 
     it '#reopen NOOP' do
-      @logger.reopen
-      @logger.info('hello world') { 'Data' }
-      SemanticLogger.flush
-      assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{@thread_name}\] CompatibilityTest -- hello world -- Data/, @mock_logger.message)
+      logger.reopen
+      logger.info('hello world')
+
+      assert log = log_message
+      assert_equal 'hello world', log.message
+      assert_equal :info, log.level
     end
 
   end

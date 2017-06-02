@@ -65,8 +65,7 @@ module SemanticLogger
     #     Name of this host to appear in log messages.
     #     Default: SemanticLogger.host
     def initialize(level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
-      @formatter   = Formatters.factory(formatter, &block) ||
-        respond_to?(:call) ? self : default_formatter
+      @formatter   = Formatters.factory(formatter, &block) || (respond_to?(:call) ? self : default_formatter)
       @application = application
       @host        = host
 

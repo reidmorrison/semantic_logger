@@ -23,7 +23,7 @@ class SemanticLoggerTest < Minitest::Test
         @appender = SemanticLogger.add_appender(file_name: 'sample.log', formatter: :json)
         assert @appender.is_a?(SemanticLogger::Appender::File)
         assert SemanticLogger.appenders.include?(@appender)
-        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Json)
+        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Json), @appender.formatter.inspect
       end
 
       it 'adds stream appender' do
@@ -116,43 +116,25 @@ class SemanticLoggerTest < Minitest::Test
     end
 
     describe 'mock_logger' do
-      before do
-        # Use a mock logger that just keeps the last logged entry in an instance
-        # variable
-        SemanticLogger.default_level   = :trace
-        SemanticLogger.backtrace_level = nil
-        @mock_logger                   = MockLogger.new
-        @appender                      = SemanticLogger.add_appender(logger: @mock_logger)
-
-        # Use this test's class name as the application name in the log output
-        @logger      = SemanticLogger['LoggerTest']
-        @hash        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-        @hash_str    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
-        @thread_name = Thread.current.name
-      end
-
-      after do
-        SemanticLogger.remove_appender(@appender)
-      end
+      include InMemoryAppenderHelper
 
       describe '.tagged' do
         it 'add tags to log entries' do
           SemanticLogger.tagged('12345', 'DJHSFK') do
-            @logger.info('Hello world')
-            SemanticLogger.flush
+            logger.info('Hello world')
 
-            assert message = @mock_logger.message
-            assert_equal %w(12345 DJHSFK), message[:tags]
+            assert log = log_message
+            assert_equal %w(12345 DJHSFK), log.tags
           end
         end
 
         it 'add embedded tags to log entries' do
           SemanticLogger.tagged('First Level', 'tags') do
             SemanticLogger.tagged('Second Level') do
-              @logger.info('Hello world')
-              SemanticLogger.flush
-              assert message = @mock_logger.message
-              assert_equal ['First Level', 'tags', 'Second Level'], message[:tags]
+              logger.info('Hello world')
+
+              assert log = log_message
+              assert_equal ['First Level', 'tags', 'Second Level'], log.tags
             end
             assert_equal 2, SemanticLogger.tags.count, SemanticLogger.tags
             assert_equal 'First Level', SemanticLogger.tags.first
@@ -192,10 +174,10 @@ class SemanticLoggerTest < Minitest::Test
           SemanticLogger.named_tagged(level1: 1) do
             SemanticLogger.named_tagged(level2: 2, more: 'data') do
               SemanticLogger.named_tagged(level3: 3) do
-                @logger.info('Hello world')
-                SemanticLogger.flush
-                assert message = @mock_logger.message
-                assert_equal({level1: 1, level2: 2, more: data, level3: 3}, message[:named_tags])
+                logger.info('Hello world')
+
+                assert log = log_message
+                assert_equal({level1: 1, level2: 2, more: 'data', level3: 3}, log.named_tags)
               end
             end
           end
@@ -204,11 +186,11 @@ class SemanticLoggerTest < Minitest::Test
 
       describe '.fast_tag' do
         it 'add string tag to log entries' do
-          @logger.fast_tag('12345') do
-            @logger.info('Hello world')
-            SemanticLogger.flush
-            assert message = @mock_logger.message
-            assert_equal(%w(12345), message[:tags])
+          logger.fast_tag('12345') do
+            logger.info('Hello world')
+
+            assert log = log_message
+            assert_equal %w(12345), log.tags
           end
         end
       end
@@ -220,30 +202,30 @@ class SemanticLoggerTest < Minitest::Test
 
         it 'not log at a level below the global default' do
           assert_equal :debug, SemanticLogger.default_level
-          assert_equal :debug, @logger.level
-          @logger.trace('hello world', @hash) { 'Calculations' }
-          SemanticLogger.flush
-          assert_nil @mock_logger.message
+          assert_equal :debug, logger.level
+          logger.trace('hello world')
+
+          refute log_message
         end
 
         it 'log at the instance level' do
           assert_equal :debug, SemanticLogger.default_level
-          @logger.level = :trace
-          assert_equal :trace, @logger.level
-          @logger.trace('hello world', @hash) { 'Calculations' }
-          SemanticLogger.flush
-          assert message = @mock_logger.message
-          assert_equal :trace, message[:level]
-          assert_equal 'hello world', message[:level]
+          logger.level = :trace
+          assert_equal :trace, logger.level
+          logger.trace('hello world')
+
+          assert log = log_message
+          assert_equal :trace, log.level
+          assert_equal 'hello world', log.message
         end
 
         it 'not log at a level below the instance level' do
           assert_equal :debug, SemanticLogger.default_level
-          @logger.level = :warn
-          assert_equal :warn, @logger.level
-          @logger.debug('hello world', @hash) { 'Calculations' }
-          SemanticLogger.flush
-          assert_nil @mock_logger.message
+          logger.level = :warn
+          assert_equal :warn, logger.level
+          logger.debug('hello world')
+
+          refute log_message
         end
       end
 
@@ -254,39 +236,39 @@ class SemanticLoggerTest < Minitest::Test
 
         it 'not log at a level below the silence level' do
           assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, @logger.level
-          @logger.silence do
-            @logger.warn('hello world', @hash) { 'Calculations' }
-            @logger.info('hello world', @hash) { 'Calculations' }
-            @logger.debug('hello world', @hash) { 'Calculations' }
-            @logger.trace('hello world', @hash) { 'Calculations' }
+          assert_equal :info, logger.level
+          logger.silence do
+            logger.warn('hello world')
+            logger.info('hello world')
+            logger.debug('hello world')
+            logger.trace('hello world')
           end
-          SemanticLogger.flush
-          assert_nil @mock_logger.message
+
+          refute log_message
         end
 
         it 'log at the instance level even with the silencer at a higher level' do
-          @logger.level = :trace
-          assert_equal :trace, @logger.level
-          @logger.silence do
-            @logger.trace('hello world', @hash) { 'Calculations' }
+          logger.level = :trace
+          assert_equal :trace, logger.level
+          logger.silence do
+            logger.trace('hello world')
           end
-          SemanticLogger.flush
-          assert message = @mock_logger.message
-          assert_equal :trace, message[:level]
-          assert_equal 'hello world', message[:level]
+
+          assert log = log_message
+          assert_equal :trace, log.level
+          assert_equal 'hello world', log.message
         end
 
         it 'log at a silence level below the default level' do
           assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, @logger.level
-          @logger.silence(:debug) do
-            @logger.debug('hello world', @hash) { 'Calculations' }
+          assert_equal :info, logger.level
+          logger.silence(:debug) do
+            logger.debug('hello world')
           end
-          SemanticLogger.flush
-          assert message = @mock_logger.message
-          assert_equal :debug, message[:level]
-          assert_equal 'hello world', message[:level]
+
+          assert log = log_message
+          assert_equal :debug, log.level
+          assert_equal 'hello world', log.message
         end
       end
 
