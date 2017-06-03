@@ -87,7 +87,7 @@ module SemanticLogger
             counters = (data[:counter] ||= [])
             # Aggregate counters with the same name, using the timestamp of the first entry in this poll interval.
             if existing = counters.find { |counter| counter[:metric] == hash[:metric] }
-              existing.value += hash[:value]
+              existing[:value] += hash[:value]
             else
               counters << hash
             end

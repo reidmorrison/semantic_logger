@@ -22,10 +22,19 @@ InMemoryAppenderHelper = shared_description do
     SemanticLogger['TestLogger']
   end
 
+  let :appender_options do
+    {appender: appender}
+  end
+
+  let :added_appender do
+    SemanticLogger.add_appender(appender_options)
+  end
+
   before do
     SemanticLogger.default_level   = :trace
     SemanticLogger.backtrace_level = :trace
-    SemanticLogger.add_appender(appender: appender)
+    SemanticLogger.flush
+    added_appender
   end
 
   after do

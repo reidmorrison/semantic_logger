@@ -2,6 +2,7 @@ module SemanticLogger
   module Appender
     # @formatter:off
     autoload :Async,             'semantic_logger/appender/async'
+    autoload :AsyncBatch,        'semantic_logger/appender/async_batch'
     autoload :Bugsnag,           'semantic_logger/appender/bugsnag'
     autoload :Elasticsearch,     'semantic_logger/appender/elasticsearch'
     autoload :ElasticsearchHttp, 'semantic_logger/appender/elasticsearch_http'
@@ -43,20 +44,20 @@ module SemanticLogger
       batch   = options.delete(:batch)
 
       # Extract batch and async options
-      facade_options = {}
-      ASYNC_OPTION_KEYS.each { |key| facade_options[key] = options.delete(key) if options.key?(key) }
+      proxy_options = {}
+      ASYNC_OPTION_KEYS.each { |key| proxy_options[key] = options.delete(key) if options.key?(key) }
 
       appender = build(options, &block)
 
-      # If appender implements #batch, then it should use the batch facade by default.
+      # If appender implements #batch, then it should use the batch proxy by default.
       batch    = true if batch.nil? && appender.respond_to?(:batch)
 
       if batch == true
-        facade_options[:appender] = appender
-        Appender::AsyncBatch.new(facade_options)
+        proxy_options[:appender] = appender
+        Appender::AsyncBatch.new(proxy_options)
       elsif async == true
-        facade_options[:appender] = appender
-        Appender::Async.new(facade_options)
+        proxy_options[:appender] = appender
+        Appender::Async.new(proxy_options)
       else
         appender
       end

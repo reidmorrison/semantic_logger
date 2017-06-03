@@ -1,11 +1,22 @@
+require 'forwardable'
+
 module SemanticLogger
   module Appender
     # Allow any appender to run asynchronously in a separate thread.
     class Async
+      extend Forwardable
+
       attr_accessor :logger, :lag_check_interval, :lag_threshold_s
       attr_reader :queue, :appender
 
-      # Appender facade to allow an existing appender to run asynchronously in a separate thread.
+      # Forward methods that can be called directly
+      def_delegator :@appender, :name
+      def_delegator :@appender, :should_log?
+      def_delegator :@appender, :filter
+      def_delegator :@appender, :level
+      def_delegator :@appender, :level=
+
+      # Appender proxy to allow an existing appender to run asynchronously in a separate thread.
       #
       # Parameters:
       #   name: [String]

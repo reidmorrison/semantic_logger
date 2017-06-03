@@ -2,7 +2,7 @@ module SemanticLogger
   # Thread that submits and processes log requests
   class Processor
     # Returns [Appender::Async => SemanticLogger::Processor] the global instance of this processor
-    # wrapped in the Async Facade so that all logging is asynchronous in a thread of its own.
+    # wrapped in the Async proxy so that all logging is asynchronous in a thread of its own.
     #
     # More than one instance can be created if needed.
     def self.instance
@@ -129,7 +129,15 @@ module SemanticLogger
 
     private
 
-    @processor = Appender::Async.new(name: 'SemanticLogger::Processor', max_queue_size: -1, appender: new)
+    def self.create_instance
+      SemanticLogger::Appender::Async.new(
+        name:           'SemanticLogger::Processor',
+        appender:       new,
+        max_queue_size: -1
+      )
+    end
+
+    @processor = create_instance
 
     # Call on_log subscribers
     def call_log_subscribers(log)

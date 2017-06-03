@@ -19,7 +19,7 @@ module Appender
         end
       end
 
-      describe 'http call' do
+      describe 'log message' do
         let :response do
           # Do not stub if the token is available in the environment
           if ENV['SIGNALFX_TOKEN']

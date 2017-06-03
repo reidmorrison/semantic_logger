@@ -4,76 +4,122 @@ require_relative '../test_helper'
 module Appender
   class ElasticsearchTest < Minitest::Test
     describe SemanticLogger::Appender::Elasticsearch do
-      before do
-        Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
-          @appender = SemanticLogger::Appender::Elasticsearch.new(url: 'http://localhost:9200')
+      let :appender do
+        if ENV['ELASTICSEARCH']
+          SemanticLogger::Appender::Elasticsearch.new(url: 'http://localhost:9200')
+        else
+          Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
+            SemanticLogger::Appender::Elasticsearch.new(url: 'http://localhost:9200')
+          end
         end
-        @message = 'AppenderElasticsearchTest log message'
+      end
+
+      let :log_message do
+        'AppenderElasticsearchTest log message'
+      end
+
+      let :log do
+        log         = SemanticLogger::Log.new('User', :info)
+        log.message = log_message
+        log
+      end
+
+      let :exception do
+        exc = nil
+        begin
+          Uh oh
+        rescue Exception => e
+          exc = e
+        end
+        exc
       end
 
       after do
-        @appender.close if @appender
+        appender.close
       end
 
-      it 'logs to daily indexes' do
-        bulk_index = nil
-        @appender.stub(:write_to_elasticsearch, -> messages { bulk_index = messages.first }) do
-          @appender.info @message
-        end
-        index = bulk_index['index']['_index']
-        assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
-      end
-
-      SemanticLogger::LEVELS.each do |level|
-        it "send #{level}" do
-          request = nil
-          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201} }) do
-            @appender.send(level, @message)
+      describe 'synchronous' do
+        it 'logs to daily indexes' do
+          bulk_index = nil
+          appender.stub(:write_to_elasticsearch, -> messages { bulk_index = messages.first }) do
+            appender.info log_message
           end
-
-          message = request[:body][1]
-          assert_equal @message, message[:message]
-          assert_equal level, message[:level]
+          index = bulk_index['index']['_index']
+          assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
         end
 
-        it "sends #{level} exceptions" do
-          exc = nil
-          begin
-            Uh oh
-          rescue Exception => e
-            exc = e
-          end
-          request = nil
-          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201} }) do
-            @appender.send(level, 'Reading File', exc)
-          end
+        it 'logs message' do
+          request = stub_client { appender.log(log) }
 
-          hash = request[:body][1]
+          assert hash = request[:body][1]
+          assert_equal log_message, hash[:message]
+        end
 
-          assert_equal 'Reading File', hash[:message]
+        it 'logs level' do
+          request = stub_client { appender.log(log) }
+
+          assert hash = request[:body][1]
+          assert_equal :info, hash[:level]
+        end
+
+        it 'logs exception' do
+          log.exception = exception
+          request       = stub_client { appender.log(log) }
+
+          assert hash = request[:body][1]
           assert exception = hash[:exception]
           assert_equal 'NameError', exception[:name]
           assert_match 'undefined local variable or method', exception[:message]
-          assert_equal level, hash[:level]
           assert exception[:stack_trace].first.include?(__FILE__), exception
         end
 
-        it "sends #{level} custom attributes" do
-          request = nil
-          @appender.client.stub(:bulk, -> r { request = r; {"status" => 201} }) do
-            @appender.send(level, @message, {key1: 1, key2: 'a'})
-          end
+        it 'logs payload' do
+          h           = {key1: 1, key2: 'a'}
+          log.payload = h
+          request     = stub_client { appender.log(log) }
 
-          message = request[:body][1]
-          assert_equal @message, message[:message]
-          assert_equal level, message[:level]
-          refute message[:stack_trace]
-          assert payload = message[:payload], message
-          assert_equal 1, payload[:key1], message
-          assert_equal 'a', payload[:key2], message
+          assert hash = request[:body][1]
+          refute hash[:stack_trace]
+          assert_equal h, hash[:payload], hash
         end
       end
 
+      describe 'async batch' do
+        it 'logs message' do
+          request = stub_client { appender.batch([log]) }
+
+          assert hash = request[:body][1]
+          assert_equal log_message, hash[:message]
+          assert_equal :info, hash[:level]
+        end
+
+        let :logs do
+          3.times.collect do |i|
+            l         = log.dup
+            l.message = "hello world#{i+1}"
+            l
+          end
+        end
+
+        it 'logs multiple messages' do
+          request = stub_client { appender.batch(logs) }
+
+          assert body = request[:body]
+          assert_equal 4, body.size, body
+          index = body[0]['index']['_index']
+          assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
+
+          assert_equal 'hello world1', body[1][:message]
+          assert_equal 'hello world2', body[2][:message]
+          assert_equal 'hello world3', body[3][:message]
+        end
+      end
+
+      def stub_client(&block)
+        request = nil
+        appender.client.stub(:bulk, -> r { request = r; {"status" => 201} }, &block)
+        request
+      end
     end
   end
 end

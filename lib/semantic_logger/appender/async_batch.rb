@@ -11,7 +11,7 @@ module SemanticLogger
       attr_accessor :batch_size, :batch_seconds
       attr_reader :signal
 
-      # Batching Appender Facade for appenders that support batches.
+      # Batching Appender proxy for appenders that support batches.
       #
       # Parameters:
       #   batch_size: [Integer]
