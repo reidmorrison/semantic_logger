@@ -5,12 +5,8 @@ module Appender
   class ElasticsearchTest < Minitest::Test
     describe SemanticLogger::Appender::Elasticsearch do
       before do
-        skip('Concurrent::TimerTask issue is preventing the process from stopping.') if defined? JRuby
         Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
-          @appender = SemanticLogger::Appender::Elasticsearch.new(
-            url:        'http://localhost:9200',
-            batch_size: 1 # immediate flush
-          )
+          @appender = SemanticLogger::Appender::Elasticsearch.new(url: 'http://localhost:9200')
         end
         @message = 'AppenderElasticsearchTest log message'
       end
@@ -54,10 +50,10 @@ module Appender
 
           hash = request[:body][1]
 
-          assert 'Reading File', hash[:message]
+          assert_equal 'Reading File', hash[:message]
           assert exception = hash[:exception]
-          assert 'NameError', exception[:name]
-          assert 'undefined local variable or method', exception[:message]
+          assert_equal 'NameError', exception[:name]
+          assert_match 'undefined local variable or method', exception[:message]
           assert_equal level, hash[:level]
           assert exception[:stack_trace].first.include?(__FILE__), exception
         end

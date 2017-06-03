@@ -47,10 +47,10 @@ module Appender
             @appender.send(level, 'Reading File', exc)
           end
           hash = JSON.parse(request.body)
-          assert 'Reading File', hash['message']
+          assert_equal 'Reading File', hash['message'], hash
           assert exception = hash['exception']
-          assert 'NameError', exception['name']
-          assert 'undefined local variable or method', exception['message']
+          assert_equal 'NameError', exception['name']
+          assert_match 'undefined local variable or method', exception['message']
           assert_equal level.to_s, hash['level']
           assert exception['stack_trace'].first.include?(__FILE__), exception
         end

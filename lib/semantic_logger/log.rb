@@ -73,7 +73,7 @@ module SemanticLogger
                metric_amount: nil,
                duration: nil,
                backtrace: nil,
-               log_exception: :partial,
+               log_exception: :full,
                on_exception_level: nil)
       # Elastic logging: Log when :duration exceeds :min_duration
       # Except if there is an exception when it will always be logged
