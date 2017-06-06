@@ -54,7 +54,7 @@ module SemanticLogger
             assert_equal fixed_metric, counter['metric'], counter
             assert_equal 1, counter['value'], counter
             assert_equal (log.time.to_f * 1_000).to_i, counter['timestamp'], counter
-            refute counter.has_key?('dimensions')
+            assert counter.has_key?('dimensions')
           end
 
           it 'send gauge metric when log includes duration' do
@@ -65,21 +65,21 @@ module SemanticLogger
             assert_equal fixed_metric, counter['metric'], counter
             assert_equal 1234, counter['value'], counter
             assert_equal (log.time.to_f * 1_000).to_i, counter['timestamp'], counter
-            refute counter.has_key?('dimensions')
+            assert counter.has_key?('dimensions')
           end
 
           it 'only forwards whitelisted dimensions' do
-            log.named_tags               = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
-            formatter.include_dimensions = [:user_id, :application]
-            hash                         = result
+            log.named_tags       = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
+            formatter.dimensions = [:user_id, :application]
+            hash                 = result
             assert counters = hash['counter'], hash
             assert counter = counters.first, hash
-            assert_equal({'user_id' => '47', 'application' => 'sample'}, counter['dimensions'], counter)
+            assert_equal({'user_id' => '47', 'host' => SemanticLogger.host, 'application' => 'sample'}, counter['dimensions'], counter)
           end
 
           it 'raises exception with both a whitelist and blacklist' do
             assert_raises ArgumentError do
-              SemanticLogger::Formatters::Signalfx.new(token: 'TEST', include_dimensions: [:user_id], exclude_dimensions: [:tracking_number])
+              SemanticLogger::Formatters::Signalfx.new(token: 'TEST', dimensions: [:user_id], exclude_dimensions: [:tracking_number])
             end
           end
         end

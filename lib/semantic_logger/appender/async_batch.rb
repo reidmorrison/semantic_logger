@@ -16,7 +16,7 @@ module SemanticLogger
       # Parameters:
       #   batch_size: [Integer]
       #     Maximum number of messages to batch up before sending.
-      #     Default: 500
+      #     Default: 300
       #
       #   batch_seconds: [Integer]
       #     Maximum number of seconds between sending batches.
@@ -31,7 +31,7 @@ module SemanticLogger
                      name: appender.class.name,
                      max_queue_size: 10_000,
                      lag_threshold_s: 30,
-                     batch_size: 500,
+                     batch_size: 300,
                      batch_seconds: 5)
 
         @batch_size    = batch_size
@@ -59,27 +59,29 @@ module SemanticLogger
 
       # Separate thread for batching up log messages before writing.
       def process_messages
-        # Wait for batch interval or number of messages to be exceeded.
-        signal.wait(batch_seconds)
+        loop do
+          # Wait for batch interval or number of messages to be exceeded.
+          signal.wait(batch_seconds)
 
-        logs          = []
-        first         = true
-        message_count = queue.length
-        message_count.times do
-          # Queue#pop(true) raises an exception when there are no more messages, which is considered expensive.
-          message = queue.pop
-          if message.is_a?(Log)
-            logs << message
-            if first
-              check_lag(message)
-              first = false
+          logs          = []
+          first         = true
+          message_count = queue.length
+          message_count.times do
+            # Queue#pop(true) raises an exception when there are no more messages, which is considered expensive.
+            message = queue.pop
+            if message.is_a?(Log)
+              logs << message
+              if first
+                check_lag(message)
+                first = false
+              end
+            else
+              process_message(message)
             end
-          else
-            process_message(message)
           end
+          appender.batch(logs) if logs.size > 0
+          signal.reset
         end
-        appender.batch(logs) if logs.size > 0
-        signal.reset
       end
 
       def submit_request(command)

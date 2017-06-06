@@ -13,6 +13,8 @@ module SemanticLogger
       def_delegator :@appender, :name
       def_delegator :@appender, :should_log?
       def_delegator :@appender, :filter
+      def_delegator :@appender, :host
+      def_delegator :@appender, :application
       def_delegator :@appender, :level
       def_delegator :@appender, :level=
 
@@ -125,7 +127,7 @@ module SemanticLogger
             count += 1
             # Check every few log messages whether this appender thread is falling behind
             if count > lag_check_interval
-              check_lag(log)
+              check_lag(message)
               count = 0
             end
           else

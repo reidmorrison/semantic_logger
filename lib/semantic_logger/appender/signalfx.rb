@@ -17,9 +17,9 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
   #     Access Token to use for sending metrics.
   #     Obtain the Signalfx token via the Signalfx Web UI under `Organization` -> `Access Tokens`.
   #
-  #   include_dimensions: [Array<String>]
-  #     List of dimensions to include when forwarding metrics to SignalFx.
-  #     Dimensions are supplied in log messages using `named_tags`
+  #   dimensions: [Array<String>]
+  #     Dimensions to forward to signalfx when they are present in the named tags of any log message.
+  #     By default `application` and `host` are always included as dimensions in all forwarded metrics.
   #     Example: [:user_id, :state]
   #
   #   filter: [Regexp|Proc]
@@ -29,22 +29,19 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
   #           The Proc must return true or false.
   #
   #   host: [String]
-  #     Name of this host to appear in log messages.
+  #     Name of this host to send as a dimension.
   #     Default: SemanticLogger.host
   #
   #   application: [String]
-  #     Name of this application to appear in log messages.
+  #     Name of this application to send as a dimension.
   #     Default: SemanticLogger.application
   #
   #   url: [String]
   #     Override the SignalFx service url.
   #     For historical data use: https://backfill.signalfx.com/v1/backfill
   #     Default: https://ingest.signalfx.com
-  #
-  # Notes:
-  # * Do not supply both include_dimensions & exclude_dimensions.
   def initialize(token:,
-                 include_dimensions: nil,
+                 dimensions: nil,
                  url: 'https://ingest.signalfx.com',
                  open_timeout: 2.0,
                  read_timeout: 1.0,
@@ -55,7 +52,7 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
                  formatter: nil,
                  &block)
 
-    formatter ||= SemanticLogger::Formatters::Signalfx.new(token: token, include_dimensions: include_dimensions,)
+    formatter ||= SemanticLogger::Formatters::Signalfx.new(token: token, dimensions: dimensions)
 
     super(
       url:              url,
@@ -74,12 +71,16 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
   end
 
   def log(log)
-    post(formatter.call(log, self), full_url)
+    message = formatter.call(log, self)
+    SemanticLogger::Processor.logger.trace(message)
+    post(message, full_url)
   end
 
   # Logs in batches
   def batch(logs)
-    post(formatter.batch(logs, self), full_url)
+    message = formatter.batch(logs, self)
+    SemanticLogger::Processor.logger.trace(message)
+    post(message, full_url)
   end
 
   # Only forward log entries that contain metrics.

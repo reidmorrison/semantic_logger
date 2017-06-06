@@ -44,7 +44,6 @@ module SemanticLogger
     # Parameters
     #   level: [:trace | :debug | :info | :warn | :error | :fatal]
     #     Override the log level for this subscriber.
-    #     Default: :error
     #
     #   formatter: [Object|Proc]
     #     An instance of a class that implements #call, or a Proc to be used to format

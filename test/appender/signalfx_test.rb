@@ -4,9 +4,9 @@ module Appender
   class SignalfxTest < Minitest::Test
     describe SemanticLogger::Appender::Signalfx do
       before do
-        @metric       = '/user/login'
-        @log          = SemanticLogger::Log.new('User', :debug)
-        @log.metric   = @metric
+        @metric     = '/user/login'
+        @log        = SemanticLogger::Log.new('User', :debug)
+        @log.metric = @metric
       end
 
       let :appender do
@@ -43,8 +43,8 @@ module Appender
         end
 
         it 'whitelists dimensions' do
-          @log.named_tags                       = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
-          appender.formatter.include_dimensions = [:user_id, :application]
+          @log.named_tags               = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
+          appender.formatter.dimensions = [:user_id, :application]
           assert response
         end
       end

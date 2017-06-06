@@ -3,15 +3,15 @@ module SemanticLogger
   module Formatters
     class Signalfx < Base
 
-      attr_accessor :token, :include_dimensions, :hash, :log, :logger
+      attr_accessor :token, :dimensions, :hash, :log, :logger
 
       def initialize(token:,
-                     include_dimensions: nil,
+                     dimensions: nil,
                      log_host: true,
                      log_application: true)
 
-        @token              = token
-        @include_dimensions = include_dimensions.map(&:to_sym) if include_dimensions
+        @token      = token
+        @dimensions = dimensions.map(&:to_sym) if dimensions
 
         super(time_format: :ms, log_host: log_host, log_application: log_application)
       end
@@ -36,20 +36,18 @@ module SemanticLogger
       end
 
       # Dimensions for this metric
-      def dimensions
-        return unless log.named_tags && !log.named_tags.empty?
-
-        dimensions               = {}
-        dimensions[:host]        = logger.host if log_host && logger.host
-        dimensions[:application] = logger.application if log_application && logger.application
+      def format_dimensions
+        h               = {}
+        h[:host]        = logger.host if log_host && logger.host
+        h[:application] = logger.application if log_application && logger.application
 
         log.named_tags.each_pair do |name, value|
           name  = name.to_sym
           value = value.to_s
           next if value.empty?
-          dimensions[name] = value if include_dimensions.include?(name)
+          h[name] = value if dimensions && dimensions.include?(name)
         end
-        hash[:dimensions] = dimensions unless dimensions.empty?
+        hash[:dimensions] = h unless h.empty?
       end
 
       # Returns [Hash] log message in Signalfx format.
@@ -58,7 +56,7 @@ module SemanticLogger
         self.log    = log
         self.logger = logger
 
-        metric; time; value; dimensions
+        metric; time; value; format_dimensions
 
         # gauge, counter, or cumulative_counter
         data = {}
@@ -79,7 +77,7 @@ module SemanticLogger
           self.hash = {}
           self.log  = log
 
-          metric; time; value; dimensions
+          metric; time; value; format_dimensions
 
           if log.duration
             (data[:gauge] ||= []) << hash

@@ -17,7 +17,7 @@ require 'openssl'
 #     url:      'http://localhost:8088/path'
 #   )
 class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
-  attr_accessor :username, :application, :host, :compress, :header,
+  attr_accessor :username, :compress, :header,
                 :open_timeout, :read_timeout, :continue_timeout
   attr_reader :http, :url, :server, :port, :path, :ssl_options
 
@@ -161,7 +161,9 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
 
   # Forward log messages to HTTP Server
   def log(log)
-    post(formatter.call(log, self))
+    message = formatter.call(log, self)
+    SemanticLogger::Processor.logger.trace(message)
+    post(message)
   end
 
   private
