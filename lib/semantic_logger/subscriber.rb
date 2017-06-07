@@ -1,11 +1,11 @@
 # Abstract Subscriber
 #
-#   Abstract base class for appender and metrics subscribers.
+#   Abstract base class for all appenders.
 module SemanticLogger
   class Subscriber < SemanticLogger::Base
-    # Every logger has its own formatter
+    # Every appender has its own formatter
     attr_accessor :formatter
-    attr_writer :application, :host
+    attr_writer :application, :host, :logger
 
     # Returns the current log level if set, otherwise it logs everything it receives.
     def level
@@ -35,6 +35,16 @@ module SemanticLogger
     # Allow host name to be set globally or on a per subscriber basis.
     def host
       @host || SemanticLogger.host
+    end
+
+    # Give each appender its own logger for logging.
+    # For example trace messages sent to servicesm or errors when something fails.
+    def logger
+      @logger ||= begin
+        logger = SemanticLogger::Processor.logger.clone
+        logger.name = self.class.name
+        logger
+      end
     end
 
     private

@@ -142,7 +142,7 @@ class SemanticLogger::Appender::Kafka < SemanticLogger::Subscriber
       ssl_ca_cert:         ssl_ca_cert,
       ssl_client_cert:     ssl_client_cert,
       ssl_client_cert_key: ssl_client_cert_key,
-      logger:              SemanticLogger::Processor.logger.clone
+      logger:              logger
     )
 
     @producer = @kafka.async_producer(

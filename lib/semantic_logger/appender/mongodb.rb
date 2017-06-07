@@ -106,7 +106,7 @@ module SemanticLogger
       def initialize(uri:, collection_name: 'semantic_logger', write_concern: 0, collection_size: 1024**3, collection_max: nil,
                      level: nil, formatter: nil, filter: nil, host: nil, application: nil, &block)
 
-        @client          = Mongo::Client.new(uri, logger: SemanticLogger::Processor.logger.clone)
+        @client          = Mongo::Client.new(uri, logger: logger)
         @collection_name = collection_name
         @options         = {
           capped: true,

@@ -17,6 +17,7 @@ module SemanticLogger
       def_delegator :@appender, :application
       def_delegator :@appender, :level
       def_delegator :@appender, :level=
+      def_delegator :@appender, :logger
 
       # Appender proxy to allow an existing appender to run asynchronously in a separate thread.
       #
@@ -41,10 +42,6 @@ module SemanticLogger
                      max_queue_size: 10_000,
                      lag_check_interval: 1_000,
                      lag_threshold_s: 30)
-
-        # Its own error logger instance
-        @logger      = Processor.logger.dup
-        @logger.name = name
 
         @appender           = appender
         @lag_check_interval = lag_check_interval
@@ -102,20 +99,20 @@ module SemanticLogger
         # This thread is designed to never go down unless the main thread terminates
         # or the appender is closed.
         Thread.current.name = logger.name
-        logger.trace "Appender thread active"
+        logger.trace "Async: Appender thread active"
         begin
           process_messages
         rescue StandardError => exception
           # This block may be called after the file handles have been released by Ruby
-          logger.error('Restarting due to exception', exception) rescue nil
+          logger.error('Async: Restarting due to exception', exception) rescue nil
           retry
         rescue Exception => exception
           # This block may be called after the file handles have been released by Ruby
-          logger.error('Stopping due to fatal exception', exception) rescue nil
+          logger.error('Async: Stopping due to fatal exception', exception) rescue nil
         ensure
           @thread = nil
           # This block may be called after the file handles have been released by Ruby
-          logger.trace('Thread has stopped') rescue nil
+          logger.trace('Async: Thread has stopped') rescue nil
         end
       end
 
@@ -147,14 +144,14 @@ module SemanticLogger
           message[:reply_queue] << true if message[:reply_queue]
           return false
         else
-          logger.warn "Appender thread: Ignoring unknown command: #{message[:command]}"
+          logger.warn "Async: Appender thread: Ignoring unknown command: #{message[:command]}"
         end
         true
       end
 
       def check_lag(log)
         if (diff = Time.now - log.time) > lag_threshold_s
-          logger.warn "Appender thread has fallen behind by #{diff} seconds with #{queue.size} messages queued up. Consider reducing the log level or changing the appenders"
+          logger.warn "Async: Appender thread has fallen behind by #{diff} seconds with #{queue.size} messages queued up. Consider reducing the log level or changing the appenders"
         end
       end
 
@@ -163,7 +160,7 @@ module SemanticLogger
         return false unless active?
 
         queue_size = queue.size
-        msg        = "Too many queued log messages: #{queue_size}, running command: #{command}"
+        msg        = "Async: Queued log messages: #{queue_size}, running command: #{command}"
         if queue_size > 1_000
           logger.warn msg
         elsif queue_size > 100

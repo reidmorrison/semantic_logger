@@ -72,14 +72,14 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
 
   def log(log)
     message = formatter.call(log, self)
-    SemanticLogger::Processor.logger.trace(message)
+    logger.trace(message)
     post(message, full_url)
   end
 
   # Logs in batches
   def batch(logs)
     message = formatter.batch(logs, self)
-    SemanticLogger::Processor.logger.trace(message)
+    logger.trace(message)
     post(message, full_url)
   end
 

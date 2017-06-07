@@ -162,7 +162,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   # Forward log messages to HTTP Server
   def log(log)
     message = formatter.call(log, self)
-    SemanticLogger::Processor.logger.trace(message)
+    logger.trace(message)
     post(message)
   end
 
@@ -202,8 +202,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   # Process HTTP Request
   def process_request(request, body = nil)
     if body
-      body         = compress_data(body) if compress
-      request.body = body
+      request.body = compress ? compress_data(body) : body
     end
     request.basic_auth(@username, @password) if @username
     response = @http.request(request)
@@ -211,7 +210,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
       true
     else
       # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
-      SemanticLogger::Processor.logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
+      logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
       false
     end
   end

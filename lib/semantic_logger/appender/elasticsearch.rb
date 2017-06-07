@@ -75,7 +75,7 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   end
 
   def reopen
-    @client = Elasticsearch::Client.new(url: url, logger: SemanticLogger::Processor.logger.clone)
+    @client = Elasticsearch::Client.new(url: url, logger: logger)
   end
 
   # Log to the index for today
@@ -107,7 +107,7 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
     bulk_result = @client.bulk(body: messages)
     if bulk_result["errors"]
       failed = bulk_result["items"].select { |x| x["status"] != 201 }
-      SemanticLogger::Processor.logger.error("ElasticSearch: Write failed. Messages discarded. : #{failed}")
+      logger.error("ElasticSearch: Write failed. Messages discarded. : #{failed}")
     end
   end
 
