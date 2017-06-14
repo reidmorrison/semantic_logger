@@ -22,4 +22,16 @@ module SemanticLogger::Utils
     string
   end
 
+  # Returns the visibility for an instance method
+  def self.method_visibility(mod, method_name)
+    method_name = method_name.to_sym
+    if mod.instance_methods.include?(method_name)
+      :public
+    elsif mod.private_instance_methods.include?(method_name)
+      :private
+    elsif mod.protected_instance_methods.include?(method_name)
+      :protected
+    end
+  end
+
 end

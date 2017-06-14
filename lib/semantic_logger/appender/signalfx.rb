@@ -23,8 +23,8 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
   #     Example: [:user_id, :state]
   #
   #   filter: [Regexp|Proc]
-  #     RegExp: Only include log messages where the class n, read_timeout: read_timeout, open_timeout: open_timeoutame matches the supplied.
-  #     regular expression. All other messages will be ignored.
+  #     RegExp: Only include log messages where the class name matches the supplied
+  #             regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true.
   #           The Proc must return true or false.
   #

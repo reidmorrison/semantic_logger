@@ -383,5 +383,41 @@ module SemanticLogger
       end
     end
 
+    # For measuring methods and logging their duration.
+    def measure_method(index:,
+                       level:,
+                       message:,
+                       min_duration:,
+                       metric:,
+                       log_exception:,
+                       on_exception_level:,
+                       &block)
+
+      # Ignores filter, silence, payload
+      exception = nil
+      start     = Time.now
+      begin
+        yield
+      rescue Exception => exc
+        exception = exc
+      ensure
+        log = Log.new(name, level, index)
+        # May return false due to elastic logging
+        should_log = log.assign(
+          message:            message,
+          min_duration:       min_duration,
+          exception:          exception,
+          metric:             metric,
+          duration:           1000.0 * (Time.now - start),
+          log_exception:      log_exception,
+          on_exception_level: on_exception_level
+        )
+
+        # Log level may change during assign due to :on_exception_level
+        log(log) if should_log && should_log?(log)
+        raise exception if exception
+      end
+    end
+
   end
 end

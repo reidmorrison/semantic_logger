@@ -80,7 +80,7 @@ module SemanticLogger
             end
           end
           appender.batch(logs) if logs.size > 0
-          signal.reset
+          signal.reset unless queue.size >= batch_size
         end
       end
 
