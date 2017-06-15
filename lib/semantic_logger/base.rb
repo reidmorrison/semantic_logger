@@ -249,7 +249,32 @@ module SemanticLogger
 
     # Whether this log entry meets the criteria to be logged by this appender.
     def should_log?(log)
-      meets_log_level?(log) && !filtered?(log)
+      if meets_log_level?(log) && !filtered?(log)
+        return log_metric_only? if log.metric_only?
+        return true
+      end
+      false
+    end
+
+    # Prototype: Will change.
+    def counter(name, count: 1, **dimensions)
+      @fatal_index    ||= SemanticLogger.level_to_index(:fatal)
+      l               = Log.new('internal', :fatal, @fatal_index)
+      l.metric        = name
+      l.metric_amount = count
+      l.time          = Time.now
+      l.dimensions    = dimensions
+      log(l)
+    end
+
+    # Prototype: Will change.
+    def gauge(name, duration, **dimensions)
+      @fatal_index ||= SemanticLogger.level_to_index(:fatal)
+      l            = Log.new('internal', :fatal, @fatal_index)
+      l.metric     = name
+      l.duration   = duration
+      l.dimensions = dimensions
+      log(l)
     end
 
     private
@@ -323,6 +348,11 @@ module SemanticLogger
 
       # Log level may change during assign due to :on_exception_level
       self.log(log) if should_log && should_log?(log)
+    end
+
+    # Whether to log metrics only events.
+    def log_metric_only?
+      false
     end
 
     # Measure the supplied block and log the message

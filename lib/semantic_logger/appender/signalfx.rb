@@ -88,5 +88,10 @@ class SemanticLogger::Appender::Signalfx < SemanticLogger::Appender::Http
     log.metric && super
   end
 
+  # Whether to log metrics only events.
+  def log_metric_only?
+    true
+  end
+
 end
 

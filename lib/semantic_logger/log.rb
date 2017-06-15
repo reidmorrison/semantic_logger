@@ -47,7 +47,10 @@ module SemanticLogger
   # context [Hash]
   #   Named contexts that were captured when the log entry was created.
   class Log
-    attr_accessor :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :named_tags, :context
+    attr_accessor :level, :level_index, :name, :message, :time, :duration,
+                  :payload, :exception, :thread_name, :backtrace,
+                  :tags, :named_tags, :context,
+                  :metric, :metric_amount, :dimensions
 
     def initialize(name, level, index = nil)
       @level       = level
@@ -286,6 +289,11 @@ module SemanticLogger
     # Lazy initializes the context hash and assigns a key value pair.
     def set_context(key, value)
       (self.context ||= {})[key] = value
+    end
+
+    # A metric only event has a metric but no message, exception, or payload.
+    def metric_only?
+      metric && message.nil? && exception.nil? && payload.nil?
     end
 
     private
