@@ -9,7 +9,7 @@ module SemanticLogger
       PRECISION   =
         if defined?(JRuby)
           if (JRUBY_VERSION.to_f >= 9.1)
-            maint = JRUBY_VERSION.match(/\A\d\.\d\.(\d)\./)[1].to_i
+            maint = JRUBY_VERSION.match(/\A\d+\.\d+\.(\d+)\./)[1].to_i
             (maint >= 8) || (JRUBY_VERSION.to_f > 9.1) ? 6 : 3
           else
             3
