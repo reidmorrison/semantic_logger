@@ -5,8 +5,8 @@ module SemanticLogger
   module Formatters
     class SignalfxTest < Minitest::Test
       describe SemanticLogger::Formatters::Signalfx do
-        let :fixed_metric do
-          'user.login'
+        let :converted_metric do
+          'Application.average'
         end
 
         let :log do
@@ -51,7 +51,7 @@ module SemanticLogger
             hash = result
             assert counters = hash['counter'], hash
             assert counter = counters.first, hash
-            assert_equal fixed_metric, counter['metric'], counter
+            assert_equal converted_metric, counter['metric'], counter
             assert_equal 1, counter['value'], counter
             assert_equal (log.time.to_f * 1_000).to_i, counter['timestamp'], counter
             assert counter.has_key?('dimensions')
@@ -62,19 +62,19 @@ module SemanticLogger
             hash         = result
             assert counters = hash['gauge'], hash
             assert counter = counters.first, hash
-            assert_equal fixed_metric, counter['metric'], counter
+            assert_equal converted_metric, counter['metric'], counter
             assert_equal 1234, counter['value'], counter
             assert_equal (log.time.to_f * 1_000).to_i, counter['timestamp'], counter
             assert counter.has_key?('dimensions')
           end
 
           it 'only forwards whitelisted dimensions' do
-            log.named_tags       = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
+            log.named_tags       = {user_id: 47, tracking_number: 7474, session_id: 'hsdhngsd'}
             formatter.dimensions = [:user_id, :application]
             hash                 = result
             assert counters = hash['counter'], hash
             assert counter = counters.first, hash
-            assert_equal({'user_id' => '47', 'host' => SemanticLogger.host, 'application' => 'sample'}, counter['dimensions'], counter)
+            assert_equal({'class' => '::user', 'action' => 'login', 'environment' => 'test', 'user_id' => '47', 'host' => SemanticLogger.host, 'application' => SemanticLogger.application}, counter['dimensions'], counter)
           end
 
           it 'raises exception with both a whitelist and blacklist' do
@@ -94,10 +94,10 @@ module SemanticLogger
 
             assert counters = hash['counter'], hash
             assert_equal 3, counters.size
-            assert_equal 'user.login1', counters[0]['metric']
+            assert_equal converted_metric, counters[0]['metric']
             assert_equal 1, counters[0]['value']
-            assert_equal 'user.login2', counters[1]['metric']
-            assert_equal 'user.login3', counters[2]['metric']
+            assert_equal converted_metric, counters[1]['metric']
+            assert_equal converted_metric, counters[2]['metric']
           end
         end
 
@@ -111,7 +111,7 @@ module SemanticLogger
 
             assert counters = hash['counter'], hash
             assert_equal 1, counters.size
-            assert_equal 'user.login', counters[0]['metric']
+            assert_equal converted_metric, counters[0]['metric']
             assert_equal 3, counters[0]['value']
           end
         end

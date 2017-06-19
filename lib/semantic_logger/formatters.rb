@@ -18,9 +18,7 @@ module SemanticLogger
     # - Instance of any of SemanticLogger::Formatters
     # - Proc
     # - Any object that responds to :call
-    # - If none of the above apply, then the supplied block is returned as the formatter.
-    # - Otherwise an instance of the default formatter is returned.
-    def self.factory(formatter, &block)
+    def self.factory(formatter)
       case
       when formatter.is_a?(Symbol)
         SemanticLogger::Utils.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
@@ -29,8 +27,8 @@ module SemanticLogger
         SemanticLogger::Utils.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
       when formatter.respond_to?(:call)
         formatter
-      when block
-        block
+      else
+        raise(ArgumentError, "Unknown formatter: #{formatter.inspect}")
       end
     end
 

@@ -4,7 +4,7 @@
 module SemanticLogger
   class Subscriber < SemanticLogger::Base
     # Every appender has its own formatter
-    attr_accessor :formatter
+    attr_reader :formatter
     attr_writer :application, :host, :logger
 
     # Returns the current log level if set, otherwise it logs everything it receives.
@@ -38,13 +38,23 @@ module SemanticLogger
     end
 
     # Give each appender its own logger for logging.
-    # For example trace messages sent to servicesm or errors when something fails.
+    # For example trace messages sent to services or errors when something fails.
     def logger
       @logger ||= begin
-        logger = SemanticLogger::Processor.logger.clone
+        logger      = SemanticLogger::Processor.logger.clone
         logger.name = self.class.name
         logger
       end
+    end
+
+    # Set the formatter from Symbol|Hash|Block
+    def formatter=(formatter)
+      @formatter =
+        if formatter.nil?
+          respond_to?(:call) ? self : default_formatter
+        else
+          Formatters.factory(formatter)
+        end
     end
 
     private
@@ -74,9 +84,9 @@ module SemanticLogger
     #     Name of this host to appear in log messages.
     #     Default: SemanticLogger.host
     def initialize(level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
-      @formatter   = Formatters.factory(formatter, &block) || (respond_to?(:call) ? self : default_formatter)
-      @application = application
-      @host        = host
+      self.formatter = block || formatter
+      @application   = application
+      @host          = host
 
       # Subscribers don't take a class name, so use this class name if a subscriber
       # is logged to directly.

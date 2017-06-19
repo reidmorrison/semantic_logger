@@ -9,7 +9,7 @@ module SemanticLogger::Utils
         klass.split('::').inject(Object) { |o, name| o.const_get(name) }
       end
     rescue NameError
-      raise(ArgumentError, "Could not convert symbol: #{symbol} to a class in: #{namespace}. Looking for: #{klass}")
+      raise(ArgumentError, "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
     end
   end
 
