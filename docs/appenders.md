@@ -61,7 +61,7 @@ Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdo
 
 ~~~ruby
 # Log errors and above to standard error:
-SemanticLogger.add_appender(io: $stderror, level: :error)
+SemanticLogger.add_appender(io: $stderr, level: :error)
 ~~~
 
 ### Syslog
