@@ -1,0 +1,36 @@
+module SemanticLogger
+  module Formatters
+    # @formatter:off
+    autoload :Base,             'semantic_logger/formatters/base'
+    autoload :Color,            'semantic_logger/formatters/color'
+    autoload :Default,          'semantic_logger/formatters/default'
+    autoload :Json,             'semantic_logger/formatters/json'
+    autoload :Raw,              'semantic_logger/formatters/raw'
+    autoload :Signalfx,         'semantic_logger/formatters/signalfx'
+    autoload :Syslog,           'semantic_logger/formatters/syslog'
+    # @formatter:on
+
+    # Return formatter that responds to call.
+    #
+    # Supports formatter supplied as:
+    # - Symbol
+    # - Hash ( Symbol => { options })
+    # - Instance of any of SemanticLogger::Formatters
+    # - Proc
+    # - Any object that responds to :call
+    def self.factory(formatter)
+      case
+      when formatter.is_a?(Symbol)
+        SemanticLogger::Utils.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
+      when formatter.is_a?(Hash) && formatter.size > 0
+        fmt, options = formatter.first
+        SemanticLogger::Utils.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
+      when formatter.respond_to?(:call)
+        formatter
+      else
+        raise(ArgumentError, "Unknown formatter: #{formatter.inspect}")
+      end
+    end
+
+  end
+end

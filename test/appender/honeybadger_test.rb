@@ -5,13 +5,11 @@ module Appender
   class HoneybadgerTest < Minitest::Test
     # Assume the formatter is well tested
     describe SemanticLogger::Appender::Honeybadger do
-      it 'logs a message with the context and request' do
-        formatted = {
-          request: { url: 'url' },
-          context: { propertyA: 1 },
-          passed: true,
-          also_passed: true
-        }
+      before do
+        @appender                      = SemanticLogger::Appender::Honeybadger.new(level: :trace)
+        @message                       = 'AppenderHoneybadgerTest log message'
+        SemanticLogger.backtrace_level = :error
+      end
 
         appender = SemanticLogger::Appender::Honeybadger.new(level: :trace, formatter: lambda { |_, _| formatted.dup })
         hash = nil

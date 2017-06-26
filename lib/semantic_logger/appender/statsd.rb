@@ -6,8 +6,10 @@ rescue LoadError
 end
 
 module SemanticLogger
-  module Metrics
-    class Statsd
+  module Appender
+    class Statsd < Subscriber
+      attr_accessor :url
+
       # Create Statsd metrics subscriber
       #
       # Parameters:
@@ -18,10 +20,18 @@ module SemanticLogger
       #     Example, send all metrics to a particular namespace:
       #       udp://localhost:8125/namespace
       #     Default: udp://localhost:8125
-      def initialize(options = {})
-        options = options.dup
-        @url    = options.delete(:url) || 'udp://localhost:8125'
-        uri     = URI.parse(@url)
+      #
+      # Example:
+      #   SemanticLogger.add_appender(
+      #     appender: :statsd,
+      #     url:      'localhost:8125'
+      #   )
+      def initialize(url: 'udp://localhost:8125')
+        @url = url
+      end
+
+      def reopen
+        uri = URI.parse(@url)
         raise('Statsd only supports udp. Example: "udp://localhost:8125"') if uri.scheme != 'udp'
 
         @statsd           = ::Statsd.new(uri.host, uri.port)
@@ -29,7 +39,7 @@ module SemanticLogger
         @statsd.namespace = path.sub('/', '') if path != ''
       end
 
-      def call(log)
+      def log(log)
         metric = log.metric
         if duration = log.duration
           @statsd.timing(metric, duration)
@@ -41,6 +51,11 @@ module SemanticLogger
             amount.times { @statsd.increment(metric) }
           end
         end
+      end
+
+      # Only forward log entries that contain metrics.
+      def should_log?(log)
+        log.metric && super
       end
 
     end

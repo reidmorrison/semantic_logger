@@ -13,6 +13,8 @@ require 'json'
 #     token:    '70CA900C-3D7E-42A4-9C79-7975D1C422A8'
 #   )
 class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
+  attr_accessor :source_type, :index
+
   # Create Splunk appender over persistent HTTP(S)
   #
   # Parameters:
@@ -42,7 +44,7 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   #     Default: SemanticLogger.host
   #
   #   compress: [true|false]
-  #     Whether to compress the JSON string with GZip.
+  #     Splunk supports HTTP Compression, enable by default.
   #     Default: true
   #
   #   ssl: [Hash]
@@ -64,37 +66,34 @@ class SemanticLogger::Appender::SplunkHttp < SemanticLogger::Appender::Http
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
-  def initialize(options, &block)
-    options             = options.dup
-    @source_type        = options.delete(:source_type)
-    @index              = options.delete(:index)
-    token               = options.delete(:token)
-    raise(ArgumentError, 'Missing mandatory parameter :token') unless token
+  def initialize(token: nil, source_type: nil, index: nil,
+                 url:, compress: true, ssl: {}, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
+                 level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
 
-    # Splunk supports HTTP Compression, enable by default
-    options[:compress] = true unless options.key?(:compress)
+    @source_type = source_type
+    @index       = index
 
-    super(options, &block)
+    super(url:   url, compress: compress, ssl: ssl, read_timeout: read_timeout, open_timeout: open_timeout, continue_timeout: continue_timeout,
+          level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
 
+    # Put splunk auth token in the header of every HTTP post.
     @header['Authorization'] = "Splunk #{token}"
   end
 
-  # Returns [String] JSON to send to Splunk
+  # Returns [String] JSON to send to Splunk.
+  #
   # For splunk format requirements see:
   #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
   def call(log, logger)
-    h = log.to_h(nil, nil)
-    h.delete(:time)
+    h                     = SemanticLogger::Formatters::Raw.new(time_format: :seconds).call(log, logger)
     message               = {
       source: logger.application,
       host:   logger.host,
-      time:   log.time.utc.to_f,
+      time:   h.delete(:time),
       event:  h
     }
-    message[:source_type] = @source_type if @source_type
-    message[:index]       = @index if @index
-
-    # Render to JSON
+    message[:source_type] = source_type if source_type
+    message[:index]       = index if index
     message.to_json
   end
 

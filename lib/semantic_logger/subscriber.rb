@@ -1,13 +1,13 @@
 # Abstract Subscriber
 #
-#   Abstract base class for appender and metrics subscribers.
+#   Abstract base class for all appenders.
 module SemanticLogger
   class Subscriber < SemanticLogger::Base
-    # Every logger has its own formatter
-    attr_accessor :formatter
-    attr_writer :application, :host
+    # Every appender has its own formatter
+    attr_reader :formatter
+    attr_writer :application, :host, :logger
 
-    # Returns the current log level if set, otherwise it logs everything it receives
+    # Returns the current log level if set, otherwise it logs everything it receives.
     def level
       @level || :trace
     end
@@ -22,23 +22,39 @@ module SemanticLogger
       # NOOP
     end
 
-    # Returns [SemanticLogger::Formatters::Default] formatter default for this subscriber
+    # Returns [SemanticLogger::Formatters::Default] default formatter for this subscriber.
     def default_formatter
       SemanticLogger::Formatters::Default.new
     end
 
-    # Called before a log is pushed onto the appender message queue, allowing subscribers to add context to it
-    def before_log(log)
-    end
-
-    # Allow application name to be set globally or per subscriber
+    # Allow application name to be set globally or on a per subscriber basis.
     def application
       @application || SemanticLogger.application
     end
 
-    # Allow host name to be set globally or per subscriber
+    # Allow host name to be set globally or on a per subscriber basis.
     def host
       @host || SemanticLogger.host
+    end
+
+    # Give each appender its own logger for logging.
+    # For example trace messages sent to services or errors when something fails.
+    def logger
+      @logger ||= begin
+        logger      = SemanticLogger::Processor.logger.clone
+        logger.name = self.class.name
+        logger
+      end
+    end
+
+    # Set the formatter from Symbol|Hash|Block
+    def formatter=(formatter)
+      @formatter =
+        if formatter.nil?
+          respond_to?(:call) ? self : default_formatter
+        else
+          Formatters.factory(formatter)
+        end
     end
 
     private
@@ -48,7 +64,6 @@ module SemanticLogger
     # Parameters
     #   level: [:trace | :debug | :info | :warn | :error | :fatal]
     #     Override the log level for this subscriber.
-    #     Default: :error
     #
     #   formatter: [Object|Proc]
     #     An instance of a class that implements #call, or a Proc to be used to format
@@ -61,70 +76,28 @@ module SemanticLogger
     #     Proc: Only include log messages where the supplied Proc returns true
     #           The Proc must return true or false.
     #
-    #   host: [String]
-    #     Name of this host to appear in log messages.
-    #     Default: SemanticLogger.host
-    #
     #   application: [String]
     #     Name of this application to appear in log messages.
     #     Default: SemanticLogger.application
-    def initialize(options={}, &block)
-      # Backward compatibility
-      options      = {level: options} unless options.is_a?(Hash)
-      options      = options.dup
-      level        = options.delete(:level)
-      filter       = options.delete(:filter)
-      @formatter   = extract_formatter(options.delete(:formatter), &block)
-      @application = options.delete(:application)
-      @host        = options.delete(:host)
-      raise(ArgumentError, "Unknown options: #{options.inspect}") if options.size > 0
+    #
+    #   host: [String]
+    #     Name of this host to appear in log messages.
+    #     Default: SemanticLogger.host
+    def initialize(level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+      self.formatter = block || formatter
+      @application   = application
+      @host          = host
 
-      # Subscribers don't take a class name, so use this class name if an subscriber
-      # is logged to directly
+      # Subscribers don't take a class name, so use this class name if a subscriber
+      # is logged to directly.
       super(self.class, level, filter)
     end
 
-    # Return the level index for fast comparisons
+    # Return the level index for fast comparisons.
     # Returns the lowest level index if the level has not been explicitly
-    # set for this instance
+    # set for this instance.
     def level_index
       @level_index || 0
-    end
-
-    # Return formatter that responds to call
-    # Supports formatter supplied as:
-    # - Symbol
-    # - Hash ( Symbol => { options })
-    # - Instance of any of SemanticLogger::Formatters
-    # - Proc
-    # - Any object that responds to :call
-    # - If none of the above apply, then the supplied block is returned as the formatter.
-    # - Otherwise an instance of the default formatter is returned.
-    def extract_formatter(formatter, &block)
-      case
-      when formatter.is_a?(Symbol)
-        SemanticLogger.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
-      when formatter.is_a?(Hash) && formatter.size > 0
-        fmt, options = formatter.first
-        SemanticLogger.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
-      when formatter.respond_to?(:call)
-        formatter
-      when block
-        block
-      when respond_to?(:call)
-        self
-      else
-        default_formatter
-      end
-    end
-
-    SUBSCRIBER_OPTIONS = [:level, :formatter, :filter, :application, :host].freeze
-
-    # Returns [Hash] the subscriber common options from the supplied Hash
-    def extract_subscriber_options!(options)
-      subscriber_options = {}
-      SUBSCRIBER_OPTIONS.each { |key| subscriber_options[key] = options.delete(key) if options.has_key?(key) }
-      subscriber_options
     end
 
   end

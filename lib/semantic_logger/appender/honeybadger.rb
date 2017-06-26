@@ -10,7 +10,7 @@ end
 #   SemanticLogger.add_appender(appender: :honeybadger)
 #
 class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
-  # Create Appender
+  # Honeybadger Appender
   #
   # Parameters
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
@@ -35,10 +35,8 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
   #   application: [String]
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
-  def initialize(options = {}, &block)
-    options = options.is_a?(Hash) ? options.dup : { level: options }
-    options[:level] ||= :error
-    super(options, &block)
+  def initialize(level: :error, formatter: nil, filter: nil, application: nil, host: nil, &block)
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
   end
 
   # Send an error notification to honeybadger
@@ -46,17 +44,17 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
   def log(log)
     return false unless should_log?(log)
 
-    options = formatter.call(log, self)
-
-    context = options.delete(:context)
-    Honeybadger.context(context) if context
-    Honeybadger::Agent.config.with_request(options.delete(:request)) do
-      Honeybadger.notify(options)
+    formatted = formatter.call(log, self)
+    begin
+      Honeybadger.context(formatted[:context])
+      Honeybadger.with_rack_env(formatted[:rack_env]) do
+        Honeybadger.notify(formatted[:message], formatted[:options])
+      end
+    ensure
+      Honeybadger.context.clear!
     end
 
     return true
-  ensure
-    Honeybadger.context.clear!
   end
 
   def before_log(log)
@@ -65,11 +63,17 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
       context[:request] = Honeybadger::Agent.config.request.dup unless Honeybadger::Agent.config.request.nil?
       context[:context] = Honeybadger.get_context.dup unless Honeybadger.get_context.nil?
 
-      log.appender_context[self.class] = context unless context.empty?
-    end
-  end
-
+  # Use Honeybadger formatter by default
   def default_formatter
     return SemanticLogger::Formatters::Honeybadger.new
   end
+
+  # Capture thread-local context at log-time
+  module CaptureContext
+    def self.call(log)
+      manager = Honeybadger::ContextManager.current
+      log.set_context(:honeybadger, context: manager.get_context.dup, rack_env: manager.get_rack_env.dup)
+    end
+  end
+  SemanticLogger.on_log(CaptureContext)
 end

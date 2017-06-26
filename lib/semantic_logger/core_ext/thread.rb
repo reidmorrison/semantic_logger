@@ -1,5 +1,8 @@
 require 'thread'
 class Thread
+  undef :name if method_defined? :name
+  undef :name= if method_defined? :name=
+
   # Returns the name of the current thread
   # Default:
   #    JRuby: The underlying Java thread name

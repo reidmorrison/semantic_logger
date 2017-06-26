@@ -2,8 +2,93 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
-- Add silence_logger for Active Record's Session Store
+## [4.1.0]
+### Added
+- New log format customization mechanism.
+  Any element within the log format can be replaced without having to re-implement entire formatter.
+- Apache Kafka Appender.
+- Prototype Syslog CEE format.
+- `logger#tagged` now supports named tags. (Hash)
+ 
+### Changed
+- Elasticsearch now uses a bulk load api to improve throughput. Thank you [Xavier Lange](https://github.com/xrl)
+- Replaced hash arguments with Ruby keyword arguments across all appenders and formatters.
+- Removed deprecated arguments.
+- Refactored Syslog appender and moved format code out of appender and into Syslog formatter.
+- When the process exits `SemanticLogger.close` is now called instead of `SemanticLogger.flush`.
+  Earlier test fameworks had issues where the `at_exit` was called and shutdown Semantic Logger
+  before tests were run.
+
+### Upgrade notes:
+- As noted above deprecated arguments have been removed, so the following code, if any:
+~~~ruby
+SemanticLogger::Appender::File.new(STDERR, :warn)
+~~~
+
+Needs to be replaced with keyword arguments:
+~~~ruby
+SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
+~~~
+
+## [4.0.0]
+### Added
+- #backtrace to log the backtrace for a thread.
+- `named_tags` to support hash like tagging of log messages.
+
+### Changed
+- Ruby V2.1 is now the minimum runtime version.
+- Switch from Hash arguments to Ruby keyword arguments, for better performance, validation and defaults.
+- Replaced Logger#with_payload with SemanticLogger.named_tagged.
+- Replaced Logger#payload with SemanticLogger.named_tags.
+- Any payload elements passed into the log line must now be specified in a separate :payload tag.
+    - For example any occurrences of:
+    ~~~ruby
+    logger.error(message: 'Hello', response: response_message)
+    ~~~
+
+    - Must be changed to use the payload tag:
+    
+    ~~~ruby
+    logger.error(message: 'Hello', payload: {response: response_message} )
+    ~~~
+    
+    - Otherwise Ruby will raise the following error:
+    
+    ~~~
+    ArgumentError: unknown keywords: response
+    semantic_logger/lib/semantic_logger/log.rb:65:in `assign'
+    ~~~
+
+- For JSON and Hash appender format, payload is now in its own :payload tag instead of being merged into the hash.
+- Text and Color formatters now include named_tags in their output.
+- MongoDB Appender has been upgraded to support Mongo Ruby Client V2.
+- Replaced hash arguments with keyword arguments.
+  - For example, the Bugsnag Appender now only accepts the level as follows:
+~~~ruby
+SemanticLogger::Appender::Bugsnag.new(level: :info)
+~~~
+
+### Fixed
+- Graylog appender when logger is called with only an exception object.
+- During a backtrace dump, include the current thread on Ruby MRI.
+
+### Dropped Support for
+- Rails 3.2
+- Ruby 1.9 & 2.0
+- JRuby 1.7
+
+## [3.4.1]
+### Fixed
+- Failed to load appender when symbolic name includes an underscore, for example: 
+~~~ruby
+SemanticLogger.add_appender(appender: :new_relic)
+~~~
+
+## [3.4.0]
+### Added
+- Sentry Logging Appender.
+- :metric_amount in JSON and Hash output.
+- Add silence_logger for Active Record's Session Store.
 
 ## [3.3.0]
 ### Added

@@ -5,7 +5,7 @@ module Appender
   class BugsnagTest < Minitest::Test
     describe SemanticLogger::Appender::Bugsnag do
       before do
-        @appender = SemanticLogger::Appender::Bugsnag.new(:info)
+        @appender = SemanticLogger::Appender::Bugsnag.new(level: :info)
         @message  = 'AppenderBugsnagTest log message'
       end
 
@@ -25,8 +25,8 @@ module Appender
             @appender.send(level, @message)
           end
           if [:trace, :debug].include?(level)
-            assert_equal nil, exception
-            assert_equal nil, hash
+            assert_nil exception
+            assert_nil hash
           else
             assert_equal 'RuntimeError', exception.class.to_s
             assert_equal @message, exception.message
@@ -40,13 +40,14 @@ module Appender
             @appender.send(level, @message, {key1: 1, key2: 'a'})
           end
           if [:trace, :debug].include?(level)
-            assert_equal nil, exception
-            assert_equal nil, hash
+            assert_nil exception
+            assert_nil hash
           else
             assert_equal 'RuntimeError', exception.class.to_s
             assert_equal @message, exception.message
-            assert_equal 1, hash[:key1], hash
-            assert_equal 'a', hash[:key2], hash
+            assert payload = hash[:payload], hash
+            assert_equal 1, payload[:key1], payload
+            assert_equal 'a', payload[:key2], payload
           end
         end
 
@@ -57,8 +58,8 @@ module Appender
             @appender.send(level, @message, error)
           end
           if [:trace, :debug].include?(level)
-            assert_equal nil, exception
-            assert_equal nil, hash
+            assert_nil exception
+            assert_nil hash
           else
             assert_equal error.class.to_s, exception.class.to_s
             assert_equal error.message, exception.message

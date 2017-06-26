@@ -2,6 +2,7 @@ require 'net/http'
 require 'uri'
 require 'socket'
 require 'json'
+require 'openssl'
 
 # Log to any HTTP(S) server that accepts log messages in JSON form
 #
@@ -16,8 +17,8 @@ require 'json'
 #     url:      'http://localhost:8088/path'
 #   )
 class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
-  attr_accessor :username, :application, :host, :compress, :header,
-    :open_timeout, :read_timeout, :continue_timeout
+  attr_accessor :username, :compress, :header,
+                :open_timeout, :read_timeout, :continue_timeout
   attr_reader :http, :url, :server, :port, :path, :ssl_options
 
   # Create HTTP(S) log appender
@@ -77,23 +78,34 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   #
   #   continue_timeout: [Float]
   #     Default: 1.0
-  def initialize(options, &block)
-    options           = options.dup
-    @url              = options.delete(:url)
-    @ssl_options      = options.delete(:ssl)
-    @username         = options.delete(:username)
-    @password         = options.delete(:password)
-    @compress         = options.delete(:compress) || false
-    @open_timeout     = options.delete(:open_timeout) || 2.0
-    @read_timeout     = options.delete(:read_timeout) || 1.0
-    @continue_timeout = options.delete(:continue_timeout) || 1.0
+  def initialize(url:,
+                 compress: false,
+                 ssl: {},
+                 username: nil,
+                 password: nil,
+                 open_timeout: 2.0,
+                 read_timeout: 1.0,
+                 continue_timeout: 1.0,
+                 level: nil,
+                 formatter: nil,
+                 filter: nil,
+                 application: nil,
+                 host: nil,
+                 &block)
 
-    raise(ArgumentError, 'Missing mandatory parameter :url') unless @url
+    @url              = url
+    @ssl_options      = ssl
+    @username         = username
+    @password         = password
+    @compress         = compress
+    @open_timeout     = open_timeout
+    @read_timeout     = read_timeout
+    @continue_timeout = continue_timeout
 
+    # On Ruby v2.0 and greater, Net::HTTP.new already uses a persistent connection if the server allows it
     @header                     = {
       'Accept'       => 'application/json',
       'Content-Type' => 'application/json',
-      # On Ruby v2.0 and greater, Net::HTTP.new already uses a persistent connection if the server allows it
       'Connection'   => 'keep-alive',
       'Keep-Alive'   => '300'
     }
@@ -101,15 +113,16 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
 
     uri     = URI.parse(@url)
     @server = uri.host
-    raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'") unless @url
+    raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'") unless @server
 
     @port     = uri.port
     @username = uri.user if !@username && uri.user
     @password = uri.password if !@password && uri.password
     @path     = uri.path
+    # Path cannot be empty
+    @path     = '/' if @path == ''
 
     if uri.scheme == 'https'
-      @ssl_options               ||= {}
       @ssl_options[:use_ssl]     = true
       @ssl_options[:verify_mode] ||= OpenSSL::SSL::VERIFY_PEER
       @port                      ||= HTTP.https_default_port
@@ -118,8 +131,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
     end
     @http = nil
 
-    # Pass on the level and custom formatter if supplied
-    super(options)
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
   end
 
@@ -149,9 +161,9 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
 
   # Forward log messages to HTTP Server
   def log(log)
-    return false unless should_log?(log)
-
-    post(formatter.call(log, self))
+    message = formatter.call(log, self)
+    logger.trace(message)
+    post(message)
   end
 
   private
@@ -190,8 +202,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
   # Process HTTP Request
   def process_request(request, body = nil)
     if body
-      body         = compress_data(body) if compress
-      request.body = body
+      request.body = compress ? compress_data(body) : body
     end
     request.basic_auth(@username, @password) if @username
     response = @http.request(request)
@@ -199,7 +210,7 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
       true
     else
       # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
-      SemanticLogger::Logger.logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
+      logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
       false
     end
   end

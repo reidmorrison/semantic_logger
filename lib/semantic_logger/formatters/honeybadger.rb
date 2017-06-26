@@ -1,55 +1,61 @@
-begin
-  require 'honeybadger'
-rescue LoadError
-  raise 'Gem honeybadger is required for logging purposes. Please add the gem "honeybadger" to your Gemfile.'
-end
+# frozen_string_literal: true
 
-# Formatter for the Honeybadger appender
-# Takes into account the honeybadger request/context expected by the gem
 class SemanticLogger::Formatters::Honeybadger < SemanticLogger::Formatters::Raw
+  # see: https://docs.honeybadger.io/ruby/getting-started/reporting-errors.html
+  # for a list of all possible option keys accepted by honeybadger. context is kept
+  # out as it is handled differently, but even when passed, will get merged with
+  # all other contexts.
+  OPTION_KEYS = %i[action backtrace controller error_message error_class fingerprint force parameters session tags url].freeze
+
   # Returns a hash of options compatible with what Honeybadger::Notice expects
   def call(log, appender)
-    formatted = { tags: log.tags, context: super }
-    format_error(log, formatted)
+    context = log.context.nil? ? nil : log.context[:honeybadger]
+    formatted = {
+      context: {}, # passed to Honeybadger.context
+      rack_env: {}, # passed to Honeybadger.with_rack_env
+      options: {}, # options passed to Honeybadger.notify call
+      message: nil # first argument passed to Honeybadger.notify call (either message or Exception)
+    }
 
-    if log.has_context?(appender.class)
-      honeybadger = log.appender_context[appender.class]
+    unless context.nil?
+      formatted[:context] = context[:context] || {}
+      formatted[:rack_env] = context[:rack_env]
+    end
 
-      if honeybadger.is_a?(Hash) && !honeybadger.empty?
-        formatted[:request] = honeybadger[:request]
-        formatted[:context].merge!(format_context(honeybadger))
+    payload = log.payload.dup # dup it to avoid modifying it for further subscribers
+    unless payload.nil?
+      honeybadger = payload.delete(:honeybadger)
+      formatted[:context].merge!(payload)
+
+      if honeybadger.is_a?(Hash)
+        formatted[:options].merge!(honeybadger.select { |key, _| OPTION_KEYS.include?(key) })
+        formatted[:context].merge!(honeybadger[:context]) if honeybadger[:context].is_a?(Hash)
       end
+      formatted[:options][:tags] = format_tags(log, formatted[:options][:tags])
+    end
+
+    if log.exception.nil?
+      formatted[:message] = log.message
+      formatted[:options][:backtrace] ||= log.backtrace
+      formatted[:options][:error_class] ||= log.name
+    else
+      formatted[:message] = log.exception
     end
 
     return formatted
   end
 
-  def format_error(log, formatted)
-    if log.exception.is_a?(Exception)
-      formatted[:exception] = log.exception
-      formatted[:context].delete(:exception) # remove from context info
-      formatted[:backtrace] = log.exception.backtrace
+  private
+
+  def format_tags(log, initial = nil)
+    binding.pry
+    tags = case initial
+    when String then initial.split(',')
+    when Array then initial
     else
-      formatted[:error_class] = formatted[:context].delete(:name)
-      formatted[:error_message] = formatted[:context].delete(:message)
-      formatted[:backtrace] = log.backtrace if log.backtrace
-    end
-  end
-  private :format_error
-
-  def format_context(info)
-    formatted = {}
-    context = info[:context]
-
-    return formatted if context.nil?
-
-    if context.is_a?(Hash)
-      formatted = context
-    else
-      formatted[:honeybadger] = context
+      []
     end
 
-    return formatted
+    return (log.tags + tags).join(', ') # must be comma-space as of Honeybadger 3.0
   end
-  private :format_context
 end

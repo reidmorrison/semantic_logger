@@ -7,14 +7,15 @@ module Appender
   class FileTest < Minitest::Test
     describe SemanticLogger::Appender::File do
       before do
-        SemanticLogger.default_level = :trace
-        @time                        = Time.new
-        @io                          = StringIO.new
-        @appender                    = SemanticLogger::Appender::File.new(@io)
-        @hash                        = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-        @hash_str                    = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
-        @thread_name                 = Thread.current.name
-        @file_name_reg_exp           = RUBY_VERSION.to_f <= 2.0 ? ' (mock|file_test).rb:\d+' : ' file_test.rb:\d+'
+        SemanticLogger.default_level   = :trace
+        SemanticLogger.backtrace_level = :error
+        @time                          = Time.new
+        @io                            = StringIO.new
+        @appender                      = SemanticLogger::Appender::File.new(io: @io)
+        @hash                          = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
+        @hash_str                      = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+        @thread_name                   = Thread.current.name
+        @file_name_reg_exp             = RUBY_VERSION.to_f <= 2.0 ? ' (mock|file_test).rb:\d+' : ' file_test.rb:\d+'
       end
 
       describe 'format logs into text form' do
@@ -86,7 +87,7 @@ module Appender
 
       describe 'custom formatter' do
         before do
-          @appender = SemanticLogger::Appender::File.new(@io) do |log|
+          @appender = SemanticLogger::Appender::File.new(io: @io) do |log|
             tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
 
             message = log.message.to_s

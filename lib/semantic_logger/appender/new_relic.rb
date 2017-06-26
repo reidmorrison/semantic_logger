@@ -12,9 +12,15 @@ end
 # Example:
 #   SemanticLogger.add_appender(appender: :new_relic)
 class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
+  attr_accessor :prefix
+
   # Create Appender
   #
   # Parameters
+  #   :prefix [String]
+  #     Prefix to add to every metric before forwarding to NewRelic.
+  #     Default: 'Custom'
+  #
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
   #     Override the log level for this appender.
   #     Default: :error
@@ -29,17 +35,21 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
-  def initialize(options = {}, &block)
-    # Backward compatibility
-    options         = {level: options} unless options.is_a?(Hash)
-    options         = options.dup
-    options[:level] = :error unless options.has_key?(:level)
-    super(options)
+  def initialize(prefix: 'Custom',
+                 level: :error,
+                 formatter: nil,
+                 filter: nil,
+                 application: nil,
+                 host: nil,
+                 &block)
+
+    @prefix = prefix
+    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
   end
 
   # Returns [Hash] of parameters to send to New Relic.
   def call(log, logger)
-    h = log.to_h(host, application)
+    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
     h.delete(:time)
     h.delete(:exception)
     {metric: log.metric, custom_params: h}
@@ -47,7 +57,7 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
 
   # Send an error notification to New Relic
   def log(log)
-    return false unless should_log?(log)
+    log_metric(log) if log.metric
 
     # Send error messages as Runtime exceptions
     exception =
@@ -65,4 +75,21 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
     true
   end
 
+  private
+
+  def log_metric(log)
+    if duration = log.duration
+      # Convert duration to seconds
+      ::NewRelic::Agent.record_metric(extract_name(log), duration / 1000.0)
+    else
+      ::NewRelic::Agent.increment_metric(extract_name(log), log.metric_amount || 1)
+    end
+  end
+
+  def extract_name(log)
+    metric = log.metric
+    # Add prefix for NewRelic
+    metric = "#{prefix}/#{metric}" unless metric.start_with?(prefix)
+    metric
+  end
 end

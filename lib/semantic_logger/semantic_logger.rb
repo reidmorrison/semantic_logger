@@ -12,14 +12,14 @@ module SemanticLogger
 
   # Sets the global default log level
   def self.default_level=(level)
-    @@default_level       = level
+    @default_level = level
     # For performance reasons pre-calculate the level index
-    @@default_level_index = level_to_index(level)
+    @default_level_index = level_to_index(level)
   end
 
   # Returns the global default log level
   def self.default_level
-    @@default_level
+    @default_level
   end
 
   # Sets the level at which backtraces should be captured
@@ -33,45 +33,45 @@ module SemanticLogger
   #   Capturing backtraces is very expensive and should not be done all
   #   the time. It is recommended to run it at :error level in production.
   def self.backtrace_level=(level)
-    @@backtrace_level       = level
+    @backtrace_level = level
     # For performance reasons pre-calculate the level index
-    @@backtrace_level_index = level.nil? ? 65535 : level_to_index(level)
+    @backtrace_level_index = level.nil? ? 65535 : level_to_index(level)
   end
 
   # Returns the current backtrace level
   def self.backtrace_level
-    @@backtrace_level
+    @backtrace_level
   end
 
   # Returns the current backtrace level index
   # For internal use only
   def self.backtrace_level_index #:nodoc
-    @@backtrace_level_index
+    @backtrace_level_index
   end
 
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
-    @@host ||= Socket.gethostname
+    @host ||= Socket.gethostname.force_encoding("UTF-8")
   end
 
   # Override the default host name
   def self.host=(host)
-    @@host = host
+    @host = host
   end
 
   # Returns [String] name of this application for logging purposes
   # Note: Not all appenders use `application`
   def self.application
-    @@application
+    @application
   end
 
   # Override the default application
   def self.application=(application)
-    @@application = application
+    @application = application
   end
 
-  @@application = 'Semantic Logger'
+  @application = 'Semantic Logger'
 
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger
@@ -153,18 +153,18 @@ module SemanticLogger
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
   def self.add_appender(options, deprecated_level = nil, &block)
     options  = options.is_a?(Hash) ? options.dup : convert_old_appender_args(options, deprecated_level)
-    appender = appender_from_options(options, &block)
-    @@appenders << appender
+    appender = SemanticLogger::Appender.factory(options, &block)
+    @appenders << appender
 
     # Start appender thread if it is not already running
-    SemanticLogger::Logger.start_appender_thread
+    SemanticLogger::Processor.start
     appender
   end
 
   # Remove an existing appender
   # Currently only supports appender instances
   def self.remove_appender(appender)
-    @@appenders.delete(appender)
+    @appenders.delete(appender)
   end
 
   # Returns [SemanticLogger::Subscriber] a copy of the list of active
@@ -172,52 +172,58 @@ module SemanticLogger
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
   def self.appenders
-    @@appenders.clone
+    @appenders.clone
   end
 
-  # Wait until all queued log messages have been written and flush all active
-  # appenders
+  # Flush all queued log entries disk, database, etc.
+  #  All queued log messages are written and then each appender is flushed in turn.
   def self.flush
-    SemanticLogger::Logger.flush
+    SemanticLogger::Processor.instance.flush
   end
 
-  # Close and flush all appenders
+  # Close all appenders and flush any outstanding messages.
   def self.close
-    SemanticLogger::Logger.close
+    SemanticLogger::Processor.instance.close
   end
 
   # After forking an active process call SemanticLogger.reopen to re-open
-  # any open file handles etc to resources
-  #
-  # Note: Only appenders that implement the reopen method will be called
-  def self.reopen
-    @@appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
-    # After a fork the appender thread is not running, start it if it is not running
-    SemanticLogger::Logger.start_appender_thread
-  end
-
-  # Supply a block to be called whenever a metric is seen during measure logging
-  #
-  #  Parameters
-  #    appender: [Symbol | Object | Proc]
-  #      [Proc] the block to call.
-  #      [Object] the block on which to call #call.
-  #      [Symbol] :new_relic, or :statsd to forward metrics to
-  #
-  #    block
-  #      The block to be called
-  #
-  # Example:
-  #   SemanticLogger.on_metric do |log|
-  #     puts "#{log.metric} was received. Log Struct: #{log.inspect}"
-  #   end
+  # any open file handles etc to resources.
   #
   # Note:
-  # * This callback is called in the logging thread.
-  # * Does not slow down the application.
-  # * Only context is what is passed in the log struct, the original thread context is not available.
-  def self.on_metric(options = {}, &block)
-    SemanticLogger::Logger.on_metric(options, &block)
+  #   Not all appenders implement reopen.
+  #   Check the code for each appender you are using before relying on this behavior.
+  def self.reopen
+    @appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
+    # After a fork the appender thread is not running, start it if it is not running.
+    SemanticLogger::Processor.start
+  end
+
+  # Supply a callback to be called whenever a log entry is created.
+  # Useful for capturing appender specific context information.
+  #
+  #  Parameters
+  #    object: [Object | Proc]
+  #      [Proc] the block to call.
+  #      [Object] any object on which to call #call.
+  #
+  # Example:
+  #   SemanticLogger.on_log do |log|
+  #     log.set_context(:honeybadger, Honeybadger.get_context)
+  #   end
+  #
+  # Example:
+  #   module CaptureContext
+  #     def call(log)
+  #       log.set_context(:honeybadger, Honeybadger.get_context)
+  #     end
+  #   end
+  #   SemanticLogger.on_log(CaptureContext)
+  #
+  # Note:
+  # * This callback is called within the thread of the application making the logging call.
+  # * If these callbacks are slow they will slow down the application.
+  def self.on_log(object = nil, &block)
+    Processor.instance.on_log(object, &block)
   end
 
   # Add signal handlers for Semantic Logger
@@ -266,15 +272,9 @@ module SemanticLogger
     Signal.trap(thread_dump_signal) do
       logger = SemanticLogger['Thread Dump']
       Thread.list.each do |thread|
-        next if thread == Thread.current
-        message = thread.name
-        if backtrace = thread.backtrace
-          message += "\n"
-          message << backtrace.join("\n")
-        end
-        tags = thread[:semantic_logger_tags]
-        tags = tags.nil? ? [] : tags.clone
-        logger.tagged(tags) { logger.warn(message) }
+        # MRI re-uses the main thread for signals, JRuby uses `SIGTTIN handler` thread.
+        next if defined?(JRuby) && (thread == Thread.current)
+        logger.backtrace(thread: thread)
       end
     end if thread_dump_signal
 
@@ -291,33 +291,52 @@ module SemanticLogger
   # If the tag being supplied is definitely a string then this fast
   # tag api can be used for short lived tags
   def self.fast_tag(tag)
-    (Thread.current[:semantic_logger_tags] ||= []) << tag
-    yield
-  ensure
-    Thread.current[:semantic_logger_tags].pop
+    return yield if tag.nil? || tag == ''
+
+    t = Thread.current[:semantic_logger_tags] ||= []
+    begin
+      t << tag
+      yield
+    ensure
+      t.pop
+    end
   end
 
-  # Add the supplied named tags to the list of tags to log for this thread whilst
-  # the supplied block is active.
+  # Add the tags or named tags to the list of tags to log for this thread whilst the supplied block is active.
   #
-  # Returns result of block
+  # Returns result of block.
   #
-  # Example:
-  def self.named_tags(tag)
-    (Thread.current[:semantic_logger_tags] ||= []) << tag
-    yield
-  ensure
-    Thread.current[:semantic_logger_tags].pop
-  end
+  # Tagged example:
+  #   SemanticLogger.tagged(12345, 'jack') do
+  #     logger.debug('Hello World')
+  #   end
+  #
+  # Named Tags (Hash) example:
+  #   SemanticLogger.tagged(tracking_number: 12345) do
+  #     logger.debug('Hello World')
+  #   end
+  #
+  # Notes:
+  # - Tags should be a list without any empty values, or contain any array.
+  #   - `logger.tagged` is a slower api that will flatten the example below:
+  #     `logger.tagged([['first', nil], nil, ['more'], 'other'])`
+  #   to the equivalent of:
+  #     `logger.tagged('first', 'more', 'other')`
+  def self.tagged(*tags, &block)
+    return yield if tags.empty?
 
-  # Add the supplied tags to the list of tags to log for this thread whilst
-  # the supplied block is active.
-  # Returns result of block
-  def self.tagged(*tags)
-    new_tags = push_tags(*tags)
-    yield self
-  ensure
-    pop_tags(new_tags.size)
+    # Allow named tags to be passed into the logger
+    if tags.size == 1
+      tag = tags[0]
+      return tag.is_a?(Hash) ? named_tagged(tag, &block) : fast_tag(tag, &block)
+    end
+
+    begin
+      push_tags(*tags)
+      yield
+    ensure
+      pop_tags(tags.size)
+    end
   end
 
   # Returns a copy of the [Array] of [String] tags currently active for this thread
@@ -329,19 +348,48 @@ module SemanticLogger
   end
 
   # Add tags to the current scope
-  # Returns the list of tags pushed after flattening them out and removing blanks
+  #
+  # Note:
+  # - This method does not flatten the array or remove any empty elements, or duplicates
+  #   since the performance penalty is excessive.
+  # - To get the flattening behavior use the slower api:
+  #     `logger.push_tags`
   def self.push_tags(*tags)
-    # Need to flatten and reject empties to support calls from Rails 4
-    new_tags                              = tags.flatten.collect(&:to_s).reject(&:empty?)
-    t                                     = Thread.current[:semantic_logger_tags]
-    Thread.current[:semantic_logger_tags] = t.nil? ? new_tags : t.concat(new_tags)
-    new_tags
+    (Thread.current[:semantic_logger_tags] ||= []).concat(tags)
+    tags
   end
 
   # Remove specified number of tags from the current tag list
   def self.pop_tags(quantity=1)
     t = Thread.current[:semantic_logger_tags]
     t.pop(quantity) unless t.nil?
+  end
+
+  # :nodoc
+  def self.named_tagged(hash)
+    return yield if hash.nil? || hash.empty?
+    raise(ArgumentError, '#named_tagged only accepts named parameters (Hash)') unless hash.is_a?(Hash)
+
+    t = Thread.current[:semantic_logger_named_tags] ||= []
+    begin
+      t << hash
+      yield
+    ensure
+      t.pop
+    end
+  end
+
+  # Returns [Hash] a copy of the named tags currently active for this thread.
+  def self.named_tags
+    if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
+      if list.size > 1
+        list.reduce({}) { |sum, h| sum.merge(h) }
+      else
+        list.first.clone
+      end
+    else
+      {}
+    end
   end
 
   # Silence noisy log levels by changing the default_level within the block
@@ -390,10 +438,10 @@ module SemanticLogger
 
   private
 
-  @@appenders = Concurrent::Array.new
+  @appenders = Concurrent::Array.new
 
   def self.default_level_index
-    Thread.current[:semantic_logger_silence] || @@default_level_index
+    Thread.current[:semantic_logger_silence] || @default_level_index
   end
 
   # Returns the symbolic level for the supplied level index
@@ -414,14 +462,14 @@ module SemanticLogger
         LEVELS.index(level)
       elsif level.is_a?(Integer) && defined?(::Logger::Severity)
         # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
-        @@map_levels ||= begin
+        @map_levels ||= begin
           levels = []
           ::Logger::Severity.constants.each do |constant|
             levels[::Logger::Severity.const_get(constant)] = LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
           end
           levels
         end
-        @@map_levels[level]
+        @map_levels[level]
       end
     raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
     index
@@ -441,52 +489,13 @@ module SemanticLogger
     else
       options[:logger] = appender
     end
-    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}" if $VERBOSE
+    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}"
     options
   end
 
-  # Returns [SemanticLogger::Subscriber] appender for the supplied options
-  def self.appender_from_options(options, &block)
-    if options[:io] || options[:file_name]
-      SemanticLogger::Appender::File.new(options, &block)
-    elsif appender = options.delete(:appender)
-      if appender.is_a?(Symbol)
-        constantize_symbol(appender).new(options)
-      elsif appender.is_a?(Subscriber)
-        appender
-      else
-        raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
-      end
-    elsif options[:logger]
-      SemanticLogger::Appender::Wrapper.new(options, &block)
-    end
-  end
-
-  def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
-    klass = "#{namespace}::#{camelize(symbol.to_s)}"
-    begin
-      if RUBY_VERSION.to_i >= 2
-        Object.const_get(klass)
-      else
-        klass.split('::').inject(Object) { |o, name| o.const_get(name) }
-      end
-    rescue NameError
-      raise(ArgumentError, "Could not convert symbol: #{symbol} to a class in: #{namespace}. Looking for: #{klass}")
-    end
-  end
-
-  # Borrow from Rails, when not running Rails
-  def self.camelize(term)
-    string = term.to_s
-    string = string.sub(/^[a-z\d]*/) { |match| match.capitalize }
-    string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{$1}#{inflections.acronyms[$2] || $2.capitalize}" }
-    string.gsub!('/'.freeze, '::'.freeze)
-    string
-  end
-
   # Initial default Level for all new instances of SemanticLogger::Logger
-  @@default_level         = :info
-  @@default_level_index   = level_to_index(@@default_level)
-  @@backtrace_level       = :error
-  @@backtrace_level_index = level_to_index(@@backtrace_level)
+  @default_level         = :info
+  @default_level_index   = level_to_index(@default_level)
+  @backtrace_level       = :error
+  @backtrace_level_index = level_to_index(@backtrace_level)
 end

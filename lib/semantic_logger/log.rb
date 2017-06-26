@@ -1,7 +1,7 @@
 module SemanticLogger
-  # Log Struct
+  # Log
   #
-  #   Structure for holding all log entries
+  #   Class to hold all log entry information
   #
   # level
   #   Log level of the supplied log call
@@ -44,10 +44,119 @@ module SemanticLogger
   #   Used for numeric or counter metrics.
   #   For example, the number of inquiries or, the amount purchased etc.
   #
-  # appender_context [Hash]
-  #   To be used by appenders to store context sensitive information. It is suggested to use the appender's class as
-  #   a key to namespace what the appender needs to capture.
-  Log = Struct.new(:level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :appender_context) do
+  # context [Hash]
+  #   Named contexts that were captured when the log entry was created.
+  class Log
+    attr_accessor :level, :level_index, :name, :message, :time, :duration,
+                  :payload, :exception, :thread_name, :backtrace,
+                  :tags, :named_tags, :context,
+                  :metric, :metric_amount, :dimensions
+
+    def initialize(name, level, index = nil)
+      @level       = level
+      @thread_name = Thread.current.name
+      @name        = name
+      @time        = Time.now
+      @tags        = SemanticLogger.tags
+      @named_tags  = SemanticLogger.named_tags
+      @level_index = index.nil? ? SemanticLogger.level_to_index(level) : index
+    end
+
+    # Assign named arguments to this log entry, supplying defaults where applicable
+    #
+    # Returns [true|false] whether this log entry should be logged
+    #
+    # Example:
+    #   logger.info(name: 'value')
+    def assign(message: nil,
+               payload: nil,
+               min_duration: 0.0,
+               exception: nil,
+               metric: nil,
+               metric_amount: nil,
+               duration: nil,
+               backtrace: nil,
+               log_exception: :full,
+               on_exception_level: nil)
+      # Elastic logging: Log when :duration exceeds :min_duration
+      # Except if there is an exception when it will always be logged
+      if duration
+        self.duration = duration
+        return false if (duration < min_duration) && exception.nil?
+      end
+
+      self.message = message
+      self.payload = payload
+
+      if exception
+        case log_exception
+        when :full
+          self.exception = exception
+        when :partial
+          self.message = "#{message} -- Exception: #{exception.class}: #{exception.message}"
+        when nil, :none
+          # Log the message without the exception that was raised
+        else
+          raise(ArgumentError, "Invalid value:#{log_exception.inspect} for argument :log_exception")
+        end
+        # On exception change the log level
+        if on_exception_level
+          self.level       = on_exception_level
+          self.level_index = SemanticLogger.level_to_index(level)
+        end
+      end
+
+      if backtrace
+        self.backtrace = self.class.cleanse_backtrace(backtrace)
+      elsif level_index >= SemanticLogger.backtrace_level_index
+        self.backtrace = self.class.cleanse_backtrace
+      end
+
+      if metric
+        self.metric        = metric
+        self.metric_amount = metric_amount
+      end
+
+      self.payload = payload if payload && (payload.size > 0)
+      true
+    end
+
+    # Assign positional arguments to this log entry, supplying defaults where applicable
+    #
+    # Returns [true|false] whether this log entry should be logged
+    #
+    # Example:
+    #   logger.info('value', :debug, 0, "hello world")
+    def assign_positional(message = nil, payload = nil, exception = nil)
+      # Exception being logged?
+      # Under JRuby a java exception is not a Ruby Exception
+      #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false
+      if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
+        exception = message
+        message   = nil
+      elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
+        exception = payload
+        payload   = nil
+      elsif payload.is_a?(String)
+        message = message.nil? ? payload : "#{message} -- #{payload}"
+      end
+
+      # Add result of block as message or payload if not nil
+      if block_given? && (result = yield)
+        if result.is_a?(String)
+          message = message.nil? ? result : "#{message} -- #{result}"
+          assign(message: message, payload: payload, exception: exception)
+        elsif message.nil? && result.is_a?(Hash)
+          assign(result)
+        elsif payload && payload.respond_to?(:merge)
+          assign(message: message, payload: payload.merge(result), exception: exception)
+        else
+          assign(message: message, payload: result, exception: exception)
+        end
+      else
+        assign(message: message, payload: payload, exception: exception)
+      end
+    end
 
     MAX_EXCEPTIONS_TO_UNWRAP = 5
     # Call the block for exception and any nested exception
@@ -88,7 +197,7 @@ module SemanticLogger
     # Returns [String] duration of the log entry as a string
     # Returns nil if their is no duration
     # Java time precision does not include microseconds
-    if defined? JRuby
+    if Formatters::Base::PRECISION == 3
       def duration_to_s
         "#{duration.to_i}ms" if duration
       end
@@ -164,89 +273,39 @@ module SemanticLogger
       !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
     end
 
-    # Returns [true|false] whether or not there is context info stored for a given appender ID
-    # Appender ID is typically the appender class, but could be parametrized depending on the appender.
-    def has_context?(appender_id)
-      return appender_context.is_a?(Hash) && appender_context.key?(appender_id)
+    # DEPRECATED
+    def formatted_time
+      time.strftime(Formatters::Base::TIME_FORMAT)
     end
 
-    def appender_context
-      return @appender_context ||= {}
-    end
+    DeprecatedLogger = Struct.new(:host, :application)
 
-    if defined? JRuby
-      # Return the Time as a formatted string
-      # JRuby only supports time in ms
-      # DEPRECATED
-      def formatted_time
-        "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%03d' % (time.usec/1000)}"
-      end
-    else
-      # Return the Time as a formatted string
-      # Ruby MRI supports micro seconds
-      # DEPRECATED
-      def formatted_time
-        "#{time.strftime('%Y-%m-%d %H:%M:%S')}.#{'%06d' % (time.usec)}"
-      end
-    end
-
-    # Returns [Hash] representation of this log entry
+    # DEPRECATED: Use SemanticLogger::Formatters::Raw
     def to_h(host = SemanticLogger.host, application = SemanticLogger.application)
-      # Header
-      h               = {
-        name:        name,
-        pid:         $$,
-        thread:      thread_name,
-        time:        time,
-        level:       level,
-        level_index: level_index,
-      }
-      h[:host]        = host if host
-      h[:application] = application if application
-      file, line      = file_name_and_line
-      if file
-        h[:file] = file
-        h[:line] = line.to_i
+      logger = DeprecatedLogger.new(host, application)
+      SemanticLogger::Formatters::Raw.new.call(self, logger)
+    end
+
+    # Lazy initializes the context hash and assigns a key value pair.
+    def set_context(key, value)
+      (self.context ||= {})[key] = value
+    end
+
+    # A metric only event has a metric but no message, exception, or payload.
+    def metric_only?
+      metric && message.nil? && exception.nil? && payload.nil?
+    end
+
+    private
+
+    SELF_PATTERN = File.join('lib', 'semantic_logger')
+
+    # Extract the backtrace leaving out Semantic Logger
+    def self.cleanse_backtrace(stack = caller)
+      while (first = stack.first) && first.include?(SELF_PATTERN)
+        stack.shift
       end
-
-      # Tags
-      h[:tags] = tags if tags && (tags.size > 0)
-
-      # Duration
-      if duration
-        h[:duration_ms] = duration
-        h[:duration]    = duration_human
-      end
-
-      # Log message
-      h[:message] = cleansed_message if message
-
-      # Payload
-      if payload
-        if payload.is_a?(Hash)
-          h.merge!(payload)
-        else
-          h[:payload] = payload
-        end
-      end
-
-      # Exceptions
-      if exception
-        root = h
-        each_exception do |exception, i|
-          name       = i == 0 ? :exception : :cause
-          root[name] = {
-            name:        exception.class.name,
-            message:     exception.message,
-            stack_trace: exception.backtrace
-          }
-          root       = root[name]
-        end
-      end
-
-      # Metric
-      h[:metric] = metric if metric
-      h
+      stack
     end
 
   end

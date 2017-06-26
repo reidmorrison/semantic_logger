@@ -5,3 +5,5 @@ nbproject/*
 Gemfile.lock
 ._test
 .bundle
+*.log
+/docs/_site

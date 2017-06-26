@@ -2,7 +2,7 @@ require 'socket'
 begin
   require 'mongo'
 rescue LoadError
-  raise 'Gem mongo is required for logging to MongoDB. Please add the gem "mongo" to your Gemfile.'
+  raise 'Gem mongo is required for logging to MongoDB. Please add the gem "mongo" v2.0 or greater to your Gemfile.'
 end
 
 module SemanticLogger
@@ -49,14 +49,15 @@ module SemanticLogger
     #   # Log some messages
     #   logger.info 'This message is written to mongo as a document'
     class MongoDB < SemanticLogger::Subscriber
-      attr_reader :db, :collection_name, :collection
-      attr_accessor :write_concern
+      attr_reader :client, :collection
 
       # Create a MongoDB Appender instance
       #
       # Parameters:
-      #   db: [Mongo::Database]
-      #     The MongoDB database connection to use, not the database name
+      #   uri: [String]
+      #     Mongo connection string.
+      #     Example:
+      #       mongodb://127.0.0.1:27017/test
       #
       #   collection_name: [String]
       #     Name of the collection to store log data in
@@ -78,6 +79,7 @@ module SemanticLogger
       #
       #   collection_max: [Integer]
       #     Maximum number of log entries that the capped collection will hold.
+      #     Default: no max limit
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
@@ -101,28 +103,30 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(options = {}, &block)
-        options          = options.dup
-        @db              = options.delete(:db) || raise('Missing mandatory parameter :db')
-        @collection_name = options.delete(:collection_name) || 'semantic_logger'
-        @write_concern   = options.delete(:write_concern) || 0
+      def initialize(uri:, collection_name: 'semantic_logger', write_concern: 0, collection_size: 1024**3, collection_max: nil,
+                     level: nil, formatter: nil, filter: nil, host: nil, application: nil, &block)
 
-        # Create a collection that will hold the lesser of 1GB space or 10K documents
-        @collection_size = options.delete(:collection_size) || 1024**3
-        @collection_max  = options.delete(:collection_max)
+        @client          = Mongo::Client.new(uri, logger: logger)
+        @collection_name = collection_name
+        @options         = {
+          capped: true,
+          size:   collection_size,
+          write:  {w: write_concern}
+        }
+        @options[:max]   = collection_max if collection_max
+
+        reopen
 
         # Create the collection and necessary indexes
         create_indexes
 
-        # Set the log level and formatter
-        super(options, &block)
-        reopen
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
       end
 
       # After forking an active process call #reopen to re-open
       # open the handles to resources
       def reopen
-        @collection = db[@collection_name]
+        @collection = client[@collection_name, @options]
       end
 
       # Create the required capped collection.
@@ -136,10 +140,14 @@ module SemanticLogger
       #
       # Creates an index based on tags to support faster searches.
       def create_indexes
-        options       = {capped: true, size: @collection_size}
-        options[:max] = @collection_max if @collection_max
-        db.create_collection(collection_name, options)
-        db[@collection_name].ensure_index('tags')
+        # Create Capped collection
+        begin
+          @collection.create
+        rescue Mongo::Error::OperationFailure
+          # Already exists
+        end
+
+        @collection.indexes.create_one({tags: 1})
       end
 
       # Purge all data from the capped collection by dropping the collection
@@ -147,22 +155,14 @@ module SemanticLogger
       # Also useful when the size of the capped collection needs to be changed
       def purge_all
         collection.drop
-        @collection = nil
+        reopen
         create_indexes
-      end
-
-      # Flush all pending logs to disk.
-      #  Waits for all sent documents to be written to disk
-      def flush
-        db.get_last_error
       end
 
       # Log the message to MongoDB
       def log(log)
-        return false unless should_log?(log)
-
         # Insert log entry into Mongo
-        collection.insert(formatter.call(log, self), w: @write_concern)
+        collection.insert_one(formatter.call(log, self))
         true
       end
 

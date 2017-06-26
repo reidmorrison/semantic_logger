@@ -61,11 +61,12 @@ module Appender
           end
           assert_equal @message, mock.message
 
-          assert mock.event[:event], mock.event.ai
-          assert_equal level, mock.event[:event][:level]
-          refute mock.event[:event][:stack_trace]
-          assert_equal(1, mock.event[:event][:key1], mock.event)
-          assert_equal('a', mock.event[:event][:key2], mock.event)
+          assert event = mock.event[:event], mock.event.ai
+          assert_equal level, event[:level]
+          refute event[:stack_trace]
+          assert payload = event[:payload]
+          assert_equal(1, payload[:key1], payload)
+          assert_equal('a', payload[:key2], payload)
         end
       end
 
