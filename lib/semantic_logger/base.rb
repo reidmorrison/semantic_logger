@@ -341,7 +341,12 @@ module SemanticLogger
       log        = Log.new(name, level, index)
       should_log =
         if payload.nil? && exception.nil? && message.is_a?(Hash)
-          log.assign(message)
+          # Check if someone just logged a hash payload instead of meaning to call semantic logger
+          if message.has_key?(:message) || message.has_key?(:payload) || message.has_key?(:exception) || message.has_key?(:metric)
+            log.assign(message)
+          else
+            log.assign_positional(nil, message, nil, &block)
+          end
         else
           log.assign_positional(message, payload, exception, &block)
         end
