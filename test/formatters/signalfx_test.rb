@@ -5,8 +5,12 @@ module SemanticLogger
   module Formatters
     class SignalfxTest < Minitest::Test
       describe SemanticLogger::Formatters::Signalfx do
-        let :converted_metric do
+        let :average_metric_name do
           'Application.average'
+        end
+
+        let :counter_metric_name do
+          'Application.counter'
         end
 
         let :log do
@@ -34,7 +38,7 @@ module SemanticLogger
 
         let :appender do
           Net::HTTP.stub_any_instance(:start, true) do
-            SemanticLogger::Appender::Signalfx.new(token: 'TEST')
+            SemanticLogger::Metric::Signalfx.new(token: 'TEST')
           end
         end
 
@@ -51,9 +55,9 @@ module SemanticLogger
             hash = result
             assert counters = hash['counter'], hash
             assert counter = counters.first, hash
-            assert_equal converted_metric, counter['metric'], counter
+            assert_equal counter_metric_name, counter['metric'], counter
             assert_equal 1, counter['value'], counter
-            assert_equal (log.time.to_f * 1_000).to_i, counter['timestamp'], counter
+            assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
             assert counter.has_key?('dimensions')
           end
 
@@ -62,19 +66,30 @@ module SemanticLogger
             hash         = result
             assert counters = hash['gauge'], hash
             assert counter = counters.first, hash
-            assert_equal converted_metric, counter['metric'], counter
+            assert_equal average_metric_name, counter['metric'], counter
             assert_equal 1234, counter['value'], counter
-            assert_equal (log.time.to_f * 1_000).to_i, counter['timestamp'], counter
+            assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
             assert counter.has_key?('dimensions')
           end
 
-          it 'only forwards whitelisted dimensions' do
+          it 'also sends counter metric when gauge metric is sent' do
+            log.duration = 1234
+            hash         = result
+            assert counters = hash['counter'], hash
+            assert counter = counters.first, hash
+            assert_equal counter_metric_name, counter['metric'], counter
+            assert_equal 1, counter['value'], counter
+            assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
+            assert counter.has_key?('dimensions')
+          end
+
+          it 'only forwards whitelisted dimensions from named_tags' do
             log.named_tags       = {user_id: 47, tracking_number: 7474, session_id: 'hsdhngsd'}
             formatter.dimensions = [:user_id, :application]
             hash                 = result
             assert counters = hash['counter'], hash
             assert counter = counters.first, hash
-            assert_equal({'class' => '::user', 'action' => 'login', 'environment' => 'test', 'user_id' => '47', 'host' => SemanticLogger.host, 'application' => SemanticLogger.application}, counter['dimensions'], counter)
+            assert_equal({'class' => 'user', 'action' => 'login', 'environment' => 'test', 'user_id' => '47', 'host' => SemanticLogger.host, 'application' => SemanticLogger.application}, counter['dimensions'], counter)
           end
 
           it 'raises exception with both a whitelist and blacklist' do
@@ -94,10 +109,21 @@ module SemanticLogger
 
             assert counters = hash['counter'], hash
             assert_equal 3, counters.size
-            assert_equal converted_metric, counters[0]['metric']
+            assert_equal counter_metric_name, counters[0]['metric']
             assert_equal 1, counters[0]['value']
-            assert_equal converted_metric, counters[1]['metric']
-            assert_equal converted_metric, counters[2]['metric']
+            assert_equal counter_metric_name, counters[1]['metric']
+            assert_equal counter_metric_name, counters[2]['metric']
+          end
+
+          it 'sends gauge metrics' do
+            logs.each { |log| log.duration = 3.5 }
+            hash = result
+            assert gauges = hash['gauge'], hash
+            assert_equal 3, gauges.size
+            assert_equal average_metric_name, gauges[0]['metric']
+            assert_equal 3.5, gauges[0]['value']
+            assert_equal average_metric_name, gauges[1]['metric']
+            assert_equal average_metric_name, gauges[2]['metric']
           end
         end
 
@@ -106,13 +132,22 @@ module SemanticLogger
             JSON.parse(formatter.batch(same_logs, appender))
           end
 
-          it 'send metrics' do
+          it 'sends counter metrics' do
             hash = result
 
             assert counters = hash['counter'], hash
             assert_equal 1, counters.size
-            assert_equal converted_metric, counters[0]['metric']
+            assert_equal counter_metric_name, counters[0]['metric']
             assert_equal 3, counters[0]['value']
+          end
+
+          it 'sends gauge metrics' do
+            same_logs.each { |log| log.duration = 3.5 }
+            hash = result
+            assert gauges = hash['gauge'], hash
+            assert_equal 1, gauges.size
+            assert_equal average_metric_name, gauges[0]['metric']
+            assert_equal 3.5, gauges[0]['value']
           end
         end
 

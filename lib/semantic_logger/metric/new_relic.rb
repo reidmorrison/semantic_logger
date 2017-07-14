@@ -4,17 +4,23 @@ rescue LoadError
   raise 'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
 end
 
-# Send log messages to NewRelic
+# Send Metrics to NewRelic
 #
 # The :error and :fatal log entries will show up under
 # "Applications" > "Application Name" > "Events" > "Errors" in New Relic.
 #
 # Example:
-#   SemanticLogger.add_appender(appender: :new_relic)
-class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
+#   SemanticLogger.add_appender(metric: :new_relic)
+class SemanticLogger::Metric::NewRelic < SemanticLogger::Subscriber
+  attr_accessor :prefix
+
   # Create Appender
   #
   # Parameters
+  #   :prefix [String]
+  #     Prefix to add to every metric before forwarding to NewRelic.
+  #     Default: 'Custom'
+  #
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
   #     Override the log level for this appender.
   #     Default: :error
@@ -29,39 +35,45 @@ class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
   #     regular expression. All other messages will be ignored.
   #     Proc: Only include log messages where the supplied Proc returns true
   #           The Proc must return true or false.
-  def initialize(level: :error,
+  def initialize(prefix: 'Custom',
+                 level: nil,
                  formatter: nil,
                  filter: nil,
                  application: nil,
                  host: nil,
                  &block)
 
+    @prefix = prefix
     super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
   end
 
-  # Returns [Hash] of parameters to send to New Relic.
-  def call(log, logger)
-    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
-    h.delete(:time)
-    h.delete(:exception)
-    {metric: log.metric, custom_params: h}
+  # Returns metric name to use.
+  def call(log, _logger)
+    metric = log.metric
+    # Add prefix for NewRelic
+    metric = "#{prefix}/#{metric}" unless metric.start_with?(prefix)
+    metric
   end
 
-  # Send an error notification to New Relic
   def log(log)
-    # Send error messages as Runtime exceptions
-    exception =
-      if log.exception
-        log.exception
-      else
-        error = RuntimeError.new(log.message)
-        error.set_backtrace(log.backtrace) if log.backtrace
-        error
-      end
-    # For more documentation on the NewRelic::Agent.notice_error method see:
-    # http://rubydoc.info/github/newrelic/rpm/NewRelic/Agent#notice_error-instance_method
-    # and https://docs.newrelic.com/docs/ruby/ruby-agent-api
-    NewRelic::Agent.notice_error(exception, formatter.call(log, self))
+    name = formatter.call(log, self)
+    if duration = log.duration
+      # Convert duration to seconds
+      ::NewRelic::Agent.record_metric(name, duration / 1000.0)
+    else
+      ::NewRelic::Agent.increment_metric(name, log.metric_amount || 1)
+    end
+    true
+  end
+
+  # Only forward log entries that contain metrics.
+  def should_log?(log)
+    # Does not support metrics with dimensions.
+    log.metric && !log.dimensions && super
+  end
+
+  # Whether to log metrics only events.
+  def log_metric_only?
     true
   end
 

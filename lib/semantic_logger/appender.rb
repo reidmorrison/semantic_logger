@@ -14,10 +14,8 @@ module SemanticLogger
     autoload :Http,              'semantic_logger/appender/http'
     autoload :MongoDB,           'semantic_logger/appender/mongodb'
     autoload :NewRelic,          'semantic_logger/appender/new_relic'
-    autoload :Signalfx,          'semantic_logger/appender/signalfx'
     autoload :Splunk,            'semantic_logger/appender/splunk'
     autoload :SplunkHttp,        'semantic_logger/appender/splunk_http'
-    autoload :Statsd,            'semantic_logger/appender/statsd'
     autoload :Syslog,            'semantic_logger/appender/syslog'
     autoload :Tcp,               'semantic_logger/appender/tcp'
     autoload :Udp,               'semantic_logger/appender/udp'
@@ -78,6 +76,14 @@ module SemanticLogger
           appender
         else
           raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
+        end
+      elsif appender = options.delete(:metric)
+        if appender.is_a?(Symbol)
+          SemanticLogger::Utils.constantize_symbol(appender, 'SemanticLogger::Metric').new(options)
+        elsif appender.is_a?(Subscriber)
+          appender
+        else
+          raise(ArgumentError, "Parameter :metric must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
         end
       elsif options[:logger]
         SemanticLogger::Appender::Wrapper.new(options, &block)

@@ -256,27 +256,6 @@ module SemanticLogger
       false
     end
 
-    # Prototype: Will change.
-    def counter(name, count: 1, **dimensions)
-      @fatal_index    ||= SemanticLogger.level_to_index(:fatal)
-      l               = Log.new('internal', :fatal, @fatal_index)
-      l.metric        = name
-      l.metric_amount = count
-      l.time          = Time.now
-      l.dimensions    = dimensions
-      log(l)
-    end
-
-    # Prototype: Will change.
-    def gauge(name, duration, **dimensions)
-      @fatal_index ||= SemanticLogger.level_to_index(:fatal)
-      l            = Log.new('internal', :fatal, @fatal_index)
-      l.metric     = name
-      l.duration   = duration
-      l.dimensions = dimensions
-      log(l)
-    end
-
     private
 
     # Initializer for Abstract Class SemanticLogger::Base

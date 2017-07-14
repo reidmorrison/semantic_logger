@@ -2,7 +2,7 @@ require_relative '../test_helper'
 
 module Appender
   class SignalfxTest < Minitest::Test
-    describe SemanticLogger::Appender::Signalfx do
+    describe SemanticLogger::Metric::Signalfx do
       before do
         @metric     = '/user/login'
         @log        = SemanticLogger::Log.new('User', :debug)
@@ -11,10 +11,10 @@ module Appender
 
       let :appender do
         if ENV['SIGNALFX_TOKEN']
-          SemanticLogger::Appender::Signalfx.new(token: ENV['SIGNALFX_TOKEN'])
+          SemanticLogger::Metric::Signalfx.new(token: ENV['SIGNALFX_TOKEN'])
         else
           Net::HTTP.stub_any_instance(:start, true) do
-            @appender = SemanticLogger::Appender::Signalfx.new(token: 'TEST')
+            @appender = SemanticLogger::Metric::Signalfx.new(token: 'TEST')
           end
         end
       end

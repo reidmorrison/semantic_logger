@@ -118,6 +118,16 @@ class LoggerTest < Minitest::Test
             assert_equal 123.44, log.duration
             assert_equal metric_name, log.metric
           end
+
+          it 'for compatibility handles random payload logged as keyword arguments' do
+            logger.send(level, payload)
+
+            assert log = log_message
+            refute log.message
+            refute log.exception
+            refute log.metric
+            assert_equal payload, log.payload
+          end
         end
 
         describe '#filter' do

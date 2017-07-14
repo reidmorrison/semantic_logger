@@ -49,7 +49,7 @@ module SemanticLogger
         when :none
           time
         when :seconds
-          time.utc.to_f
+          time.to_f
         when nil
           ''
         else

@@ -6,7 +6,7 @@ rescue LoadError
 end
 
 module SemanticLogger
-  module Appender
+  module Metric
     class Statsd < Subscriber
       attr_accessor :url
 
@@ -23,8 +23,8 @@ module SemanticLogger
       #
       # Example:
       #   SemanticLogger.add_appender(
-      #     appender: :statsd,
-      #     url:      'localhost:8125'
+      #     metric: :statsd,
+      #     url:    'localhost:8125'
       #   )
       def initialize(url: 'udp://localhost:8125')
         @url = url
@@ -55,7 +55,13 @@ module SemanticLogger
 
       # Only forward log entries that contain metrics.
       def should_log?(log)
-        log.metric && super
+        # Does not support metrics with dimensions.
+        log.metric && !log.dimensions && super
+      end
+
+      # Whether to log metrics only events.
+      def log_metric_only?
+        true
       end
 
     end

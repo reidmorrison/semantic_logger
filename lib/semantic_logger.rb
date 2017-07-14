@@ -20,6 +20,12 @@ module SemanticLogger
     autoload :Compatibility,    'semantic_logger/concerns/compatibility'
   end
 
+  module Metric
+    autoload :NewRelic,          'semantic_logger/metric/new_relic'
+    autoload :Signalfx,          'semantic_logger/metric/signalfx'
+    autoload :Statsd,            'semantic_logger/metric/statsd'
+  end
+
   if defined?(JRuby)
     module JRuby
       autoload :GarbageCollectionLogger, 'semantic_logger/jruby/garbage_collection_logger'
