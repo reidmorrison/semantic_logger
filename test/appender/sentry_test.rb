@@ -37,7 +37,9 @@ module Appender
 
           assert_equal error.class.to_s, exception.class.to_s
           assert_equal error.message, exception.message
-          assert_equal @message, hash[:message], hash
+          assert_equal true, hash.has_key?(:extra)
+          assert_equal @message, hash[:extra][:message], hash
+          assert_equal level, hash[:level]
         end
       end
 
