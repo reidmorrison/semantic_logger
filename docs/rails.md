@@ -257,6 +257,8 @@ Valid options:
     * Plain text output with color.
 * :json
     * JSON output format.
+* :one_line
+    * Reduce each log message to a single line. 
 * `Object`
     An instance of any class that derives from `SemanticLogger::Formatters::Base`.
 
