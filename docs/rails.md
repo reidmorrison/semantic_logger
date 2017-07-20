@@ -213,7 +213,7 @@ Notes:
 Example, also log to a JSON log file, for consumption by ELK, Splunk, etc.:
 
 ~~~ruby
-config.semantic_logger.add_appender(file: "log/#{Rails.env}.json", formatter: :json)
+config.semantic_logger.add_appender(file_name: "log/#{Rails.env}.json", formatter: :json)
 ~~~
 
 Example, also log to a local Syslog:
