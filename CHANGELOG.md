@@ -164,7 +164,7 @@ logger.info message: 'Hello', metric: 'user/hello', duration: 25
 - Changed `SemanticLogger.add_appender` to take hash parameters.
     - Deprecated non hash style arguments.
     - For Example:
-        - `SemanticLogger.add_appender(file: 'development.log', formatter: :color)`
+        - `SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)`
     - See [Appenders](http://rocketjob.github.io/semantic_logger/appenders.html)
     - Move AnsiColors into its own module: `SemanticLogger::AnsiColors`
 - Appenders now use the same hash style arguments as `SemanticLogger.add_appender`.
