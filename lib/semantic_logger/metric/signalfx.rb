@@ -116,12 +116,7 @@ class SemanticLogger::Metric::Signalfx < SemanticLogger::Appender::Http
 
   # Only forward log entries that contain metrics.
   def should_log?(log)
-    log.metric && super
-  end
-
-  # Whether to log metrics only events.
-  def log_metric_only?
-    true
+    log.metric && meets_log_level?(log) && !filtered?(log)
   end
 
 end

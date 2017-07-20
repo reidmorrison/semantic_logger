@@ -249,11 +249,7 @@ module SemanticLogger
 
     # Whether this log entry meets the criteria to be logged by this appender.
     def should_log?(log)
-      if meets_log_level?(log) && !filtered?(log)
-        return log_metric_only? if log.metric_only?
-        return true
-      end
-      false
+      meets_log_level?(log) && !filtered?(log)
     end
 
     private
@@ -332,11 +328,6 @@ module SemanticLogger
 
       # Log level may change during assign due to :on_exception_level
       self.log(log) if should_log && should_log?(log)
-    end
-
-    # Whether to log metrics only events.
-    def log_metric_only?
-      false
     end
 
     # Measure the supplied block and log the message

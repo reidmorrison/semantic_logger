@@ -36,6 +36,21 @@ module SemanticLogger
           end
         end
 
+        let :dimensions do
+          {action: 'hit', user: 'jbloggs', state: 'FL'}
+        end
+
+        let :all_dimensions do
+          dims        = dimensions.merge(
+            host:        SemanticLogger.host,
+            application: SemanticLogger.application,
+            environment: 'test'
+          )
+          string_keys = {}
+          dims.each_pair { |k, v| string_keys[k.to_s] = v }
+          string_keys
+        end
+
         let :appender do
           Net::HTTP.stub_any_instance(:start, true) do
             SemanticLogger::Metric::Signalfx.new(token: 'TEST')
@@ -97,6 +112,19 @@ module SemanticLogger
               SemanticLogger::Formatters::Signalfx.new(token: 'TEST', dimensions: [:user_id], exclude_dimensions: [:tracking_number])
             end
           end
+
+          it 'send custom counter metric when there is no duration' do
+            log.metric     = 'Filter/count'
+            log.dimensions = dimensions
+            hash           = result
+
+            assert counters = hash['counter'], hash
+            assert counter = counters.first, hash
+            assert_equal 'Filter.count', counter['metric'], counter
+            assert_equal 1, counter['value'], counter
+            assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
+            assert_equal all_dimensions, counter['dimensions']
+          end
         end
 
         describe 'format batch logs' do
@@ -125,6 +153,29 @@ module SemanticLogger
             assert_equal average_metric_name, gauges[1]['metric']
             assert_equal average_metric_name, gauges[2]['metric']
           end
+
+          describe 'send custom' do
+            let :logs do
+              3.times.collect do |i|
+                l            = log.dup
+                l.metric     = 'Filter/count'
+                l.dimensions = dimensions
+                l
+              end
+            end
+
+            it 'counter metric when there is no duration' do
+              hash = result
+
+              assert counters = hash['counter'], hash
+              assert counter = counters.first, hash
+              assert_equal 'Filter.count', counter['metric'], counter
+              assert_equal 3, counter['value'], counter
+              assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
+              assert_equal all_dimensions, counter['dimensions']
+            end
+          end
+
         end
 
         describe 'format batch logs with aggregation' do
@@ -139,15 +190,6 @@ module SemanticLogger
             assert_equal 1, counters.size
             assert_equal counter_metric_name, counters[0]['metric']
             assert_equal 3, counters[0]['value']
-          end
-
-          it 'sends gauge metrics' do
-            same_logs.each { |log| log.duration = 3.5 }
-            hash = result
-            assert gauges = hash['gauge'], hash
-            assert_equal 3, gauges.size
-            assert_equal average_metric_name, gauges[0]['metric']
-            assert_equal 3.5, gauges[0]['value']
           end
         end
 

@@ -11,6 +11,7 @@ require 'semantic_logger'
 #require 'logger'
 require_relative 'in_memory_appender'
 require_relative 'in_memory_batch_appender'
+require_relative 'in_memory_metrics_appender'
 require_relative 'in_memory_appender_helper'
 require 'awesome_print'
 

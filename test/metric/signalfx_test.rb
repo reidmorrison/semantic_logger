@@ -37,6 +37,12 @@ module Appender
           assert response
         end
 
+        it 'send custom counter metric when there is no duration' do
+          @log.metric     = 'Filter/count'
+          @log.dimensions = {action: 'hit', user: 'jbloggs', state: 'FL'}
+          assert response
+        end
+
         it 'send gauge metric when log includes duration' do
           @log.duration = 1234
           assert response
@@ -46,6 +52,24 @@ module Appender
           @log.named_tags               = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
           appender.formatter.dimensions = [:user_id, :application]
           assert response
+        end
+      end
+
+      describe 'should_log?' do
+        it 'logs metric only metric' do
+          assert appender.should_log?(@log)
+        end
+
+        it 'not logs when no metric' do
+          @log.message = 'blah'
+          @log.metric = nil
+          refute appender.should_log?(@log)
+        end
+
+        it 'logs metric only metric with dimensions' do
+          @log.metric = 'Filter/count'
+          @log.dimensions = {action: 'hit', user: 'jbloggs', state: 'FL'}
+          assert appender.should_log?(@log)
         end
       end
 

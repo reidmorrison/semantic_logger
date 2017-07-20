@@ -5,6 +5,10 @@ class LoggerTest < Minitest::Test
   describe SemanticLogger::Logger do
     include InMemoryAppenderHelper
 
+    let :dimensions do
+      {action: 'hit', user: 'jbloggs', state: 'FL'}
+    end
+
     # Ensure that any log level can be logged
     SemanticLogger::LEVELS.each do |level|
 
@@ -117,6 +121,22 @@ class LoggerTest < Minitest::Test
             assert_equal payload, log.payload
             assert_equal 123.44, log.duration
             assert_equal metric_name, log.metric
+          end
+
+          describe 'metrics appender' do
+            let :appender do
+              InMemoryMetricsAppender.new
+            end
+
+            it 'logs metric only events' do
+              metric_name = '/my/custom/metric'
+              logger.send(level, metric: metric_name, dimensions: dimensions)
+
+              assert log = log_message
+              assert_equal metric_name, log.metric
+              assert_equal dimensions, log.dimensions
+              refute log.message
+            end
           end
 
           it 'for compatibility handles random payload logged as keyword arguments' do

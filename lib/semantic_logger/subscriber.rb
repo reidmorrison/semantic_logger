@@ -57,6 +57,11 @@ module SemanticLogger
         end
     end
 
+    # Whether this log entry meets the criteria to be logged by this appender.
+    def should_log?(log)
+      super(log) && !log.metric_only?
+    end
+
     private
 
     # Initializer for Abstract Class SemanticLogger::Subscriber

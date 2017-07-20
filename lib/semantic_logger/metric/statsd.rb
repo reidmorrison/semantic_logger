@@ -56,12 +56,7 @@ module SemanticLogger
       # Only forward log entries that contain metrics.
       def should_log?(log)
         # Does not support metrics with dimensions.
-        log.metric && !log.dimensions && super
-      end
-
-      # Whether to log metrics only events.
-      def log_metric_only?
-        true
+        log.metric && !log.dimensions && meets_log_level?(log) && !filtered?(log)
       end
 
     end
