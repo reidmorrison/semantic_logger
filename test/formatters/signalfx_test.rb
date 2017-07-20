@@ -145,7 +145,7 @@ module SemanticLogger
             same_logs.each { |log| log.duration = 3.5 }
             hash = result
             assert gauges = hash['gauge'], hash
-            assert_equal 1, gauges.size
+            assert_equal 3, gauges.size
             assert_equal average_metric_name, gauges[0]['metric']
             assert_equal 3.5, gauges[0]['value']
           end

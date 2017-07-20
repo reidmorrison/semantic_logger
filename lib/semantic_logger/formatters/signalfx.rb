@@ -140,28 +140,13 @@ module SemanticLogger
           end
         end
 
-        # Average counters with the same time(s), name, and dimensions.
-        if gauges = data[:gauge]
-          gauges.each { |gauge| average_value(gauge) }
-        end
-
         data.to_json
       end
 
       private
 
       def add_gauge(gauges, metric)
-        # Collect counters with the same time (second), name, and dimensions.
-        if existing = find_match(gauges, metric)
-          existing_value = existing[:value]
-          if existing_value.is_a?(Array)
-            existing_value << metric[:value]
-          else
-            existing[:value] = [existing_value, metric[:value]]
-          end
-        else
-          gauges << metric
-        end
+        gauges << metric
       end
 
       # Sum counters with the same time (second), name, and dimensions.
@@ -176,21 +161,6 @@ module SemanticLogger
           (item[:timestamp] == metric[:timestamp]) &&
             (item[:metric] == metric[:metric]) &&
             (item[:dimensions] == metric[:dimensions])
-        end
-      end
-
-      # Average the values contained in the metrics
-      if [].respond_to?(:sum)
-        def average_value(gauge)
-          return unless gauge[:value].is_a?(Array)
-          values        = gauge[:value]
-          gauge[:value] = values.sum.to_f / values.size
-        end
-      else
-        def average_value(gauge)
-          return unless gauge[:value].is_a?(Array)
-          values        = gauge[:value]
-          gauge[:value] = values.inject { |sum, el| sum + el }.to_f / values.size
         end
       end
 
