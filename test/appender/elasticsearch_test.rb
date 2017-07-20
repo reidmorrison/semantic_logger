@@ -75,7 +75,7 @@ module Appender
           end
 
           it 'logs payload' do
-            h           = { key1: 1, key2: 'a' }
+            h           = {key1: 1, key2: 'a'}
             log.payload = h
             request     = stub_client { appender.log(log) }
 
@@ -118,21 +118,16 @@ module Appender
 
         def stub_client(&block)
           request = nil
-          appender.client.stub(:bulk, ->(r) { request = r; { 'status' => 201 } }, &block)
+          appender.client.stub(:bulk, ->(r) { request = r; {'status' => 201} }, &block)
           request
         end
       end
 
-      describe 'elasticsearch args' do
+      describe 'elasticsearch parameters' do
         let :appender do
           Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
             SemanticLogger::Appender::Elasticsearch.new(
-              elasticsearch: {
-                hosts: [{
-                  host: 'localhost',
-                  port: 9200
-                }]
-              }
+              hosts: [{host: 'localhost', port: 9200}]
             )
           end
         end
@@ -197,7 +192,7 @@ module Appender
           end
 
           it 'logs payload' do
-            h           = { key1: 1, key2: 'a' }
+            h           = {key1: 1, key2: 'a'}
             log.payload = h
             request     = stub_client { appender.log(log) }
 
@@ -240,7 +235,7 @@ module Appender
 
         def stub_client(&block)
           request = nil
-          appender.client.stub(:bulk, ->(r) { request = r; { 'status' => 201 } }, &block)
+          appender.client.stub(:bulk, ->(r) { request = r; {'status' => 201} }, &block)
           request
         end
       end

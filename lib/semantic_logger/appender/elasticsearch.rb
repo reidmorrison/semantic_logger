@@ -15,15 +15,11 @@ require 'date'
 #     url:      'http://localhost:9200'
 #   )
 class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
-  attr_accessor :url, :index, :type, :client, :flush_interval, :timeout_interval, :batch_size
+  attr_accessor :url, :index, :type, :client, :flush_interval, :timeout_interval, :batch_size, :elasticsearch_args
 
   # Create Elasticsearch appender over persistent HTTP(S)
   #
   # Parameters:
-  #   url: [String]
-  #     Fully qualified address to the Elasticsearch service.
-  #     Default: 'http://localhost:9200'
-  #
   #   index: [String]
   #     Prefix of the index to store the logs in Elasticsearch.
   #     The final index appends the date so that indexes are used per day.
@@ -56,6 +52,70 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   #   application: [String]
   #     Name of this application to appear in log messages.
   #     Default: SemanticLogger.application
+  #
+  # Elasticsearch Parameters:
+  #   url: [String]
+  #     Fully qualified address to the Elasticsearch service.
+  #     Default: 'http://localhost:9200'
+  #
+  #   hosts: [String|Hash|Array]
+  #     Single host passed as a String or Hash, or multiple hosts
+  #     passed as an Array; `host` or `url` keys are also valid.
+  #     Note:
+  #       :url above is ignored when supplying this option.
+  #
+  #   resurrect_after [Float]
+  #     After how many seconds a dead connection should be tried again.
+  #
+  #   reload_connections [true|false|Integer]
+  #     Reload connections after X requests.
+  #     Default: false
+  #
+  #   randomize_hosts [true|false]
+  #     Shuffle connections on initialization and reload.
+  #     Default: false
+  #
+  #   sniffer_timeout [Integer]
+  #     Timeout for reloading connections in seconds.
+  #     Default: 1
+  #
+  #   retry_on_failure [true|false|Integer]
+  #     Retry X times when request fails before raising and exception.
+  #     Default: false
+  #
+  #   retry_on_status [Array<Number>]
+  #     Retry when specific status codes are returned.
+  #
+  #   reload_on_failure [true|false]
+  #     Reload connections after failure.
+  #     Default: false
+  #
+  #   request_timeout [Integer]
+  #     The request timeout to be passed to transport in options.
+  #
+  #   adapter [Symbol]
+  #     A specific adapter for Faraday (e.g. `:patron`)
+  #
+  #   transport_options [Hash]
+  #     Options to be passed to the `Faraday::Connection` constructor.
+  #
+  #   transport_class [Constant]
+  #     A specific transport class to use, will be initialized by
+  #     the client and passed hosts and all arguments.
+  #
+  #   transport [Object]
+  #     A specific transport instance.
+  #
+  #   serializer_class [Constant]
+  #     A specific serializer class to use, will be initialized by
+  #     the transport and passed the transport instance.
+  #
+  #   selector [Elasticsearch::Transport::Transport::Connections::Selector::Base]
+  #     An instance of selector strategy derived from `Elasticsearch::Transport::Transport::Connections::Selector::Base`.
+  #
+  #   send_get_body_as [String]
+  #     Specify the HTTP method to use for GET requests with a body.
+  #     Default: 'GET'
   def initialize(url: 'http://localhost:9200',
                  index: 'semantic_logger',
                  type: 'log',
@@ -64,24 +124,22 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
                  filter: nil,
                  application: nil,
                  host: nil,
-                 **args,
+                 **elasticsearch_args,
                  &block)
 
-    @url                = url
-    @index              = index
-    @type               = type
-    @elasticsearch_args = args[:elasticsearch]
+    @url                         = url
+    @index                       = index
+    @type                        = type
+    @elasticsearch_args          = elasticsearch_args.dup
+    @elasticsearch_args[:url]    = url if url && !elasticsearch_args[:hosts]
+    @elasticsearch_args[:logger] = logger
 
     super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
     reopen
   end
 
   def reopen
-    if @elasticsearch_args
-      @client = Elasticsearch::Client.new(@elasticsearch_args.merge!(logger: logger))
-    else
-      @client = Elasticsearch::Client.new(url: url, logger: logger)
-    end
+    @client = Elasticsearch::Client.new(@elasticsearch_args)
   end
 
   # Log to the index for today
