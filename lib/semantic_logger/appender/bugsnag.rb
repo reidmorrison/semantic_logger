@@ -54,6 +54,8 @@ class SemanticLogger::Appender::Bugsnag < SemanticLogger::Subscriber
     # Send error messages as Runtime exceptions
     exception =
       if log.exception
+        # Manually constructed Exception, without a backtrace.
+        log.exception.set_backtrace(log.backtrace) if !log.exception.backtrace && log.backtrace
         log.exception
       else
         error = RuntimeError.new(log.message)

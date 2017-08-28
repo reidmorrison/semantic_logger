@@ -2,6 +2,28 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.2.0]
+### Added
+- New Signalfx appender.
+- New Async appender that puts any other appender in its own thread.
+- New Batch appender to batch up groups of messages for appenders that support batching. 
+- API now supports metric dimensions.
+- Support for metric only events. Does not require a log message to be created just to create a metric event.
+- A new one line formatter. Strips stack traces and newlines in log messages.
+
+### Changed
+- Call `SemanticLogger.flush` instead of `SemanticLogger.close` on process exit. 
+- Elasticsearch appender now supports remaining Elasticsearch arguments. Thank you @willsoto.
+- Documentation fixes. Thank you @Silex.
+- Re-open http appender on failure.
+
+### Fixed
+- \#77 ArgumentError: wrong number of arguments. Now supports Hash only arguments when logging without needing a metric wrapper.
+- Sentry Appender
+  - \#69 undefined method `error_class` for the Sentry appender. Thank you @gingerlime.
+  - Prevent feedback loops. Thank you @gingerlime.
+  - \#74  NoMethodError: undefined method `host=' for #<Raven::Event:0x0000000d1621e8>. Thank you @gingerlime.
+
 ## [4.1.0]
 ### Added
 - New log format customization mechanism.

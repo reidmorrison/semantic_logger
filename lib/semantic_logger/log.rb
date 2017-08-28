@@ -108,9 +108,9 @@ module SemanticLogger
       end
 
       if backtrace
-        self.backtrace = self.class.cleanse_backtrace(backtrace)
+        self.backtrace = Utils.cleanse_backtrace(backtrace)
       elsif level_index >= SemanticLogger.backtrace_level_index
-        self.backtrace = self.class.cleanse_backtrace
+        self.backtrace = Utils.cleanse_backtrace
       end
 
       if metric
@@ -296,18 +296,6 @@ module SemanticLogger
     # A metric only event has a metric but no message, exception, or payload.
     def metric_only?
       metric && message.nil? && exception.nil? && payload.nil?
-    end
-
-    private
-
-    SELF_PATTERN = File.join('lib', 'semantic_logger')
-
-    # Extract the backtrace leaving out Semantic Logger
-    def self.cleanse_backtrace(stack = caller)
-      while (first = stack.first) && first.include?(SELF_PATTERN)
-        stack.shift
-      end
-      stack
     end
 
   end

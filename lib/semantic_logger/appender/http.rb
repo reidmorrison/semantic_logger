@@ -213,6 +213,9 @@ class SemanticLogger::Appender::Http < SemanticLogger::Subscriber
       logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
       false
     end
+  rescue RuntimeError => exc
+    reopen
+    raise exc
   end
 
 end

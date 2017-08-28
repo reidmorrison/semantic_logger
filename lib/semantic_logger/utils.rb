@@ -34,4 +34,14 @@ module SemanticLogger::Utils
     end
   end
 
+  SELF_PATTERN = File.join('lib', 'semantic_logger')
+
+  # Extract the backtrace leaving out the last few Semantic Logger lines.
+  def self.cleanse_backtrace(stack = caller)
+    while (first = stack.first) && first.include?(SELF_PATTERN)
+      stack.shift
+    end
+    stack
+  end
+
 end

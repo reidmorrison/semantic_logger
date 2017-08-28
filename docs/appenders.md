@@ -20,6 +20,7 @@ Log messages can be written to one or more of the following destinations at the 
 * Papertrail
 * New Relic
 * Bugsnag
+* Signalfx
 * Apache Kafka
 * HTTP(S)
 * TCP (+ SSL)
