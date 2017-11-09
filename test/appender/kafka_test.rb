@@ -5,7 +5,7 @@ module Appender
     describe SemanticLogger::Appender::Kafka do
       before do
         @appender = SemanticLogger::Appender::Kafka.new(
-          seed_brokers: ['http://localhost:9092']
+          seed_brokers: ['localhost:9092']
         )
         @message  = 'AppenderKafkaTest log message'
       end
