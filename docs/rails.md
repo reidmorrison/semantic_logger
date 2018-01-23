@@ -31,9 +31,51 @@ Install required gems with bundler
 This will automatically replace the standard Rails logger with Semantic Logger
 which will write all log data to the configured Rails log file.
 
+### Conflicting Gems
+
+Remove all of the following gems since they conflict or duplicate what Rails Semantic Logger already
+achieves.
+
+* lograge
+* rails_stdout_logging
+* rails_12factor
+
 ### Process Forking
 
 See [Process Forking](forking.html) if you use Unicorn or Puma.
+
+### Heroku
+
+#### Log to standard out.
+
+When running on Heroku all logging needs to be set to standard out.
+
+Add the following to `config/environments/production.rb`:
+
+~~~ruby
+if ENV["RAILS_LOG_TO_STDOUT"].present?
+  STDOUT.sync = true
+  config.rails_semantic_logger.add_file_appender = false
+  config.semantic_logger.add_appender(io: STDOUT, level: config.log_level, formatter: config.rails_semantic_logger.format)
+end
+~~~
+
+Heroku sets the `RAILS_LOG_TO_STDOUT` environment variable to `true`.
+
+#### Setting the log level.
+
+The log level is usually set with the config setting `config.log_level`, but
+Heroku also allows the log level to be set via the `LOG_LEVEL` environment variable.
+
+`heroku config:set LOG_LEVEL=DEBUG`
+
+To enable the above log level environment variable for Heroku, add the following to `config/environments/production.rb`:
+
+~~~ruby
+if ENV["LOG_LEVEL"].present?
+  config.log_level = ENV["LOG_LEVEL"].downcase.strip.to_sym
+end
+~~~
 
 ### Configuration
 
@@ -88,7 +130,7 @@ To change the log level:
 config.log_level = :debug
 ~~~
 
-#### Named Tags 
+#### Named Tags
 
 Named tags can be added to every log message on a per web request basis, by overriding the Rails built-in
 `config.log_tags` with a hash value.
@@ -258,7 +300,7 @@ Valid options:
 * :json
     * JSON output format.
 * :one_line
-    * Reduce each log message to a single line. 
+    * Reduce each log message to a single line.
 * `Object`
     An instance of any class that derives from `SemanticLogger::Formatters::Base`.
 
@@ -349,6 +391,24 @@ for every log message is expensive.
 
 This feature can be used in production, but use care since setting the level too low will slow down the application.
 
+### Custom Controller Base Class
+
+If your application is using a custom controller base class other than `ActionController::Base` or `ActionController::API`,
+then Rails Semantic Logger will fall back to the `ActionController::Base` logger instance.
+This is not ideal since all log entries from that controller will now have the name `ActionController::Base`.
+
+To make the log entries use the correct class name add the following to your custom controller class:
+~~~ruby
+include SemanticLogger::Loggable
+~~~
+
+Or, if the custom controller base class is inside of a third party gem, add an initializer with:
+~~~ruby
+CustomControllerBase.include(SemanticLogger::Loggable)
+~~~
+
+Where `CustomControllerBase` is the name of the custom controller base class.
+
 ### Log Rotation
 
 Since the log file is not re-opened with every call, when the log file needs
@@ -374,7 +434,6 @@ Rails Semantic Logger automatically replaces the default loggers for the followi
 after they have been initialized:
 
 - Bugsnag
-- Concurrent-ruby
 - Mongoid
 - Mongo
 - Moped

@@ -443,7 +443,7 @@ create a file called `<Rails Root>/config/initializers/mongodb.rb` with
 the following contents and restart the application.
 
 ~~~ruby
-client   = Mongo::MongoClient.new('localhost', 27017)
+client   = Mongo::MongoClient.new('127.0.0.1', 27017)
 database = client['test']
 
 appender = SemanticLogger::Appender::MongoDB.new(

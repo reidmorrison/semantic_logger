@@ -1,13 +1,11 @@
 language: ruby
 
 rvm:
-  - 2.2.8
-  - 2.3.5
-  - 2.4.2
-  - jruby-9.1.14.0
-
-jdk:
-  - oraclejdk8
+  - 2.2.9
+  - 2.3.6
+  - 2.4.3
+  - 2.5.0
+  - jruby-9.1.15.0
 
 services:
   - mongodb
