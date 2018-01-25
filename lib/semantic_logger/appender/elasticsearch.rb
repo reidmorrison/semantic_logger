@@ -152,12 +152,14 @@ class SemanticLogger::Appender::Elasticsearch < SemanticLogger::Subscriber
   def batch(logs)
     messages = []
     day      = nil
+    index_statement = nil
     logs.each do |log|
-      # Only write the bulk index once per day per batch. Supports mixed dates in a batch.
+      # Format the index statement only once per day
       if log.time.day != day
-        messages << bulk_index(log)
+        index_statement = bulk_index(log)
         day = log.time.day
       end
+      messages << index_statement
       messages << formatter.call(log, self)
     end
 
