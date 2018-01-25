@@ -370,12 +370,11 @@ module SemanticLogger
     return yield if hash.nil? || hash.empty?
     raise(ArgumentError, '#named_tagged only accepts named parameters (Hash)') unless hash.is_a?(Hash)
 
-    t = Thread.current[:semantic_logger_named_tags] ||= []
     begin
-      t << hash
+      push_named_tags(hash)
       yield
     ensure
-      t.pop
+      pop_named_tags
     end
   end
 
@@ -390,6 +389,16 @@ module SemanticLogger
     else
       {}
     end
+  end
+
+  def self.push_named_tags(hash)
+    (Thread.current[:semantic_logger_named_tags] ||= []) << hash
+    hash
+  end
+
+  def self.pop_named_tags(quantity=1)
+    t = Thread.current[:semantic_logger_named_tags]
+    t.pop(quantity) unless t.nil?
   end
 
   # Silence noisy log levels by changing the default_level within the block
