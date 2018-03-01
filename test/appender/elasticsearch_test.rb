@@ -106,13 +106,15 @@ module Appender
             request = stub_client { appender.batch(logs) }
 
             assert body = request[:body]
-            assert_equal 4, body.size, body
-            index = body[0]['index']['_index']
-            assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
-
+            assert_equal 6, body.size, body
+            
+            index = "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}"
+            assert_equal index,          body[0]['index']['_index']
             assert_equal 'hello world1', body[1][:message]
-            assert_equal 'hello world2', body[2][:message]
-            assert_equal 'hello world3', body[3][:message]
+            assert_equal index,          body[2]['index']['_index']
+            assert_equal 'hello world2', body[3][:message]
+            assert_equal index,          body[4]['index']['_index']
+            assert_equal 'hello world3', body[5][:message]
           end
         end
 
@@ -223,13 +225,15 @@ module Appender
             request = stub_client { appender.batch(logs) }
 
             assert body = request[:body]
-            assert_equal 4, body.size, body
-            index = body[0]['index']['_index']
-            assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
-
+            assert_equal 6, body.size, body
+            
+            index = "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}"
+            assert_equal index,          body[0]['index']['_index']
             assert_equal 'hello world1', body[1][:message]
-            assert_equal 'hello world2', body[2][:message]
-            assert_equal 'hello world3', body[3][:message]
+            assert_equal index,          body[2]['index']['_index']
+            assert_equal 'hello world2', body[3][:message]
+            assert_equal index,          body[4]['index']['_index']
+            assert_equal 'hello world3', body[5][:message]
           end
         end
 
