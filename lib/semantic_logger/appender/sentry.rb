@@ -49,6 +49,8 @@ class SemanticLogger::Appender::Sentry < SemanticLogger::Subscriber
     context = formatter.call(log, self)
     attrs                     = {
       level: context.delete(:level),
+      user: context.delete(:user),
+      tags: context.delete(:tags),
       extra: context
     }
     if log.exception
