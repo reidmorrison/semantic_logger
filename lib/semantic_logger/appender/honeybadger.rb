@@ -40,28 +40,40 @@ class SemanticLogger::Appender::Honeybadger < SemanticLogger::Subscriber
   end
 
   # Send an error notification to honeybadger
+  # Takes into account the request/context set on the caller thread
   def log(log)
-    context = formatter.call(log, self)
-    if log.exception
-      context.delete(:exception)
-      Honeybadger.notify(log.exception, context)
-    else
-      message             = {
-        error_class:   context.delete(:name),
-        error_message: context.delete(:message),
-        context:       context
-      }
-      message[:backtrace] = log.backtrace if log.backtrace
-      Honeybadger.notify(message)
+    return false unless should_log?(log)
+
+    formatted = formatter.call(log, self)
+    begin
+      Honeybadger.context(formatted[:context])
+      Honeybadger.with_rack_env(formatted[:rack_env]) do
+        Honeybadger.notify(formatted[:message], formatted[:options])
+      end
+    ensure
+      Honeybadger.context.clear!
     end
-    true
+
+    return true
   end
 
-  private
+  def before_log(log)
+    if should_log?(log)
+      context = {}
+      context[:request] = Honeybadger::Agent.config.request.dup unless Honeybadger::Agent.config.request.nil?
+      context[:context] = Honeybadger.get_context.dup unless Honeybadger.get_context.nil?
 
-  # Use Raw Formatter by default
+  # Use Honeybadger formatter by default
   def default_formatter
-    SemanticLogger::Formatters::Raw.new
+    return SemanticLogger::Formatters::Honeybadger.new
   end
 
+  # Capture thread-local context at log-time
+  module CaptureContext
+    def self.call(log)
+      manager = Honeybadger::ContextManager.current
+      log.set_context(:honeybadger, context: manager.get_context.dup, rack_env: manager.get_rack_env.dup)
+    end
+  end
+  SemanticLogger.on_log(CaptureContext)
 end
