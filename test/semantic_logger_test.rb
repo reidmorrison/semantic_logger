@@ -271,6 +271,33 @@ class SemanticLoggerTest < Minitest::Test
           assert_equal 'hello world', log.message
         end
       end
+
+      describe '.on_log' do
+        before do
+          SemanticLogger.default_level = :info
+        end
+
+        after do
+          SemanticLogger::Processor.instance.appender.log_subscribers = nil
+        end
+
+        it 'registers a log listener' do
+          SemanticLogger.on_log do |log|
+            log.set_context(:custom_info, 'test')
+          end
+
+          assert_equal :info, SemanticLogger.default_level
+          assert_equal :info, logger.level
+          logger.silence(:debug) do
+            logger.debug('hello world')
+          end
+
+          assert log = log_message
+          assert_equal :debug, log.level
+          assert_equal 'hello world', log.message
+          assert_equal 'test', log.context[:custom_info]
+        end
+      end
     end
   end
 end
