@@ -17,7 +17,7 @@ module Appender
 
       it 'logs to daily indexes' do
         index = nil
-        @appender.stub(:post, -> json, ind { index = ind }) do
+        @appender.stub(:post, ->(_json, ind) { index = ind }) do
           @appender.info @message
         end
         assert_equal "/semantic_logger-#{Time.now.utc.strftime('%Y.%m.%d')}/log", index
@@ -26,7 +26,7 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, @message)
           end
           message = JSON.parse(request.body)
@@ -43,7 +43,7 @@ module Appender
             exc = e
           end
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, 'Reading File', exc)
           end
           hash = JSON.parse(request.body)
@@ -57,8 +57,8 @@ module Appender
 
         it "sends #{level} custom attributes" do
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
-            @appender.send(level, @message, {key1: 1, key2: 'a'})
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
+            @appender.send(level, @message, key1: 1, key2: 'a')
           end
           message = JSON.parse(request.body)
           assert_equal @message, message['message']
@@ -69,7 +69,6 @@ module Appender
           assert_equal 'a', payload['key2'], message
         end
       end
-
     end
   end
 end

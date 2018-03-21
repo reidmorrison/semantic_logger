@@ -39,7 +39,6 @@ module Appender
           assert_instance_of Queue, added_appender.queue
         end
       end
-
     end
   end
 end

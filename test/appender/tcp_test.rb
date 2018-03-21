@@ -19,7 +19,7 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           data = nil
-          @appender.tcp_client.stub(:write, -> d { data = d }) do
+          @appender.tcp_client.stub(:write, ->(d) { data = d }) do
             @appender.send(level, @message)
           end
           hash = JSON.parse(data)
@@ -36,7 +36,7 @@ module Appender
             exc = e
           end
           data = nil
-          @appender.tcp_client.stub(:write, -> d { data = d }) do
+          @appender.tcp_client.stub(:write, ->(d) { data = d }) do
             @appender.send(level, 'Reading File', exc)
           end
           hash = JSON.parse(data)
@@ -49,8 +49,8 @@ module Appender
 
         it "send #{level} custom attributes" do
           data = nil
-          @appender.tcp_client.stub(:write, -> d { data = d }) do
-            @appender.send(level, @message, {key1: 1, key2: 'a'})
+          @appender.tcp_client.stub(:write, ->(d) { data = d }) do
+            @appender.send(level, @message, key1: 1, key2: 'a')
           end
           hash = JSON.parse(data)
           assert_equal @message, hash['message']
@@ -60,7 +60,6 @@ module Appender
           assert_equal 1, payload['key1'], payload
           assert_equal 'a', payload['key2'], payload
         end
-
       end
     end
   end

@@ -77,6 +77,5 @@ class DebugAsTraceLoggerTest < Minitest::Test
         assert_equal :trace, log.level
       end
     end
-
   end
 end

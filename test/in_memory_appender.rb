@@ -6,4 +6,3 @@ class InMemoryAppender < SemanticLogger::Subscriber
     self.message = log
   end
 end
-

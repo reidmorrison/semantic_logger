@@ -113,6 +113,5 @@ class TestLogger < Minitest::Test
       assert_equal 'hello world', log.message
       assert_equal :info, log.level
     end
-
   end
 end

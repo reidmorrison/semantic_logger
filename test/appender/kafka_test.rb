@@ -11,13 +11,13 @@ module Appender
       end
 
       after do
-        @appender.close if @appender
+        @appender&.close
       end
 
       it 'sends log messages in JSON format' do
         message = nil
         options = nil
-        ::Kafka::Producer.stub_any_instance(:produce, -> value, **opts { message = value; options = opts }) do
+        ::Kafka::Producer.stub_any_instance(:produce, ->(value, **opts) { message = value; options = opts }) do
           @appender.info(@message)
           @appender.flush
         end
@@ -25,12 +25,11 @@ module Appender
         h = JSON.parse(message)
         assert_equal 'info', h['level']
         assert_equal @message, h['message']
-        assert_equal "SemanticLogger::Appender::Kafka", h['name']
-        assert_equal $$, h['pid']
+        assert_equal 'SemanticLogger::Appender::Kafka', h['name']
+        assert_equal $PROCESS_ID, h['pid']
 
         assert_equal 'log_messages', options[:topic]
       end
-
     end
   end
 end

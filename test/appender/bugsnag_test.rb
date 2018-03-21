@@ -21,10 +21,10 @@ module Appender
               level.to_s
             end
           exception     = hash = nil
-          Bugsnag.stub(:notify, -> exc, h { exception = exc; hash = h }) do
+          Bugsnag.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
             @appender.send(level, @message)
           end
-          if [:trace, :debug].include?(level)
+          if %i[trace debug].include?(level)
             assert_nil exception
             assert_nil hash
           else
@@ -36,10 +36,10 @@ module Appender
 
         it "sends #{level} custom attributes" do
           exception = hash = nil
-          Bugsnag.stub(:notify, -> exc, h { exception = exc; hash = h }) do
-            @appender.send(level, @message, {key1: 1, key2: 'a'})
+          Bugsnag.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
+            @appender.send(level, @message, key1: 1, key2: 'a')
           end
-          if [:trace, :debug].include?(level)
+          if %i[trace debug].include?(level)
             assert_nil exception
             assert_nil hash
           else
@@ -54,10 +54,10 @@ module Appender
         it "sends #{level} exceptions" do
           error     = RuntimeError.new('Hello World')
           exception = hash = nil
-          Bugsnag.stub(:notify, -> exc, h { exception = exc; hash = h }) do
+          Bugsnag.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
             @appender.send(level, @message, error)
           end
-          if [:trace, :debug].include?(level)
+          if %i[trace debug].include?(level)
             assert_nil exception
             assert_nil hash
           else
@@ -67,7 +67,6 @@ module Appender
           end
         end
       end
-
     end
   end
 end

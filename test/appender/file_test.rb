@@ -12,8 +12,8 @@ module Appender
         @time                          = Time.new
         @io                            = StringIO.new
         @appender                      = SemanticLogger::Appender::File.new(io: @io)
-        @hash                          = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-        @hash_str                      = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+        @hash                          = {session_id: 'HSSKLEU@JDK767', tracking_number: 12_345}
+        @hash_str                      = @hash.inspect.sub('{', '\\{').sub('}', '\\}')
         @thread_name                   = Thread.current.name
         @file_name_reg_exp             = RUBY_VERSION.to_f <= 2.0 ? ' (mock|file_test).rb:\d+' : ' file_test.rb:\d+'
       end
@@ -88,15 +88,15 @@ module Appender
       describe 'custom formatter' do
         before do
           @appender = SemanticLogger::Appender::File.new(io: @io) do |log|
-            tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags && (log.tags.size > 0)
+            tags = log.tags.collect { |tag| "[#{tag}]" }.join(' ') + ' ' if log.tags&.size&.positive?
 
             message = log.message.to_s
             message << ' -- ' << log.payload.inspect if log.payload
             message << ' -- ' << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}" if log.exception
 
-            duration_str = log.duration ? " (#{'%.1f' % log.duration}ms)" : ''
+            duration_str = log.duration ? " (#{format('%.1f', log.duration)}ms)" : ''
 
-            "#{log.formatted_time} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
+            "#{log.formatted_time} #{log.level.to_s.upcase} [#{$PROCESS_ID}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
           end
         end
 
@@ -105,7 +105,6 @@ module Appender
           assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ DEBUG \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- \n/, @io.string)
         end
       end
-
     end
   end
 end

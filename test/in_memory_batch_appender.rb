@@ -6,4 +6,3 @@ class InMemoryBatchAppender < SemanticLogger::Subscriber
     self.message = logs
   end
 end
-

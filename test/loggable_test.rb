@@ -55,7 +55,7 @@ class AppenderFileTest < Minitest::Test
         base = Base.new
         base.perform
         called = false
-        Base.logger.stub(:info, -> description { called = true if description == 'perform' }) do
+        Base.logger.stub(:info, ->(description) { called = true if description == 'perform' }) do
           base.perform
         end
         assert called, 'Did not call the correct logger'
@@ -65,7 +65,7 @@ class AppenderFileTest < Minitest::Test
         subclass = Subclass.new
         subclass.process
         called = false
-        Subclass.logger.stub(:info, -> description { called = true if description == 'process' }) do
+        Subclass.logger.stub(:info, ->(description) { called = true if description == 'process' }) do
           subclass.process
         end
         assert called, 'Did not call the correct logger'
@@ -99,6 +99,5 @@ class AppenderFileTest < Minitest::Test
         end
       end
     end
-
   end
 end

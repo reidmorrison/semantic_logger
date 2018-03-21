@@ -16,7 +16,7 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, @message)
           end
           hash = JSON.parse(request.body)
@@ -33,7 +33,7 @@ module Appender
             exc = e
           end
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, 'Reading File', exc)
           end
           hash = JSON.parse(request.body)
@@ -46,8 +46,8 @@ module Appender
 
         it "send #{level} custom attributes" do
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
-            @appender.send(level, @message, {key1: 1, key2: 'a'})
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
+            @appender.send(level, @message, key1: 1, key2: 'a')
           end
           hash = JSON.parse(request.body)
           assert_equal @message, hash['message']
@@ -57,7 +57,6 @@ module Appender
           assert_equal 1, payload['key1'], payload
           assert_equal 'a', payload['key2'], payload
         end
-
       end
     end
   end

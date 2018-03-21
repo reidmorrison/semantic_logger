@@ -41,8 +41,8 @@ module Appender
         @time              = Time.new
         @mock_logger       = MockLogger.new
         @appender          = SemanticLogger::Appender::Wrapper.new(logger: @mock_logger)
-        @hash              = {session_id: 'HSSKLEU@JDK767', tracking_number: 12345}
-        @hash_str          = @hash.inspect.sub("{", "\\{").sub("}", "\\}")
+        @hash              = {session_id: 'HSSKLEU@JDK767', tracking_number: 12_345}
+        @hash_str          = @hash.inspect.sub('{', '\\{').sub('}', '\\}')
         @thread_name       = Thread.current.name
         @file_name_reg_exp = ' wrapper_test.rb:\d+'
       end
@@ -90,7 +90,6 @@ module Appender
           end
         end
       end
-
     end
   end
 end

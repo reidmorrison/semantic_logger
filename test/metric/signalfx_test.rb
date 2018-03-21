@@ -27,7 +27,7 @@ module Appender
           else
             response_mock = Struct.new(:code, :body)
             request       = nil
-            appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
+            appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
               appender.log(@log)
             end
           end
@@ -50,7 +50,7 @@ module Appender
 
         it 'whitelists dimensions' do
           @log.named_tags               = {user_id: 47, application: 'sample', tracking_number: 7474, session_id: 'hsdhngsd'}
-          appender.formatter.dimensions = [:user_id, :application]
+          appender.formatter.dimensions = %i[user_id application]
           assert response
         end
       end
@@ -72,7 +72,6 @@ module Appender
           assert appender.should_log?(@log)
         end
       end
-
     end
   end
 end

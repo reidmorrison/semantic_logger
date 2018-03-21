@@ -19,7 +19,7 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, @message)
           end
           body    = decompress_data(request.body)
@@ -37,7 +37,7 @@ module Appender
             exc = e
           end
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
             @appender.send(level, 'Reading File', exc)
           end
           body = decompress_data(request.body)
@@ -52,8 +52,8 @@ module Appender
 
         it "sends #{level} custom attributes" do
           request = nil
-          @appender.http.stub(:request, -> r { request = r; response_mock.new('200', 'ok') }) do
-            @appender.send(level, @message, {key1: 1, key2: 'a'})
+          @appender.http.stub(:request, ->(r) { request = r; response_mock.new('200', 'ok') }) do
+            @appender.send(level, @message, key1: 1, key2: 'a')
           end
           body    = decompress_data(request.body)
           message = JSON.parse(body)

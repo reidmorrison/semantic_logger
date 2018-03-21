@@ -6,18 +6,17 @@ require_relative '../test_helper'
 module Appender
   class NewRelicTest < Minitest::Test
     describe SemanticLogger::Appender::NewRelic do
-
       before do
         @appender = SemanticLogger::Appender::NewRelic.new
         @message  = 'AppenderNewRelicTest log message'
       end
 
-      (SemanticLogger::LEVELS - [:error, :fatal]).each do |level|
-        it "does not send :#{level.to_s} notifications to New Relic" do
+      (SemanticLogger::LEVELS - %i[error fatal]).each do |level|
+        it "does not send :#{level} notifications to New Relic" do
           exception = hash = nil
-          NewRelic::Agent.stub(:notice_error, -> exc, h { exception = exc; hash = h }) do
+          NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
             @appender.tagged('test') do
-              @appender.send(level, "AppenderNewRelicTest #{level.to_s} message")
+              @appender.send(level, "AppenderNewRelicTest #{level} message")
             end
           end
           assert_nil exception
@@ -25,10 +24,10 @@ module Appender
         end
       end
 
-      [:error, :fatal].each do |level|
-        it "sends :#{level.to_s} notifications to New Relic" do
+      %i[error fatal].each do |level|
+        it "sends :#{level} notifications to New Relic" do
           exception = hash = nil
-          NewRelic::Agent.stub(:notice_error, -> exc, h { exception = exc; hash = h }) do
+          NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
             @appender.tagged('test') do
               @appender.send(level, @message)
             end
@@ -43,7 +42,7 @@ module Appender
 
       it 'send notification to New Relic with custom attributes' do
         exception = hash = nil
-        NewRelic::Agent.stub(:notice_error, -> exc, h { exception = exc; hash = h }) do
+        NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
           SemanticLogger.tagged('test') do
             SemanticLogger.named_tagged(key1: 1, key2: 'a') do
               @appender.measure_error(message: @message, payload: {key3: 4}) do

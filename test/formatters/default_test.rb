@@ -56,7 +56,7 @@ module SemanticLogger
           end
 
           it 'supports time_format' do
-            formatter = SemanticLogger::Formatters::Default.new(time_format: "%H:%M:%S")
+            formatter = SemanticLogger::Formatters::Default.new(time_format: '%H:%M:%S')
             formatter.call(log, nil)
             assert_equal '08:32:05', formatter.time
           end
@@ -70,53 +70,53 @@ module SemanticLogger
 
         describe 'process_info' do
           it 'logs pid and thread name' do
-            assert_equal "[#{$$}:#{Thread.current.name}]", formatter.process_info
+            assert_equal "[#{$PROCESS_ID}:#{Thread.current.name}]", formatter.process_info
           end
 
           it 'logs pid, thread name, and file name' do
             set_exception
             log.backtrace = backtrace
-            assert_equal "[#{$$}:#{Thread.current.name} default_test.rb:99]", formatter.process_info
+            assert_equal "[#{$PROCESS_ID}:#{Thread.current.name} default_test.rb:99]", formatter.process_info
           end
         end
 
         describe 'tags' do
           it 'logs tags' do
-            log.tags = %w(first second third)
-            assert_equal "[first] [second] [third]", formatter.tags
+            log.tags = %w[first second third]
+            assert_equal '[first] [second] [third]', formatter.tags
           end
         end
 
         describe 'named_tags' do
           it 'logs named tags' do
             log.named_tags = {first: 1, second: 2, third: 3}
-            assert_equal "{first: 1, second: 2, third: 3}", formatter.named_tags
+            assert_equal '{first: 1, second: 2, third: 3}', formatter.named_tags
           end
         end
 
         describe 'duration' do
           it 'logs long duration' do
             log.duration = 1_000_000.34567
-            assert_equal "(16m 40s)", formatter.duration
+            assert_equal '(16m 40s)', formatter.duration
           end
 
           it 'logs short duration' do
             log.duration = 1.34567
-            duration     = SemanticLogger::Formatters::Base::PRECISION == 3 ? "(1ms)" : "(1.346ms)"
+            duration     = SemanticLogger::Formatters::Base::PRECISION == 3 ? '(1ms)' : '(1.346ms)'
             assert_equal duration, formatter.duration
           end
         end
 
         describe 'name' do
           it 'logs name' do
-            assert_equal "DefaultTest", formatter.name
+            assert_equal 'DefaultTest', formatter.name
           end
         end
 
         describe 'message' do
           it 'logs message' do
-            log.message = "Hello World"
-            assert_equal "-- Hello World", formatter.message
+            log.message = 'Hello World'
+            assert_equal '-- Hello World', formatter.message
           end
 
           it 'skips empty message' do
@@ -127,7 +127,7 @@ module SemanticLogger
         describe 'payload' do
           it 'logs hash payload' do
             log.payload = {first: 1, second: 2, third: 3}
-            assert_equal "-- {:first=>1, :second=>2, :third=>3}", formatter.payload
+            assert_equal '-- {:first=>1, :second=>2, :third=>3}', formatter.payload
           end
 
           it 'skips nil payload' do
@@ -153,23 +153,22 @@ module SemanticLogger
 
         describe 'call' do
           it 'returns minimal elements' do
-            assert_equal "#{expected_time} D [#{$$}:#{Thread.current.name}] DefaultTest", formatter.call(log, nil)
+            assert_equal "#{expected_time} D [#{$PROCESS_ID}:#{Thread.current.name}] DefaultTest", formatter.call(log, nil)
           end
 
           it 'retuns all elements' do
-            log.tags       = %w(first second third)
+            log.tags       = %w[first second third]
             log.named_tags = {first: 1, second: 2, third: 3}
             log.duration   = 1.34567
-            log.message    = "Hello World"
+            log.message    = 'Hello World'
             log.payload    = {first: 1, second: 2, third: 3}
             log.backtrace  = backtrace
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? '1' : '1.346'
-            str      = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
+            str      = "#{expected_time} D [#{$PROCESS_ID}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end
-
       end
     end
   end

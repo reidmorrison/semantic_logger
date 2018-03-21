@@ -3,7 +3,6 @@ AllCops:
   Exclude:
     - '.git/**/*'
     - 'docs/**/*'
-    - 'test/**/*'
 
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
@@ -98,6 +97,9 @@ Style/FrozenStringLiteralComment:
 
 Style/NumericPredicate:
   AutoCorrect: true
+
+Style/SingleLineMethods:
+  AutoCorrect: false
 
 # Does not allow Symbols to load
 Security/YAMLLoad:

@@ -46,7 +46,7 @@ class MeasureTest < Minitest::Test
 
         it ':exception' do
           assert_raises RuntimeError do
-            logger.send(measure_level, 'hello world', payload: payload) { raise RuntimeError.new('Test') }
+            logger.send(measure_level, 'hello world', payload: payload) { raise 'Test' }
           end
 
           assert log = log_message
@@ -57,7 +57,7 @@ class MeasureTest < Minitest::Test
 
         it ':on_exception_level' do
           assert_raises RuntimeError do
-            logger.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise RuntimeError.new('Test') }
+            logger.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
           end
 
           assert log = log_message
@@ -69,7 +69,7 @@ class MeasureTest < Minitest::Test
         describe 'log_exception' do
           it 'default' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world') { raise RuntimeError.new('Test') }
+              logger.send(measure_level, 'hello world') { raise 'Test' }
             end
 
             assert log = log_message
@@ -79,7 +79,7 @@ class MeasureTest < Minitest::Test
 
           it ':full' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world', log_exception: :full) { raise RuntimeError.new('Test') }
+              logger.send(measure_level, 'hello world', log_exception: :full) { raise 'Test' }
             end
 
             assert log = log_message
@@ -91,7 +91,7 @@ class MeasureTest < Minitest::Test
 
           it ':partial' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world', log_exception: :partial) { raise RuntimeError.new('Test') }
+              logger.send(measure_level, 'hello world', log_exception: :partial) { raise 'Test' }
             end
 
             assert log = log_message
@@ -101,7 +101,7 @@ class MeasureTest < Minitest::Test
 
           it ':none' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world', log_exception: :none) { raise RuntimeError.new('Test') }
+              logger.send(measure_level, 'hello world', log_exception: :none) { raise 'Test' }
             end
 
             assert log = log_message
@@ -124,7 +124,7 @@ class MeasureTest < Minitest::Test
 
             assert log = log_message
             assert log.backtrace
-            assert log.backtrace.size > 0
+            assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
             h = log.to_h
@@ -171,7 +171,7 @@ class MeasureTest < Minitest::Test
 
         it ':exception' do
           assert_raises RuntimeError do
-            logger.measure(level, 'hello world', payload: payload) { raise RuntimeError.new('Test') }
+            logger.measure(level, 'hello world', payload: payload) { raise 'Test' }
           end
 
           assert log = log_message
@@ -182,7 +182,7 @@ class MeasureTest < Minitest::Test
 
         it ':on_exception_level' do
           assert_raises RuntimeError do
-            logger.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise RuntimeError.new('Test') }
+            logger.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
           end
 
           assert log = log_message
@@ -205,7 +205,7 @@ class MeasureTest < Minitest::Test
 
             assert log = log_message
             assert log.backtrace
-            assert log.backtrace.size > 0
+            assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
             h = log.to_h
@@ -253,7 +253,7 @@ class MeasureTest < Minitest::Test
 
         it ':exception' do
           assert_raises RuntimeError do
-            logger.send(measure_level, message: 'hello world', payload: payload) { raise RuntimeError.new('Test') }
+            logger.send(measure_level, message: 'hello world', payload: payload) { raise 'Test' }
           end
 
           assert log = log_message
@@ -264,7 +264,7 @@ class MeasureTest < Minitest::Test
 
         it ':on_exception_level' do
           assert_raises RuntimeError do
-            logger.send(measure_level, message: 'hello world', payload: payload, on_exception_level: :fatal) { raise RuntimeError.new('Test') }
+            logger.send(measure_level, message: 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
           end
 
           assert log = log_message
@@ -287,7 +287,7 @@ class MeasureTest < Minitest::Test
 
             assert log = log_message
             assert log.backtrace
-            assert log.backtrace.size > 0
+            assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
             h = log.to_h
@@ -296,7 +296,6 @@ class MeasureTest < Minitest::Test
           end
         end
       end
-
     end
 
     describe 'return' do
@@ -343,6 +342,5 @@ class MeasureTest < Minitest::Test
       end
       'Bad'
     end
-
   end
 end

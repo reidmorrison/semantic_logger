@@ -36,7 +36,7 @@ module SemanticLogger
         describe 'message' do
           it 'logs message' do
             log.message = "Hello \nWorld\n"
-            assert_equal "-- Hello World", formatter.message
+            assert_equal '-- Hello World', formatter.message
           end
 
           it 'skips empty message' do
@@ -54,7 +54,6 @@ module SemanticLogger
             refute formatter.exception
           end
         end
-
       end
     end
   end

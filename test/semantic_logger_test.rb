@@ -124,7 +124,7 @@ class SemanticLoggerTest < Minitest::Test
             logger.info('Hello world')
 
             assert log = log_message
-            assert_equal %w(12345 DJHSFK), log.tags
+            assert_equal %w[12345 DJHSFK], log.tags
           end
         end
 
@@ -190,7 +190,7 @@ class SemanticLoggerTest < Minitest::Test
             logger.info('Hello world')
 
             assert log = log_message
-            assert_equal %w(12345), log.tags
+            assert_equal %w[12345], log.tags
           end
         end
       end
@@ -271,8 +271,6 @@ class SemanticLoggerTest < Minitest::Test
           assert_equal 'hello world', log.message
         end
       end
-
     end
-
   end
 end

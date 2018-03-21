@@ -6,7 +6,6 @@ require_relative '../test_helper'
 module Metric
   class NewRelicTest < Minitest::Test
     describe SemanticLogger::Appender::NewRelic do
-
       before do
         @appender = SemanticLogger::Metric::NewRelic.new
         @message  = 'AppenderNewRelicTest log message'
@@ -14,7 +13,7 @@ module Metric
 
       it 'logs counter metric' do
         name = amount = nil
-        NewRelic::Agent.stub(:increment_metric, -> name_, amount_ { name = name_, amount = amount_ }) do
+        NewRelic::Agent.stub(:increment_metric, ->(name_, amount_) { name = name_, amount = amount_ }) do
           @appender.info(message: @message, metric: 'User/authenticated')
         end
         assert_equal 'Custom/User/authenticated', name.first
@@ -23,7 +22,7 @@ module Metric
 
       it 'logs duration metric' do
         name = duration = nil
-        NewRelic::Agent.stub(:record_metric, -> name_, duration_ { name = name_, duration = duration_ }) do
+        NewRelic::Agent.stub(:record_metric, ->(name_, duration_) { name = name_, duration = duration_ }) do
           @appender.measure_info(message: @message, metric: 'User/authenticate') do
             sleep 0.001
           end

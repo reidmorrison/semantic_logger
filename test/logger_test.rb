@@ -11,7 +11,6 @@ class LoggerTest < Minitest::Test
 
     # Ensure that any log level can be logged
     SemanticLogger::LEVELS.each do |level|
-
       describe "##{level}" do
         describe 'positional parameter' do
           it 'logs message' do
@@ -44,7 +43,7 @@ class LoggerTest < Minitest::Test
               assert_equal 'hello world -- Calculations', log.message
               assert_equal payload, log.payload
               assert log.backtrace
-              assert log.backtrace.size > 0, log.backtrace
+              assert log.backtrace.size.positive?, log.backtrace
             end
           end
 
@@ -56,7 +55,7 @@ class LoggerTest < Minitest::Test
               assert log = log_message
               assert_equal 'hello world', log.message
               assert log.backtrace
-              assert log.backtrace.size > 0, log.backtrace
+              assert log.backtrace.size.positive?, log.backtrace
 
               assert log.exception
               refute log.exception.backtrace
@@ -153,7 +152,7 @@ class LoggerTest < Minitest::Test
         describe '#filter' do
           describe 'at the appender level' do
             it 'Proc' do
-              appender.filter = -> log { (/\AExclude/ =~ log.message).nil? }
+              appender.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
 
               refute log_message
@@ -161,7 +160,7 @@ class LoggerTest < Minitest::Test
 
             it 'RegExp' do
               filter          = /\ALogger/
-              appender.filter = -> log { (/\AExclude/ =~ log.message).nil? }
+              appender.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
 
               refute log_message
@@ -170,7 +169,7 @@ class LoggerTest < Minitest::Test
 
           describe 'at the logger level' do
             it 'Proc' do
-              logger.filter = -> log { (/\AExclude/ =~ log.message).nil? }
+              logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
 
               refute log_message
@@ -178,13 +177,12 @@ class LoggerTest < Minitest::Test
 
             it 'RegExp' do
               filter        = /\ALogger/
-              logger.filter = -> log { (/\AExclude/ =~ log.message).nil? }
+              logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
 
               refute log_message
             end
           end
-
         end
       end
     end
@@ -261,7 +259,7 @@ class LoggerTest < Minitest::Test
 
           assert log = log_message
           assert_equal 'hello world', log.message
-          assert_equal %w(12345 DJHSFK), log.tags
+          assert_equal %w[12345 DJHSFK], log.tags
         end
       end
 
@@ -292,15 +290,14 @@ class LoggerTest < Minitest::Test
       end
 
       it 'is compatible with rails logging that uses arrays and nils' do
-        logger.tagged('', ['12345', 'DJHSFK'], nil) do
+        logger.tagged('', %w[12345 DJHSFK], nil) do
           logger.info('hello world')
 
           assert log = log_message
           assert_equal 'hello world', log.message
-          assert_equal %w(12345 DJHSFK), log.tags
+          assert_equal %w[12345 DJHSFK], log.tags
         end
       end
     end
-
   end
 end

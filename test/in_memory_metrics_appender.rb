@@ -11,4 +11,3 @@ class InMemoryMetricsAppender < SemanticLogger::Subscriber
     log.metric && meets_log_level?(log) && !filtered?(log)
   end
 end
-

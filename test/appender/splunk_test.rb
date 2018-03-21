@@ -4,7 +4,6 @@ require_relative '../test_helper'
 #
 module Appender
   class SplunkTest < Minitest::Test
-
     class Mock
       attr_accessor :message, :event
 
@@ -57,7 +56,7 @@ module Appender
         it "sends #{level} custom attributes" do
           mock = Mock.new
           @appender.stub(:service_index, mock) do
-            @appender.send(level, @message, {key1: 1, key2: 'a'})
+            @appender.send(level, @message, key1: 1, key2: 'a')
           end
           assert_equal @message, mock.message
 
@@ -80,6 +79,5 @@ module Appender
         assert_nil mock.message
       end
     end
-
   end
 end

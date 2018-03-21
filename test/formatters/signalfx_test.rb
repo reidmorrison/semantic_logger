@@ -29,9 +29,9 @@ module SemanticLogger
         end
 
         let :same_logs do
-          3.times.collect do |i|
+          3.times.collect do |_i|
             l        = log.dup
-            l.metric = "/user/login"
+            l.metric = '/user/login'
             l
           end
         end
@@ -73,7 +73,7 @@ module SemanticLogger
             assert_equal counter_metric_name, counter['metric'], counter
             assert_equal 1, counter['value'], counter
             assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
-            assert counter.has_key?('dimensions')
+            assert counter.key?('dimensions')
           end
 
           it 'send gauge metric when log includes duration' do
@@ -84,7 +84,7 @@ module SemanticLogger
             assert_equal average_metric_name, counter['metric'], counter
             assert_equal 1234, counter['value'], counter
             assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
-            assert counter.has_key?('dimensions')
+            assert counter.key?('dimensions')
           end
 
           it 'also sends counter metric when gauge metric is sent' do
@@ -95,12 +95,12 @@ module SemanticLogger
             assert_equal counter_metric_name, counter['metric'], counter
             assert_equal 1, counter['value'], counter
             assert_equal (log.time.to_i * 1_000).to_i, counter['timestamp'], counter
-            assert counter.has_key?('dimensions')
+            assert counter.key?('dimensions')
           end
 
           it 'only forwards whitelisted dimensions from named_tags' do
             log.named_tags       = {user_id: 47, tracking_number: 7474, session_id: 'hsdhngsd'}
-            formatter.dimensions = [:user_id, :application]
+            formatter.dimensions = %i[user_id application]
             hash                 = result
             assert counters = hash['counter'], hash
             assert counter = counters.first, hash
@@ -156,7 +156,7 @@ module SemanticLogger
 
           describe 'send custom' do
             let :logs do
-              3.times.collect do |i|
+              3.times.collect do |_i|
                 l            = log.dup
                 l.metric     = 'Filter/count'
                 l.dimensions = dimensions
@@ -175,7 +175,6 @@ module SemanticLogger
               assert_equal all_dimensions, counter['dimensions']
             end
           end
-
         end
 
         describe 'format batch logs with aggregation' do
@@ -192,9 +191,7 @@ module SemanticLogger
             assert_equal 3, counters[0]['value']
           end
         end
-
       end
-
     end
   end
 end

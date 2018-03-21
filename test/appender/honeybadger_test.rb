@@ -13,25 +13,25 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
           hash = nil
-          Honeybadger.stub(:notify, -> h { hash = h }) do
+          Honeybadger.stub(:notify, ->(h) { hash = h }) do
             @appender.send(level, @message)
           end
           assert_equal @message, hash[:error_message]
           assert_equal 'SemanticLogger::Appender::Honeybadger', hash[:error_class]
 
-          if [:error, :fatal].include?(level)
-            assert hash.has_key?(:backtrace)
+          if %i[error fatal].include?(level)
+            assert hash.key?(:backtrace)
           else
-            refute hash.has_key?(:backtrace)
+            refute hash.key?(:backtrace)
           end
-          assert_equal true, hash.has_key?(:context)
+          assert_equal true, hash.key?(:context)
           assert_equal level, hash[:context][:level]
         end
 
         it "sends #{level} exceptions" do
           error     = RuntimeError.new('Oh no, Error.')
           exception = hash = nil
-          Honeybadger.stub(:notify, -> exc, h { exception = exc; hash = h }) do
+          Honeybadger.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
             @appender.send(level, @message, error)
           end
 
@@ -40,7 +40,6 @@ module Appender
           assert_equal @message, hash[:message], hash
         end
       end
-
     end
   end
 end

@@ -55,7 +55,6 @@ module Appender
           assert_equal 'hello world', logs.first.message
         end
       end
-
     end
   end
 end

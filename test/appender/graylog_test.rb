@@ -9,11 +9,11 @@ module Appender
         @message  = 'AppenderGraylogTest log message'
       end
 
-      (SemanticLogger::LEVELS - [:info, :warn, :error, :fatal]).each do |level|
+      (SemanticLogger::LEVELS - %i[info warn error fatal]).each do |level|
         it "not send :#{level} notifications to Graylog" do
           hash = nil
-          @appender.notifier.stub(:notify!, -> h { hash = h }) do
-            @appender.send(level, "AppenderGraylogTest #{level.to_s} message")
+          @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+            @appender.send(level, "AppenderGraylogTest #{level} message")
           end
           assert_nil hash
         end
@@ -27,7 +27,7 @@ module Appender
         rescue Exception => e
           exc = e
         end
-        @appender.notifier.stub(:notify!, -> h { hash = h }) do
+        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           @appender.error 'Reading File', exc
         end
         assert_equal 'Reading File', hash[:short_message]
@@ -45,7 +45,7 @@ module Appender
         rescue Exception => e
           exc = e
         end
-        @appender.notifier.stub(:notify!, -> h { hash = h }) do
+        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           @appender.error exc
         end
         assert_equal exc.message, hash[:short_message]
@@ -57,7 +57,7 @@ module Appender
 
       it 'send error notifications to Graylog with severity' do
         hash = nil
-        @appender.notifier.stub(:notify!, -> h { hash = h }) do
+        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           @appender.error @message
         end
         assert_equal @message, hash[:short_message]
@@ -67,8 +67,8 @@ module Appender
 
       it 'send notification to Graylog with custom attributes' do
         hash = nil
-        @appender.notifier.stub(:notify!, -> h { hash = h }) do
-          @appender.error @message, {key1: 1, key2: 'a'}
+        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          @appender.error @message, key1: 1, key2: 'a'
         end
         assert_equal @message, hash[:short_message]
         assert_equal 3, hash[:level]
