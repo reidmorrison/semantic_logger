@@ -11,65 +11,68 @@ end
 #
 # Example:
 #   SemanticLogger.add_appender(metric: :new_relic)
-class SemanticLogger::Metric::NewRelic < SemanticLogger::Subscriber
-  attr_accessor :prefix
+module SemanticLogger
+  module Metric
+    class NewRelic < SemanticLogger::Subscriber
+      attr_accessor :prefix
 
-  # Create Appender
-  #
-  # Parameters
-  #   :prefix [String]
-  #     Prefix to add to every metric before forwarding to NewRelic.
-  #     Default: 'Custom'
-  #
-  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
-  #     Override the log level for this appender.
-  #     Default: :error
-  #
-  #   formatter: [Object|Proc]
-  #     An instance of a class that implements #call, or a Proc to be used to format
-  #     the output from this appender
-  #     Default: Use the built-in formatter (See: #call)
-  #
-  #   filter: [Regexp|Proc]
-  #     RegExp: Only include log messages where the class name matches the supplied.
-  #     regular expression. All other messages will be ignored.
-  #     Proc: Only include log messages where the supplied Proc returns true
-  #           The Proc must return true or false.
-  def initialize(prefix: 'Custom',
-                 level: nil,
-                 formatter: nil,
-                 filter: nil,
-                 application: nil,
-                 host: nil,
-                 &block)
+      # Create Appender
+      #
+      # Parameters
+      #   :prefix [String]
+      #     Prefix to add to every metric before forwarding to NewRelic.
+      #     Default: 'Custom'
+      #
+      #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+      #     Override the log level for this appender.
+      #     Default: :error
+      #
+      #   formatter: [Object|Proc]
+      #     An instance of a class that implements #call, or a Proc to be used to format
+      #     the output from this appender
+      #     Default: Use the built-in formatter (See: #call)
+      #
+      #   filter: [Regexp|Proc]
+      #     RegExp: Only include log messages where the class name matches the supplied.
+      #     regular expression. All other messages will be ignored.
+      #     Proc: Only include log messages where the supplied Proc returns true
+      #           The Proc must return true or false.
+      def initialize(prefix: 'Custom',
+                     level: nil,
+                     formatter: nil,
+                     filter: nil,
+                     application: nil,
+                     host: nil,
+                     &block)
 
-    @prefix = prefix
-    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
-  end
+        @prefix = prefix
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+      end
 
-  # Returns metric name to use.
-  def call(log, _logger)
-    metric = log.metric
-    # Add prefix for NewRelic
-    metric = "#{prefix}/#{metric}" unless metric.start_with?(prefix)
-    metric
-  end
+      # Returns metric name to use.
+      def call(log, _logger)
+        metric = log.metric
+        # Add prefix for NewRelic
+        metric = "#{prefix}/#{metric}" unless metric.start_with?(prefix)
+        metric
+      end
 
-  def log(log)
-    name = formatter.call(log, self)
-    if duration = log.duration
-      # Convert duration to seconds
-      ::NewRelic::Agent.record_metric(name, duration / 1000.0)
-    else
-      ::NewRelic::Agent.increment_metric(name, log.metric_amount || 1)
+      def log(log)
+        name = formatter.call(log, self)
+        if (duration = log.duration)
+          # Convert duration to seconds
+          ::NewRelic::Agent.record_metric(name, duration / 1000.0)
+        else
+          ::NewRelic::Agent.increment_metric(name, log.metric_amount || 1)
+        end
+        true
+      end
+
+      # Only forward log entries that contain metrics.
+      def should_log?(log)
+        # Does not support metrics with dimensions.
+        log.metric && !log.dimensions && meets_log_level?(log) && !filtered?(log)
+      end
     end
-    true
   end
-
-  # Only forward log entries that contain metrics.
-  def should_log?(log)
-    # Does not support metrics with dimensions.
-    log.metric && !log.dimensions && meets_log_level?(log) && !filtered?(log)
-  end
-
 end

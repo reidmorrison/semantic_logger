@@ -11,58 +11,61 @@ end
 #
 # Example:
 #   SemanticLogger.add_appender(appender: :new_relic)
-class SemanticLogger::Appender::NewRelic < SemanticLogger::Subscriber
-  # Create Appender
-  #
-  # Parameters
-  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
-  #     Override the log level for this appender.
-  #     Default: :error
-  #
-  #   formatter: [Object|Proc]
-  #     An instance of a class that implements #call, or a Proc to be used to format
-  #     the output from this appender
-  #     Default: Use the built-in formatter (See: #call)
-  #
-  #   filter: [Regexp|Proc]
-  #     RegExp: Only include log messages where the class name matches the supplied.
-  #     regular expression. All other messages will be ignored.
-  #     Proc: Only include log messages where the supplied Proc returns true
-  #           The Proc must return true or false.
-  def initialize(level: :error,
-                 formatter: nil,
-                 filter: nil,
-                 application: nil,
-                 host: nil,
-                 &block)
+module SemanticLogger
+  module Appender
+    class NewRelic < SemanticLogger::Subscriber
+      # Create Appender
+      #
+      # Parameters
+      #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+      #     Override the log level for this appender.
+      #     Default: :error
+      #
+      #   formatter: [Object|Proc]
+      #     An instance of a class that implements #call, or a Proc to be used to format
+      #     the output from this appender
+      #     Default: Use the built-in formatter (See: #call)
+      #
+      #   filter: [Regexp|Proc]
+      #     RegExp: Only include log messages where the class name matches the supplied.
+      #     regular expression. All other messages will be ignored.
+      #     Proc: Only include log messages where the supplied Proc returns true
+      #           The Proc must return true or false.
+      def initialize(level: :error,
+                     formatter: nil,
+                     filter: nil,
+                     application: nil,
+                     host: nil,
+                     &block)
 
-    super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
-  end
-
-  # Returns [Hash] of parameters to send to New Relic.
-  def call(log, logger)
-    h = SemanticLogger::Formatters::Raw.new.call(log, logger)
-    h.delete(:time)
-    h.delete(:exception)
-    {metric: log.metric, custom_params: h}
-  end
-
-  # Send an error notification to New Relic
-  def log(log)
-    # Send error messages as Runtime exceptions
-    exception =
-      if log.exception
-        log.exception
-      else
-        error = RuntimeError.new(log.message)
-        error.set_backtrace(log.backtrace) if log.backtrace
-        error
+        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
       end
-    # For more documentation on the NewRelic::Agent.notice_error method see:
-    # http://rubydoc.info/github/newrelic/rpm/NewRelic/Agent#notice_error-instance_method
-    # and https://docs.newrelic.com/docs/ruby/ruby-agent-api
-    NewRelic::Agent.notice_error(exception, formatter.call(log, self))
-    true
-  end
 
+      # Returns [Hash] of parameters to send to New Relic.
+      def call(log, logger)
+        h = SemanticLogger::Formatters::Raw.new.call(log, logger)
+        h.delete(:time)
+        h.delete(:exception)
+        {metric: log.metric, custom_params: h}
+      end
+
+      # Send an error notification to New Relic
+      def log(log)
+        # Send error messages as Runtime exceptions
+        exception =
+          if log.exception
+            log.exception
+          else
+            error = RuntimeError.new(log.message)
+            error.set_backtrace(log.backtrace) if log.backtrace
+            error
+          end
+        # For more documentation on the NewRelic::Agent.notice_error method see:
+        # http://rubydoc.info/github/newrelic/rpm/NewRelic/Agent#notice_error-instance_method
+        # and https://docs.newrelic.com/docs/ruby/ruby-agent-api
+        ::NewRelic::Agent.notice_error(exception, formatter.call(log, self))
+        true
+      end
+    end
+  end
 end

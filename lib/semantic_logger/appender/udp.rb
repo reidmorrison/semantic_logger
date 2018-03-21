@@ -82,12 +82,12 @@ module SemanticLogger
 
       # Flush is called by the semantic_logger during shutdown.
       def flush
-        @socket.flush if @socket
+        @socket&.flush
       end
 
       # Close is called during shutdown, or with reopen
       def close
-        @socket.close if @socket
+        @socket&.close
       end
 
       private
@@ -96,7 +96,6 @@ module SemanticLogger
       def default_formatter
         SemanticLogger::Formatters::Json.new
       end
-
     end
   end
 end

@@ -28,7 +28,6 @@ module SemanticLogger
       # * `lag_check_interval` is not applicable to batches, since the first message of every batch
       #   is the oldest and is always checked to see if the lag interval has been exceeded.
       def initialize(appender:,
-                     name: appender.class.name,
                      max_queue_size: 10_000,
                      lag_threshold_s: 30,
                      batch_size: 300,
@@ -39,7 +38,6 @@ module SemanticLogger
         @signal        = Concurrent::Event.new
         super(
           appender:        appender,
-          name:            name,
           max_queue_size:  max_queue_size,
           lag_threshold_s: lag_threshold_s
         )
@@ -79,7 +77,7 @@ module SemanticLogger
               process_message(message)
             end
           end
-          appender.batch(logs) if logs.size > 0
+          appender.batch(logs) if logs.size.positive?
           signal.reset unless queue.size >= batch_size
         end
       end
@@ -89,7 +87,6 @@ module SemanticLogger
         signal.set
         super
       end
-
     end
   end
 end

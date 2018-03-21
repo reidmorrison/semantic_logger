@@ -43,7 +43,8 @@ module SemanticLogger
         @logger = logger
 
         # Check if the custom appender responds to all the log levels. For example Ruby ::Logger
-        if does_not_implement = LEVELS[1..-1].find { |i| !@logger.respond_to?(i) }
+        does_not_implement = LEVELS[1..-1].find { |i| !@logger.respond_to?(i) }
+        if does_not_implement
           raise(ArgumentError, "Supplied logger does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..-1].inspect}")
         end
 
@@ -63,7 +64,6 @@ module SemanticLogger
       def flush
         @logger.flush if @logger.respond_to?(:flush)
       end
-
     end
   end
 end

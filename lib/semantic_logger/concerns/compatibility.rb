@@ -29,11 +29,12 @@ module SemanticLogger
       end
 
       # :nodoc:
-      def close
+      def close;
       end
 
       # :nodoc:
       def reopen(logdev = nil)
+        ;
       end
 
       # :nodoc:
@@ -47,7 +48,6 @@ module SemanticLogger
           false
         end
       end
-
     end
   end
 end

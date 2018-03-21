@@ -30,13 +30,12 @@ module SemanticLogger
       #   Strip leading '/'
       #   Convert remaining '/' to '.'
       def metric
+        name = log.metric.to_s.sub(/\A\/+/, '')
         if log.dimensions
-          name = log.metric.to_s.sub(/\A\/+/, '')
-          name.gsub!('/', '.')
+          name.tr!('/', '.')
           hash[:metric] = name
         else
           # Extract class and action from metric name
-          name  = log.metric.to_s.sub(/\A\/+/, '')
           names = name.split('/')
           h     = (hash[:dimensions] ||= {})
           if names.size > 1
@@ -75,7 +74,7 @@ module SemanticLogger
             name  = name.to_sym
             value = value.to_s
             next if value.empty?
-            h[name] = value if dimensions && dimensions.include?(name)
+            h[name] = value if dimensions&.include?(name)
           end
         end
         h[:host]        = logger.host if log_host && logger.host
@@ -163,7 +162,6 @@ module SemanticLogger
             (item[:dimensions] == metric[:dimensions])
         end
       end
-
     end
   end
 end

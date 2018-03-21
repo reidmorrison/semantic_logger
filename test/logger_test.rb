@@ -204,9 +204,9 @@ class LoggerTest < Minitest::Test
         it "log Ruby logger #{level} info" do
           logger.level = Logger::Severity.const_get(level)
           if level.to_s == 'UNKNOWN'
-            assert_equal Logger::Severity.const_get('ERROR')+1, logger.send(:level_index)
+            assert_equal Logger::Severity.const_get('ERROR') + 1, logger.send(:level_index)
           else
-            assert_equal Logger::Severity.const_get(level)+1, logger.send(:level_index)
+            assert_equal Logger::Severity.const_get(level) + 1, logger.send(:level_index)
           end
         end
       end

@@ -30,7 +30,7 @@ module SemanticLogger
       end
 
       # Time is part of the syslog packet and is not included in the formatted message.
-      def time
+      def time;
       end
 
       def call(log, logger)
@@ -45,7 +45,7 @@ module SemanticLogger
         packet          = SyslogProtocol::Packet.new
         packet.hostname = logger.host
         packet.facility = facility
-        packet.tag      = logger.application.gsub(' ', '')
+        packet.tag      = logger.application.delete(' ')
         packet.content  = message
         packet.time     = log.time
         packet.severity = level_map[log.level]
@@ -54,4 +54,3 @@ module SemanticLogger
     end
   end
 end
-

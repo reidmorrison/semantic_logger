@@ -61,15 +61,13 @@ module SemanticLogger
       end
     end
 
-    private
-
-    ASYNC_OPTION_KEYS = [:max_queue_size, :lag_threshold_s, :batch_size, :batch_seconds, :lag_check_interval]
+    ASYNC_OPTION_KEYS = %i[max_queue_size lag_threshold_s batch_size batch_seconds lag_check_interval].freeze
 
     # Returns [Subscriber] instance from the supplied options.
     def self.build(options, &block)
       if options[:io] || options[:file_name]
         SemanticLogger::Appender::File.new(options, &block)
-      elsif appender = options.delete(:appender)
+      elsif (appender = options.delete(:appender))
         if appender.is_a?(Symbol)
           SemanticLogger::Utils.constantize_symbol(appender).new(options)
         elsif appender.is_a?(Subscriber)
@@ -77,7 +75,7 @@ module SemanticLogger
         else
           raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
         end
-      elsif appender = options.delete(:metric)
+      elsif (appender = options.delete(:metric))
         if appender.is_a?(Symbol)
           SemanticLogger::Utils.constantize_symbol(appender, 'SemanticLogger::Metric').new(options)
         elsif appender.is_a?(Subscriber)
@@ -90,5 +88,6 @@ module SemanticLogger
       end
     end
 
+    private_class_method :build
   end
 end

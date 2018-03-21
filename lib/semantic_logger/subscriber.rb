@@ -104,6 +104,5 @@ module SemanticLogger
     def level_index
       @level_index || 0
     end
-
   end
 end

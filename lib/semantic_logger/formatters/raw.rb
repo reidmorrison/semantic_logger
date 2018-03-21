@@ -2,7 +2,6 @@ require 'json'
 module SemanticLogger
   module Formatters
     class Raw < Base
-
       # Fields are added by populating this hash.
       attr_accessor :hash, :log, :logger, :time_key
 
@@ -35,14 +34,14 @@ module SemanticLogger
 
       # Process info
       def process_info
-        hash[:pid]    = $$
+        hash[:pid]    = $PROCESS_ID
         hash[:thread] = log.thread_name
 
         file, line = log.file_name_and_line
-        if file
-          hash[:file] = file
-          hash[:line] = line.to_i
-        end
+        return unless file
+
+        hash[:file] = file
+        hash[:line] = line.to_i
       end
 
       # Tags
@@ -75,7 +74,7 @@ module SemanticLogger
 
       # Payload
       def payload
-        hash[:payload] = log.payload if log.payload && log.payload.respond_to?(:empty?) && !log.payload.empty?
+        hash[:payload] = log.payload if log.payload&.respond_to?(:empty?) && !log.payload.empty?
       end
 
       # Exception
@@ -83,7 +82,7 @@ module SemanticLogger
         return unless log.exception
         root = hash
         log.each_exception do |exception, i|
-          name       = i == 0 ? :exception : :cause
+          name       = i.zero? ? :exception : :cause
           root[name] = {
             name:        exception.class.name,
             message:     exception.message,
@@ -108,8 +107,6 @@ module SemanticLogger
         host; application; time; level; process_info; duration; tags; named_tags; name; message; payload; exception; metric
         hash
       end
-
     end
   end
 end
-

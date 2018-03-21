@@ -1,3 +1,3 @@
-module SemanticLogger #:nodoc
-  VERSION = '4.2.0'
+module SemanticLogger
+  VERSION = '4.2.0'.freeze
 end

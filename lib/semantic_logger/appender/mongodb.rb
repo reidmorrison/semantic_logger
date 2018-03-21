@@ -103,7 +103,7 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(uri:, collection_name: 'semantic_logger', write_concern: 0, collection_size: 1024**3, collection_max: nil,
+      def initialize(uri:, collection_name: 'semantic_logger', write_concern: 0, collection_size: 1024 ** 3, collection_max: nil,
                      level: nil, formatter: nil, filter: nil, host: nil, application: nil, &block)
 
         @client          = Mongo::Client.new(uri, logger: logger)
@@ -144,10 +144,10 @@ module SemanticLogger
         begin
           @collection.create
         rescue Mongo::Error::OperationFailure
-          # Already exists
+          nil
         end
 
-        @collection.indexes.create_one({tags: 1})
+        @collection.indexes.create_one(tags: 1)
       end
 
       # Purge all data from the capped collection by dropping the collection

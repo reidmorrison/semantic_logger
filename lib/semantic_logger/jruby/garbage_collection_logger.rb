@@ -5,7 +5,7 @@ module SemanticLogger
 
       # Only log the garbage collection if the number of microseconds exceeds
       # this value
-      def initialize(min_microseconds = 10000)
+      def initialize(min_microseconds = 10_000)
         @min_microseconds = min_microseconds
       end
 
@@ -17,11 +17,14 @@ module SemanticLogger
         info     = Java::ComSunManagement::GarbageCollectionNotificationInfo.from(notification.user_data)
         gc_info  = info.gc_info
         duration = gc_info.duration
-        if duration >= @min_microseconds
-          SemanticLogger['GarbageCollector'].measure_warn "Garbage Collection completed: #{info.gc_name} ##{gc_info.id}", duration: duration.to_f / 1000
-        end
+
+        return unless duration >= @min_microseconds
+
+        SemanticLogger['GarbageCollector'].measure_warn(
+          "Garbage Collection completed: #{info.gc_name} ##{gc_info.id}",
+          duration: duration.to_f / 1000
+        )
       end
     end
-
   end
 end

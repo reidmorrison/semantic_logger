@@ -20,18 +20,16 @@ module SemanticLogger
     # - Proc
     # - Any object that responds to :call
     def self.factory(formatter)
-      case
-      when formatter.is_a?(Symbol)
+      if formatter.is_a?(Symbol)
         SemanticLogger::Utils.constantize_symbol(formatter, 'SemanticLogger::Formatters').new
-      when formatter.is_a?(Hash) && formatter.size > 0
+      elsif formatter.is_a?(Hash) && formatter.size.positive?
         fmt, options = formatter.first
         SemanticLogger::Utils.constantize_symbol(fmt.to_sym, 'SemanticLogger::Formatters').new(options)
-      when formatter.respond_to?(:call)
+      elsif formatter.respond_to?(:call)
         formatter
       else
         raise(ArgumentError, "Unknown formatter: #{formatter.inspect}")
       end
     end
-
   end
 end

@@ -97,6 +97,7 @@ module SemanticLogger
           self.message = "#{message} -- Exception: #{exception.class}: #{exception.message}"
         when nil, :none
           # Log the message without the exception that was raised
+          nil
         else
           raise(ArgumentError, "Invalid value:#{log_exception.inspect} for argument :log_exception")
         end
@@ -119,7 +120,7 @@ module SemanticLogger
         self.dimensions    = dimensions
       end
 
-      self.payload = payload if payload && (payload.size > 0)
+      self.payload = payload if payload&.size&.positive?
       true
     end
 
@@ -150,7 +151,7 @@ module SemanticLogger
           assign(message: message, payload: payload, exception: exception)
         elsif message.nil? && result.is_a?(Hash)
           assign(result)
-        elsif payload && payload.respond_to?(:merge)
+        elsif payload&.respond_to?(:merge)
           assign(message: message, payload: payload.merge(result), exception: exception)
         else
           assign(message: message, payload: result, exception: exception)
@@ -167,7 +168,7 @@ module SemanticLogger
       depth      = 0
       exceptions = []
       ex         = exception
-      while ex != nil && !exceptions.include?(ex) && exceptions.length < MAX_EXCEPTIONS_TO_UNWRAP
+      while !ex.nil? && !exceptions.include?(ex) && exceptions.length < MAX_EXCEPTIONS_TO_UNWRAP
         exceptions << ex
         yield(ex, depth)
 
@@ -187,7 +188,7 @@ module SemanticLogger
     def backtrace_to_s
       trace = ''
       each_exception do |exception, i|
-        if i == 0
+        if i.zero?
           trace = (exception.backtrace || []).join("\n")
         else
           trace << "\nCause: #{exception.class.name}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
@@ -206,7 +207,7 @@ module SemanticLogger
     else
       def duration_to_s
         return unless duration
-        duration < 10.0 ? "#{'%.3f' % duration}ms" : "#{'%.1f' % duration}ms"
+        duration < 10.0 ? "#{format('%.3f', duration)}ms" : "#{format('%.1f', duration)}ms"
       end
     end
 
@@ -214,14 +215,14 @@ module SemanticLogger
     def duration_human
       return nil unless duration
       seconds = duration / 1000
-      if seconds >= 86400.0 # 1 day
-        "#{(seconds / 86400).to_i}d #{Time.at(seconds).strftime('%-Hh %-Mm')}"
+      if seconds >= 86_400.0 # 1 day
+        "#{(seconds / 86_400).to_i}d #{Time.at(seconds).strftime('%-Hh %-Mm')}"
       elsif seconds >= 3600.0 # 1 hour
         Time.at(seconds).strftime('%-Hh %-Mm')
       elsif seconds >= 60.0 # 1 minute
         Time.at(seconds).strftime('%-Mm %-Ss')
       elsif seconds >= 1.0 # 1 second
-        "#{'%.3f' % seconds}s"
+        "#{format('%.3f', seconds)}s"
       else
         duration_to_s
       end
@@ -239,7 +240,7 @@ module SemanticLogger
       file, line = file_name_and_line(true)
       file_name  = " #{file}:#{line}" if file
 
-      "#{$$}:#{"%.#{thread_name_length}s" % thread_name}#{file_name}"
+      "#{$PROCESS_ID}:#{format("%.#{thread_name_length}s", thread_name)}#{file_name}"
     end
 
     CALLER_REGEXP = /^(.*):(\d+).*/
@@ -253,10 +254,8 @@ module SemanticLogger
     # Returns [String, String] the file_name and line_number from the backtrace supplied
     # in either the backtrace or exception
     def file_name_and_line(short_name = false)
-      if backtrace || (exception && exception.backtrace)
-        stack = backtrace || exception.backtrace
-        extract_file_and_line(stack, short_name) if stack && stack.size > 0
-      end
+      stack = backtrace || exception&.backtrace
+      extract_file_and_line(stack, short_name) if stack&.size&.positive?
     end
 
     # Strip the standard Rails colorizing from the logged message
@@ -267,13 +266,16 @@ module SemanticLogger
     # Return the payload in text form
     # Returns nil if payload is missing or empty
     def payload_to_s
-      payload.inspect if has_payload?
+      payload.inspect if payload?
     end
 
     # Returns [true|false] whether the log entry has a payload
-    def has_payload?
+    def payload?
       !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
     end
+
+    # DEPRECATED
+    alias has_payload? payload?
 
     # DEPRECATED
     def formatted_time
@@ -297,7 +299,5 @@ module SemanticLogger
     def metric_only?
       metric && message.nil? && exception.nil? && payload.nil?
     end
-
   end
-
 end

@@ -60,8 +60,8 @@ module SemanticLogger
     #   Can be replaced with another Ruby logger or Rails logger, but never to
     #   SemanticLogger::Logger itself since it is for reporting problems
     #   while trying to log to the various appenders
-    def self.logger=(logger)
-      @logger = logger
+    class << self
+      attr_writer :logger
     end
 
     # Internal logger for SemanticLogger
@@ -86,7 +86,10 @@ module SemanticLogger
     def on_log(object = nil, &block)
       subscriber = block || object
 
-      raise('When supplying an on_log subscriber, it must support the #call method') unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
+      unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
+        raise('When supplying an on_log subscriber, it must support the #call method')
+      end
+
       subscribers = (@log_subscribers ||= Concurrent::Array.new)
       subscribers << subscriber unless subscribers.include?(subscriber)
     end
@@ -130,12 +133,10 @@ module SemanticLogger
     private
 
     def self.create_instance
-      SemanticLogger::Appender::Async.new(
-        name:           'SemanticLogger::Processor',
-        appender:       new,
-        max_queue_size: -1
-      )
+      SemanticLogger::Appender::Async.new(appender: new, max_queue_size: -1)
     end
+
+    private_class_method :create_instance
 
     @processor = create_instance
 
@@ -152,6 +153,5 @@ module SemanticLogger
         end
       end
     end
-
   end
 end

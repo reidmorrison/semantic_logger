@@ -1,7 +1,7 @@
 require 'rake/clean'
 require 'rake/testtask'
 
-$LOAD_PATH.unshift File.expand_path("../lib", __FILE__)
+$LOAD_PATH.unshift File.expand_path('lib', __dir__)
 require 'semantic_logger/version'
 
 task :gem do

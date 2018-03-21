@@ -1,0 +1,104 @@
+AllCops:
+  TargetRubyVersion: 2.3
+  Exclude:
+    - '.git/**/*'
+    - 'docs/**/*'
+    - 'test/**/*'
+
+Layout/SpaceInsideHashLiteralBraces:
+  EnforcedStyle: no_space
+  EnforcedStyleForEmptyBraces: no_space
+
+# Match existing layout
+Layout/DotPosition:
+  EnforcedStyle: trailing
+
+# Rubocop cannot yet see beyond one line above or below, when aligning =
+Layout/ExtraSpacing:
+  Enabled: false
+  AllowForAlignment: true
+  ForceEqualSignAlignment: true
+  AutoCorrect: false
+
+# Pick one
+Layout/IndentHeredoc:
+  EnforcedStyle: squiggly
+
+# Match existing layout
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+  IndentationWidth: 2
+
+# Rubocop cannot yet see beyond one line above or below, when aligning =
+Layout/SpaceAroundOperators:
+  Enabled: false
+  AllowForAlignment: true
+  AutoCorrect: false
+
+# Match existing layout
+Layout/SpaceInsideHashLiteralBraces:
+  EnforcedStyle: no_space
+  EnforcedStyleForEmptyBraces: no_space
+
+# TODO: Soften Limits for phase 1 only
+Metrics/AbcSize:
+  Max: 40
+
+# Support long block lengths for tests
+Metrics/BlockLength:
+  Exclude:
+    - 'test/**/*'
+
+# Soften limits
+Metrics/ClassLength:
+  Max: 250
+  Exclude:
+    - 'test/**/*'
+
+# TODO: Soften Limits for phase 1 only
+Metrics/CyclomaticComplexity:
+  Max: 15
+
+Metrics/LineLength:
+  Max: 128
+  Exclude:
+    - 'cli.rb'
+    - 'test/**/*'
+
+# Soften limits
+Metrics/MethodLength:
+  Max: 50
+
+# Soften limits
+Metrics/ModuleLength:
+  Max: 250
+
+Metrics/ParameterLists:
+  CountKeywordArgs: false
+
+# TODO: Soften Limits for phase 1 only
+Metrics/PerceivedComplexity:
+  Max: 21
+
+# Initialization Vector abbreviation
+Naming/UncommunicativeMethodParamName:
+  AllowedNames: ['iv', '_', 'io', 'ap']
+
+# Needed for testing DateTime
+Style/DateTime:
+  Exclude: ['test/**/*']
+
+# TODO: Soften Limits for phase 1 only
+Style/Documentation:
+  Enabled: false
+
+# Ruby 3 compatibility feature
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Style/NumericPredicate:
+  AutoCorrect: true
+
+# Does not allow Symbols to load
+Security/YAMLLoad:
+  AutoCorrect: false

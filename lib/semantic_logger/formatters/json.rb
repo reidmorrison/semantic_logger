@@ -11,8 +11,6 @@ module SemanticLogger
       def call(log, logger)
         super(log, logger).to_json
       end
-
     end
   end
 end
-

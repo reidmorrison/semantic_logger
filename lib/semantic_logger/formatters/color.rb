@@ -2,6 +2,7 @@
 begin
   require 'awesome_print'
 rescue LoadError
+  nil
 end
 
 module SemanticLogger
@@ -13,7 +14,14 @@ module SemanticLogger
       class ColorMap
         attr_accessor :trace, :debug, :info, :warn, :error, :fatal, :bold, :clear
 
-        def initialize(trace: AnsiColors::MAGENTA, debug: AnsiColors::GREEN, info: AnsiColors::CYAN, warn: AnsiColors::BOLD, error: AnsiColors::RED, fatal: AnsiColors::RED, bold: AnsiColors::BOLD, clear: AnsiColors::CLEAR)
+        def initialize(trace: AnsiColors::MAGENTA,
+                       debug: AnsiColors::GREEN,
+                       info: AnsiColors::CYAN,
+                       warn: AnsiColors::BOLD,
+                       error: AnsiColors::RED,
+                       fatal: AnsiColors::RED,
+                       bold: AnsiColors::BOLD,
+                       clear: AnsiColors::CLEAR)
           @trace = trace
           @debug = debug
           @info  = info
@@ -50,7 +58,11 @@ module SemanticLogger
       #
       #  color_map: [Hash | SemanticLogger::Formatters::Color::ColorMap]
       #    ColorMaps each of the log levels to a color
-      def initialize(ap: {multiline: false}, color_map: ColorMap.new, time_format: TIME_FORMAT, log_host: false, log_application: false)
+      def initialize(ap: {multiline: false},
+                     color_map: ColorMap.new,
+                     time_format: TIME_FORMAT,
+                     log_host: false,
+                     log_application: false)
         @ai_options = ap
         @color_map  = color_map.is_a?(ColorMap) ? color_map : ColorMap.new(color_map)
         super(time_format: time_format, log_host: log_host, log_application: log_application)
@@ -66,11 +78,12 @@ module SemanticLogger
 
       # Named Tags
       def named_tags
-        if (named_tags = log.named_tags) && !named_tags.empty?
-          list = []
-          named_tags.each_pair { |name, value| list << "#{color}#{name}: #{value}#{color_map.clear}" }
-          "{#{list.join(', ')}}"
-        end
+        named_tags = log.named_tags
+        return if named_tags.nil? || named_tags.empty?
+
+        list = []
+        named_tags.each_pair { |name, value| list << "#{color}#{name}: #{value}#{color_map.clear}" }
+        "{#{list.join(', ')}}"
       end
 
       def duration
@@ -82,25 +95,29 @@ module SemanticLogger
       end
 
       def payload
-        return unless log.has_payload?
+        return unless log.payload?
 
         if !defined?(AwesomePrint) || !log.payload.respond_to?(:ai)
           super
         else
-          "-- #{log.payload.ai(@ai_options)}" rescue super
+          begin
+            "-- #{log.payload.ai(@ai_options)}"
+          rescue StandardError
+            super
+          end
         end
       end
 
       def exception
-        "-- Exception: #{color}#{log.exception.class}: #{log.exception.message}#{color_map.clear}\n#{log.backtrace_to_s}" if log.exception
+        return unless log.exception
+
+        "-- Exception: #{color}#{log.exception.class}: #{log.exception.message}#{color_map.clear}\n#{log.backtrace_to_s}"
       end
 
       def call(log, logger)
         self.color = color_map[log.level]
         super(log, logger)
       end
-
     end
   end
 end
-

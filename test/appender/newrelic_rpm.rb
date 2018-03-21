@@ -8,7 +8,7 @@ module NewRelic
     def self.record_metric(name, secoonds)
     end
 
-    def self.increment_metric(name, count=1)
+    def self.increment_metric(name, count = 1)
     end
   end
 end

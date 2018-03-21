@@ -8,7 +8,7 @@ module SemanticLogger
       # JRuby 9.1.8.0 supports microseconds
       PRECISION   =
         if defined?(JRuby)
-          if (JRUBY_VERSION.to_f >= 9.1)
+          if JRUBY_VERSION.to_f >= 9.1
             maint = JRUBY_VERSION.match(/\A\d+\.\d+\.(\d+)\./)[1].to_i
             (maint >= 8) || (JRUBY_VERSION.to_f > 9.1) ? 6 : 3
           else
@@ -17,7 +17,7 @@ module SemanticLogger
         else
           6
         end
-      TIME_FORMAT = "%Y-%m-%d %H:%M:%S.%#{PRECISION}N"
+      TIME_FORMAT = "%Y-%m-%d %H:%M:%S.%#{PRECISION}N".freeze
 
       # Parameters
       #   time_format: [String|Symbol|nil]
@@ -56,7 +56,6 @@ module SemanticLogger
           time.strftime(time_format)
         end
       end
-
     end
   end
 end

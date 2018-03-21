@@ -37,6 +37,5 @@ module SemanticLogger
       return add(log, message, progname, &block) unless log.is_a?(SemanticLogger::Log)
       Processor << log
     end
-
   end
 end

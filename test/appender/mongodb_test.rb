@@ -7,7 +7,7 @@ module Appender
       before do
         @appender           = SemanticLogger::Appender::MongoDB.new(
           uri:             'mongodb://127.0.0.1:27017/test',
-          collection_size: 10*1024**2, # 10MB
+          collection_size: 10 * 1024 ** 2, # 10MB
           host:        'test',
           application: 'test_application',
           level:       :trace

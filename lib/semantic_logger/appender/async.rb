@@ -22,9 +22,6 @@ module SemanticLogger
       # Appender proxy to allow an existing appender to run asynchronously in a separate thread.
       #
       # Parameters:
-      #   name: [String]
-      #     Name to use for the log thread and the log name when logging any errors from this appender.
-      #
       #   max_queue_size: [Integer]
       #     The maximum number of log messages to hold on the queue before blocking attempts to add to the queue.
       #     -1: The queue size is uncapped and will never block no matter how long the queue is.
@@ -38,7 +35,6 @@ module SemanticLogger
       #     Number of messages to process before checking for slow logging.
       #     Default: 1,000
       def initialize(appender:,
-                     name: appender.class.name,
                      max_queue_size: 10_000,
                      lag_check_interval: 1_000,
                      lag_threshold_s: 30)
@@ -66,13 +62,13 @@ module SemanticLogger
       #
       # Starts the worker thread if not running.
       def thread
-        return @thread if @thread && @thread.alive?
+        return @thread if @thread&.alive?
         @thread = Thread.new { process }
       end
 
       # Returns true if the worker thread is active
       def active?
-        @thread && @thread.alive?
+        @thread&.alive?
       end
 
       # Add log message for processing.
@@ -99,26 +95,38 @@ module SemanticLogger
         # This thread is designed to never go down unless the main thread terminates
         # or the appender is closed.
         Thread.current.name = logger.name
-        logger.trace "Async: Appender thread active"
+        logger.trace 'Async: Appender thread active'
         begin
           process_messages
         rescue StandardError => exception
           # This block may be called after the file handles have been released by Ruby
-          logger.error('Async: Restarting due to exception', exception) rescue nil
+          begin
+            logger.error('Async: Restarting due to exception', exception)
+          rescue StandardError
+            nil
+          end
           retry
         rescue Exception => exception
           # This block may be called after the file handles have been released by Ruby
-          logger.error('Async: Stopping due to fatal exception', exception) rescue nil
+          begin
+            logger.error('Async: Stopping due to fatal exception', exception)
+          rescue StandardError
+            nil
+          end
         ensure
           @thread = nil
           # This block may be called after the file handles have been released by Ruby
-          logger.trace('Async: Thread has stopped') rescue nil
+          begin
+            logger.trace('Async: Thread has stopped')
+          rescue StandardError
+            nil
+          end
         end
       end
 
       def process_messages
         count = 0
-        while message = queue.pop
+        while (message = queue.pop)
           if message.is_a?(Log)
             appender.log(message)
             count += 1
@@ -150,9 +158,10 @@ module SemanticLogger
       end
 
       def check_lag(log)
-        if (diff = Time.now - log.time) > lag_threshold_s
-          logger.warn "Async: Appender thread has fallen behind by #{diff} seconds with #{queue.size} messages queued up. Consider reducing the log level or changing the appenders"
-        end
+        diff = Time.now - log.time
+        return unless diff > lag_threshold_s
+
+        logger.warn "Async: Appender thread has fallen behind by #{diff} seconds with #{queue.size} messages queued up. Consider reducing the log level or changing the appenders"
       end
 
       # Submit command and wait for reply
@@ -165,7 +174,7 @@ module SemanticLogger
           logger.warn msg
         elsif queue_size > 100
           logger.info msg
-        elsif queue_size > 0
+        elsif queue_size.positive?
           logger.trace msg
         end
 
@@ -173,7 +182,6 @@ module SemanticLogger
         queue << {command: command, reply_queue: reply_queue}
         reply_queue.pop
       end
-
     end
   end
 end

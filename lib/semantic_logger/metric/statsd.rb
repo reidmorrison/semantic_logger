@@ -41,11 +41,11 @@ module SemanticLogger
 
       def log(log)
         metric = log.metric
-        if duration = log.duration
+        if (duration = log.duration)
           @statsd.timing(metric, duration)
         else
           amount = (log.metric_amount || 1).round
-          if amount < 0
+          if amount.negative?
             amount.times { @statsd.decrement(metric) }
           else
             amount.times { @statsd.increment(metric) }
@@ -58,7 +58,6 @@ module SemanticLogger
         # Does not support metrics with dimensions.
         log.metric && !log.dimensions && meets_log_level?(log) && !filtered?(log)
       end
-
     end
   end
 end

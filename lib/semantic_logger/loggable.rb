@@ -30,7 +30,6 @@
 #     ExternalSupplier.prepend SemanticLogger::Loggable
 module SemanticLogger
   module Loggable
-
     def self.included(base)
       base.extend ClassMethods
       base.class_eval do
@@ -85,14 +84,14 @@ module SemanticLogger
 
         index = SemanticLogger.level_to_index(level)
 
-        logger_measure_module.module_eval(<<-EOT, __FILE__, __LINE__ + 1)
+        logger_measure_module.module_eval(<<~MEASURE_METHOD, __FILE__, __LINE__ + 1)
           def #{method_name}(*args, &block)
             if logger.send(:level_index) <= #{index}
               logger.send(
                 :measure_method,
-                index:              #{index}, 
-                level:              #{level.inspect}, 
-                message:            #{message.inspect}, 
+                index:              #{index},
+                level:              #{level.inspect},
+                message:            #{message.inspect},
                 min_duration:       #{min_duration},
                 metric:             #{metric.inspect},
                 log_exception:      #{log_exception.inspect},
@@ -104,8 +103,8 @@ module SemanticLogger
               super(*args, &block)
             end
           end
-        EOT
-        #{"#{visibility} :#{method_name}" unless visibility == :public}
+        MEASURE_METHOD
+        # {"#{visibility} :#{method_name}" unless visibility == :public}
         true
       end
 
@@ -121,8 +120,6 @@ module SemanticLogger
           mod
         end
       end
-
     end
-
   end
 end

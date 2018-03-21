@@ -23,7 +23,7 @@ class Minitest::Test
   # Use AwesomePrint to display messages
   def message msg = nil, ending = nil, &default
     proc {
-      msg = msg.call.chomp(".") if Proc === msg
+      msg            = msg.call.chomp(".") if Proc === msg
       custom_message = "#{msg.ai}.\n" unless msg.nil? or msg.to_s.empty?
       "#{custom_message}#{default.call}#{ending || "."}"
     }

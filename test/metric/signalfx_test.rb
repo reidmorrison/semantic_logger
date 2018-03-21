@@ -62,12 +62,12 @@ module Appender
 
         it 'not logs when no metric' do
           @log.message = 'blah'
-          @log.metric = nil
+          @log.metric  = nil
           refute appender.should_log?(@log)
         end
 
         it 'logs metric only metric with dimensions' do
-          @log.metric = 'Filter/count'
+          @log.metric     = 'Filter/count'
           @log.dimensions = {action: 'hit', user: 'jbloggs', state: 'FL'}
           assert appender.should_log?(@log)
         end

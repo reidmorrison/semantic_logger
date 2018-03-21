@@ -5,7 +5,6 @@
 module SemanticLogger
   module Appender
     class File < SemanticLogger::Subscriber
-
       # Create a File Logger appender instance.
       #
       # Parameters
@@ -81,7 +80,7 @@ module SemanticLogger
       def reopen
         return unless @file_name
 
-        @log = open(@file_name, (::File::WRONLY | ::File::APPEND | ::File::CREAT))
+        @log = ::File.open(@file_name, ::File::WRONLY | ::File::APPEND | ::File::CREAT)
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @log.sync = true
@@ -105,7 +104,6 @@ module SemanticLogger
       def flush
         @log.flush if @log.respond_to?(:flush)
       end
-
     end
   end
 end

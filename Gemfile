@@ -2,12 +2,12 @@ source 'http://rubygems.org'
 
 gemspec
 
-gem 'rake'
+gem 'awesome_print'
 gem 'minitest'
 gem 'minitest-reporters'
-gem 'minitest-stub_any_instance'
 gem 'minitest-shared_description'
-gem 'awesome_print'
+gem 'minitest-stub_any_instance'
+gem 'rake'
 
 # [optional] Bugsnag appender
 gem 'bugsnag'
@@ -22,7 +22,7 @@ gem 'ruby-kafka'
 # [optional] MongoDB appender
 gem 'mongo'
 # [optional] NewRelic appender ( Tests use a mock class )
-#gem 'newrelic_rpm'
+# gem 'newrelic_rpm'
 # [optional] Net::TCP appender
 gem 'net_tcp_client'
 # [optional] Splunk appender
@@ -34,3 +34,6 @@ gem 'sentry-raven'
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
 gem 'syslog_protocol'
 
+group :development do
+  gem 'rubocop'
+end

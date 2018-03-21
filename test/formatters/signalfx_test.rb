@@ -23,7 +23,7 @@ module SemanticLogger
         let :logs do
           3.times.collect do |i|
             l        = log.dup
-            l.metric = "/user/login#{i+1}"
+            l.metric = "/user/login#{i + 1}"
             l
           end
         end

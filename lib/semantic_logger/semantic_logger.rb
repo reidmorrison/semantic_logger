@@ -3,7 +3,7 @@ require 'socket'
 
 module SemanticLogger
   # Logging levels in order of most detailed to most severe
-  LEVELS = [:trace, :debug, :info, :warn, :error, :fatal]
+  LEVELS = %i[trace debug info warn error fatal].freeze
 
   # Return a logger for the supplied class or class_name
   def self.[](klass)
@@ -35,7 +35,7 @@ module SemanticLogger
   def self.backtrace_level=(level)
     @backtrace_level = level
     # For performance reasons pre-calculate the level index
-    @backtrace_level_index = level.nil? ? 65535 : level_to_index(level)
+    @backtrace_level_index = level.nil? ? 65_535 : level_to_index(level)
   end
 
   # Returns the current backtrace level
@@ -45,14 +45,14 @@ module SemanticLogger
 
   # Returns the current backtrace level index
   # For internal use only
-  def self.backtrace_level_index #:nodoc
+  def self.backtrace_level_index
     @backtrace_level_index
   end
 
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
-    @host ||= Socket.gethostname.force_encoding("UTF-8")
+    @host ||= Socket.gethostname.force_encoding('UTF-8')
   end
 
   # Override the default host name
@@ -261,22 +261,26 @@ module SemanticLogger
   # Note:
   #   To only register one of the signal handlers, set the other to nil
   #   Set gc_log_microseconds to nil to not enable JRuby Garbage collections
-  def self.add_signal_handler(log_level_signal='USR2', thread_dump_signal='TTIN', gc_log_microseconds=100000)
-    Signal.trap(log_level_signal) do
-      index     = (default_level == :trace) ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
-      new_level = LEVELS[index-1]
-      self['SemanticLogger'].warn "Changed global default log level to #{new_level.inspect}"
-      self.default_level = new_level
-    end if log_level_signal
-
-    Signal.trap(thread_dump_signal) do
-      logger = SemanticLogger['Thread Dump']
-      Thread.list.each do |thread|
-        # MRI re-uses the main thread for signals, JRuby uses `SIGTTIN handler` thread.
-        next if defined?(JRuby) && (thread == Thread.current)
-        logger.backtrace(thread: thread)
+  def self.add_signal_handler(log_level_signal = 'USR2', thread_dump_signal = 'TTIN', gc_log_microseconds = 100_000)
+    if log_level_signal
+      Signal.trap(log_level_signal) do
+        index     = default_level == :trace ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
+        new_level = LEVELS[index - 1]
+        self['SemanticLogger'].warn "Changed global default log level to #{new_level.inspect}"
+        self.default_level = new_level
       end
-    end if thread_dump_signal
+    end
+
+    if thread_dump_signal
+      Signal.trap(thread_dump_signal) do
+        logger = SemanticLogger['Thread Dump']
+        Thread.list.each do |thread|
+          # MRI re-uses the main thread for signals, JRuby uses `SIGTTIN handler` thread.
+          next if defined?(JRuby) && (thread == Thread.current)
+          logger.backtrace(thread: thread)
+        end
+      end
+    end
 
     if gc_log_microseconds && defined?(JRuby)
       listener = SemanticLogger::JRuby::GarbageCollectionLogger.new(gc_log_microseconds)
@@ -360,9 +364,9 @@ module SemanticLogger
   end
 
   # Remove specified number of tags from the current tag list
-  def self.pop_tags(quantity=1)
+  def self.pop_tags(quantity = 1)
     t = Thread.current[:semantic_logger_tags]
-    t.pop(quantity) unless t.nil?
+    t&.pop(quantity)
   end
 
   # :nodoc
@@ -396,9 +400,9 @@ module SemanticLogger
     hash
   end
 
-  def self.pop_named_tags(quantity=1)
+  def self.pop_named_tags(quantity = 1)
     t = Thread.current[:semantic_logger_named_tags]
-    t.pop(quantity) unless t.nil?
+    t&.pop(quantity)
   end
 
   # Silence noisy log levels by changing the default_level within the block
@@ -445,18 +449,18 @@ module SemanticLogger
     Thread.current[:semantic_logger_silence] = current_index
   end
 
-  private
-
-  @appenders = Concurrent::Array.new
-
   def self.default_level_index
     Thread.current[:semantic_logger_silence] || @default_level_index
   end
+
+  # private_class_method :default_level_index
 
   # Returns the symbolic level for the supplied level index
   def self.index_to_level(level_index)
     LEVELS[level_index]
   end
+
+  # private_class_method :index_to_level
 
   # Internal method to return the log level as an internal index
   # Also supports mapping the ::Logger levels to SemanticLogger levels
@@ -474,7 +478,8 @@ module SemanticLogger
         @map_levels ||= begin
           levels = []
           ::Logger::Severity.constants.each do |constant|
-            levels[::Logger::Severity.const_get(constant)] = LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
+            levels[::Logger::Severity.const_get(constant)] =
+              LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
           end
           levels
         end
@@ -483,6 +488,8 @@ module SemanticLogger
     raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
     index
   end
+
+  # private_class_method :level_to_index
 
   # Backward compatibility
   def self.convert_old_appender_args(appender, level)
@@ -501,6 +508,10 @@ module SemanticLogger
     warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}"
     options
   end
+
+  private_class_method :convert_old_appender_args
+
+  @appenders = Concurrent::Array.new
 
   # Initial default Level for all new instances of SemanticLogger::Logger
   @default_level         = :info

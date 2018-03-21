@@ -1,4 +1,3 @@
-require 'thread'
 class Thread
   undef :name if method_defined? :name
   undef :name= if method_defined? :name=

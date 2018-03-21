@@ -24,11 +24,12 @@ module SemanticLogger
 
       # Named Tags
       def named_tags
-        if (named_tags = log.named_tags) && !named_tags.empty?
-          list = []
-          named_tags.each_pair { |name, value| list << "#{name}: #{value}" }
-          "{#{list.join(', ')}}"
-        end
+        named_tags = log.named_tags
+        return if named_tags.nil? || named_tags.empty?
+
+        list = []
+        named_tags.each_pair { |name, value| list << "#{name}: #{value}" }
+        "{#{list.join(', ')}}"
       end
 
       # Duration
@@ -48,9 +49,10 @@ module SemanticLogger
 
       # Payload
       def payload
-        if pl = log.payload_to_s
-          "-- #{pl}"
-        end
+        pl = log.payload_to_s
+        return unless pl
+
+        "-- #{pl}"
       end
 
       # Exception
@@ -67,8 +69,6 @@ module SemanticLogger
 
         [time, level, process_info, tags, named_tags, duration, name, message, payload, exception].compact.join(' ')
       end
-
     end
   end
 end
-

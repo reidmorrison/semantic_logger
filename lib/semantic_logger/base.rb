@@ -23,7 +23,7 @@ module SemanticLogger
         @level_index = nil
         @level       = nil
       else
-        @level_index = SemanticLogger.level_to_index(level)
+        @level_index = SemanticLogger.send(:level_to_index, level)
         @level       = SemanticLogger.send(:index_to_level, @level_index)
       end
     end
@@ -78,7 +78,7 @@ module SemanticLogger
     #    logger.info("Parsing received XML", exc)
     #
     SemanticLogger::LEVELS.each_with_index do |level, index|
-      class_eval <<-EOT, __FILE__, __LINE__ + 1
+      class_eval <<~METHODS, __FILE__, __LINE__ + 1
         def #{level}(message=nil, payload=nil, exception=nil, &block)
           if level_index <= #{index}
             log_internal(:#{level}, #{index}, message, payload, exception, &block)
@@ -107,7 +107,7 @@ module SemanticLogger
             block.call(params) if block
           end
         end
-      EOT
+      METHODS
     end
 
     # Dynamically supply the log level with every measurement call
@@ -115,13 +115,13 @@ module SemanticLogger
       index = SemanticLogger.level_to_index(level)
       if level_index <= index
         measure_internal(level, index, message, params, &block)
-      else
-        block.call(params) if block
+      elsif block
+        yield(params)
       end
     end
 
     # Backward compatibility
-    alias_method :benchmark, :measure
+    alias benchmark measure
 
     # Log a thread backtrace
     def backtrace(thread: Thread.current,
@@ -150,7 +150,11 @@ module SemanticLogger
         message << backtrace.join("\n")
       end
 
-      if log.assign(message: message, backtrace: backtrace, payload: payload, metric: metric, metric_amount: metric_amount) && !filtered?(log)
+      if log.assign(message:       message,
+                    backtrace:     backtrace,
+                    payload:       payload,
+                    metric:        metric,
+                    metric_amount: metric_amount) && !filtered?(log)
         self.log(log)
       else
         false
@@ -196,7 +200,7 @@ module SemanticLogger
     end
 
     # :nodoc:
-    alias_method :with_tags, :tagged
+    alias with_tags tagged
 
     # :nodoc:
     def tags
@@ -243,8 +247,8 @@ module SemanticLogger
     end
 
     # Write log data to underlying data storage
-    def log(log_)
-      raise NotImplementedError.new('Logging Appender must implement #log(log)')
+    def log(_log_)
+      raise NotImplementedError, 'Logging Appender must implement #log(log)'
     end
 
     # Whether this log entry meets the criteria to be logged by this appender.
@@ -298,7 +302,7 @@ module SemanticLogger
       return false if @filter.nil?
 
       if @filter.is_a?(Regexp)
-        (@filter =~ log.name) == nil
+        (@filter =~ log.name).nil?
       elsif @filter.is_a?(Proc)
         @filter.call(log) != true
       else
@@ -317,7 +321,7 @@ module SemanticLogger
       should_log =
         if payload.nil? && exception.nil? && message.is_a?(Hash)
           # Check if someone just logged a hash payload instead of meaning to call semantic logger
-          if message.has_key?(:message) || message.has_key?(:payload) || message.has_key?(:exception) || message.has_key?(:metric)
+          if message.key?(:message) || message.key?(:payload) || message.key?(:exception) || message.key?(:metric)
             log.assign(message)
           else
             log.assign_positional(nil, message, nil, &block)
@@ -343,7 +347,7 @@ module SemanticLogger
       begin
         if block_given?
           result =
-            if silence_level = params[:silence]
+            if (silence_level = params[:silence])
               # In case someone accidentally sets `silence: true` instead of `silence: :error`
               silence_level = :error if silence_level == true
               silence(silence_level) { yield(params) }
@@ -395,8 +399,7 @@ module SemanticLogger
                        min_duration:,
                        metric:,
                        log_exception:,
-                       on_exception_level:,
-                       &block)
+                       on_exception_level:)
 
       # Ignores filter, silence, payload
       exception = nil
@@ -423,6 +426,5 @@ module SemanticLogger
         raise exception if exception
       end
     end
-
   end
 end
