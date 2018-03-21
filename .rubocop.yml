@@ -98,7 +98,7 @@ Style/FrozenStringLiteralComment:
 Style/NumericPredicate:
   AutoCorrect: true
 
-Style/SingleLineMethods:
+Style/EmptyMethod:
   AutoCorrect: false
 
 # Does not allow Symbols to load

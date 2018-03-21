@@ -30,7 +30,7 @@ module SemanticLogger
       end
 
       # Time is part of the syslog packet and is not included in the formatted message.
-      def time;
+      def time
       end
 
       def call(log, logger)
