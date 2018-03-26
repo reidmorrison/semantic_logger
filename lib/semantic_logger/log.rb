@@ -149,7 +149,7 @@ module SemanticLogger
         if result.is_a?(String)
           message = message.nil? ? result : "#{message} -- #{result}"
           assign(message: message, payload: payload, exception: exception)
-        elsif message.nil? && result.is_a?(Hash)
+        elsif message.nil? && result.is_a?(Hash) && [:message, :payload, :exception].any? { |k| result.key? k }
           assign(result)
         elsif payload&.respond_to?(:merge)
           assign(message: message, payload: payload.merge(result), exception: exception)
