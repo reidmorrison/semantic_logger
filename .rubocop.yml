@@ -4,10 +4,6 @@ AllCops:
     - '.git/**/*'
     - 'docs/**/*'
 
-Layout/SpaceInsideHashLiteralBraces:
-  EnforcedStyle: no_space
-  EnforcedStyleForEmptyBraces: no_space
-
 # Match existing layout
 Layout/DotPosition:
   EnforcedStyle: trailing
@@ -38,6 +34,10 @@ Layout/SpaceAroundOperators:
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
   EnforcedStyleForEmptyBraces: no_space
+
+# Files must end with a blank line
+Layout/TrailingBlankLines:
+  EnforcedStyle: final_newline
 
 # TODO: Soften Limits for phase 1 only
 Metrics/AbcSize:
@@ -83,6 +83,10 @@ Metrics/PerceivedComplexity:
 Naming/UncommunicativeMethodParamName:
   AllowedNames: ['iv', '_', 'io', 'ap']
 
+# Does not allow Symbols to load
+Security/YAMLLoad:
+  AutoCorrect: false
+
 # Needed for testing DateTime
 Style/DateTime:
   Exclude: ['test/**/*']
@@ -91,6 +95,10 @@ Style/DateTime:
 Style/Documentation:
   Enabled: false
 
+# One line methods
+Style/EmptyMethod:
+  AutoCorrect: false
+
 # Ruby 3 compatibility feature
 Style/FrozenStringLiteralComment:
   Enabled: false
@@ -98,9 +106,3 @@ Style/FrozenStringLiteralComment:
 Style/NumericPredicate:
   AutoCorrect: true
 
-Style/EmptyMethod:
-  AutoCorrect: false
-
-# Does not allow Symbols to load
-Security/YAMLLoad:
-  AutoCorrect: false

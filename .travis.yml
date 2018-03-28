@@ -6,6 +6,10 @@ rvm:
   - 2.5.0
   - jruby-9.1.16.0
 
+matrix:
+  allow_failures:
+    - rvm: jruby-9.1.16.0
+
 bundler_args: --without development
 
 services:
