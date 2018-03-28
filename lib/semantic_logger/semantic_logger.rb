@@ -223,7 +223,7 @@ module SemanticLogger
   # * This callback is called within the thread of the application making the logging call.
   # * If these callbacks are slow they will slow down the application.
   def self.on_log(object = nil, &block)
-    Processor.instance.on_log(object, &block)
+    Processor.instance.appender.on_log(object, &block)
   end
 
   # Add signal handlers for Semantic Logger
