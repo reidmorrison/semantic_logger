@@ -2,6 +2,19 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.2.1]
+### Added
+- Add #push_named_tags and #pop_named_tags -- @aburgel
+- Sentry appender can now define user context and tags context -- @joker-777 
+
+### Changed
+- RuboCop Changes
+
+### Fixed
+- Fix Elasticsearch bulk bugs -- @wfxr
+- Fix SemanticLogger.on_log -- @tsauerwein
+- Fix exception typo for syslog -- @nbulaj
+
 ## [4.2.0]
 ### Added
 - New Signalfx appender.
