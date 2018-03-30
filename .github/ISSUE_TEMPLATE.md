@@ -22,7 +22,8 @@ Note:
 * Describe or show the actual behavior.
 * Provide text or screen capture showing the behavior.
 
-### Even Better
+### Pull Request
 
 * Consider submitting a Pull Request with a fix for the issue.
-    * This is particularly helpful for appender changes/fixes since we don't have access to some appenders.
+    * This is particularly helpful for appender changes/fixes since we don't have access to all appenders.
+* Or, even a Pull request that only includes a test that reproduces the problem. 

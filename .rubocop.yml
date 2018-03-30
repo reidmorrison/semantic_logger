@@ -97,7 +97,7 @@ Style/Documentation:
 
 # One line methods
 Style/EmptyMethod:
-  AutoCorrect: false
+  Enabled: false
 
 # Ruby 3 compatibility feature
 Style/FrozenStringLiteralComment:

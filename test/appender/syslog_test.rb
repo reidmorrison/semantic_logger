@@ -45,7 +45,7 @@ module Appender
           Syslog.stub(:open, nil) do
             Syslog.stub(:log, nil) do
               syslog_appender = SemanticLogger::Appender::Syslog.new
-              syslog_appender.send(level, 'AppenderSyslogTest #{level.to_s} message')
+              syslog_appender.send(level, "AppenderSyslogTest #{level} message")
             end
           end
         end
