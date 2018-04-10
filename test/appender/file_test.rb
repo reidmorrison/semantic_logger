@@ -96,7 +96,7 @@ module Appender
 
             duration_str = log.duration ? " (#{format('%.1f', log.duration)}ms)" : ''
 
-            "#{log.formatted_time} #{log.level.to_s.upcase} [#{$PROCESS_ID}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
+            "#{log.formatted_time} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
           end
         end
 

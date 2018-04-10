@@ -26,7 +26,7 @@ module Appender
         assert_equal 'info', h['level']
         assert_equal @message, h['message']
         assert_equal 'SemanticLogger::Appender::Kafka', h['name']
-        assert_equal $PROCESS_ID, h['pid']
+        assert_equal $$, h['pid']
 
         assert_equal 'log_messages', options[:topic]
       end

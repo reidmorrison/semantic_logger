@@ -34,7 +34,7 @@ module SemanticLogger
 
       # Process info
       def process_info
-        hash[:pid]    = $PROCESS_ID
+        hash[:pid]    = $$
         hash[:thread] = log.thread_name
 
         file, line = log.file_name_and_line

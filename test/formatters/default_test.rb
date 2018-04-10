@@ -70,13 +70,13 @@ module SemanticLogger
 
         describe 'process_info' do
           it 'logs pid and thread name' do
-            assert_equal "[#{$PROCESS_ID}:#{Thread.current.name}]", formatter.process_info
+            assert_equal "[#{$$}:#{Thread.current.name}]", formatter.process_info
           end
 
           it 'logs pid, thread name, and file name' do
             set_exception
             log.backtrace = backtrace
-            assert_equal "[#{$PROCESS_ID}:#{Thread.current.name} default_test.rb:99]", formatter.process_info
+            assert_equal "[#{$$}:#{Thread.current.name} default_test.rb:99]", formatter.process_info
           end
         end
 
@@ -153,7 +153,7 @@ module SemanticLogger
 
         describe 'call' do
           it 'returns minimal elements' do
-            assert_equal "#{expected_time} D [#{$PROCESS_ID}:#{Thread.current.name}] DefaultTest", formatter.call(log, nil)
+            assert_equal "#{expected_time} D [#{$$}:#{Thread.current.name}] DefaultTest", formatter.call(log, nil)
           end
 
           it 'retuns all elements' do
@@ -165,7 +165,7 @@ module SemanticLogger
             log.backtrace  = backtrace
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? '1' : '1.346'
-            str      = "#{expected_time} D [#{$PROCESS_ID}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
+            str      = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end

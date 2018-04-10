@@ -131,7 +131,7 @@ module SemanticLogger
 
         describe 'call' do
           it 'returns minimal elements' do
-            assert_equal "#{expected_time} #{color}D#{clear} [#{$PROCESS_ID}:#{Thread.current.name}] #{color}ColorTest#{clear}", formatter.call(log, nil)
+            assert_equal "#{expected_time} #{color}D#{clear} [#{$$}:#{Thread.current.name}] #{color}ColorTest#{clear}", formatter.call(log, nil)
           end
 
           it 'retuns all elements' do
@@ -143,7 +143,7 @@ module SemanticLogger
             log.backtrace  = backtrace
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? '1' : '1.346'
-            str      = "#{expected_time} #{color}D#{clear} [#{$PROCESS_ID}:#{Thread.current.name} default_test.rb:35] [#{color}first#{clear}] [#{color}second#{clear}] [#{color}third#{clear}] {#{color}first: 1#{clear}, #{color}second: 2#{clear}, #{color}third: 3#{clear}} (#{bold}#{duration}ms#{clear}) #{color}ColorTest#{clear} -- Hello World -- #{{first: 1, second: 2, third: 3}.ai(multiline: false)} -- Exception: #{color}RuntimeError: Oh no#{clear}\n"
+            str      = "#{expected_time} #{color}D#{clear} [#{$$}:#{Thread.current.name} default_test.rb:35] [#{color}first#{clear}] [#{color}second#{clear}] [#{color}third#{clear}] {#{color}first: 1#{clear}, #{color}second: 2#{clear}, #{color}third: 3#{clear}} (#{bold}#{duration}ms#{clear}) #{color}ColorTest#{clear} -- Hello World -- #{{first: 1, second: 2, third: 3}.ai(multiline: false)} -- Exception: #{color}RuntimeError: Oh no#{clear}\n"
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end
