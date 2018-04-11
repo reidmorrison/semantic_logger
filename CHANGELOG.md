@@ -2,6 +2,10 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.2.2]
+### Fixed
+- Fix Process Id not logging.
+
 ## [4.2.1]
 ### Added
 - Add #push_named_tags and #pop_named_tags -- @aburgel
