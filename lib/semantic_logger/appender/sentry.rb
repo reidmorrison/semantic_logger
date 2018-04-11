@@ -54,7 +54,7 @@ module SemanticLogger
           user:  context.delete(:user),
           tags:  context.delete(:tags),
           extra: context
-        }
+        }.compact
         if log.exception
           context.delete(:exception)
           Raven.capture_exception(log.exception, attrs)
