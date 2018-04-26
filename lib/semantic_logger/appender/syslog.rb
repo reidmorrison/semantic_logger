@@ -164,7 +164,8 @@ module SemanticLogger
       def reopen
         case @protocol
         when :syslog
-          ::Syslog.open(application, options, facility)
+          method = ::Syslog.opened? ? :reopen : :open
+          ::Syslog.send(method, application, options, facility)
         when :tcp
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
           @tcp_client_options[:logger] = logger
