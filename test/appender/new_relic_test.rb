@@ -66,6 +66,15 @@ module Appender
         assert payload = params[:payload], params
         assert_equal 4, payload[:key3], payload
       end
+
+      it 'does not send metric only notifications' do
+        exception = hash = nil
+        NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
+          @appender.debug metric: 'my/custom/metric', payload: {hello: :world}
+        end
+        assert_nil exception
+        assert_nil hash
+      end
     end
   end
 end

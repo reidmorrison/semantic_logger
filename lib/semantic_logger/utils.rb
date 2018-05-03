@@ -1,4 +1,6 @@
 module SemanticLogger
+  # Internal-use only utility functions for Semantic Logger.
+  # Not intended for public use.
   module Utils
     def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
       klass = "#{namespace}::#{camelize(symbol.to_s)}"
@@ -37,11 +39,26 @@ module SemanticLogger
     SELF_PATTERN = File.join('lib', 'semantic_logger')
 
     # Extract the backtrace leaving out the last few Semantic Logger lines.
-    def self.cleanse_backtrace(stack = caller)
+    def self.extract_backtrace(stack = caller)
       while (first = stack.first) && first.include?(SELF_PATTERN)
         stack.shift
       end
       stack
+    end
+
+    # Strips off all gems and built-in ruby code paths from the top of the stack until application code is found.
+    def self.strip_backtrace(stack = caller)
+      while (first = stack.first) && system_path?(first)
+        stack.shift
+      end
+      stack
+    end
+
+    GEM_ROOT = File.expand_path('../../..', __dir__) + '/'
+
+    def self.system_path?(path)
+      path.start_with?(GEM_ROOT) ||
+        path.start_with?(RbConfig::CONFIG['rubylibdir'])
     end
   end
 end

@@ -42,6 +42,7 @@ module SemanticLogger
         @appender           = appender
         @lag_check_interval = lag_check_interval
         @lag_threshold_s    = lag_threshold_s
+        @thread             = nil
 
         if max_queue_size == -1
           @queue  = Queue.new

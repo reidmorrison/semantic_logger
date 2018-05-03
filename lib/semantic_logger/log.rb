@@ -109,9 +109,9 @@ module SemanticLogger
       end
 
       if backtrace
-        self.backtrace = Utils.cleanse_backtrace(backtrace)
+        self.backtrace = Utils.extract_backtrace(backtrace)
       elsif level_index >= SemanticLogger.backtrace_level_index
-        self.backtrace = Utils.cleanse_backtrace
+        self.backtrace = Utils.extract_backtrace
       end
 
       if metric
@@ -295,9 +295,9 @@ module SemanticLogger
       (self.context ||= {})[key] = value
     end
 
-    # A metric only event has a metric but no message, exception, or payload.
+    # A metric only event has a metric but no message or exception.
     def metric_only?
-      metric && message.nil? && exception.nil? && payload.nil?
+      metric && message.nil? && exception.nil?
     end
   end
 end

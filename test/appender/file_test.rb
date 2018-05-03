@@ -64,6 +64,16 @@ module Appender
           @appender.debug exc
           assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- Exception: StandardError: StandardError\n\n/, @io.string)
         end
+
+        it 'ignores metric only messages' do
+          @appender.debug metric: 'my/custom/metric'
+          assert_equal '', @io.string
+        end
+
+        it 'ignores metric only messages with payload' do
+          @appender.debug metric: 'my/custom/metric', payload: { hello: :world}
+          assert_equal '', @io.string
+        end
       end
 
       describe 'for each log level' do

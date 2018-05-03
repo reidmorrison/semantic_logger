@@ -50,11 +50,7 @@ Checkout the sister project [Rocket Job](http://rocketjob.io): Ruby's missing ba
 Fully supports Semantic Logger when running jobs in the background. Complete support for job metrics
 sent via Semantic Logger to your favorite dashboards.
 
-## Supports
-
-Semantic Logger is tested and supported on the following Ruby platforms:
-- Ruby 2.1 and higher.
-- JRuby 9.1 and higher.
+## Optional Dependencies
 
 The following gems are only required when their corresponding appenders are being used,
 and are therefore not automatically included by this gem:
