@@ -49,12 +49,14 @@ module SemanticLogger
         return false if log.name == 'Raven'
 
         context = formatter.call(log, self)
-        attrs   = {
+        user = context.delete(:user)
+        tags = context.delete(:tags)
+        attrs = {
           level: context.delete(:level),
-          user:  context.delete(:user),
-          tags:  context.delete(:tags),
           extra: context
         }
+        attrs[:user] = user if user
+        attrs[:tags] = tags if tags
         if log.exception
           context.delete(:exception)
           Raven.capture_exception(log.exception, attrs)
