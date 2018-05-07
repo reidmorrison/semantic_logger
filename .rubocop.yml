@@ -106,3 +106,6 @@ Style/FrozenStringLiteralComment:
 Style/NumericPredicate:
   AutoCorrect: true
 
+# Since English may not be loaded, cannot force its use.
+Style/SpecialGlobalVars:
+  Enabled: false

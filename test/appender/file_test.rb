@@ -71,7 +71,7 @@ module Appender
         end
 
         it 'ignores metric only messages with payload' do
-          @appender.debug metric: 'my/custom/metric', payload: { hello: :world}
+          @appender.debug metric: 'my/custom/metric', payload: {hello: :world}
           assert_equal '', @io.string
         end
       end

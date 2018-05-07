@@ -89,10 +89,10 @@ class LoggerTest < Minitest::Test
           end
 
           it 'logs payload from block' do
-            logger.send(level) { { 'test_key1' => 'hello world', 'test_key2' => payload} }
+            logger.send(level) { {'test_key1' => 'hello world', 'test_key2' => payload} }
 
             assert log = log_message
-            assert_equal log.payload, { 'test_key1' => 'hello world', 'test_key2' => payload }
+            assert_equal log.payload, 'test_key1' => 'hello world', 'test_key2' => payload
           end
 
           it 'logs payload only' do

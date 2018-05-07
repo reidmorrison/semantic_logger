@@ -59,7 +59,7 @@ module SemanticLogger
 
     # Whether this log entry meets the criteria to be logged by this appender.
     def should_log?(log)
-     super(log) && (log.metric_only? ? metrics? : true)
+      super(log) && (log.metric_only? ? metrics? : true)
     end
 
     private

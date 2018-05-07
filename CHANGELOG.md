@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.3.0]
+### Added
+- Add option to allow an appender to log metrics only events.
+  I.e. An event that contains a metric name, optional payload, but no message or exception. 
+  By default such events are not logged, except to the metric appenders.
+
+### Fixed
+- Reopen Syslog when already open -- @seanthingee
+- Fix Sentry context attributes cannot be nil -- @joker-777
+
 ## [4.2.2]
 ### Fixed
 - Fix Process Id not logging.
@@ -540,4 +550,3 @@ logger.info message: 'Hello', metric: 'user/hello', duration: 25
 - Use Queue based logging with a separate appender thread.
 - Ruby Logger Appender.
 - MongoDB Appender.
-

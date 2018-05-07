@@ -38,7 +38,6 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(prefix: 'Custom', **args, &block)
-
         @prefix = prefix
         super(**args, &block)
       end
