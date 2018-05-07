@@ -31,14 +31,8 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
-      def initialize(level: :error,
-                     formatter: nil,
-                     filter: nil,
-                     application: nil,
-                     host: nil,
-                     &block)
-
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+      def initialize(level: :error, **args, &block)
+        super(level: level, **args, &block)
       end
 
       # Returns [Hash] of parameters to send to New Relic.

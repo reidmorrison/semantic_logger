@@ -37,8 +37,8 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(level: :error, formatter: nil, filter: nil, application: nil, host: nil, &block)
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+      def initialize(level: :error, **args, &block)
+        super(level: level, **args, &block)
       end
 
       # Send an error notification to honeybadger

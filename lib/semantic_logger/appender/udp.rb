@@ -48,6 +48,10 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       #
+      #   metrics: [Boolean]
+      #     Send metrics only events over udp.
+      #     Default: true
+      #
       # Limitations:
       # * UDP packet size is limited by the connected network and any routers etc
       #   that the message has to traverse. See https://en.wikipedia.org/wiki/Maximum_transmission_unit
@@ -57,11 +61,11 @@ module SemanticLogger
       #     appender: :udp,
       #     server:   'server:3300'
       #   )
-      def initialize(server:, udp_flags: 0, level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+      def initialize(server:, udp_flags: 0, metrics: true, **args, &block)
         @server    = server
         @udp_flags = udp_flags
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+        super(metrics: metrics, **args, &block)
         reopen
       end
 

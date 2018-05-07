@@ -68,15 +68,17 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
-      def initialize(token: nil, source_type: nil, index: nil,
-                     url:, compress: true, ssl: {}, open_timeout: 2.0, read_timeout: 1.0, continue_timeout: 1.0,
-                     level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+      def initialize(token: nil,
+                     source_type: nil,
+                     index: nil,
+                     compress: true,
+                     **args,
+                     &block)
 
         @source_type = source_type
         @index       = index
 
-        super(url:   url, compress: compress, ssl: ssl, read_timeout: read_timeout, open_timeout: open_timeout, continue_timeout: continue_timeout,
-              level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+        super(compress: compress, **args, &block)
 
         # Put splunk auth token in the header of every HTTP post.
         @header['Authorization'] = "Splunk #{token}"

@@ -76,28 +76,13 @@ module SemanticLogger
       def initialize(token:,
                      dimensions: nil,
                      url: 'https://ingest.signalfx.com',
-                     open_timeout: 2.0,
-                     read_timeout: 1.0,
-                     continue_timeout: 1.0,
-                     filter: nil,
-                     application: nil,
-                     host: nil,
                      formatter: nil,
+                     **args,
                      &block)
 
         formatter ||= SemanticLogger::Formatters::Signalfx.new(token: token, dimensions: dimensions)
 
-        super(
-          url:              url,
-          read_timeout:     read_timeout,
-          open_timeout:     open_timeout,
-          continue_timeout: continue_timeout,
-          filter:           filter,
-          application:      application,
-          host:             host,
-          formatter:        formatter,
-          &block
-        )
+        super(url: url, formatter: formatter, **args, &block)
 
         @header['X-SF-TOKEN'] = token
         @full_url             = "#{url}/#{END_POINT}"

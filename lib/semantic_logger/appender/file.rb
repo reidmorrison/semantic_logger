@@ -59,7 +59,7 @@ module SemanticLogger
       #
       #    logger =  SemanticLogger['test']
       #    logger.info 'Hello World'
-      def initialize(io: nil, file_name: nil, level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+      def initialize(io: nil, file_name: nil, **args, &block)
         if io
           @log = io
         else
@@ -68,7 +68,7 @@ module SemanticLogger
           reopen
         end
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+        super(**args, &block)
       end
 
       # After forking an active process call #reopen to re-open

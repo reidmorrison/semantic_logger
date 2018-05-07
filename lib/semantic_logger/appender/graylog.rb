@@ -82,15 +82,19 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(url: 'udp://localhost:12201', max_size: 'WAN', gelf_options: {}, level_map: LevelMap.new,
-                     level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+      def initialize(url: 'udp://localhost:12201',
+                     max_size: 'WAN',
+                     gelf_options: {},
+                     level_map: LevelMap.new,
+                     **args,
+                     &block)
 
         @url          = url
         @max_size     = max_size
         @gelf_options = gelf_options
         @level_map    = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(level_map)
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+        super(**args, &block)
         reopen
       end
 

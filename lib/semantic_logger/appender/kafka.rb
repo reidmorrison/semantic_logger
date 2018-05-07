@@ -111,11 +111,15 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
+      #
+      #   metrics: [Boolean]
+      #     Send metrics only events to kafka.
+      #     Default: true
       def initialize(seed_brokers:, client_id: 'semantic-logger', connect_timeout: nil, socket_timeout: nil,
                      ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil,
                      topic: 'log_messages', partition: nil, partition_key: nil, key: nil,
                      delivery_threshold: 100, delivery_interval: 10,
-                     level: nil, formatter: nil, filter: nil, application: nil, host: nil, &block)
+                     metrics: true, **args, &block)
 
         @seed_brokers        = seed_brokers
         @client_id           = client_id
@@ -131,7 +135,7 @@ module SemanticLogger
         @delivery_threshold  = delivery_threshold
         @delivery_interval   = delivery_interval
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+        super(metrics: metrics, **args, &block)
         reopen
       end
 

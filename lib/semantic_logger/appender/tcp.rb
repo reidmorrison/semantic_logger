@@ -182,7 +182,7 @@ module SemanticLogger
       #     connect_retry_count:    5
       #   )
       def initialize(separator: "\n",
-                     level: nil, formatter: nil, filter: nil, application: nil, host: nil,
+                     level: nil, formatter: nil, filter: nil, application: nil, host: nil, metrics: false,
                      **tcp_client_args, &block)
         @separator       = separator
         @tcp_client_args = tcp_client_args

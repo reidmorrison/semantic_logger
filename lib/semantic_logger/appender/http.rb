@@ -88,11 +88,7 @@ module SemanticLogger
                      open_timeout: 2.0,
                      read_timeout: 1.0,
                      continue_timeout: 1.0,
-                     level: nil,
-                     formatter: nil,
-                     filter: nil,
-                     application: nil,
-                     host: nil,
+                     **args,
                      &block)
 
         @url              = url
@@ -133,7 +129,7 @@ module SemanticLogger
         end
         @http = nil
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+        super(**args, &block)
         reopen
       end
 
