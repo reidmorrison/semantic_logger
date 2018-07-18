@@ -5,11 +5,7 @@ module SemanticLogger
     def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
       klass = "#{namespace}::#{camelize(symbol.to_s)}"
       begin
-        if RUBY_VERSION.to_i >= 2
-          Object.const_get(klass)
-        else
-          klass.split('::').inject(Object) { |o, name| o.const_get(name) }
-        end
+        Object.const_get(klass)
       rescue NameError
         raise(ArgumentError, "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
       end
