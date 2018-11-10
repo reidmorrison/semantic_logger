@@ -207,6 +207,10 @@ module SemanticLogger
       SemanticLogger.tags
     end
 
+    def named_tags
+      SemanticLogger.named_tags
+    end
+
     # Returns the list of tags pushed after flattening them out and removing blanks
     #
     # Note:
