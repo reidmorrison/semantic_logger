@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.3.1]
+### Fixed
+- Fix Splunk HTTP Appender sourcetype -- @chroto
+- Add back named tags as an instance method since it used in Rails apps -- @allcentury
+
 ## [4.3.0]
 ### Added
 - Add option to allow an appender to log metrics only events.
