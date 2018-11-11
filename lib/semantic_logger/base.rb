@@ -305,13 +305,7 @@ module SemanticLogger
     def filtered?(log)
       return false if @filter.nil?
 
-      if @filter.is_a?(Regexp)
-        (@filter =~ log.name).nil?
-      elsif @filter.is_a?(Proc)
-        @filter.call(log) != true
-      else
-        raise(ArgumentError, "Unrecognized semantic logger filter: #{@filter.inspect}, must be a Regexp or a Proc")
-      end
+      @filter.is_a?(Regexp) ? (@filter =~ log.name).nil? : @filter.call(log) != true
     end
 
     # Ensure minimum log level is met

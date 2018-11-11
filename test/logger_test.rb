@@ -9,6 +9,13 @@ class LoggerTest < Minitest::Test
       {action: 'hit', user: 'jbloggs', state: 'FL'}
     end
 
+    # Complex filters
+    module ComplexFilter
+      def self.call(log)
+        (/\AExclude/ =~ log.message).nil?
+      end
+    end
+
     # Ensure that any log level can be logged
     SemanticLogger::LEVELS.each do |level|
       describe "##{level}" do
@@ -165,6 +172,13 @@ class LoggerTest < Minitest::Test
               refute log_message
             end
 
+            it 'Module' do
+              appender.filter = ComplexFilter
+              logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
+
+              refute log_message
+            end
+
             it 'RegExp' do
               filter          = /\ALogger/
               appender.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
@@ -177,6 +191,13 @@ class LoggerTest < Minitest::Test
           describe 'at the logger level' do
             it 'Proc' do
               logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
+              logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
+
+              refute log_message
+            end
+
+            it 'Module' do
+              logger.filter = ComplexFilter
               logger.send(level, 'Exclude this log message', @hash) { 'Calculations' }
 
               refute log_message
