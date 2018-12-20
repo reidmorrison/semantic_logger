@@ -60,12 +60,13 @@ module SemanticLogger
       #    ColorMaps each of the log levels to a color
       def initialize(ap: {multiline: false},
                      color_map: ColorMap.new,
-                     time_format: TIME_FORMAT,
+                     time_format: nil,
                      log_host: false,
-                     log_application: false)
+                     log_application: false,
+                     precision: PRECISION)
         @ai_options = ap
         @color_map  = color_map.is_a?(ColorMap) ? color_map : ColorMap.new(color_map)
-        super(time_format: time_format, log_host: log_host, log_application: log_application)
+        super(time_format: time_format, log_host: log_host, log_application: log_application, precision: precision)
       end
 
       def level

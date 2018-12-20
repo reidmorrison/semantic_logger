@@ -279,7 +279,7 @@ module SemanticLogger
 
     # DEPRECATED
     def formatted_time
-      time.strftime(Formatters::Base::TIME_FORMAT)
+      time.strftime(Formatters::Base.build_time_format)
     end
 
     DeprecatedLogger = Struct.new(:host, :application)
