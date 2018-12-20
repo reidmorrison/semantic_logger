@@ -45,27 +45,28 @@ module Appender
         @hash_str          = @hash.inspect.sub('{', '\\{').sub('}', '\\}')
         @thread_name       = Thread.current.name
         @file_name_reg_exp = ' wrapper_test.rb:\d+'
+        @pid_regexp        = defined?(JRuby) ? '' : '\d+:'
       end
 
       describe 'format logs into text form' do
         it 'logs blank data' do
           @appender.debug
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper/, @mock_logger.message)
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[#{@pid_regexp}#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper/, @mock_logger.message)
         end
 
         it 'logs message' do
           @appender.debug('hello world')
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, @mock_logger.message)
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[#{@pid_regexp}#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, @mock_logger.message)
         end
 
         it 'logs message and payload' do
           @appender.debug('hello world', @hash)
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{@hash_str}/, @mock_logger.message)
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[#{@pid_regexp}#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{@hash_str}/, @mock_logger.message)
         end
 
         it 'logs named parameters' do
           @appender.debug(message: 'hello world', payload: @hash)
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{@hash_str}/, @mock_logger.message)
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[#{@pid_regexp}#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{@hash_str}/, @mock_logger.message)
         end
       end
 
@@ -86,7 +87,7 @@ module Appender
             level_char = 'E' if level_char == 'U'
             @logger.send(level.downcase.to_sym, 'hello world', @hash)
             SemanticLogger.flush
-            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[\d+:#{@thread_name}#{@file_name_reg_exp}\] Appender::WrapperTest -- hello world -- #{@hash_str}/, @mock_logger.message)
+            assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ #{level_char} \[#{@pid_regexp}#{@thread_name}#{@file_name_reg_exp}\] Appender::WrapperTest -- hello world -- #{@hash_str}/, @mock_logger.message)
           end
         end
       end

@@ -239,8 +239,9 @@ module SemanticLogger
     def process_info(thread_name_length = 30)
       file, line = file_name_and_line(true)
       file_name  = " #{file}:#{line}" if file
-
-      "#{$$}:#{format("%.#{thread_name_length}s", thread_name)}#{file_name}"
+      # PID has limited value in JRuby, where fork() doesn't work
+      pid = defined?(JRuby) ? '' : "#{$$}:"
+      "#{pid}#{format("%.#{thread_name_length}s", thread_name)}#{file_name}"
     end
 
     CALLER_REGEXP = /^(.*):(\d+).*/
