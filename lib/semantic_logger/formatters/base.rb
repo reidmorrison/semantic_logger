@@ -42,6 +42,8 @@ module SemanticLogger
       # Return the Time as a formatted string
       def format_time(time)
         case time_format
+        when :rfc_3339
+          time.utc.to_datetime.rfc3339
         when :iso_8601
           time.utc.iso8601(PRECISION)
         when :ms
