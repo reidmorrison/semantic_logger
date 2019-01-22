@@ -14,6 +14,7 @@ module SemanticLogger
     autoload :Http,              'semantic_logger/appender/http'
     autoload :MongoDB,           'semantic_logger/appender/mongodb'
     autoload :NewRelic,          'semantic_logger/appender/new_relic'
+    autoload :Rabbitmq,          'semantic_logger/appender/rabbitmq'
     autoload :Splunk,            'semantic_logger/appender/splunk'
     autoload :SplunkHttp,        'semantic_logger/appender/splunk_http'
     autoload :Syslog,            'semantic_logger/appender/syslog'
@@ -56,6 +57,8 @@ module SemanticLogger
       elsif async == true
         proxy_options[:appender] = appender
         Appender::Async.new(proxy_options)
+
+
       else
         appender
       end

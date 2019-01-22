@@ -8,3 +8,4 @@ Gemfile.lock
 *.log
 /docs/_site
 .rakeTasks
+/tags
