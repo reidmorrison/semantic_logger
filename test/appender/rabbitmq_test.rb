@@ -18,8 +18,10 @@ module Appender
             password: 'the-password'
           )
 
-          expected_bunny_args = [{ host: 'localhost', username: 'the-username', password: 'the-password' }]
-          assert_equal expected_bunny_args, bunny.args
+          bunny_args = bunny.args.first
+          assert_equal 'localhost', bunny_args[:host]
+          assert_equal 'the-username', bunny_args[:username]
+          assert_equal 'the-password', bunny_args[:password]
 
           message  = 'AppenderRabbitmqTest log message'
           @appender.info(message)
