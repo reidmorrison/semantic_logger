@@ -4,25 +4,24 @@ require_relative '../test_helper'
 module Appender
   class MongoDBTest < Minitest::Test
     describe SemanticLogger::Appender::MongoDB do
-      # before do
-      #   @appender           = SemanticLogger::Appender::MongoDB.new(
-      #     uri:             'mongodb://127.0.0.1:27017/test',
-      #     collection_size: 10 * 1024 ** 2, # 10MB
-      #     host:        'test',
-      #     application: 'test_application',
-      #     level:       :trace
-      #   )
-      #   @hash               = {tracking_number: 12_345, session_id: 'HSSKLEU@JDK767'}
-      #   Thread.current.name = 'thread'
-      # end
+      before do
+        @appender           = SemanticLogger::Appender::MongoDB.new(
+          uri:             'mongodb://127.0.0.1:27017/test',
+          collection_size: 10 * 1024 ** 2, # 10MB
+          host:        'test',
+          application: 'test_application',
+          level:       :trace
+        )
+        @hash               = {tracking_number: 12_345, session_id: 'HSSKLEU@JDK767'}
+        Thread.current.name = 'thread'
+      end
 
-      # after do
-      #   @appender&.purge_all
-      # end
+      after do
+        @appender&.purge_all
+      end
 
       describe 'format logs into documents' do
         it 'handle no arguments' do
-          skip
           @appender.debug
           document = @appender.collection.find.first
           assert_equal :debug, document['level']
@@ -36,7 +35,6 @@ module Appender
         end
 
         it 'handle named parameters' do
-          skip
           @appender.debug(payload: @hash)
 
           document = @appender.collection.find.first
@@ -53,7 +51,6 @@ module Appender
         end
 
         it 'handle message and payload' do
-          skip
           @appender.debug('hello world', @hash)
 
           document = @appender.collection.find.first
@@ -70,7 +67,6 @@ module Appender
         end
 
         it 'handle message without payload' do
-          skip
           @appender.debug('hello world')
 
           document = @appender.collection.find.first
@@ -88,7 +84,6 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         describe "##{level}" do
           it 'logs' do
-            skip
             @appender.send(level, 'hello world -- Calculations', @hash)
             document = @appender.collection.find.first
             assert_equal level, document['level']

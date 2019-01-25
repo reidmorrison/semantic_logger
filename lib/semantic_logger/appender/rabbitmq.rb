@@ -112,7 +112,6 @@ module SemanticLogger
         SemanticLogger::Formatters::Json.new
       end
 
-
       def queue
         @queue ||= @channel.queue(@queue_name)
       end
