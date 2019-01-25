@@ -22,6 +22,7 @@ Log messages can be written to one or more of the following destinations at the 
 * Bugsnag
 * Signalfx
 * Apache Kafka
+* RabbitMQ (AMQP)
 * HTTP(S)
 * TCP (+ SSL)
 * UDP
@@ -480,6 +481,20 @@ Publish log messages to an Apache Kafka broker.
 SemanticLogger.add_appender(
   appender:     :kafka,
   seed_brokers: ["kafka1:9092", "kafka2:9092"],
+)
+~~~
+
+### RabbitMQ (AMQP)
+
+Stream log messages through a queue on RabbitMQ broker.
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:      :rabbitmq,
+  queue_name:    'semantic_logger',
+  rabbitmq_host: 'localhost',
+  username:      'the-username',
+  password:      'the-password',
 )
 ~~~
 
