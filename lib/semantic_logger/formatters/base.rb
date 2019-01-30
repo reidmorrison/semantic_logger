@@ -2,7 +2,7 @@ require 'time'
 module SemanticLogger
   module Formatters
     class Base
-      attr_accessor :time_format, :log_host, :log_application
+      attr_accessor :time_format, :log_host, :log_application, :precision
 
       # Time precision varies by Ruby interpreter
       # JRuby 9.1.8.0 supports microseconds
@@ -17,7 +17,6 @@ module SemanticLogger
         else
           6
         end
-      TIME_FORMAT = "%Y-%m-%d %H:%M:%S.%#{PRECISION}N".freeze
 
       # Parameters
       #   time_format: [String|Symbol|nil]
@@ -25,11 +24,32 @@ module SemanticLogger
       #     :iso_8601 Outputs an ISO8601 Formatted timestamp.
       #     :ms       Output in miliseconds since epoch.
       #     nil:      Returns Empty string for time ( no time is output ).
-      #     Default: '%Y-%m-%d %H:%M:%S.%6N'
-      def initialize(time_format: TIME_FORMAT, log_host: true, log_application: true)
-        @time_format     = time_format
+      #     Default: '%Y-%m-%d %H:%M:%S.%<precision>N'
+      #   log_host: [Boolean]
+      #     Whether or not to include hostname in logs
+      #     Default: true
+      #   log_application: [Boolean]
+      #     Whether or not to include application name in logs
+      #     Default: true
+      #   precision: [Integer]
+      #     How many fractional digits to log times with.
+      #     Default: PRECISION (6, except on older JRuby, where 3)
+      def initialize(time_format: nil, log_host: true, log_application: true,
+                     precision: PRECISION)
+        @time_format     = time_format || self.class.build_time_format(precision)
         @log_host        = log_host
         @log_application = log_application
+        @precision       = precision
+      end
+
+      # Return default time format string
+      #
+      # Parameters
+      #   precision: [Integer]
+      #     How many fractional digits to log times with.
+      #     Default: PRECISION (6, except on older JRuby, where 3)
+      def self.build_time_format(precision=PRECISION)
+        "%Y-%m-%d %H:%M:%S.%#{precision}N"
       end
 
       # Date & time
@@ -43,7 +63,7 @@ module SemanticLogger
       def format_time(time)
         case time_format
         when :iso_8601
-          time.utc.iso8601(PRECISION)
+          time.utc.iso8601(precision)
         when :ms
           (time.to_f * 1_000).to_i
         when :none

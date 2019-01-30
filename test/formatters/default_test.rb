@@ -60,6 +60,27 @@ module SemanticLogger
             formatter.call(log, nil)
             assert_equal '08:32:05', formatter.time
           end
+
+          it 'supports time_format of iso_8601' do
+            formatter = SemanticLogger::Formatters::Default.new(time_format: :iso_8601)
+            formatter.call(log, nil)
+            assert_equal '2017-01-14T08:32:05.375276Z', formatter.time
+          end
+
+          describe 'precision is specified' do
+            it 'follows it for default time format' do
+              formatter = SemanticLogger::Formatters::Default.new(precision: 2)
+              formatter.call(log, nil)
+              assert_equal '2017-01-14 08:32:05.37', formatter.time
+            end
+
+            it 'follows it for iso_8601' do
+              formatter = SemanticLogger::Formatters::Default.new(precision: 2,
+                                                                  time_format: :iso_8601)
+              formatter.call(log, nil)
+              assert_equal '2017-01-14T08:32:05.37Z', formatter.time
+            end
+          end
         end
 
         describe 'level' do

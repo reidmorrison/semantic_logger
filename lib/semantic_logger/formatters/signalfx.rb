@@ -10,7 +10,8 @@ module SemanticLogger
                      log_application: true,
                      gauge_name: 'Application.average',
                      counter_name: 'Application.counter',
-                     environment: true)
+                     environment: true,
+                     precision: PRECISION)
 
         @token        = token
         @dimensions   = dimensions.map(&:to_sym) if dimensions
@@ -23,7 +24,7 @@ module SemanticLogger
           @environment = environment
         end
 
-        super(time_format: :ms, log_host: log_host, log_application: log_application)
+        super(time_format: :ms, log_host: log_host, log_application: log_application, precision: precision)
       end
 
       # Create SignalFx friendly metric.
