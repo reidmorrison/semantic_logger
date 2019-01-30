@@ -9,6 +9,7 @@ module SemanticLogger
     autoload :OneLine,          'semantic_logger/formatters/one_line'
     autoload :Signalfx,         'semantic_logger/formatters/signalfx'
     autoload :Syslog,           'semantic_logger/formatters/syslog'
+    autoload :Fluentd,          'semantic_logger/formatters/fluentd'
     # @formatter:on
 
     # Return formatter that responds to call.
