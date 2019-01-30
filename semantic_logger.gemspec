@@ -14,7 +14,6 @@ Gem::Specification.new do |spec|
   spec.homepage              = 'https://github.com/rocketjob/semantic_logger'
   spec.summary               = 'Feature rich logging framework, and replacement for existing Ruby & Rails loggers.'
   spec.files                 = Dir['lib/**/*', 'LICENSE.txt', 'Rakefile', 'README.md']
-  spec.test_files            = Dir['test/**/*']
   spec.license               = 'Apache-2.0'
   spec.required_ruby_version = '>= 2.3'
   spec.add_dependency 'concurrent-ruby', '~> 1.0'

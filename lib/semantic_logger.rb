@@ -26,6 +26,10 @@ module SemanticLogger
     autoload :Statsd,            'semantic_logger/metric/statsd'
   end
 
+  module Reporters
+    autoload :Minitest,          'semantic_logger/reporters/minitest'
+  end
+
   if defined?(JRuby)
     module JRuby
       autoload :GarbageCollectionLogger, 'semantic_logger/jruby/garbage_collection_logger'
