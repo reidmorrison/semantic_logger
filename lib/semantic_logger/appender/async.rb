@@ -54,6 +54,12 @@ module SemanticLogger
         thread
       end
 
+      # Re-open appender after a fork
+      def reopen
+        appender.reopen if appender.respond_to?(:reopen)
+        thread
+      end
+
       # Returns [true|false] if the queue has a capped size.
       def capped?
         @capped
