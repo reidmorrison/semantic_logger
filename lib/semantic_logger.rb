@@ -6,6 +6,7 @@ require 'semantic_logger/semantic_logger'
 module SemanticLogger
   autoload :AnsiColors,         'semantic_logger/ansi_colors'
   autoload :Appender,           'semantic_logger/appender'
+  autoload :Appenders,          'semantic_logger/appenders'
   autoload :Base,               'semantic_logger/base'
   autoload :DebugAsTraceLogger, 'semantic_logger/debug_as_trace_logger'
   autoload :Formatters,         'semantic_logger/formatters'

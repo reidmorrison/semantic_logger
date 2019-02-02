@@ -7,7 +7,7 @@ module SemanticLogger
       extend Forwardable
 
       attr_accessor :logger, :lag_check_interval, :lag_threshold_s
-      attr_reader :queue, :appender
+      attr_reader :queue, :appender, :max_queue_size
 
       # Forward methods that can be called directly
       def_delegator :@appender, :name
@@ -43,21 +43,22 @@ module SemanticLogger
         @lag_check_interval = lag_check_interval
         @lag_threshold_s    = lag_threshold_s
         @thread             = nil
-
-        if max_queue_size == -1
-          @queue  = Queue.new
-          @capped = false
-        else
-          @queue  = SizedQueue.new(max_queue_size)
-          @capped = true
-        end
+        @max_queue_size     = max_queue_size
+        create_queue
         thread
       end
 
       # Re-open appender after a fork
       def reopen
+        # Workaround CRuby crash on fork by recreating queue on reopen
+        #   https://github.com/rocketjob/semantic_logger/issues/103
+        @queue&.close
+        create_queue
+
         appender.reopen if appender.respond_to?(:reopen)
-        thread
+
+        @thread.kill if @thread&.alive?
+        @thread = Thread.new { process }
       end
 
       # Returns [true|false] if the queue has a capped size.
@@ -96,6 +97,16 @@ module SemanticLogger
       end
 
       private
+
+      def create_queue
+        if max_queue_size == -1
+          @queue  = Queue.new
+          @capped = false
+        else
+          @queue  = SizedQueue.new(max_queue_size)
+          @capped = true
+        end
+      end
 
       # Separate thread for batching up log messages before writing.
       def process
@@ -146,6 +157,7 @@ module SemanticLogger
             break unless process_message(message)
           end
         end
+        logger.trace 'Async: Queue Closed'
       end
 
       # Returns false when message processing should be stopped

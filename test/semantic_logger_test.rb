@@ -278,7 +278,7 @@ class SemanticLoggerTest < Minitest::Test
         end
 
         after do
-          SemanticLogger::Processor.instance.appender.log_subscribers = nil
+          SemanticLogger::Logger.subscribers.clear
         end
 
         it 'registers a log listener' do

@@ -5,6 +5,21 @@ module SemanticLogger
   class Logger < Base
     include SemanticLogger::Concerns::Compatibility
 
+    def self.on_log(object = nil, &block)
+      subscriber = block || object
+
+      unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
+        raise('When supplying an on_log subscriber, it must support the #call method')
+      end
+
+      subscribers = (@subscribers ||= Concurrent::Array.new)
+      subscribers << subscriber unless subscribers.include?(subscriber)
+    end
+
+    class << self
+      attr_reader :subscribers
+    end
+
     # Returns a Logger instance
     #
     # Return the logger for a specific class, supports class specific log levels
@@ -32,10 +47,32 @@ module SemanticLogger
 
     # Place log request on the queue for the Appender thread to write to each
     # appender in the order that they were registered
+    #
+    # Log subscribers are called inline before handing off to the queue so that
+    # they can capture additional context information when applicable.
     def log(log, message = nil, progname = nil, &block)
       # Compatibility with ::Logger
       return add(log, message, progname, &block) unless log.is_a?(SemanticLogger::Log)
-      Processor << log
+
+      self.class.call_subscribers(log)
+
+      Processor.instance.log(log)
+    end
+
+    private
+
+    @subscribers = nil
+
+    def self.call_subscribers(log)
+      return unless @subscribers
+
+      @subscribers.each do |subscriber|
+        begin
+          subscriber.call(log)
+        rescue Exception => exc
+          Processor.instance.logger.error('Exception calling :on_log subscriber', exc)
+        end
+      end
     end
   end
 end

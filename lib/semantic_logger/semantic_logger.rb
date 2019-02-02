@@ -152,19 +152,16 @@ module SemanticLogger
   #   logger.info "Hello World"
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
   def self.add_appender(options, deprecated_level = nil, &block)
-    options  = options.is_a?(Hash) ? options.dup : convert_old_appender_args(options, deprecated_level)
-    appender = SemanticLogger::Appender.factory(options, &block)
-    @appenders << appender
-
+    appender = Processor.instance.appender.appenders.add(options, deprecated_level, &block)
     # Start appender thread if it is not already running
-    SemanticLogger::Processor.start
+    Processor.start
     appender
   end
 
   # Remove an existing appender
   # Currently only supports appender instances
   def self.remove_appender(appender)
-    @appenders.delete(appender)
+    Processor.instance.appender.appenders.delete(appender)
   end
 
   # Returns [SemanticLogger::Subscriber] a copy of the list of active
@@ -172,30 +169,28 @@ module SemanticLogger
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
   def self.appenders
-    @appenders.clone
+    Processor.instance.appender.appenders.to_a
   end
 
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
   def self.flush
-    SemanticLogger::Processor.instance.flush
+    Processor.instance.flush
   end
 
   # Close all appenders and flush any outstanding messages.
   def self.close
-    SemanticLogger::Processor.instance.close
+    Processor.instance.close
   end
 
   # After forking an active process call SemanticLogger.reopen to re-open
   # any open file handles etc to resources.
   #
   # Note:
-  #   Not all appenders implement reopen.
+  #   Not all appender's implement reopen.
   #   Check the code for each appender you are using before relying on this behavior.
   def self.reopen
-    @appenders.each { |appender| appender.reopen if appender.respond_to?(:reopen) }
-    # After a fork the appender thread is not running, start it if it is not running.
-    SemanticLogger::Processor.start
+    Processor.instance.reopen
   end
 
   # Supply a callback to be called whenever a log entry is created.
@@ -223,7 +218,7 @@ module SemanticLogger
   # * This callback is called within the thread of the application making the logging call.
   # * If these callbacks are slow they will slow down the application.
   def self.on_log(object = nil, &block)
-    Processor.instance.appender.on_log(object, &block)
+    Logger.on_log(object, &block)
   end
 
   # Add signal handlers for Semantic Logger
@@ -449,6 +444,34 @@ module SemanticLogger
     Thread.current[:semantic_logger_silence] = current_index
   end
 
+  # Returns [Integer] the number of log entries waiting to be written to the appenders.
+  #
+  # When this number grows it is because the logging appender thread is not
+  # able to write to the appenders fast enough. Either reduce the amount of
+  # logging, increase the log level, reduce the number of appenders, or
+  # look into speeding up the appenders themselves
+  def self.queue_size
+    Processor.instance.queue.size
+  end
+
+  # Returns the check_interval which is the number of messages between checks
+  # to determine if the appender thread is falling behind.
+  def self.lag_check_interval
+    Processor.instance.lag_check_interval
+  end
+
+  # Set the check_interval which is the number of messages between checks
+  # to determine if the appender thread is falling behind.
+  def self.lag_check_interval=(lag_check_interval)
+    Processor.instance.lag_check_interval = lag_check_interval
+  end
+
+  # Returns the amount of time in seconds
+  # to determine if the appender thread is falling behind.
+  def self.lag_threshold_s
+    Processor.instance.lag_threshold_s
+  end
+
   def self.default_level_index
     Thread.current[:semantic_logger_silence] || @default_level_index
   end
@@ -488,30 +511,7 @@ module SemanticLogger
     raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
     index
   end
-
   # private_class_method :level_to_index
-
-  # Backward compatibility
-  def self.convert_old_appender_args(appender, level)
-    options         = {}
-    options[:level] = level if level
-
-    if appender.is_a?(String)
-      options[:file_name] = appender
-    elsif appender.is_a?(IO)
-      options[:io] = appender
-    elsif appender.is_a?(Symbol) || appender.is_a?(Subscriber)
-      options[:appender] = appender
-    else
-      options[:logger] = appender
-    end
-    warn "[DEPRECATED] SemanticLogger.add_appender parameters have changed. Please use: #{options.inspect}"
-    options
-  end
-
-  private_class_method :convert_old_appender_args
-
-  @appenders = Concurrent::Array.new
 
   # Initial default Level for all new instances of SemanticLogger::Logger
   @default_level         = :info
