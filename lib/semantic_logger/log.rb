@@ -87,7 +87,12 @@ module SemanticLogger
       end
 
       self.message = message
-      self.payload = payload
+      if payload && payload.is_a?(Hash)
+        self.payload = payload
+      elsif payload
+        self.message = message.nil? ? payload.to_s : "#{message} -- #{payload}"
+        self.payload = nil
+      end
 
       if exception
         case log_exception
@@ -120,7 +125,6 @@ module SemanticLogger
         self.dimensions    = dimensions
       end
 
-      self.payload = payload if payload&.size&.positive?
       true
     end
 
@@ -140,8 +144,9 @@ module SemanticLogger
       elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
         exception = payload
         payload   = nil
-      elsif payload.is_a?(String)
+      elsif payload && !payload.is_a?(Hash)
         message = message.nil? ? payload : "#{message} -- #{payload}"
+        payload = nil
       end
 
       # Add result of block as message or payload if not nil

@@ -19,7 +19,7 @@ module SemanticLogger
         @counter_name = counter_name
 
         if environment == true
-          @environment = defined?(Rails) ? Rails.env : ENV['RAILS_ENV'] || ENV['RACK_ENV'] || 'development'
+          @environment = defined?(Rails) && Rails.respond_to?(:env) ? Rails.env : ENV['RAILS_ENV'] || ENV['RACK_ENV'] || 'development'
         elsif environment
           @environment = environment
         end

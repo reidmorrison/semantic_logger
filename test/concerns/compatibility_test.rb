@@ -20,6 +20,40 @@ class TestLogger < Minitest::Test
       assert_equal :fatal, log.level
     end
 
+    describe '#info' do
+      it 'logs message' do
+        logger.info('hello1')
+
+        assert log = log_message
+        assert_equal 'hello1', log.message
+        assert_equal :info, log.level
+      end
+
+      it 'logs 2 messages' do
+        logger.info('hello1', 'hello2')
+
+        assert log = log_message
+        assert_equal 'hello1 -- hello2', log.message
+        assert_equal :info, log.level
+      end
+
+      it 'logs non-string' do
+        logger.info('hello1', true)
+
+        assert log = log_message
+        assert_equal 'hello1 -- true', log.message
+        assert_equal :info, log.level
+      end
+
+      it 'logs block result' do
+        logger.info('hello1', true) { 'Data' }
+
+        assert log = log_message
+        assert_equal 'hello1 -- true -- Data', log.message
+        assert_equal :info, log.level
+      end
+    end
+
     it '#unknown' do
       logger.unknown('hello world') { 'Data' }
 
