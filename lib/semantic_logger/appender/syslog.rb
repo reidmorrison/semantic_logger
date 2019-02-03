@@ -170,10 +170,10 @@ module SemanticLogger
           method = ::Syslog.opened? ? :reopen : :open
           ::Syslog.send(method, application, options, facility)
         when :tcp
-          # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
-          @tcp_client_options[:logger] = logger
           @tcp_client_options[:server] = "#{@server}:#{@port}"
           @remote_syslog               = Net::TCPClient.new(@tcp_client_options)
+          # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
+          @remote_syslog.logger = logger
         when :udp
           @remote_syslog = UDPSocket.new
         else
