@@ -3,18 +3,18 @@ require 'socket'
 
 module SemanticLogger
   # Logging levels in order of most detailed to most severe
-  LEVELS = %i[trace debug info warn error fatal].freeze
+  LEVELS = Levels::LEVELS
 
   # Return a logger for the supplied class or class_name
   def self.[](klass)
-    SemanticLogger::Logger.new(klass)
+    Logger.new(klass)
   end
 
   # Sets the global default log level
   def self.default_level=(level)
     @default_level = level
     # For performance reasons pre-calculate the level index
-    @default_level_index = level_to_index(level)
+    @default_level_index = Levels.index(level)
   end
 
   # Returns the global default log level
@@ -35,7 +35,7 @@ module SemanticLogger
   def self.backtrace_level=(level)
     @backtrace_level = level
     # For performance reasons pre-calculate the level index
-    @backtrace_level_index = level.nil? ? 65_535 : level_to_index(level)
+    @backtrace_level_index = level.nil? ? 65_535 : Levels.index(level)
   end
 
   # Returns the current backtrace level
@@ -152,16 +152,16 @@ module SemanticLogger
   #   logger.info "Hello World"
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
   def self.add_appender(options, deprecated_level = nil, &block)
-    appender = Processor.instance.appender.appenders.add(options, deprecated_level, &block)
+    appender = Logger.processor.appenders.add(options, deprecated_level, &block)
     # Start appender thread if it is not already running
-    Processor.start
+    Logger.processor.start
     appender
   end
 
   # Remove an existing appender
   # Currently only supports appender instances
   def self.remove_appender(appender)
-    Processor.instance.appender.appenders.delete(appender)
+    Logger.processor.appenders.delete(appender)
   end
 
   # Returns [SemanticLogger::Subscriber] a copy of the list of active
@@ -169,18 +169,18 @@ module SemanticLogger
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
   def self.appenders
-    Processor.instance.appender.appenders.to_a
+    Logger.processor.appenders.to_a
   end
 
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
   def self.flush
-    Processor.instance.flush
+    Logger.processor.flush
   end
 
   # Close all appenders and flush any outstanding messages.
   def self.close
-    Processor.instance.close
+    Logger.processor.close
   end
 
   # After forking an active process call SemanticLogger.reopen to re-open
@@ -190,7 +190,7 @@ module SemanticLogger
   #   Not all appender's implement reopen.
   #   Check the code for each appender you are using before relying on this behavior.
   def self.reopen
-    Processor.instance.reopen
+    Logger.processor.reopen
   end
 
   # Supply a callback to be called whenever a log entry is created.
@@ -218,7 +218,7 @@ module SemanticLogger
   # * This callback is called within the thread of the application making the logging call.
   # * If these callbacks are slow they will slow down the application.
   def self.on_log(object = nil, &block)
-    Logger.on_log(object, &block)
+    Logger.subscribe(object, &block)
   end
 
   # Add signal handlers for Semantic Logger
@@ -438,7 +438,7 @@ module SemanticLogger
   #   explicitly. I.e. That do not rely on the global default level
   def self.silence(new_level = :error)
     current_index                            = Thread.current[:semantic_logger_silence]
-    Thread.current[:semantic_logger_silence] = SemanticLogger.level_to_index(new_level)
+    Thread.current[:semantic_logger_silence] = Levels.index(new_level)
     yield
   ensure
     Thread.current[:semantic_logger_silence] = current_index
@@ -451,71 +451,36 @@ module SemanticLogger
   # logging, increase the log level, reduce the number of appenders, or
   # look into speeding up the appenders themselves
   def self.queue_size
-    Processor.instance.queue.size
+    Logger.processor.queue.size
   end
 
   # Returns the check_interval which is the number of messages between checks
   # to determine if the appender thread is falling behind.
   def self.lag_check_interval
-    Processor.instance.lag_check_interval
+    Logger.processor.lag_check_interval
   end
 
   # Set the check_interval which is the number of messages between checks
   # to determine if the appender thread is falling behind.
   def self.lag_check_interval=(lag_check_interval)
-    Processor.instance.lag_check_interval = lag_check_interval
+    Logger.processor.lag_check_interval = lag_check_interval
   end
 
   # Returns the amount of time in seconds
   # to determine if the appender thread is falling behind.
   def self.lag_threshold_s
-    Processor.instance.lag_threshold_s
+    Logger.processor.lag_threshold_s
   end
 
   def self.default_level_index
     Thread.current[:semantic_logger_silence] || @default_level_index
   end
 
-  # private_class_method :default_level_index
-
-  # Returns the symbolic level for the supplied level index
-  def self.index_to_level(level_index)
-    LEVELS[level_index]
-  end
-
-  # private_class_method :index_to_level
-
-  # Internal method to return the log level as an internal index
-  # Also supports mapping the ::Logger levels to SemanticLogger levels
-  def self.level_to_index(level)
-    return if level.nil?
-
-    index =
-      if level.is_a?(Symbol)
-        LEVELS.index(level)
-      elsif level.is_a?(String)
-        level = level.downcase.to_sym
-        LEVELS.index(level)
-      elsif level.is_a?(Integer) && defined?(::Logger::Severity)
-        # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
-        @map_levels ||= begin
-          levels = []
-          ::Logger::Severity.constants.each do |constant|
-            levels[::Logger::Severity.const_get(constant)] =
-              LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
-          end
-          levels
-        end
-        @map_levels[level]
-      end
-    raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
-    index
-  end
-  # private_class_method :level_to_index
+  private
 
   # Initial default Level for all new instances of SemanticLogger::Logger
   @default_level         = :info
-  @default_level_index   = level_to_index(@default_level)
+  @default_level_index   = Levels.index(@default_level)
   @backtrace_level       = :error
-  @backtrace_level_index = level_to_index(@backtrace_level)
+  @backtrace_level_index = Levels.index(@backtrace_level)
 end

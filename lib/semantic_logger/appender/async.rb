@@ -6,7 +6,7 @@ module SemanticLogger
     class Async
       extend Forwardable
 
-      attr_accessor :logger, :lag_check_interval, :lag_threshold_s
+      attr_accessor :lag_check_interval, :lag_threshold_s
       attr_reader :queue, :appender, :max_queue_size
 
       # Forward methods that can be called directly
@@ -18,6 +18,7 @@ module SemanticLogger
       def_delegator :@appender, :level
       def_delegator :@appender, :level=
       def_delegator :@appender, :logger
+      def_delegator :@appender, :logger=
 
       # Appender proxy to allow an existing appender to run asynchronously in a separate thread.
       #

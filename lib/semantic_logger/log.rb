@@ -59,7 +59,7 @@ module SemanticLogger
       @time        = Time.now
       @tags        = SemanticLogger.tags
       @named_tags  = SemanticLogger.named_tags
-      @level_index = index.nil? ? SemanticLogger.level_to_index(level) : index
+      @level_index = index.nil? ? Levels.index(level) : index
     end
 
     # Assign named arguments to this log entry, supplying defaults where applicable
@@ -109,7 +109,7 @@ module SemanticLogger
         # On exception change the log level
         if on_exception_level
           self.level       = on_exception_level
-          self.level_index = SemanticLogger.level_to_index(level)
+          self.level_index = Levels.index(level)
         end
       end
 

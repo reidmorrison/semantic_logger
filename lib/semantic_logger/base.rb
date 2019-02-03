@@ -23,8 +23,8 @@ module SemanticLogger
         @level_index = nil
         @level       = nil
       else
-        @level_index = SemanticLogger.send(:level_to_index, level)
-        @level       = SemanticLogger.send(:index_to_level, @level_index)
+        @level_index = Levels.index(level)
+        @level       = Levels.level(@level_index)
       end
     end
 
@@ -112,7 +112,7 @@ module SemanticLogger
 
     # Dynamically supply the log level with every measurement call
     def measure(level, message, params = {}, &block)
-      index = SemanticLogger.level_to_index(level)
+      index = Levels.index(level)
       if level_index <= index
         measure_internal(level, index, message, params, &block)
       elsif block

@@ -1,6 +1,5 @@
 require 'semantic_logger/core_ext/thread'
 require 'semantic_logger/version'
-require 'semantic_logger/semantic_logger'
 
 # @formatter:off
 module SemanticLogger
@@ -10,6 +9,7 @@ module SemanticLogger
   autoload :Base,               'semantic_logger/base'
   autoload :DebugAsTraceLogger, 'semantic_logger/debug_as_trace_logger'
   autoload :Formatters,         'semantic_logger/formatters'
+  autoload :Levels,             'semantic_logger/levels'
   autoload :Log,                'semantic_logger/log'
   autoload :Logger,             'semantic_logger/logger'
   autoload :Loggable,           'semantic_logger/loggable'
@@ -37,6 +37,7 @@ module SemanticLogger
     end
   end
 end
+require 'semantic_logger/semantic_logger'
 # @formatter:on
 
 # Flush all appenders at exit, waiting for outstanding messages on the queue

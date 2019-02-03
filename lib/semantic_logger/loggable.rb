@@ -82,7 +82,7 @@ module SemanticLogger
         #   return false
         # end
 
-        index = SemanticLogger.level_to_index(level)
+        index = Levels.index(level)
 
         logger_measure_module.module_eval(<<~MEASURE_METHOD, __FILE__, __LINE__ + 1)
           def #{method_name}(*args, &block)
