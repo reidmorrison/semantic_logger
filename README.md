@@ -11,6 +11,16 @@ Semantic Logger is a feature rich logging framework, and replacement for existin
 
 [Reference Documentation](http://www.rubydoc.info/gems/semantic_logger/)
 
+## Upgrading to Semantic Logger v4.4
+
+With some forking frameworks it is necessary to call `reopen` after the fork. With v4.4 the
+workaround for Ruby 2.5 crashes is no longer needed. 
+I.e. Please remove the following line if being called anywhere:
+
+~~~ruby
+SemanticLogger::Processor.instance.instance_variable_set(:@queue, Queue.new)
+~~~
+
 ## Logging Destinations
 
 Logging to the following destinations are all supported "out-of-the-box":
@@ -70,7 +80,7 @@ The following changes need to be made when upgrading to V4:
 - Replace calls to Logger#with_payload with SemanticLogger.named_tagged.
 - Replace calls to Logger#payload with SemanticLogger.named_tags.
 - MongoDB Appender requires Mongo Ruby Client V2 or greater.
-- Appenders now write payload data in a seperate :payload tag instead of mixing them.
+- Appenders now write payload data in a seperate :payload tag instead of mixing them
   directly into the root elements to avoid name clashes.
 
 As a result any calls like the following:
