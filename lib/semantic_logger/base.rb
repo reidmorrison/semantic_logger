@@ -341,7 +341,7 @@ module SemanticLogger
         params  = message
         message = nil
       end
-      start = Time.now
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       begin
         if block_given?
           result =
@@ -362,7 +362,7 @@ module SemanticLogger
         message   = params[:message] if params[:message]
         duration  =
           if block_given?
-            1000.0 * (Time.now - start)
+            1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start)
           else
             params[:duration] || raise('Mandatory block missing when :duration option is not supplied')
           end
@@ -401,7 +401,7 @@ module SemanticLogger
 
       # Ignores filter, silence, payload
       exception = nil
-      start     = Time.now
+      start     = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       begin
         yield
       rescue Exception => exc
@@ -414,7 +414,7 @@ module SemanticLogger
           min_duration:       min_duration,
           exception:          exception,
           metric:             metric,
-          duration:           1000.0 * (Time.now - start),
+          duration:           1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start),
           log_exception:      log_exception,
           on_exception_level: on_exception_level
         )
