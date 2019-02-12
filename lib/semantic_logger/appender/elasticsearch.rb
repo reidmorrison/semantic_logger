@@ -17,7 +17,7 @@ require 'date'
 module SemanticLogger
   module Appender
     class Elasticsearch < SemanticLogger::Subscriber
-      attr_accessor :url, :index, :type, :client, :flush_interval, :timeout_interval, :batch_size, :elasticsearch_args
+      attr_accessor :url, :index, :date_pattern, :type, :client, :flush_interval, :timeout_interval, :batch_size, :elasticsearch_args
 
       # Create Elasticsearch appender over persistent HTTP(S)
       #
@@ -27,6 +27,11 @@ module SemanticLogger
       #     The final index appends the date so that indexes are used per day.
       #       I.e. The final index will look like 'semantic_logger-YYYY.MM.DD'
       #     Default: 'semantic_logger'
+      #
+      #   date_pattern: [String]
+      #     The time format used to generate the full index name. Useful
+      #       if you want monthly indexes ('%Y.%m') or weekly ('%Y.%W').
+      #     Default: '%Y.%m.%d'
       #
       #   type: [String]
       #     Document type to associate with logs when they are written.
@@ -120,6 +125,7 @@ module SemanticLogger
       #     Default: 'GET'
       def initialize(url: 'http://localhost:9200',
                      index: 'semantic_logger',
+                     date_pattern: '%Y.%m.%d',
                      type: 'log',
                      level: nil,
                      formatter: nil,
@@ -132,6 +138,7 @@ module SemanticLogger
 
         @url                         = url
         @index                       = index
+        @date_pattern                = date_pattern
         @type                        = type
         @elasticsearch_args          = elasticsearch_args.dup
         @elasticsearch_args[:url]    = url if url && !elasticsearch_args[:hosts]
@@ -173,8 +180,8 @@ module SemanticLogger
       end
 
       def bulk_index(log)
-        daily_index = log.time.strftime("#{index}-%Y.%m.%d")
-        {'index' => {'_index' => daily_index, '_type' => type}}
+        expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
+        {'index' => {'_index' => expanded_index_name, '_type' => type}}
       end
 
       def default_formatter
