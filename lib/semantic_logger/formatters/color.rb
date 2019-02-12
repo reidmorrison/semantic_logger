@@ -44,8 +44,20 @@ module SemanticLogger
       #   SemanticLogger.add_appender(io: $stdout, formatter: :color)
       #
       # Example:
-      #   # Use a colorized output logger chenging the color for info to green.
-      #   SemanticLogger.add_appender(io: $stdout, formatter: :color, color_map: {info: SemanticLogger::AnsiColors::YELLOW})
+      #   # Use a colorized output logger changing the color for info to yellow.
+      #   SemanticLogger.add_appender(io: $stdout, formatter: {color: {color_map: {info: SemanticLogger::AnsiColors::YELLOW}}})
+      #
+      # Example:
+      #   # Override the Awesome Print options to output hashes over multiple lines:
+      #   SemanticLogger.add_appender(io: $stdout, formatter: {color: {ap: {multiline: true}}})
+      #
+      #   # Calling the appender added above:
+      #   SemanticLogger['Test'].info('hi', {a: 1, b: 2})
+      #   => true
+      #   => 2019-02-12 11:47:50.794339 I [35832:70112015269920] Test -- hi -- {
+      #        :a => 1,
+      #        :b => 2
+      #      }
       #
       # Parameters:
       #  ap: [Hash]
