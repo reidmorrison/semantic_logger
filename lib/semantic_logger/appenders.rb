@@ -43,7 +43,7 @@ module SemanticLogger
           logger.trace "Closing appender: #{appender.name}"
           appender.flush
           appender.close
-          appenders.delete(appender)
+          delete(appender)
         rescue Exception => exc
           logger.error "Failed to close appender: #{appender.inspect}", exc
         end
