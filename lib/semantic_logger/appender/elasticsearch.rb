@@ -131,6 +131,7 @@ module SemanticLogger
                      formatter: nil,
                      filter: nil,
                      application: nil,
+                     environment: nil,
                      host: nil,
                      metrics: false,
                      **elasticsearch_args,
@@ -144,7 +145,7 @@ module SemanticLogger
         @elasticsearch_args[:url]    = url if url && !elasticsearch_args[:hosts]
         @elasticsearch_args[:logger] = logger
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, metrics: false, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: false, &block)
         reopen
       end
 

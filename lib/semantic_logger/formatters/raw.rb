@@ -6,9 +6,9 @@ module SemanticLogger
       attr_accessor :hash, :log, :logger, :time_key
 
       # By default Raw formatter does not reformat the time
-      def initialize(time_format: :none, log_host: true, log_application: true, time_key: :time, precision: PRECISION)
+      def initialize(time_format: :none, log_host: true, log_application: true, log_environment: true, time_key: :time, precision: PRECISION)
         @time_key = time_key
-        super(time_format: time_format, log_host: log_host, log_application: log_application, precision: precision)
+        super(time_format: time_format, log_host: log_host, log_application: log_application, log_environment: log_environment, precision: precision)
       end
 
       # Host name
@@ -19,6 +19,11 @@ module SemanticLogger
       # Application name
       def application
         hash[:application] = logger.application if log_application && logger.application
+      end
+
+      # Environment
+      def environment
+        hash[:environment] = logger.environment if log_environment && logger.environment
       end
 
       # Date & time
@@ -104,7 +109,7 @@ module SemanticLogger
         self.log    = log
         self.logger = logger
 
-        host; application; time; level; process_info; duration; tags; named_tags; name; message; payload; exception; metric
+        host; application; environment; time; level; process_info; duration; tags; named_tags; name; message; payload; exception; metric
         hash
       end
     end

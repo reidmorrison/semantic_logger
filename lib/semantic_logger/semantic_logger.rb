@@ -71,7 +71,19 @@ module SemanticLogger
     @application = application
   end
 
+  # Returns [String] name of this environment for logging purposes
+  # Note: Not all appenders use `environment`
+  def self.environment
+    @environment
+  end
+
+  # Override the default environment
+  def self.environment=(environment)
+    @environment = environment
+  end
+
   @application = 'Semantic Logger'
+  @environment = nil
 
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger

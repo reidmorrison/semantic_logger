@@ -89,7 +89,7 @@ module SemanticLogger
       #     where multiple sends are expected during a single response
       #     Default: true
       #
-      #   :connect_retry_count [Fixnum]
+      #   :connect_retry_count [Integer]
       #     Number of times to retry connecting when a connection fails
       #     Default: 10
       #
@@ -97,7 +97,7 @@ module SemanticLogger
       #     Number of seconds between connection retry attempts after the first failed attempt
       #     Default: 0.5
       #
-      #   :retry_count [Fixnum]
+      #   :retry_count [Integer]
       #     Number of times to retry when calling #retry_on_connection_failure
       #     This is independent of :connect_retry_count which still applies with
       #     connection failures. This retry controls upto how many times to retry the
@@ -182,7 +182,7 @@ module SemanticLogger
       #     connect_retry_count:    5
       #   )
       def initialize(separator: "\n",
-                     level: nil, formatter: nil, filter: nil, application: nil, host: nil, metrics: false,
+                     level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil, metrics: false,
                      **tcp_client_args, &block)
         @separator       = separator
         @tcp_client_args = tcp_client_args
@@ -191,7 +191,7 @@ module SemanticLogger
         Net::TCPClient.logger      = logger
         Net::TCPClient.logger.name = 'Net::TCPClient'
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, &block)
         reopen
       end
 

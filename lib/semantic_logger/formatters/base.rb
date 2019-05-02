@@ -2,7 +2,7 @@ require 'time'
 module SemanticLogger
   module Formatters
     class Base
-      attr_accessor :time_format, :log_host, :log_application, :precision
+      attr_accessor :time_format, :log_host, :log_application, :log_environment, :precision
 
       # Time precision varies by Ruby interpreter
       # JRuby 9.1.8.0 supports microseconds
@@ -34,11 +34,12 @@ module SemanticLogger
       #   precision: [Integer]
       #     How many fractional digits to log times with.
       #     Default: PRECISION (6, except on older JRuby, where 3)
-      def initialize(time_format: nil, log_host: true, log_application: true,
+      def initialize(time_format: nil, log_host: true, log_application: true, log_environment: true,
                      precision: PRECISION)
         @time_format     = time_format || self.class.build_time_format(precision)
         @log_host        = log_host
         @log_application = log_application
+        @log_environment = log_environment
         @precision       = precision
       end
 
