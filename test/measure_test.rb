@@ -10,21 +10,21 @@ class MeasureTest < Minitest::Test
 
       describe "##{measure_level}" do
         it ':message' do
-          assert_equal 'result', logger.send(measure_level, 'hello world') { 'result' }
+          assert_equal 'result', appender.send(measure_level, 'hello world') { 'result' }
 
           assert log = log_message
           assert_equal 'hello world', log.message
         end
 
         it ':level' do
-          assert_equal 'result', logger.send(measure_level, 'hello world') { 'result' }
+          assert_equal 'result', appender.send(measure_level, 'hello world') { 'result' }
 
           assert log = log_message
           assert_equal level, log.level
         end
 
         it ':payload' do
-          assert_equal 'result', logger.send(measure_level, 'hello world', payload: payload) { 'result' }
+          assert_equal 'result', appender.send(measure_level, 'hello world', payload: payload) { 'result' }
 
           assert log = log_message
           assert_equal payload, log.payload
@@ -32,12 +32,12 @@ class MeasureTest < Minitest::Test
 
         describe ':min_duration' do
           it 'not log when faster' do
-            assert_equal 'result', logger.send(measure_level, 'hello world', min_duration: 2000) { 'result' }
+            assert_equal 'result', appender.send(measure_level, 'hello world', min_duration: 2000) { 'result' }
             refute log_message
           end
 
           it 'log when slower' do
-            assert_equal 'result', logger.send(measure_level, 'hello world', min_duration: 200, payload: payload) { sleep 0.5; 'result' }
+            assert_equal 'result', appender.send(measure_level, 'hello world', min_duration: 200, payload: payload) { sleep 0.5; 'result' }
 
             assert log = log_message
             assert_equal 'hello world', log.message
@@ -46,7 +46,7 @@ class MeasureTest < Minitest::Test
 
         it ':exception' do
           assert_raises RuntimeError do
-            logger.send(measure_level, 'hello world', payload: payload) { raise 'Test' }
+            appender.send(measure_level, 'hello world', payload: payload) { raise 'Test' }
           end
 
           assert log = log_message
@@ -57,7 +57,7 @@ class MeasureTest < Minitest::Test
 
         it ':on_exception_level' do
           assert_raises RuntimeError do
-            logger.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
+            appender.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
           end
 
           assert log = log_message
@@ -69,7 +69,7 @@ class MeasureTest < Minitest::Test
         describe 'log_exception' do
           it 'default' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world') { raise 'Test' }
+              appender.send(measure_level, 'hello world') { raise 'Test' }
             end
 
             assert log = log_message
@@ -79,7 +79,7 @@ class MeasureTest < Minitest::Test
 
           it ':full' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world', log_exception: :full) { raise 'Test' }
+              appender.send(measure_level, 'hello world', log_exception: :full) { raise 'Test' }
             end
 
             assert log = log_message
@@ -91,7 +91,7 @@ class MeasureTest < Minitest::Test
 
           it ':partial' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world', log_exception: :partial) { raise 'Test' }
+              appender.send(measure_level, 'hello world', log_exception: :partial) { raise 'Test' }
             end
 
             assert log = log_message
@@ -101,7 +101,7 @@ class MeasureTest < Minitest::Test
 
           it ':none' do
             assert_raises RuntimeError do
-              logger.send(measure_level, 'hello world', log_exception: :none) { raise 'Test' }
+              appender.send(measure_level, 'hello world', log_exception: :none) { raise 'Test' }
             end
 
             assert log = log_message
@@ -112,7 +112,7 @@ class MeasureTest < Minitest::Test
 
         it ':metric' do
           metric_name = '/my/custom/metric'
-          assert_equal 'result', logger.send(measure_level, 'hello world', metric: metric_name) { 'result' }
+          assert_equal 'result', appender.send(measure_level, 'hello world', metric: metric_name) { 'result' }
 
           assert log = log_message
           assert_equal metric_name, log.metric
@@ -120,14 +120,14 @@ class MeasureTest < Minitest::Test
 
         it ':backtrace_level' do
           SemanticLogger.stub(:backtrace_level_index, 0) do
-            assert_equal 'result', logger.send(measure_level, 'hello world') { 'result' }
+            assert_equal 'result', appender.send(measure_level, 'hello world') { 'result' }
 
             assert log = log_message
             assert log.backtrace
             assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
-            h = log.to_h
+            h = SemanticLogger::Formatters::Raw.new.call(log, appender)
             assert_match /measure_test.rb/, h[:file], h
             assert h[:line].is_a?(Integer)
           end
@@ -136,21 +136,21 @@ class MeasureTest < Minitest::Test
 
       describe "#measure(#{level})" do
         it ':message' do
-          assert_equal 'result', logger.measure(level, 'hello world') { 'result' }
+          assert_equal 'result', appender.measure(level, 'hello world') { 'result' }
 
           assert log = log_message
           assert_equal 'hello world', log.message
         end
 
         it ':level' do
-          assert_equal 'result', logger.measure(level, 'hello world') { 'result' }
+          assert_equal 'result', appender.measure(level, 'hello world') { 'result' }
 
           assert log = log_message
           assert_equal level, log.level
         end
 
         it ':payload' do
-          assert_equal 'result', logger.measure(level, 'hello world', payload: payload) { 'result' }
+          assert_equal 'result', appender.measure(level, 'hello world', payload: payload) { 'result' }
 
           assert log = log_message
           assert_equal payload, log.payload
@@ -158,12 +158,12 @@ class MeasureTest < Minitest::Test
 
         describe ':min_duration' do
           it 'not log when faster' do
-            assert_equal 'result', logger.measure(level, 'hello world', min_duration: 2000) { 'result' }
+            assert_equal 'result', appender.measure(level, 'hello world', min_duration: 2000) { 'result' }
             refute log_message
           end
 
           it 'log when slower' do
-            assert_equal 'result', logger.measure(level, 'hello world', min_duration: 200, payload: payload) { sleep 0.5; 'result' }
+            assert_equal 'result', appender.measure(level, 'hello world', min_duration: 200, payload: payload) { sleep 0.5; 'result' }
             assert log = log_message
             assert_equal 'hello world', log.message
           end
@@ -171,7 +171,7 @@ class MeasureTest < Minitest::Test
 
         it ':exception' do
           assert_raises RuntimeError do
-            logger.measure(level, 'hello world', payload: payload) { raise 'Test' }
+            appender.measure(level, 'hello world', payload: payload) { raise 'Test' }
           end
 
           assert log = log_message
@@ -182,7 +182,7 @@ class MeasureTest < Minitest::Test
 
         it ':on_exception_level' do
           assert_raises RuntimeError do
-            logger.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
+            appender.measure(level, 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
           end
 
           assert log = log_message
@@ -193,7 +193,7 @@ class MeasureTest < Minitest::Test
 
         it ':metric' do
           metric_name = '/my/custom/metric'
-          assert_equal 'result', logger.measure(level, 'hello world', metric: metric_name) { 'result' }
+          assert_equal 'result', appender.measure(level, 'hello world', metric: metric_name) { 'result' }
 
           assert log = log_message
           assert_equal metric_name, log.metric
@@ -201,14 +201,14 @@ class MeasureTest < Minitest::Test
 
         it ':backtrace_level' do
           SemanticLogger.stub(:backtrace_level_index, 0) do
-            assert_equal 'result', logger.measure(level, 'hello world') { 'result' }
+            assert_equal 'result', appender.measure(level, 'hello world') { 'result' }
 
             assert log = log_message
             assert log.backtrace
             assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
-            h = log.to_h
+            h = SemanticLogger::Formatters::Raw.new.call(log, appender)
             assert_match /measure_test.rb/, h[:file], h
             assert h[:line].is_a?(Integer)
           end
@@ -217,21 +217,21 @@ class MeasureTest < Minitest::Test
 
       describe "##{measure_level} keyword arguments" do
         it ':message' do
-          assert_equal 'result', logger.send(measure_level, message: 'hello world') { 'result' }
+          assert_equal 'result', appender.send(measure_level, message: 'hello world') { 'result' }
 
           assert log = log_message
           assert_equal 'hello world', log.message
         end
 
         it ':level' do
-          assert_equal 'result', logger.send(measure_level, message: 'hello world') { 'result' }
+          assert_equal 'result', appender.send(measure_level, message: 'hello world') { 'result' }
 
           assert log = log_message
           assert_equal level, log.level
         end
 
         it ':payload' do
-          assert_equal 'result', logger.send(measure_level, message: 'hello world', payload: payload) { 'result' }
+          assert_equal 'result', appender.send(measure_level, message: 'hello world', payload: payload) { 'result' }
 
           assert log = log_message
           assert_equal payload, log.payload
@@ -239,12 +239,12 @@ class MeasureTest < Minitest::Test
 
         describe ':min_duration' do
           it 'not log when faster' do
-            assert_equal 'result', logger.send(measure_level, message: 'hello world', min_duration: 2000) { 'result' }
+            assert_equal 'result', appender.send(measure_level, message: 'hello world', min_duration: 2000) { 'result' }
             refute log_message
           end
 
           it 'log when slower' do
-            assert_equal 'result', logger.send(measure_level, message: 'hello world', min_duration: 200, payload: payload) { sleep 0.5; 'result' }
+            assert_equal 'result', appender.send(measure_level, message: 'hello world', min_duration: 200, payload: payload) { sleep 0.5; 'result' }
 
             assert log = log_message
             assert_equal 'hello world', log.message
@@ -253,7 +253,7 @@ class MeasureTest < Minitest::Test
 
         it ':exception' do
           assert_raises RuntimeError do
-            logger.send(measure_level, message: 'hello world', payload: payload) { raise 'Test' }
+            appender.send(measure_level, message: 'hello world', payload: payload) { raise 'Test' }
           end
 
           assert log = log_message
@@ -264,7 +264,7 @@ class MeasureTest < Minitest::Test
 
         it ':on_exception_level' do
           assert_raises RuntimeError do
-            logger.send(measure_level, message: 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
+            appender.send(measure_level, message: 'hello world', payload: payload, on_exception_level: :fatal) { raise 'Test' }
           end
 
           assert log = log_message
@@ -275,7 +275,7 @@ class MeasureTest < Minitest::Test
 
         it ':metric' do
           metric_name = '/my/custom/metric'
-          assert_equal 'result', logger.send(measure_level, message: 'hello world', metric: metric_name) { 'result' }
+          assert_equal 'result', appender.send(measure_level, message: 'hello world', metric: metric_name) { 'result' }
 
           assert log = log_message
           assert_equal metric_name, log.metric
@@ -283,14 +283,14 @@ class MeasureTest < Minitest::Test
 
         it ':backtrace_level' do
           SemanticLogger.stub(:backtrace_level_index, 0) do
-            assert_equal 'result', logger.send(measure_level, message: 'hello world') { 'result' }
+            assert_equal 'result', appender.send(measure_level, message: 'hello world') { 'result' }
 
             assert log = log_message
             assert log.backtrace
             assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
-            h = log.to_h
+            h = SemanticLogger::Formatters::Raw.new.call(log, appender)
             assert_match /measure_test.rb/, h[:file], h
             assert h[:line].is_a?(Integer)
           end
@@ -300,7 +300,7 @@ class MeasureTest < Minitest::Test
 
     describe 'return' do
       it 'log when the block performs a return' do
-        assert_equal 'Good', function_with_return(logger)
+        assert_equal 'Good', function_with_return(appender)
 
         assert log = log_message
         assert_equal 'hello world', log.message
@@ -310,8 +310,8 @@ class MeasureTest < Minitest::Test
     describe ':silence' do
       it 'silences messages' do
         SemanticLogger.default_level = :info
-        logger.measure_info('hello world', silence: :error) do
-          logger.warn "don't log me"
+        appender.measure_info('hello world', silence: :error) do
+          appender.warn "don't log me"
         end
 
         assert log = log_message
@@ -321,8 +321,8 @@ class MeasureTest < Minitest::Test
       it 'does not silence higher level messages' do
         SemanticLogger.default_level = :info
         first                        = nil
-        logger.measure_info('hello world', silence: :trace) do
-          logger.debug('hello world', payload) { 'Calculations' }
+        appender.measure_info('hello world', silence: :trace) do
+          appender.debug('hello world', payload) { 'Calculations' }
           first = log_message
         end
         assert_equal 'hello world -- Calculations', first.message
@@ -336,8 +336,8 @@ class MeasureTest < Minitest::Test
 
     # Make sure that measure still logs when a block uses return to return from
     # a function
-    def function_with_return(logger)
-      logger.measure_info('hello world', payload: payload) do
+    def function_with_return(appender)
+      appender.measure_info('hello world', payload: payload) do
         return 'Good'
       end
       'Bad'

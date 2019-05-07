@@ -6,8 +6,8 @@ module Appender
       include InMemoryAppenderHelper
 
       describe 'with capped queue' do
-        let :appender_options do
-          {appender: appender, async: true}
+        let :added_appender do
+          SemanticLogger.add_appender(appender: appender, async: true)
         end
 
         it 'uses the async proxy' do
@@ -27,8 +27,8 @@ module Appender
       end
 
       describe 'with uncapped queue' do
-        let :appender_options do
-          {appender: appender, async: true, max_queue_size: -1}
+        let :added_appender do
+          SemanticLogger.add_appender(appender: appender, async: true, max_queue_size: -1)
         end
 
         it 'uses the async proxy' do

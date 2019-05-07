@@ -279,22 +279,6 @@ module SemanticLogger
       !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
     end
 
-    # DEPRECATED
-    alias has_payload? payload?
-
-    # DEPRECATED
-    def formatted_time
-      time.strftime(Formatters::Base.build_time_format)
-    end
-
-    DeprecatedLogger = Struct.new(:host, :application, :environment)
-
-    # DEPRECATED: Use SemanticLogger::Formatters::Raw
-    def to_h(host = SemanticLogger.host, application = SemanticLogger.application)
-      logger = DeprecatedLogger.new(host, application)
-      SemanticLogger::Formatters::Raw.new.call(self, logger)
-    end
-
     # Lazy initializes the context hash and assigns a key value pair.
     def set_context(key, value)
       (self.context ||= {})[key] = value

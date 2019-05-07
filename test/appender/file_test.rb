@@ -106,7 +106,9 @@ module Appender
 
             duration_str = log.duration ? " (#{format('%.1f', log.duration)}ms)" : ''
 
-            "#{log.formatted_time} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
+            formatted_time = log.time.strftime(SemanticLogger::Formatters::Base.build_time_format)
+
+            "#{formatted_time} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
           end
         end
 

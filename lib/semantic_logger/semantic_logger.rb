@@ -163,8 +163,8 @@ module SemanticLogger
   #   logger = SemanticLogger['Example']
   #   logger.info "Hello World"
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
-  def self.add_appender(options, deprecated_level = nil, &block)
-    appender = Logger.processor.appenders.add(options, deprecated_level, &block)
+  def self.add_appender(**args, &block)
+    appender = Logger.processor.appenders.add(**args, &block)
     # Start appender thread if it is not already running
     Logger.processor.start
     appender

@@ -73,48 +73,6 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
-    describe '.add_appender DEPRECATED' do
-      before do
-        @appender = nil
-      end
-
-      after do
-        SemanticLogger.remove_appender(@appender) if @appender
-        File.delete('sample.log') if File.exist?('sample.log')
-      end
-
-      it 'adds file appender' do
-        @appender = SemanticLogger.add_appender('sample.log')
-        assert @appender.is_a?(SemanticLogger::Appender::File)
-        assert SemanticLogger.appenders.include?(@appender)
-      end
-
-      it 'adds stream appender' do
-        @appender = SemanticLogger.add_appender(STDOUT)
-        assert @appender.is_a?(SemanticLogger::Appender::File)
-        assert SemanticLogger.appenders.include?(@appender)
-      end
-
-      it 'adds appender' do
-        @appender = SemanticLogger.add_appender(SemanticLogger::Appender::File.new(io: STDOUT))
-        assert @appender.is_a?(SemanticLogger::Appender::File), @appender.ai
-        assert SemanticLogger.appenders.include?(@appender)
-      end
-
-      it 'adds logger wrapper appender' do
-        @appender = SemanticLogger.add_appender(::Logger.new(STDOUT))
-        assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
-        assert @appender.logger.is_a?(::Logger)
-        assert SemanticLogger.appenders.include?(@appender)
-      end
-
-      it 'fails to add invalid logger appender' do
-        assert_raises do
-          SemanticLogger.add_appender(logger: 'blah')
-        end
-      end
-    end
-
     describe 'mock_logger' do
       include InMemoryAppenderHelper
 
