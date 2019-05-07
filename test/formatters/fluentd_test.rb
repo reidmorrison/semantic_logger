@@ -52,7 +52,7 @@ module SemanticLogger
 
         describe 'severity' do
           it 'logs single character' do
-            assert_equal 1, formatter.severity
+            assert_equal 1, formatter.level
           end
         end
 

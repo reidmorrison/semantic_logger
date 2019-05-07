@@ -53,7 +53,7 @@ module SemanticLogger
 
         let :appender do
           Net::HTTP.stub_any_instance(:start, true) do
-            SemanticLogger::Metric::Signalfx.new(token: 'TEST')
+            SemanticLogger::Metric::Signalfx.new(token: 'TEST', environment: 'test')
           end
         end
 

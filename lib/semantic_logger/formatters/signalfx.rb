@@ -6,19 +6,17 @@ module SemanticLogger
 
       def initialize(token:,
                      dimensions: nil,
-                     log_host: true,
-                     log_application: true,
-                     log_environment: true,
                      gauge_name: 'Application.average',
                      counter_name: 'Application.counter',
-                     precision: PRECISION)
+                     time_format: :ms,
+                     **args)
 
         @token        = token
         @dimensions   = dimensions.map(&:to_sym) if dimensions
         @gauge_name   = gauge_name
         @counter_name = counter_name
 
-        super(time_format: :ms, log_host: log_host, log_application: log_application, log_environment: log_environment, precision: precision)
+        super(time_format: time_format, **args)
       end
 
       # Create SignalFx friendly metric.

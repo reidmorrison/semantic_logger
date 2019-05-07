@@ -57,8 +57,6 @@ module SemanticLogger
       elsif async == true
         proxy_options[:appender] = appender
         Appender::Async.new(proxy_options)
-
-
       else
         appender
       end

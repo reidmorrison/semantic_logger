@@ -287,7 +287,7 @@ module SemanticLogger
       time.strftime(Formatters::Base.build_time_format)
     end
 
-    DeprecatedLogger = Struct.new(:host, :application)
+    DeprecatedLogger = Struct.new(:host, :application, :environment)
 
     # DEPRECATED: Use SemanticLogger::Formatters::Raw
     def to_h(host = SemanticLogger.host, application = SemanticLogger.application)
