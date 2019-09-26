@@ -1,7 +1,7 @@
 begin
   require 'honeybadger'
 rescue LoadError
-  raise 'Gem honeybadger is required for logging purposes. Please add the gem "honeybadger" to your Gemfile.'
+  raise LoadError.new('Gem honeybadger is required for logging purposes. Please add the gem "honeybadger" to your Gemfile.')
 end
 
 # Send log messages to honeybadger

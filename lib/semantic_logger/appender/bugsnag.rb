@@ -1,7 +1,7 @@
 begin
   require 'bugsnag'
 rescue LoadError
-  raise 'Gem bugsnag is required for logging purposes. Please add the gem "bugsnag" to your Gemfile.'
+  raise LoadError.new('Gem bugsnag is required for logging purposes. Please add the gem "bugsnag" to your Gemfile.')
 end
 
 # Send log messages to Bugsnag

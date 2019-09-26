@@ -1,7 +1,7 @@
 begin
   require 'kafka'
 rescue LoadError
-  raise 'Gem ruby-kafka is required for logging to Elasticsearch. Please add the gem "ruby-kafka" to your Gemfile.'
+  raise LoadError.new('Gem ruby-kafka is required for logging to Elasticsearch. Please add the gem "ruby-kafka" to your Gemfile.')
 end
 
 require 'date'

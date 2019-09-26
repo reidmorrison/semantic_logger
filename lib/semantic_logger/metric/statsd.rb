@@ -2,7 +2,7 @@ require 'uri'
 begin
   require 'statsd-ruby'
 rescue LoadError
-  raise 'Gem statsd-ruby is required for logging metrics. Please add the gem "statsd-ruby" to your Gemfile.'
+  raise LoadError.new('Gem statsd-ruby is required for logging metrics. Please add the gem "statsd-ruby" to your Gemfile.')
 end
 
 module SemanticLogger

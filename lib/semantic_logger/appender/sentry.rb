@@ -1,7 +1,7 @@
 begin
   require 'sentry-raven'
 rescue LoadError
-  raise 'Gem sentry-raven is required for logging purposes. Please add the gem "sentry-raven" to your Gemfile.'
+  raise LoadError.new('Gem sentry-raven is required for logging purposes. Please add the gem "sentry-raven" to your Gemfile.')
 end
 
 # Send log messages to sentry
