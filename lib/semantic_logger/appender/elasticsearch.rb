@@ -1,7 +1,7 @@
 begin
   require 'elasticsearch'
 rescue LoadError
-  raise 'Gem elasticsearch is required for logging to Elasticsearch. Please add the gem "elasticsearch" to your Gemfile.'
+  raise LoadError.new('Gem elasticsearch is required for logging to Elasticsearch. Please add the gem "elasticsearch" to your Gemfile.')
 end
 
 require 'date'

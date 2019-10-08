@@ -2,7 +2,7 @@ require 'uri'
 begin
   require 'gelf'
 rescue LoadError
-  raise 'Gem gelf is required for logging to Graylog. Please add the gem "gelf" to your Gemfile.'
+  raise LoadError.new('Gem gelf is required for logging to Graylog. Please add the gem "gelf" to your Gemfile.')
 end
 
 # Forward log entries to a Graylog server.

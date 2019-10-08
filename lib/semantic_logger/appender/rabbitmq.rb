@@ -1,7 +1,7 @@
 begin
   require 'bunny'
 rescue LoadError
-  raise 'Gem bunny is required for logging to RabbitMQ. Please add the gem "bunny" to your Gemfile.'
+  raise LoadError.new('Gem bunny is required for logging to RabbitMQ. Please add the gem "bunny" to your Gemfile.')
 end
 
 # Forward all log messages to RabbitMQ.
