@@ -55,6 +55,17 @@ module Appender
         assert hash[:exception][:stack_trace].first.include?(__FILE__), hash[:exception]
       end
 
+      it 'send notifications to Graylog without exception message' do
+        hash = nil
+        exc  = nil
+        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          @appender.error exc
+        end
+        assert_equal hash[:short_message], '<no-exception-message>'
+        assert_nil exc
+        assert_equal 3, hash[:level], 'Should be error level (3)'
+      end
+
       it 'send error notifications to Graylog with severity' do
         hash = nil
         @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
