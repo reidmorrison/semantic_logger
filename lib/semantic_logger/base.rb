@@ -312,6 +312,9 @@ module SemanticLogger
           else
             log.assign_positional(nil, message, nil, &block)
           end
+        elsif exception.nil? && message && payload && payload.is_a?(Hash) &&
+          (payload.key?(:payload) || payload.key?(:exception) || payload.key?(:metric))
+          log.assign(message: message, **payload)
         else
           log.assign_positional(message, payload, exception, &block)
         end
