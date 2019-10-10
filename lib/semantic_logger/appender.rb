@@ -23,71 +23,62 @@ module SemanticLogger
     autoload :Wrapper,           'semantic_logger/appender/wrapper'
     # @formatter:on
 
-    # DEPRECATED, use SemanticLogger::AnsiColors
-    AnsiColors = SemanticLogger::AnsiColors
-
-    # DEPRECATED: use SemanticLogger::Formatters::Color.new
-    def self.colorized_formatter
-      SemanticLogger::Formatters::Color.new
-    end
-
-    # DEPRECATED: use SemanticLogger::Formatters::Json.new
-    def self.json_formatter
-      SemanticLogger::Formatters::Json.new
-    end
-
     # Returns [SemanticLogger::Subscriber] appender for the supplied options
-    def self.factory(options, &block)
-      options = options.dup
-      async   = options.delete(:async)
-      batch   = options.delete(:batch)
-
-      # Extract batch and async options
-      proxy_options = {}
-      ASYNC_OPTION_KEYS.each { |key| proxy_options[key] = options.delete(key) if options.key?(key) }
-
-      appender = build(options, &block)
+    def self.factory(async: false, batch: nil,
+      max_queue_size: 10_000, lag_check_interval: 1_000, lag_threshold_s: 30,
+      batch_size: 300, batch_seconds: 5,
+      **args,
+      &block
+    )
+      appender = build(**args, &block)
 
       # If appender implements #batch, then it should use the batch proxy by default.
       batch    = true if batch.nil? && appender.respond_to?(:batch)
 
       if batch == true
-        proxy_options[:appender] = appender
-        Appender::AsyncBatch.new(proxy_options)
+        Appender::AsyncBatch.new(
+          appender:           appender,
+          max_queue_size:     max_queue_size,
+          lag_threshold_s:    lag_threshold_s,
+          batch_size:         batch_size,
+          batch_seconds:      batch_seconds
+        )
       elsif async == true
-        proxy_options[:appender] = appender
-        Appender::Async.new(proxy_options)
-
-
+        Appender::Async.new(
+          appender:           appender,
+          max_queue_size:     max_queue_size,
+          lag_check_interval: lag_check_interval,
+          lag_threshold_s:    lag_threshold_s
+        )
       else
         appender
       end
     end
 
-    ASYNC_OPTION_KEYS = %i[max_queue_size lag_threshold_s batch_size batch_seconds lag_check_interval].freeze
-
     # Returns [Subscriber] instance from the supplied options.
-    def self.build(options, &block)
-      if options[:io] || options[:file_name]
-        SemanticLogger::Appender::File.new(options, &block)
-      elsif (appender = options.delete(:appender))
+    def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &block)
+      if io || file_name
+        SemanticLogger::Appender::File.new(io: io, file_name: file_name, **args, &block)
+      elsif logger
+        SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &block)
+      elsif appender
         if appender.is_a?(Symbol)
-          SemanticLogger::Utils.constantize_symbol(appender).new(options)
+          SemanticLogger::Utils.constantize_symbol(appender).new(**args)
         elsif appender.is_a?(Subscriber)
           appender
         else
           raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
         end
-      elsif (appender = options.delete(:metric))
-        if appender.is_a?(Symbol)
-          SemanticLogger::Utils.constantize_symbol(appender, 'SemanticLogger::Metric').new(options)
-        elsif appender.is_a?(Subscriber)
-          appender
+      elsif metric
+        if metric.is_a?(Symbol)
+          SemanticLogger::Utils.constantize_symbol(metric, 'SemanticLogger::Metric').new(**args)
+        elsif metric.is_a?(Subscriber)
+          metric
         else
           raise(ArgumentError, "Parameter :metric must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
         end
-      elsif options[:logger]
-        SemanticLogger::Appender::Wrapper.new(options, &block)
+      else
+        raise(ArgumentError, 'To create an appender it must supply one of the following: :io, :file_name, :appender, :metric, or :logger')
       end
     end
 

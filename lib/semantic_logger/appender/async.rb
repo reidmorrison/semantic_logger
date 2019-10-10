@@ -15,6 +15,7 @@ module SemanticLogger
       def_delegator :@appender, :filter
       def_delegator :@appender, :host
       def_delegator :@appender, :application
+      def_delegator :@appender, :environment
       def_delegator :@appender, :level
       def_delegator :@appender, :level=
       def_delegator :@appender, :logger

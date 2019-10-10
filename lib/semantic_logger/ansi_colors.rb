@@ -11,15 +11,5 @@ module SemanticLogger
     MAGENTA = "\e[35m".freeze
     CYAN    = "\e[36m".freeze
     WHITE   = "\e[37m".freeze
-
-    # DEPRECATED - NOT USED
-    LEVEL_MAP = {
-      trace: MAGENTA,
-      debug: GREEN,
-      info:  CYAN,
-      warn:  BOLD,
-      error: RED,
-      fatal: RED
-    }.freeze
   end
 end

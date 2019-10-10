@@ -22,12 +22,8 @@ InMemoryAppenderHelper = shared_description do
     SemanticLogger['TestLogger']
   end
 
-  let :appender_options do
-    {appender: appender}
-  end
-
   let :added_appender do
-    SemanticLogger.add_appender(appender_options)
+    SemanticLogger.add_appender(appender: appender)
   end
 
   before do

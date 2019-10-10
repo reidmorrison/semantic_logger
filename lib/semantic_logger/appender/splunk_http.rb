@@ -96,6 +96,7 @@ module SemanticLogger
           time:   h.delete(:time),
           event:  h
         }
+        message[:environment] = logger.environment if logger.environment
         message[:sourcetype]  = source_type if source_type
         message[:index]       = index if index
         message.to_json

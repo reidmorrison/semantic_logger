@@ -2,29 +2,21 @@ require 'json'
 module SemanticLogger
   module Formatters
     class Signalfx < Base
-      attr_accessor :token, :dimensions, :hash, :log, :logger, :gauge_name, :counter_name, :environment
+      attr_accessor :token, :dimensions, :hash, :log, :logger, :gauge_name, :counter_name
 
       def initialize(token:,
                      dimensions: nil,
-                     log_host: true,
-                     log_application: true,
                      gauge_name: 'Application.average',
                      counter_name: 'Application.counter',
-                     environment: true,
-                     precision: PRECISION)
+                     time_format: :ms,
+                     **args)
 
         @token        = token
         @dimensions   = dimensions.map(&:to_sym) if dimensions
         @gauge_name   = gauge_name
         @counter_name = counter_name
 
-        if environment == true
-          @environment = defined?(Rails) && Rails.respond_to?(:env) ? Rails.env : ENV['RAILS_ENV'] || ENV['RACK_ENV'] || 'development'
-        elsif environment
-          @environment = environment
-        end
-
-        super(time_format: :ms, log_host: log_host, log_application: log_application, precision: precision)
+        super(time_format: time_format, **args)
       end
 
       # Create SignalFx friendly metric.
@@ -80,7 +72,7 @@ module SemanticLogger
         end
         h[:host]        = logger.host if log_host && logger.host
         h[:application] = logger.application if log_application && logger.application
-        h[:environment] = environment if environment
+        h[:environment] = logger.environment if log_environment && logger.environment
       end
 
       # Returns [Hash] log message in Signalfx format.

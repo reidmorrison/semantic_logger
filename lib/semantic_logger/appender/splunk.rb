@@ -127,6 +127,7 @@ module SemanticLogger
           message: h.delete(:message),
           event:   h
         }
+        message[:environment] = logger.environment if logger.environment
         message[:sourcetype] = source_type if source_type
         message
       end

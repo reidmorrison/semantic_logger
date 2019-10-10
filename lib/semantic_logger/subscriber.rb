@@ -5,7 +5,7 @@ module SemanticLogger
   class Subscriber < SemanticLogger::Base
     # Every appender has its own formatter
     attr_reader :formatter
-    attr_writer :application, :host, :logger, :metrics
+    attr_writer :application, :environment, :host, :logger, :metrics
 
     # Returns the current log level if set, otherwise it logs everything it receives.
     def level
@@ -30,6 +30,11 @@ module SemanticLogger
     # Allow application name to be set globally or on a per subscriber basis.
     def application
       @application || SemanticLogger.application
+    end
+
+    # Allow environment name to be set globally or on a per subscriber basis.
+    def environment
+      @environment || SemanticLogger.environment
     end
 
     # Allow host name to be set globally or on a per subscriber basis.
@@ -92,9 +97,10 @@ module SemanticLogger
     #   metrics: [Boolean]
     #     Whether to log metric only entries with this subscriber.
     #     Default: false
-    def initialize(level: nil, formatter: nil, filter: nil, application: nil, host: nil, metrics: false, &block)
+    def initialize(level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil, metrics: false, &block)
       self.formatter = block || formatter
       @application   = application
+      @environment   = environment
       @host          = host
       @metrics       = metrics
 

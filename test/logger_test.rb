@@ -42,6 +42,17 @@ class LoggerTest < Minitest::Test
             assert_equal payload, log.payload
           end
 
+          it 'logs simple metric' do
+            metric_name = '/my/own/metric'
+            logger.send(level, 'hello world', metric: metric_name)
+
+            assert log = log_message
+            assert_equal 'hello world', log.message
+            assert_equal metric_name, log.metric
+            assert_nil log.payload
+            assert_nil log.duration
+          end
+
           it 'logs with backtrace' do
             SemanticLogger.stub(:backtrace_level_index, 0) do
               logger.send(level, 'hello world', payload) { 'Calculations' }

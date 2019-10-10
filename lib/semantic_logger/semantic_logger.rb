@@ -71,7 +71,19 @@ module SemanticLogger
     @application = application
   end
 
-  @application = 'Semantic Logger'
+  # Returns [String] name of this environment for logging purposes
+  # Note: Not all appenders use `environment`
+  def self.environment
+    @environment
+  end
+
+  # Override the default environment
+  def self.environment=(environment)
+    @environment = environment
+  end
+
+  @application = ENV['SEMANTIC_LOGGER_APP'] || 'Semantic Logger'
+  @environment = ENV['SEMANTIC_LOGGER_ENV'] || ENV['RAILS_ENV'] || ENV['RACK_ENV']
 
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger
@@ -151,8 +163,8 @@ module SemanticLogger
   #   logger = SemanticLogger['Example']
   #   logger.info "Hello World"
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
-  def self.add_appender(options, deprecated_level = nil, &block)
-    appender = Logger.processor.appenders.add(options, deprecated_level, &block)
+  def self.add_appender(**args, &block)
+    appender = Logger.processor.appenders.add(**args, &block)
     # Start appender thread if it is not already running
     Logger.processor.start
     appender

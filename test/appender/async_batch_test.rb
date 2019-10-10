@@ -10,8 +10,8 @@ module Appender
       end
 
       describe 'with default batch_size' do
-        let :appender_options do
-          {appender: appender, batch: true}
+        let :added_appender do
+          SemanticLogger.add_appender(appender: appender, batch: true)
         end
 
         it 'uses the batch proxy' do
@@ -39,8 +39,8 @@ module Appender
 
       # :batch_size, :batch_seconds
       describe 'with batch_size 1' do
-        let :appender_options do
-          {appender: appender, batch: true, batch_size: 1}
+        let :added_appender do
+          SemanticLogger.add_appender(appender: appender, batch: true, batch_size: 1)
         end
 
         it 'uses the batch proxy' do

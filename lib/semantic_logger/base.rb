@@ -233,21 +233,9 @@ module SemanticLogger
       SemanticLogger.silence(new_level, &block)
     end
 
-    # Deprecated. Use `SemanticLogger.tagged`
+    # :nodoc:
     def fast_tag(tag, &block)
       SemanticLogger.fast_tag(tag, &block)
-    end
-
-    # :nodoc:
-    def with_payload(payload, &block)
-      warn '#with_payload is deprecated, use SemanticLogger.named_tagged'
-      SemanticLogger.named_tagged(payload, &block)
-    end
-
-    # :nodoc:
-    def payload
-      warn '#payload is deprecated, use SemanticLogger.named_tags'
-      SemanticLogger.named_tags
     end
 
     # Write log data to underlying data storage
@@ -324,6 +312,9 @@ module SemanticLogger
           else
             log.assign_positional(nil, message, nil, &block)
           end
+        elsif exception.nil? && message && payload && payload.is_a?(Hash) &&
+          (payload.key?(:payload) || payload.key?(:exception) || payload.key?(:metric))
+          log.assign(message: message, **payload)
         else
           log.assign_positional(message, payload, exception, &block)
         end
