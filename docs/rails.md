@@ -442,5 +442,6 @@ after they have been initialized:
 - Resque
 - Sidekiq
 - Sidetiq
+- DelayedJob
 
 ### [Next: Centralized Logging ==>](centralized_logging.html)
