@@ -76,7 +76,7 @@ and are therefore not automatically included by this gem:
 ## V4 Upgrade notes
 
 The following changes need to be made when upgrading to V4:
-- Ruby V2.1 / JRuby V9.1 is now the minimum runtime version.
+- Ruby V2.3 / JRuby V9.1 is now the minimum runtime version.
 - Replace calls to Logger#with_payload with SemanticLogger.named_tagged.
 - Replace calls to Logger#payload with SemanticLogger.named_tags.
 - MongoDB Appender requires Mongo Ruby Client V2 or greater.
