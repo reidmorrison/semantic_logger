@@ -19,7 +19,7 @@ module SemanticLogger
         begin
           appender.log(log) if appender.should_log?(log)
         rescue Exception => exc
-          logger.error "Failed to log to appender: #{appender.inspect}", exc
+          logger.error "Failed to log to appender: #{appender.name}", exc
         end
       end
     end
@@ -30,7 +30,7 @@ module SemanticLogger
           logger.trace "Flushing appender: #{appender.name}"
           appender.flush
         rescue Exception => exc
-          logger.error "Failed to flush appender: #{appender.inspect}", exc
+          logger.error "Failed to flush appender: #{appender.name}", exc
         end
       end
       logger.trace 'All appenders flushed'
@@ -44,7 +44,7 @@ module SemanticLogger
           appender.close
           delete(appender)
         rescue Exception => exc
-          logger.error "Failed to close appender: #{appender.inspect}", exc
+          logger.error "Failed to close appender: #{appender.name}", exc
         end
       end
       logger.trace 'All appenders closed and removed from appender list'
@@ -59,7 +59,7 @@ module SemanticLogger
           logger.trace "Reopening appender: #{appender.name}"
           appender.reopen
         rescue Exception => exc
-          logger.error "Failed to re-open appender: #{appender.inspect}", exc
+          logger.error "Failed to re-open appender: #{appender.name}", exc
         end
       end
       logger.trace 'All appenders re-opened'
