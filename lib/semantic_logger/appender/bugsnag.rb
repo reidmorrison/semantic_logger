@@ -67,7 +67,7 @@ module SemanticLogger
 
         # For more documentation on the Bugsnag.notify method see:
         # https://bugsnag.com/docs/notifiers/ruby#sending-handled-exceptions
-        ::Bugsnag.notify(exception, formatter.call(log, self))
+        ::Bugsnag.notify(exception){ formatter.call(log, self) }
         true
       end
 
