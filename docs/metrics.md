@@ -70,7 +70,7 @@ Send metrics to [Statsd](https://github.com/quasor/statsd) via UDP so it can rol
 
 ~~~ruby
 subscriber = SemanticLogger::Metrics::Statsd.new(url: 'udp://localhost:8125')
-SemanticLogger.on_metric(subscriber)
+SemanticLogger.on_log(subscriber)
 ~~~
 
 #### New Relic
@@ -79,7 +79,7 @@ To forward metrics to New Relic so that they can be displayed using custom dashb
 
 ~~~ruby
 subscriber = SemanticLogger::Metrics::NewRelic.new
-SemanticLogger.on_metric(subscriber)
+SemanticLogger.on_log(subscriber)
 ~~~
 
 #### Elasticsearch & Splunk
@@ -92,7 +92,7 @@ they can be displayed using their custom dashboards.
 For example, if running a rails application, create a file called `config/initializers/semantic_logger_metrics.rb`
 
 ~~~ruby
-SemanticLogger.on_metric do |log_struct|
+SemanticLogger.on_log do |log_struct|
   puts "Metric: #{log_struct.metric} with duration: #{log_struct.duration}ms"
 end
 ~~~
