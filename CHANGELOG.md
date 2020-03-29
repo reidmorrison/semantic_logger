@@ -2,6 +2,40 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.6.1]
+### Fixed
+- Avoid leaking sensitive information when logging appender name
+- Update docs to reflect minimum supported ruby v2.3
+- Update docs to include DelayedJob in list of replaced loggers
+
+## [4.6.0]
+### Fixed
+- Allow sending a metric with a message
+- Fix graylog issue with non-exception logs
+
+### Changed
+- When a required gem is missing, raise a LoadError rather than a RuntimeError
+- Appender#factory method signature
+- Appender#build method signature
+- SemanticLogger::Base.fast_tag no longer deprecated
+
+### Removed
+- Remove deprecated methods and backwards compatibility code:
+  * AnsiColors::LEVEL_MAP
+  * Appender::AnsiColors (use SemanticLogger::AnsiColors)
+  * Appender.colorized_formatter (use SemanticLogger::Formatters::Color.new)
+  * Appender.json_formatter (use SemanticLogger::Formatters::Json.new)
+  * SemanticLogger::Base.payload (use SemanticLogger.named_tags)
+  * SemanticLogger::Base.with_payload (use SemanticLogger.named_tagged)
+  * SemanticLogger::Log.has_paylod? (use SemanticLogger::Lab.payload?)
+  * SemanticLogger::Log.formatted_time (use time.strftime(Formatters::Base.build_time_format))
+  * SemanticLogger::Log.to_h (use Use SemanticLogger::Formatters::Raw)
+  
+### Added
+- Log environment when available
+
+## [4.5.0 .. ] TODO
+
 ## [4.3.1]
 ### Fixed
 - Fix Splunk HTTP Appender sourcetype -- @chroto
