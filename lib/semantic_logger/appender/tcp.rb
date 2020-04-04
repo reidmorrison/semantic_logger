@@ -1,10 +1,10 @@
 begin
-  require 'net/tcp_client'
+  require "net/tcp_client"
 rescue LoadError
-  raise LoadError.new('Gem net_tcp_client is required for logging over TCP. Please add the gem "net_tcp_client" to your Gemfile.')
+  raise LoadError, 'Gem net_tcp_client is required for logging over TCP. Please add the gem "net_tcp_client" to your Gemfile.'
 end
 
-raise 'Net::TCPClient v2.0 or greater is required to log over TCP' unless Net::TCPClient::VERSION.to_f >= 2.0
+raise "Net::TCPClient v2.0 or greater is required to log over TCP" unless Net::TCPClient::VERSION.to_f >= 2.0
 
 module SemanticLogger
   module Appender
@@ -189,7 +189,7 @@ module SemanticLogger
 
         # Use the internal logger so that errors with remote logging are only written locally.
         Net::TCPClient.logger      = logger
-        Net::TCPClient.logger.name = 'Net::TCPClient'
+        Net::TCPClient.logger.name = "Net::TCPClient"
 
         super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, &block)
         reopen
@@ -198,7 +198,7 @@ module SemanticLogger
       # After forking an active process call #reopen to re-open the handles to resources.
       def reopen
         close
-        @tcp_client = Net::TCPClient.new(@tcp_client_args)
+        @tcp_client = Net::TCPClient.new(**@tcp_client_args)
       end
 
       # Write the log using the specified protocol and server.

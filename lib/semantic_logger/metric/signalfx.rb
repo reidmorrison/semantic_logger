@@ -10,7 +10,7 @@ module SemanticLogger
     class Signalfx < SemanticLogger::Appender::Http
       attr_reader :full_url
 
-      END_POINT = 'v2/datapoint'.freeze
+      END_POINT = "v2/datapoint".freeze
 
       # Create SignalFx metrics appender.
       #
@@ -75,7 +75,7 @@ module SemanticLogger
       #   end
       def initialize(token:,
                      dimensions: nil,
-                     url: 'https://ingest.signalfx.com',
+                     url: "https://ingest.signalfx.com",
                      formatter: nil,
                      **args,
                      &block)
@@ -84,7 +84,7 @@ module SemanticLogger
 
         super(url: url, formatter: formatter, **args, &block)
 
-        @header['X-SF-TOKEN'] = token
+        @header["X-SF-TOKEN"] = token
         @full_url             = "#{url}/#{END_POINT}"
       end
 

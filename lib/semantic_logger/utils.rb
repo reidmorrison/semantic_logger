@@ -2,7 +2,7 @@ module SemanticLogger
   # Internal-use only utility functions for Semantic Logger.
   # Not intended for public use.
   module Utils
-    def self.constantize_symbol(symbol, namespace = 'SemanticLogger::Appender')
+    def self.constantize_symbol(symbol, namespace = "SemanticLogger::Appender")
       klass = "#{namespace}::#{camelize(symbol.to_s)}"
       begin
         Object.const_get(klass)
@@ -15,8 +15,8 @@ module SemanticLogger
     def self.camelize(term)
       string = term.to_s
       string = string.sub(/^[a-z\d]*/, &:capitalize)
-      string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{Regexp.last_match(1)}#{Regexp.last_match(2).capitalize}" }
-      string.gsub!('/'.freeze, '::'.freeze)
+      string.gsub!(%r{(?:_|(/))([a-z\d]*)}i) { "#{Regexp.last_match(1)}#{Regexp.last_match(2).capitalize}" }
+      string.gsub!("/".freeze, "::".freeze)
       string
     end
 
@@ -32,7 +32,7 @@ module SemanticLogger
       end
     end
 
-    SELF_PATTERN = File.join('lib', 'semantic_logger')
+    SELF_PATTERN = File.join("lib", "semantic_logger")
 
     # Extract the backtrace leaving out the last few Semantic Logger lines.
     def self.extract_backtrace(stack = caller)
@@ -50,11 +50,11 @@ module SemanticLogger
       stack
     end
 
-    GEM_ROOT = File.expand_path('../../..', __dir__) + '/'
+    GEM_ROOT = File.expand_path("../../..", __dir__) + "/"
 
     def self.system_path?(path)
       path.start_with?(GEM_ROOT) ||
-        path.start_with?(RbConfig::CONFIG['rubylibdir'])
+        path.start_with?(RbConfig::CONFIG["rubylibdir"])
     end
   end
 end

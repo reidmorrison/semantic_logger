@@ -1,7 +1,7 @@
 begin
-  require 'syslog_protocol'
+  require "syslog_protocol"
 rescue LoadError
-  raise LoadError.new('Gem syslog_protocol is required for remote logging using the Syslog protocol. Please add the gem "syslog_protocol" to your Gemfile.')
+  raise LoadError, 'Gem syslog_protocol is required for remote logging using the Syslog protocol. Please add the gem "syslog_protocol" to your Gemfile.'
 end
 
 module SemanticLogger
@@ -45,7 +45,7 @@ module SemanticLogger
         packet          = SyslogProtocol::Packet.new
         packet.hostname = logger.host
         packet.facility = facility
-        packet.tag      = logger.application.delete(' ')
+        packet.tag      = logger.application.delete(" ")
         packet.content  = message
         packet.time     = log.time
         packet.severity = level_map[log.level]

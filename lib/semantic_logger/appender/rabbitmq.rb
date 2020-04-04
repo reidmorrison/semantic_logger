@@ -1,7 +1,7 @@
 begin
-  require 'bunny'
+  require "bunny"
 rescue LoadError
-  raise LoadError.new('Gem bunny is required for logging to RabbitMQ. Please add the gem "bunny" to your Gemfile.')
+  raise LoadError, 'Gem bunny is required for logging to RabbitMQ. Please add the gem "bunny" to your Gemfile.'
 end
 
 # Forward all log messages to RabbitMQ.
@@ -14,7 +14,7 @@ end
 #     # Name of the queue in RabbitMQ where to publish the logs. This queue will be bound to "amqp.direct" exchange.
 #     queue: 'semantic_logger',
 #
-#     # This host will be used for RabbitMQ connection. 
+#     # This host will be used for RabbitMQ connection.
 #     # NOTE this is different than :host option which is used by the logger directly.
 #     rabbitmq_host: '127.0.0.1',
 #
@@ -63,7 +63,7 @@ module SemanticLogger
       # RabbitMQ Parameters:
       #
       #   rabbitmq_host: [String]
-      #     Host for AMQP connection. in Bunny this is called :host but here it has 
+      #     Host for AMQP connection. in Bunny this is called :host but here it has
       #     been remapped to avoid conflicting with SemanticLogger's :host param.
       #     Default: localhost
       #
@@ -76,7 +76,7 @@ module SemanticLogger
       #     Default: nil
       #
       #   more parameters supported by Bunny: http://rubybunny.info/articles/connecting.html
-      def initialize(queue_name: 'semantic_logger', rabbitmq_host: nil, metrics: false, **args, &block)
+      def initialize(queue_name: "semantic_logger", rabbitmq_host: nil, metrics: false, **args, &block)
         @queue_name             = queue_name
         @rabbitmq_args          = args.dup
         @rabbitmq_args[:host]   = rabbitmq_host

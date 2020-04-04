@@ -1,7 +1,7 @@
 begin
-  require 'honeybadger'
+  require "honeybadger"
 rescue LoadError
-  raise LoadError.new('Gem honeybadger is required for logging purposes. Please add the gem "honeybadger" to your Gemfile.')
+  raise LoadError, 'Gem honeybadger is required for logging purposes. Please add the gem "honeybadger" to your Gemfile.'
 end
 
 # Send log messages to honeybadger
@@ -48,7 +48,7 @@ module SemanticLogger
           context.delete(:exception)
           ::Honeybadger.notify(log.exception, context)
         else
-          message             = {
+          message = {
             error_class:   context.delete(:name),
             error_message: context.delete(:message),
             context:       context

@@ -1,4 +1,4 @@
-require 'json'
+require "json"
 module SemanticLogger
   module Formatters
     class Raw < Base
@@ -85,6 +85,7 @@ module SemanticLogger
       # Exception
       def exception
         return unless log.exception
+
         root = hash
         log.each_exception do |exception, i|
           name       = i.zero? ? :exception : :cause
@@ -93,7 +94,7 @@ module SemanticLogger
             message:     exception.message,
             stack_trace: exception.backtrace
           }
-          root       = root[name]
+          root = root[name]
         end
       end
 

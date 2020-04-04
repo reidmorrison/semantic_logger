@@ -1,4 +1,4 @@
-require 'concurrent'
+require "concurrent"
 module SemanticLogger
   # Logger stores the class name to be used for all log messages so that every
   # log message written by this instance will include the class name
@@ -9,7 +9,7 @@ module SemanticLogger
       subscriber = block || object
 
       unless subscriber.is_a?(Proc) || subscriber.respond_to?(:call)
-        raise('When supplying an on_log subscriber, it must support the #call method')
+        raise("When supplying an on_log subscriber, it must support the #call method")
       end
 
       subscribers = (@subscribers ||= Concurrent::Array.new)
@@ -20,8 +20,8 @@ module SemanticLogger
       attr_reader :subscribers
     end
 
-    def self.processor
-      @processor
+    class << self
+      attr_reader :processor
     end
 
     # Returns a Logger instance
@@ -74,8 +74,8 @@ module SemanticLogger
       @subscribers.each do |subscriber|
         begin
           subscriber.call(log)
-        rescue Exception => exc
-          self.class.processor.logger.error('Exception calling :on_log subscriber', exc)
+        rescue Exception => e
+          self.class.processor.logger.error("Exception calling :on_log subscriber", e)
         end
       end
     end

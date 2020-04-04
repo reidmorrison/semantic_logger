@@ -1,4 +1,4 @@
-require_relative '../test_helper'
+require_relative "../test_helper"
 
 # Unit Test for SemanticLogger::Appender::Splunk
 #
@@ -18,7 +18,7 @@ module Appender
         SemanticLogger::Appender::Splunk.stub_any_instance(:reopen, nil) do
           @appender = SemanticLogger::Appender::Splunk.new
         end
-        @message = 'AppenderSplunkTest log message'
+        @message = "AppenderSplunkTest log message"
       end
 
       SemanticLogger::LEVELS.each do |level|
@@ -47,8 +47,8 @@ module Appender
           assert_equal @message, mock.message
 
           assert exception = mock.event[:event][:exception]
-          assert 'NameError', exception[:name]
-          assert 'undefined local variable or method', exception[:message]
+          assert "NameError", exception[:name]
+          assert "undefined local variable or method", exception[:message]
           assert_equal level, mock.event[:event][:level]
           assert exception[:stack_trace].first.include?(__FILE__), exception
         end
@@ -56,7 +56,7 @@ module Appender
         it "sends #{level} custom attributes" do
           mock = Mock.new
           @appender.stub(:service_index, mock) do
-            @appender.send(level, @message, key1: 1, key2: 'a')
+            @appender.send(level, @message, key1: 1, key2: "a")
           end
           assert_equal @message, mock.message
 
@@ -65,15 +65,15 @@ module Appender
           refute event[:stack_trace]
           assert payload = event[:payload]
           assert_equal(1, payload[:key1], payload)
-          assert_equal('a', payload[:key2], payload)
+          assert_equal("a", payload[:key2], payload)
         end
       end
 
-      it 'does not send :trace notifications to Splunk when set to :error' do
+      it "does not send :trace notifications to Splunk when set to :error" do
         mock            = Mock.new
         @appender.level = :error
         @appender.stub(:service_index, mock) do
-          @appender.trace('AppenderSplunkTest trace message')
+          @appender.trace("AppenderSplunkTest trace message")
         end
         assert_nil mock.event
         assert_nil mock.message

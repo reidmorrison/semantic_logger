@@ -126,7 +126,7 @@ module SemanticLogger
     # Log a thread backtrace
     def backtrace(thread: Thread.current,
                   level: :warn,
-                  message: 'Backtrace:',
+                  message: "Backtrace:",
                   payload: nil,
                   metric: nil,
                   metric_amount: nil)
@@ -190,7 +190,8 @@ module SemanticLogger
       # Allow named tags to be passed into the logger
       if tags.size == 1
         tag = tags[0]
-        return yield if tag.nil? || tag == ''
+        return yield if tag.nil? || tag == ""
+
         return tag.is_a?(Hash) ? SemanticLogger.named_tagged(tag, &block) : SemanticLogger.fast_tag(tag.to_s, &block)
       end
 
@@ -240,7 +241,7 @@ module SemanticLogger
 
     # Write log data to underlying data storage
     def log(_log_)
-      raise NotImplementedError, 'Logging Appender must implement #log(log)'
+      raise NotImplementedError, "Logging Appender must implement #log(log)"
     end
 
     # Whether this log entry meets the criteria to be logged by this appender.
@@ -269,7 +270,7 @@ module SemanticLogger
     #          The Proc must return true or false
     def initialize(klass, level = nil, filter = nil)
       # Support filtering all messages to this logger using a Regular Expression or Proc
-      raise ':filter must be a Regexp or Proc' unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
+      raise ":filter must be a Regexp or Proc" unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
 
       @filter = filter.is_a?(Regexp) ? filter.freeze : filter
       @name   = klass.is_a?(String) ? klass : klass.name
@@ -308,12 +309,12 @@ module SemanticLogger
         if payload.nil? && exception.nil? && message.is_a?(Hash)
           # Check if someone just logged a hash payload instead of meaning to call semantic logger
           if message.key?(:message) || message.key?(:payload) || message.key?(:exception) || message.key?(:metric)
-            log.assign(message)
+            log.assign(**message)
           else
             log.assign_positional(nil, message, nil, &block)
           end
         elsif exception.nil? && message && payload && payload.is_a?(Hash) &&
-          (payload.key?(:payload) || payload.key?(:exception) || payload.key?(:metric))
+              (payload.key?(:payload) || payload.key?(:exception) || payload.key?(:metric))
           log.assign(message: message, **payload)
         else
           log.assign_positional(message, payload, exception, &block)
@@ -344,18 +345,18 @@ module SemanticLogger
               yield(params)
             end
         end
-      rescue Exception => exc
-        exception = exc
+      rescue Exception => e
+        exception = e
       ensure
         # Must use ensure block otherwise a `return` in the yield above will skip the log entry
-        log       = Log.new(name, level, index)
+        log = Log.new(name, level, index)
         exception ||= params[:exception]
-        message   = params[:message] if params[:message]
-        duration  =
+        message = params[:message] if params[:message]
+        duration =
           if block_given?
             1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start)
           else
-            params[:duration] || raise('Mandatory block missing when :duration option is not supplied')
+            params[:duration] || raise("Mandatory block missing when :duration option is not supplied")
           end
 
         # Extract options after block completes so that block can modify any of the options
@@ -377,6 +378,7 @@ module SemanticLogger
         # Log level may change during assign due to :on_exception_level
         self.log(log) if should_log && should_log?(log)
         raise exception if exception
+
         result
       end
     end
@@ -395,8 +397,8 @@ module SemanticLogger
       start     = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       begin
         yield
-      rescue Exception => exc
-        exception = exc
+      rescue Exception => e
+        exception = e
       ensure
         log = Log.new(name, level, index)
         # May return false due to elastic logging

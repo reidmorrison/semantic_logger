@@ -1,4 +1,4 @@
-require_relative '../test_helper'
+require_relative "../test_helper"
 
 # Unit Test for SemanticLogger::Appender::Bugsnag
 module Appender
@@ -6,7 +6,7 @@ module Appender
     describe SemanticLogger::Appender::Bugsnag do
       before do
         @appender = SemanticLogger::Appender::Bugsnag.new(level: :info)
-        @message  = 'AppenderBugsnagTest log message'
+        @message  = "AppenderBugsnagTest log message"
       end
 
       SemanticLogger::LEVELS.each do |level|
@@ -14,9 +14,9 @@ module Appender
           bugsnag_level =
             case level
             when :warn
-              'warning'
+              "warning"
             when :fatal
-              'error'
+              "error"
             else
               level.to_s
             end
@@ -28,7 +28,7 @@ module Appender
             assert_nil exception
             assert_nil hash
           else
-            assert_equal 'RuntimeError', exception.class.to_s
+            assert_equal "RuntimeError", exception.class.to_s
             assert_equal @message, exception.message
             assert_equal bugsnag_level.to_s, hash[:severity]
           end
@@ -37,22 +37,22 @@ module Appender
         it "sends #{level} custom attributes" do
           exception = hash = nil
           Bugsnag.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
-            @appender.send(level, @message, key1: 1, key2: 'a')
+            @appender.send(level, @message, key1: 1, key2: "a")
           end
           if %i[trace debug].include?(level)
             assert_nil exception
             assert_nil hash
           else
-            assert_equal 'RuntimeError', exception.class.to_s
+            assert_equal "RuntimeError", exception.class.to_s
             assert_equal @message, exception.message
             assert payload = hash[:payload], hash
             assert_equal 1, payload[:key1], payload
-            assert_equal 'a', payload[:key2], payload
+            assert_equal "a", payload[:key2], payload
           end
         end
 
         it "sends #{level} exceptions" do
-          error     = RuntimeError.new('Hello World')
+          error     = RuntimeError.new("Hello World")
           exception = hash = nil
           Bugsnag.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
             @appender.send(level, @message, error)
@@ -67,10 +67,10 @@ module Appender
           end
         end
 
-        it 'does not send metric only notifications' do
+        it "does not send metric only notifications" do
           exception = hash = nil
           Bugsnag.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
-            @appender.debug metric: 'my/custom/metric', payload: {hello: :world}
+            @appender.debug metric: "my/custom/metric", payload: {hello: :world}
           end
           assert_nil exception
           assert_nil hash

@@ -18,8 +18,8 @@ module SemanticLogger
       each do |appender|
         begin
           appender.log(log) if appender.should_log?(log)
-        rescue Exception => exc
-          logger.error "Failed to log to appender: #{appender.name}", exc
+        rescue Exception => e
+          logger.error "Failed to log to appender: #{appender.name}", e
         end
       end
     end
@@ -29,11 +29,11 @@ module SemanticLogger
         begin
           logger.trace "Flushing appender: #{appender.name}"
           appender.flush
-        rescue Exception => exc
-          logger.error "Failed to flush appender: #{appender.name}", exc
+        rescue Exception => e
+          logger.error "Failed to flush appender: #{appender.name}", e
         end
       end
-      logger.trace 'All appenders flushed'
+      logger.trace "All appenders flushed"
     end
 
     def close
@@ -43,11 +43,11 @@ module SemanticLogger
           appender.flush
           appender.close
           delete(appender)
-        rescue Exception => exc
-          logger.error "Failed to close appender: #{appender.name}", exc
+        rescue Exception => e
+          logger.error "Failed to close appender: #{appender.name}", e
         end
       end
-      logger.trace 'All appenders closed and removed from appender list'
+      logger.trace "All appenders closed and removed from appender list"
     end
 
     # After a fork the appender thread is not running, start it if it is not running.
@@ -58,11 +58,11 @@ module SemanticLogger
 
           logger.trace "Reopening appender: #{appender.name}"
           appender.reopen
-        rescue Exception => exc
-          logger.error "Failed to re-open appender: #{appender.name}", exc
+        rescue Exception => e
+          logger.error "Failed to re-open appender: #{appender.name}", e
         end
       end
-      logger.trace 'All appenders re-opened'
+      logger.trace "All appenders re-opened"
     end
   end
 end

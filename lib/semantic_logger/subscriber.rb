@@ -45,11 +45,12 @@ module SemanticLogger
     # Give each appender its own logger for logging.
     # For example trace messages sent to services or errors when something fails.
     def logger
-      @logger ||= begin
-        logger      = SemanticLogger::Processor.logger.clone
-        logger.name = self.class.name
-        logger
-      end
+      @logger ||=
+        begin
+          logger      = SemanticLogger::Processor.logger.clone
+          logger.name = self.class.name
+          logger
+        end
     end
 
     # Set the formatter from Symbol|Hash|Block

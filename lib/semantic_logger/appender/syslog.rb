@@ -1,6 +1,6 @@
-require 'syslog'
-require 'uri'
-require 'socket'
+require "syslog"
+require "uri"
+require "socket"
 # Send log messages to local syslog, or remote syslog servers over TCP or UDP.
 #
 # Example:
@@ -119,7 +119,7 @@ module SemanticLogger
       #   Example:
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
-      def initialize(url: 'syslog://localhost',
+      def initialize(url: "syslog://localhost",
                      facility: ::Syslog::LOG_USER,
                      level_map: SemanticLogger::Formatters::Syslog::LevelMap.new,
                      options: ::Syslog::LOG_PID | ::Syslog::LOG_CONS,
@@ -132,10 +132,10 @@ module SemanticLogger
         @level_map          = level_map
         @url                = url
         uri                 = URI(@url)
-        @server             = uri.host || 'localhost'
+        @server             = uri.host || "localhost"
         @protocol           = (uri.scheme || :syslog).to_sym
         @port               = uri.port || 514
-        @server             = 'localhost' if @protocol == :syslog
+        @server             = "localhost" if @protocol == :syslog
         @tcp_client_options = tcp_client
 
         raise "Unknown protocol #{@protocol}!" unless %i[syslog tcp udp].include?(@protocol)
@@ -143,17 +143,17 @@ module SemanticLogger
         # The syslog_protocol gem is required when logging over TCP or UDP.
         if %i[tcp udp].include?(@protocol)
           begin
-            require 'syslog_protocol'
+            require "syslog_protocol"
           rescue LoadError
-            raise LoadError.new('Missing gem: syslog_protocol. This gem is required when logging over TCP or UDP. To fix this error: gem install syslog_protocol')
+            raise LoadError, "Missing gem: syslog_protocol. This gem is required when logging over TCP or UDP. To fix this error: gem install syslog_protocol"
           end
 
           # The net_tcp_client gem is required when logging over TCP.
           if protocol == :tcp
             begin
-              require 'net/tcp_client'
+              require "net/tcp_client"
             rescue LoadError
-              raise LoadError.new('Missing gem: net_tcp_client. This gem is required when logging over TCP. To fix this error: gem install net_tcp_client')
+              raise LoadError, "Missing gem: net_tcp_client. This gem is required when logging over TCP. To fix this error: gem install net_tcp_client"
             end
           end
         end
@@ -171,7 +171,7 @@ module SemanticLogger
           ::Syslog.send(method, application, options, facility)
         when :tcp
           @tcp_client_options[:server] = "#{@server}:#{@port}"
-          @remote_syslog               = Net::TCPClient.new(@tcp_client_options)
+          @remote_syslog               = Net::TCPClient.new(**@tcp_client_options)
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
           @remote_syslog.logger = logger
         when :udp
@@ -186,7 +186,7 @@ module SemanticLogger
         case @protocol
         when :syslog
           # Since the Ruby Syslog API supports sprintf format strings, double up all existing '%'
-          message = formatter.call(log, self).gsub '%', '%%'
+          message = formatter.call(log, self).gsub "%", "%%"
           ::Syslog.log @level_map[log.level], message
         when :tcp
           @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{formatter.call(log, self)}\r\n") }

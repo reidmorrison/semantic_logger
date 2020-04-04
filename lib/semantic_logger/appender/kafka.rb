@@ -1,10 +1,10 @@
 begin
-  require 'kafka'
+  require "kafka"
 rescue LoadError
-  raise LoadError.new('Gem ruby-kafka is required for logging to Elasticsearch. Please add the gem "ruby-kafka" to your Gemfile.')
+  raise LoadError, 'Gem ruby-kafka is required for logging to Elasticsearch. Please add the gem "ruby-kafka" to your Gemfile.'
 end
 
-require 'date'
+require "date"
 
 # Forward all log messages to Apache Kafka.
 #
@@ -115,9 +115,9 @@ module SemanticLogger
       #   metrics: [Boolean]
       #     Send metrics only events to kafka.
       #     Default: true
-      def initialize(seed_brokers:, client_id: 'semantic-logger', connect_timeout: nil, socket_timeout: nil,
+      def initialize(seed_brokers:, client_id: "semantic-logger", connect_timeout: nil, socket_timeout: nil,
                      ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil,
-                     topic: 'log_messages', partition: nil, partition_key: nil, key: nil,
+                     topic: "log_messages", partition: nil, partition_key: nil, key: nil,
                      delivery_threshold: 100, delivery_interval: 10,
                      metrics: true, **args, &block)
 

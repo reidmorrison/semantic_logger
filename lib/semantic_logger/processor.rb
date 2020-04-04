@@ -13,11 +13,12 @@ module SemanticLogger
     #   For example when an appender is not working etc..
     #   By default logs to STDERR
     def self.logger
-      @logger ||= begin
-        l      = SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
-        l.name = name
-        l
-      end
+      @logger ||=
+        begin
+          l      = SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
+          l.name = name
+          l
+        end
     end
 
     attr_reader :appenders
@@ -30,6 +31,7 @@ module SemanticLogger
     # Start the appender thread
     def start
       return false if active?
+
       thread
       true
     end

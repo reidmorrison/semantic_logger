@@ -1,4 +1,4 @@
-require 'date'
+require "date"
 # Forward all log messages to Elasticsearch one at a time via a HTTP post.
 #
 # Note:
@@ -50,9 +50,9 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(index: 'semantic_logger',
-                     type: 'log',
-                     url: 'http://localhost:9200',
+      def initialize(index: "semantic_logger",
+                     type: "log",
+                     url: "http://localhost:9200",
                      **http_args,
                      &block)
 

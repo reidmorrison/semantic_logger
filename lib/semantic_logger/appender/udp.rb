@@ -1,4 +1,4 @@
-require 'socket'
+require "socket"
 module SemanticLogger
   module Appender
     # UDP log appender.
@@ -74,7 +74,7 @@ module SemanticLogger
       def reopen
         close
         @socket    = UDPSocket.new
-        host, port = server.split(':')
+        host, port = server.split(":")
         @socket.connect(host, port.to_i)
       end
 

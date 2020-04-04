@@ -1,4 +1,4 @@
-require 'json'
+require "json"
 
 module SemanticLogger
   module Formatters
@@ -13,8 +13,8 @@ module SemanticLogger
       end
 
       def level
-        hash['severity']       = log.level
-        hash['severity_index'] = log.level_index
+        hash["severity"]       = log.level
+        hash["severity_index"] = log.level_index
       end
 
       def process_info

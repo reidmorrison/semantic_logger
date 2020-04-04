@@ -1,4 +1,4 @@
-require_relative '../test_helper'
+require_relative "../test_helper"
 
 module SemanticLogger
   module Formatters
@@ -13,16 +13,16 @@ module SemanticLogger
         end
 
         let(:log) do
-          log      = SemanticLogger::Log.new('DefaultTest', level)
+          log      = SemanticLogger::Log.new("DefaultTest", level)
           log.time = log_time
           log
         end
 
         let(:set_exception) do
           begin
-            raise 'Oh no'
-          rescue Exception => exc
-            log.exception = exc
+            raise "Oh no"
+          rescue Exception => e
+            log.exception = e
           end
         end
 
@@ -33,24 +33,24 @@ module SemanticLogger
           formatter
         end
 
-        describe 'message' do
-          it 'logs message' do
+        describe "message" do
+          it "logs message" do
             log.message = "Hello \nWorld\n"
-            assert_equal '-- Hello World', formatter.message
+            assert_equal "-- Hello World", formatter.message
           end
 
-          it 'skips empty message' do
+          it "skips empty message" do
             refute formatter.message
           end
         end
 
-        describe 'exception' do
-          it 'logs exception' do
+        describe "exception" do
+          it "logs exception" do
             set_exception
-            assert_equal '-- Exception: RuntimeError: Oh no', formatter.exception
+            assert_equal "-- Exception: RuntimeError: Oh no", formatter.exception
           end
 
-          it 'skips nil exception' do
+          it "skips nil exception" do
             refute formatter.exception
           end
         end

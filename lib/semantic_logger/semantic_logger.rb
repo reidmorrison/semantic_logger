@@ -1,5 +1,5 @@
-require 'concurrent'
-require 'socket'
+require "concurrent"
+require "socket"
 
 module SemanticLogger
   # Logging levels in order of most detailed to most severe
@@ -52,7 +52,7 @@ module SemanticLogger
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
-    @host ||= Socket.gethostname.force_encoding('UTF-8')
+    @host ||= Socket.gethostname.force_encoding("UTF-8")
   end
 
   # Override the default host name
@@ -82,8 +82,8 @@ module SemanticLogger
     @environment = environment
   end
 
-  @application = ENV['SEMANTIC_LOGGER_APP'] || 'Semantic Logger'
-  @environment = ENV['SEMANTIC_LOGGER_ENV'] || ENV['RAILS_ENV'] || ENV['RACK_ENV']
+  @application = ENV["SEMANTIC_LOGGER_APP"] || "Semantic Logger"
+  @environment = ENV["SEMANTIC_LOGGER_ENV"] || ENV["RAILS_ENV"] || ENV["RACK_ENV"]
 
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger
@@ -268,22 +268,23 @@ module SemanticLogger
   # Note:
   #   To only register one of the signal handlers, set the other to nil
   #   Set gc_log_microseconds to nil to not enable JRuby Garbage collections
-  def self.add_signal_handler(log_level_signal = 'USR2', thread_dump_signal = 'TTIN', gc_log_microseconds = 100_000)
+  def self.add_signal_handler(log_level_signal = "USR2", thread_dump_signal = "TTIN", gc_log_microseconds = 100_000)
     if log_level_signal
       Signal.trap(log_level_signal) do
         index     = default_level == :trace ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
         new_level = LEVELS[index - 1]
-        self['SemanticLogger'].warn "Changed global default log level to #{new_level.inspect}"
+        self["SemanticLogger"].warn "Changed global default log level to #{new_level.inspect}"
         self.default_level = new_level
       end
     end
 
     if thread_dump_signal
       Signal.trap(thread_dump_signal) do
-        logger = SemanticLogger['Thread Dump']
+        logger = SemanticLogger["Thread Dump"]
         Thread.list.each do |thread|
           # MRI re-uses the main thread for signals, JRuby uses `SIGTTIN handler` thread.
           next if defined?(JRuby) && (thread == Thread.current)
+
           logger.backtrace(thread: thread)
         end
       end
@@ -302,7 +303,7 @@ module SemanticLogger
   # If the tag being supplied is definitely a string then this fast
   # tag api can be used for short lived tags
   def self.fast_tag(tag)
-    return yield if tag.nil? || tag == ''
+    return yield if tag.nil? || tag == ""
 
     t = Thread.current[:semantic_logger_tags] ||= []
     begin
@@ -379,7 +380,7 @@ module SemanticLogger
   # :nodoc
   def self.named_tagged(hash)
     return yield if hash.nil? || hash.empty?
-    raise(ArgumentError, '#named_tagged only accepts named parameters (Hash)') unless hash.is_a?(Hash)
+    raise(ArgumentError, "#named_tagged only accepts named parameters (Hash)") unless hash.is_a?(Hash)
 
     begin
       push_named_tags(hash)

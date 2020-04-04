@@ -1,7 +1,7 @@
 begin
-  require 'sentry-raven'
+  require "sentry-raven"
 rescue LoadError
-  raise LoadError.new('Gem sentry-raven is required for logging purposes. Please add the gem "sentry-raven" to your Gemfile.')
+  raise LoadError, 'Gem sentry-raven is required for logging purposes. Please add the gem "sentry-raven" to your Gemfile.'
 end
 
 # Send log messages to sentry
@@ -46,12 +46,12 @@ module SemanticLogger
       # Send an error notification to sentry
       def log(log)
         # Ignore logs coming from Raven itself
-        return false if log.name == 'Raven'
+        return false if log.name == "Raven"
 
-        context = formatter.call(log, self)
-        user = context.delete(:user)
-        tags = context.delete(:tags)
-        attrs = {
+        context      = formatter.call(log, self)
+        user         = context.delete(:user)
+        tags         = context.delete(:tags)
+        attrs        = {
           level: context.delete(:level),
           extra: context
         }

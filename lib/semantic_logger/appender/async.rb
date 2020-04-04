@@ -1,4 +1,4 @@
-require 'forwardable'
+require "forwardable"
 
 module SemanticLogger
   module Appender
@@ -73,6 +73,7 @@ module SemanticLogger
       # Starts the worker thread if not running.
       def thread
         return @thread if @thread&.alive?
+
         @thread = Thread.new { process }
       end
 
@@ -115,21 +116,21 @@ module SemanticLogger
         # This thread is designed to never go down unless the main thread terminates
         # or the appender is closed.
         Thread.current.name = logger.name
-        logger.trace 'Async: Appender thread active'
+        logger.trace "Async: Appender thread active"
         begin
           process_messages
-        rescue StandardError => exception
+        rescue StandardError => e
           # This block may be called after the file handles have been released by Ruby
           begin
-            logger.error('Async: Restarting due to exception', exception)
+            logger.error("Async: Restarting due to exception", e)
           rescue StandardError
             nil
           end
           retry
-        rescue Exception => exception
+        rescue Exception => e
           # This block may be called after the file handles have been released by Ruby
           begin
-            logger.error('Async: Stopping due to fatal exception', exception)
+            logger.error("Async: Stopping due to fatal exception", e)
           rescue StandardError
             nil
           end
@@ -137,7 +138,7 @@ module SemanticLogger
           @thread = nil
           # This block may be called after the file handles have been released by Ruby
           begin
-            logger.trace('Async: Thread has stopped')
+            logger.trace("Async: Thread has stopped")
           rescue StandardError
             nil
           end
@@ -159,7 +160,7 @@ module SemanticLogger
             break unless process_message(message)
           end
         end
-        logger.trace 'Async: Queue Closed'
+        logger.trace "Async: Queue Closed"
       end
 
       # Returns false when message processing should be stopped

@@ -1,4 +1,4 @@
-require 'json'
+require "json"
 # Splunk log appender using the Splunk HTTP(S) listener.
 #
 # Use the newer, faster and more complete JSON over HTTP interface for Splunk.
@@ -81,7 +81,7 @@ module SemanticLogger
         super(compress: compress, **args, &block)
 
         # Put splunk auth token in the header of every HTTP post.
-        @header['Authorization'] = "Splunk #{token}"
+        @header["Authorization"] = "Splunk #{token}"
       end
 
       # Returns [String] JSON to send to Splunk.

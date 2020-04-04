@@ -1,8 +1,8 @@
-require 'socket'
+require "socket"
 begin
-  require 'mongo'
+  require "mongo"
 rescue LoadError
-  raise LoadError.new('Gem mongo is required for logging to MongoDB. Please add the gem "mongo" v2.0 or greater to your Gemfile.')
+  raise LoadError, 'Gem mongo is required for logging to MongoDB. Please add the gem "mongo" v2.0 or greater to your Gemfile.'
 end
 
 module SemanticLogger
@@ -104,9 +104,9 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       def initialize(uri:,
-                     collection_name: 'semantic_logger',
+                     collection_name: "semantic_logger",
                      write_concern: 0,
-                     collection_size: 1024 ** 3,
+                     collection_size: 1024**3,
                      collection_max: nil,
                      **args,
                      &block)
@@ -118,7 +118,7 @@ module SemanticLogger
           size:   collection_size,
           write:  {w: write_concern}
         }
-        @options[:max]   = collection_max if collection_max
+        @options[:max] = collection_max if collection_max
 
         reopen
 

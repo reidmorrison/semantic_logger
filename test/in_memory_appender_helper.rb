@@ -1,4 +1,4 @@
-require 'minitest/shared_description'
+require "minitest/shared_description"
 
 InMemoryAppenderHelper = shared_description do
   let :log_message do
@@ -15,11 +15,11 @@ InMemoryAppenderHelper = shared_description do
   end
 
   let :payload do
-    {session_id: 'HSSKLEU@JDK767', tracking_number: 12_345}
+    {session_id: "HSSKLEU@JDK767", tracking_number: 12_345}
   end
 
   let :logger do
-    SemanticLogger['TestLogger']
+    SemanticLogger["TestLogger"]
   end
 
   let :added_appender do

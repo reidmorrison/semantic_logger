@@ -1,8 +1,8 @@
-require 'uri'
+require "uri"
 begin
-  require 'statsd-ruby'
+  require "statsd-ruby"
 rescue LoadError
-  raise LoadError.new('Gem statsd-ruby is required for logging metrics. Please add the gem "statsd-ruby" to your Gemfile.')
+  raise LoadError, 'Gem statsd-ruby is required for logging metrics. Please add the gem "statsd-ruby" to your Gemfile.'
 end
 
 module SemanticLogger
@@ -26,17 +26,17 @@ module SemanticLogger
       #     metric: :statsd,
       #     url:    'localhost:8125'
       #   )
-      def initialize(url: 'udp://localhost:8125')
+      def initialize(url: "udp://localhost:8125")
         @url = url
       end
 
       def reopen
         uri = URI.parse(@url)
-        raise('Statsd only supports udp. Example: "udp://localhost:8125"') if uri.scheme != 'udp'
+        raise('Statsd only supports udp. Example: "udp://localhost:8125"') if uri.scheme != "udp"
 
         @statsd           = ::Statsd.new(uri.host, uri.port)
-        path              = uri.path.chomp('/')
-        @statsd.namespace = path.sub('/', '') if path != ''
+        path              = uri.path.chomp("/")
+        @statsd.namespace = path.sub("/", "") if path != ""
       end
 
       def log(log)

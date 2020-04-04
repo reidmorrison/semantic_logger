@@ -64,7 +64,8 @@ module SemanticLogger
           @log = io
         else
           @file_name = file_name
-          raise 'SemanticLogging::Appender::File missing mandatory parameter :file_name or :io' unless file_name
+          raise "SemanticLogging::Appender::File missing mandatory parameter :file_name or :io" unless file_name
+
           reopen
         end
 

@@ -1,10 +1,10 @@
 begin
-  require 'elasticsearch'
+  require "elasticsearch"
 rescue LoadError
-  raise LoadError.new('Gem elasticsearch is required for logging to Elasticsearch. Please add the gem "elasticsearch" to your Gemfile.')
+  raise LoadError, 'Gem elasticsearch is required for logging to Elasticsearch. Please add the gem "elasticsearch" to your Gemfile.'
 end
 
-require 'date'
+require "date"
 
 # Forward all log messages to Elasticsearch.
 #
@@ -123,10 +123,10 @@ module SemanticLogger
       #   send_get_body_as [String]
       #     Specify the HTTP method to use for GET requests with a body.
       #     Default: 'GET'
-      def initialize(url: 'http://localhost:9200',
-                     index: 'semantic_logger',
-                     date_pattern: '%Y.%m.%d',
-                     type: 'log',
+      def initialize(url: "http://localhost:9200",
+                     index: "semantic_logger",
+                     date_pattern: "%Y.%m.%d",
+                     type: "log",
                      level: nil,
                      formatter: nil,
                      filter: nil,
@@ -174,15 +174,15 @@ module SemanticLogger
 
       def write_to_elasticsearch(messages)
         bulk_result = @client.bulk(body: messages)
-        return unless bulk_result['errors']
+        return unless bulk_result["errors"]
 
-        failed = bulk_result['items'].reject { |x| x['status'] == 201 }
+        failed = bulk_result["items"].reject { |x| x["status"] == 201 }
         logger.error("ElasticSearch: Write failed. Messages discarded. : #{failed}")
       end
 
       def bulk_index(log)
         expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
-        {'index' => {'_index' => expanded_index_name, '_type' => type}}
+        {"index" => {"_index" => expanded_index_name, "_type" => type}}
       end
 
       def default_formatter

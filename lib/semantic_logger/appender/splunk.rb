@@ -1,7 +1,7 @@
 begin
-  require 'splunk-sdk-ruby'
+  require "splunk-sdk-ruby"
 rescue LoadError
-  raise LoadError.new('Gem splunk-sdk-ruby is required for logging to Splunk. Please add the gem "splunk-sdk-ruby" to your Gemfile.')
+  raise LoadError, 'Gem splunk-sdk-ruby is required for logging to Splunk. Please add the gem "splunk-sdk-ruby" to your Gemfile.'
 end
 
 # Splunk log appender.
@@ -88,7 +88,7 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
-      def initialize(index: 'main', source_type: nil, **args, &block)
+      def initialize(index: "main", source_type: nil, **args, &block)
         @index       = index
         @source_type = source_type
 
@@ -120,7 +120,7 @@ module SemanticLogger
       def call(log, logger)
         h = SemanticLogger::Formatters::Raw.new.call(log, logger)
         h.delete(:time)
-        message               = {
+        message = {
           source:  logger.application,
           host:    logger.host,
           time:    log.time.utc.to_f,
@@ -128,7 +128,7 @@ module SemanticLogger
           event:   h
         }
         message[:environment] = logger.environment if logger.environment
-        message[:sourcetype] = source_type if source_type
+        message[:sourcetype]  = source_type if source_type
         message
       end
     end

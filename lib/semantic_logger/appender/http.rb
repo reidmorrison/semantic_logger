@@ -1,8 +1,8 @@
-require 'net/http'
-require 'uri'
-require 'socket'
-require 'json'
-require 'openssl'
+require "net/http"
+require "uri"
+require "socket"
+require "json"
+require "openssl"
 
 # Log to any HTTP(S) server that accepts log messages in JSON form
 #
@@ -101,27 +101,29 @@ module SemanticLogger
         @continue_timeout = continue_timeout
 
         # On Ruby v2.0 and greater, Net::HTTP.new already uses a persistent connection if the server allows it
-        @header                     = {
-          'Accept'       => 'application/json',
-          'Content-Type' => 'application/json',
-          'Connection'   => 'keep-alive',
-          'Keep-Alive'   => '300'
+        @header = {
+          "Accept"       => "application/json",
+          "Content-Type" => "application/json",
+          "Connection"   => "keep-alive",
+          "Keep-Alive"   => "300"
         }
-        @header['Content-Encoding'] = 'gzip' if @compress
+        @header["Content-Encoding"] = "gzip" if @compress
 
         uri     = URI.parse(@url)
         @server = uri.host
-        raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'") unless @server
+        unless @server
+          raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'")
+        end
 
         @port     = uri.port
         @username = uri.user if !@username && uri.user
         @password = uri.password if !@password && uri.password
         @path     = uri.path
         # Path cannot be empty
-        @path     = '/' if @path == ''
+        @path     = "/" if @path == ""
 
-        if uri.scheme == 'https'
-          @ssl_options[:use_ssl]     = true
+        if uri.scheme == "https"
+          @ssl_options[:use_ssl] = true
           @ssl_options[:verify_mode] ||= OpenSSL::SSL::VERIFY_PEER
           @port                      ||= HTTP.https_default_port
         else
@@ -205,16 +207,16 @@ module SemanticLogger
         end
         request.basic_auth(@username, @password) if @username
         response = @http.request(request)
-        if response.code == '200' || response.code == '201'
+        if response.code == "200" || response.code == "201"
           true
         else
           # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
           logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
           false
         end
-      rescue RuntimeError => exc
+      rescue RuntimeError => e
         reopen
-        raise exc
+        raise e
       end
     end
   end

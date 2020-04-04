@@ -2,19 +2,18 @@ language: ruby
 
 rvm:
   - 2.3.8
-  - 2.4.5
-  - 2.5.3
-  - 2.6.1
-  - ruby-head
-  - jruby-9.2.5.0
+  - 2.4.10
+  - 2.5.8
+  - 2.6.6
+  - 2.7.1
+  - jruby-9.2.11.1
 
 matrix:
   allow_failures:
-    - rvm: ruby-head
-    - rvm: jruby-9.2.5.0
+    - rvm: jruby-9.2.11.1
 
 jdk:
-  - openjdk10
+  - openjdk9
 
 bundler_args: --without development
 

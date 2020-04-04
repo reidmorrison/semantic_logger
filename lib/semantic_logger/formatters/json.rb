@@ -1,4 +1,4 @@
-require 'json'
+require "json"
 module SemanticLogger
   module Formatters
     class Json < Raw

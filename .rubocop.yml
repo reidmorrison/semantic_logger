@@ -4,40 +4,37 @@ AllCops:
     - '.git/**/*'
     - 'docs/**/*'
 
-# Match existing layout
+#
+# RuboCop built-in settings.
+#   For documentation on all settings see: https://docs.rubocop.org/en/stable
+#
+
+# Trailing periods.
 Layout/DotPosition:
   EnforcedStyle: trailing
 
-# Rubocop cannot yet see beyond one line above or below, when aligning =
-Layout/ExtraSpacing:
-  Enabled: false
-  AllowForAlignment: true
-  ForceEqualSignAlignment: true
-  AutoCorrect: false
+# Turn on auto-correction of equals alignment.
+Layout/EndAlignment:
+  AutoCorrect: true
 
-# Pick one
-Layout/IndentHeredoc:
-  EnforcedStyle: squiggly
+# Prevent accidental windows line endings
+Layout/EndOfLine:
+  EnforcedStyle: lf
 
-# Match existing layout
-Layout/MultilineMethodCallIndentation:
-  EnforcedStyle: indented
-  IndentationWidth: 2
+# Use a table layout for hashes
+Layout/HashAlignment:
+  EnforcedHashRocketStyle: table
+  EnforcedColonStyle: table
 
-# Rubocop cannot yet see beyond one line above or below, when aligning =
-Layout/SpaceAroundOperators:
-  Enabled: false
-  AllowForAlignment: true
-  AutoCorrect: false
+# Soften limits
+Layout/LineLength:
+  Max: 128
+  Exclude:
+    - '**/test/**/*'
 
 # Match existing layout
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
-  EnforcedStyleForEmptyBraces: no_space
-
-# Files must end with a blank line
-Layout/TrailingBlankLines:
-  EnforcedStyle: final_newline
 
 # TODO: Soften Limits for phase 1 only
 Metrics/AbcSize:
@@ -47,6 +44,10 @@ Metrics/AbcSize:
 Metrics/BlockLength:
   Exclude:
     - 'test/**/*'
+    - '**/*/cli.rb'
+  ExcludedMethods:
+    - 'aasm'
+    - 'included'
 
 # Soften limits
 Metrics/ClassLength:
@@ -57,12 +58,6 @@ Metrics/ClassLength:
 # TODO: Soften Limits for phase 1 only
 Metrics/CyclomaticComplexity:
   Max: 15
-
-Metrics/LineLength:
-  Max: 128
-  Exclude:
-    - 'cli.rb'
-    - 'test/**/*'
 
 # Soften limits
 Metrics/MethodLength:
@@ -80,7 +75,7 @@ Metrics/PerceivedComplexity:
   Max: 21
 
 # Initialization Vector abbreviation
-Naming/UncommunicativeMethodParamName:
+Naming/MethodParameterName:
   AllowedNames: ['iv', '_', 'io', 'ap']
 
 # Does not allow Symbols to load
@@ -97,7 +92,7 @@ Style/Documentation:
 
 # One line methods
 Style/EmptyMethod:
-  Enabled: false
+  EnforcedStyle: expanded
 
 # Ruby 3 compatibility feature
 Style/FrozenStringLiteralComment:
@@ -106,6 +101,14 @@ Style/FrozenStringLiteralComment:
 Style/NumericPredicate:
   AutoCorrect: true
 
+# Incorrectly changes job.fail to job.raise
+Style/SignalException:
+  Enabled: false
+
 # Since English may not be loaded, cannot force its use.
 Style/SpecialGlobalVars:
   Enabled: false
+
+# Make it easier for developers to move between Elixir and Ruby.
+Style/StringLiterals:
+  EnforcedStyle: double_quotes

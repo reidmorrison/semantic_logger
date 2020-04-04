@@ -1,4 +1,4 @@
-require 'json'
+require "json"
 module SemanticLogger
   module Formatters
     class Signalfx < Base
@@ -6,8 +6,8 @@ module SemanticLogger
 
       def initialize(token:,
                      dimensions: nil,
-                     gauge_name: 'Application.average',
-                     counter_name: 'Application.counter',
+                     gauge_name: "Application.average",
+                     counter_name: "Application.counter",
                      time_format: :ms,
                      **args)
 
@@ -23,19 +23,19 @@ module SemanticLogger
       #   Strip leading '/'
       #   Convert remaining '/' to '.'
       def metric
-        name = log.metric.to_s.sub(/\A\/+/, '')
+        name = log.metric.to_s.sub(%r{\A/+}, "")
         if log.dimensions
-          name.tr!('/', '.')
+          name.tr!("/", ".")
           hash[:metric] = name
         else
           # Extract class and action from metric name
-          names = name.split('/')
+          names = name.split("/")
           h     = (hash[:dimensions] ||= {})
           if names.size > 1
             h[:action] = names.pop
-            h[:class]  = names.join('::')
+            h[:class]  = names.join("::")
           else
-            h[:class]  = 'Unknown'
+            h[:class]  = "Unknown"
             h[:action] = names.first || log.metric
           end
 
@@ -67,6 +67,7 @@ module SemanticLogger
             name  = name.to_sym
             value = value.to_s
             next if value.empty?
+
             h[name] = value if dimensions&.include?(name)
           end
         end

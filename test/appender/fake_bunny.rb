@@ -9,7 +9,8 @@ class FakeBunny
       Queue.new(name, @conn)
     end
 
-    def close; end
+    def close
+    end
   end
 
   class Queue
@@ -19,19 +20,22 @@ class FakeBunny
     end
 
     def publish(message)
-      @conn.published << { message: message, queue: @name }
+      @conn.published << {message: message, queue: @name}
     end
   end
 
   attr_accessor :published, :args
 
   def initialize(args)
-    @args = args
+    @args      = args
     @published = []
   end
 
-  def start; end
-  def close; end
+  def start
+  end
+
+  def close
+  end
 
   def create_channel
     Channel.new(self)

@@ -1,4 +1,4 @@
-require 'time'
+require "time"
 module SemanticLogger
   module Formatters
     class Base
@@ -77,7 +77,7 @@ module SemanticLogger
         when :seconds
           time.to_f
         when nil
-          ''
+          ""
         else
           time.strftime(time_format)
         end

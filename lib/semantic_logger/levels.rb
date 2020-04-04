@@ -16,17 +16,19 @@ module SemanticLogger
           LEVELS.index(level)
         elsif level.is_a?(Integer) && defined?(::Logger::Severity)
           # Mapping of Rails and Ruby Logger levels to SemanticLogger levels
-          @map_levels ||= begin
-            levels = []
-            ::Logger::Severity.constants.each do |constant|
-              levels[::Logger::Severity.const_get(constant)] =
-                LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
+          @map_levels ||=
+            begin
+              levels = []
+              ::Logger::Severity.constants.each do |constant|
+                levels[::Logger::Severity.const_get(constant)] =
+                  LEVELS.find_index(constant.downcase.to_sym) || LEVELS.find_index(:error)
+              end
+              levels
             end
-            levels
-          end
           @map_levels[level]
         end
       raise "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}" unless index
+
       index
     end
 

@@ -1,7 +1,7 @@
 begin
-  require 'bugsnag'
+  require "bugsnag"
 rescue LoadError
-  raise LoadError.new('Gem bugsnag is required for logging purposes. Please add the gem "bugsnag" to your Gemfile.')
+  raise LoadError, 'Gem bugsnag is required for logging purposes. Please add the gem "bugsnag" to your Gemfile.'
 end
 
 # Send log messages to Bugsnag
@@ -30,7 +30,7 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(level: :error, **args, &block)
-        raise 'Bugsnag only supports :info, :warn, or :error log levels' unless %i[info warn error fatal].include?(level)
+        raise "Bugsnag only supports :info, :warn, or :error log levels" unless %i[info warn error fatal].include?(level)
 
         # Replace the Bugsnag logger so that we can identify its log messages and not forward them to Bugsnag
         ::Bugsnag.configure { |config| config.logger = SemanticLogger[Bugsnag] }
@@ -51,7 +51,7 @@ module SemanticLogger
       # Send an error notification to Bugsnag
       def log(log)
         # Ignore logs coming from Bugsnag itself
-        return false if log.name == 'Bugsnag'
+        return false if log.name == "Bugsnag"
 
         # Send error messages as Runtime exceptions
         exception =
@@ -77,11 +77,11 @@ module SemanticLogger
       def log_level(log)
         case log.level
         when :error, :fatal
-          'error'
+          "error"
         when :warn
-          'warning'
+          "warning"
         else
-          'info'
+          "info"
         end
       end
     end

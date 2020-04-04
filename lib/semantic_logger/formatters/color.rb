@@ -1,6 +1,6 @@
 # Load AwesomePrint if available
 begin
-  require 'awesome_print'
+  require "awesome_print"
 rescue LoadError
   nil
 end

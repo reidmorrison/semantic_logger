@@ -87,7 +87,7 @@ module SemanticLogger
       end
 
       self.message = message
-      if payload && payload.is_a?(Hash)
+      if payload&.is_a?(Hash)
         self.payload = payload
       elsif payload
         self.message = message.nil? ? payload.to_s : "#{message} -- #{payload}"
@@ -155,7 +155,7 @@ module SemanticLogger
           message = message.nil? ? result : "#{message} -- #{result}"
           assign(message: message, payload: payload, exception: exception)
         elsif message.nil? && result.is_a?(Hash) && %i[message payload exception].any? { |k| result.key? k }
-          assign(result)
+          assign(**result)
         elsif payload&.respond_to?(:merge)
           assign(message: message, payload: payload.merge(result), exception: exception)
         else
@@ -178,7 +178,7 @@ module SemanticLogger
         yield(ex, depth)
 
         depth += 1
-        ex    =
+        ex =
           if ex.respond_to?(:cause) && ex.cause
             ex.cause
           elsif ex.respond_to?(:continued_exception) && ex.continued_exception
@@ -191,7 +191,7 @@ module SemanticLogger
 
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
     def backtrace_to_s
-      trace = ''
+      trace = ""
       each_exception do |exception, i|
         if i.zero?
           trace = (exception.backtrace || []).join("\n")
@@ -212,6 +212,7 @@ module SemanticLogger
     else
       def duration_to_s
         return unless duration
+
         duration < 10.0 ? "#{format('%.3f', duration)}ms" : "#{format('%.1f', duration)}ms"
       end
     end
@@ -219,13 +220,14 @@ module SemanticLogger
     # Returns [String] the duration in human readable form
     def duration_human
       return nil unless duration
+
       seconds = duration / 1000
       if seconds >= 86_400.0 # 1 day
         "#{(seconds / 86_400).to_i}d #{Time.at(seconds).strftime('%-Hh %-Mm')}"
       elsif seconds >= 3600.0 # 1 hour
-        Time.at(seconds).strftime('%-Hh %-Mm')
+        Time.at(seconds).strftime("%-Hh %-Mm")
       elsif seconds >= 60.0 # 1 minute
-        Time.at(seconds).strftime('%-Mm %-Ss')
+        Time.at(seconds).strftime("%-Mm %-Ss")
       elsif seconds >= 1.0 # 1 second
         "#{format('%.3f', seconds)}s"
       else
@@ -248,7 +250,7 @@ module SemanticLogger
       "#{$$}:#{format("%.#{thread_name_length}s", thread_name)}#{file_name}"
     end
 
-    CALLER_REGEXP = /^(.*):(\d+).*/
+    CALLER_REGEXP = /^(.*):(\d+).*/.freeze
 
     # Extract the filename and line number from the last entry in the supplied backtrace
     def extract_file_and_line(stack, short_name = false)
@@ -265,7 +267,7 @@ module SemanticLogger
 
     # Strip the standard Rails colorizing from the logged message
     def cleansed_message
-      message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, '').strip
+      message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, "").strip
     end
 
     # Return the payload in text form

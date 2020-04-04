@@ -1,8 +1,8 @@
-require 'uri'
+require "uri"
 begin
-  require 'gelf'
+  require "gelf"
 rescue LoadError
-  raise LoadError.new('Gem gelf is required for logging to Graylog. Please add the gem "gelf" to your Gemfile.')
+  raise LoadError, 'Gem gelf is required for logging to Graylog. Please add the gem "gelf" to your Gemfile.'
 end
 
 # Forward log entries to a Graylog server.
@@ -82,8 +82,8 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(url: 'udp://localhost:12201',
-                     max_size: 'WAN',
+      def initialize(url: "udp://localhost:12201",
+                     max_size: "WAN",
                      gelf_options: {},
                      level_map: LevelMap.new,
                      **args,
@@ -105,7 +105,9 @@ module SemanticLogger
         @port     = uri.port
         @protocol = uri.scheme.to_sym
 
-        raise(ArgumentError, "Invalid protocol value: #{@protocol}. Must be :udp or :tcp") unless %i[udp tcp].include?(@protocol)
+        unless %i[udp tcp].include?(@protocol)
+          raise(ArgumentError, "Invalid protocol value: #{@protocol}. Must be :udp or :tcp")
+        end
 
         gelf_options[:protocol] ||= (@protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP)
         gelf_options[:facility] ||= application
@@ -120,11 +122,11 @@ module SemanticLogger
 
         h[:short_message] = h.delete(:message)
         if h[:short_message].nil?
-          h[:short_message] = log.exception.nil?  ? '<no-exception-message>' : log.exception.message
+          h[:short_message] = log.exception.nil? ? "<no-exception-message>" : log.exception.message
         end
-        h[:level]         = logger.level_map[log.level]
-        h[:level_str]     = log.level.to_s
-        h[:duration_str]  = h.delete(:duration)
+        h[:level]        = logger.level_map[log.level]
+        h[:level_str]    = log.level.to_s
+        h[:duration_str] = h.delete(:duration)
         h
       end
 

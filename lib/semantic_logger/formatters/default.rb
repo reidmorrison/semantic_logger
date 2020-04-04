@@ -67,7 +67,7 @@ module SemanticLogger
         self.log    = log
         self.logger = logger
 
-        [time, level, process_info, tags, named_tags, duration, name, message, payload, exception].compact.join(' ')
+        [time, level, process_info, tags, named_tags, duration, name, message, payload, exception].compact.join(" ")
       end
     end
   end

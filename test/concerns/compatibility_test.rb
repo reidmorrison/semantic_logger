@@ -1,150 +1,150 @@
-require_relative '../test_helper'
+require_relative "../test_helper"
 
 class TestLogger < Minitest::Test
   describe SemanticLogger::Logger do
     include InMemoryAppenderHelper
 
-    it '#add' do
-      logger.add(Logger::INFO, 'hello world', 'progname') { 'Data' }
+    it "#add" do
+      logger.add(Logger::INFO, "hello world", "progname") { "Data" }
 
       assert log = log_message
-      assert_equal 'hello world -- progname -- Data', log.message
+      assert_equal "hello world -- progname -- Data", log.message
       assert_equal :info, log.level
     end
 
-    it '#log' do
-      logger.log(Logger::FATAL, 'hello world', 'progname') { 'Data' }
+    it "#log" do
+      logger.log(Logger::FATAL, "hello world", "progname") { "Data" }
 
       assert log = log_message
-      assert_equal 'hello world -- progname -- Data', log.message
+      assert_equal "hello world -- progname -- Data", log.message
       assert_equal :fatal, log.level
     end
 
-    describe '#info' do
-      it 'logs message' do
-        logger.info('hello1')
+    describe "#info" do
+      it "logs message" do
+        logger.info("hello1")
 
         assert log = log_message
-        assert_equal 'hello1', log.message
+        assert_equal "hello1", log.message
         assert_equal :info, log.level
       end
 
-      it 'logs 2 messages' do
-        logger.info('hello1', 'hello2')
+      it "logs 2 messages" do
+        logger.info("hello1", "hello2")
 
         assert log = log_message
-        assert_equal 'hello1 -- hello2', log.message
+        assert_equal "hello1 -- hello2", log.message
         assert_equal :info, log.level
       end
 
-      it 'logs non-string' do
-        logger.info('hello1', true)
+      it "logs non-string" do
+        logger.info("hello1", true)
 
         assert log = log_message
-        assert_equal 'hello1 -- true', log.message
+        assert_equal "hello1 -- true", log.message
         assert_equal :info, log.level
       end
 
-      it 'logs block result' do
-        logger.info('hello1', true) { 'Data' }
+      it "logs block result" do
+        logger.info("hello1", true) { "Data" }
 
         assert log = log_message
-        assert_equal 'hello1 -- true -- Data', log.message
+        assert_equal "hello1 -- true -- Data", log.message
         assert_equal :info, log.level
       end
     end
 
-    it '#unknown' do
-      logger.unknown('hello world') { 'Data' }
+    it "#unknown" do
+      logger.unknown("hello world") { "Data" }
 
       assert log = log_message
-      assert_equal 'hello world -- Data', log.message
+      assert_equal "hello world -- Data", log.message
       assert_equal :error, log.level
-      assert_equal 'TestLogger', log.name
+      assert_equal "TestLogger", log.name
     end
 
-    it '#unknown? as error?' do
+    it "#unknown? as error?" do
       SemanticLogger.default_level = :error
       assert logger.unknown?
-      logger.log(Logger::UNKNOWN, 'hello world', 'progname') { 'Data' }
+      logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
 
       assert log = log_message
-      assert_equal 'hello world -- progname -- Data', log.message
+      assert_equal "hello world -- progname -- Data", log.message
       assert_equal :error, log.level
     end
 
-    it '#unknown? as error? when false' do
+    it "#unknown? as error? when false" do
       SemanticLogger.default_level = :fatal
       refute logger.unknown?
-      logger.log(Logger::UNKNOWN, 'hello world', 'progname') { 'Data' }
+      logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
 
       refute log_message
     end
 
-    it '#silence_logger' do
+    it "#silence_logger" do
       logger.silence_logger do
-        logger.info 'hello world'
+        logger.info "hello world"
       end
       refute log_message
     end
 
-    it '#<< as info' do
-      logger << 'hello world'
+    it "#<< as info" do
+      logger << "hello world"
 
       assert log = log_message
-      assert_equal 'hello world', log.message
+      assert_equal "hello world", log.message
       assert_equal :info, log.level
     end
 
-    it '#progname= as #name=' do
-      assert_equal 'TestLogger', logger.name
-      logger.progname = 'NewTest'
-      assert_equal 'NewTest', logger.name
+    it "#progname= as #name=" do
+      assert_equal "TestLogger", logger.name
+      logger.progname = "NewTest"
+      assert_equal "NewTest", logger.name
     end
 
-    it '#progname as #name' do
-      assert_equal 'TestLogger', logger.name
-      assert_equal 'TestLogger', logger.progname
+    it "#progname as #name" do
+      assert_equal "TestLogger", logger.name
+      assert_equal "TestLogger", logger.progname
     end
 
-    it '#sev_threshold= as #level=' do
+    it "#sev_threshold= as #level=" do
       assert_equal :trace, logger.level
       logger.sev_threshold = Logger::DEBUG
       assert_equal :debug, logger.level
     end
 
-    it '#sev_threshold as #level' do
+    it "#sev_threshold as #level" do
       assert_equal :trace, logger.level
       assert_equal :trace, logger.sev_threshold
     end
 
-    it '#formatter NOOP' do
+    it "#formatter NOOP" do
       assert_nil logger.formatter
-      logger.formatter = 'blah'
-      assert_equal 'blah', logger.formatter
+      logger.formatter = "blah"
+      assert_equal "blah", logger.formatter
     end
 
-    it '#datetime_format NOOP' do
+    it "#datetime_format NOOP" do
       assert_nil logger.datetime_format
-      logger.datetime_format = 'blah'
-      assert_equal 'blah', logger.datetime_format
+      logger.datetime_format = "blah"
+      assert_equal "blah", logger.datetime_format
     end
 
-    it '#close NOOP' do
+    it "#close NOOP" do
       logger.close
-      logger.info('hello world')
+      logger.info("hello world")
 
       assert log = log_message
-      assert_equal 'hello world', log.message
+      assert_equal "hello world", log.message
       assert_equal :info, log.level
     end
 
-    it '#reopen NOOP' do
+    it "#reopen NOOP" do
       logger.reopen
-      logger.info('hello world')
+      logger.info("hello world")
 
       assert log = log_message
-      assert_equal 'hello world', log.message
+      assert_equal "hello world", log.message
       assert_equal :info, log.level
     end
   end
