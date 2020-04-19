@@ -34,7 +34,41 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Log environment when available
 
-## [4.5.0 .. ] TODO
+## [4.5.0]
+
+### Fixed
+- Fix 'NameError' always raised and logged by Appenders#close
+- SemanticLogger::Appender::Async segmentation fault
+  Recreate Queue on #re-open
+  Refactoring:
+  * Create Appenders class
+  * Move log subscribers to Logger class
+- Error if payload does not respond to #size + Simple strings are shown twice
+  Handle non-hash/payload as second argument by converting non-hash second argument to a string and appending to the message
+ 
+### Added
+- Date pattern support in Elasticsearch
+- Support new Net::TCPClient in TCP Syslog appender
+
+### Changed
+- Use monotonic clock when measuring time
+- Break out Appenders and Levels into separate files
+- Allow precision to be specified for formatters
+- Allow a Module to define a filter 
+
+### [4.4.0]
+
+### Fixed
+- Reopen child appender when using Async or Async Batch 
+
+### Added
+- Add RabbitMQ appender
+- Add Minitest Reporter to log test start and finish messages, as well as the duration of each test
+- Fluentd formatter
+
+### Changed
+- Allow precision to be specified for formatters
+- Allow a Module to define a filter 
 
 ## [4.3.1]
 ### Fixed
