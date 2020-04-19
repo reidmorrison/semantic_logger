@@ -10,7 +10,8 @@ for every Controller-Action call.
 
 ### Rails Support
 
-* Supports Rails 4.2, 5.0 and 5.1.
+For the complete list of supported Ruby and Rails versions, see
+the [Testing file](https://github.com/rocketjob/rails_semantic_logger/blob/master/.travis.yml).
 
 ### Installation
 
