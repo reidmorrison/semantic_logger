@@ -127,7 +127,7 @@ class MeasureTest < Minitest::Test
             assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
-            h = SemanticLogger::Formatters::Raw.new.call(log, appender)
+            h = log.to_h
             assert_match /measure_test.rb/, h[:file], h
             assert h[:line].is_a?(Integer)
           end
@@ -208,7 +208,7 @@ class MeasureTest < Minitest::Test
             assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
-            h = SemanticLogger::Formatters::Raw.new.call(log, appender)
+            h = log.to_h
             assert_match /measure_test.rb/, h[:file], h
             assert h[:line].is_a?(Integer)
           end
@@ -290,7 +290,7 @@ class MeasureTest < Minitest::Test
             assert log.backtrace.size.positive?
 
             # Extract file name and line number from backtrace
-            h = SemanticLogger::Formatters::Raw.new.call(log, appender)
+            h = log.to_h
             assert_match /measure_test.rb/, h[:file], h
             assert h[:line].is_a?(Integer)
           end
