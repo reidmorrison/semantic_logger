@@ -2,7 +2,7 @@ require "json"
 module SemanticLogger
   module Formatters
     class Signalfx < Base
-      attr_accessor :token, :dimensions, :hash, :log, :logger, :gauge_name, :counter_name
+      attr_accessor :token, :dimensions, :hash, :gauge_name, :counter_name
 
       def initialize(token:,
                      dimensions: nil,

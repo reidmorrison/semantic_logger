@@ -3,7 +3,7 @@ module SemanticLogger
   module Formatters
     class Raw < Base
       # Fields are added by populating this hash.
-      attr_accessor :hash, :log, :logger, :time_key
+      attr_accessor :hash, :time_key
 
       # By default Raw formatter does not reformat the time
       def initialize(time_format: :none, time_key: :time, **args)
@@ -37,11 +37,18 @@ module SemanticLogger
         hash[:level_index] = log.level_index
       end
 
-      # Process info
-      def process_info
-        hash[:pid]    = $$
-        hash[:thread] = log.thread_name
+      # Process ID
+      def pid
+        hash[:pid] = super
+      end
 
+      # Name of the thread that logged the message.
+      def thread_name
+        hash[:thread] = log.thread_name
+      end
+
+      # Ruby file name and line number that logged the message.
+      def file_name_and_line
         file, line = log.file_name_and_line
         return unless file
 
@@ -94,7 +101,7 @@ module SemanticLogger
             message:     exception.message,
             stack_trace: exception.backtrace
           }
-          root = root[name]
+          root       = root[name]
         end
       end
 
@@ -110,7 +117,23 @@ module SemanticLogger
         self.log    = log
         self.logger = logger
 
-        host; application; environment; time; level; process_info; duration; tags; named_tags; name; message; payload; exception; metric
+        host
+        application
+        environment
+        time
+        level
+        pid
+        thread_name
+        file_name_and_line
+        duration
+        tags
+        named_tags
+        name
+        message
+        payload
+        exception
+        metric
+
         hash
       end
     end

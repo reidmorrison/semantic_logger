@@ -240,9 +240,7 @@ module SemanticLogger
       level.to_s[0..0].upcase
     end
 
-    # Returns [String] the available process info
-    # Example:
-    #    18934:thread 23 test_logging.rb:51
+    # DEPRECATED
     def process_info(thread_name_length = 30)
       file, line = file_name_and_line(true)
       file_name  = " #{file}:#{line}" if file

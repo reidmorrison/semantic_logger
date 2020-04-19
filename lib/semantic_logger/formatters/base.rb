@@ -2,7 +2,7 @@ require "time"
 module SemanticLogger
   module Formatters
     class Base
-      attr_accessor :time_format, :log_host, :log_application, :log_environment, :precision
+      attr_accessor :log, :logger, :time_format, :log_host, :log_application, :log_environment, :precision
 
       # Time precision varies by Ruby interpreter
       # JRuby 9.1.8.0 supports microseconds
@@ -59,6 +59,11 @@ module SemanticLogger
       # Date & time
       def time
         format_time(log.time) if time_format
+      end
+
+      # Process ID
+      def pid
+        $$
       end
 
       private

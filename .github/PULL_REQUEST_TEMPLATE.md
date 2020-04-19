@@ -1,5 +1,9 @@
 ### Issue # (if available)
 
+### Changelog
+
+Pull requests will not be accepted without a description of this change under the `[unreleased]` section 
+in the file `CHANGELOG`.
 
 ### Description of changes
 

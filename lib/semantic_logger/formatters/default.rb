@@ -2,8 +2,6 @@ module SemanticLogger
   module Formatters
     # Default non-colored text log output
     class Default < Base
-      attr_accessor :log, :logger
-
       # Formatting methods, must return nil, or a string
       # Nil values are ignored
 
@@ -12,9 +10,24 @@ module SemanticLogger
         log.level_to_s
       end
 
-      # Process info
+      # Name of the thread that logged the message.
+      def thread_name
+        format("%.30s", log.thread_name)
+      end
+
+      # Ruby file name and line number that logged the message.
+      def file_name_and_line
+        file, line = log.file_name_and_line(true)
+        "#{file}:#{line}" if file
+      end
+
+      # Returns [String] the available process info
+      # Example:
+      #    [18934:thread_name test_logging.rb:51]
       def process_info
-        "[#{log.process_info}]"
+        process_id = "#{pid}:" if pid
+        fname      = file_name_and_line
+        fname ? "[#{process_id}#{thread_name} #{fname}]" : "[#{process_id}#{thread_name}]"
       end
 
       # Tags
