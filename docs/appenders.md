@@ -27,6 +27,7 @@ Log messages can be written to one or more of the following destinations at the 
 * TCP (+ SSL)
 * UDP
 * MongoDB
+* Rollbar
 * Logger, log4r, etc.
 
 To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
@@ -630,6 +631,23 @@ SemanticLogger.add_appender(
   server:    'localhost:8088',
   formatter: formatter
 )
+~~~
+
+### Rollbar
+
+In order to integrate Rollbar error handling into Semantic Logger it requires it's own 
+current thread context. As such, it cannot use a regular appender unless running
+in Synchronous logging mode.
+
+As recommended by @gingerlime, to enable Rollbar for Semantic Logger add the following initializer:
+~~~ruby
+SemanticLogger.on_log do |log|
+  next unless log.try(:level) == :error
+
+  err = RuntimeError.new(log.try(:message))
+  err.set_backtrace(log.backtrace) if log.backtrace
+  Rollbar.error(err, :log_extra => log.to_h)
+end
 ~~~
 
 ### Logger, log4r, etc.
