@@ -7,6 +7,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - SemanticLogger::Log.to_h
 - Fixed #122 make it easier to remove the pid from logs
+- Fixed #137 Add Synchronous mode to perform logging in the current thread
 
 ## [4.6.1]
 ### Fixed

@@ -20,8 +20,8 @@ module SemanticLogger
       attr_reader :subscribers
     end
 
-    class << self
-      attr_reader :processor
+    def self.processor
+      @processor ||= SemanticLogger.sync? ? SyncProcessor.new : Processor.new
     end
 
     # Returns a Logger instance
@@ -65,7 +65,7 @@ module SemanticLogger
 
     private
 
-    @processor   = Processor.new
+    @processor   = nil
     @subscribers = nil
 
     def self.call_subscribers(log)

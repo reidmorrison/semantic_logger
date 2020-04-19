@@ -597,4 +597,35 @@ demo.rb:14:in `<main>'
 The output above contains 2 stack traces, with the second stack trace starting at 
 `Cause: IOError: not opened for reading`. 
 
+### Synchronous Operation
+
+Sometimes it is useful to perform logging in the current thread instead of using a separate thread.
+
+Some examples
+- In tests it would be easier to verify logging of metrics, messages, etc.
+- In forked environments not having to re-create the logging thread could be useful.
+- Other logging frameworks perform synchronous logging. Transitioning to Semantic Logger could be easier.
+- Logging maintains the current threads context.
+- Very few Ruby applications actually use threads.
+
+Of course this means that all logging is performed in the current thread slowing it down a little.
+
+Run Semantic Logger in Synchronous mode:
+~~~ruby
+SemanticLogger.sync! = true
+~~~
+
+_Note:_ The above config option must be called _before_ any appenders have been added.
+
+To guarantee that the above sync config option is enabled, replace the regular require statement
+with one that forces synchronous logging:
+~~~ruby
+require "semantic_logger/sync"
+~~~
+
+Or, when using a Gemfile:
+~~~ruby
+gem "semantic_logger", require: "semantic_logger/sync"
+~~~    
+
 ### [Next: Appenders ==>](appenders.html)

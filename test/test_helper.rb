@@ -7,7 +7,11 @@ ENV["RAILS_ENV"] = "test"
 require "minitest/autorun"
 require "minitest/reporters"
 require "minitest/stub_any_instance"
-require "semantic_logger"
+if ENV["LOGGER_SYNC"]
+  require "semantic_logger/sync"
+else
+  require "semantic_logger"
+end
 require_relative "in_memory_appender"
 require_relative "in_memory_batch_appender"
 require_relative "in_memory_metrics_appender"

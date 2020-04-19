@@ -106,4 +106,33 @@ appender = SemanticLogger.appenders.find{ |a| a.is_a?(SemanticLogger::Appender::
 appender.formatter = MyFormatter.new
 ~~~
 
+#### Example: Do not log the process ID
+
+When running docker containers with a single process which is always 1, or when running only one
+process on a server the PID ( Process ID ) is not relevant.
+
+To leave out the pid, we can use a custom formatter:
+
+```ruby
+class NoPidFormatter < SemanticLogger::Formatters::Default
+  # Leave out the pid
+  def pid
+  end
+end
+```
+
+Specify the formatter when creating the appender:
+
+```ruby
+SemanticLogger.add_appender(file_name: 'development.log', formatter: NoPidFormatter.new)
+```
+
+Or to use the colorized formatter, use `SemanticLogger::Formatters::Color` instead of 
+`SemanticLogger::Formatters::Default`.
+
+Or if the appender is already installed:
+```ruby
+SemanticLogger.appenders.first.formatter = NoPidFormatter.new
+```
+
 ### [Next: Custom Appenders ==>](custom_appenders.html)

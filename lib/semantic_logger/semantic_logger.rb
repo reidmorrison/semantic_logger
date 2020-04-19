@@ -489,6 +489,19 @@ module SemanticLogger
     Thread.current[:semantic_logger_silence] || @default_level_index
   end
 
+  # Run Semantic Logger in Synchronous mode.
+  #
+  # I.e. Instead of logging messages in a separate thread for better performance,
+  # log them using the current thread.
+  def self.sync!
+    @sync = true
+  end
+
+  # Running in synchronous mode?
+  def self.sync?
+    @sync
+  end
+
   private
 
   # Initial default Level for all new instances of SemanticLogger::Logger
@@ -496,4 +509,5 @@ module SemanticLogger
   @default_level_index   = Levels.index(@default_level)
   @backtrace_level       = :error
   @backtrace_level_index = Levels.index(@backtrace_level)
+  @synchronous           = false
 end
