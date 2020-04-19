@@ -53,8 +53,6 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - Use monotonic clock when measuring time
 - Break out Appenders and Levels into separate files
-- Allow precision to be specified for formatters
-- Allow a Module to define a filter 
 
 ### [4.4.0]
 
