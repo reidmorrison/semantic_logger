@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+- Fix an undefined method error when handling exceptions from on_log
 
 ### Added
 - SemanticLogger::Log.to_h
@@ -37,7 +38,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   * SemanticLogger::Log.has_paylod? (use SemanticLogger::Lab.payload?)
   * SemanticLogger::Log.formatted_time (use time.strftime(Formatters::Base.build_time_format))
   * SemanticLogger::Log.to_h (use Use SemanticLogger::Formatters::Raw)
-  
+
 ### Added
 - Log environment when available
 
@@ -52,7 +53,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   * Move log subscribers to Logger class
 - Error if payload does not respond to #size + Simple strings are shown twice
   Handle non-hash/payload as second argument by converting non-hash second argument to a string and appending to the message
- 
+
 ### Added
 - Date pattern support in Elasticsearch
 - Support new Net::TCPClient in TCP Syslog appender
@@ -64,7 +65,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### [4.4.0]
 
 ### Fixed
-- Reopen child appender when using Async or Async Batch 
+- Reopen child appender when using Async or Async Batch
 
 ### Added
 - Add RabbitMQ appender
@@ -73,7 +74,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - Allow precision to be specified for formatters
-- Allow a Module to define a filter 
+- Allow a Module to define a filter
 
 ## [4.3.1]
 ### Fixed
@@ -83,7 +84,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [4.3.0]
 ### Added
 - Add option to allow an appender to log metrics only events.
-  I.e. An event that contains a metric name, optional payload, but no message or exception. 
+  I.e. An event that contains a metric name, optional payload, but no message or exception.
   By default such events are not logged, except to the metric appenders.
 
 ### Fixed
@@ -97,7 +98,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [4.2.1]
 ### Added
 - Add #push_named_tags and #pop_named_tags -- @aburgel
-- Sentry appender can now define user context and tags context -- @joker-777 
+- Sentry appender can now define user context and tags context -- @joker-777
 
 ### Changed
 - RuboCop Changes
@@ -111,13 +112,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - New Signalfx appender.
 - New Async appender that puts any other appender in its own thread.
-- New Batch appender to batch up groups of messages for appenders that support batching. 
+- New Batch appender to batch up groups of messages for appenders that support batching.
 - API now supports metric dimensions.
 - Support for metric only events. Does not require a log message to be created just to create a metric event.
 - A new one line formatter. Strips stack traces and newlines in log messages.
 
 ### Changed
-- Call `SemanticLogger.flush` instead of `SemanticLogger.close` on process exit. 
+- Call `SemanticLogger.flush` instead of `SemanticLogger.close` on process exit.
 - Elasticsearch appender now supports remaining Elasticsearch arguments. Thank you @willsoto.
 - Documentation fixes. Thank you @Silex.
 - Re-open http appender on failure.
@@ -136,7 +137,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Apache Kafka Appender.
 - Prototype Syslog CEE format.
 - `logger#tagged` now supports named tags. (Hash)
- 
+
 ### Changed
 - Elasticsearch now uses a bulk load api to improve throughput. Thank you [Xavier Lange](https://github.com/xrl)
 - Replaced hash arguments with Ruby keyword arguments across all appenders and formatters.
@@ -174,13 +175,13 @@ SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
     ~~~
 
     - Must be changed to use the payload tag:
-    
+
     ~~~ruby
     logger.error(message: 'Hello', payload: {response: response_message} )
     ~~~
-    
+
     - Otherwise Ruby will raise the following error:
-    
+
     ~~~
     ArgumentError: unknown keywords: response
     semantic_logger/lib/semantic_logger/log.rb:65:in `assign'
@@ -206,7 +207,7 @@ SemanticLogger::Appender::Bugsnag.new(level: :info)
 
 ## [3.4.1]
 ### Fixed
-- Failed to load appender when symbolic name includes an underscore, for example: 
+- Failed to load appender when symbolic name includes an underscore, for example:
 ~~~ruby
 SemanticLogger.add_appender(appender: :new_relic)
 ~~~
