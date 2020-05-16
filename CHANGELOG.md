@@ -2,12 +2,17 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+
 ## [unreleased]
+### Fixed
 
 ### Added
+
+## [4.7.0]
+### Added
 - SemanticLogger::Log.to_h
-- Fixed #122 make it easier to remove the pid from logs
-- Fixed #137 Add Synchronous mode to perform logging in the current thread
+- Make it easier to remove the pid from logs #122
+- Add Synchronous mode to perform logging in the current thread #137
 
 ## [4.6.1]
 ### Fixed
