@@ -87,7 +87,7 @@ module SemanticLogger
       # Returns [String] JSON to send to Splunk.
       #
       # For splunk format requirements see:
-      #   http://dev.splunk.com/view/event-collector/SP-CAAAE6P
+      #   https://docs.splunk.com/Documentation/Splunk/latest/Data/FormateventsforHTTPEventCollector
       def call(log, logger)
         h                     = SemanticLogger::Formatters::Raw.new(time_format: :seconds).call(log, logger)
         message               = {
@@ -96,7 +96,6 @@ module SemanticLogger
           time:   h.delete(:time),
           event:  h
         }
-        message[:environment] = logger.environment if logger.environment
         message[:sourcetype]  = source_type if source_type
         message[:index]       = index if index
         message.to_json
