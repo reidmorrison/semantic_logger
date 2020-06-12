@@ -7,6 +7,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 - Fix an undefined method error when handling exceptions from on_log.
+- Remove `environment` from the `SplunkHttp` appender message body.
 
 ### Added
 
