@@ -6,10 +6,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 ### Fixed
-- Fix an undefined method error when handling exceptions from on_log.
-- Remove `environment` from the `SplunkHttp` appender message body.
 
 ### Added
+
+## [4.7.1]
+
+### Fixed
+- Fix an undefined method error when handling exceptions from on_log.
+- Remove `environment` from the `SplunkHttp` appender message body.
+- Replace Awesome Print with new supported fork called Amazing Print.
+- Improve backward compatability. For example: `logger.message("Hello", duration: 20)`
 
 ## [4.7.0]
 ### Added
