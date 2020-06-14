@@ -18,11 +18,11 @@ the [Testing file](https://github.com/rocketjob/rails_semantic_logger/blob/maste
 Add the following lines to Gemfile
 
 ~~~ruby
-gem 'awesome_print'
+gem 'amazing_print'
 gem 'rails_semantic_logger'
 ~~~
 
-The gem `awesome_print` is optional, but is recommended to get colorized output of semantic data
+The gem `amazing_print` is optional, but is recommended to get colorized output of semantic data
 (Hash output).
 
 Install required gems with bundler
@@ -246,7 +246,7 @@ config.rails_semantic_logger.ap_options = {multiline: false}
 ~~~
 
 The defaults can also changed be creating a `~/.aprc` file.
-See the [Awesome Print Options Documentation](https://github.com/michaeldv/awesome_print)
+See the [Amazing Print Documentation](https://github.com/amazing-print/amazing_print)
 
 Notes:
 

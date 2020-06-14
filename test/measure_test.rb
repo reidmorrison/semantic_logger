@@ -128,7 +128,7 @@ class MeasureTest < Minitest::Test
 
             # Extract file name and line number from backtrace
             h = log.to_h
-            assert_match /measure_test.rb/, h[:file], h
+            assert_match(/measure_test.rb/, h[:file], h)
             assert h[:line].is_a?(Integer)
           end
         end
@@ -209,7 +209,7 @@ class MeasureTest < Minitest::Test
 
             # Extract file name and line number from backtrace
             h = log.to_h
-            assert_match /measure_test.rb/, h[:file], h
+            assert_match(/measure_test.rb/, h[:file], h)
             assert h[:line].is_a?(Integer)
           end
         end
@@ -291,7 +291,7 @@ class MeasureTest < Minitest::Test
 
             # Extract file name and line number from backtrace
             h = log.to_h
-            assert_match /measure_test.rb/, h[:file], h
+            assert_match(/measure_test.rb/, h[:file], h)
             assert h[:line].is_a?(Integer)
           end
         end

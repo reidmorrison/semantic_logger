@@ -42,9 +42,9 @@ module SemanticLogger
           lag_threshold_s: lag_threshold_s
         )
 
-        unless appender.respond_to?(:batch)
-          raise(ArgumentError, "#{appender.class.name} does not support batching. It must implement #batch")
-        end
+        return if appender.respond_to?(:batch)
+
+        raise(ArgumentError, "#{appender.class.name} does not support batching. It must implement #batch")
       end
 
       # Add log message for processing.

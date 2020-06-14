@@ -1,8 +1,8 @@
 AllCops:
   TargetRubyVersion: 2.4
   Exclude:
-    - '.git/**/*'
-    - 'docs/**/*'
+    - ".git/**/*"
+    - "docs/**/*"
 
 #
 # RuboCop built-in settings.
@@ -30,7 +30,7 @@ Layout/HashAlignment:
 Layout/LineLength:
   Max: 128
   Exclude:
-    - '**/test/**/*'
+    - "**/test/**/*"
 
 # Match existing layout
 Layout/SpaceInsideHashLiteralBraces:
@@ -43,17 +43,17 @@ Metrics/AbcSize:
 # Support long block lengths for tests
 Metrics/BlockLength:
   Exclude:
-    - 'test/**/*'
-    - '**/*/cli.rb'
+    - "test/**/*"
+    - "**/*/cli.rb"
   ExcludedMethods:
-    - 'aasm'
-    - 'included'
+    - "aasm"
+    - "included"
 
 # Soften limits
 Metrics/ClassLength:
   Max: 250
   Exclude:
-    - 'test/**/*'
+    - "test/**/*"
 
 # TODO: Soften Limits for phase 1 only
 Metrics/CyclomaticComplexity:
@@ -84,7 +84,7 @@ Security/YAMLLoad:
 
 # Needed for testing DateTime
 Style/DateTime:
-  Exclude: ['test/**/*']
+  Exclude: ["test/**/*"]
 
 # TODO: Soften Limits for phase 1 only
 Style/Documentation:

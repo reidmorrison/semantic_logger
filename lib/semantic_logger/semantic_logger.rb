@@ -502,12 +502,10 @@ module SemanticLogger
     @sync
   end
 
-  private
-
   # Initial default Level for all new instances of SemanticLogger::Logger
   @default_level         = :info
   @default_level_index   = Levels.index(@default_level)
   @backtrace_level       = :error
   @backtrace_level_index = Levels.index(@backtrace_level)
-  @synchronous           = false
+  @sync                  = false
 end

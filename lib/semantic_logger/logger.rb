@@ -63,8 +63,6 @@ module SemanticLogger
       Logger.processor.log(log)
     end
 
-    private
-
     @processor   = nil
     @subscribers = nil
 
@@ -75,7 +73,7 @@ module SemanticLogger
         begin
           subscriber.call(log)
         rescue Exception => e
-          self.processor.logger.error("Exception calling :on_log subscriber", e)
+          processor.logger.error("Exception calling :on_log subscriber", e)
         end
       end
     end

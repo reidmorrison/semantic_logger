@@ -1,8 +1,12 @@
-# Load AwesomePrint if available
+# Load Amazing Print, or Awesome Print if available
 begin
-  require "awesome_print"
+  require "amazing_print"
 rescue LoadError
-  nil
+  begin
+    require "awesome_print"
+  rescue LoadError
+    nil
+  end
 end
 
 module SemanticLogger
@@ -61,9 +65,9 @@ module SemanticLogger
       #
       # Parameters:
       #  ap: [Hash]
-      #    Any valid AwesomePrint option for rendering data.
+      #    Any valid Amazing Print option for rendering data.
       #    These options can also be changed be creating a `~/.aprc` file.
-      #    See: https://github.com/michaeldv/awesome_print
+      #    See: https://github.com/amazing-print/amazing_print
       #
       #    Note: The option :multiline is set to false if not supplied.
       #    Note: Has no effect if Awesome Print is not installed.
@@ -105,7 +109,7 @@ module SemanticLogger
       def payload
         return unless log.payload?
 
-        if !defined?(AwesomePrint) || !log.payload.respond_to?(:ai)
+        if !log.payload.respond_to?(:ai)
           super
         else
           begin

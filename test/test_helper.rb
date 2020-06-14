@@ -16,7 +16,7 @@ require_relative "in_memory_appender"
 require_relative "in_memory_batch_appender"
 require_relative "in_memory_metrics_appender"
 require_relative "in_memory_appender_helper"
-require "awesome_print"
+require "amazing_print"
 
 # Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
 class Minitest::Test

@@ -164,7 +164,7 @@ module SemanticLogger
         describe "exception" do
           it "logs exception" do
             set_exception
-            assert_match /-- Exception: RuntimeError: Oh no/, formatter.exception
+            assert_match(/-- Exception: RuntimeError: Oh no/, formatter.exception)
           end
 
           it "skips nil exception" do

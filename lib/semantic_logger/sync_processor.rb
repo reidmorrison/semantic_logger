@@ -39,6 +39,5 @@ module SemanticLogger
     def start
       # NOP
     end
-
   end
 end

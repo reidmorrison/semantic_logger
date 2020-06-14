@@ -47,6 +47,9 @@ module SemanticLogger
   # context [Hash]
   #   Named contexts that were captured when the log entry was created.
   class Log
+    # Keys passed in without a payload that will be extracted and the remainder passed into the payload.
+    PAYLOAD_KEYS = %i[exception metric duration metric_amount min_duration backtrace log_exception on_exception_level dimensions].freeze
+
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
                   :tags, :named_tags, :context,
@@ -280,8 +283,7 @@ module SemanticLogger
     end
 
     def to_h(host = SemanticLogger.host, application = SemanticLogger.application, environment = SemanticLogger.environment)
-      logger = Struct.new(:host, :application, :environment)
-                     .new(host, application, environment)
+      logger = Struct.new(:host, :application, :environment).new(host, application, environment)
       SemanticLogger::Formatters::Raw.new.call(self, logger)
     end
 

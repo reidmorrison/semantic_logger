@@ -2,7 +2,7 @@ source "http://rubygems.org"
 
 gemspec
 
-gem "awesome_print"
+gem "amazing_print"
 gem "minitest"
 gem "minitest-reporters"
 gem "minitest-shared_description"

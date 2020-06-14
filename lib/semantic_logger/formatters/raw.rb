@@ -101,7 +101,7 @@ module SemanticLogger
             message:     exception.message,
             stack_trace: exception.backtrace
           }
-          root       = root[name]
+          root = root[name]
         end
       end
 
