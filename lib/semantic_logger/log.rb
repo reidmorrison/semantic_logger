@@ -48,7 +48,10 @@ module SemanticLogger
   #   Named contexts that were captured when the log entry was created.
   class Log
     # Keys passed in without a payload that will be extracted and the remainder passed into the payload.
-    PAYLOAD_KEYS = %i[exception metric duration metric_amount min_duration backtrace log_exception on_exception_level dimensions].freeze
+    NON_PAYLOAD_KEYS = %i[message exception backtrace exception
+                          duration min_duration
+                          log_exception on_exception_level
+                          metric metric_amount dimensions].freeze
 
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
@@ -82,20 +85,13 @@ module SemanticLogger
                log_exception: :full,
                on_exception_level: nil,
                dimensions: nil)
-      # Elastic logging: Log when :duration exceeds :min_duration
-      # Except if there is an exception when it will always be logged
-      if duration
-        self.duration = duration
-        return false if (duration < min_duration) && exception.nil?
-      end
 
-      self.message = message
-      if payload&.is_a?(Hash)
-        self.payload = payload
-      elsif payload
-        self.message = message.nil? ? payload.to_s : "#{message} -- #{payload}"
-        self.payload = nil
-      end
+      self.message       = message
+      self.payload       = payload
+      self.duration      = duration
+      self.metric        = metric
+      self.metric_amount = metric_amount
+      self.dimensions    = dimensions
 
       if exception
         case log_exception
@@ -116,57 +112,45 @@ module SemanticLogger
         end
       end
 
+      # Elastic logging: Log when :duration exceeds :min_duration
+      # Except if there is an exception when it will always be logged
+      if duration
+        return false if (duration < min_duration) && exception.nil?
+      end
+
       if backtrace
         self.backtrace = Utils.extract_backtrace(backtrace)
       elsif level_index >= SemanticLogger.backtrace_level_index
         self.backtrace = Utils.extract_backtrace
       end
 
-      if metric
-        self.metric        = metric
-        self.metric_amount = metric_amount
-        self.dimensions    = dimensions
-      end
-
       true
     end
 
-    # Assign positional arguments to this log entry, supplying defaults where applicable
-    #
-    # Returns [true|false] whether this log entry should be logged
-    #
-    # Example:
-    #   logger.info('value', :debug, 0, "hello world")
-    def assign_positional(message = nil, payload = nil, exception = nil)
-      # Exception being logged?
-      # Under JRuby a java exception is not a Ruby Exception
-      #   Java::JavaLang::ClassCastException.new.is_a?(Exception) => false
-      if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
-        exception = message
-        message   = nil
-      elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
-        exception = payload
-        payload   = nil
-      elsif payload && !payload.is_a?(Hash)
-        message = message.nil? ? payload : "#{message} -- #{payload}"
-        payload = nil
-      end
-
-      # Add result of block as message or payload if not nil
-      if block_given? && (result = yield)
-        if result.is_a?(String)
-          message = message.nil? ? result : "#{message} -- #{result}"
-          assign(message: message, payload: payload, exception: exception)
-        elsif message.nil? && result.is_a?(Hash) && %i[message payload exception].any? { |k| result.key? k }
-          assign(**result)
-        elsif payload&.respond_to?(:merge)
-          assign(message: message, payload: payload.merge(result), exception: exception)
+    # Assign known keys to self, all other keys to the payload.
+    def assign_hash(hash)
+      self.payload ||= {}
+      hash.each_pair do |key, value|
+        if respond_to?("#{key}=".to_sym)
+          public_send("#{key}=".to_sym, value)
         else
-          assign(message: message, payload: result, exception: exception)
+          payload[key] = value
         end
-      else
-        assign(message: message, payload: payload, exception: exception)
       end
+      self.payload = nil if payload.empty?
+      self
+    end
+
+    # Extract the arguments from a Hash Payload
+    def extract_arguments(payload)
+      raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
+
+      return payload if payload.key?(:payload)
+
+      args = {}
+      payload.each_key { |key| args[key] = payload.delete(key) if NON_PAYLOAD_KEYS.include?(key) }
+      args[:payload] = payload unless payload.empty?
+      args
     end
 
     MAX_EXCEPTIONS_TO_UNWRAP = 5
@@ -181,7 +165,7 @@ module SemanticLogger
         yield(ex, depth)
 
         depth += 1
-        ex =
+        ex    =
           if ex.respond_to?(:cause) && ex.cause
             ex.cause
           elsif ex.respond_to?(:continued_exception) && ex.continued_exception

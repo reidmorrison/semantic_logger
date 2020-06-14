@@ -17,7 +17,8 @@ class LoggerTest < Minitest::Test
     end
 
     # Ensure that any log level can be logged
-    SemanticLogger::LEVELS.each do |level|
+    # SemanticLogger::LEVELS.each do |level|
+    [:debug].each do |level|
       describe "##{level}" do
         describe "positional parameter" do
           it "logs message" do
@@ -51,6 +52,16 @@ class LoggerTest < Minitest::Test
             assert_equal metric_name, log.metric
             assert_nil log.payload
             assert_nil log.duration
+          end
+
+          it "logs duration" do
+            logger.send(level, "hello world", duration: 20)
+
+            assert log = log_message
+            assert_equal "hello world", log.message
+            assert_equal 20, log.duration
+            assert_nil log.payload
+            assert_nil log.metric
           end
 
           it "logs with backtrace" do

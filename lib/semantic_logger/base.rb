@@ -303,22 +303,41 @@ module SemanticLogger
     end
 
     # Log message at the specified level
-    def log_internal(level, index, message = nil, payload = nil, exception = nil, &block)
-      log        = Log.new(name, level, index)
+    def log_internal(level, index, message = nil, payload = nil, exception = nil)
+      # Handle variable number of arguments by detecting exception object and payload hash.
+      if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
+        exception = message
+        message   = nil
+      elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
+        exception = payload
+        payload   = nil
+      elsif payload && !payload.is_a?(Hash)
+        message = message.nil? ? payload : "#{message} -- #{payload}"
+        payload = nil
+      end
+
+      log = Log.new(name, level, index)
       should_log =
         if payload.nil? && exception.nil? && message.is_a?(Hash)
-          # Check if someone just logged a hash payload instead of meaning to call semantic logger
-          if message.key?(:message) || message.key?(:payload) || message.key?(:exception) || message.key?(:metric)
-            log.assign(**message)
-          else
-            log.assign_positional(nil, message, nil, &block)
-          end
-        elsif exception.nil? && message && payload && payload.is_a?(Hash) &&
-              (payload.key?(:payload) || payload.key?(:exception) || payload.key?(:metric))
-          log.assign(message: message, **payload)
+          # Everything as keyword arguments.
+          log.assign(**log.extract_arguments(message))
+        elsif exception.nil? && message && payload && payload.is_a?(Hash)
+          # Message with keyword arguments as the rest.
+          log.assign(message: message, **log.extract_arguments(payload))
         else
-          log.assign_positional(message, payload, exception, &block)
+          # No keyword arguments.
+          log.assign(message: message, payload: payload, exception: exception)
         end
+
+      # Add result of block to message or payload if not nil
+      if block_given?
+        result = yield(log)
+        if result.is_a?(String)
+          log.message = log.message.nil? ? result : "#{log.message} -- #{result}"
+        elsif result.is_a?(Hash)
+          log.assign_hash(result)
+        end
+      end
 
       # Log level may change during assign due to :on_exception_level
       self.log(log) if should_log && should_log?(log)
@@ -349,10 +368,10 @@ module SemanticLogger
         exception = e
       ensure
         # Must use ensure block otherwise a `return` in the yield above will skip the log entry
-        log = Log.new(name, level, index)
+        log       = Log.new(name, level, index)
         exception ||= params[:exception]
-        message = params[:message] if params[:message]
-        duration =
+        message   = params[:message] if params[:message]
+        duration  =
           if block_given?
             1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start)
           else
