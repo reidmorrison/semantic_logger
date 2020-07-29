@@ -5,6 +5,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+### Changed
+- Instead of the `.to_s` method we use the `assemble` method of the `SyslogProtocol::Packet` class.
+
 ### Fixed
 
 ### Added
