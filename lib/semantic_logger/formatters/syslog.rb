@@ -7,7 +7,7 @@ end
 module SemanticLogger
   module Formatters
     class Syslog < Default
-      attr_accessor :level_map, :facility
+      attr_accessor :level_map, :facility, :max_size
 
       # Default level map for every log level
       #
@@ -50,9 +50,10 @@ module SemanticLogger
       #   Example:
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
-      def initialize(facility: ::Syslog::LOG_USER, level_map: LevelMap.new)
+      def initialize(facility: ::Syslog::LOG_USER, level_map: LevelMap.new, max_size: Integer)
         @facility  = facility
         @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(level_map)
+        @max_size = max_size
         super()
       end
 
@@ -77,7 +78,7 @@ module SemanticLogger
         packet.content  = message
         packet.time     = log.time
         packet.severity = level_map[log.level]
-        packet.to_s
+        packet.assemble(@max_size)
       end
     end
   end
