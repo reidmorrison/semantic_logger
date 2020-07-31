@@ -75,12 +75,13 @@ Log to a local Syslog daemon
 SemanticLogger.add_appender(appender: :syslog)
 ~~~
 
-Log to a remote Syslog server using TCP:
+Log to a remote Syslog server using TCP with packet size 2048 bytes. By default the size is 1024 bytes:
 
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :syslog,
-  url:      'tcp://myloghost:514'
+  url:      'tcp://myloghost:514',
+  max_size: 2048
 )
 ~~~
 

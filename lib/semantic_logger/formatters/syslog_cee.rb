@@ -7,7 +7,7 @@ end
 module SemanticLogger
   module Formatters
     class SyslogCee < Raw
-      attr_accessor :level_map, :facility
+      attr_accessor :level_map, :facility, :max_size
 
       # CEE JSON Syslog format
       #   Untested prototype code. Based on documentation only.
@@ -23,9 +23,10 @@ module SemanticLogger
       # Example:
       #   # Log via udp to a remote syslog server on host: `server1` and port `8514`, using the CEE format.
       #   SemanticLogger.add_appender(appender: :syslog, formatter: syslog_cee, url: 'udp://server1:8514')
-      def initialize(facility: ::Syslog::LOG_USER, level_map: SemanticLogger::Formatters::Syslog::LevelMap.new)
+      def initialize(facility: ::Syslog::LOG_USER, level_map: SemanticLogger::Formatters::Syslog::LevelMap.new, max_size: Integer)
         @facility  = facility
         @level_map = level_map.is_a?(SemanticLogger::Formatters::Syslog::LevelMap) ? level_map : SemanticLogger::Formatters::Syslog::LevelMap.new(level_map)
+        @max_size = max_size
         super()
       end
 
@@ -49,7 +50,7 @@ module SemanticLogger
         packet.content  = message
         packet.time     = log.time
         packet.severity = level_map[log.level]
-        packet.to_s
+        packet.assemble(@max_size)
       end
     end
   end

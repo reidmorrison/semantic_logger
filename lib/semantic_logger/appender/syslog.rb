@@ -31,7 +31,7 @@ require "socket"
 module SemanticLogger
   module Appender
     class Syslog < SemanticLogger::Subscriber
-      attr_reader :remote_syslog, :url, :server, :port, :protocol, :facility, :options, :level_map
+      attr_reader :remote_syslog, :url, :server, :port, :protocol, :facility, :options, :level_map, :max_size
 
       # Create a Syslog appender instance.
       #
@@ -72,6 +72,10 @@ module SemanticLogger
       #   application: [String]
       #     Identity of the program.
       #     Default: SemanticLogger.application
+      #
+      #   max_size: [Integer]
+      #     Set your own packet size.
+      #     Default: 1024 bytes
       #
       #   options: [Integer]
       #     Default: ::Syslog::LOG_PID | ::Syslog::LOG_CONS
@@ -121,6 +125,7 @@ module SemanticLogger
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
       def initialize(url: "syslog://localhost",
                      facility: ::Syslog::LOG_USER,
+                     max_size: 1024,
                      level_map: SemanticLogger::Formatters::Syslog::LevelMap.new,
                      options: ::Syslog::LOG_PID | ::Syslog::LOG_CONS,
                      tcp_client: {},
@@ -129,6 +134,7 @@ module SemanticLogger
 
         @options            = options
         @facility           = facility
+        @max_size           = max_size
         @level_map          = level_map
         @url                = url
         uri                 = URI(@url)
@@ -209,7 +215,7 @@ module SemanticLogger
           # Format is text output without the time
           SemanticLogger::Formatters::Default.new(time_format: nil)
         else
-          SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map)
+          SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map, max_size: max_size)
         end
       end
     end
