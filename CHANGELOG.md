@@ -2,15 +2,18 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-
 ## [unreleased]
 
 ### Changed
-- Instead of the `.to_s` method we use the `assemble` method of the `SyslogProtocol::Packet` class.
 
 ### Fixed
 
 ### Added
+
+## [4.7.2]
+
+### Changed
+- Make Remote Syslog packet size configurable.
 
 ## [4.7.1]
 
