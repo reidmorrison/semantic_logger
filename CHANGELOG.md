@@ -8,9 +8,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
-- Remove `host` from the `SplunkHttp` appender message body.
-
 ### Added
+
+## [4.7.3]
+
+### Fixed
+
+- Remove `host` from the `SplunkHttp` appender message body.
+- Support Bugsnag 6. Fix infinite loop. #150
+- Fix documentation. #158 
 
 ## [4.7.2]
 
@@ -22,7 +28,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - Fix an undefined method error when handling exceptions from on_log.
 - Remove `environment` from the `SplunkHttp` appender message body.
-- Replace Awesome Print with new supported fork called Amazing Print.
+- Replace Awesome Print with new supported fork called Amazing Print. #156
 - Improve backward compatability. For example: `logger.message("Hello", duration: 20)`
 
 ## [4.7.0]
