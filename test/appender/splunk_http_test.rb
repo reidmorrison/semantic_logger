@@ -58,6 +58,7 @@ module Appender
           body = decompress_data(request.body)
           message = JSON.parse(body)
           assert event = message["event"], message.ai
+          refute_includes message["event"], "host"
           assert_equal @message, event["message"]
           assert_equal level.to_s, event["level"]
           refute event["stack_trace"]

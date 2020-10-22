@@ -90,6 +90,7 @@ module SemanticLogger
       #   https://docs.splunk.com/Documentation/Splunk/latest/Data/FormateventsforHTTPEventCollector
       def call(log, logger)
         h                     = SemanticLogger::Formatters::Raw.new(time_format: :seconds).call(log, logger)
+        h.delete(:host)
         message               = {
           source: logger.application,
           host:   logger.host,
