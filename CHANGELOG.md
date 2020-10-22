@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Remove `host` from the `SplunkHttp` appender message body.
+
 ### Added
 
 ## [4.7.2]
