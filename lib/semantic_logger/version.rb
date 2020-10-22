@@ -1,3 +1,3 @@
 module SemanticLogger
-  VERSION = "4.7.2".freeze
+  VERSION = "4.7.3".freeze
 end
