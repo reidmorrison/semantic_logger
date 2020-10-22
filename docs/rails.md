@@ -392,7 +392,7 @@ config.semantic_logger.backtrace_level = :debug
 By default backtraces are only captured for `:error` and `:fatal` levels since capturing a backtrace
 for every log message is expensive.
 
-This feature can be used in production, but use care since setting the level too low will slow down the application.
+This feature can be used in production, but use with care since setting the level too low will slow down the application.
 
 ### Custom Controller Base Class
 

@@ -54,7 +54,7 @@ Or, even better, pass the actual class itself:
 logger = SemanticLogger[MyClass]
 ~~~
 
-A logger instance should be created for every class so that it's log entries
+A logger instance should be created for every class so that its log entries
 can be uniquely identified from logging entries from other classes.
 
 All logger instances forward their log messages to the global Appender Thread that

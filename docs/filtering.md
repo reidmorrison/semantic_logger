@@ -99,7 +99,7 @@ logger = SemanticLogger[Resque]
 # Filter out all messages containing the text beginning with '*** Checking'
 logger.filter = Proc.new {|log| log.message !~ /\A\*\*\* Checking/ }
 
-# Give Resque its own logger with the custom filter qpplied to reduce it's verbosity
+# Give Resque its own logger with the custom filter applied to reduce its verbosity
 # when logging to all registered appenders
 Resque.logger = logger
 ~~~
