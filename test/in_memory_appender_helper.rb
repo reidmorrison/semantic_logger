@@ -6,6 +6,10 @@ InMemoryAppenderHelper = shared_description do
     appender.message
   end
 
+  let :log_filter do
+    nil
+  end
+
   let :appender do
     InMemoryAppender.new
   end
@@ -19,7 +23,7 @@ InMemoryAppenderHelper = shared_description do
   end
 
   let :logger do
-    SemanticLogger["TestLogger"]
+    SemanticLogger::Logger.new("TestLogger", nil, log_filter)
   end
 
   let :added_appender do

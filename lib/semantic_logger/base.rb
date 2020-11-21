@@ -263,14 +263,22 @@ module SemanticLogger
     #    For example if set to :warn, this appender would only log :warn and :fatal
     #    log messages when other appenders could be logging :info and lower
     #
-    #  filter [Regexp|Proc]
+    #  filter [Regexp|Proc|Module]
     #    RegExp: Only include log messages where the class name matches the supplied
     #    regular expression. All other messages will be ignored
     #    Proc: Only include log messages where the supplied Proc returns true
     #          The Proc must return true or false
+    #    Module: A module that implements `.call`. For example:
+    #      module ComplexFilter
+    #        def self.call(log)
+    #          (/\AExclude/ =~ log.message).nil?
+    #        end
+    #      end
     def initialize(klass, level = nil, filter = nil)
-      # Support filtering all messages to this logger using a Regular Expression or Proc
-      raise ":filter must be a Regexp or Proc" unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc)
+      # Support filtering all messages to this logger instance.
+      unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc) || filter.respond_to?(:call)
+        raise ":filter must be a Regexp, Proc, or implement :call"
+      end
 
       @filter = filter.is_a?(Regexp) ? filter.freeze : filter
       @name   = klass.is_a?(String) ? klass : klass.name

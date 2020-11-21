@@ -8,9 +8,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
-- Remove `host` from the `SplunkHttp` appender message body.
-
 ### Added
+
+## [4.7.4]
+
+### Fixed
+
+- Allow Module filter to be passed in on the logger initializer #162
+
+## [4.7.3]
+
+### Fixed
+
+- Remove `host` from the `SplunkHttp` appender message body.
 
 ## [4.7.2]
 
