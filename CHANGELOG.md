@@ -10,6 +10,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+## [4.7.4]
+
+### Fixed
+
+- Allow Module filter to be passed in on the logger initializer #162
+
 ## [4.7.3]
 
 ### Fixed

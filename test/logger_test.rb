@@ -233,6 +233,41 @@ class LoggerTest < Minitest::Test
               refute log_message
             end
           end
+
+          describe "on the logger initializer" do
+            describe "Proc" do
+              let :log_filter do
+                ->(log) { (/\AExclude/ =~ log.message).nil? }
+              end
+
+              it "filters" do
+                logger.send(level, "Exclude this log message", @hash) { "Calculations" }
+                refute log_message
+              end
+            end
+
+            describe "Module" do
+              let :log_filter do
+                ComplexFilter
+              end
+
+              it "filters" do
+                logger.send(level, "Exclude this log message", @hash) { "Calculations" }
+                refute log_message
+              end
+            end
+
+            describe "RegExp" do
+              let :log_filter do
+                /\ALogger/
+              end
+
+              it "filters" do
+                logger.send(level, "Exclude this log message", @hash) { "Calculations" }
+                refute log_message
+              end
+            end
+          end
         end
       end
     end
