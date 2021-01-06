@@ -58,6 +58,61 @@ For performance reasons the log file is not re-opened with every call.
 When the log file needs to be rotated, use a copy-truncate operation rather
 than deleting the file.
 
+#### JSON log format
+
+When writing json log output, it has the following layout:
+
+~~~json
+{
+  "timestamp": "ISO-8601",
+  
+  "application": "Application name",
+  "environment": "Custom Environment name",
+  "host": "Host name",
+  "pid": "Process Id",
+  "thread": "Thread name or id",
+  "file": "filename",
+  "line": "line number",
+  
+  "level": "trace|debug|info|warn|error|fatal",
+  "level_index": "0|1|2|3|4|5",
+  "message": "The message text without any colorization",
+  "name": "Name of the class that generated the log message. Including namespace, if any.",
+  "tags": ["tag_name 1", "tag_name 2"],
+  "duration": "Human readable duration",
+  "duration_ms": "Duration in milliseconds",
+  "metric": "Name of the metric",
+  "metric_amount": "Size of the metric, usually 1",
+  
+  "named_tags": {
+    "tag1": "any named tags will be inside this named_tags tag",
+    "tag2": "any named tags will be inside this named_tags tag"
+  },
+  
+  "payload": {
+    "field1": "any custom payload fields will be inside this payload tag",
+    "field2": "any custom payload fields will be inside this payload tag"
+  },
+  
+  "exception": {
+    "name": "Exception class name",
+    "message": "Exception message",
+    "stack_trace": ["line 1", "line 2"],
+    "cause": {
+      "name": "Exception class name",
+      "message": "Exception message",
+      "stack_trace": ["line 1", "line 2"]
+    }
+  }
+}
+~~~
+
+Note: 
+* The above JSON layout is formatted for readability. 
+  The actual json layout will be a single line terminated with a single newline.
+  It does not contain any embedded newlines.
+* If a field has a nil value it is excluded from the output json.
+
 ### IO Streams
 
 Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdout
