@@ -17,7 +17,7 @@ module Appender
       it "sends log messages in JSON format" do
         message = nil
         options = nil
-        ::Kafka::Producer.stub_any_instance(:produce, ->(value, **opts) { message = value; options = opts }) do
+        @appender.send(:producer).stub(:produce, ->(value, *opts) { message = value; options = opts.first }) do
           @appender.info(@message)
           @appender.flush
         end

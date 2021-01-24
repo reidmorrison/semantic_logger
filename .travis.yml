@@ -5,12 +5,13 @@ rvm:
   - 2.4.10
   - 2.5.8
   - 2.6.6
-  - 2.7.1
-  - jruby-9.2.11.1
+  - 2.7.2
+  - 3.0.0
+  - jruby-9.2.14.0
 
 matrix:
   allow_failures:
-    - rvm: jruby-9.2.11.1
+    - rvm: jruby-9.2.14.0
 
 jdk:
   - openjdk9

@@ -183,6 +183,10 @@ module SemanticLogger
           delivery_interval:  delivery_interval
         )
       end
+
+      private
+
+      attr_reader :producer
     end
   end
 end
