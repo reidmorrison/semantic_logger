@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.version               = SemanticLogger::VERSION
   spec.platform              = Gem::Platform::RUBY
   spec.authors               = ["Reid Morrison"]
-  spec.homepage              = "https://github.com/rocketjob/semantic_logger"
+  spec.homepage              = "https://logger.rocketjob.io"
   spec.summary               = "Feature rich logging framework, and replacement for existing Ruby & Rails loggers."
   spec.files                 = Dir["lib/**/*", "LICENSE.txt", "Rakefile", "README.md"]
   spec.license               = "Apache-2.0"
