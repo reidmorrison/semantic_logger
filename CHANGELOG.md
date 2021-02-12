@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- Remove the no-longer-used Travis setting `sudo: false`. See [more at the Travis blog](https://blog.travis-ci.com/2018-11-19-required-linux-infrastructure-migration). [#166](https://github.com/rocketjob/semantic_logger/pull/166)
+
 ### Fixed
 
 ### Added
