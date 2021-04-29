@@ -38,6 +38,17 @@ on_worker_boot do
 end
 ~~~
 
+### Rails with Minitest
+
+If you use [parallel tests in Rails with forking](https://guides.rubyonrails.org/testing.html#parallel-testing-with-processes), add the following to your `ActiveSupport::TestCase` class:
+
+~~~ruby
+# test/test_helper.rb
+parallelize_setup do |worker|
+  SemanticLogger.reopen
+end
+~~~
+
 ### Auto-detected Frameworks
 
 The following frameworks are automatically detected by the `Rails Semantic Logger` gem,
