@@ -68,4 +68,4 @@ metric [Object]
 
 * Object supplied when the measure api was called
 
-### [Next: View on Github ==>](https://github.com/rocketjob/semantic_logger)
+### [Next: View on Github ==>](https://github.com/reidmorrison/semantic_logger)

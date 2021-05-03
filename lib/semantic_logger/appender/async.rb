@@ -53,7 +53,7 @@ module SemanticLogger
       # Re-open appender after a fork
       def reopen
         # Workaround CRuby crash on fork by recreating queue on reopen
-        #   https://github.com/rocketjob/semantic_logger/issues/103
+        #   https://github.com/reidmorrison/semantic_logger/issues/103
         @queue&.close
         create_queue
 

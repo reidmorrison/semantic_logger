@@ -11,7 +11,7 @@ for every Controller-Action call.
 ### Rails Support
 
 For the complete list of supported Ruby and Rails versions, see
-the [Testing file](https://github.com/rocketjob/rails_semantic_logger/blob/master/.travis.yml).
+the [Testing file](https://github.com/reidmorrison/rails_semantic_logger/blob/master/.travis.yml).
 
 ### Installation
 
@@ -335,9 +335,9 @@ In `application.rb`:
   config.rails_semantic_logger.format = MyFormatter.new
 ~~~
 
-See [SemanticLogger::Formatters::Color](https://github.com/rocketjob/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb) for the other methods that can be overridden.
+See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb) for the other methods that can be overridden.
 
-To modify and use a different base formatter choose from [the complete list of formatters](https://github.com/rocketjob/semantic_logger/tree/master/lib/semantic_logger/formatters).
+To modify and use a different base formatter choose from [the complete list of formatters](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/formatters).
 
 #### Disable default Rails file logging
 

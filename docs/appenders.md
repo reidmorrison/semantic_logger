@@ -653,7 +653,7 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-See [Net::TCPClient](https://github.com/rocketjob/net_tcp_client) for the remaining options that can be set when the appender is added.
+See [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client) for the remaining options that can be set when the appender is added.
 
 ### UDP Appender
 

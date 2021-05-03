@@ -60,7 +60,7 @@ Rails.logger.info "Hello World"
 # => 2017-04-05 01:05:52.868286 INFO [13143:70216759638540 (irb):11] Rails -- Hello World
 ~~~
 
-See [SemanticLogger::Formatters::Default](https://github.com/rocketjob/semantic_logger/blob/master/lib/semantic_logger/formatters/default.rb) for all the methods that can be replaced to customize the output.
+See [SemanticLogger::Formatters::Default](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/default.rb) for all the methods that can be replaced to customize the output.
 
 #### Example: Replace the colorized log file formatter
 
@@ -91,7 +91,7 @@ Rails.logger.info "Hello World"
 # => 2017-04-05 01:05:52.868286 INFO [13143:70216759638540 (irb):11] Rails -- Hello World
 ~~~
 
-See [SemanticLogger::Formatters::Color](https://github.com/rocketjob/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb) for all the methods that can be replaced to customize the output.
+See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb) for all the methods that can be replaced to customize the output.
 
 #### Example: Replacing the format for an active logger, such as in Rails:
 

@@ -9,7 +9,7 @@ Provide at least:
 * Full Stack Trace, if an exception is being raised.
 
 Note:
-* If the issue is with extensions to Rails to make it use Semantic Logger, please report the issue at [Rails Semantic Logger](https://github.com/rocketjob/rails_semantic_logger/issues).
+* If the issue is with extensions to Rails to make it use Semantic Logger, please report the issue at [Rails Semantic Logger](https://github.com/reidmorrison/rails_semantic_logger/issues).
 * All appender issues should be reported here.
 
 ### Expected Behavior

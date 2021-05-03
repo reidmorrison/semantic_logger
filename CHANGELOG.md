@@ -326,13 +326,13 @@ logger.info message: 'Hello', metric: 'user/hello', duration: 25
     - Deprecated non hash style arguments.
     - For Example:
         - `SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)`
-    - See [Appenders](http://rocketjob.github.io/semantic_logger/appenders.html)
+    - See [Appenders](https://logger.rocketjob.io/appenders.html)
     - Move AnsiColors into its own module: `SemanticLogger::AnsiColors`
 - Appenders now use the same hash style arguments as `SemanticLogger.add_appender`.
 - Appenders use the new common formatters where applicable.
 - Appenders now use custom formatters as the `#call` method for better performance over blocks.
 - Bugsnag appender will now forward `:fatal` errors, since some were being ignored and
-  not being reported in Bugsnag. Changes in [Rails Semantic Logger](http://rocketjob.github.io/semantic_logger/rails.html)
+  not being reported in Bugsnag. Changes in [Rails Semantic Logger](https://logger.rocketjob.io/rails.html)
   allow Rails messages to be sent correctly to Bugsnag.
 - Use Ruby's built-in JSON library
 

@@ -57,7 +57,7 @@ module SemanticLogger
       #     Only used with the TCP protocol.
       #     Specify custom parameters to pass into Net::TCPClient.new
       #     For a list of options see the net_tcp_client documentation:
-      #       https://github.com/rocketjob/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
+      #       https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.

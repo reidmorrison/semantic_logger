@@ -1,15 +1,13 @@
 # Semantic Logger
-[![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://github.com/rocketjob/semantic_logger/workflows/build/badge.svg)](https://github.com/rocketjob/semantic_logger/actions?query=workflow%3Abuild) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg) [![Gitter chat](https://img.shields.io/badge/IRC%20(gitter)-Support-brightgreen.svg)](https://gitter.im/rocketjob/support)
+[![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://github.com/reidmorrison/semantic_logger/workflows/build/badge.svg)](https://github.com/reidmorrison/semantic_logger/actions?query=workflow%3Abuild) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg)
 
 Semantic Logger is a feature rich logging framework, and replacement for existing Ruby & Rails loggers.  
 
-* https://rocketjob.github.io/semantic_logger/
+* https://logger.rocketjob.io/
 
 ## Documentation
 
-[Semantic Logger Guide](http://rocketjob.github.io/semantic_logger)
-
-[Reference Documentation](http://www.rubydoc.info/gems/semantic_logger/)
+[Semantic Logger Guide](https://logger.rocketjob.io/)
 
 ## Upgrading to Semantic Logger v4.4
 
@@ -50,7 +48,7 @@ handles saving log information to multiple destinations / appenders.
 
 ## Rails
 
-When running Rails, use [rails_semantic_logger](http://github.com/rocketjob/rails_semantic_logger)
+When running Rails, use [rails_semantic_logger](http://github.com/reidmorrison/rails_semantic_logger)
 instead of Semantic Logger directly since it will automatically replace the Rails default logger with Semantic Logger.
 
 ## Rocket Job
@@ -129,13 +127,13 @@ SemanticLogger.default_level = :trace
 SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
 ~~~
 
-If running rails, see: [Semantic Logger Rails](http://rocketjob.github.io/semantic_logger/rails.html)
+If running rails, see: [Semantic Logger Rails](https://logger.rocketjob.io/rails.html)
 
 ## Author
 
 [Reid Morrison](https://github.com/reidmorrison)
 
-[Contributors](https://github.com/rocketjob/semantic_logger/graphs/contributors)
+[Contributors](https://github.com/reidmorrison/semantic_logger/graphs/contributors)
 
 ## Versioning
 
