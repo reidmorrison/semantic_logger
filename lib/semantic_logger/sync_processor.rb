@@ -10,7 +10,7 @@ module SemanticLogger
     def_delegator :@appenders, :close
     def_delegator :@appenders, :reopen
 
-    # Allow the internal logger to be overridden from its default of STDERR
+    # Allow the internal logger to be overridden from its default of $stderr
     #   Can be replaced with another Ruby logger or Rails logger, but never to
     #   SemanticLogger::Logger itself since it is for reporting problems
     #   while trying to log to the various appenders
@@ -20,11 +20,11 @@ module SemanticLogger
 
     # Internal logger for SemanticLogger
     #   For example when an appender is not working etc..
-    #   By default logs to STDERR
+    #   By default logs to $stderr
     def self.logger
       @logger ||=
         begin
-          l      = SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
+          l      = SemanticLogger::Appender::File.new(io: $stderr, level: :warn)
           l.name = name
           l
         end

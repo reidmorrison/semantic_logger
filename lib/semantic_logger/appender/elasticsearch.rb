@@ -1,7 +1,8 @@
 begin
   require "elasticsearch"
 rescue LoadError
-  raise LoadError, 'Gem elasticsearch is required for logging to Elasticsearch. Please add the gem "elasticsearch" to your Gemfile.'
+  raise LoadError,
+        'Gem elasticsearch is required for logging to Elasticsearch. Please add the gem "elasticsearch" to your Gemfile.'
 end
 
 require "date"
@@ -17,7 +18,8 @@ require "date"
 module SemanticLogger
   module Appender
     class Elasticsearch < SemanticLogger::Subscriber
-      attr_accessor :url, :index, :date_pattern, :type, :client, :flush_interval, :timeout_interval, :batch_size, :elasticsearch_args
+      attr_accessor :url, :index, :date_pattern, :type, :client, :flush_interval, :timeout_interval, :batch_size,
+                    :elasticsearch_args
 
       # Create Elasticsearch appender over persistent HTTP(S)
       #

@@ -82,11 +82,9 @@ module SemanticLogger
       return unless @subscribers
 
       @subscribers.each do |subscriber|
-        begin
-          subscriber.call(log)
-        rescue Exception => e
-          processor.logger.error("Exception calling :on_log subscriber", e)
-        end
+        subscriber.call(log)
+      rescue Exception => e
+        processor.logger.error("Exception calling :on_log subscriber", e)
       end
     end
   end

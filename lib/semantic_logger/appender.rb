@@ -66,7 +66,8 @@ module SemanticLogger
         elsif appender.is_a?(Subscriber)
           appender
         else
-          raise(ArgumentError, "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
+          raise(ArgumentError,
+                "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
         end
       elsif metric
         if metric.is_a?(Symbol)
@@ -74,10 +75,12 @@ module SemanticLogger
         elsif metric.is_a?(Subscriber)
           metric
         else
-          raise(ArgumentError, "Parameter :metric must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
+          raise(ArgumentError,
+                "Parameter :metric must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
         end
       else
-        raise(ArgumentError, "To create an appender it must supply one of the following: :io, :file_name, :appender, :metric, or :logger")
+        raise(ArgumentError,
+              "To create an appender it must supply one of the following: :io, :file_name, :appender, :metric, or :logger")
       end
     end
 

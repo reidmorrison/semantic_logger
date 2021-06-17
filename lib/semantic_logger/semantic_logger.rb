@@ -101,7 +101,7 @@ module SemanticLogger
   #   Or,
   #   io: [IO]
   #     An IO Stream to log to.
-  #     For example STDOUT, STDERR, etc.
+  #     For example $stdout, $stderr, etc.
   #
   #   Or,
   #   appender: [Symbol|SemanticLogger::Subscriber]
@@ -138,14 +138,14 @@ module SemanticLogger
   # Examples:
   #
   #   # Send all logging output to Standard Out (Screen)
-  #   SemanticLogger.add_appender(io: STDOUT)
+  #   SemanticLogger.add_appender(io: $stdout)
   #
   #   # Send all logging output to a file
   #   SemanticLogger.add_appender(file_name: 'logfile.log')
   #
   #   # Send all logging output to a file and only :info and above to standard output
   #   SemanticLogger.add_appender(file_name: 'logfile.log')
-  #   SemanticLogger.add_appender(io: STDOUT, level: :info)
+  #   SemanticLogger.add_appender(io: $stdout, level: :info)
   #
   # Log to log4r, Logger, etc.:
   #
@@ -154,7 +154,7 @@ module SemanticLogger
   #   require 'semantic_logger'
   #
   #   # Built-in Ruby logger
-  #   log = Logger.new(STDOUT)
+  #   log = Logger.new($stdout)
   #   log.level = Logger::DEBUG
   #
   #   SemanticLogger.default_level = :debug

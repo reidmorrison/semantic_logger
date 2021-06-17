@@ -27,13 +27,13 @@ class SemanticLoggerTest < Minitest::Test
       end
 
       it "adds stream appender" do
-        @appender = SemanticLogger.add_appender(io: STDOUT)
+        @appender = SemanticLogger.add_appender(io: $stdout)
         assert @appender.is_a?(SemanticLogger::Appender::File)
         assert SemanticLogger.appenders.include?(@appender)
       end
 
       it "adds symbol appender" do
-        @appender = SemanticLogger.add_appender(appender: :wrapper, logger: Logger.new(STDOUT))
+        @appender = SemanticLogger.add_appender(appender: :wrapper, logger: Logger.new($stdout))
         assert @appender.is_a?(SemanticLogger::Appender::Wrapper), -> { @appender.ai }
         assert SemanticLogger.appenders.include?(@appender)
       end
@@ -45,7 +45,7 @@ class SemanticLoggerTest < Minitest::Test
       end
 
       it "adds logger wrapper appender" do
-        @appender = SemanticLogger.add_appender(logger: ::Logger.new(STDOUT))
+        @appender = SemanticLogger.add_appender(logger: ::Logger.new($stdout))
         assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
         assert @appender.logger.is_a?(::Logger)
         assert SemanticLogger.appenders.include?(@appender)
@@ -53,7 +53,7 @@ class SemanticLoggerTest < Minitest::Test
       end
 
       it "adds logger wrapper appender with color formatter" do
-        @appender = SemanticLogger.add_appender(logger: ::Logger.new(STDOUT), formatter: :color)
+        @appender = SemanticLogger.add_appender(logger: ::Logger.new($stdout), formatter: :color)
         assert @appender.is_a?(SemanticLogger::Appender::Wrapper)
         assert @appender.logger.is_a?(::Logger)
         assert SemanticLogger.appenders.include?(@appender)
@@ -61,7 +61,7 @@ class SemanticLoggerTest < Minitest::Test
       end
 
       it "adds appender" do
-        @appender = SemanticLogger.add_appender(appender: SemanticLogger::Appender::File.new(io: STDOUT))
+        @appender = SemanticLogger.add_appender(appender: SemanticLogger::Appender::File.new(io: $stdout))
         assert @appender.is_a?(SemanticLogger::Appender::File), @appender.ai
         assert SemanticLogger.appenders.include?(@appender)
       end

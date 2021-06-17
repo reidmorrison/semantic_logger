@@ -114,9 +114,7 @@ module SemanticLogger
 
       # Elastic logging: Log when :duration exceeds :min_duration
       # Except if there is an exception when it will always be logged
-      if duration
-        return false if (duration < min_duration) && exception.nil?
-      end
+      return false if duration && ((duration < min_duration) && exception.nil?)
 
       if backtrace
         self.backtrace = Utils.extract_backtrace(backtrace)

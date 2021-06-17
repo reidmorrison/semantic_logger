@@ -21,7 +21,7 @@ formatter = Proc.new do |log|
   # This formatter just returns the log struct as a string
   log.inspect
 end
-SemanticLogger.add_appender(io: STDOUT, formatter: formatter)
+SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 
 logger = SemanticLogger['Hello']
 logger.info "Hello World"

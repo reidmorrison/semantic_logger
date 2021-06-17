@@ -63,7 +63,7 @@ module SemanticLogger
     #    SemanticLogger.default_level = :info
     #
     #    # Log to screen
-    #    SemanticLogger.add_appender(io: STDOUT, formatter: :color)
+    #    SemanticLogger.add_appender(io: $stdout, formatter: :color)
     #
     #    # And log to a file at the same time
     #    SemanticLogger.add_appender(file_name: 'application.log', formatter: :color)
@@ -376,7 +376,7 @@ module SemanticLogger
         exception = e
       ensure
         # Must use ensure block otherwise a `return` in the yield above will skip the log entry
-        log       = Log.new(name, level, index)
+        log = Log.new(name, level, index)
         exception ||= params[:exception]
         message   = params[:message] if params[:message]
         duration  =

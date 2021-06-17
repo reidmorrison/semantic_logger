@@ -8,7 +8,7 @@
 # Example:
 #   require 'semantic_logger'
 #   SemanticLogger.default_level = :debug
-#   SemanticLogger.add_appender(io: STDOUT, formatter: :color)
+#   SemanticLogger.add_appender(io: $stdout, formatter: :color)
 #
 #   class ExternalSupplier
 #     # Create class and instance logger methods

@@ -26,42 +26,36 @@ module SemanticLogger
       any? do |appender|
         next unless appender.is_a?(Appender::File)
 
-        [STDERR, STDOUT].include?(appender.instance_variable_get(:@log))
+        [$stderr, $stdout].include?(appender.instance_variable_get(:@log))
       end
     end
 
     def log(log)
       each do |appender|
-        begin
-          appender.log(log) if appender.should_log?(log)
-        rescue Exception => e
-          logger.error "Failed to log to appender: #{appender.name}", e
-        end
+        appender.log(log) if appender.should_log?(log)
+      rescue Exception => e
+        logger.error "Failed to log to appender: #{appender.name}", e
       end
     end
 
     def flush
       each do |appender|
-        begin
-          logger.trace "Flushing appender: #{appender.name}"
-          appender.flush
-        rescue Exception => e
-          logger.error "Failed to flush appender: #{appender.name}", e
-        end
+        logger.trace "Flushing appender: #{appender.name}"
+        appender.flush
+      rescue Exception => e
+        logger.error "Failed to flush appender: #{appender.name}", e
       end
       logger.trace "All appenders flushed"
     end
 
     def close
       to_a.each do |appender|
-        begin
-          logger.trace "Closing appender: #{appender.name}"
-          delete(appender)
-          appender.flush
-          appender.close
-        rescue Exception => e
-          logger.error "Failed to close appender: #{appender.name}", e
-        end
+        logger.trace "Closing appender: #{appender.name}"
+        delete(appender)
+        appender.flush
+        appender.close
+      rescue Exception => e
+        logger.error "Failed to close appender: #{appender.name}", e
       end
       logger.trace "All appenders closed and removed from appender list"
     end
@@ -69,14 +63,12 @@ module SemanticLogger
     # After a fork the appender thread is not running, start it if it is not running.
     def reopen
       each do |appender|
-        begin
-          next unless appender.respond_to?(:reopen)
+        next unless appender.respond_to?(:reopen)
 
-          logger.trace "Reopening appender: #{appender.name}"
-          appender.reopen
-        rescue Exception => e
-          logger.error "Failed to re-open appender: #{appender.name}", e
-        end
+        logger.trace "Reopening appender: #{appender.name}"
+        appender.reopen
+      rescue Exception => e
+        logger.error "Failed to re-open appender: #{appender.name}", e
       end
       logger.trace "All appenders re-opened"
     end

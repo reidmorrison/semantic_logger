@@ -1,8 +1,9 @@
 AllCops:
-  TargetRubyVersion: 2.4
   Exclude:
     - ".git/**/*"
     - "docs/**/*"
+  NewCops: enable
+  TargetRubyVersion: 2.5
 
 #
 # RuboCop built-in settings.
@@ -45,7 +46,7 @@ Metrics/BlockLength:
   Exclude:
     - "test/**/*"
     - "**/*/cli.rb"
-  ExcludedMethods:
+  IgnoredMethods:
     - "aasm"
     - "included"
 

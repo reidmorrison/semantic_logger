@@ -109,14 +109,14 @@ module SemanticLogger
       def payload
         return unless log.payload?
 
-        if !log.payload.respond_to?(:ai)
-          super
-        else
+        if log.payload.respond_to?(:ai)
           begin
             "-- #{log.payload.ai(@ai_options)}"
           rescue StandardError
             super
           end
+        else
+          super
         end
       end
 

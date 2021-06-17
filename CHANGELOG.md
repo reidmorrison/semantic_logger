@@ -185,12 +185,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Upgrade notes:
 - As noted above deprecated arguments have been removed, so the following code, if any:
 ~~~ruby
-SemanticLogger::Appender::File.new(STDERR, :warn)
+SemanticLogger::Appender::File.new($stderr, :warn)
 ~~~
 
 Needs to be replaced with keyword arguments:
 ~~~ruby
-SemanticLogger::Appender::File.new(io: STDERR, level: :warn)
+SemanticLogger::Appender::File.new(io: $stderr, level: :warn)
 ~~~
 
 ## [4.0.0]
@@ -625,7 +625,7 @@ logger.info message: 'Hello', metric: 'user/hello', duration: 25
 ## [0.5.0] - 2012-09-11
 ### Added
 - Log using the time the log was captured, not when it was written to the appender.
-- File and STDOUT logging appenders.
+- File and $stdout logging appenders.
     - Faster than going via the Ruby Logger.
 - Railtie support for Rails 3 and now 3.2.
 - Replace Rails Buffered Logger with SemanticLogger File Appender.

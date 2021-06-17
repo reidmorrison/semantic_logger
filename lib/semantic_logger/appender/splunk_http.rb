@@ -89,9 +89,9 @@ module SemanticLogger
       # For splunk format requirements see:
       #   https://docs.splunk.com/Documentation/Splunk/latest/Data/FormateventsforHTTPEventCollector
       def call(log, logger)
-        h                     = SemanticLogger::Formatters::Raw.new(time_format: :seconds).call(log, logger)
+        h = SemanticLogger::Formatters::Raw.new(time_format: :seconds).call(log, logger)
         h.delete(:host)
-        message               = {
+        message = {
           source: logger.application,
           host:   logger.host,
           time:   h.delete(:time),

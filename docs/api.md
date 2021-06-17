@@ -570,7 +570,7 @@ Calling the above function and then logging the exception:
 
 ~~~ruby
 require 'semantic_logger'
-SemanticLogger.add_appender(io: STDOUT, formatter: :color)
+SemanticLogger.add_appender(io: $stdout, formatter: :color)
 logger = SemanticLogger['Demo']
 
 begin

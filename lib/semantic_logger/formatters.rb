@@ -1,17 +1,15 @@
 module SemanticLogger
   module Formatters
-    # @formatter:off
-    autoload :Base,             "semantic_logger/formatters/base"
-    autoload :Color,            "semantic_logger/formatters/color"
-    autoload :Default,          "semantic_logger/formatters/default"
-    autoload :Json,             "semantic_logger/formatters/json"
-    autoload :Raw,              "semantic_logger/formatters/raw"
-    autoload :OneLine,          "semantic_logger/formatters/one_line"
-    autoload :Signalfx,         "semantic_logger/formatters/signalfx"
-    autoload :Syslog,           "semantic_logger/formatters/syslog"
-    autoload :Fluentd,          "semantic_logger/formatters/fluentd"
-    autoload :Logfmt,            "semantic_logger/formatters/logfmt"
-    # @formatter:on
+    autoload :Base,     "semantic_logger/formatters/base"
+    autoload :Color,    "semantic_logger/formatters/color"
+    autoload :Default,  "semantic_logger/formatters/default"
+    autoload :Json,     "semantic_logger/formatters/json"
+    autoload :Raw,      "semantic_logger/formatters/raw"
+    autoload :OneLine,  "semantic_logger/formatters/one_line"
+    autoload :Signalfx, "semantic_logger/formatters/signalfx"
+    autoload :Syslog,   "semantic_logger/formatters/syslog"
+    autoload :Fluentd,  "semantic_logger/formatters/fluentd"
+    autoload :Logfmt,   "semantic_logger/formatters/logfmt"
 
     # Return formatter that responds to call.
     #

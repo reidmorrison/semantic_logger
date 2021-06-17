@@ -715,7 +715,7 @@ while still writing to the existing destinations.
 * Or, write to a destination not currently supported by Semantic Logger.
 
 ~~~ruby
-ruby_logger = Logger.new(STDOUT)
+ruby_logger = Logger.new($stdout)
 
 # Log to an existing Ruby Logger instance
 SemanticLogger.add_appender(logger: ruby_logger)

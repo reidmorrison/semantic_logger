@@ -202,7 +202,6 @@ class LoggerTest < Minitest::Test
             end
 
             it "RegExp" do
-              filter          = /\ALogger/
               appender.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
@@ -226,7 +225,6 @@ class LoggerTest < Minitest::Test
             end
 
             it "RegExp" do
-              filter        = /\ALogger/
               logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 

@@ -9,7 +9,7 @@ module Appender
 
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
-          bugsnag_level   =
+          bugsnag_level =
             case level
             when :warn
               "warning"
@@ -32,7 +32,7 @@ module Appender
         end
 
         it "sends #{level} custom attributes" do
-          exception, hash, severity = stub_bugsnag do
+          exception, hash, _severity = stub_bugsnag do
             appender.send(level, log_message, key1: 1, key2: "a")
           end
           if %i[trace debug].include?(level)
@@ -48,8 +48,8 @@ module Appender
         end
 
         it "sends #{level} exceptions" do
-          error           = RuntimeError.new("Hello World")
-          exception, hash, severity = stub_bugsnag do
+          error = RuntimeError.new("Hello World")
+          exception, hash, _severity = stub_bugsnag do
             appender.send(level, log_message, error)
           end
           if %i[trace debug].include?(level)

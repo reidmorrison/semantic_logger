@@ -36,7 +36,7 @@ module SemanticLogger
       #    SemanticLogger.default_level = :info
       #
       #    # Log to screen
-      #    SemanticLogger.add_appender(io: STDOUT, formatter: :color)
+      #    SemanticLogger.add_appender(io: $stdout, formatter: :color)
       #
       #    # And log to a file at the same time
       #    SemanticLogger.add_appender(file_name: 'application.log', formatter: :color)
@@ -52,7 +52,7 @@ module SemanticLogger
       #    SemanticLogger.default_level = :trace
       #
       #    # Log to screen but only display :info and above
-      #    SemanticLogger.add_appender(io: STDOUT, level: :info)
+      #    SemanticLogger.add_appender(io: $stdout, level: :info)
       #
       #    # And log to a file at the same time, including all :trace level data
       #    SemanticLogger.add_appender(file_name: 'application.log')

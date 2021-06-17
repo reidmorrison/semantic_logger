@@ -1,4 +1,4 @@
-require 'json'
+require "json"
 
 module SemanticLogger
   module Formatters
@@ -24,13 +24,13 @@ module SemanticLogger
       end
 
       def handle_payload
-        return unless @raw.has_key? :payload
+        return unless @raw.key? :payload
 
         @parsed = @parsed.merge(@raw[:payload])
       end
 
       def handle_exception
-        return unless @raw.has_key? :exception
+        return unless @raw.key? :exception
 
         @parsed[:tag] = "exception"
         @parsed = @parsed.merge(@raw[:exception])
@@ -41,7 +41,7 @@ module SemanticLogger
           "#{key}=#{parse_value(value)}"
         end
 
-        flattened.join(' ')
+        flattened.join(" ")
       end
 
       def parse_value(value)

@@ -10,22 +10,22 @@ module Appender
       attr_accessor :message
 
       Logger::Severity.constants.each do |level|
-        class_eval <<-EOT, __FILE__, __LINE__
-        def #{level.downcase}(message = nil, progname = nil)
-          if message
-            self.message = message
-          elsif block_given?
-            self.message = yield
-          else
-            self.message = progname
+        class_eval <<~LEVEL_CODE, __FILE__, __LINE__ + 1
+          def #{level.downcase}(message = nil, progname = nil)
+            if message
+              self.message = message
+            elsif block_given?
+              self.message = yield
+            else
+              self.message = progname
+            end
+            self.message
           end
-          self.message
-        end
 
-        def #{level}?
-          @true
-        end
-        EOT
+          def #{level}?
+            @true
+          end
+        LEVEL_CODE
       end
 
       def flush

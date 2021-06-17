@@ -24,11 +24,9 @@ module SemanticLogger
         end
 
         let(:set_exception) do
-          begin
-            raise "Oh no"
-          rescue Exception => e
-            log.exception = e
-          end
+          raise "Oh no"
+        rescue Exception => e
+          log.exception = e
         end
 
         let(:backtrace) do
