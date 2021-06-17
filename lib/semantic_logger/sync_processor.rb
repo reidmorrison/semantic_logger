@@ -32,8 +32,8 @@ module SemanticLogger
 
     attr_reader :appenders
 
-    def initialize
-      @appenders = Appenders.new(self.class.logger.dup)
+    def initialize(appenders = nil)
+      @appenders = appenders || Appenders.new(self.class.logger.dup)
     end
 
     def start

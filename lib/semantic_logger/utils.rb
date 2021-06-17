@@ -32,29 +32,48 @@ module SemanticLogger
       end
     end
 
-    SELF_PATTERN = File.join("lib", "semantic_logger")
-
-    # Extract the backtrace leaving out the last few Semantic Logger lines.
+    # Extract the backtrace stripping off the leading semantic logger entries.
+    # Leaves all other system and gem path entries in place.
     def self.extract_backtrace(stack = caller)
-      while (first = stack.first) && first.include?(SELF_PATTERN)
+      while (first = stack.first) && extract_path?(first)
         stack.shift
       end
       stack
     end
 
-    # Strips off all gems and built-in ruby code paths from the top of the stack until application code is found.
+    def self.extract_paths
+      @extract_paths ||= %w[lib/semantic_logger lib/rails_semantic_logger]
+    end
+
+    # Whether this path should be excluded from any cleansed backtrace
+    def self.extract_path?(path)
+      extract_paths.any? { |exclude| path.include?(exclude) }
+    end
+
+    # Try to strip everything off of the supplied backtrace, until the first application stack entry is at the top.
+    # For example all leading gem paths and built-in ruby code paths are removed from the top.
+    # Once the first application entry is found, the remaining stack is returned.
     def self.strip_backtrace(stack = caller)
-      while (first = stack.first) && system_path?(first)
+      while (first = stack.first) && (strip_path?(first) || extract_path?(first))
         stack.shift
       end
       stack
     end
 
-    GEM_ROOT = File.expand_path("../../..", __dir__) + "/"
+    # Paths to exclude in the stripped backtrace
+    # Includes Gems and built-in Ruby code paths
+    def self.strip_paths
+      @strip_paths ||=
+        begin
+          paths = Gem.path | [Gem.default_dir]
+          paths << RbConfig::CONFIG["rubylibdir"]
+          paths
+        end
+    end
 
-    def self.system_path?(path)
-      path.start_with?(GEM_ROOT) ||
-        path.start_with?(RbConfig::CONFIG["rubylibdir"])
+    # Whether this path should be excluded from any cleansed backtrace
+    def self.strip_path?(path)
+      strip_paths.any? { |exclude| path.start_with?(exclude) }
     end
   end
 end

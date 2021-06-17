@@ -10,8 +10,24 @@ module SemanticLogger
 
     def add(**args, &block)
       appender = SemanticLogger::Appender.factory(**args, &block)
+
+      if appender.is_a?(Appender::File) && console_output?
+        logger.warn "Ignoring attempt to add a second console appender since it would result in duplicate console output."
+        return
+      end
+
       self << appender
       appender
+    end
+
+    # Whether any of the existing appenders already output to the console?
+    # I.e. Writes to stdout or stderr.
+    def console_output?
+      any? do |appender|
+        next unless appender.is_a?(Appender::File)
+
+        [STDERR, STDOUT].include?(appender.instance_variable_get(:@log))
+      end
     end
 
     def log(log)
@@ -37,12 +53,12 @@ module SemanticLogger
     end
 
     def close
-      each do |appender|
+      to_a.each do |appender|
         begin
           logger.trace "Closing appender: #{appender.name}"
+          delete(appender)
           appender.flush
           appender.close
-          delete(appender)
         rescue Exception => e
           logger.error "Failed to close appender: #{appender.name}", e
         end

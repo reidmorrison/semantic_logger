@@ -21,7 +21,19 @@ module SemanticLogger
     end
 
     def self.processor
-      @processor ||= SemanticLogger.sync? ? SyncProcessor.new : Processor.new
+      @processor ||= Processor.new
+    end
+
+    # Switch to the synchronous processor
+    def self.sync!
+      return if @processor.is_a?(SyncProcessor)
+
+      @processor = SyncProcessor.new(@processor&.appenders)
+    end
+
+    # Running without the background logging thread?
+    def self.sync?
+      processor.is_a?(SyncProcessor)
     end
 
     # Returns a Logger instance

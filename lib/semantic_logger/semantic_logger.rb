@@ -173,7 +173,15 @@ module SemanticLogger
   # Remove an existing appender
   # Currently only supports appender instances
   def self.remove_appender(appender)
+    return unless appender
+
     Logger.processor.appenders.delete(appender)
+    appender.close
+  end
+
+  # Clear out all previously registered appenders
+  def self.clear_appenders!
+    Logger.processor.close
   end
 
   # Returns [SemanticLogger::Subscriber] a copy of the list of active
@@ -494,12 +502,12 @@ module SemanticLogger
   # I.e. Instead of logging messages in a separate thread for better performance,
   # log them using the current thread.
   def self.sync!
-    @sync = true
+    Logger.sync!
   end
 
   # Running in synchronous mode?
   def self.sync?
-    @sync
+    Logger.sync?
   end
 
   # Initial default Level for all new instances of SemanticLogger::Logger

@@ -121,7 +121,7 @@ module SemanticLogger
       if backtrace
         self.backtrace = Utils.extract_backtrace(backtrace)
       elsif level_index >= SemanticLogger.backtrace_level_index
-        self.backtrace = Utils.extract_backtrace
+        self.backtrace = Utils.extract_backtrace(caller)
       end
 
       true
