@@ -4,13 +4,29 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
-- adds Logfmt formatter
-
 ### Changed
 
 ### Fixed
 
 ### Added
+
+## [4.8.0]
+
+### Changed
+
+- Dropped support for Ruby 2.4 and 2.5.
+- Moved testing to Github Actions.
+
+### Fixed
+
+- Allow `SemanticLogger.sync!` to be called after appenders have already been created.
+- Refactor `SemanticLogger::Utils.extract_backtrace` for better backtraces in Rails Semantic Logger.
+
+### Added
+
+- Support for Ruby v3.
+- New Logfmt formatter. #170
+- Prevent multiple console (stdout or stderr) appenders from being added.
 
 ## [4.7.4]
 
