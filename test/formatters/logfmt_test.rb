@@ -21,9 +21,11 @@ module SemanticLogger
         end
       
         let(:set_exception) do
-          raise "Oh no"
-        rescue StandardError => e
-          log.exception = e
+          begin
+            raise "Oh no"
+          rescue StandardError => e
+            log.exception = e
+          end
         end
 
         describe "call" do
