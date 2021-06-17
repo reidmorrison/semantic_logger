@@ -10,6 +10,7 @@ module SemanticLogger
     autoload :Signalfx,         "semantic_logger/formatters/signalfx"
     autoload :Syslog,           "semantic_logger/formatters/syslog"
     autoload :Fluentd,          "semantic_logger/formatters/fluentd"
+    autoload :Logfmt,            "semantic_logger/formatters/logfmt"
     # @formatter:on
 
     # Return formatter that responds to call.
