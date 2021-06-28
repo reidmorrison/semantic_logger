@@ -119,6 +119,23 @@ module Appender
           assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ DEBUG \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- \n/, @io.string)
         end
       end
+
+      describe "#console_output?" do
+        it "logs to stdout" do
+          appender = SemanticLogger::Appender::File.new(io: $stdout)
+          assert appender.console_output?
+        end
+
+        it "logs to stderr" do
+          appender = SemanticLogger::Appender::File.new(io: $stderr)
+          assert appender.console_output?
+        end
+
+        it "logs to file" do
+          appender = SemanticLogger::Appender::File.new(file_name: "test.log")
+          refute appender.console_output?
+        end
+      end
     end
   end
 end

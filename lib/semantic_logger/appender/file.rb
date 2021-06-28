@@ -105,6 +105,10 @@ module SemanticLogger
       def flush
         @log.flush if @log.respond_to?(:flush)
       end
+
+      def console_output?
+        [$stderr, $stdout].include?(@log)
+      end
     end
   end
 end

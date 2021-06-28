@@ -11,8 +11,8 @@ module SemanticLogger
     def add(**args, &block)
       appender = SemanticLogger::Appender.factory(**args, &block)
 
-      if appender.is_a?(Appender::File) && console_output?
-        logger.warn "Ignoring attempt to add a second console appender since it would result in duplicate console output."
+      if appender.respond_to?(:console_output?) && appender.console_output? && console_output?
+        logger.warn "Ignoring attempt to add a second console appender: #{appender.class.name} since it would result in duplicate console output."
         return
       end
 
@@ -23,11 +23,7 @@ module SemanticLogger
     # Whether any of the existing appenders already output to the console?
     # I.e. Writes to stdout or stderr.
     def console_output?
-      any? do |appender|
-        next unless appender.is_a?(Appender::File)
-
-        [$stderr, $stdout].include?(appender.instance_variable_get(:@log))
-      end
+      any? { |appender| appender.respond_to?(:console_output?) && appender.console_output? }
     end
 
     def log(log)

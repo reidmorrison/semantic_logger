@@ -4,11 +4,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
-### Changed
+## [4.8.1]
 
-### Fixed
-
-### Added
+- Fixed issue where adding a file appender was being ignored after a console appender had already been added.
 
 ## [4.8.0]
 
