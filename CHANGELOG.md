@@ -12,7 +12,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
-- Dropped support for Ruby 2.4 and 2.5.
+- Dropped support for Ruby 2.3 and 2.4.
 - Moved testing to Github Actions.
 
 ### Fixed
