@@ -32,7 +32,14 @@ module SemanticLogger
   module Loggable
     def self.included(base)
       base.extend ClassMethods
+      base.singleton_class.class_eval do
+        undef_method :logger if method_defined?(:logger)
+        undef_method :logger= if method_defined?(:logger=)
+      end
       base.class_eval do
+        undef_method :logger if method_defined?(:logger)
+        undef_method :logger= if method_defined?(:logger=)
+
         # Returns [SemanticLogger::Logger] class level logger
         def self.logger
           @semantic_logger ||= SemanticLogger[self]
