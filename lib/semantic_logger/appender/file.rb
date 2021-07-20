@@ -62,9 +62,14 @@ module SemanticLogger
       def initialize(io: nil, file_name: nil, **args, &block)
         if io
           @log = io
+          unless @log.respond_to?(:write)
+            raise(ArgumentError, "SemanticLogging::Appender::File :io is not a valid IO instance: #{io.inspect}")
+          end
         else
           @file_name = file_name
-          raise "SemanticLogging::Appender::File missing mandatory parameter :file_name or :io" unless file_name
+          unless file_name
+            raise(ArgumentError, "SemanticLogging::Appender::File missing mandatory parameter :file_name or :io")
+          end
 
           reopen
         end
