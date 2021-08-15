@@ -5,8 +5,10 @@ module Appender
   class MongoDBTest < Minitest::Test
     describe SemanticLogger::Appender::MongoDB do
       before do
+        skip "Set env var MONGO_HOST to run Mongo tests" unless ENV["MONGO_HOST"]
+
         @appender = SemanticLogger::Appender::MongoDB.new(
-          uri:             "mongodb://127.0.0.1:27017/test",
+          uri:             "mongodb://#{ENV['MONGO_HOST']}/test",
           collection_size: 10 * 1024**2, # 10MB
           host:            "test",
           application:     "test_application",

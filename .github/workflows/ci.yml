@@ -13,6 +13,8 @@ jobs:
         image: mongo
         ports:
           - 27017:27017
+    env:
+      MONGO_HOST: 27017:27017
     strategy:
       fail-fast: false
       matrix:

@@ -14,7 +14,8 @@ gem "bugsnag"
 # [optional] Rabbitmq appender
 gem "bunny"
 # [optional] Elasticsearch appender
-gem "elasticsearch"
+# 7.14 has a breaking API change.
+gem "elasticsearch", "~>7.13.0"
 # [optional] Graylog appender
 gem "gelf"
 # [optional] Honeybadger appender
@@ -29,6 +30,7 @@ gem "mongo"
 gem "net_tcp_client"
 # [optional] Splunk appender
 gem "splunk-sdk-ruby"
+gem "nokogiri"
 # [optional] Statsd metrics
 gem "statsd-ruby"
 # [optional] Sentry appender
