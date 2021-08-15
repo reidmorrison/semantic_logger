@@ -4,7 +4,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
-- Fixed method redifinition warnings when Rails is also used
+## [4.8.2]
+
+- Fixed method redefinition warnings when Rails is also used.
+- Validate IO object can write when supplied to an IO appender.
 
 ## [4.8.1]
 
