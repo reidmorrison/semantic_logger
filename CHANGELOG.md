@@ -4,6 +4,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Fixed method redifinition warnings when Rails is also used
+
 ## [4.8.1]
 
 - Fixed issue where adding a file appender was being ignored after a console appender had already been added.
