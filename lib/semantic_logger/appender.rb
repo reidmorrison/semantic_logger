@@ -9,6 +9,7 @@ module SemanticLogger
     autoload :File,              "semantic_logger/appender/file"
     autoload :Graylog,           "semantic_logger/appender/graylog"
     autoload :Honeybadger,       "semantic_logger/appender/honeybadger"
+    autoload :IO,                "semantic_logger/appender/io"
     autoload :Kafka,             "semantic_logger/appender/kafka"
     autoload :Sentry,            "semantic_logger/appender/sentry"
     autoload :Http,              "semantic_logger/appender/http"
@@ -32,7 +33,7 @@ module SemanticLogger
       appender = build(**args, &block)
 
       # If appender implements #batch, then it should use the batch proxy by default.
-      batch = true if batch.nil? && appender.respond_to?(:batch)
+      batch    = true if batch.nil? && appender.respond_to?(:batch)
 
       if batch == true
         Appender::AsyncBatch.new(
@@ -56,8 +57,10 @@ module SemanticLogger
 
     # Returns [Subscriber] instance from the supplied options.
     def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &block)
-      if io || file_name
-        SemanticLogger::Appender::File.new(io: io, file_name: file_name, **args, &block)
+      if file_name
+        SemanticLogger::Appender::File.new(file_name, **args, &block)
+      elsif io
+        SemanticLogger::Appender::IO.new(io, **args, &block)
       elsif logger
         SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &block)
       elsif appender

@@ -8,7 +8,7 @@ class FormattersTest < Minitest::Test
       end
 
       let :appender do
-        SemanticLogger::Appender::File.new(io: $stdout)
+        SemanticLogger::Appender::IO.new($stdout)
       end
 
       it "from a symbol" do

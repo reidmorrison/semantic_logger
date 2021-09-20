@@ -4,6 +4,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+## [4.9.0]
+
+- Break apart file and io appenders, adding retry with re-open capability when writing to a file fails.
+
 ## [4.8.2]
 
 - Fixed method redefinition warnings when Rails is also used.

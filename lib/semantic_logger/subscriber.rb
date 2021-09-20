@@ -22,6 +22,11 @@ module SemanticLogger
       # NOOP
     end
 
+    # Method called to log an event
+    def log(log)
+      raise NotImplementedError
+    end
+
     # Returns [SemanticLogger::Formatters::Default] default formatter for this subscriber.
     def default_formatter
       SemanticLogger::Formatters::Default.new
@@ -66,6 +71,11 @@ module SemanticLogger
     # Whether this log entry meets the criteria to be logged by this appender.
     def should_log?(log)
       super(log) && (log.metric_only? ? metrics? : true)
+    end
+
+    # Whether this appender is logging to stdout or stderror
+    def console_output?
+      false
     end
 
     private

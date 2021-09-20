@@ -24,7 +24,7 @@ module SemanticLogger
     def self.logger
       @logger ||=
         begin
-          l      = SemanticLogger::Appender::File.new(io: $stderr, level: :warn)
+          l      = SemanticLogger::Appender::IO.new($stderr, level: :warn)
           l.name = name
           l
         end

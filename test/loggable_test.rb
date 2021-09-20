@@ -5,8 +5,6 @@ class TestAttribute
   include SemanticLogger::Loggable
 end
 
-# Unit Test for SemanticLogger::Appender::File
-#
 class AppenderFileTest < Minitest::Test
   module Perform
     def perform

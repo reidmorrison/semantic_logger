@@ -24,7 +24,7 @@ class AppendersTest < Minitest::Test
 
       it "adds stream appender" do
         appender = appenders.add(io: $stdout)
-        assert appender.is_a?(SemanticLogger::Appender::File)
+        assert appender.is_a?(SemanticLogger::Appender::IO)
         assert appenders.include?(appender)
       end
 
@@ -57,8 +57,8 @@ class AppendersTest < Minitest::Test
       end
 
       it "adds appender" do
-        appender = appenders.add(appender: SemanticLogger::Appender::File.new(io: $stdout))
-        assert appender.is_a?(SemanticLogger::Appender::File), appender.ai
+        appender = appenders.add(appender: SemanticLogger::Appender::IO.new($stdout))
+        assert appender.is_a?(SemanticLogger::Appender::IO), appender.ai
         assert appenders.include?(appender)
       end
 

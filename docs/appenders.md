@@ -788,7 +788,7 @@ Example:
 ~~~ruby
 require 'semantic_logger'
 
-appender = SemanticLogger::Appender::File.new(file_name: 'separate.log', level: :info, formatter: :color)
+appender = SemanticLogger::Appender::File.new("separate.log", level: :info, formatter: :color)
 
 # Use appender directly, without using global Semantic Logger
 appender.warn 'Only send this to separate.log'

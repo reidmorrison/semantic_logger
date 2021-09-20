@@ -1,139 +1,64 @@
 require_relative "../test_helper"
-require "stringio"
 
-# Unit Test for SemanticLogger::Appender::File
-#
 module Appender
   class FileTest < Minitest::Test
     describe SemanticLogger::Appender::File do
-      before do
-        SemanticLogger.default_level   = :trace
-        SemanticLogger.backtrace_level = :error
-        @time                          = Time.new
-        @io                            = StringIO.new
-        @appender                      = SemanticLogger::Appender::File.new(io: @io)
-        @hash                          = {session_id: "HSSKLEU@JDK767", tracking_number: 12_345}
-        @hash_str                      = @hash.inspect.sub("{", '\\{').sub("}", '\\}')
-        @thread_name                   = Thread.current.name
-        @file_name_reg_exp             = RUBY_VERSION.to_f <= 2.0 ? ' (mock|file_test).rb:\d+' : ' file_test.rb:\d+'
+      let(:log_message) { "Hello World" }
+      let(:thread_name) { "Worker 001" }
+      let(:file_name) { ".quick_test.log" }
+      let(:appender) { SemanticLogger::Appender::File.new(file_name) }
+
+      let :log do
+        log             = SemanticLogger::Log.new("User", :info)
+        log.message     = log_message
+        log.thread_name = thread_name
+        log
       end
 
-      describe "format logs into text form" do
-        it "handle no message or payload" do
-          @appender.debug
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File\n/, @io.string)
+      after do
+        File.unlink(file_name) if File.exist?(file_name)
+      end
+
+      describe "#log" do
+        it "logs output" do
+          assert appender.log(log)
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{thread_name}\] User -- #{log_message}\n/, File.read(file_name))
         end
 
-        it "handle message" do
-          @appender.debug "hello world"
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world\n/, @io.string)
+        # The local file system writes the output to nowhere when the file is deleted.
+        # This logic is for shared file systems that return an exception when the file
+        # cannot be written to because it was deleted, etc.
+        # it "Creates a new file when an exception is raised writing to the file" do
+        #   assert appender.log(log)
+        #   File.unlink(file_name)
+        #   assert appender.log(log)
+        #   assert_equal 1, File.read(file_name).lines.count
+        # end
+      end
+
+      describe "#reopen" do
+        it "Opens a new file" do
+          assert appender.log(log)
+          before_log = appender.instance_variable_get(:@log)
+          assert_equal 1, File.read(file_name).lines.count
+          assert appender.reopen
+          assert appender.log(log)
+          assert_equal 2, File.read(file_name).lines.count
+          refute_equal before_log.object_id, appender.instance_variable_get(:@log).object_id
         end
 
-        it "handle message and payload" do
-          @appender.debug "hello world", @hash
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str}\n/, @io.string)
-        end
-
-        it "handle message, payload, and exception" do
-          @appender.debug "hello world", @hash, StandardError.new("StandardError")
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str} -- Exception: StandardError: StandardError\n\n/, @io.string)
-        end
-
-        it "logs exception with nil backtrace" do
-          @appender.debug StandardError.new("StandardError")
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- Exception: StandardError: StandardError\n\n/, @io.string)
-        end
-
-        it "handle nested exception" do
-          begin
-            raise StandardError, "FirstError"
-          rescue Exception
-            begin
-              raise StandardError, "SecondError"
-            rescue Exception => e
-              @appender.debug e
-            end
-          end
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name} file_test.rb:\d+\] SemanticLogger::Appender::File -- Exception: StandardError: SecondError\n/, @io.string)
-          assert_match(/^Cause: StandardError: FirstError\n/, @io.string) if Exception.instance_methods.include?(:cause)
-        end
-
-        it "logs exception with empty backtrace" do
-          exc = StandardError.new("StandardError")
-          exc.set_backtrace([])
-          @appender.debug exc
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- Exception: StandardError: StandardError\n\n/, @io.string)
-        end
-
-        it "ignores metric only messages" do
-          @appender.debug metric: "my/custom/metric"
-          assert_equal "", @io.string
-        end
-
-        it "ignores metric only messages with payload" do
-          @appender.debug metric: "my/custom/metric", payload: {hello: :world}
-          assert_equal "", @io.string
+        it "Creates a new file on reopen" do
+          assert appender.log(log)
+          File.unlink(file_name)
+          assert appender.reopen
+          assert appender.log(log)
+          assert_equal 1, File.read(file_name).lines.count
         end
       end
 
-      describe "for each log level" do
-        # Ensure that any log level can be logged
-        SemanticLogger::LEVELS.each do |level|
-          it "log #{level} with file_name" do
-            SemanticLogger.stub(:backtrace_level_index, 0) do
-              @appender.send(level, "hello world", @hash)
-              assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name}#{@file_name_reg_exp}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str}\n/, @io.string)
-            end
-          end
-
-          it "log #{level} without file_name" do
-            SemanticLogger.stub(:backtrace_level_index, 100) do
-              @appender.send(level, "hello world", @hash)
-              assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- hello world -- #{@hash_str}\n/, @io.string)
-            end
-          end
-        end
-      end
-
-      describe "custom formatter" do
-        before do
-          @appender = SemanticLogger::Appender::File.new(io: @io) do |log|
-            tags = log.tags.collect { |tag| "[#{tag}]" }.join(" ") + " " if log.tags&.size&.positive?
-
-            message = log.message.to_s
-            message << " -- " << log.payload.inspect if log.payload
-            if log.exception
-              message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}"
-            end
-
-            duration_str = log.duration ? " (#{format('%.1f', log.duration)}ms)" : ""
-
-            formatted_time = log.time.strftime(SemanticLogger::Formatters::Base.build_time_format)
-
-            "#{formatted_time} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
-          end
-        end
-
-        it "format using formatter" do
-          @appender.debug
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ DEBUG \[\d+:#{@thread_name}\] SemanticLogger::Appender::File -- \n/, @io.string)
-        end
-      end
-
-      describe "#console_output?" do
-        it "logs to stdout" do
-          appender = SemanticLogger::Appender::File.new(io: $stdout)
-          assert appender.console_output?
-        end
-
-        it "logs to stderr" do
-          appender = SemanticLogger::Appender::File.new(io: $stderr)
-          assert appender.console_output?
-        end
-
-        it "logs to file" do
-          appender = SemanticLogger::Appender::File.new(file_name: "test.log")
-          refute appender.console_output?
+      describe "#flush" do
+        it "flushes output" do
+          assert appender.flush
         end
       end
     end
