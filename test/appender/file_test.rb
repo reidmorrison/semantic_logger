@@ -39,12 +39,12 @@ module Appender
       describe "#reopen" do
         it "Opens a new file" do
           assert appender.log(log)
-          before_log = appender.instance_variable_get(:@log)
+          before_log = appender.instance_variable_get(:@file)
           assert_equal 1, File.read(file_name).lines.count
           assert appender.reopen
           assert appender.log(log)
           assert_equal 2, File.read(file_name).lines.count
-          refute_equal before_log.object_id, appender.instance_variable_get(:@log).object_id
+          refute_equal before_log.object_id, appender.instance_variable_get(:@file).object_id
         end
 
         it "Creates a new file on reopen" do
@@ -58,6 +58,11 @@ module Appender
 
       describe "#flush" do
         it "flushes output" do
+          refute appender.flush
+        end
+
+        it "flushes output after logging" do
+          appender.debug("Hello")
           assert appender.flush
         end
       end
