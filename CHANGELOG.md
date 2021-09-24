@@ -4,9 +4,27 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
-## [4.9.0]
+## [5.0.0]
 
-- Break apart file and io appenders, adding retry with re-open capability when writing to a file fails.
+- Separate out File and IO log appenders.
+- Add "log rotation" like capabilities to the File appender.
+  - Re-open the log file after a specified number of log entries. 
+    - See new SemanticLogger::Appender::File option `reopen_count`.
+  - Re-open the log file after a specified number of bytes have been written by this process. 
+    - See new SemanticLogger::Appender::File option `reopen_size`.
+  - New format directives so that file name dynamically includes any of the following attributes
+    every time the log file is re-opened:
+    - Host name
+    - Process Id
+    - Date
+    - Time
+    - See new SemanticLogger::Appender::File argument `file_name`.
+- Add automatic retries for the file appender when an error occurs while writing to the file.
+  - See new SemanticLogger::Appender::File option `retry_count`.
+- Other options added to the file appender:
+  - append, exclusive_lock, encoding
+
+Note: See the readme for v5 upgrade instructions.
 
 ## [4.8.2]
 

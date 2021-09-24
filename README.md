@@ -9,16 +9,6 @@ Semantic Logger is a feature rich logging framework, and replacement for existin
 
 [Semantic Logger Guide](https://logger.rocketjob.io/)
 
-## Upgrading to Semantic Logger v4.4
-
-With some forking frameworks it is necessary to call `reopen` after the fork. With v4.4 the
-workaround for Ruby 2.5 crashes is no longer needed. 
-I.e. Please remove the following line if being called anywhere:
-
-~~~ruby
-SemanticLogger::Processor.instance.instance_variable_set(:@queue, Queue.new)
-~~~
-
 ## Logging Destinations
 
 Logging to the following destinations are all supported "out-of-the-box":
@@ -71,7 +61,43 @@ and are therefore not automatically included by this gem:
 - Elasticsearch Appender: gem 'elasticsearch'
 - Kafka Appender: gem 'ruby-kafka'
 
-## V4 Upgrade notes
+## Upgrading to Semantic Logger v5.0
+
+File and IO are now separate appenders. When creating the File appender explicitly, its arguments
+have changed. For example, when requesting an IO stream, it needs to be changed from:
+
+~~~ruby
+SemanticLogger::Appender::File.new(io: $stderr)
+~~~
+to:
+~~~ruby
+SemanticLogger::Appender::IO.new($stderr)
+~~~
+
+Additionally, this needs to be changed from:
+~~~ruby
+SemanticLogger::Appender::File.new(file_name: "file.log")
+~~~
+to:
+~~~ruby
+SemanticLogger::Appender::File.new("file.log")
+~~~
+
+This does not affect any calls to `SemanticLogger.add_appender`
+
+Rails Semantic Logger, if used, needs to be upgraded to v5 when upgrading to Semantic Logger v5.
+
+## Upgrading to Semantic Logger v4.4
+
+With some forking frameworks it is necessary to call `reopen` after the fork. With v4.4 the
+workaround for Ruby 2.5 crashes is no longer needed.
+I.e. Please remove the following line if being called anywhere:
+
+~~~ruby
+SemanticLogger::Processor.instance.instance_variable_set(:@queue, Queue.new)
+~~~
+
+## Upgrading to Semantic Logger v4.0
 
 The following changes need to be made when upgrading to V4:
 - Ruby V2.3 / JRuby V9.1 is now the minimum runtime version.
