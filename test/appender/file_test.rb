@@ -210,6 +210,24 @@ module Appender
           assert_equal "log/production-myserver.domain.org.log", formatted
         end
 
+        it "application" do
+          file_name = "log/production-%a.log"
+          formatted =
+            SemanticLogger.stub(:application, "my_app") do
+              appender.send(:apply_format_directives, file_name)
+            end
+          assert_equal "log/production-my_app.log", formatted
+        end
+
+        it "environment" do
+          file_name = "log/production-%e.log"
+          formatted =
+            SemanticLogger.stub(:environment, "this_environment") do
+              appender.send(:apply_format_directives, file_name)
+            end
+          assert_equal "log/production-this_environment.log", formatted
+        end
+
         it "process id" do
           file_name = "log/production-%p.log"
           formatted = appender.send(:apply_format_directives, file_name)

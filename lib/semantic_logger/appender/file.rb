@@ -17,8 +17,10 @@ module SemanticLogger
       #
       #     File name format directives:
       #       %p - Process Id
-      #       %n - Short hostname. Everything before the first period in the hostname.
-      #       %N - Full hostname.
+      #       %n - Short hostname (SemanticLogger.host). Everything before the first period in the hostname.
+      #       %N - Full hostname (SemanticLogger.host)
+      #       %a - Application name (SemanticLogger.application)
+      #       %e - Environment name (SemanticLogger.environment)
       #       %D - Current Date. Equivalent to "%Y%m%d"
       #       %T - Current Time. Equivalent to "%H%M%S"
       #       %% - Literal `%` character
@@ -217,6 +219,10 @@ module SemanticLogger
           SemanticLogger.host.split(".")[0]
         when "N"
           SemanticLogger.host
+        when "a"
+          SemanticLogger.application
+        when "e"
+          SemanticLogger.environment
         when "D"
           Date.today.strftime("%Y%m%d")
         when "Y", "C", "y", "m", "d", "j", "U", "W"
