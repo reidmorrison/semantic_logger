@@ -90,6 +90,17 @@ module Appender
           assert appender.log(log)
           assert_equal 1, File.read(file_name).lines.count
         end
+
+        it "exclusive_lock" do
+          appender.exclusive_lock = true
+          assert appender.reopen
+          assert appender.log(log)
+          assert_equal 1, File.read(file_name).lines.count
+          exception = assert_raises(ArgumentError) do
+            File.open("w+", file_name) { |file| file.write("Cannot share") }
+          end
+          assert_includes(exception.message, "invalid access mode")
+        end
       end
 
       describe "#flush" do
