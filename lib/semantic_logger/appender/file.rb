@@ -78,7 +78,7 @@ module SemanticLogger
       #
       #   :reopen_count [Integer]
       #     Close and re-open the log file after every `reopen_count` number of logged entries.
-      #     Default: nil
+      #     Default: 0
       #
       #   :reopen_size [Integer]
       #     Approximate number of bytes to write to a log file by this process before closing and re-opening it.
@@ -89,7 +89,7 @@ module SemanticLogger
       #     - The `reopen_size` is only the amount of bytes written by this process, it excludes data
       #       written by other processes. Use a unique filename to prevent multiple processes from writing to
       #       the same log file at the same time.
-      #     Default: nil
+      #     Default: 0
       #
       # Example
       #    require "semantic_logger"
@@ -102,7 +102,7 @@ module SemanticLogger
       #
       #    logger = SemanticLogger["test"]
       #    logger.info "Hello World"
-      def initialize(file_name, retry_count: 1, append: true, reopen_count: nil, reopen_size: nil, encoding: Encoding::BINARY, **args, &block)
+      def initialize(file_name, retry_count: 1, append: true, reopen_count: 0, reopen_size: 0, encoding: Encoding::BINARY, **args, &block)
         if !file_name.is_a?(String) || file_name.empty?
           raise(ArgumentError, "SemanticLogging::Appender::File file_name must be a non-empty string")
         end
@@ -184,8 +184,8 @@ module SemanticLogger
       def time_to_reopen?
         return true unless @file
 
-        if (reopen_count && (log_count >= reopen_count)) ||
-          (reopen_size && (log_size >= reopen_size))
+        if (reopen_count.positive? && (log_count >= reopen_count)) ||
+          (reopen_size.positive? && (log_size >= reopen_size))
           return true
         end
 
