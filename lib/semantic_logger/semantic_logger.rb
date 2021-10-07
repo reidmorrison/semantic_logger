@@ -164,7 +164,7 @@ module SemanticLogger
   #   logger.info "Hello World"
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
   def self.add_appender(**args, &block)
-    appender = Logger.processor.appenders.add(**args, &block)
+    appender = appenders.add(**args, &block)
     # Start appender thread if it is not already running
     Logger.processor.start
     appender
@@ -175,7 +175,7 @@ module SemanticLogger
   def self.remove_appender(appender)
     return unless appender
 
-    Logger.processor.appenders.delete(appender)
+    appenders.delete(appender)
     appender.close
   end
 
@@ -189,7 +189,7 @@ module SemanticLogger
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
   def self.appenders
-    Logger.processor.appenders.to_a
+    Logger.processor.appenders
   end
 
   # Flush all queued log entries disk, database, etc.

@@ -57,7 +57,7 @@ Add the following to `config/environments/production.rb`:
 if ENV["RAILS_LOG_TO_STDOUT"].present?
   $stdout.sync = true
   config.rails_semantic_logger.add_file_appender = false
-  config.semantic_logger.add_appender(io: $stdout, level: config.log_level, formatter: config.rails_semantic_logger.format)
+  config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
 end
 ~~~
 
@@ -133,6 +133,11 @@ To change the log level:
 config.log_level = :debug
 ~~~
 
+To change the log level when running inside of a running Rails console:
+~~~ruby
+SemanticLogger.default_level = :debug
+~~~
+
 #### Named Tags
 
 Named tags can be added to every log message on a per web request basis, by overriding the Rails built-in
@@ -155,6 +160,16 @@ Note:
 To turn off named tags in development, add the following to `config/environments/development.rb`
 ~~~ruby
 config.log_tags        = nil
+~~~
+
+#### Rails Console Logging
+
+By default the Rails Semantic Logger adds a logger to stderr when running inside a rails console.
+
+To disable this behavior:
+
+~~~ruby
+config.rails_semantic_logger.console_logger = false
 ~~~
 
 #### Quiet asset logging
