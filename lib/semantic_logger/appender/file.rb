@@ -6,8 +6,9 @@ require "date"
 module SemanticLogger
   module Appender
     class File < SemanticLogger::Subscriber
-      attr_accessor :file_name, :retry_count, :append, :exclusive_lock, :reopen_count, :reopen_size, :encoding
-      attr_reader :log_count, :log_size, :current_file_name
+      attr_accessor :file_name, :retry_count, :append, :exclusive_lock, :encoding,
+                    :reopen_period, :reopen_count, :reopen_size
+      attr_reader :log_count, :log_size, :current_file_name, :next_period
 
       # Create an appender to log to a named file.
       #
@@ -78,6 +79,23 @@ module SemanticLogger
       #     Note: Set to 0 to disable retries.
       #     Default: 1
       #
+      #   :reopen_period [String]
+      #     Specify a period after which to re-open the log file, specified in minutes, hours, or days.
+      #     The format of the duration must start with an Integer or Float number,
+      #     followed by the duration specified as:
+      #       "m" : minutes
+      #       "h" : hours
+      #       "d" : days
+      #     The time is rounded down to the specified time interval, so that:
+      #     - "1h" will re-open every hour at the beginning of the hour.
+      #     - "30m" will re-open every 30 minutes at the beginning of the 30th minute.
+      #     - "1d" will re-open every day at midnight.
+      #     Examples:
+      #       "60m" : Every 60 minutes at the beginning of the minute: 10:24:00, 11:24:00, 12:24:00, ...
+      #       "1h"  : Every hour at the beginning of the hour: 10:00:00, 11:00:00, 12:00:00, ...
+      #       "1d"  : Every day at the beginning of the day: "20211008 00:00:00", "20211009 00:00:00", ...
+      #     Default: nil
+      #
       #   :reopen_count [Integer]
       #     Close and re-open the log file after every `reopen_count` number of logged entries.
       #     Default: 0
@@ -104,7 +122,7 @@ module SemanticLogger
       #
       #    logger = SemanticLogger["test"]
       #    logger.info "Hello World"
-      def initialize(file_name, retry_count: 1, append: true, reopen_count: 0, reopen_size: 0, encoding: Encoding::BINARY, exclusive_lock: false, **args, &block)
+      def initialize(file_name, retry_count: 1, append: true, reopen_period: nil, reopen_count: 0, reopen_size: 0, encoding: Encoding::BINARY, exclusive_lock: false, **args, &block)
         if !file_name.is_a?(String) || file_name.empty?
           raise(ArgumentError, "SemanticLogging::Appender::File file_name must be a non-empty string")
         end
@@ -113,12 +131,14 @@ module SemanticLogger
         @retry_count    = retry_count
         @file           = nil
         @append         = append
+        @reopen_period  = reopen_period
         @reopen_count   = reopen_count
         @reopen_size    = reopen_size
         @encoding       = encoding
         @exclusive_lock = exclusive_lock
         @log_count      = 0
         @log_size       = 0
+        @next_period    = nil
 
         super(**args, &block)
       end
@@ -140,6 +160,8 @@ module SemanticLogger
         else
           self.log_size = 0
         end
+
+        self.next_period = reopen_period ? next_reopen_period(reopen_period) : nil
 
         options = ::File::WRONLY | ::File::CREAT
         options |= ::File::APPEND if append
@@ -182,27 +204,14 @@ module SemanticLogger
 
       private
 
-      attr_writer :log_count, :log_size, :current_file_name
+      attr_writer :log_count, :log_size, :current_file_name, :next_period
 
       def time_to_reopen?
         return true unless @file
 
-        if (reopen_count.positive? && (log_count >= reopen_count)) ||
-          (reopen_size.positive? && (log_size >= reopen_size))
-          return true
-        end
-
-        # Possible future enhancement to support time based log rotation
-        #   :reopen_interval [:hour|:day|:week|:month|Integer]
-        #     :hour     Close and re-open the log file every hour on the hour.
-        #     :day      Close and re-open the log file every day at midnight.
-        #     :week     Close and re-open the log file every week starting at 12am every Monday.
-        #     Integer   When an integer value, the number of minutes between closing and re-opening the log file.
-        #     Notes:
-        #     - Log rotation can be achieved by including a date and time pattern in the log file name.
-        #       With every re-open the date and time pattern is re-evaluated.
-
-        false
+        (reopen_count.positive? && (log_count >= reopen_count)) ||
+          (reopen_size.positive? && (log_size >= reopen_size)) ||
+          (next_period && (Time.now > next_period))
       end
 
       def apply_format_directives(file_name)
@@ -235,6 +244,38 @@ module SemanticLogger
           "%"
         else
           raise(ArgumentError, "Format Directive '#{directive}' in file_name: #{file_name} is not supported.")
+        end
+      end
+
+      def next_reopen_period(period_string)
+        return unless period_string
+
+        duration, period = parse_period(period_string)
+        calculate_next_period(duration, period)
+      end
+
+      def parse_period(period_string)
+        match    = period_string.downcase.gsub(/[^0-9mhd]/, "").match(/([\d.]+)([mhd])/)
+        duration = match[1]
+        period   = match[2]
+        raise(ArgumentError, "Invalid or missing duration in: #{period_string}, must begin with an integer.") unless duration
+        raise(ArgumentError, "Invalid or missing period in: #{period_string}, must end with m,h, or d.") unless period
+
+        [duration.to_i, period]
+      end
+
+      # Round down the current time based on the period, then add on the duration for that period
+      def calculate_next_period(duration, period)
+        t = Time.now
+        case period
+        when "m"
+          Time.new(t.year, t.month, t.day, t.hour, t.min, 0) + duration * 60
+        when "h"
+          Time.new(t.year, t.month, t.day, t.hour, 0, 0) + duration * 60 * 60
+        when "d"
+          Time.new(t.year, t.month, t.day, 0, 0, 0) + duration * 24 * 60 * 60
+        else
+          raise(ArgumentError, "Invalid or missing period in: #{reopen_period}, must end with m,h, or d.")
         end
       end
     end
