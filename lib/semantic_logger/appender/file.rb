@@ -8,7 +8,7 @@ module SemanticLogger
     class File < SemanticLogger::Subscriber
       attr_accessor :file_name, :retry_count, :append, :exclusive_lock, :encoding,
                     :reopen_period, :reopen_count, :reopen_size
-      attr_reader :log_count, :log_size, :current_file_name, :next_period
+      attr_reader :log_count, :log_size, :current_file_name, :reopen_at
 
       # Create an appender to log to a named file.
       #
@@ -138,7 +138,7 @@ module SemanticLogger
         @exclusive_lock = exclusive_lock
         @log_count      = 0
         @log_size       = 0
-        @next_period    = nil
+        @reopen_at      = nil
 
         super(**args, &block)
       end
@@ -146,7 +146,11 @@ module SemanticLogger
       # After forking an active process call #reopen to re-open
       # open the file handles etc to resources.
       def reopen
-        @file&.close rescue nil
+        begin
+          @file&.close
+        rescue StandardError
+          nil
+        end
 
         self.current_file_name = apply_format_directives(file_name)
         if ::File.directory?(file_name)
@@ -161,11 +165,11 @@ module SemanticLogger
           self.log_size = 0
         end
 
-        self.next_period = reopen_period ? next_reopen_period(reopen_period) : nil
+        self.reopen_at = reopen_period ? next_reopen_period(reopen_period) : nil
 
         options = ::File::WRONLY | ::File::CREAT
         options |= ::File::APPEND if append
-        @file   = ::File.open(current_file_name, options)
+        @file = ::File.open(current_file_name, options)
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @file.sync = true
@@ -204,14 +208,14 @@ module SemanticLogger
 
       private
 
-      attr_writer :log_count, :log_size, :current_file_name, :next_period
+      attr_writer :log_count, :log_size, :current_file_name, :reopen_at
 
       def time_to_reopen?
         return true unless @file
 
         (reopen_count.positive? && (log_count >= reopen_count)) ||
           (reopen_size.positive? && (log_size >= reopen_size)) ||
-          (next_period && (Time.now > next_period))
+          (reopen_at && (Time.now > reopen_at))
       end
 
       def apply_format_directives(file_name)
@@ -251,11 +255,16 @@ module SemanticLogger
         return unless period_string
 
         duration, period = parse_period(period_string)
-        calculate_next_period(duration, period)
+        calculate_reopen_at(duration, period)
       end
 
       def parse_period(period_string)
-        match    = period_string.downcase.gsub(/[^0-9mhd]/, "").match(/([\d.]+)([mhd])/)
+        match = period_string.to_s.downcase.gsub(/\s+/, "").match(/([\d.]+)([mhd])/)
+        unless match
+          raise(ArgumentError,
+                "Invalid period definition: #{period_string}, must begin with an integer, followed by m,h, or d.")
+        end
+
         duration = match[1]
         period   = match[2]
         raise(ArgumentError, "Invalid or missing duration in: #{period_string}, must begin with an integer.") unless duration
@@ -265,15 +274,14 @@ module SemanticLogger
       end
 
       # Round down the current time based on the period, then add on the duration for that period
-      def calculate_next_period(duration, period)
-        t = Time.now
+      def calculate_reopen_at(duration, period, time = Time.now)
         case period
         when "m"
-          Time.new(t.year, t.month, t.day, t.hour, t.min, 0) + duration * 60
+          Time.new(time.year, time.month, time.day, time.hour, time.min, 0) + (duration * 60)
         when "h"
-          Time.new(t.year, t.month, t.day, t.hour, 0, 0) + duration * 60 * 60
+          Time.new(time.year, time.month, time.day, time.hour, 0, 0) + (duration * 60 * 60)
         when "d"
-          Time.new(t.year, t.month, t.day, 0, 0, 0) + duration * 24 * 60 * 60
+          Time.new(time.year, time.month, time.day, 0, 0, 0) + (duration * 24 * 60 * 60)
         else
           raise(ArgumentError, "Invalid or missing period in: #{reopen_period}, must end with m,h, or d.")
         end
