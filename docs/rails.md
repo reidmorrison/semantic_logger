@@ -11,7 +11,7 @@ for every Controller-Action call.
 ### Rails Support
 
 For the complete list of supported Ruby and Rails versions, see
-the [Testing file](https://github.com/reidmorrison/rails_semantic_logger/blob/master/.travis.yml).
+the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/master/.github/workflows/ci.yml).
 
 ### Installation
 

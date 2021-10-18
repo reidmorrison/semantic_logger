@@ -222,6 +222,6 @@ Output:
 ### Ruby Support
 
 For the complete list of supported Ruby versions, see
-the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/master/.travis.yml).
+the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/master/.github/workflows/ci.yml).
 
 ### [Next: Rails ==>](rails.html)
