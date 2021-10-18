@@ -4,6 +4,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Documentation: Fix link to GitHub Actions CI configuration.
+
 ## [5.0.0]
 
 - Separate out File and IO log appenders.
