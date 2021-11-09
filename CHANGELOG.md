@@ -5,14 +5,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 - Documentation: Fix link to GitHub Actions CI configuration.
+- Handle case when tags are passed as an array in a single argument to `SemanticLogger::Base#tagged`.
 
 ## [5.0.0]
 
 - Separate out File and IO log appenders.
 - Add "log rotation" like capabilities to the File appender.
-  - Re-open the log file after a specified number of log entries. 
+  - Re-open the log file after a specified number of log entries.
     - See new SemanticLogger::Appender::File option `reopen_count`.
-  - Re-open the log file after a specified number of bytes have been written by this process. 
+  - Re-open the log file after a specified number of bytes have been written by this process.
     - See new SemanticLogger::Appender::File option `reopen_size`.
   - New format directives so that file name dynamically includes any of the following attributes
     every time the log file is re-opened:
@@ -67,7 +68,7 @@ Note: See the readme for v5 upgrade instructions.
 
 - Remove `host` from the `SplunkHttp` appender message body.
 - Support Bugsnag 6. Fix infinite loop. #150
-- Fix documentation. #158 
+- Fix documentation. #158
 
 ## [4.7.2]
 
