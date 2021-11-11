@@ -162,6 +162,7 @@ module SemanticLogger
 
       # Forward log messages to HTTP Server
       def log(log)
+        log = log.encode('UTF-8', invalid: :replace, undef: :replace replace: '<replaced-during-utf-8-conversion>')
         message = formatter.call(log, self)
         logger.trace(message)
         post(message)
