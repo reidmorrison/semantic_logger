@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 - Documentation: Fix link to GitHub Actions CI configuration.
+- feat: Add tags to logfmt formatter output
 
 ## [5.0.0]
 

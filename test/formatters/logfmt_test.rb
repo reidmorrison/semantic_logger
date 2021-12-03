@@ -10,6 +10,8 @@ module SemanticLogger
         let(:log) do
           log = SemanticLogger::Log.new("DefaultTest", :info)
           log.time = log_time
+          log.tags = tags
+          log.named_tags = named_tags
           log
         end
 
@@ -24,6 +26,14 @@ module SemanticLogger
           raise "Oh no"
         rescue StandardError => e
           log.exception = e
+        end
+
+        let(:tags) do
+          []
+        end
+
+        let(:named_tags) do
+          {}
         end
 
         describe "call" do
@@ -62,6 +72,61 @@ module SemanticLogger
               log.payload = {name: "shrek"}
               set_exception
               assert_match(/name="RuntimeError"/, formatter.call(log, nil))
+            end
+          end
+
+          describe "given a set of tags" do
+            let(:tags) do
+              ["breakfast", "second breakfast", %q{"elevensies"}, "'lunch'"]
+            end
+
+            it "merges them into a single key value pair" do
+              assert_match(/tags="breakfast,second breakfast,\"elevensies\",'lunch'"/, formatter.call(log, nil))
+            end
+
+            describe "given a payload with conflicting keys" do
+              it "overrides the named tags" do
+                log.payload = {tags: "apples,bananas,pears"}
+
+                text = formatter.call(log, nil)
+
+                refute_match(/tags="breakfast,second breakfast,\"elevensies\",'lunch'"/, text)
+                assert_match(/tags="apples,bananas,pears"/, text)
+              end
+            end
+          end
+
+          describe "given a set of named tags" do
+            let(:named_tags) do
+              {
+                base: "breakfast",
+                spaces: "second breakfast",
+                double_quotes: %q{"elevensies"},
+                single_quotes: "'lunch'"
+              }
+            end
+
+            it "flattens them into the message" do
+              text = formatter.call(log, nil)
+
+              assert_match(/base="breakfast"/, text)
+              assert_match(/spaces="second breakfast"/, text)
+              assert_match(/double_quotes="\\"elevensies\\""/, text)
+              assert_match(/single_quotes="\'lunch\'"/, text)
+            end
+
+            describe "given a payload with conflicting keys" do
+              it "overrides the named tags" do
+                log.payload = {spaces: "You shall not pass"}
+
+                text = formatter.call(log, nil)
+
+                assert_match(/base="breakfast"/, text)
+                refute_match(/spaces="second breakfast"/, text)
+                assert_match(/spaces="You shall not pass"/, text)
+                assert_match(/double_quotes="\\"elevensies\\""/, text)
+                assert_match(/single_quotes="\'lunch\'"/, text)
+              end
             end
           end
         end

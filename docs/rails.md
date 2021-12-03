@@ -113,7 +113,7 @@ config.rails_semantic_logger.rendered   = true
 ![Semantic Disabled](images/rails_semantic_false.png)
 
 #### Include the file name and line number in the source code where the message originated
-**Warning:** Either set this to `nil` (to disable it completely) or to a high log level (`:fatal` or `:error`) in your production environment otherwise you risk encountering a memory leak due to the very high number of 
+**Warning:** Either set this to `nil` (to disable it completely) or to a high log level (`:fatal` or `:error`) in your production environment otherwise you risk encountering a memory leak due to the very high number of
 objects allocated when Ruby backtraces are created. This is best used in development for debugging purposes.
 
 ~~~ruby
@@ -317,6 +317,8 @@ Valid options:
     * Plain text output with color.
 * :json
     * JSON output format.
+* :logfmt
+    * logfmt output format.
 * :one_line
     * Reduce each log message to a single line.
 * `Object`
