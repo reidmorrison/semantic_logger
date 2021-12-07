@@ -16,7 +16,7 @@ module SemanticLogger
         end
 
         let(:formatter) do
-          formatter = SemanticLogger::Formatters::Logfmt.new(log_host: false)
+          formatter = SemanticLogger::Formatters::Logfmt.new(log_host: false, time_key: time_key)
           # Does not use the logger instance for formatting purposes
           formatter.call(log, nil)
           formatter
@@ -34,6 +34,10 @@ module SemanticLogger
 
         let(:named_tags) do
           {}
+        end
+
+        let(:time_key) do
+          :timestamp
         end
 
         describe "call" do
@@ -127,6 +131,18 @@ module SemanticLogger
                 assert_match(/double_quotes="\\"elevensies\\""/, text)
                 assert_match(/single_quotes="\'lunch\'"/, text)
               end
+            end
+          end
+
+          describe "given an time_key" do
+            let(:time_key) do
+              :ts
+            end
+
+            it "overrides the timestamp" do
+              text = formatter.call(log, nil)
+              refute_match(/timestamp=/, text)
+              assert_match(/ts=\"2020-07-20T08:32:05.375276Z\"/, text)
             end
           end
         end
