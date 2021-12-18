@@ -12,7 +12,7 @@ module SemanticLogger
     #
     # All timestamps are ISO8601 formatteed
     # All user supplied values are escaped and surrounded by double quotes to avoid ambiguious message delimeters
-    # `tags` are flattened into a single comma separated key value pair. Avoid using commas in tags.
+    # `tags` are treated as keys with boolean values. Tag names are not formatted or validated, ensure you use valid logfmt format for tag names.
     # `named_tags` are flattened are merged into the top level message field. Any conflicting fields are overridden.
     # `payload` values take precedence over `tags` and `named_tags`. Any conflicting fields are overridden.
     #
