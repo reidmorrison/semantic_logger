@@ -81,16 +81,13 @@ module SemanticLogger
 
           describe "given a set of tags" do
             let(:tags) do
-              ["breakfast", "second breakfast", %q{"elevensies"}, "'lunch'"]
+              ["ruby", "rails"]
             end
 
-            # This results in invalid logfmt keys
             it "formats the tag as a 'true' value" do
               text = formatter.call(log, nil)
-              assert_match(/breakfast=true/, text)
-              assert_match(/second breakfast=true/, text)
-              assert_match(/\"elevensies\"=true/, text)
-              assert_match(/'lunch'=true/, text)
+              assert_match(/ruby=true/, text)
+              assert_match(/rails=true/, text)
             end
 
             describe "given a payload with tags key" do
@@ -98,12 +95,23 @@ module SemanticLogger
                 log.payload = {tags: "apples,bananas,pears"}
 
                 text = formatter.call(log, nil)
-                assert_match(/breakfast=true/, text)
-                assert_match(/second breakfast=true/, text)
-                assert_match(/\"elevensies\"=true/, text)
-                assert_match(/'lunch'=true/, text)
+                assert_match(/ruby=true/, text)
+                assert_match(/rails=true/, text)
                 assert_match(/tags="apples,bananas,pears"/, text)
               end
+            end
+          end
+
+          describe "given a invalid tag names" do
+            let(:tags) do
+              ["second breakfast", %q{"elevensies"}, "'lunch'"]
+            end
+
+            it "formats the tag as a 'true' value" do
+              text = formatter.call(log, nil)
+              assert_match(/second breakfast=true/, text)
+              assert_match(/\"elevensies\"=true/, text)
+              assert_match(/'lunch'=true/, text)
             end
           end
 
