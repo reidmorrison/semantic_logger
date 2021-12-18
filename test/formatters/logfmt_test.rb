@@ -42,7 +42,7 @@ module SemanticLogger
 
         describe "call" do
           it "parses log to logfmt" do
-            assert_match formatter.call(log, nil), "timestamp=\"2020-07-20T08:32:05.375276Z\" level=info name=\"DefaultTest\" tag=\"success\""
+            assert_match formatter.call(log, nil), %[timestamp="2020-07-20T08:32:05.375276Z" level="info" name="DefaultTest" tag="success"]
           end
 
           it "flattens payload information" do
@@ -84,17 +84,24 @@ module SemanticLogger
               ["breakfast", "second breakfast", %q{"elevensies"}, "'lunch'"]
             end
 
-            it "merges them into a single key value pair" do
-              assert_match(/tags="breakfast,second breakfast,\"elevensies\",'lunch'"/, formatter.call(log, nil))
+            # This results in invalid logfmt keys
+            it "formats the tag as a 'true' value" do
+              text = formatter.call(log, nil)
+              assert_match(/breakfast=true/, text)
+              assert_match(/second breakfast=true/, text)
+              assert_match(/\"elevensies\"=true/, text)
+              assert_match(/'lunch'=true/, text)
             end
 
-            describe "given a payload with conflicting keys" do
-              it "overrides the named tags" do
+            describe "given a payload with tags key" do
+              it "includes the value as a separate field" do
                 log.payload = {tags: "apples,bananas,pears"}
 
                 text = formatter.call(log, nil)
-
-                refute_match(/tags="breakfast,second breakfast,\"elevensies\",'lunch'"/, text)
+                assert_match(/breakfast=true/, text)
+                assert_match(/second breakfast=true/, text)
+                assert_match(/\"elevensies\"=true/, text)
+                assert_match(/'lunch'=true/, text)
                 assert_match(/tags="apples,bananas,pears"/, text)
               end
             end

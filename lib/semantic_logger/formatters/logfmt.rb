@@ -31,11 +31,20 @@ module SemanticLogger
       private
 
       def raw_to_logfmt
-        @parsed = @raw.slice(time_key, :level, :name, :message, :duration, :tags).merge(@raw.fetch(:named_tags){ {} }).merge(tag: "success")
+        @parsed = @raw.slice(time_key, :level, :name, :message, :duration).merge(tag: "success")
+        handle_tags
         handle_payload
         handle_exception
 
         flatten_log
+      end
+
+      def handle_tags
+        tags = @raw.fetch(:tags){ [] }
+                    .each_with_object({}){ |tag, accum| accum[tag] = true }
+
+        @parsed = @parsed.merge(tags)
+                         .merge(@raw.fetch(:named_tags){ {} })
       end
 
       def handle_payload
@@ -53,21 +62,10 @@ module SemanticLogger
 
       def flatten_log
         flattened = @parsed.map do |key, value|
-          "#{key}=#{parse_value(value)}"
+          "#{key}=#{value.to_json}"
         end
 
         flattened.join(" ")
-      end
-
-      def parse_value(value)
-        case value
-        when Array
-          %Q|"#{value.join(",")}"|
-        when String
-          value.to_json
-        else
-          value
-        end
       end
     end
   end
