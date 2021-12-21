@@ -188,7 +188,8 @@ module SemanticLogger
     # - For better performance with clean tags, see `SemanticLogger.tagged`.
     def tagged(*tags, &block)
       # Allow named tags to be passed into the logger
-      if tags.size == 1
+      # Rails::Rack::Logger passes logs as an array with a single argument
+      if tags.size == 1 && !tags.first.is_a?(Array)
         tag = tags[0]
         return yield if tag.nil? || tag == ""
 
