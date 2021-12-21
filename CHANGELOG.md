@@ -7,6 +7,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Documentation: Fix link to GitHub Actions CI configuration.
 - Add support for logging to elastic data-streams
 - Handle case when tags are passed as an array in a single argument to `SemanticLogger::Base#tagged`.
+- feat: Add tags to logfmt formatter output
+- fix: Ensure time_key is used in logfmt formatter
 
 ## [5.0.0]
 

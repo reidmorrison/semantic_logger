@@ -122,7 +122,7 @@ module SemanticLogger
   #     Default: SemanticLogger.default_level
   #
   #   formatter: [Symbol|Object|Proc]
-  #     Any of the following symbol values: :default, :color, :json
+  #     Any of the following symbol values: :default, :color, :json, :logfmt, etc...
   #       Or,
   #     An instance of a class that implements #call
   #       Or,

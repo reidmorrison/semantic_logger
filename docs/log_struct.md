@@ -18,6 +18,7 @@ Log = Struct.new(
   :time,
   :duration,
   :tags,
+  :named_tags,
   :level_index,
   :exception,
   :metric)
@@ -55,6 +56,10 @@ duration [Float]
 tags [Array<String>]
 
 * Any tags active on the thread when the log call was made
+
+named_tags [Hash<String, Object>]
+
+* Any named tags active on the thread when the log call was made
 
 level_index [Integer]
 
