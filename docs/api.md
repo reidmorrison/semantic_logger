@@ -131,7 +131,7 @@ Parameters
 - payload_or_exception
     - Optional, either a Ruby Exception object or a Hash
 - exception
-    - Optional, Ruby Exception object. 
+    - Optional, Ruby Exception object.
     - Allows both an exception and a payload to be logged
 - block
     - The optional block is executed only if the corresponding log level is active.
@@ -278,7 +278,7 @@ second is a Hash of settings:
 
 - `:log_exception` [Symbol]
     - Control whether or how an exception thrown in the block is
-      reported by Semantic Logger. 
+      reported by Semantic Logger.
     - Values:
         - `:full`
             - Log the exception class, message, and backtrace.
@@ -594,8 +594,8 @@ demo.rb:4:in `oh_no'
 demo.rb:14:in `<main>'
 ~~~
 
-The output above contains 2 stack traces, with the second stack trace starting at 
-`Cause: IOError: not opened for reading`. 
+The output above contains 2 stack traces, with the second stack trace starting at
+`Cause: IOError: not opened for reading`.
 
 ### Synchronous Operation
 
@@ -612,7 +612,7 @@ Of course this means that all logging is performed in the current thread slowing
 
 Run Semantic Logger in Synchronous mode:
 ~~~ruby
-SemanticLogger.sync! = true
+SemanticLogger.sync!
 ~~~
 
 _Note:_ The above config option must be called _before_ any appenders have been added.
@@ -626,6 +626,6 @@ require "semantic_logger/sync"
 Or, when using a Gemfile:
 ~~~ruby
 gem "semantic_logger", require: "semantic_logger/sync"
-~~~    
+~~~
 
 ### [Next: Appenders ==>](appenders.html)
