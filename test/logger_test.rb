@@ -384,6 +384,16 @@ class LoggerTest < Minitest::Test
           assert_equal %w[12345 DJHSFK], log.tags
         end
       end
+
+      it "properly handles logs as an array with a single argument" do
+        logger.tagged(%w[first second]) do
+          logger.info("hello world")
+
+          assert log = log_message
+          assert_equal "hello world", log.message
+          assert_equal %w[first second], log.tags
+        end
+      end
     end
   end
 end
