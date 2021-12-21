@@ -277,8 +277,10 @@ Example:
 
 ~~~ruby
 SemanticLogger.add_appender(
-  appender: :elasticsearch,
-  url:      'http://localhost:9200'
+  appender:    :elasticsearch,
+  url:         'http://localhost:9200',
+  index:       'my-index',
+  data_stream: true
 )
 ~~~
 
