@@ -39,19 +39,19 @@ impact the performance of you application.
 Log to file with the standard formatter:
 
 ~~~ruby
-SemanticLogger.add_appender(file_name: 'development.log')
+SemanticLogger.add_appender(file_name: "development.log")
 ~~~
 
 Log to file with the standard colorized formatter:
 
 ~~~ruby
-SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
+SemanticLogger.add_appender(file_name: "development.log", formatter: :color)
 ~~~
 
 Log to file in JSON format:
 
 ~~~ruby
-SemanticLogger.add_appender(file_name: 'development.log', formatter: :json)
+SemanticLogger.add_appender(file_name: "development.log", formatter: :json)
 ~~~
 
 For performance reasons the log file is not re-opened with every call.
@@ -135,7 +135,7 @@ Log to a remote Syslog server using TCP with packet size 2048 bytes. By default 
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :syslog,
-  url:      'tcp://myloghost:514',
+  url:      "tcp://myloghost:514",
   max_size: 2048
 )
 ~~~
@@ -145,7 +145,7 @@ Log to a remote Syslog server using UDP:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :syslog,
-  url:      'udp://myloghost:514'
+  url:      "udp://myloghost:514"
 )
 ~~~
 
@@ -154,7 +154,7 @@ Optional: Add filter to exclude health_check, or other log entries:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :syslog,
-  url:      'udp://myloghost:514',
+  url:      "udp://myloghost:514",
   filter:   Proc.new { |log| log.message !~ /(health_check|Not logged in)/ }
 )
 ~~~
@@ -162,14 +162,14 @@ SemanticLogger.add_appender(
 If logging to a remote Syslog server using UDP, add the following line to your `Gemfile`:
 
 ~~~ruby
-gem 'syslog_protocol'
+gem "syslog_protocol"
 ~~~
 
 If logging to a remote Syslog server using TCP, add the following lines to your `Gemfile`:
 
 ~~~ruby
-gem 'syslog_protocol'
-gem 'net_tcp_client'
+gem "syslog_protocol"
+gem "net_tcp_client"
 ~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
@@ -185,7 +185,7 @@ had the log information been converted to text.)
 For Rails applications, or running bundler, add the following line to the file `Gemfile`:
 
 ~~~ruby
-gem 'gelf'
+gem "gelf"
 ~~~
 
 Install gems:
@@ -209,7 +209,7 @@ To use the TCP Protocol:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :graylog,
-  url:      'tcp://localhost:12201'
+  url:      "tcp://localhost:12201"
 )
 ~~~
 
@@ -218,7 +218,7 @@ Or, to use the UDP Protocol:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :graylog,
-  url:      'udp://localhost:12201'
+  url:      "udp://localhost:12201"
 )
 ~~~
 
@@ -235,8 +235,8 @@ The instructions also include information on how to generate a token that needs 
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :splunk_http,
-  url:      'http://localhost:8088/services/collector/event',
-  token:    'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+  url:      "http://localhost:8088/services/collector/event",
+  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 )
 ~~~
 
@@ -258,8 +258,8 @@ If HTTPS is being used for the Splunk HTTP Collector, update the url accordingly
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :splunk_http,
-  url:      'https://localhost:8088/services/collector/event',
-  token:    'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+  url:      "https://localhost:8088/services/collector/event",
+  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 )
 ~~~
 
@@ -278,8 +278,8 @@ Example:
 ~~~ruby
 SemanticLogger.add_appender(
   appender:    :elasticsearch,
-  url:         'http://localhost:9200',
-  index:       'my-index',
+  url:         "http://localhost:9200",
+  index:       "my-index",
   data_stream: true
 )
 ~~~
@@ -306,8 +306,8 @@ module Logentries
   end
 end
 
-formatter = Logentries::Formatter.new('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')
-SemanticLogger.add_appender(appender: :tcp, server: 'api.logentries.com:20000', ssl: true, formatter: formatter)
+formatter = Logentries::Formatter.new("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+SemanticLogger.add_appender(appender: :tcp, server: "api.logentries.com:20000", ssl: true, formatter: formatter)
 ~~~
 
 ### loggly.com
@@ -320,7 +320,7 @@ Replace `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` below with the above token.
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :http,
-  url:      'http://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
+  url:      "http://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/"
 )
 ~~~
 
@@ -340,7 +340,7 @@ If HTTPS is being used for Loggly, update the url accordingly:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :http,
-  url:      'https://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/'
+  url:      "https://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/"
 )
 ~~~
 
@@ -351,7 +351,7 @@ Forward log messages to Logstash.
 For Rails applications, or running bundler, add the following line to the file `Gemfile`:
 
 ~~~ruby
-gem 'logstash-logger'
+gem "logstash-logger"
 ~~~
 
 Install gems:
@@ -370,11 +370,11 @@ If running Rails create an initializer with the following code, otherwise add th
 to your program:
 
 ~~~ruby
-require 'logstash-logger'
+require "logstash-logger"
 
 # Use the TCP logger
 # See https://github.com/dwbutler/logstash-logger for further options
-log_stash = LogStashLogger.new(type: :tcp, host: 'localhost', port: 5229)
+log_stash = LogStashLogger.new(type: :tcp, host: "localhost", port: 5229)
 
 SemanticLogger.add_appender(logger: log_stash)
 ~~~
@@ -390,10 +390,10 @@ Sample configuration:
 ~~~ruby
 config.semantic_logger.add_appender(
     appender: :syslog,
-    url:      'tcp://something.papertrailapp.com:1234',
+    url:      "tcp://something.papertrailapp.com:1234",
     tcp_client: {
       ssl: {
-        ca_file: File.join(Rails.root, 'config', 'papertrail-bundle.pem')
+        ca_file: File.join(Rails.root, "config", "papertrail-bundle.pem")
       }
     }
   )
@@ -447,7 +447,7 @@ information when logging with tags or a payload.
 For Rails applications, or running bundler, add the following line to the bottom of the file `Gemfile`:
 
 ~~~ruby
-gem 'newrelic_rpm'
+gem "newrelic_rpm"
 ~~~
 
 Install gems:
@@ -483,7 +483,7 @@ Write log messages as documents into a MongoDB capped collection.
 For Rails applications, or running bundler, add the following line to the file `Gemfile`:
 
 ~~~ruby
-gem 'mongo'
+gem "mongo"
 ~~~
 
 Install gems:
@@ -503,8 +503,8 @@ create a file called `<Rails Root>/config/initializers/mongodb.rb` with
 the following contents and restart the application.
 
 ~~~ruby
-client   = Mongo::MongoClient.new('127.0.0.1', 27017)
-database = client['test']
+client   = Mongo::MongoClient.new("127.0.0.1", 27017)
+database = client["test"]
 
 appender = SemanticLogger::Appender::MongoDB.new(
   db:              database,
@@ -550,10 +550,10 @@ Stream log messages through a queue on RabbitMQ broker.
 ~~~ruby
 SemanticLogger.add_appender(
   appender:      :rabbitmq,
-  queue_name:    'semantic_logger',
-  rabbitmq_host: 'localhost',
-  username:      'the-username',
-  password:      'the-password',
+  queue_name:    "semantic_logger",
+  rabbitmq_host: "localhost",
+  username:      "the-username",
+  password:      "the-password",
 )
 ~~~
 
@@ -565,7 +565,7 @@ in JSON format via HTTP or HTTPS.
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :http,
-  url:      'http://localhost:8088/path'
+  url:      "http://localhost:8088/path"
 )
 ~~~
 
@@ -574,7 +574,7 @@ To send messages via HTTPS, change the url to:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :http,
-  url:      'https://localhost:8088/path'
+  url:      "https://localhost:8088/path"
 )
 ~~~
 
@@ -595,7 +595,7 @@ end
 
 SemanticLogger.add_appender(
   appender:  :http,
-  url:       'https://localhost:8088/path',
+  url:       "https://localhost:8088/path",
   formatter: formatter
 )
 ~~~
@@ -610,7 +610,7 @@ Send messages in JSON format over TCP:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :tcp,
-  server:   'localhost:8088'
+  server:   "localhost:8088"
 )
 ~~~
 
@@ -619,7 +619,7 @@ Send messages in JSON format over TCP with SSL enabled:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :tcp,
-  server:   'localhost:8088',
+  server:   "localhost:8088",
   ssl:      true
 )
 ~~~
@@ -629,7 +629,7 @@ When using self-signed certificates, or to disable verification of the server SS
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :tcp,
-  server:   'localhost:8088',
+  server:   "localhost:8088",
   ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE}
 )
 ~~~
@@ -649,7 +649,7 @@ end
 
 SemanticLogger.add_appender(
   appender: :tcp,
-  server:   'localhost:8088',
+  server:   "localhost:8088",
   ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE},
   formatter: formatter
 )
@@ -667,7 +667,7 @@ Send messages in JSON format over UDP:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :udp,
-  server:   'localhost:8088'
+  server:   "localhost:8088"
 )
 ~~~
 
@@ -686,7 +686,7 @@ end
 
 SemanticLogger.add_appender(
   appender:  :udp,
-  server:    'localhost:8088',
+  server:    "localhost:8088",
   formatter: formatter
 )
 ~~~
@@ -732,10 +732,10 @@ Messages can be logged to multiple appenders at the same time.
 Example, log to a local file and to a remote Syslog server such as syslog-ng over TCP:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 SemanticLogger.default_level = :trace
-SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
-SemanticLogger.add_appender(appender: :syslog, url: 'tcp://myloghost:514')
+SemanticLogger.add_appender(file_name: "development.log", formatter: :color)
+SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514")
 ~~~
 
 ### Appender Logging Levels
@@ -749,18 +749,18 @@ The logging level for each appender can be set explicitly. This supports:
 Stand alone example:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 
 # Set default log level for new logger instances
 SemanticLogger.default_level = :info
 
 # Log all warning messages and above to warnings.log
-SemanticLogger.add_appender(file_name: 'log/warnings.log', level: :warn)
+SemanticLogger.add_appender(file_name: "log/warnings.log", level: :warn)
 
 # Log all trace messages and above to trace.log
-SemanticLogger.add_appender(file_name: 'log/trace.log', level: :trace)
+SemanticLogger.add_appender(file_name: "log/trace.log", level: :trace)
 
-logger = SemanticLogger['MyClass']
+logger = SemanticLogger["MyClass"]
 logger.level = :trace
 logger.trace "This is a trace message"
 logger.info "This is an info message"
@@ -788,14 +788,14 @@ being written to the appenders that have been registered in Semantic Logger.
 Example:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 
 appender = SemanticLogger::Appender::File.new("separate.log", level: :info, formatter: :color)
 
 # Use appender directly, without using global Semantic Logger
-appender.warn 'Only send this to separate.log'
+appender.warn "Only send this to separate.log"
 
-appender.measure_info 'Called supplier' do
+appender.measure_info "Called supplier" do
   # Call supplier ...
 end
 ~~~

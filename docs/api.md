@@ -24,14 +24,14 @@ By default Semantic Logger will only log `:info` and above. To log everything to
 the log file set the global default log level to `:trace`:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 
 # Override the default log level of :info so that :debug and :trace are also logged
 SemanticLogger.default_level = :trace
 
-SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
+SemanticLogger.add_appender(file_name: "development.log", formatter: :color)
 
-logger = SemanticLogger['MyClass']
+logger = SemanticLogger["MyClass"]
 logger.info "Hello World"
 logger.trace "Low level trace information"
 ~~~
@@ -45,7 +45,7 @@ unless they have been explicity set to another level. In which case changing
 To create a stand-alone logger instance by supplying the name of the class/application:
 
 ~~~ruby
-logger = SemanticLogger['MyClass']
+logger = SemanticLogger["MyClass"]
 ~~~
 
 Or, even better, pass the actual class itself:
@@ -78,11 +78,11 @@ class Supplier
   include SemanticLogger::Loggable
 
   def self.some_class_method
-    logger.debug('logger is accessible from class methods')
+    logger.debug("logger is accessible from class methods")
   end
 
   def call_supplier
-    logger.debug('logger is accessible from instance methods')
+    logger.debug("logger is accessible from instance methods")
   end
 end
 ~~~
@@ -97,7 +97,7 @@ The Semantic Logger logging API supports the existing logging interface for
 the Rails and Ruby Loggers. For example:
 
 ~~~ruby
-logger.info('Hello World')
+logger.info("Hello World")
 ~~~
 
 Or to query whether a specific log level is set
@@ -109,12 +109,12 @@ logger.info?
 The following traditional logging methods are available
 
 ~~~ruby
-logger.trace('Low level trace information such as data sent over a socket')
-logger.debug('Debugging information to aid with problem determination')
-logger.info('Informational message such as request received')
-logger.warn('Warn about something in the system')
-logger.error('An error occurred during processing')
-logger.fatal('Oh no something really bad happened')
+logger.trace("Low level trace information such as data sent over a socket")
+logger.debug("Debugging information to aid with problem determination")
+logger.info("Informational message such as request received")
+logger.warn("Warn about something in the system")
+logger.error("An error occurred during processing")
+logger.fatal("Oh no something really bad happened")
 ~~~
 
 Each of the above calls can take additional parameters, for example:
@@ -143,7 +143,7 @@ Examples:
 ~~~ruby
 logger.debug("Calling Supplier")
 
-logger.debug("Calling Supplier", request: 'update', user: 'Jack')
+logger.debug("Calling Supplier", request: "update", user: "Jack")
 
 logger.trace { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed" }
 ~~~
@@ -151,24 +151,24 @@ logger.trace { "A total of #{result.inject(0) {|sum, i| i+sum }} were processed"
 An alternative API is to pass everything in a Hash, including the message.
 
 ~~~ruby
-logger.debug(message: 'Calling Supplier')
+logger.debug(message: "Calling Supplier")
 
-logger.debug(message: 'Calling Supplier', payload: {request: 'update', user: 'Jack'})
+logger.debug(message: "Calling Supplier", payload: {request: "update", user: "Jack"})
 
 # Log a complete exception
-logger.error(message: 'Calling Supplier', exception: exception)
+logger.error(message: "Calling Supplier", exception: exception)
 
 # Add a 100ms duration to the log entry
-logger.error(message: 'Calling Supplier', duration: 100)
+logger.error(message: "Calling Supplier", duration: 100)
 
 # Add a count metric ( with a value of 1 )
-logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry')
+logger.error(message: "Calling Supplier", metric: "Supplier/inquiry")
 
 # Add a count metric with a value of 21
-logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry', metric_amount: 21)
+logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", metric_amount: 21)
 
 # Add a duration metric
-logger.error(message: 'Calling Supplier', metric: 'Supplier/inquiry', duration: 100)
+logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", duration: 100)
 ~~~
 
 ### Exceptions
@@ -254,7 +254,7 @@ By measuring the time taken to execute a block of code and then assigning a metr
 the duration can be aggregated into a dashboard.
 
 ~~~ruby
-logger.measure_info "Called external interface", metric: 'Supplier/inquiry' do
+logger.measure_info "Called external interface", metric: "Supplier/inquiry" do
   # Code to call external service ...
 end
 ~~~
@@ -321,7 +321,7 @@ Example
 logger.measure_info "Called external interface",
     log_exception: :full,
     min_duration:  100,
-    metric:        'Custom/Supplier/process' do
+    metric:        "Custom/Supplier/process" do
   # Code to call external service ...
 end
 ~~~
@@ -349,10 +349,10 @@ Using Tagged logging is critical in any highly concurrent environment so that
 one can quickly find all related log entries across all levels of code, and threads.
 
 ~~~ruby
-tracking_number = '15354128'
+tracking_number = "15354128"
 
-logger.tagged(tracking_number) do
-  # All log entries in this block will include the 'tracking_number' logging tag
+SemanticLogger.tagged(tracking_number) do
+  # All log entries in this block will include the "tracking_number" logging tag
   logger.debug("Hello World")
 end
 ~~~
@@ -362,7 +362,7 @@ a system grows over time. Named tags are easier to identify and alert off of whe
 system is being written to.
 
 ~~~ruby
-logger.tagged(user: 'Jack', zip_code: 12345) do
+SemanticLogger.tagged(user: "Jack", zip_code: 12345) do
   # All log entries in this block will include the above named tags
   logger.debug("Hello World")
 end
@@ -428,7 +428,7 @@ to increase log information in diagnosing a specific issue.
 # Perform trace level logging within the block, even when the default is higher
 SemanticLogger.default_level = :info
 
-logger.debug 'this will _not_ be logged'
+logger.debug "this will _not_ be logged"
 
 logger.silence(:trace) do
  logger.debug "this will be logged"
@@ -450,10 +450,10 @@ its logger with an instance of `DebugAsTraceLogger::SemanticLogger`
 
 ~~~ruby
 # Example, log debug level messages as trace:
-logger = SemanticLogger::DebugAsTraceLogger.new('NoisyLibrary')
+logger = SemanticLogger::DebugAsTraceLogger.new("NoisyLibrary")
 
 # This will be logged as :trace
-logger.debug 'Some very low level noisy message'
+logger.debug "Some very low level noisy message"
 ~~~
 
 ### Changing the log level for a single class at runtime
@@ -462,10 +462,10 @@ Since the logger is class specific, its log level can be changed dynamically at 
 For example, to temporarily set the log level to `:trace` to diagnose an issue:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 
 SemanticLogger.default_level = :info
-SemanticLogger.add_appender(file_name: 'example.log', formatter: :color)
+SemanticLogger.add_appender(file_name: "example.log", formatter: :color)
 
 class ExternalSupplier
   # Lazy load logger class variable on first use
@@ -483,13 +483,13 @@ end
 
 # Create and use the class
 supplier = ExternalSupplier.new
-supplier.call_supplier(100, 'Jack')
+supplier.call_supplier(100, "Jack")
 
 # Now change the log level to :trace
 ExternalSupplier.logger.level = :trace
 
 # Call the supplier, this time including trace level messages
-supplier.call_supplier(100, 'Jack')
+supplier.call_supplier(100, "Jack")
 
 # Change the log level back to the global default level
 ExternalSupplier.logger.level = nil
@@ -558,26 +558,26 @@ Example function that raises a new exception:
 
 ~~~ruby
 def oh_no
-  f = File.new('filename', 'w')
+  f = File.new("filename", "w")
   # Will raise: IOError: not opened for reading
   f.read
 rescue IOError
-  raise RuntimeError.new('Failed to write to file')
+  raise RuntimeError.new("Failed to write to file")
 end
 ~~~
 
 Calling the above function and then logging the exception:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 SemanticLogger.add_appender(io: $stdout, formatter: :color)
-logger = SemanticLogger['Demo']
+logger = SemanticLogger["Demo"]
 
 begin
   oh_no
 rescue StandardError => exception
   # Semantic Logger will log both the exception and the causing exception
-  logger.error('Failed calling oh_no', exception)
+  logger.error("Failed calling oh_no", exception)
 end
 ~~~
 

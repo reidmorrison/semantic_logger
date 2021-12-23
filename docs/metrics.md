@@ -20,7 +20,7 @@ To set any duration based metric, add `:metric` option to any `measure_` logging
 along with a name for the metric:
 
 ~~~ruby
-logger.measure_info('Called supplier', metric: 'supplier/add_user') do
+logger.measure_info("Called supplier", metric: "supplier/add_user") do
   # Code to call external service ...
 end
 ~~~
@@ -29,7 +29,7 @@ Using keyword arguments, add the `:metric` option to any level based logging cal
 along with a name for the metric as well as the required `:duration` in ms.
 
 ~~~ruby
-logger.info(message: 'Called supplier', metric: 'supplier/add_user', duration: 100.23)
+logger.info(message: "Called supplier", metric: "supplier/add_user", duration: 100.23)
 ~~~
 
 ### Counting Metrics
@@ -38,7 +38,7 @@ Counting metrics can be incremented or decremented as part of a logging call.
 Using keyword arguments, add the `:metric` option.
 
 ~~~ruby
-logger.info(message: 'Called supplier', metric: 'supplier/called_user')
+logger.info(message: "Called supplier", metric: "supplier/called_user")
 ~~~
 
 In the above example the metric `supplier/called_user` is incremented by 1.
@@ -46,13 +46,13 @@ In the above example the metric `supplier/called_user` is incremented by 1.
 To decrement a metric:
 
 ~~~ruby
-logger.info(message: 'Called supplier', metric: 'supplier/called_user', metric_amount: -1)
+logger.info(message: "Called supplier", metric: "supplier/called_user", metric_amount: -1)
 ~~~
 
 To increment total counters, such as the total dollar amount of purchases by department:
 
 ~~~ruby
-logger.info(message: 'Purchase complete', metric: 'departments/clothing', metric_amount: 189.42)
+logger.info(message: "Purchase complete", metric: "departments/clothing", metric_amount: 189.42)
 ~~~
 
 Note: Statsd total counters only supports integers, floats are rounded to the nearest integer.
@@ -69,7 +69,7 @@ Send metrics to [Statsd](https://github.com/quasor/statsd) via UDP so it can rol
 [graphite](http://graphite.wikidot.com/) or [mongodb](http://mongodb.org).
 
 ~~~ruby
-subscriber = SemanticLogger::Metrics::Statsd.new(url: 'udp://localhost:8125')
+subscriber = SemanticLogger::Metrics::Statsd.new(url: "udp://localhost:8125")
 SemanticLogger.on_log(subscriber)
 ~~~
 

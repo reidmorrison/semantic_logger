@@ -208,7 +208,7 @@ end
 Add tags to every log entry within the code block. For example login, session id, source ip address, username, etc.
 
 ~~~ruby
-logger.tagged('jbloggs') do
+SemanticLogger.tagged("jbloggs") do
   # All log entries in this block will include the tag 'jbloggs'
   logger.info("Hello World")
   logger.debug("More messages")
@@ -218,6 +218,16 @@ end
 Output:
 
 ![development.log](images/example_output.png)
+
+Add named tags to every log entry within the code block.
+
+~~~ruby
+SemanticLogger.tagged(name: "jbloggs") do
+  # All log entries in this block will include the named tag: `{name: "jbloggs"}`
+  logger.info("Hello World")
+  logger.debug("More messages")
+end
+~~~
 
 ### Ruby Support
 

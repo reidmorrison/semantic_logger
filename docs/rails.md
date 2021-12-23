@@ -18,8 +18,8 @@ the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/master/.
 Add the following lines to Gemfile
 
 ~~~ruby
-gem 'amazing_print'
-gem 'rails_semantic_logger'
+gem "amazing_print"
+gem "rails_semantic_logger"
 ~~~
 
 The gem `amazing_print` is optional, but is recommended to get colorized output of semantic data
@@ -149,7 +149,7 @@ For example, add the following to application.rb, or replace the existing `confi
   config.log_tags = {
     request_id: :request_id,
     ip:         :remote_ip,
-    user:       -> request { request.cookie_jar['login'] }
+    user:       -> request { request.cookie_jar["login"] }
   }
 ~~~
 
@@ -285,13 +285,13 @@ config.semantic_logger.add_appender(appender: syslog)
 Example, also log to a local Syslog such as syslog-ng over TCP:
 
 ~~~ruby
-config.semantic_logger.add_appender(appender: syslog, url: 'tcp://myloghost:514')
+config.semantic_logger.add_appender(appender: syslog, url: "tcp://myloghost:514")
 ~~~
 
 Example, also log to elasticsearch:
 
 ~~~ruby
-config.semantic_logger.add_appender(appender: :elasticsearch, url: 'http://localhost:9200')
+config.semantic_logger.add_appender(appender: :elasticsearch, url: "http://localhost:9200")
 ~~~
 
 Example, also log to BugSnag:
@@ -369,7 +369,7 @@ After disabling the default file logging another appender needs to be added befo
 For example to create a JSON only log file:
 
 ~~~ruby
-config.semantic_logger.add_appender(file_name: 'log/json.log', formatter: :json)
+config.semantic_logger.add_appender(file_name: "log/json.log", formatter: :json)
 ~~~
 
 Notes:

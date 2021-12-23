@@ -47,7 +47,7 @@ or add the code directly to your application:
 ~~~ruby
 SemanticLogger.add_appender(
   appender: :elasticsearch,
-  url:      'http://localhost:9200'
+  url:      "http://localhost:9200"
 )
 ~~~
 

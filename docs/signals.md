@@ -62,7 +62,7 @@ Java thread dump which includes system threads and Java stack traces.
 It is recommended to name any threads you create in the application, by
 calling the following from within the thread itself:
 ~~~ruby
-Thread.current.name = 'My Worker'
+Thread.current.name = "My Worker"
 ~~~
 
 Example (where the target ruby process id is 1234) :
@@ -90,9 +90,9 @@ Set gc_log_microseconds to nil to not enable JRuby Garbage collections
 
 ~~~ruby
 # Set the log level change signal to USR1
-# Set the thread dump signal to 'USR2'
+# Set the thread dump signal to "USR2"
 # Set the Garbage collection minimum threshold to 100,000 micro-seconds
-SemanticLogger.add_signal_handler('USR1', 'USR2', 100000)
+SemanticLogger.add_signal_handler("USR1", "USR2", 100000)
 ~~~
 
 ### [Next: Forking ==>](forking.html)

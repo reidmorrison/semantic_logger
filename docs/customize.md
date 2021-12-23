@@ -13,7 +13,7 @@ For the format of the `Log Struct`, see [Log Struct](log_struct.html)
 #### Example: Formatter that just returns the Log Struct
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 
 SemanticLogger.default_level = :trace
 
@@ -23,7 +23,7 @@ formatter = Proc.new do |log|
 end
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 
-logger = SemanticLogger['Hello']
+logger = SemanticLogger["Hello"]
 logger.info "Hello World"
 ~~~
 Output:
@@ -34,7 +34,7 @@ Output:
 #### Example: Replace the default log file formatter
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 SemanticLogger.default_level = :trace
 ~~~
 
@@ -50,7 +50,7 @@ end
 
 Specify the formatter when creating the appender:
 ~~~ruby
-SemanticLogger.add_appender(file_name: 'development.log', formatter: MyFormatter.new)
+SemanticLogger.add_appender(file_name: "development.log", formatter: MyFormatter.new)
 ~~~
 
 Example usage:
@@ -65,7 +65,7 @@ See [SemanticLogger::Formatters::Default](https://github.com/reidmorrison/semant
 #### Example: Replace the colorized log file formatter
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 SemanticLogger.default_level = :trace
 ~~~
 
@@ -81,7 +81,7 @@ end
 
 Specify the formatter when creating the appender:
 ~~~ruby
-SemanticLogger.add_appender(file_name: 'development.log', formatter: MyFormatter.new)
+SemanticLogger.add_appender(file_name: "development.log", formatter: MyFormatter.new)
 ~~~
 
 Example usage:
@@ -95,7 +95,7 @@ See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic
 
 #### Example: Replacing the format for an active logger, such as in Rails:
 
-This example assumes you have `gem 'rails_semantic_logger'` in your Gemfile.
+This example assumes you have `gem "rails_semantic_logger"` in your Gemfile.
 
 Create a file called `config/initializers/semantic_logger.rb`:
 
@@ -124,7 +124,7 @@ end
 Specify the formatter when creating the appender:
 
 ```ruby
-SemanticLogger.add_appender(file_name: 'development.log', formatter: NoPidFormatter.new)
+SemanticLogger.add_appender(file_name: "development.log", formatter: NoPidFormatter.new)
 ```
 
 Or to use the colorized formatter, use `SemanticLogger::Formatters::Color` instead of 

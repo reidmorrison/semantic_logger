@@ -26,22 +26,22 @@ Example. Using a regular expression filter, log everything to one file,
 log _only_ messages from a particular class to the second file:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 
 # Log everything to development.log
-SemanticLogger.add_appender(file_name: 'development.log')
+SemanticLogger.add_appender(file_name: "development.log")
 
-# Log everything except any messages from 'MyClass' to summary.log
+# Log everything except any messages from "MyClass" to summary.log
 appender = SemanticLogger.add_appender(
-  file_name: 'my_class.log',
-  # Filter out log entries where the class name is 'MyClass'
+  file_name: "my_class.log",
+  # Filter out log entries where the class name is "MyClass"
   filter:    /MyClass/
 )
 
-logger1 = SemanticLogger['MyClass']
-logger1.info "This will _only_ be logged to 'my_class.log'"
+logger1 = SemanticLogger["MyClass"]
+logger1.info "This will _only_ be logged to "my_class.log""
 
-logger2 = SemanticLogger['OtherClass']
+logger2 = SemanticLogger["OtherClass"]
 logger2.info "This will be logged to development.log and 'my_class.log'"
 ~~~
 
@@ -49,22 +49,22 @@ Example Using a Proc filter, log everything to one file, log everything except
 messages from a particular class to the second file:
 
 ~~~ruby
-require 'semantic_logger'
+require "semantic_logger"
 
 # Log everything to development.log
-SemanticLogger.add_appender(file_name: 'development.log')
+SemanticLogger.add_appender(file_name: "development.log")
 
-# Log all messages from 'MyClass' to summary.log
+# Log all messages from "MyClass" to summary.log
 appender = SemanticLogger.add_appender(
-  file_name: 'my_class.log',
-  # Filter out log entries where the class name is _not_ 'MyClass'
-  filter:    -> log { log.name != 'MyClass' }
+  file_name: "my_class.log",
+  # Filter out log entries where the class name is _not_ "MyClass"
+  filter:    -> log { log.name != "MyClass" }
 )
 
-logger1 = SemanticLogger['MyClass']
+logger1 = SemanticLogger["MyClass"]
 logger1.info "This will _not_ be logged to summary.log"
 
-logger2 = SemanticLogger['OtherClass']
+logger2 = SemanticLogger["OtherClass"]
 logger2.info "This will be logged to summary.log"
 ~~~
 
@@ -77,7 +77,7 @@ Strip out the job data since from the following log messages:
 
 ~~~ruby
 Resque.logger.filter = -> log do
-  if (log.name == 'Resque') && (match = log.message.to_s.match(/\A(got|done): /))
+  if (log.name == "Resque") && (match = log.message.to_s.match(/\A(got|done): /))
     log.message = match[1]
   end
   # After the message has been modified, make sure it is logged:
@@ -96,7 +96,7 @@ For example, filter out all the `*** Checking` log messages from Resque:
 
 ~~~ruby
 logger = SemanticLogger[Resque]
-# Filter out all messages containing the text beginning with '*** Checking'
+# Filter out all messages containing the text beginning with "*** Checking"
 logger.filter = Proc.new {|log| log.message !~ /\A\*\*\* Checking/ }
 
 # Give Resque its own logger with the custom filter applied to reduce its verbosity
