@@ -32,6 +32,10 @@ module SemanticLogger
     autoload :Minitest,          "semantic_logger/reporters/minitest"
   end
 
+  module Test
+    autoload :CaptureLogEvents,  "semantic_logger/test/capture_log_events"
+  end
+
   if defined?(JRuby)
     module JRuby
       autoload :GarbageCollectionLogger, "semantic_logger/jruby/garbage_collection_logger"
