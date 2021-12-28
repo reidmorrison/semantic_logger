@@ -4,6 +4,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- feat: Add support for newer `sentry-ruby` gem
+
 ## [4.9.0]
 
 - Separate out File and IO log appenders.
