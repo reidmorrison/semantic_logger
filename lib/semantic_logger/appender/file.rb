@@ -94,11 +94,11 @@ module SemanticLogger
       #       "60m" : Every 60 minutes at the beginning of the minute: 10:24:00, 11:24:00, 12:24:00, ...
       #       "1h"  : Every hour at the beginning of the hour: 10:00:00, 11:00:00, 12:00:00, ...
       #       "1d"  : Every day at the beginning of the day: "20211008 00:00:00", "20211009 00:00:00", ...
-      #     Default: nil
+      #     Default: nil (Disabled)
       #
       #   :reopen_count [Integer]
       #     Close and re-open the log file after every `reopen_count` number of logged entries.
-      #     Default: 0
+      #     Default: 0 (Disabled)
       #
       #   :reopen_size [Integer]
       #     Approximate number of bytes to write to a log file by this process before closing and re-opening it.
@@ -109,7 +109,7 @@ module SemanticLogger
       #     - The `reopen_size` is only the amount of bytes written by this process, it excludes data
       #       written by other processes. Use a unique filename to prevent multiple processes from writing to
       #       the same log file at the same time.
-      #     Default: 0
+      #     Default: 0 (Disabled)
       #
       # Example
       #    require "semantic_logger"

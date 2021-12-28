@@ -61,7 +61,13 @@ and are therefore not automatically included by this gem:
 - Elasticsearch Appender: gem 'elasticsearch'
 - Kafka Appender: gem 'ruby-kafka'
 
-## Upgrading to Semantic Logger v5.0
+## Upgrading to Semantic Logger v4.9
+
+These changes should not be noticeable by the majority of users of Semantic Logger, since
+they are to the internal API. It is possible that advanced users may be using these internal
+API's directly.
+
+This does not affect any calls to the public api `SemanticLogger.add_appender`.
 
 File and IO are now separate appenders. When creating the File appender explicitly, its arguments
 have changed. For example, when requesting an IO stream, it needs to be changed from:
@@ -83,9 +89,7 @@ to:
 SemanticLogger::Appender::File.new("file.log")
 ~~~
 
-This does not affect any calls to `SemanticLogger.add_appender`
-
-Rails Semantic Logger, if used, needs to be upgraded to v5 when upgrading to Semantic Logger v5.
+Rails Semantic Logger, if used, needs to be upgraded to v4.9 when upgrading to Semantic Logger v4.9.
 
 ## Upgrading to Semantic Logger v4.4
 

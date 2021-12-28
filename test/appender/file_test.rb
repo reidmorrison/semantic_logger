@@ -146,9 +146,10 @@ module Appender
             appender.info("Hello world how are you doing")
             assert appender.log_size > 10
             refute appender.send(:time_to_reopen?)
+            file_handle = appender.instance_variable_get(:@file).object_id
             assert_file_reopened(appender) do
-              7.times { appender.info("Hello world how are you doing") }
-              assert appender.log_size > 250
+              10.times { appender.info("Hello world how are you doing") }
+              refute_equal file_handle, appender.instance_variable_get(:@file).object_id
             end
           end
         end

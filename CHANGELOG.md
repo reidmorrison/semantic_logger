@@ -4,13 +4,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
-- Documentation: Fix link to GitHub Actions CI configuration.
-- Add support for logging to elastic data-streams
-- Handle case when tags are passed as an array in a single argument to `SemanticLogger::Base#tagged`.
-- feat: Add tags to logfmt formatter output
-- fix: Ensure time_key is used in logfmt formatter
-
-## [5.0.0]
+## [4.9.0]
 
 - Separate out File and IO log appenders.
 - Add "log rotation" like capabilities to the File appender.
@@ -29,8 +23,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   - See new SemanticLogger::Appender::File option `retry_count`.
 - Other options added to the file appender:
   - append, exclusive_lock, encoding
+- Documentation: Fix link to GitHub Actions CI configuration.
+- Add support for logging to elastic data-streams
+- Handle case when tags are passed as an array in a single argument to `SemanticLogger::Base#tagged`.
+- feat: Add tags to logfmt formatter output
+- fix: Ensure time_key is used in logfmt formatter
 
-Note: See the readme for v5 upgrade instructions.
+Note: See the readme for v4.9 upgrade instructions.
 
 ## [4.8.2]
 
