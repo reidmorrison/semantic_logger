@@ -147,7 +147,7 @@ module Appender
             assert appender.log_size > 10
             refute appender.send(:time_to_reopen?)
             assert_file_reopened(appender) do
-              20.times { appender.info("Hello world how are you doing") }
+              7.times { appender.info("Hello world how are you doing") }
               assert appender.log_size > 250
             end
           end
