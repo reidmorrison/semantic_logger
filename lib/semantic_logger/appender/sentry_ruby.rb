@@ -51,9 +51,10 @@ module SemanticLogger
 
         context = formatter.call(log, self)
         payload = context.delete(:payload) || {}
-        transaction_name = context[:named_tags].delete(:transaction_name)
+        named_tags = context[:named_tags] || {}
+        transaction_name = named_tags.delete(:transaction_name)
 
-        user = extract_user!(context[:named_tags], payload)
+        user = extract_user!(named_tags, payload)
         tags = extract_tags!(context)
 
         fingerprint = payload.delete(:fingerprint)
