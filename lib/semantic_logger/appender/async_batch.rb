@@ -64,6 +64,7 @@ module SemanticLogger
           signal.wait(batch_seconds)
 
           logs          = []
+          messages      = []
           first         = true
           message_count = queue.length
           message_count.times do
@@ -76,10 +77,11 @@ module SemanticLogger
                 first = false
               end
             else
-              process_message(message)
+              messages << message
             end
           end
           appender.batch(logs) if logs.size.positive?
+          messages.each { |message| process_message(message) }
           signal.reset unless queue.size >= batch_size
         end
       end
