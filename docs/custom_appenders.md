@@ -66,4 +66,20 @@ To have your custom appender included in the standard list of appenders, submit 
 with complete working tests.
 See the [Graylog Appender Test](https://github.com/reidmorrison/semantic_logger/blob/master/test/appender/graylog_test.rb) for an example.
 
-### [Next: Log Struct ==>](log_struct.html)
+## Design
+
+This section introduces the internal design of Semantic Logger, which will be helpful for anyone
+that wants to contribute changes for others in the community to take advantage of.
+
+### Log message flow diagram
+
+Shows how log messages events are emitted from the various log instances, placed in the in-memory queue,
+and then written to one or more appenders on a separate thread.
+
+![Log message flow diagram](images/log_event_flow.png "Flow Diagram")
+
+### Class Diagram
+
+![Class diagram](images/class_diagram.png "Class Diagram")
+
+### [Next: Log Event ==>](log_struct.html)
