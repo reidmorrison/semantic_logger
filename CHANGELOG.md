@@ -4,6 +4,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- feat: Add support for newer `sentry-ruby` gem
 - Fixed `flush` on `AsyncBatch` appender not immediately writing logs
 
 ## [4.9.0]

@@ -28,6 +28,7 @@ Log messages can be written to one or more of the following destinations at the 
 * UDP
 * MongoDB
 * Rollbar
+* Sentry
 * Logger, log4r, etc.
 
 To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
@@ -705,6 +706,36 @@ SemanticLogger.on_log do |log|
   err = RuntimeError.new(log.try(:message))
   err.set_backtrace(log.backtrace) if log.backtrace
   Rollbar.error(err, :log_extra => log.to_h)
+end
+~~~
+
+### Sentry
+
+Usage of `sentry-raven` gem is possible but the gem itself is deprecated.
+
+Use the `sentry-ruby` gem instead, and the corresponding appender:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :sentry_ruby)
+~~~
+
+Some of the logging context will be sent to Sentry:
+
+* From named tags, `transaction_name`.
+  See <https://docs.sentry.io/platforms/ruby/enriching-events/transaction-name/>.
+* From either named tags or payload, `user` is built based on `user_id`,
+  `username`, `user_email`, `ip_address` keys plus any additional `user` key
+  that happens to be a hash.
+  See <https://docs.sentry.io/platforms/ruby/enriching-events/identify-user/>.
+* From the payload, `fingerprint` can be used to configure grouping
+  granularity. See <https://docs.sentry.io/platforms/ruby/usage/sdk-fingerprinting/>.
+* Named tags are sent as tags. See <https://docs.sentry.io/platforms/ruby/enriching-events/tags/>
+* The unnamed tags are sent in as the `:tag` tag, separated by commas. An existing
+* Everything else from payload and context is added to the `extras`.
+
+~~~ruby
+SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
+  logger.error("some message", username: "joe", fingerprint: ["bar"])
 end
 ~~~
 

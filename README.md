@@ -22,7 +22,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * Splunk
 * MongoDB
 * Honeybadger
-* Sentry
+* Sentry (both with legacy `sentry-raven` and modern `sentry-ruby` gem)
 * HTTP
 * TCP
 * UDP
@@ -60,6 +60,8 @@ and are therefore not automatically included by this gem:
 - Splunk Appender: gem 'splunk-sdk-ruby'
 - Elasticsearch Appender: gem 'elasticsearch'
 - Kafka Appender: gem 'ruby-kafka'
+- Legacy Sentry Appender: gem 'sentry-raven' (deprecated)
+- Sentry Appender: gem 'sentry-ruby'
 
 ## Upgrading to Semantic Logger v4.9
 
