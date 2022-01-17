@@ -2,11 +2,11 @@
 layout: default
 ---
 
-## Write your own Custom Appender
+## Custom Appender
 
-To write your own appender it should meet the following requirements:
+To write your own log appender it should meet the following requirements:
 
-* Inherit from `SemanticLogger::Base`
+* Inherit from `SemanticLogger::Subscriber`
 * In the initializer connect to the resource being logged to
 * Implement #log(log) which needs to write to the relevant resource
 * Implement #flush if the resource can be flushed
@@ -60,7 +60,7 @@ logger.info "Hello World"
 
 Look at the [existing appenders](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/appender) for good examples
 
-### Contribute
+### Tests
 
 To have your custom appender included in the standard list of appenders, submit it along
 with complete working tests.
