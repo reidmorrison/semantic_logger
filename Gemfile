@@ -3,11 +3,6 @@ source "http://rubygems.org"
 gemspec
 
 gem "amazing_print"
-gem "minitest"
-gem "minitest-reporters"
-gem "minitest-shared_description"
-gem "minitest-stub_any_instance"
-gem "rake"
 
 # [optional] Bugsnag appender
 gem "bugsnag"
@@ -41,5 +36,10 @@ gem "sentry-ruby"
 gem "syslog_protocol"
 
 group :development do
+  gem "minitest"
+  gem "minitest-reporters"
+  gem "minitest-shared_description"
+  gem "minitest-stub_any_instance"
+  gem "rake"
   gem "rubocop"
 end
