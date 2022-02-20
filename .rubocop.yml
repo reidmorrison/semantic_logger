@@ -1,9 +1,11 @@
+inherit_from: .rubocop_todo.yml
+
 AllCops:
   Exclude:
     - ".git/**/*"
     - "docs/**/*"
   NewCops: enable
-  TargetRubyVersion: 2.5
+  TargetRubyVersion: 2.7
 
 #
 # RuboCop built-in settings.
