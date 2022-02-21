@@ -16,6 +16,7 @@ task publish: :gem do
 end
 
 Rake::TestTask.new do |t|
+  t.description = "Run all tests"
   t.pattern = "test/**/*_test.rb"
   t.verbose = true
   t.warning = false
