@@ -34,4 +34,5 @@ Rake::TestTask.new do |t|
   t.warning = false
 end
 
+task :test => :test_unit
 task default: :test
