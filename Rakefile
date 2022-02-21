@@ -15,7 +15,7 @@ task publish: :gem do
   system "rm semantic_logger-#{SemanticLogger::VERSION}.gem"
 end
 
-Rake::TestTask.new(:test) do |t|
+Rake::TestTask.new do |t|
   t.pattern = "test/**/*_test.rb"
   t.verbose = true
   t.warning = false
