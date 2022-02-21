@@ -4,6 +4,12 @@ gemspec
 
 gem "amazing_print"
 
+# @note While this gem is not called directly anywhere, Ruby 3.1.0 breaks
+#   without it because the Splunk SDK requires rexml/document for its
+#   xml_shim.rb and rexml is no longer a default gem beyond Ruby
+#   2.7.5.
+gem "rexml"
+
 # [optional] Bugsnag appender
 gem "bugsnag"
 # [optional] Rabbitmq appender
@@ -25,7 +31,6 @@ gem "mongo"
 gem "net_tcp_client"
 # [optional] Splunk appender
 gem "splunk-sdk-ruby"
-gem "nokogiri"
 # [optional] Statsd metrics
 gem "statsd-ruby"
 # [optional] legacy Sentry appender
