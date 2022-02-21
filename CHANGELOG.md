@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+### Changed
+- Contributor experience related to RuboCop was improved with the
+  following changes:
+    - New .rubocop\_todo.yml to hold RuboCop offenses and enable a clean
+      run of RuboCop against the current code base.
+    - A number of items in .rubocop.yml were removed to allow RuboCop to
+      manage them within the .rubocop\_todo.yml file.
+    - Updated RuboCop's target version to Ruby 2.7.5.
+    - Updated minimum Ruby version to 2.7.5 as earlier versions are
+      end-of-life.
 
 ## [4.10.0]
 
