@@ -37,12 +37,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Add automatic retries for the file appender when an error occurs while writing to the file.
   - See new SemanticLogger::Appender::File option `retry_count`.
 - Other options added to the file appender:
-  - append, exclusive_lock, encoding
+  - append, exclusive\_lock, encoding
 - Documentation: Fix link to GitHub Actions CI configuration.
 - Add support for logging to elastic data-streams
 - Handle case when tags are passed as an array in a single argument to `SemanticLogger::Base#tagged`.
 - feat: Add tags to logfmt formatter output
-- fix: Ensure time_key is used in logfmt formatter
+- fix: Ensure time\_key is used in logfmt formatter
 
 Note: See the readme for v4.9 upgrade instructions.
 
