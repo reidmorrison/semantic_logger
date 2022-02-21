@@ -3,6 +3,22 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+### Added
+- New unit tests that validate that the gems in the :development group
+  aren't required for non-development use.
+- New Rake task to exercise the new unit tests.
+### Changed
+- Contributor experience related to RuboCop was improved with the
+  following changes:
+    - New .rubocop\_todo.yml to hold RuboCop offenses and enable a clean
+      run of RuboCop against the current code base.
+    - A number of items in .rubocop.yml were removed to allow RuboCop to
+      manage them within the .rubocop\_todo.yml file.
+- Move development-only gems in the Gemfile to the :development group.
+- Refactored the Rakefile to run the additional tests along with the
+  existing tests.
+- Updated gemspec to better support Splunk, making the REXML dependency
+  clearer on both Ruby 2.7.5 and Ruby 3.1.0.
 
 ## [4.10.0]
 
@@ -27,12 +43,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Add automatic retries for the file appender when an error occurs while writing to the file.
   - See new SemanticLogger::Appender::File option `retry_count`.
 - Other options added to the file appender:
-  - append, exclusive_lock, encoding
+  - append, exclusive\_lock, encoding
 - Documentation: Fix link to GitHub Actions CI configuration.
 - Add support for logging to elastic data-streams
 - Handle case when tags are passed as an array in a single argument to `SemanticLogger::Base#tagged`.
 - feat: Add tags to logfmt formatter output
-- fix: Ensure time_key is used in logfmt formatter
+- fix: Ensure time\_key is used in logfmt formatter
 
 Note: See the readme for v4.9 upgrade instructions.
 
