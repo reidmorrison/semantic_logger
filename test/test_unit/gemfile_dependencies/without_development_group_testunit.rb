@@ -30,15 +30,12 @@ Test::Unit.at_exit do
 end
 
 class WithoutDevelopmentGroupGems < Test::Unit::TestCase
-  def test_1_MiniTest_constant_is_undefined
+  def test_1_minitest_constants_are_undefined
     refute defined?(MiniTest), "minitest loaded from :development group"
-  end
-
-  def test_2_Minitest_constant_is_undefined
     refute defined?(Minitest), "minitest loaded from :development group"
   end
 
-  def test_3_logger_succeeds_without_development_gems
+  def test_2_logger_succeeds_without_development_gems
     msg = "test without :development gems"
     logger = SemanticLogger::Test::CaptureLogEvents.new
     logger.info msg

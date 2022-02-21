@@ -16,11 +16,11 @@ task publish: :gem do
 end
 
 desc "Run only test/unit tests"
-task :test_unit, [:options] do |t, args|
+task :test_unit, [:options] do |_t, args|
   args.with_defaults options: nil
   options = args.to_a
-  options << '--verbose' if ENV['TESTOPTS']
-  options = options.compact.uniq.join ?\s
+  options << "--verbose" if ENV["TESTOPTS"]
+  options = options.compact.uniq.join "\s"
   FileList["test/**/*_testunit.rb"].map do |f|
     sh "ruby #{f} #{options}"
   end
@@ -34,5 +34,5 @@ Rake::TestTask.new do |t|
   t.warning = false
 end
 
-task :test => :test_unit
+task test: :test_unit
 task default: :test
