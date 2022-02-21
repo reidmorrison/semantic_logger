@@ -15,6 +15,18 @@ task publish: :gem do
   system "rm semantic_logger-#{SemanticLogger::VERSION}.gem"
 end
 
+desc "Run only test/unit tests"
+task :test_unit, [:options] do |t, args|
+  args.with_defaults options: nil
+  options = args.to_a
+  options << '--verbose' if ENV['TESTOPTS']
+  options = options.compact.uniq.join ?\s
+  FileList["test/**/*_testunit.rb"].map do |f|
+    sh "ruby #{f} #{options}"
+  end
+  puts
+end
+
 Rake::TestTask.new do |t|
   t.description = "Run all tests"
   t.pattern = "test/**/*_test.rb"
