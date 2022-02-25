@@ -15,15 +15,15 @@ module SemanticLogger
   end
 
   def self.current_logger
-    @current_logger || default_logger
+    Thread.current[:semantic_logger_current_logger] || default_logger
   end
 
   def self.with_current_logger(logger)
-    current_logger = Thread.current[:semantic_logger_current_logger] || default_logger
+    prev_logger = current_logger
     Thread.current[:semantic_logger_current_logger] = logger
     yield
   ensure
-    Thread.current[:semantic_logger_current_logger] = current_logger
+    Thread.current[:semantic_logger_current_logger] = prev_logger
   end
 
   # Sets the global default log level
@@ -327,12 +327,12 @@ module SemanticLogger
   # If the tag being supplied is definitely a string then this fast
   # tag api can be used for short lived tags
   def self.fast_tag(tag)
-    return yield(Thread.current[:semantic_logger_current_logger]) if tag.nil? || tag == ""
+    return yield(current_logger) if tag.nil? || tag == ""
 
     t = Thread.current[:semantic_logger_tags] ||= []
     begin
       t << tag
-      yield(Thread.current[:semantic_logger_current_logger])
+      yield(current_logger)
     ensure
       t.pop
     end
@@ -359,7 +359,7 @@ module SemanticLogger
   #   to the equivalent of:
   #     `logger.tagged('first', 'more', 'other')`
   def self.tagged(*tags, &block)
-    return yield(Thread.current[:semantic_logger_current_logger]) if tags.empty?
+    return yield(current_logger) if tags.empty?
 
     # Allow named tags to be passed into the logger
     if tags.size == 1
@@ -369,7 +369,7 @@ module SemanticLogger
 
     begin
       push_tags(*tags)
-      yield(Thread.current[:semantic_logger_current_logger])
+      yield(current_logger)
     ensure
       pop_tags(tags.size)
     end
@@ -403,12 +403,12 @@ module SemanticLogger
 
   # :nodoc
   def self.named_tagged(hash)
-    return yield(Thread.current[:semantic_logger_current_logger]) if hash.nil? || hash.empty?
+    return yield(current_logger) if hash.nil? || hash.empty?
     raise(ArgumentError, "#named_tagged only accepts named parameters (Hash)") unless hash.is_a?(Hash)
 
     begin
       push_named_tags(hash)
-      yield(Thread.current[:semantic_logger_current_logger])
+      yield(current_logger)
     ensure
       pop_named_tags
     end
