@@ -4,6 +4,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Yield the logger instance to `SemanticLogger.tagged` for compatibility with ActiveSupport::TaggedLogging
+
 ## [4.10.0]
 
 - New Feature: Add support for newer `sentry-ruby` gem.
