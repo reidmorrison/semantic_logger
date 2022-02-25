@@ -33,6 +33,15 @@ class SemanticLoggerTest < Minitest::Test
           end
         end
 
+        it "add tags to log entries taking a block argument" do
+          SemanticLogger.tagged("12345", "DJHSFK") do |l|
+            l.info("Hello world")
+
+            assert log = log_message
+            assert_equal %w[12345 DJHSFK], log.tags
+          end
+        end
+
         it "add embedded tags to log entries" do
           SemanticLogger.tagged("First Level", "tags") do
             SemanticLogger.tagged("Second Level") do

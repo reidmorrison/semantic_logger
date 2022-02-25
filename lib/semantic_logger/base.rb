@@ -187,18 +187,20 @@ module SemanticLogger
     #     `logger.tagged('first', 'more', 'other')`
     # - For better performance with clean tags, see `SemanticLogger.tagged`.
     def tagged(*tags, &block)
-      # Allow named tags to be passed into the logger
-      # Rails::Rack::Logger passes logs as an array with a single argument
-      if tags.size == 1 && !tags.first.is_a?(Array)
-        tag = tags[0]
-        return yield if tag.nil? || tag == ""
+      SemanticLogger.with_current_logger(self) do
+        # Allow named tags to be passed into the logger
+        # Rails::Rack::Logger passes logs as an array with a single argument
+        if tags.size == 1 && !tags.first.is_a?(Array)
+          tag = tags[0]
+          return yield if tag.nil? || tag == ""
 
-        return tag.is_a?(Hash) ? SemanticLogger.named_tagged(tag, &block) : SemanticLogger.fast_tag(tag.to_s, &block)
+          return tag.is_a?(Hash) ? SemanticLogger.named_tagged(tag, &block) : SemanticLogger.fast_tag(tag.to_s, &block)
+        end
+
+        # Need to flatten and reject empties to support calls from Rails 4
+        new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
+        SemanticLogger.tagged(*new_tags, &block)
       end
-
-      # Need to flatten and reject empties to support calls from Rails 4
-      new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
-      SemanticLogger.tagged(*new_tags, &block)
     end
 
     # :nodoc:
