@@ -394,6 +394,31 @@ class LoggerTest < Minitest::Test
           assert_equal %w[first second], log.tags
         end
       end
+
+      it "yields the logger" do
+        logger.tagged(foo: "bar") do |l|
+          l.info("hello world")
+        end
+
+        assert log = log_message
+        assert_equal "hello world", log.message
+        assert_equal({foo: "bar"}, log.named_tags)
+      end
+
+      it "yields the logger in another thread" do
+        t = Thread.new do
+          logger.tagged(thread: "new") do |l|
+            l.info("hello from the other thread")
+            assert_equal l, logger
+          end
+        end
+
+        t.join
+
+        assert log = log_message
+        assert_equal "hello from the other thread", log.message
+        assert_equal({thread: "new"}, log.named_tags)
+      end
     end
   end
 end
