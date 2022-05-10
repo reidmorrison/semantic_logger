@@ -5,7 +5,7 @@ layout: default
 Semantic Logger is a comprehensive logging interface that enables human and machine readable logging outputs.
 
 * Colorful text log files for humans to read.
-* JSON log files containing all Semantic information that machines can easily comsume. 
+* JSON log files containing all Semantic information that machines can easily consume. 
 * Write to multiple output destinations at the same time.
 * Forward logs to a centralized logging system, via JSON output or built-in appenders.
 
