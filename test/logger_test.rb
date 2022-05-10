@@ -394,6 +394,12 @@ class LoggerTest < Minitest::Test
           assert_equal %w[first second], log.tags
         end
       end
+
+      it "yields self to be compatible with rails tagged logger" do
+        logger.tagged("12345", "DJHSFK") do |yielded_logger|
+          assert_equal logger.object_id, yielded_logger.object_id
+        end
+      end
     end
   end
 end

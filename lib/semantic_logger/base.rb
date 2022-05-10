@@ -186,7 +186,8 @@ module SemanticLogger
     #   to:
     #     `logger.tagged('first', 'more', 'other')`
     # - For better performance with clean tags, see `SemanticLogger.tagged`.
-    def tagged(*tags, &block)
+    def tagged(*tags)
+      block = -> { yield(self) }
       # Allow named tags to be passed into the logger
       # Rails::Rack::Logger passes logs as an array with a single argument
       if tags.size == 1 && !tags.first.is_a?(Array)
