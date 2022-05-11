@@ -41,5 +41,5 @@ gem "sentry-ruby"
 gem "syslog_protocol"
 
 group :development do
-  gem "rubocop", "~> 1.28"
+  gem "rubocop", "~> 1.28", "< 1.29"
 end
