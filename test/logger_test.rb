@@ -109,6 +109,14 @@ class LoggerTest < Minitest::Test
             assert_equal payload, log.payload
           end
 
+          it "logs payload and message without payload arg" do
+            logger.send(level, "hello world", **payload)
+
+            assert log = log_message
+            assert_equal "hello world", log.message
+            assert_equal payload.except(:message), log.payload
+          end
+
           it "logs payload and message from block" do
             logger.send(level) { {message: "hello world", payload: payload} }
 
@@ -178,7 +186,7 @@ class LoggerTest < Minitest::Test
             logger.send(level, payload)
 
             assert log = log_message
-            refute log.message
+            assert_equal "Message from payload", log.message
             refute log.exception
             refute log.metric
             assert_equal payload, log.payload

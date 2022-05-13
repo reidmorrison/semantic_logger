@@ -333,7 +333,7 @@ module SemanticLogger
           log.assign(**log.extract_arguments(message))
         elsif exception.nil? && message && payload && payload.is_a?(Hash)
           # Message with keyword arguments as the rest.
-          log.assign(message: message, **log.extract_arguments(payload))
+          log.assign(**log.extract_arguments(payload), message: message)
         else
           # No keyword arguments.
           log.assign(message: message, payload: payload, exception: exception)
