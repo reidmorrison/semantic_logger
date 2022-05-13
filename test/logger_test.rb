@@ -198,7 +198,9 @@ class LoggerTest < Minitest::Test
             assert_equal "Message from payload", log.message
             refute log.exception
             refute log.metric
-            assert_equal payload.except(:message), log.payload
+            payload_without_message = payload.dup
+            payload_without_message.delete(:message)
+            assert_equal payload_without_message, log.payload
           end
         end
 
