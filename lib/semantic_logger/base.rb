@@ -328,14 +328,14 @@ module SemanticLogger
 
       log = Log.new(name, level, index)
       should_log =
-        if payload.nil? && exception.nil? && message.is_a?(Hash)
-          # Everything as keyword arguments.
+        if exception.nil? && payload.nil? && message.is_a?(Hash)
+          # All arguments as a hash in the message.
           log.assign(**log.extract_arguments(message))
         elsif exception.nil? && message && payload && payload.is_a?(Hash)
-          # Message with keyword arguments as the rest.
-          log.assign(**log.extract_arguments(payload), message: message)
+          # Message supplied along with a hash with the remaining arguments.
+          log.assign(**log.extract_arguments(payload, message))
         else
-          # No keyword arguments.
+          # All fields supplied directly.
           log.assign(message: message, payload: payload, exception: exception)
         end
 

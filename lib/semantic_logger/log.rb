@@ -140,14 +140,25 @@ module SemanticLogger
     end
 
     # Extract the arguments from a Hash Payload
-    def extract_arguments(payload)
+    def extract_arguments(payload, message = nil)
       raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
 
+      message = nil if message == ""
       return payload if payload.key?(:payload)
 
-      args = {}
-      payload.each_key { |key| args[key] = payload.delete(key) if NON_PAYLOAD_KEYS.include?(key) }
-      args[:payload] = payload unless payload.empty?
+      new_payload = {}
+      args        = {}
+      payload.each_pair do |key, value|
+        # Supplied message takes precedence
+        if (key == :message) && !message.nil?
+          new_payload[key] = value
+          next
+        end
+
+        NON_PAYLOAD_KEYS.include?(key) ? args[key] = value : new_payload[key] = value
+      end
+      args[:payload] = new_payload unless new_payload.empty?
+      args[:message] = message if message
       args
     end
 
