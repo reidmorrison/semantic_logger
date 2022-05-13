@@ -4,6 +4,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+## [4.11.0]
+
+- Add kafka client option to use system SSL settings: `ssl_ca_certs_from_system`
+- Support rails tagged logger usage that yields itself: 
+~~~ruby
+Rails.logger.tagged("tag") do |logger| 
+  logger.info("Hello World")
+end
+~~~
+- Fixes #211 Stop modifying supplied hash.
+- Fixes #194 Give message precedence over the message in the payload, if any.
+
 ## [4.10.0]
 
 - New Feature: Add support for newer `sentry-ruby` gem.
