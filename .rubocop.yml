@@ -1,3 +1,5 @@
+inherit_from: .rubocop_todo.yml
+
 AllCops:
   Exclude:
     - ".git/**/*"
@@ -27,19 +29,9 @@ Layout/HashAlignment:
   EnforcedHashRocketStyle: table
   EnforcedColonStyle: table
 
-# Soften limits
-Layout/LineLength:
-  Max: 128
-  Exclude:
-    - "**/test/**/*"
-
 # Match existing layout
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
-
-# TODO: Soften Limits for phase 1 only
-Metrics/AbcSize:
-  Max: 40
 
 # Support long block lengths for tests
 Metrics/BlockLength:
@@ -56,10 +48,6 @@ Metrics/ClassLength:
   Exclude:
     - "test/**/*"
 
-# TODO: Soften Limits for phase 1 only
-Metrics/CyclomaticComplexity:
-  Max: 15
-
 # Soften limits
 Metrics/MethodLength:
   Max: 50
@@ -70,10 +58,6 @@ Metrics/ModuleLength:
 
 Metrics/ParameterLists:
   CountKeywordArgs: false
-
-# TODO: Soften Limits for phase 1 only
-Metrics/PerceivedComplexity:
-  Max: 21
 
 # Initialization Vector abbreviation
 Naming/MethodParameterName:

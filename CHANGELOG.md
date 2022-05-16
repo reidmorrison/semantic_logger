@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+### Changed
+- Contributor experience related to RuboCop was improved with the
+  following changes:
+    - New .rubocop\_todo.yml to hold RuboCop offenses and enable a clean
+      run of RuboCop against the current code base.
+    - A number of items in .rubocop.yml were removed to allow RuboCop to
+      manage them within the .rubocop\_todo.yml file.
+    - Updated RuboCop's target version to Ruby 2.7.5.
+    - Updated minimum Ruby version to 2.7.5 as earlier versions are
+      end-of-life.
 
 ## [4.11.0]
 
@@ -39,12 +49,12 @@ end
 - Add automatic retries for the file appender when an error occurs while writing to the file.
   - See new SemanticLogger::Appender::File option `retry_count`.
 - Other options added to the file appender:
-  - append, exclusive_lock, encoding
+  - append, exclusive\_lock, encoding
 - Documentation: Fix link to GitHub Actions CI configuration.
 - Add support for logging to elastic data-streams
 - Handle case when tags are passed as an array in a single argument to `SemanticLogger::Base#tagged`.
 - feat: Add tags to logfmt formatter output
-- fix: Ensure time_key is used in logfmt formatter
+- fix: Ensure time\_key is used in logfmt formatter
 
 Note: See the readme for v4.9 upgrade instructions.
 
