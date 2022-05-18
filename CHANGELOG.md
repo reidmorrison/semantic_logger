@@ -26,6 +26,8 @@ end
 - Fixes #211 Stop modifying supplied hash.
 - Fixes #194 Give message precedence over the message in the payload, if any.
 
+- Passthru the ssl_ca_certs_from_system and required_acks flags to the ruby-kafka driver
+
 ## [4.10.0]
 
 - New Feature: Add support for newer `sentry-ruby` gem.
