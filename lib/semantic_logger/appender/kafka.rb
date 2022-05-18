@@ -24,7 +24,7 @@ module SemanticLogger
     class Kafka < SemanticLogger::Subscriber
       attr_accessor :seed_brokers, :client_id, :connect_timeout, :socket_timeout,
                     :ssl_ca_cert, :ssl_client_cert, :ssl_client_cert_key, :ssl_ca_certs_from_system,
-                    :delivery_threshold, :delivery_interval,
+                    :delivery_threshold, :delivery_interval, :required_acks,
                     :topic, :partition, :partition_key, :key
 
       # Send log messages to Kafka in JSON format.
@@ -90,6 +90,10 @@ module SemanticLogger
       #      Number of seconds between triggering a delivery of messages to Apache Kafka.
       #      Default: 5
       #
+      #    required_acks: [Integer]
+      #      Number of replicas that must acknowledge receipt of each log message to the topic
+      #      Default: 1
+      #
       # Semantic Logger Parameters:
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
@@ -121,7 +125,7 @@ module SemanticLogger
       def initialize(seed_brokers:, client_id: "semantic-logger", connect_timeout: nil, socket_timeout: nil,
                      ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil, ssl_ca_certs_from_system: false,
                      topic: "log_messages", partition: nil, partition_key: nil, key: nil,
-                     delivery_threshold: 100, delivery_interval: 10,
+                     delivery_threshold: 100, delivery_interval: 10, required_acks: 1,
                      metrics: true, **args, &block)
 
         @seed_brokers             = seed_brokers
@@ -138,6 +142,7 @@ module SemanticLogger
         @key                      = key
         @delivery_threshold       = delivery_threshold
         @delivery_interval        = delivery_interval
+        @required_acks            = required_acks
 
         super(metrics: metrics, **args, &block)
         reopen
@@ -158,7 +163,8 @@ module SemanticLogger
 
         @producer = @kafka.async_producer(
           delivery_threshold: delivery_threshold,
-          delivery_interval:  delivery_interval
+          delivery_interval:  delivery_interval,
+          required_acks:      required_acks
         )
       end
 

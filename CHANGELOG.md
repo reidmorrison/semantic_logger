@@ -4,6 +4,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Passthru the ssl_ca_certs_from_system and required_acks flags to the ruby-kafka driver
+
 ## [4.10.0]
 
 - New Feature: Add support for newer `sentry-ruby` gem.
