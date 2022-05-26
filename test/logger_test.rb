@@ -117,6 +117,25 @@ class LoggerTest < Minitest::Test
             assert_equal payload, log.payload
           end
 
+          it "logs payload and message with payload keyword when the payload contains the message key" do
+            logger.send(level, "hello world", **{payload: payload})
+
+            assert log = log_message
+            assert_equal "hello world", log.message
+            assert_equal payload, log.payload
+          end
+
+          it "logs payload and message with payload keyword when the payload does not contain the message key" do
+            payload_without_message = payload.dup
+            payload_without_message.delete(:message)
+
+            logger.send(level, "hello world", **{payload: payload_without_message})
+
+            assert log = log_message
+            assert_equal "hello world", log.message
+            assert_equal payload_without_message, log.payload
+          end
+
           it "logs message without modifying the supplied hash" do
             details = { message: "hello world" }
             logger.send(level, details)

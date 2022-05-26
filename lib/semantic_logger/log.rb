@@ -144,7 +144,9 @@ module SemanticLogger
       raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
 
       message = nil if message == ""
-      return payload if payload.key?(:payload)
+      if payload.key?(:payload)
+        return payload.merge({ message: message }.compact)
+      end
 
       new_payload = {}
       args        = {}
