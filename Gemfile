@@ -34,7 +34,7 @@ gem "sentry-ruby"
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
 gem "syslog_protocol"
 
-group :development do
+group :development, :test do
   gem "minitest"
   gem "minitest-reporters"
   gem "minitest-shared_description"
