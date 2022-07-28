@@ -16,15 +16,5 @@ Gem::Specification.new do |spec|
   spec.license               = "Apache-2.0"
   spec.required_ruby_version = ">= 2.5"
   spec.add_dependency "concurrent-ruby", "~> 1.0"
-
-  spec.post_install_message = <<~'REXML'
-    While this gem does not use REXML directly, Ruby >= 3.1.0 breaks without it
-    because the Splunk SDK requires rexml/document for its xml_shim.rb. As rexml
-    is no longer included as a default gem beyond Ruby 2.7.5, users of more
-    recent Ruby versions may need to add the following to their Gemfile or
-    GEM_HOME directory to run SemanticLogger:
-
-        gem "rexml", "~> 3.2"
-
-  REXML
+  spec.add_dependency "nokogiri" "~> 1.13" if Gem::Version.new(RUBY_VERSION) >= Gem::Version.new(3)
 end
