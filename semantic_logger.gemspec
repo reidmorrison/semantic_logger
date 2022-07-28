@@ -16,5 +16,5 @@ Gem::Specification.new do |spec|
   spec.license               = "Apache-2.0"
   spec.required_ruby_version = ">= 2.5"
   spec.add_dependency "concurrent-ruby", "~> 1.0"
-  spec.add_dependency "nokogiri" "~> 1.13" if Gem::Version.new(RUBY_VERSION) >= Gem::Version.new(3)
+  spec.add_dependency "nokogiri", "~> 1.13" if Gem::Version.new(RUBY_VERSION) >= Gem::Version.new(3)
 end
