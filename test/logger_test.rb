@@ -109,6 +109,23 @@ class LoggerTest < Minitest::Test
             assert_equal payload, log.payload
           end
 
+          it "logs payload and message without payload arg" do
+            logger.send(level, "hello world", **payload)
+
+            assert log = log_message
+            assert_equal "hello world", log.message
+            assert_equal payload, log.payload
+          end
+
+          it "logs message without modifying the supplied hash" do
+            details = { message: "hello world" }
+            logger.send(level, details)
+
+            assert log = log_message
+            assert_equal "hello world", log.message
+            assert_equal "hello world", details[:message]
+          end
+
           it "logs payload and message from block" do
             logger.send(level) { {message: "hello world", payload: payload} }
 
@@ -178,10 +195,12 @@ class LoggerTest < Minitest::Test
             logger.send(level, payload)
 
             assert log = log_message
-            refute log.message
+            assert_equal "Message from payload", log.message
             refute log.exception
             refute log.metric
-            assert_equal payload, log.payload
+            payload_without_message = payload.dup
+            payload_without_message.delete(:message)
+            assert_equal payload_without_message, log.payload
           end
         end
 
@@ -392,6 +411,12 @@ class LoggerTest < Minitest::Test
           assert log = log_message
           assert_equal "hello world", log.message
           assert_equal %w[first second], log.tags
+        end
+      end
+
+      it "yields self to be compatible with rails tagged logger" do
+        logger.tagged("12345", "DJHSFK") do |yielded_logger|
+          assert_equal logger.object_id, yielded_logger.object_id
         end
       end
     end

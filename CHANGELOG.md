@@ -17,8 +17,24 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Move development-only gems in the Gemfile to the :development group.
 - Refactored the Rakefile to run the additional tests along with the
   existing tests.
-- Updated gemspec to better support Splunk, making the REXML dependency
-  clearer on both Ruby 2.7.5 and Ruby 3.1.0.
+- Updated gemspec to better support Splunk by conditionally including
+  Nokogiri as a dependency on versions of Ruby that no longer include
+  REXML in the standard library.
+
+## [4.11.0]
+
+- Add kafka client option to use system SSL settings: `ssl_ca_certs_from_system`
+- Support rails tagged logger usage that yields itself: 
+~~~ruby
+Rails.logger.tagged("tag") do |logger| 
+  logger.info("Hello World")
+end
+~~~
+- Fixes #211 Stop modifying supplied hash.
+- Fixes #194 Give message precedence over the message in the payload, if any.
+
+- Passthru the ssl_ca_certs_from_system and required_acks flags to the ruby-kafka driver
+>>>>>>> master
 
 ## [4.10.0]
 
