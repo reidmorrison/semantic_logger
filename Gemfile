@@ -41,4 +41,6 @@ group :development do
   gem "minitest-stub_any_instance"
   gem "rake"
   gem "rubocop", "~> 1.28", "< 1.29"
+  gem "rubocop-minitest"
+  gem "rubocop-rake"
 end
