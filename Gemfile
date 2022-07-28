@@ -3,11 +3,6 @@ source "http://rubygems.org"
 gemspec
 
 gem "amazing_print"
-gem "minitest"
-gem "minitest-reporters"
-gem "minitest-shared_description"
-gem "minitest-stub_any_instance"
-gem "rake"
 
 # [optional] Bugsnag appender
 gem "bugsnag"
@@ -30,7 +25,6 @@ gem "mongo"
 gem "net_tcp_client"
 # [optional] Splunk appender
 gem "splunk-sdk-ruby"
-gem "nokogiri"
 # [optional] Statsd metrics
 gem "statsd-ruby"
 # [optional] legacy Sentry appender
@@ -40,6 +34,13 @@ gem "sentry-ruby"
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
 gem "syslog_protocol"
 
-group :development do
+group :development, :test do
+  gem "minitest"
+  gem "minitest-reporters"
+  gem "minitest-shared_description"
+  gem "minitest-stub_any_instance"
+  gem "rake"
   gem "rubocop", "~> 1.28", "< 1.29"
+  gem "rubocop-minitest"
+  gem "rubocop-rake"
 end

@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+### Added
+- New unit tests that validate that the gems in the :development group
+  aren't required for non-development use.
+- New Rake task to exercise the new unit tests.
 ### Changed
 - Contributor experience related to RuboCop was improved with the
   following changes:
@@ -10,9 +14,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
       run of RuboCop against the current code base.
     - A number of items in .rubocop.yml were removed to allow RuboCop to
       manage them within the .rubocop\_todo.yml file.
-    - Updated RuboCop's target version to Ruby 2.7.5.
-    - Updated minimum Ruby version to 2.7.5 as earlier versions are
-      end-of-life.
+- Move development-only gems in the Gemfile to the :development group.
+- Refactored the Rakefile to run the additional tests along with the
+  existing tests.
+- Updated gemspec to better support Splunk by conditionally including
+  Nokogiri as a dependency on versions of Ruby that no longer include
+  REXML in the standard library.
 
 ## [4.11.0]
 
@@ -27,6 +34,7 @@ end
 - Fixes #194 Give message precedence over the message in the payload, if any.
 
 - Passthru the ssl_ca_certs_from_system and required_acks flags to the ruby-kafka driver
+>>>>>>> master
 
 ## [4.10.0]
 
