@@ -62,7 +62,7 @@ module SemanticLogger
 
       def flatten_log
         flattened = @parsed.map do |key, value|
-          "#{key}=#{value.to_json}"
+          "#{key}=#{value.to_s.to_json}"
         end
 
         flattened.join(" ")
