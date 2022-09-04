@@ -279,10 +279,13 @@ module SemanticLogger
   def self.add_signal_handler(log_level_signal = "USR2", thread_dump_signal = "TTIN", gc_log_microseconds = 100_000)
     if log_level_signal
       Signal.trap(log_level_signal) do
-        index     = default_level == :trace ? LEVELS.find_index(:error) : LEVELS.find_index(default_level)
-        new_level = LEVELS[index - 1]
-        self["SemanticLogger"].warn "Changed global default log level to #{new_level.inspect}"
+        current_level_index = LEVELS.find_index(default_level)
+        $stderr.puts "\ncurrent log level is #{current_level_index}: #{default_level}"
+        new_level_index = current_level_index == 0 ? LEVELS.size - 1 : current_level_index - 1
+        new_level = LEVELS[new_level_index]
+        $stderr.puts "new log level is #{new_level_index}: #{new_level}\n\n"
         self.default_level = new_level
+        self["SemanticLogger"].warn "Changed global default log level to #{new_level.inspect}"
       end
     end
 
