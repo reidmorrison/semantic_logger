@@ -13,6 +13,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
     - Updated RuboCop's target version to Ruby 2.7.5.
     - Updated minimum Ruby version to 2.7.5 as earlier versions are
       end-of-life.
+- Fixed log level signal handler to include fatal and error levels.
 
 ## [4.11.0]
 
