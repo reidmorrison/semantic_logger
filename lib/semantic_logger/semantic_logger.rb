@@ -280,10 +280,8 @@ module SemanticLogger
     if log_level_signal
       Signal.trap(log_level_signal) do
         current_level_index = LEVELS.find_index(default_level)
-        $stderr.puts "\ncurrent log level is #{current_level_index}: #{default_level}"
         new_level_index = current_level_index == 0 ? LEVELS.size - 1 : current_level_index - 1
         new_level = LEVELS[new_level_index]
-        $stderr.puts "new log level is #{new_level_index}: #{new_level}\n\n"
         self.default_level = new_level
         self["SemanticLogger"].warn "Changed global default log level to #{new_level.inspect}"
       end
