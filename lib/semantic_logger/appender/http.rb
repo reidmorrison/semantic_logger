@@ -21,7 +21,7 @@ module SemanticLogger
     class Http < SemanticLogger::Subscriber
       attr_accessor :username, :compress, :header,
                     :open_timeout, :read_timeout, :continue_timeout
-      attr_reader :http, :url, :server, :port, :path, :ssl_options
+      attr_reader :http, :url, :server, :port, :path, :ssl_options, :proxy_url
 
       # Create HTTP(S) log appender
       #
@@ -57,6 +57,16 @@ module SemanticLogger
       #       ca_file, ca_path, cert, cert_store, ciphers, key, ssl_timeout,
       #       ssl_version, verify_callback, verify_depth and verify_mode.
       #
+      #   proxy_url: [String]
+      #     URL of proxy server to use for HTTP(s) connections.  Should
+      #       include username and password if required.
+      #       Example: http://user@pass:example.com/some_path
+      #     To enable SSL include https in the URL.
+      #       Example: https://example.com/some_path
+      #     If this is set to :ENV, Net::HTTP will use the environment http_proxy*
+      #       variables if they are set.  If set to nil then no proxy will be used,
+      #       even if the environment variables are set.
+      #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
       #     Default: SemanticLogger.default_level
@@ -85,6 +95,7 @@ module SemanticLogger
                      ssl: {},
                      username: nil,
                      password: nil,
+                     proxy_url: :ENV,
                      open_timeout: 2.0,
                      read_timeout: 1.0,
                      continue_timeout: 1.0,
@@ -92,6 +103,7 @@ module SemanticLogger
                      &block)
 
         @url              = url
+        @proxy_url        = proxy_url
         @ssl_options      = ssl
         @username         = username
         @password         = password
@@ -129,6 +141,9 @@ module SemanticLogger
         else
           @port ||= HTTP.http_default_port
         end
+
+        @proxy_uri = URI.parse(@proxy_url) if @proxy_url && @proxy_url != :ENV
+
         @http = nil
 
         super(**args, &block)
@@ -144,7 +159,11 @@ module SemanticLogger
           nil
         end
 
-        @http = Net::HTTP.new(server, port)
+        @http = if @proxy_uri
+          Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
+        else
+          Net::HTTP.new(server, port, @proxy_url)
+        end
 
         if @ssl_options
           @http.methods.grep(/\A(\w+)=\z/) do |meth|
