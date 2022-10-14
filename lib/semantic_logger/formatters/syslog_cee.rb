@@ -23,7 +23,7 @@ module SemanticLogger
       #
       # Example:
       #   # Log via udp to a remote syslog server on host: `server1` and port `8514`, using the CEE format.
-      #   SemanticLogger.add_appender(appender: :syslog, formatter: syslog_cee, url: 'udp://server1:8514')
+      #   SemanticLogger.add_appender(appender: :syslog, formatter: :syslog_cee, url: 'udp://server1:8514')
       def initialize(facility: ::Syslog::LOG_USER, level_map: SemanticLogger::Formatters::Syslog::LevelMap.new, max_size: Integer)
         @facility  = facility
         @level_map = level_map.is_a?(SemanticLogger::Formatters::Syslog::LevelMap) ? level_map : SemanticLogger::Formatters::Syslog::LevelMap.new(level_map)
