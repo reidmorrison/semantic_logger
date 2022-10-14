@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
-
+- The Logfmt formatter can now parse Hashes and Arrays correctly.
 - Fixes a race condition in `SemancicLogger.reopen`.
 
 ### Changed
