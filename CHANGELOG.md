@@ -14,6 +14,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
     - Updated minimum Ruby version to 2.7.5 as earlier versions are
       end-of-life.
 
+### Fixed
+- Fixed a thread safety issue in Async#submit_request. When closing the async
+  processor, the submit_request method could return before the child thread had
+  finished executing. This caused the program to hang if the child thread
+  dies in the middle of a second call to Async#submit_request. The solution was
+  to wait for the child thread to 'join' before returning.
+
 ## [4.11.0]
 
 - Add kafka client option to use system SSL settings: `ssl_ca_certs_from_system`

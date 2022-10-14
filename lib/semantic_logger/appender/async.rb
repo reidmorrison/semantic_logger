@@ -135,7 +135,6 @@ module SemanticLogger
             nil
           end
         ensure
-          @thread = nil
           # This block may be called after the file handles have been released by Ruby
           begin
             logger.trace("Async: Thread has stopped")
@@ -202,7 +201,9 @@ module SemanticLogger
 
         reply_queue = Queue.new
         queue << {command: command, reply_queue: reply_queue}
-        reply_queue.pop
+        return_value = reply_queue.pop
+        @thread.join if command == :close
+        return_value
       end
     end
   end
