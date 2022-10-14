@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+- The Logfmt formatter can now parse Hashes and Arrays correctly.
+- Fixes a race condition in `SemancicLogger.reopen`.
+
 ### Changed
 - Contributor experience related to RuboCop was improved with the
   following changes:
@@ -14,6 +17,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
     - Updated minimum Ruby version to 2.7.5 as earlier versions are
       end-of-life.
 - New Feature: Ability to directly set proxy for `SemanticLogger::Appender::Http`
+- Fixed log level signal handler to include fatal and error levels.
+- Fixes #218 Calls Sentry.init inside sentry_ruby appender only if it is not initialized
+
 ## [4.11.0]
 
 - Add kafka client option to use system SSL settings: `ssl_ca_certs_from_system`

@@ -59,7 +59,7 @@ module SemanticLogger
 
         appender.reopen if appender.respond_to?(:reopen)
 
-        @thread.kill if @thread&.alive?
+        @thread&.kill if @thread&.alive?
         @thread = Thread.new { process }
       end
 
