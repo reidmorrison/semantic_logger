@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   finished executing. This caused the program to hang if the child thread
   dies in the middle of a second call to Async#submit_request. The solution was
   to wait for the child thread to 'join' before returning.
+- AsyncBatch now listens to :close message.
 
 ## [4.11.0]
 

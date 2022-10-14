@@ -81,7 +81,7 @@ module SemanticLogger
             end
           end
           appender.batch(logs) if logs.size.positive?
-          messages.each { |message| process_message(message) }
+          break unless messages.each { |message| break false unless process_message(message) }
           signal.reset unless queue.size >= batch_size
         end
       end
