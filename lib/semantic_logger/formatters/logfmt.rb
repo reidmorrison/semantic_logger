@@ -62,7 +62,12 @@ module SemanticLogger
 
       def flatten_log
         flattened = @parsed.map do |key, value|
-          "#{key}=#{value.to_json}"
+          case value
+          when Hash, Array
+            "#{key}=#{value.to_s.to_json}"
+          else
+            "#{key}=#{value.to_json}"
+          end
         end
 
         flattened.join(" ")
