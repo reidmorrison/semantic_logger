@@ -58,6 +58,61 @@ module Appender
           assert_equal "a", payload["key2"], payload
         end
       end
+
+      # We need to use a valid address that doesn't resolve to a localhost
+      # address in order to check the proxy.  Net::HTTP uses URI::Generic#find_proxy
+      # to determine the proxy to use, which will return nil if the hostname resolves
+      # to 127.* or ::1.
+      #
+      # Unfortunately this probably also means that this test will fail if it's
+      # run on a machine that cannot resolve hostnames
+      it "uses a proxy if specified" do
+        proxy = "http://user:password@proxy.example.com:12345"
+        Net::HTTP.stub_any_instance(:start, true) do
+          appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path", proxy_url: proxy)
+
+          proxy_uri = URI.parse(proxy)
+          assert(appender.http.proxy?)
+          refute(appender.http.proxy_from_env?)
+          assert_equal(proxy_uri.host, appender.http.proxy_address)
+          assert_equal(proxy_uri.port, appender.http.proxy_port)
+          assert_equal(proxy_uri.user, appender.http.proxy_user)
+          assert_equal(proxy_uri.password, appender.http.proxy_pass)
+        end
+      end
+
+      it "uses the ENV proxy if specified" do
+        old_env_proxy = ENV["http_proxy"]
+        ENV["http_proxy"] = "http://user:password@proxy.example.com:12345"
+        Net::HTTP.stub_any_instance(:start, true) do
+          appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path")
+
+          proxy_uri = URI.parse(ENV["http_proxy"])
+          assert(appender.http.proxy?)
+          assert(appender.http.proxy_from_env?)
+          assert_equal(proxy_uri.host, appender.http.proxy_address)
+          assert_equal(proxy_uri.port, appender.http.proxy_port)
+          assert_equal(proxy_uri.user, appender.http.proxy_user)
+          assert_equal(proxy_uri.password, appender.http.proxy_pass)
+        end
+
+        ENV["http_proxy"] = old_env_proxy if old_env_proxy
+      end
+
+      it "doesn't use the ENV proxy if explicity requested" do
+        old_env_proxy = ENV["http_proxy"]
+        ENV["http_proxy"] = "http://user:password@proxy.example.com:12345"
+        Net::HTTP.stub_any_instance(:start, true) do
+          appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path", proxy_url: nil)
+
+          refute(appender.http.proxy_from_env?)
+          refute(appender.http.proxy_address)
+          refute(appender.http.proxy_user)
+          refute(appender.http.proxy_pass)
+        end
+
+        ENV["http_proxy"] = old_env_proxy if old_env_proxy
+      end
     end
   end
 end

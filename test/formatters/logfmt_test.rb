@@ -72,6 +72,11 @@ module SemanticLogger
               assert_match(/message="Oh no"/, formatter.call(log, nil))
             end
 
+            it "flattens the stacktrace" do
+              set_exception
+              assert_match(/stack_trace="\[\\"/, formatter.call(log, nil))
+            end
+
             it "changes name to exception" do
               log.payload = {name: "shrek"}
               set_exception
