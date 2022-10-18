@@ -7,7 +7,7 @@ module SemanticLogger
       extend Forwardable
 
       attr_accessor :lag_check_interval, :lag_threshold_s
-      attr_reader :queue, :appender, :max_queue_size
+      attr_reader :queue, :appender, :max_queue_size, :thread_mutex
 
       # Forward methods that can be called directly
       def_delegator :@appender, :name
@@ -44,23 +44,26 @@ module SemanticLogger
         @appender           = appender
         @lag_check_interval = lag_check_interval
         @lag_threshold_s    = lag_threshold_s
-        @thread             = nil
         @max_queue_size     = max_queue_size
+        @thread_mutex       = Mutex.new
         create_queue
-        thread
+        @thread             = Thread.new { process }
       end
 
       # Re-open appender after a fork
       def reopen
-        # Workaround CRuby crash on fork by recreating queue on reopen
-        #   https://github.com/reidmorrison/semantic_logger/issues/103
-        @queue&.close
-        create_queue
+        @thread_mutex.synchronize do
+          unless @thread.alive?
+            # Workaround CRuby crash on fork by recreating queue on reopen
+            #   https://github.com/reidmorrison/semantic_logger/issues/103
+            @queue.close
+            create_queue
 
-        appender.reopen if appender.respond_to?(:reopen)
+            appender.reopen if appender.respond_to?(:reopen)
 
-        @thread&.kill if @thread&.alive?
-        @thread = Thread.new { process }
+            @thread = Thread.new { process }
+          end
+        end
       end
 
       # Returns [true|false] if the queue has a capped size.
@@ -71,15 +74,21 @@ module SemanticLogger
       # Returns [Thread] the worker thread.
       #
       # Starts the worker thread if not running.
+      #
+      # Consumers must call this method within the context of a locked 'thread_mutex' for thread
+      #   safety.
       def thread
-        return @thread if @thread&.alive?
+        return @thread if @thread.alive?
 
         @thread = Thread.new { process }
       end
 
       # Returns true if the worker thread is active
+      #
+      # Consumers should only call this method within the context of a locked 'thread_mutex' for
+      #   thread safety.
       def active?
-        @thread&.alive?
+        @thread.alive?
       end
 
       # Add log message for processing.
@@ -187,23 +196,25 @@ module SemanticLogger
 
       # Submit command and wait for reply
       def submit_request(command)
-        return false unless active?
+        @thread_mutex.synchronize do
+          return false unless active?
 
-        queue_size = queue.size
-        msg        = "Async: Queued log messages: #{queue_size}, running command: #{command}"
-        if queue_size > 1_000
-          logger.warn msg
-        elsif queue_size > 100
-          logger.info msg
-        elsif queue_size.positive?
-          logger.trace msg
+          queue_size = queue.size
+          msg        = "Async: Queued log messages: #{queue_size}, running command: #{command}"
+          if queue_size > 1_000
+            logger.warn msg
+          elsif queue_size > 100
+            logger.info msg
+          elsif queue_size.positive?
+            logger.trace msg
+          end
+
+          reply_queue = Queue.new
+          queue << {command: command, reply_queue: reply_queue}
+          return_value = reply_queue.pop
+          @thread.join if command == :close
+          return_value
         end
-
-        reply_queue = Queue.new
-        queue << {command: command, reply_queue: reply_queue}
-        return_value = reply_queue.pop
-        @thread.join if command == :close
-        return_value
       end
     end
   end

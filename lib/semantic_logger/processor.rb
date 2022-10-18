@@ -30,10 +30,12 @@ module SemanticLogger
 
     # Start the appender thread
     def start
-      return false if active?
+      thread_mutex.synchronize do
+        return false if active?
 
-      thread
-      true
+        thread
+        true
+      end
     end
   end
 end

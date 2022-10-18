@@ -4,7 +4,6 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 - The Logfmt formatter can now parse Hashes and Arrays correctly.
-- Fixes a race condition in `SemancicLogger.reopen`.
 
 ### Changed
 - Contributor experience related to RuboCop was improved with the
@@ -27,6 +26,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   dies in the middle of a second call to Async#submit_request. The solution was
   to wait for the child thread to 'join' before returning.
 - AsyncBatch now listens to :close message.
+- Fixed thread safety issues where appender threads are created and destroyed in
+  multiple threads. Before this fix, Semantic Logger could lose track of
+  appender threads. Consumers could also hang when attempting to flush or close
+  the logger.
 
 ## [4.11.0]
 
