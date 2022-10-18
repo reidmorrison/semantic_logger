@@ -27,6 +27,12 @@ class AppenderFileTest < Minitest::Test
     include Process
   end
 
+  class EagerClass
+    def initialize
+      SemanticLogger::Loggable.install_eager(self)
+    end
+  end
+
   describe SemanticLogger::Loggable do
     describe "inheritance" do
       it "should give child classes their own logger" do
@@ -67,6 +73,19 @@ class AppenderFileTest < Minitest::Test
           subclass.process
         end
         assert called, "Did not call the correct logger"
+      end
+    end
+
+    describe "eager (nonlazy) initialization" do
+      it "should populate the logger variables when install_eager is used" do
+        instance = EagerClass.new
+        assert instance.instance_variable_get(:@semantic_logger).is_a?(SemanticLogger::Logger)
+        assert instance.class.instance_variable_get(:@semantic_logger).is_a?(SemanticLogger::Logger)
+      end
+
+      it "should enable freezing the logging object without error" do
+        instance = EagerClass.new
+        instance.freeze
       end
     end
 

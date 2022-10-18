@@ -60,6 +60,16 @@ module SemanticLogger
           @semantic_logger = logger
         end
       end
+
+      # Call this method in your constructor *instead of* including Loggable
+      # if you want eager (nonlazy) initialization of the class and instance
+      # logger objects (i.e. @semantic_logger variables).
+      #
+      # This is necessary if you want to freeze your objects before calling `logger`.
+      def self.install_eager(instance)
+        instance.class.include SemanticLogger::Loggable
+        instance.logger
+      end
     end
 
     module ClassMethods
