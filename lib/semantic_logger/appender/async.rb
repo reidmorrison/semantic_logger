@@ -101,10 +101,8 @@ module SemanticLogger
       # Close all appenders and flush any outstanding messages.
       def close
         instance_lock.synchronize do
-          if @close_already_requested
-            # warn "Close already requested on thread #{Thread.current}."
-            return
-          end
+          return if @close_already_requested
+
           @close_already_requested = true
           submit_request(:close)
         end
