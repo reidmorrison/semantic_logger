@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 - The Logfmt formatter can now parse Hashes and Arrays correctly.
 - Fixes a race condition in `SemancicLogger.reopen`.
+- Prevent multiple calls to Async#close.
+- Wrap Async close, flush, create_queue, and reopen methods in a mutex.
 
 ### Changed
 - Contributor experience related to RuboCop was improved with the
