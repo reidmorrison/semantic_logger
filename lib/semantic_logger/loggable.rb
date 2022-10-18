@@ -66,7 +66,7 @@ module SemanticLogger
       # logger objects (i.e. @semantic_logger variables).
       #
       # This is necessary if you want to freeze your objects before calling `logger`.
-      def self.install_eager(instance)
+      def self.install_eagerly(instance)
         instance.class.include SemanticLogger::Loggable
         instance.logger
       end

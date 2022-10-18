@@ -29,7 +29,7 @@ class AppenderFileTest < Minitest::Test
 
   class EagerClass
     def initialize
-      SemanticLogger::Loggable.install_eager(self)
+      SemanticLogger::Loggable.install_eagerly(self)
     end
   end
 
@@ -77,7 +77,7 @@ class AppenderFileTest < Minitest::Test
     end
 
     describe "eager (nonlazy) initialization" do
-      it "should populate the logger variables when install_eager is used" do
+      it "should populate the logger variables when install_eagerly is used" do
         instance = EagerClass.new
         assert instance.instance_variable_get(:@semantic_logger).is_a?(SemanticLogger::Logger)
         assert instance.class.instance_variable_get(:@semantic_logger).is_a?(SemanticLogger::Logger)
