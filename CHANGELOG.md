@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 - The Logfmt formatter can now parse Hashes and Arrays correctly.
 - Fixes a race condition in `SemancicLogger.reopen`.
+- Add `install_eager` method option to the `Loggable` module, to populate the logger variables before object initialization has completed.
 
 ### Changed
 - Contributor experience related to RuboCop was improved with the
