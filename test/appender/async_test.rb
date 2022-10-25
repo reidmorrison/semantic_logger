@@ -40,5 +40,15 @@ module Appender
         end
       end
     end
+
+    describe "synchronization" do
+      it "can be reopened without error" do
+        SemanticLogger.clear_appenders!
+        SemanticLogger.add_appender(appender: SemanticLogger::Appender::File.new('/dev/null'), async: true)
+        appender = SemanticLogger.appenders.first
+        assert_instance_of SemanticLogger::Appender::Async, appender
+        appender.reopen
+      end
+    end
   end
 end

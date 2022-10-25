@@ -111,14 +111,12 @@ module SemanticLogger
       private
 
       def create_queue
-        instance_lock.synchronize do
-          if max_queue_size == -1
-            @queue  = Queue.new
-            @capped = false
-          else
-            @queue  = SizedQueue.new(max_queue_size)
-            @capped = true
-          end
+        if max_queue_size == -1
+          @queue  = Queue.new
+          @capped = false
+        else
+          @queue  = SizedQueue.new(max_queue_size)
+          @capped = true
         end
       end
 
