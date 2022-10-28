@@ -14,6 +14,7 @@ module SemanticLogger
   autoload :Logger,             "semantic_logger/logger"
   autoload :Loggable,           "semantic_logger/loggable"
   autoload :Processor,          "semantic_logger/processor"
+  autoload :QueueProcessor,     "semantic_logger/queue_processor"
   autoload :Subscriber,         "semantic_logger/subscriber"
   autoload :SyncProcessor,      "semantic_logger/sync_processor"
   autoload :Utils,              "semantic_logger/utils"
