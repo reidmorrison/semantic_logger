@@ -1,7 +1,6 @@
 require_relative "../test_helper"
 
 # Unit Test for SemanticLogger::Appender::Wrapper
-#
 module Appender
   class WrapperTest < Minitest::Test
     # Looks like a standard Ruby Logger or Rails Logger
@@ -23,7 +22,7 @@ module Appender
           end
 
           def #{level}?
-            @true
+            true
           end
         LEVEL_CODE
       end

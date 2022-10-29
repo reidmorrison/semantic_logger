@@ -1,6 +1,14 @@
 require_relative "test_helper"
 
 class SemanticLoggerTest < Minitest::Test
+  class BatchAppender < SemanticLogger::Test::CaptureLogEvents
+    attr_accessor :batches
+
+    def batch(events)
+      (@batches ||= []) << events
+    end
+  end
+
   describe SemanticLogger do
     describe ".add_appender" do
       before do
@@ -17,6 +25,20 @@ class SemanticLoggerTest < Minitest::Test
         assert @appender.is_a?(SemanticLogger::Appender::File)
         assert SemanticLogger.appenders.include?(@appender)
         assert @appender.formatter.is_a?(SemanticLogger::Formatters::Default)
+      end
+
+      it "adds async appender" do
+        @appender = SemanticLogger.add_appender(file_name: "sample.log", async: true)
+        assert @appender.is_a?(SemanticLogger::Appender::Async)
+        refute @appender.batch?
+        assert @appender.appender.is_a?(SemanticLogger::Appender::File)
+      end
+
+      it "adds async appender with batch" do
+        @appender = SemanticLogger.add_appender(appender: BatchAppender.new, batch: true)
+        assert @appender.is_a?(SemanticLogger::Appender::Async)
+        assert @appender.batch?
+        assert @appender.appender.is_a?(BatchAppender)
       end
     end
 

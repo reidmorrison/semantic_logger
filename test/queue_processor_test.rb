@@ -37,6 +37,7 @@ class QueueProcessorTest < Minitest::Test
     let(:lag_check_interval) { 1_000 }
     let(:lag_threshold_s) { 30 }
     let(:log_time) { Time.now - 1 }
+    let(:max_queue_size) { 1_000 }
     let(:batch) { false }
     let(:log) do
       log         = SemanticLogger::Log.new("User", :info)
@@ -51,18 +52,35 @@ class QueueProcessorTest < Minitest::Test
         appender:           appender,
         lag_check_interval: lag_check_interval,
         lag_threshold_s:    lag_threshold_s,
-        max_retries:        2,
+        async_max_retries:        2,
         batch:              batch,
         batch_size:         3,
-        batch_seconds:      1
+        batch_seconds:      1,
+        max_queue_size:     max_queue_size
       )
     end
 
     describe ".new" do
-      let(:batch) { true }
+      describe "batch" do
+        let(:batch) { true }
 
-      it "checks for non-batch appender attempts" do
-        assert_raises(ArgumentError) { subject }
+        it "checks for non-batch appender attempts" do
+          assert_raises(ArgumentError) { subject }
+        end
+      end
+
+      it "creates a capped queue" do
+        assert_instance_of SizedQueue, subject.queue
+        assert_equal true, subject.capped?
+      end
+
+      describe "infinite max_queue_size" do
+        let(:max_queue_size) { -1 }
+
+        it "creates a capped queue" do
+          assert_instance_of Queue, subject.queue
+          assert_equal false, subject.capped?
+        end
       end
     end
 
@@ -94,7 +112,7 @@ class QueueProcessorTest < Minitest::Test
         assert_includes messages[1], "Stopped processing messages"
       end
 
-      it "handles standard errors" do
+      it "retries on standard error" do
         subject.stub(:process_messages, -> { raise StandardError.new("Standard") }) do
           subject.send(:process)
         end
@@ -105,6 +123,17 @@ class QueueProcessorTest < Minitest::Test
         assert_includes messages[2], "Sleeping 2 second(s). Retry: 2"
         assert_includes messages[3], "Stopping, exhausted 2 retries"
         assert_includes messages[4], "Stopped processing messages"
+      end
+
+      it "exits on exception" do
+        subject.stub(:process_messages, -> { raise Exception.new("Exception") }) do
+          subject.send(:process)
+        end
+        assert messages = logger.events.collect(&:message)
+        assert_equal 3, messages.count, messages
+        assert_includes messages[0], "Processing messages"
+        assert_includes messages[1], "Stopping due to a fatal exception"
+        assert_includes messages[2], "Stopped processing messages"
       end
     end
 

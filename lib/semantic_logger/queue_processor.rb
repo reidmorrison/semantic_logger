@@ -4,7 +4,7 @@ module SemanticLogger
   # Internal class to process log messages from a queue.
   class QueueProcessor
     attr_reader :appender, :max_queue_size, :logger,
-                :lag_check_interval, :lag_threshold_s, :max_retries, :batch_size, :batch_seconds,
+                :lag_check_interval, :lag_threshold_s, :async_max_retries, :batch_size, :batch_seconds,
                 :queue, :thread, :retry_count, :signal
 
     def self.start(**args)
@@ -14,14 +14,14 @@ module SemanticLogger
     end
 
     def initialize(appender:, max_queue_size: 10_000, logger: nil,
-                   lag_check_interval: 1_000, lag_threshold_s: 30, max_retries: 100,
+                   lag_check_interval: 1_000, lag_threshold_s: 30, async_max_retries: 100,
                    batch: false, batch_size: 300, batch_seconds: 5)
       @appender           = appender
       @capped             = max_queue_size != -1
       @queue              = @capped ? SizedQueue.new(max_queue_size) : Queue.new
       @lag_check_interval = lag_check_interval
       @lag_threshold_s    = lag_threshold_s
-      @max_retries        = max_retries
+      @async_max_retries        = async_max_retries
       @logger             = logger || appender.logger
       @retry_count        = 0
       @batch              = batch
@@ -104,7 +104,7 @@ module SemanticLogger
       begin
         batch? ? process_messages_in_batches : process_messages
       rescue StandardError => e
-        if retry_count < max_retries
+        if retry_count < async_max_retries
           self.retry_count += 1
           safe_log(:warn, "QueueProcessor: Sleeping #{retry_count} second(s). Retry: #{retry_count}", e)
           sleep(retry_count)
