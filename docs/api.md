@@ -597,6 +597,45 @@ demo.rb:14:in `<main>'
 The output above contains 2 stack traces, with the second stack trace starting at
 `Cause: IOError: not opened for reading`.
 
+### Writing Tests
+
+It is recommended to turn on synchronous operation when running tests to avoid threading issues.
+Add the following line to `test_helper.rb`:
+
+~~~ruby
+SemanticLogger.sync!
+~~~
+
+To confirm that the correct log messages, metrics, etc. are being logged in the code, 
+stub out the regular global logger with a special logger that will store the log events in memory.
+The log events can then be verified for accuracy. 
+
+Example:
+~~~ruby
+class UserTest < ActiveSupport::TestCase
+  describe User do
+    let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
+    let(:user) { User.new }
+
+    it "logs message" do
+      user.stub(:logger, logger) do
+        user.enable!
+      end
+      assert log = logger.events.first
+      assert_equal "Hello World", log.message
+      assert_equal :info, log.level
+    end
+  end
+end
+~~~
+
+By default, `SemanticLogger::Test::CaptureLogEvents` captures all log events regardless of log level.
+To use the global default log level and to support silencing of messages, set `level` to `nil` for tests
+that need to verify silencing of log levels:
+~~~ruby
+let(:logger) { SemanticLogger::Test::CaptureLogEvents.new(level: nil) }
+~~~
+
 ### Synchronous Operation
 
 Sometimes it is useful to perform logging in the current thread instead of using a separate thread.

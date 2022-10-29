@@ -71,11 +71,11 @@ class SemanticLoggerTest < Minitest::Test
 
         it "also supports named tagging" do
           SemanticLogger.tagged(level1: 1) do
-            assert_equal({level1: 1}, SemanticLogger.named_tags)
+            assert_equal({ level1: 1 }, SemanticLogger.named_tags)
             SemanticLogger.tagged(level2: 2, more: "data") do
-              assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
+              assert_equal({ level1: 1, level2: 2, more: "data" }, SemanticLogger.named_tags)
               SemanticLogger.tagged(level3: 3) do
-                assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
+                assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, SemanticLogger.named_tags)
               end
             end
           end
@@ -85,11 +85,11 @@ class SemanticLoggerTest < Minitest::Test
       describe ".named_tags" do
         it "returns named tags in creation order" do
           SemanticLogger.named_tagged(level1: 1) do
-            assert_equal({level1: 1}, SemanticLogger.named_tags)
+            assert_equal({ level1: 1 }, SemanticLogger.named_tags)
             SemanticLogger.named_tagged(level2: 2, more: "data") do
-              assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
+              assert_equal({ level1: 1, level2: 2, more: "data" }, SemanticLogger.named_tags)
               SemanticLogger.named_tagged(level3: 3) do
-                assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
+                assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, SemanticLogger.named_tags)
               end
             end
           end
@@ -104,7 +104,7 @@ class SemanticLoggerTest < Minitest::Test
                 logger.info("Hello world")
 
                 assert log = log_message
-                assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, log.named_tags)
+                assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, log.named_tags)
               end
             end
           end
@@ -224,6 +224,13 @@ class SemanticLoggerTest < Minitest::Test
           assert_equal "hello world", log.message
           assert_equal "test", log.context[:custom_info]
         end
+      end
+    end
+
+    describe "defaults" do
+      it "sets global defaults" do
+        assert_equal [], SemanticLogger.tags
+        assert_equal 0, SemanticLogger.backtrace_level_index
       end
     end
   end
