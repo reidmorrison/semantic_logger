@@ -48,6 +48,10 @@ module SemanticLogger
           formatter
         end
 
+        before do
+          Thread.current.name = "thread_name"
+        end
+
         describe "time" do
           it "logs time" do
             assert_equal expected_time, formatter.time

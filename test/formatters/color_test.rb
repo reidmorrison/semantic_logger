@@ -60,6 +60,10 @@ module SemanticLogger
           formatter
         end
 
+        before do
+          Thread.current.name = "thread_name"
+        end
+
         describe "level" do
           it "logs single character" do
             assert_equal "#{color}D#{clear}", formatter.level
