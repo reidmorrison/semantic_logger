@@ -253,9 +253,9 @@ module SemanticLogger
   #   When the log_level_signal is raised on this process, the global default log level
   #   rotates through the following log levels in the following order, starting
   #   from the current global default level:
-  #     :warn, :info, :debug, :trace
+  #     :fatal, :error, :warn, :info, :debug, :trace
   #
-  #   If the current level is :trace it wraps around back to :warn
+  #   If the current level is :trace it wraps around back to :fatal
   #
   # 2. Logging a Ruby thread dump
   #
