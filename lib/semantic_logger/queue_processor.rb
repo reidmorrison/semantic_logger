@@ -21,7 +21,7 @@ module SemanticLogger
       @queue              = @capped ? SizedQueue.new(max_queue_size) : Queue.new
       @lag_check_interval = lag_check_interval
       @lag_threshold_s    = lag_threshold_s
-      @async_max_retries        = async_max_retries
+      @async_max_retries  = async_max_retries
       @logger             = logger || appender.logger
       @retry_count        = 0
       @batch              = batch
@@ -29,9 +29,9 @@ module SemanticLogger
       @batch_seconds      = batch_seconds
       @signal             = Concurrent::Event.new
 
-      if batch && !appender.respond_to?(:batch)
-        raise(ArgumentError, "#{appender.class.name} does not support batching. It must implement #batch")
-      end
+      return unless batch && !appender.respond_to?(:batch)
+
+      raise(ArgumentError, "#{appender.class.name} does not support batching. It must implement #batch")
     end
 
     def log(log)
@@ -87,7 +87,7 @@ module SemanticLogger
       signal.set if batch?
 
       reply_queue = Queue.new
-      queue << { command: command, reply_queue: reply_queue }
+      queue << {command: command, reply_queue: reply_queue}
       reply_queue.pop
     end
 
@@ -124,7 +124,7 @@ module SemanticLogger
         if message.is_a?(Log)
           appender.log(message)
           self.retry_count = 0
-          count        += 1
+          count += 1
           # Check every few log messages whether this appender thread is falling behind
           if count > lag_check_interval
             check_lag(message)

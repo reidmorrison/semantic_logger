@@ -127,12 +127,12 @@ module SemanticLogger
           raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'")
         end
 
-        @port     = uri.port
-        @username = uri.user if !@username && uri.user
-        @password = uri.password if !@password && uri.password
-        @path     = uri.path
+        @port      = uri.port
+        @username  = uri.user if !@username && uri.user
+        @password  = uri.password if !@password && uri.password
+        @path      = uri.path
         # Path cannot be empty
-        @path     = "/" if @path == ""
+        @path      = "/" if @path == ""
 
         if uri.scheme == "https"
           @ssl_options[:use_ssl] = true
@@ -159,11 +159,12 @@ module SemanticLogger
           nil
         end
 
-        @http = if @proxy_uri
-          Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
-        else
-          Net::HTTP.new(server, port, @proxy_url)
-        end
+        @http =
+          if @proxy_uri
+            Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
+          else
+            Net::HTTP.new(server, port, @proxy_url)
+          end
 
         if @ssl_options
           @http.methods.grep(/\A(\w+)=\z/) do |meth|

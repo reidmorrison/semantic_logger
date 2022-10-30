@@ -6,6 +6,7 @@ module SemanticLogger
     def initialize(logger = Processor.logger.dup)
       @logger      = logger
       @logger.name = self.class.name
+      super()
     end
 
     def add(**args, &block)

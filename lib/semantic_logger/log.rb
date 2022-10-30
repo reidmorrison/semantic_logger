@@ -275,7 +275,8 @@ module SemanticLogger
       !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
     end
 
-    def to_h(host = SemanticLogger.host, application = SemanticLogger.application, environment = SemanticLogger.environment)
+    def to_h(host = SemanticLogger.host, application = SemanticLogger.application,
+             environment = SemanticLogger.environment)
       logger = Struct.new(:host, :application, :environment).new(host, application, environment)
       SemanticLogger::Formatters::Raw.new.call(self, logger)
     end

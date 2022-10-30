@@ -122,7 +122,8 @@ module SemanticLogger
       #
       #    logger = SemanticLogger["test"]
       #    logger.info "Hello World"
-      def initialize(file_name, retry_count: 1, append: true, reopen_period: nil, reopen_count: 0, reopen_size: 0, encoding: Encoding::BINARY, exclusive_lock: false, **args, &block)
+      def initialize(file_name, retry_count: 1, append: true, reopen_period: nil, reopen_count: 0, reopen_size: 0,
+                     encoding: Encoding::BINARY, exclusive_lock: false, **args, &block)
         if !file_name.is_a?(String) || file_name.empty?
           raise(ArgumentError, "SemanticLogging::Appender::File file_name must be a non-empty string")
         end
@@ -267,7 +268,9 @@ module SemanticLogger
 
         duration = match[1]
         period   = match[2]
-        raise(ArgumentError, "Invalid or missing duration in: #{period_string}, must begin with an integer.") unless duration
+        unless duration
+          raise(ArgumentError, "Invalid or missing duration in: #{period_string}, must begin with an integer.")
+        end
         raise(ArgumentError, "Invalid or missing period in: #{period_string}, must end with m,h, or d.") unless period
 
         [duration.to_i, period]

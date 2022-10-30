@@ -25,7 +25,8 @@ module SemanticLogger
       class LevelMap
         attr_accessor :trace, :debug, :info, :warn, :error, :fatal
 
-        def initialize(trace: ::Syslog::LOG_DEBUG, debug: ::Syslog::LOG_INFO, info: ::Syslog::LOG_NOTICE, warn: ::Syslog::LOG_WARNING, error: ::Syslog::LOG_ERR, fatal: ::Syslog::LOG_CRIT)
+        def initialize(trace: ::Syslog::LOG_DEBUG, debug: ::Syslog::LOG_INFO, info: ::Syslog::LOG_NOTICE,
+                       warn: ::Syslog::LOG_WARNING, error: ::Syslog::LOG_ERR, fatal: ::Syslog::LOG_CRIT)
           @trace = trace
           @debug = debug
           @info  = info

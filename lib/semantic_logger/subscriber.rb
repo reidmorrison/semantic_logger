@@ -108,7 +108,8 @@ module SemanticLogger
     #   metrics: [Boolean]
     #     Whether to log metric only entries with this subscriber.
     #     Default: false
-    def initialize(level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil, metrics: false, &block)
+    def initialize(level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil,
+                   metrics: false, &block)
       self.formatter = block || formatter
       @application   = application
       @environment   = environment

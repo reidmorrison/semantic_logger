@@ -86,7 +86,7 @@ module SemanticLogger
 
       # Payload
       def payload
-        hash[:payload] = log.payload if log.payload&.respond_to?(:empty?) && !log.payload.empty?
+        hash[:payload] = log.payload if log.payload.respond_to?(:empty?) && !log.payload.empty?
       end
 
       # Exception

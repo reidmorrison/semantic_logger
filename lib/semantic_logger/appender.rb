@@ -60,18 +60,20 @@ module SemanticLogger
       elsif logger
         SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &block)
       elsif appender
-        if appender.is_a?(Symbol)
+        case appender
+        when Symbol
           SemanticLogger::Utils.constantize_symbol(appender).new(**args)
-        elsif appender.is_a?(Subscriber)
+        when Subscriber
           appender
         else
           raise(ArgumentError,
                 "Parameter :appender must be either a Symbol or an object derived from SemanticLogger::Subscriber, not: #{appender.inspect}")
         end
       elsif metric
-        if metric.is_a?(Symbol)
+        case metric
+        when Symbol
           SemanticLogger::Utils.constantize_symbol(metric, "SemanticLogger::Metric").new(**args)
-        elsif metric.is_a?(Subscriber)
+        when Subscriber
           metric
         else
           raise(ArgumentError,

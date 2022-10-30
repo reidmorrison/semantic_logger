@@ -208,7 +208,7 @@ module SemanticLogger
 
       # Flush is called by the semantic_logger during shutdown.
       def flush
-        @remote_syslog.flush if @remote_syslog&.respond_to?(:flush)
+        @remote_syslog.flush if @remote_syslog.respond_to?(:flush)
       end
 
       # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender depending on the protocal selected

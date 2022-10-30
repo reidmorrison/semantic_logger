@@ -40,11 +40,11 @@ module SemanticLogger
       end
 
       def handle_tags
-        tags = @raw.fetch(:tags){ [] }
-                    .each_with_object({}){ |tag, accum| accum[tag] = true }
+        tags = @raw.fetch(:tags) { [] }.
+               each_with_object({}) { |tag, accum| accum[tag] = true }
 
-        @parsed = @parsed.merge(tags)
-                         .merge(@raw.fetch(:named_tags){ {} })
+        @parsed = @parsed.merge(tags).
+                  merge(@raw.fetch(:named_tags) { {} })
       end
 
       def handle_payload
