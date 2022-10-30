@@ -92,14 +92,16 @@ module SemanticLogger
     end
 
     def create_thread
-      self.thread = Thread.new { process }
+      self.thread = Thread.new do
+        Thread.current.name = logger.name
+        process
+      end
     end
 
     # Process messages from the queue.
     def process
       # This thread is designed to never go down unless the main thread terminates
       # or the appender is closed.
-      Thread.current.name = logger.name
       logger.trace "QueueProcessor: Processing messages"
       begin
         batch? ? process_messages_in_batches : process_messages

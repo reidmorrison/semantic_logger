@@ -6,7 +6,6 @@ module Appender
     describe SemanticLogger::Appender::MongoDB do
       before do
         skip "Set env var MONGO_HOST to run Mongo tests" unless ENV["MONGO_HOST"]
-        Thread.current.name = "thread"
       end
 
       let(:appender) do
@@ -31,7 +30,7 @@ module Appender
           document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_nil document["message"]
-          assert_equal "thread", document["thread"]
+          assert_equal Thread.current.name, document["thread"]
           assert document["time"].is_a?(Time)
           assert_nil document["payload"]
           assert_equal $$, document["pid"]
@@ -45,7 +44,7 @@ module Appender
           document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_nil document["message"]
-          assert_equal "thread", document["thread"]
+          assert_equal Thread.current.name, document["thread"]
           assert document["time"].is_a?(Time)
           assert payload = document["payload"]
           assert_equal 12_345, payload["tracking_number"], payload
@@ -61,7 +60,7 @@ module Appender
           document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
-          assert_equal "thread", document["thread"]
+          assert_equal Thread.current.name, document["thread"]
           assert document["time"].is_a?(Time)
           assert payload = document["payload"]
           assert_equal 12_345, payload["tracking_number"], payload
@@ -77,7 +76,7 @@ module Appender
           document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
-          assert_equal "thread", document["thread"]
+          assert_equal Thread.current.name, document["thread"]
           assert document["time"].is_a?(Time)
           assert_equal $$, document["pid"]
           assert_equal "test", document["host"]
@@ -93,7 +92,7 @@ module Appender
             document = appender.collection.find.first
             assert_equal level, document["level"]
             assert_equal "hello world -- Calculations", document["message"]
-            assert_equal "thread", document["thread"]
+            assert_equal Thread.current.name, document["thread"]
             assert document["time"].is_a?(Time)
             assert payload = document["payload"]
             assert_equal 12_345, payload["tracking_number"], payload

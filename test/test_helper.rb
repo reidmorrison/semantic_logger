@@ -31,3 +31,10 @@ end
 
 SemanticLogger.default_level   = :trace
 SemanticLogger.backtrace_level = :trace
+SemanticLogger.add_appender(file_name: "test.log", formatter: :color)
+
+reporters = [
+  Minitest::Reporters::ProgressReporter.new,
+  SemanticLogger::Reporters::Minitest.new
+]
+Minitest::Reporters.use!(reporters)

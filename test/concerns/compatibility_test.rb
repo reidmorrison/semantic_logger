@@ -132,12 +132,13 @@ class CompatibilityTest < Minitest::Test
     end
 
     it "#sev_threshold= as #level=" do
-      assert_equal :trace, logger.level
+      logger.level = :trace
       logger.sev_threshold = Logger::DEBUG
       assert_equal :debug, logger.level
     end
 
     it "#sev_threshold as #level" do
+      logger.level = :trace
       assert_equal :trace, logger.level
       assert_equal :trace, logger.sev_threshold
     end

@@ -1,7 +1,6 @@
 require_relative "../test_helper"
 
 # Unit Test for SemanticLogger::Appender::Splunk
-#
 module Appender
   class SplunkTest < Minitest::Test
     class Mock
@@ -15,7 +14,12 @@ module Appender
 
     describe SemanticLogger::Appender::Splunk do
       let(:appender) do
-        SemanticLogger::Appender::Splunk.stub_any_instance(:reopen, nil) do
+        mock = Module.new do
+          def self.indexes
+            {"main" => "main"}
+          end
+        end
+        ::Splunk.stub(:connect, mock) do
           SemanticLogger::Appender::Splunk.new
         end
       end

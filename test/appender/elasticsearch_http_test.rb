@@ -6,11 +6,7 @@ module Appender
     response_mock = Struct.new(:code, :body)
 
     describe SemanticLogger::Appender::ElasticsearchHttp do
-      let(:appender) do
-        Net::HTTP.stub_any_instance(:start, true) do
-          SemanticLogger::Appender::ElasticsearchHttp.new(url: "http://localhost:9200")
-        end
-      end
+      let(:appender) { SemanticLogger::Appender::ElasticsearchHttp.new(url: "http://mockhost:9200") }
       let(:amessage) { "AppenderElasticsearchTest log message" }
 
       it "logs to daily indexes" do

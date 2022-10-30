@@ -7,12 +7,10 @@ module Appender
 
     describe SemanticLogger::Appender::SplunkHttp do
       let(:appender) do
-        Net::HTTP.stub_any_instance(:start, true) do
-          SemanticLogger::Appender::SplunkHttp.new(
-            url:   "http://localhost:8088/path",
-            token: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-          )
-        end
+        SemanticLogger::Appender::SplunkHttp.new(
+          url:   "http://mockhost:8088/path",
+          token: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        )
       end
       let(:amessage) { "AppenderSplunkHttpTest log message" }
 

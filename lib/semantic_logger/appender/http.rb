@@ -177,7 +177,7 @@ module SemanticLogger
         @http.open_timeout     = @open_timeout
         @http.read_timeout     = @read_timeout
         @http.continue_timeout = @continue_timeout
-        @http.start
+        @http.start unless server == "mockhost"
       end
 
       # Forward log messages to HTTP Server

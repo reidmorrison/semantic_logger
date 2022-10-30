@@ -45,10 +45,6 @@ module Appender
         log
       end
 
-      before do
-        Thread.current.name = Thread.current.object_id
-      end
-
       describe "logs" do
         it "blank data" do
           appender.debug

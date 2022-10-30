@@ -18,10 +18,6 @@ class SubscriberTest < Minitest::Test
     let(:hash_str) { hash_value.inspect.sub("{", '\\{').sub("}", '\\}') }
     let(:file_name_reg_exp) { ' subscriber_test.rb:\d+' }
 
-    before do
-      Thread.current.name = Thread.current.object_id
-    end
-
     describe "format logs into text form" do
       it "handle no message or payload" do
         appender.debug

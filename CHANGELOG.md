@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+## [5.0.0]
+
+- Refactored code that executes the logging appenders in a separate thread.
+
 ## [4.12.0]
 
 - Add SyslogCee formatter for Syslog.

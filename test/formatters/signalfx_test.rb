@@ -41,7 +41,7 @@ module SemanticLogger
         end
 
         let :all_dimensions do
-          dims = dimensions.merge(
+          dims        = dimensions.merge(
             host:        SemanticLogger.host,
             application: SemanticLogger.application,
             environment: "test"
@@ -51,15 +51,8 @@ module SemanticLogger
           string_keys
         end
 
-        let :appender do
-          Net::HTTP.stub_any_instance(:start, true) do
-            SemanticLogger::Metric::Signalfx.new(token: "TEST", environment: "test")
-          end
-        end
-
-        let :formatter do
-          appender.formatter
-        end
+        let(:appender) { SemanticLogger::Metric::Signalfx.new(token: "TEST", environment: "test", url: "http://mockhost") }
+        let(:formatter) { appender.formatter }
 
         describe "format single log" do
           let :result do
@@ -104,16 +97,18 @@ module SemanticLogger
             hash                 = result
             assert counters = hash["counter"], hash
             assert counter = counters.first, hash
-            assert_equal(
-              { "class" => "user", "action" => "login", "environment" => "test", "user_id" => "47", "host" => SemanticLogger.host,
-"application" => SemanticLogger.application }, counter["dimensions"], counter
-            )
+            expected = { "class" => "user", "action" => "login", "environment" => "test", "user_id" => "47",
+                         "host"  => SemanticLogger.host, "application" => SemanticLogger.application }
+            assert_equal expected, counter["dimensions"], counter
           end
 
           it "raises exception with both a whitelist and blacklist" do
             assert_raises ArgumentError do
-              SemanticLogger::Formatters::Signalfx.new(token: "TEST", dimensions: [:user_id],
-                                                       exclude_dimensions: [:tracking_number])
+              SemanticLogger::Formatters::Signalfx.new(
+                token:              "TEST",
+                dimensions:         [:user_id],
+                exclude_dimensions: [:tracking_number]
+              )
             end
           end
 
