@@ -43,14 +43,14 @@ class SemanticLoggerTest < Minitest::Test
     end
 
     describe "mock_logger" do
-      include InMemoryAppenderHelper
+      let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
       describe ".tagged" do
         it "add tags to log entries" do
           SemanticLogger.tagged("12345", "DJHSFK") do
             logger.info("Hello world")
 
-            assert log = log_message
+            assert log = logger.events.first
             assert_equal %w[12345 DJHSFK], log.tags
           end
         end
@@ -60,7 +60,7 @@ class SemanticLoggerTest < Minitest::Test
             SemanticLogger.tagged("Second Level") do
               logger.info("Hello world")
 
-              assert log = log_message
+              assert log = logger.events.first
               assert_equal ["First Level", "tags", "Second Level"], log.tags
             end
             assert_equal 2, SemanticLogger.tags.count, SemanticLogger.tags
@@ -103,7 +103,7 @@ class SemanticLoggerTest < Minitest::Test
               SemanticLogger.named_tagged(level3: 3) do
                 logger.info("Hello world")
 
-                assert log = log_message
+                assert log = logger.events.first
                 assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, log.named_tags)
               end
             end
@@ -113,97 +113,57 @@ class SemanticLoggerTest < Minitest::Test
 
       describe ".fast_tag" do
         it "add string tag to log entries" do
-          logger.fast_tag("12345") do
+          SemanticLogger.fast_tag("12345") do
             logger.info("Hello world")
 
-            assert log = log_message
+            assert log = logger.events.first
             assert_equal %w[12345], log.tags
           end
         end
       end
 
       describe ".default_level" do
-        before do
-          SemanticLogger.default_level = :debug
-        end
+        let(:logger) { SemanticLogger::Test::CaptureLogEvents.new(level: nil) }
 
-        it "not log at a level below the global default" do
-          assert_equal :debug, SemanticLogger.default_level
-          assert_equal :debug, logger.level
-          logger.trace("hello world")
-
-          refute log_message
-        end
-
-        it "log at the instance level" do
-          assert_equal :debug, SemanticLogger.default_level
-          logger.level = :trace
+        it "appender inherits global default level" do
           assert_equal :trace, logger.level
-          logger.trace("hello world")
-
-          assert log = log_message
-          assert_equal :trace, log.level
-          assert_equal "hello world", log.message
         end
 
-        it "not log at a level below the instance level" do
-          assert_equal :debug, SemanticLogger.default_level
-          logger.level = :warn
-          assert_equal :warn, logger.level
-          logger.debug("hello world")
+        it "appender inherits updated global default level" do
+          SemanticLogger.stub(:default_level_index, 1) do
+            assert_equal 1, logger.level_index
+            assert logger.debug?
+          end
+        end
 
-          refute log_message
+        it "appender can use its own level" do
+          logger.level = :error
+          assert_equal :error, logger.level
         end
       end
 
       describe ".silence" do
-        before do
-          SemanticLogger.default_level = :info
+        let(:logger) { SemanticLogger::Test::CaptureLogEvents.new(level: nil) }
+
+        it "default error level" do
+          SemanticLogger.silence do
+            logger.warn("Ignore me")
+          end
+          assert_nil logger.events
         end
 
-        it "not log at a level below the silence level" do
-          assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, logger.level
-          logger.silence do
-            logger.warn("hello world")
-            logger.info("hello world")
-            logger.debug("hello world")
-            logger.trace("hello world")
+        it "custom level" do
+          SemanticLogger.silence(:warn) do
+            assert logger.error?
+            assert logger.warn?
+            refute logger.info?
+            refute logger.debug?
+            refute logger.trace?
           end
-
-          refute log_message
-        end
-
-        it "log at the instance level even with the silencer at a higher level" do
-          logger.level = :trace
-          assert_equal :trace, logger.level
-          logger.silence do
-            logger.trace("hello world")
-          end
-
-          assert log = log_message
-          assert_equal :trace, log.level
-          assert_equal "hello world", log.message
-        end
-
-        it "log at a silence level below the default level" do
-          assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, logger.level
-          logger.silence(:debug) do
-            logger.debug("hello world")
-          end
-
-          assert log = log_message
-          assert_equal :debug, log.level
-          assert_equal "hello world", log.message
         end
       end
 
       describe ".on_log" do
-        before do
-          SemanticLogger.default_level = :info
-        end
-
         after do
           SemanticLogger::Logger.subscribers.clear
         end
@@ -212,25 +172,13 @@ class SemanticLoggerTest < Minitest::Test
           SemanticLogger.on_log do |log|
             log.set_context(:custom_info, "test")
           end
+          logger.debug("hello world")
 
-          assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, logger.level
-          logger.silence(:debug) do
-            logger.debug("hello world")
-          end
-
-          assert log = log_message
+          assert log = logger.events.first
           assert_equal :debug, log.level
           assert_equal "hello world", log.message
           assert_equal "test", log.context[:custom_info]
         end
-      end
-    end
-
-    describe "defaults" do
-      it "sets global defaults" do
-        assert_equal [], SemanticLogger.tags
-        assert_equal 0, SemanticLogger.backtrace_level_index
       end
     end
   end

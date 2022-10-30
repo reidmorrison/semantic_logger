@@ -6,21 +6,21 @@ module Appender
     response_mock = Struct.new(:code, :body)
 
     describe SemanticLogger::Appender::Http do
-      before do
+      let(:appender) do
         Net::HTTP.stub_any_instance(:start, true) do
-          @appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path")
+          SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path")
         end
-        @message = "AppenderHttpTest log message"
       end
+      let(:amessage) { "AppenderHttpTest log message" }
 
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, @message)
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(level, amessage)
           end
           hash = JSON.parse(request.body)
-          assert_equal @message, hash["message"]
+          assert_equal amessage, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
         end
@@ -33,8 +33,8 @@ module Appender
             exc = e
           end
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, "Reading File", exc)
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(level, "Reading File", exc)
           end
           hash = JSON.parse(request.body)
           assert "Reading File", hash["message"]
@@ -46,11 +46,11 @@ module Appender
 
         it "send #{level} custom attributes" do
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, @message, key1: 1, key2: "a")
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(level, amessage, key1: 1, key2: "a")
           end
           hash = JSON.parse(request.body)
-          assert_equal @message, hash["message"]
+          assert_equal amessage, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
           assert payload = hash["payload"], hash

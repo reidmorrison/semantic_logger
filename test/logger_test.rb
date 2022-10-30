@@ -178,10 +178,6 @@ class LoggerTest < Minitest::Test
           end
 
           describe "metrics appender" do
-            let :appender do
-              InMemoryMetricsAppender.new
-            end
-
             it "logs metric only events" do
               metric_name = "/my/custom/metric"
               logger.send(level, metric: metric_name, dimensions: dimensions)

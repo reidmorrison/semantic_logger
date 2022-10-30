@@ -28,6 +28,7 @@ module SemanticLogger
       end
 
       def log(log)
+        Logger.call_subscribers(log)
         (@events ||= []) << log
       end
 

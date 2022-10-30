@@ -7,25 +7,27 @@ module Appender
       before do
         skip "Set env var MONGO_HOST to run Mongo tests" unless ENV["MONGO_HOST"]
 
-        @appender = SemanticLogger::Appender::MongoDB.new(
-          uri:             "mongodb://#{ENV['MONGO_HOST']}/test",
-          collection_size: 10 * 1024**2, # 10MB
-          host:            "test",
-          application:     "test_application",
-          level:           :trace
-        )
-        @hash = {tracking_number: 12_345, session_id: "HSSKLEU@JDK767"}
+        let(:appender) do
+          SemanticLogger::Appender::MongoDB.new(
+            uri:             "mongodb://#{ENV['MONGO_HOST']}/test",
+            collection_size: 10 * 1024 ** 2,
+            host:            "test",
+            application:     "test_application",
+            level:           :trace
+          )
+        end
+        let(:ahash) { { tracking_number: 12_345, session_id: "HSSKLEU@JDK767" } }
         Thread.current.name = "thread"
       end
 
       after do
-        @appender&.purge_all
+        appender&.purge_all
       end
 
       describe "format logs into documents" do
         it "handle no arguments" do
-          @appender.debug
-          document = @appender.collection.find.first
+          appender.debug
+          document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_nil document["message"]
           assert_equal "thread", document["thread"]
@@ -37,9 +39,9 @@ module Appender
         end
 
         it "handle named parameters" do
-          @appender.debug(payload: @hash)
+          appender.debug(payload: ahash)
 
-          document = @appender.collection.find.first
+          document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_nil document["message"]
           assert_equal "thread", document["thread"]
@@ -53,9 +55,9 @@ module Appender
         end
 
         it "handle message and payload" do
-          @appender.debug("hello world", @hash)
+          appender.debug("hello world", ahash)
 
-          document = @appender.collection.find.first
+          document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
           assert_equal "thread", document["thread"]
@@ -69,9 +71,9 @@ module Appender
         end
 
         it "handle message without payload" do
-          @appender.debug("hello world")
+          appender.debug("hello world")
 
-          document = @appender.collection.find.first
+          document = appender.collection.find.first
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
           assert_equal "thread", document["thread"]
@@ -86,8 +88,8 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         describe "##{level}" do
           it "logs" do
-            @appender.send(level, "hello world -- Calculations", @hash)
-            document = @appender.collection.find.first
+            appender.send(level, "hello world -- Calculations", ahash)
+            document = appender.collection.find.first
             assert_equal level, document["level"]
             assert_equal "hello world -- Calculations", document["message"]
             assert_equal "thread", document["thread"]

@@ -6,39 +6,39 @@ module Appender
     response_mock = Struct.new(:code, :body)
 
     describe SemanticLogger::Appender::SplunkHttp do
-      before do
+      let(:appender) do
         Net::HTTP.stub_any_instance(:start, true) do
-          @appender = SemanticLogger::Appender::SplunkHttp.new(
+          SemanticLogger::Appender::SplunkHttp.new(
             url:   "http://localhost:8088/path",
             token: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
           )
         end
-        @message = "AppenderSplunkHttpTest log message"
       end
+      let(:amessage) { "AppenderSplunkHttpTest log message" }
 
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, @message)
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(level, amessage)
           end
-          body = decompress_data(request.body)
+          body    = decompress_data(request.body)
           message = JSON.parse(body)
-          assert_equal @message, message["event"]["message"]
+          assert_equal amessage, message["event"]["message"]
           assert_equal level.to_s, message["event"]["level"]
           refute message["event"]["exception"]
         end
 
         it "sends #{level} exceptions" do
-          exc = nil
+          exc     = nil
           begin
             Uh oh
           rescue Exception => e
             exc = e
           end
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, "Reading File", exc)
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(level, "Reading File", exc)
           end
           body = decompress_data(request.body)
           hash = JSON.parse(body)
@@ -52,14 +52,14 @@ module Appender
 
         it "sends #{level} custom attributes" do
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, @message, key1: 1, key2: "a")
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(level, amessage, key1: 1, key2: "a")
           end
-          body = decompress_data(request.body)
+          body    = decompress_data(request.body)
           message = JSON.parse(body)
           assert event = message["event"], message.ai
           refute_includes message["event"], "host"
-          assert_equal @message, event["message"]
+          assert_equal amessage, event["message"]
           assert_equal level.to_s, event["level"]
           refute event["stack_trace"]
           assert payload = event["payload"], event

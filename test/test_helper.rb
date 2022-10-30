@@ -12,9 +12,6 @@ if ENV["LOGGER_SYNC"]
 else
   require "semantic_logger"
 end
-require_relative "in_memory_appender"
-require_relative "in_memory_metrics_appender"
-require_relative "in_memory_appender_helper"
 require "amazing_print"
 
 # Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
@@ -31,3 +28,6 @@ class Minitest::Test
     }
   end
 end
+
+SemanticLogger.default_level   = :trace
+SemanticLogger.backtrace_level = :trace
