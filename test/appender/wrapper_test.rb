@@ -52,27 +52,37 @@ module Appender
       describe "logs" do
         it "blank data" do
           appender.debug
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper/, mock_logger.message)
+          assert_match(
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper/, mock_logger.message
+          )
         end
 
         it "message" do
           appender.info("hello world")
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, mock_logger.message)
+          assert_match(
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, mock_logger.message
+          )
         end
 
         it "message and payload" do
           appender.warn("hello world", ahash)
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{hash_str}/, mock_logger.message)
+          assert_match(
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{hash_str}/, mock_logger.message
+          )
         end
 
         it "named parameters" do
           appender.error(message: "hello world", payload: ahash)
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{hash_str}/, mock_logger.message)
+          assert_match(
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{hash_str}/, mock_logger.message
+          )
         end
 
         it "trace as debug" do
           appender.trace("hello world")
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, mock_logger.message)
+          assert_match(
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, mock_logger.message
+          )
         end
       end
     end

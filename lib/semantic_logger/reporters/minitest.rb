@@ -33,11 +33,23 @@ module SemanticLogger
 
       def after_test(test)
         if test.error?
-          logger.benchmark_error("FAIL #{test.class_name} #{test.name}", duration: test.time * 1_000, metric: "minitest/fail")
+          logger.benchmark_error(
+            "FAIL #{test.class_name} #{test.name}",
+            duration: test.time * 1_000,
+            metric:   "minitest/fail"
+          )
         elsif test.skipped?
-          logger.benchmark_warn("SKIP #{test.class_name} #{test.name}", duration: test.time * 1_000, metric: "minitest/skip")
+          logger.benchmark_warn(
+            "SKIP #{test.class_name} #{test.name}",
+            duration: test.time * 1_000,
+            metric:   "minitest/skip"
+          )
         else
-          logger.benchmark_info("PASS #{test.class_name} #{test.name}", duration: test.time * 1_000, metric: "minitest/pass")
+          logger.benchmark_info(
+            "PASS #{test.class_name} #{test.name}",
+            duration: test.time * 1_000,
+            metric:   "minitest/pass"
+          )
         end
       end
     end

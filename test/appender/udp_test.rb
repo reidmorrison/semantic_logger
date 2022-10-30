@@ -20,7 +20,7 @@ module Appender
         end
 
         it "send #{level} exceptions" do
-          exc  = nil
+          exc = nil
           begin
             Uh oh
           rescue Exception => e

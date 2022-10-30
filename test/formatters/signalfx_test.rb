@@ -37,7 +37,7 @@ module SemanticLogger
         end
 
         let :dimensions do
-          {action: "hit", user: "jbloggs", state: "FL"}
+          { action: "hit", user: "jbloggs", state: "FL" }
         end
 
         let :all_dimensions do
@@ -99,17 +99,21 @@ module SemanticLogger
           end
 
           it "only forwards whitelisted dimensions from named_tags" do
-            log.named_tags       = {user_id: 47, tracking_number: 7474, session_id: "hsdhngsd"}
+            log.named_tags       = { user_id: 47, tracking_number: 7474, session_id: "hsdhngsd" }
             formatter.dimensions = %i[user_id application]
             hash                 = result
             assert counters = hash["counter"], hash
             assert counter = counters.first, hash
-            assert_equal({"class" => "user", "action" => "login", "environment" => "test", "user_id" => "47", "host" => SemanticLogger.host, "application" => SemanticLogger.application}, counter["dimensions"], counter)
+            assert_equal(
+              { "class" => "user", "action" => "login", "environment" => "test", "user_id" => "47", "host" => SemanticLogger.host,
+"application" => SemanticLogger.application }, counter["dimensions"], counter
+            )
           end
 
           it "raises exception with both a whitelist and blacklist" do
             assert_raises ArgumentError do
-              SemanticLogger::Formatters::Signalfx.new(token: "TEST", dimensions: [:user_id], exclude_dimensions: [:tracking_number])
+              SemanticLogger::Formatters::Signalfx.new(token: "TEST", dimensions: [:user_id],
+                                                       exclude_dimensions: [:tracking_number])
             end
           end
 

@@ -191,9 +191,9 @@ module SemanticLogger
       def bulk_index(log)
         expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
         if @data_stream
-          {"create" => {}}
+          { "create" => {} }
         else
-          {"index" => {"_index" => expanded_index_name, "_type" => type}}
+          { "index" => { "_index" => expanded_index_name, "_type" => type } }
         end
       end
 

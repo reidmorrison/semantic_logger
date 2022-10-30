@@ -5,6 +5,7 @@ AllCops:
     - ".git/**/*"
     - "docs/**/*"
   NewCops: enable
+  SuggestExtensions: false
   TargetRubyVersion: 2.7
 
 #
@@ -28,10 +29,6 @@ Layout/EndOfLine:
 Layout/HashAlignment:
   EnforcedHashRocketStyle: table
   EnforcedColonStyle: table
-
-# Match existing layout
-Layout/SpaceInsideHashLiteralBraces:
-  EnforcedStyle: no_space
 
 # Support long block lengths for tests
 Metrics/BlockLength:

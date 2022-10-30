@@ -6,7 +6,7 @@ class CompatibilityTest < Minitest::Test
 
     it "#add" do
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.add(Logger::INFO, "hello world", "progname") { "Data" }
       end
 
@@ -16,7 +16,7 @@ class CompatibilityTest < Minitest::Test
 
     it "#log" do
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.log(Logger::FATAL, "hello world", "progname") { "Data" }
       end
 
@@ -27,7 +27,7 @@ class CompatibilityTest < Minitest::Test
     describe "#info" do
       it "logs message" do
         log = nil
-        SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
           logger.info("hello1")
         end
 
@@ -37,7 +37,7 @@ class CompatibilityTest < Minitest::Test
 
       it "logs 2 messages" do
         log = nil
-        SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
           logger.info("hello1", "hello2")
         end
 
@@ -47,7 +47,7 @@ class CompatibilityTest < Minitest::Test
 
       it "logs non-string" do
         log = nil
-        SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
           logger.info("hello1", true)
         end
 
@@ -57,7 +57,7 @@ class CompatibilityTest < Minitest::Test
 
       it "logs block result" do
         log = nil
-        SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
           logger.info("hello1", true) { "Data" }
         end
 
@@ -68,7 +68,7 @@ class CompatibilityTest < Minitest::Test
 
     it "#unknown" do
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.unknown("hello world") { "Data" }
       end
 
@@ -81,7 +81,7 @@ class CompatibilityTest < Minitest::Test
       logger.level = :error
       assert logger.unknown?
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
       end
 
@@ -93,7 +93,7 @@ class CompatibilityTest < Minitest::Test
       logger.level = :fatal
       refute logger.unknown?
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
       end
 
@@ -102,7 +102,7 @@ class CompatibilityTest < Minitest::Test
 
     it "#silence_logger" do
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.silence_logger do
           logger.info "hello world"
         end
@@ -112,7 +112,7 @@ class CompatibilityTest < Minitest::Test
 
     it "#<< as info" do
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger << "hello world"
       end
 
@@ -157,7 +157,7 @@ class CompatibilityTest < Minitest::Test
     it "#close NOOP" do
       logger.close
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.info("hello world")
       end
 
@@ -168,7 +168,7 @@ class CompatibilityTest < Minitest::Test
     it "#reopen NOOP" do
       logger.reopen
       log = nil
-      SemanticLogger::Logger.processor.stub(:log, -> (_log) { log = _log }) do
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.info("hello world")
       end
 

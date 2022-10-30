@@ -41,7 +41,7 @@ module SemanticLogger
         h = SemanticLogger::Formatters::Raw.new.call(log, logger)
         h.delete(:time)
         h.delete(:exception)
-        {metric: log.metric, custom_params: h}
+        { metric: log.metric, custom_params: h }
       end
 
       # Send an error notification to New Relic

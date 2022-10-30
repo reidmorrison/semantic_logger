@@ -67,7 +67,7 @@ module Appender
               SemanticLogger.tagged("tag 2") do
                 SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
                   ::Sentry.stub(:capture_message, capture) do
-                    args = {username: "joe", fingerprint: ["bar"], other: "unrelated"}
+                    args = { username: "joe", fingerprint: ["bar"], other: "unrelated" }
                     appender.error("some message", **args)
                   end
                 end
@@ -81,10 +81,10 @@ module Appender
           assert_equal "foo", @scope.transaction_name
           assert_equal "unrelated", @scope.extra[:other]
 
-          expected_tags = {"tag" => "tag 1, tag 2", "baz" => "quz", "some" => "tag"}
+          expected_tags = { "tag" => "tag 1, tag 2", "baz" => "quz", "some" => "tag" }
           assert_equal expected_tags, @scope.tags
 
-          expected_user_data = {id: 42, username: "joe"}
+          expected_user_data = { id: 42, username: "joe" }
           assert_equal expected_user_data, @scope.user
         end
       end

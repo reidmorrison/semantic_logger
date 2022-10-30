@@ -20,7 +20,7 @@ class FakeBunny
     end
 
     def publish(message)
-      @conn.published << {message: message, queue: @name}
+      @conn.published << { message: message, queue: @name }
     end
   end
 

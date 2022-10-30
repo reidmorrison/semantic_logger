@@ -96,7 +96,7 @@ module SemanticLogger
       # the above keys is already present.
       #
       def extract_user!(*sources)
-        keys = {user_id: :id, username: :username, user_email: :email, ip_address: :ip_address}
+        keys = { user_id: :id, username: :username, user_email: :email, ip_address: :ip_address }
 
         user = {}
 

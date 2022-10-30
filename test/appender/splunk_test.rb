@@ -70,7 +70,7 @@ module Appender
       end
 
       it "does not send :trace notifications to Splunk when set to :error" do
-        mock            = Mock.new
+        mock = Mock.new
         appender.level = :error
         appender.stub(:service_index, mock) do
           appender.trace("AppenderSplunkTest trace message")

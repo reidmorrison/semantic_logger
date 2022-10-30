@@ -66,7 +66,7 @@ module SemanticLogger
           end
 
           it "process log with payload" do
-            log.payload = {is_test: true}
+            log.payload = { is_test: true }
             assert_match(/"is_test":true/, formatter.call(log, appender.logger))
           end
 

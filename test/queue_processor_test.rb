@@ -52,7 +52,7 @@ class QueueProcessorTest < Minitest::Test
         appender:           appender,
         lag_check_interval: lag_check_interval,
         lag_threshold_s:    lag_threshold_s,
-        async_max_retries:        2,
+        async_max_retries:  2,
         batch:              batch,
         batch_size:         3,
         batch_seconds:      1,
@@ -113,7 +113,7 @@ class QueueProcessorTest < Minitest::Test
       end
 
       it "retries on standard error" do
-        subject.stub(:process_messages, -> { raise StandardError.new("Standard") }) do
+        subject.stub(:process_messages, -> { raise StandardError, "Standard" }) do
           subject.send(:process)
         end
         assert messages = logger.events.collect(&:message)
@@ -126,7 +126,7 @@ class QueueProcessorTest < Minitest::Test
       end
 
       it "exits on exception" do
-        subject.stub(:process_messages, -> { raise Exception.new("Exception") }) do
+        subject.stub(:process_messages, -> { raise Exception, "Exception" }) do
           subject.send(:process)
         end
         assert messages = logger.events.collect(&:message)

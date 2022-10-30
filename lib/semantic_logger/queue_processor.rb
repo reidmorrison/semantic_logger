@@ -87,7 +87,7 @@ module SemanticLogger
       signal.set if batch?
 
       reply_queue = Queue.new
-      queue << {command: command, reply_queue: reply_queue}
+      queue << { command: command, reply_queue: reply_queue }
       reply_queue.pop
     end
 

@@ -108,7 +108,7 @@ module SemanticLogger
 
         describe "named_tags" do
           it "logs named tags" do
-            log.named_tags = {first: 1, second: 2, third: 3}
+            log.named_tags = { first: 1, second: 2, third: 3 }
             assert_equal "{first: 1, second: 2, third: 3}", formatter.named_tags
           end
         end
@@ -145,7 +145,7 @@ module SemanticLogger
 
         describe "payload" do
           it "logs hash payload" do
-            log.payload = {first: 1, second: 2, third: 3}
+            log.payload = { first: 1, second: 2, third: 3 }
             assert_equal "-- {:first=>1, :second=>2, :third=>3}", formatter.payload
           end
 
@@ -177,10 +177,10 @@ module SemanticLogger
 
           it "retuns all elements" do
             log.tags       = %w[first second third]
-            log.named_tags = {first: 1, second: 2, third: 3}
+            log.named_tags = { first: 1, second: 2, third: 3 }
             log.duration   = 1.34567
             log.message    = "Hello World"
-            log.payload    = {first: 1, second: 2, third: 3}
+            log.payload    = { first: 1, second: 2, third: 3 }
             log.backtrace  = backtrace
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1" : "1.346"

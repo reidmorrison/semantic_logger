@@ -39,7 +39,7 @@ module Appender
           appender.close
         end
 
-        it 'uses :timestamp as time_key' do
+        it "uses :timestamp as time_key" do
           assert_equal :timestamp, appender.formatter.time_key
         end
 
@@ -79,7 +79,7 @@ module Appender
           end
 
           it "logs payload" do
-            h           = {key1: 1, key2: "a"}
+            h           = { key1: 1, key2: "a" }
             log.payload = h
             request     = stub_client { appender.log(log) }
 
@@ -134,13 +134,13 @@ module Appender
         let :appender do
           if ENV["ELASTICSEARCH"]
             SemanticLogger::Appender::Elasticsearch.new(
-              url: "http://localhost:9200",
+              url:         "http://localhost:9200",
               data_stream: true
             )
           else
             Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
               SemanticLogger::Appender::Elasticsearch.new(
-                url: "http://localhost:9200",
+                url:         "http://localhost:9200",
                 data_stream: true
               )
             end
@@ -161,15 +161,15 @@ module Appender
           appender.close
         end
 
-        it 'uses @timestamp as time_key' do
-          assert_equal '@timestamp', appender.formatter.time_key
+        it "uses @timestamp as time_key" do
+          assert_equal "@timestamp", appender.formatter.time_key
         end
 
         describe "synchronous" do
           it "logs to data-stream index without date" do
             request = stub_client { appender.log(log) }
 
-            assert_equal 'semantic_logger', request[:index]
+            assert_equal "semantic_logger", request[:index]
             assert hash = request[:body][1]
             assert_equal log_message, hash[:message]
           end
@@ -198,7 +198,7 @@ module Appender
           it "logs multiple messages" do
             request = stub_client { appender.batch(logs) }
 
-            assert_equal 'semantic_logger', request[:index]
+            assert_equal "semantic_logger", request[:index]
             assert body = request[:body]
             assert_equal 6, body.size, body
 
@@ -222,7 +222,7 @@ module Appender
         let :appender do
           Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
             SemanticLogger::Appender::Elasticsearch.new(
-              hosts: [{host: "localhost", port: 9200}]
+              hosts: [{ host: "localhost", port: 9200 }]
             )
           end
         end
@@ -287,7 +287,7 @@ module Appender
           end
 
           it "logs payload" do
-            h           = {key1: 1, key2: "a"}
+            h           = { key1: 1, key2: "a" }
             log.payload = h
             request     = stub_client { appender.log(log) }
 

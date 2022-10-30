@@ -161,7 +161,13 @@ class LoggerTest < Minitest::Test
           end
 
           it "does not log when below min_duration" do
-            logger.send(level, min_duration: 200, duration: 123.45, message: "hello world", payload: { tracking_number: "123456", even: 2, more: "data" })
+            logger.send(
+              level,
+              min_duration: 200,
+              duration:     123.45,
+              message:      "hello world",
+              payload:      { tracking_number: "123456", even: 2, more: "data" }
+            )
 
             assert_nil logger.events
           end

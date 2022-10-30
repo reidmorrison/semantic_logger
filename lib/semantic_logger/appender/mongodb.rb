@@ -117,7 +117,7 @@ module SemanticLogger
         @options         = {
           capped: true,
           size:   collection_size,
-          write:  {w: write_concern}
+          write:  { w: write_concern }
         }
         @options[:max] = collection_max if collection_max
 
