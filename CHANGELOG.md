@@ -1,12 +1,18 @@
 # Change Log
+
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
-- The Logfmt formatter can now parse Hashes and Arrays correctly.
-- Fixes a race condition in `SemancicLogger.reopen`.
 
-### Changed
+## [4.12.0]
+
+- Add SyslogCee formatter for Syslog.
+- The Logfmt formatter can now parse Hashes and Arrays correctly.
+- Fixes a race condition in `SemanticLogger.reopen`.
+- Ability to directly set proxy for `SemanticLogger::Appender::Http`
+- Fixed log level signal handler to include fatal and error levels.
+- Fixes #218 Calls Sentry.init inside sentry_ruby appender only if it is not initialized
 - Contributor experience related to RuboCop was improved with the
   following changes:
     - New .rubocop\_todo.yml to hold RuboCop offenses and enable a clean
@@ -16,9 +22,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
     - Updated RuboCop's target version to Ruby 2.7.5.
     - Updated minimum Ruby version to 2.7.5 as earlier versions are
       end-of-life.
-- New Feature: Ability to directly set proxy for `SemanticLogger::Appender::Http`
-- Fixed log level signal handler to include fatal and error levels.
-- Fixes #218 Calls Sentry.init inside sentry_ruby appender only if it is not initialized
+- Add mutexes to `SemanticLogger.sync!` in case some users are still using it in a 
+  multi-threaded environment.
 
 ## [4.11.0]
 
