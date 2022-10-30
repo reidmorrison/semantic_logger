@@ -599,16 +599,15 @@ The output above contains 2 stack traces, with the second stack trace starting a
 
 ### Writing Tests
 
-It is recommended to turn on synchronous operation when running tests to avoid threading issues.
-Add the following line to `test_helper.rb`:
+When writing tests we want to verify that the correct log messages, metrics, etc.
+are being created by the application.
+Since Semantic Logger uses a global logging mechanism we can't use the regular logging to
+confirm logging events.
 
-~~~ruby
-SemanticLogger.sync!
-~~~
-
-To confirm that the correct log messages, metrics, etc. are being logged in the code, 
-stub out the regular global logger with a special logger that will store the log events in memory.
-The log events can then be verified for accuracy. 
+The approach is to stub out the Semantic Logger and replace it with an instance of
+`SemanticLogger::Test::CaptureLogEvents`. It looks and feels like a regular logging class,
+except that it retains the log events in memory. The raw events are captured so that tests are not
+affected by configured appenders or their formats.
 
 Example:
 ~~~ruby
@@ -630,6 +629,7 @@ end
 ~~~
 
 By default, `SemanticLogger::Test::CaptureLogEvents` captures all log events regardless of log level.
+
 To use the global default log level and to support silencing of messages, set `level` to `nil` for tests
 that need to verify silencing of log levels:
 ~~~ruby
@@ -638,16 +638,21 @@ let(:logger) { SemanticLogger::Test::CaptureLogEvents.new(level: nil) }
 
 ### Synchronous Operation
 
-Sometimes it is useful to perform logging in the current thread instead of using a separate thread.
+Some users have requested the ability to bypass the separate logging thread.
+It forces logging to be performed in the current thread, instead of being performed asynchronously.
+Of course this means that all logging is performed in the current thread slowing it down, 
+depending on how many and which log appenders are being used.
 
-Some examples
-- In tests it would be easier to verify logging of metrics, messages, etc.
-- In forked environments not having to re-create the logging thread could be useful.
-- Other logging frameworks perform synchronous logging. Transitioning to Semantic Logger could be easier.
+It is _not_ recommended to use this feature since it disables a core design principle in Semantic Logger
+itself. If your application is single threaded and is not time critical, performing logging in the
+current may be useful for your application though.
+
+Some scenarious where it could be useful.
+- In forked environments not having to re-create the logging thread.
+- Short lived execution where creating a separate thread and then waiting for it to terminate on
+  exit may nor be desirable.
 - Logging maintains the current threads context.
 - Very few Ruby applications actually use threads.
-
-Of course this means that all logging is performed in the current thread slowing it down a little.
 
 Run Semantic Logger in Synchronous mode:
 ~~~ruby

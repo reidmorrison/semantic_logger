@@ -35,10 +35,10 @@ When the signal is sent, the global default log level rotates through the follow
 log levels in the following order, starting from the current global default level:
 
 ~~~ruby
-  :warn, :info, :debug, :trace
+  :fatal, :error, :warn, :info, :debug, :trace
 ~~~
 
-If the current level is `:trace` it wraps around back to `:warn`
+If the current level is `:trace` it wraps around back to `:fatal`
 
 Example (where the target ruby process id is 1234) :
 
