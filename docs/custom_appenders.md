@@ -21,16 +21,16 @@ Basic outline for an Appender:
 require "semantic_logger"
 
 class SimpleAppender < SemanticLogger::Subscriber
-  def initialize(level=nil, &block)
-    # Set the log level and formatter if supplied
-    super(level, &block)
+  attr_reader :host
+  
+  # Add additional arguments to the initializer while supporting all existing ones.
+  def initialize(host: host, **args, &block)
+    @host = host
+    super(**args, &block)
   end
 
   # Display the log struct and the text formatted output
   def log(log)
-    # Ensure minimum log level is met, and check filter
-    return false if (level_index > (log.level_index || 0)) || !include_message?(log)
-
     # Display the raw log structure
     p log
 
@@ -41,6 +41,11 @@ class SimpleAppender < SemanticLogger::Subscriber
   # Optional
   def flush
     puts "Flush :)"
+  end
+
+  # Optional
+  def close
+    puts "Closing :)"
   end
 end
 ~~~
