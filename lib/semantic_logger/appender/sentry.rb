@@ -38,10 +38,10 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(level: :error, **args, &block)
+      def initialize(**args, &block)
         # Replace the Sentry Raven logger so that we can identify its log messages and not forward them to Sentry
         Raven.configure { |config| config.logger = SemanticLogger[Raven] }
-        super(level: level, **args, &block)
+        super(**args, &block)
       end
 
       # Send an error notification to sentry
