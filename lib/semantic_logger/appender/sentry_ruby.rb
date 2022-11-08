@@ -37,11 +37,11 @@ module SemanticLogger
       #   application: [String]
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
-      def initialize(**args, &block)
+      def initialize(level: :error, **args, &block)
         # Replace the Sentry Ruby logger so that we can identify its log
         # messages and not forward them to Sentry
         ::Sentry.init { |config| config.logger = SemanticLogger[::Sentry] } unless ::Sentry.initialized?
-        super(**args, &block)
+        super(level: level, **args, &block)
       end
 
       # Send an error notification to sentry
