@@ -5,9 +5,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
-## [5.0.0]
+## [4.13.0]
 
-- Refactored code that executes the logging appenders in a separate thread.
+- Add Minitest helper methods to assist with asserting logging events.
 
 ## [4.12.0]
 

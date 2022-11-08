@@ -597,45 +597,6 @@ demo.rb:14:in `<main>'
 The output above contains 2 stack traces, with the second stack trace starting at
 `Cause: IOError: not opened for reading`.
 
-### Writing Tests
-
-When writing tests we want to verify that the correct log messages, metrics, etc.
-are being created by the application.
-Since Semantic Logger uses a global logging mechanism we can't use the regular logging to
-confirm logging events.
-
-The approach is to stub out the Semantic Logger and replace it with an instance of
-`SemanticLogger::Test::CaptureLogEvents`. It looks and feels like a regular logging class,
-except that it retains the log events in memory. The raw events are captured so that tests are not
-affected by configured appenders or their formats.
-
-Example:
-~~~ruby
-class UserTest < ActiveSupport::TestCase
-  describe User do
-    let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
-    let(:user) { User.new }
-
-    it "logs message" do
-      user.stub(:logger, logger) do
-        user.enable!
-      end
-      assert log = logger.events.first
-      assert_equal "Hello World", log.message
-      assert_equal :info, log.level
-    end
-  end
-end
-~~~
-
-By default, `SemanticLogger::Test::CaptureLogEvents` captures all log events regardless of log level.
-
-To use the global default log level and to support silencing of messages, set `level` to `nil` for tests
-that need to verify silencing of log levels:
-~~~ruby
-let(:logger) { SemanticLogger::Test::CaptureLogEvents.new(level: nil) }
-~~~
-
 ### Synchronous Operation
 
 Some users have requested the ability to bypass the separate logging thread.
