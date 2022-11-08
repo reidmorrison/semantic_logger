@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+## [4.13.0]
+
+- Add Minitest helper methods to assist with asserting logging events.
+
 ## [4.12.0]
 
 - Add SyslogCee formatter for Syslog.
