@@ -44,40 +44,60 @@ module Appender
         log.level   = :info
         log
       end
+      let(:backtrace) do
+        [
+          "test/formatters/default_test.rb:35:in `block (2 levels) in <class:DefaultTest>'",
+        ]
+      end
 
       describe "logs" do
         it "blank data" do
-          appender.debug
+          log.message = nil
+          log.level   = :debug
+          appender.log(log.freeze)
           assert_match(
-            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper/, mock_logger.message
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\] User/, mock_logger.message
           )
         end
 
         it "message" do
-          appender.info("hello world")
+          appender.log(log.freeze)
           assert_match(
-            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, mock_logger.message
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:\w+\] User -- hello world/, mock_logger.message
           )
         end
 
-        it "message and payload" do
-          appender.warn("hello world", ahash)
+        it "backtrace" do
+          log.level     = :warn
+          log.backtrace = backtrace
+          appender.log(log.freeze)
           assert_match(
-            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{hash_str}/, mock_logger.message
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+\ default_test.rb:35] User -- hello world/, mock_logger.message
           )
         end
 
-        it "named parameters" do
-          appender.error(message: "hello world", payload: ahash)
+        it "payload" do
+          log.level   = :error
+          log.payload = ahash
+          appender.log(log.freeze)
           assert_match(
-            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world -- #{hash_str}/, mock_logger.message
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:\w+\] User -- hello world -- #{hash_str}/, mock_logger.message
           )
         end
 
         it "trace as debug" do
-          appender.trace("hello world")
+          log.level = :trace
+          appender.log(log.freeze)
           assert_match(
-            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SemanticLogger::Appender::Wrapper -- hello world/, mock_logger.message
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:\w+\] User -- hello world/, mock_logger.message
+          )
+        end
+
+        it "fatal" do
+          log.level = :fatal
+          appender.log(log.freeze)
+          assert_match(
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:\w+\] User -- hello world/, mock_logger.message
           )
         end
       end

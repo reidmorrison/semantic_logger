@@ -35,7 +35,8 @@ module SemanticLogger
     end
 
     def log(log)
-      queue << log
+      # Freeze the log entry to prevent subsequent changes since it is being shared across threads.
+      queue << log.freeze
 
       # For batches wake up the processing thread once the number of queued messages has been exceeded.
       signal.set if batch? && (queue.size >= batch_size)

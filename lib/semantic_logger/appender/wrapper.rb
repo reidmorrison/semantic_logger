@@ -1,7 +1,6 @@
 # Send log messages to any standard Ruby logging class.
 #
 #  Forwards logging call to loggers such as Logger, log4r, etc.
-#
 module SemanticLogger
   module Appender
     class Wrapper < SemanticLogger::Subscriber
@@ -56,8 +55,8 @@ module SemanticLogger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
       def log(log)
-        log.level = :debug if log.level == :trace
-        @logger.send(log.level, formatter.call(log, self))
+        level = log.level == :trace ? :debug : log.level
+        @logger.send(level, formatter.call(log, self))
         true
       end
 
