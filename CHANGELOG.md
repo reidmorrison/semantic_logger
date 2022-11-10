@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [4.13.0]
 
 - Add Minitest helper methods to assist with asserting logging events.
+- Loggable now works with frozen classes and objects.
 
 ## [4.12.0]
 

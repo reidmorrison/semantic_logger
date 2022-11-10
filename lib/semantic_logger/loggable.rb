@@ -30,6 +30,9 @@
 #     ExternalSupplier.prepend SemanticLogger::Loggable
 module SemanticLogger
   module Loggable
+    LOGGABLE_LOGGERS = Hash.new do |hash, klass|
+      hash[klass] = SemanticLogger[klass]
+    end
     def self.included(base)
       base.extend ClassMethods
       base.singleton_class.class_eval do
@@ -42,7 +45,7 @@ module SemanticLogger
 
         # Returns [SemanticLogger::Logger] class level logger
         def self.logger
-          @semantic_logger ||= SemanticLogger[self]
+          @semantic_logger || SemanticLogger::Loggable::LOGGABLE_LOGGERS[self]
         end
 
         # Replace instance class level logger
@@ -52,7 +55,7 @@ module SemanticLogger
 
         # Returns [SemanticLogger::Logger] instance level logger
         def logger
-          @semantic_logger ||= self.class.logger
+          @semantic_logger || self.class.logger
         end
 
         # Replace instance level logger
