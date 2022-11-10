@@ -50,9 +50,5 @@ module SemanticLogger
       @mutex     = Mutex.new
       @appenders = appenders || Appenders.new(self.class.logger.dup)
     end
-
-    def start
-      # NOP
-    end
   end
 end

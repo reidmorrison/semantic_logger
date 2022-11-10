@@ -46,18 +46,21 @@ module SemanticLogger
     end
 
     def close
-      to_a.each do |appender|
+      closed_appenders = []
+      each do |appender|
         logger.trace "Closing appender: #{appender.name}"
-        delete(appender)
+        appenders << appender
         appender.flush
         appender.close
       rescue Exception => e
         logger.error "Failed to close appender: #{appender.name}", e
       end
+      # Delete appenders outside the #each above which prevents changes during iteration.
+      closed_appenders.each { |appender| delete(appender) }
       logger.trace "All appenders closed and removed from appender list"
     end
 
-    # After a fork the appender thread is not running, start it if it is not running.
+    # After a fork reopen each appender.
     def reopen
       each do |appender|
         next unless appender.respond_to?(:reopen)

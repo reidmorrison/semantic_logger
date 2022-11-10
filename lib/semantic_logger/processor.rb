@@ -27,13 +27,5 @@ module SemanticLogger
       @appenders = Appenders.new(self.class.logger.dup)
       super(appender: @appenders, max_queue_size: max_queue_size)
     end
-
-    # Start the appender thread
-    def start
-      return false if active?
-
-      thread
-      true
-    end
   end
 end
