@@ -32,3 +32,7 @@ class Minitest::Test
     }
   end
 end
+
+def add_mocks_to_load_path
+  $LOAD_PATH.unshift File.join(File.dirname(__FILE__), "mocks")
+end

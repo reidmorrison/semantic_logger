@@ -1,6 +1,6 @@
-# So that the NewRelic appender will load the mock
-$LOAD_PATH.unshift File.dirname(__FILE__)
 require_relative "../test_helper"
+
+add_mocks_to_load_path
 
 # Unit Test for SemanticLogger::Appender::NewRelic
 module Appender
