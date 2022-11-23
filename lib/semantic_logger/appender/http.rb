@@ -160,10 +160,10 @@ module SemanticLogger
         end
 
         @http = if @proxy_uri
-          Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
-        else
-          Net::HTTP.new(server, port, @proxy_url)
-        end
+                  Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
+                else
+                  Net::HTTP.new(server, port, @proxy_url)
+                end
 
         if @ssl_options
           @http.methods.grep(/\A(\w+)=\z/) do |meth|

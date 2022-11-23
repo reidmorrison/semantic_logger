@@ -2,6 +2,19 @@
 
 module NewRelic
   module Agent
+    module LogEventAggregrator
+      def self.record(message, level)
+      end
+    end
+
+    def self.agent
+      self
+    end
+
+    def self.log_event_aggregrator
+      LogEventAggregrator
+    end
+
     def self.notice_error(message, hash)
     end
 
@@ -12,7 +25,7 @@ module NewRelic
     end
 
     def self.linking_metadata
-      {"entity.name"=>"Entity Name", "entity.type"=>"SERVICE", "hostname"=>"hostname"}
+      {"entity.name" => "Entity Name", "entity.type" => "SERVICE", "hostname" => "hostname"}
     end
 
     module Tracer

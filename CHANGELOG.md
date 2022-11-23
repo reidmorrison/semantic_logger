@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 - Move `newrelic_rpm.rb` mock to the `test/mocks` directory
 - Add `add_mocks_to_load_path`
+- Add NewRelicLogs formatter & appender
 
 ## [4.13.0]
 
