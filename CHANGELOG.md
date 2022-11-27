@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Quote 3.0 in CI configuration to prevent truncation.
+
 ## [4.13.0]
 
 - Add Minitest helper methods to assist with asserting logging events.
