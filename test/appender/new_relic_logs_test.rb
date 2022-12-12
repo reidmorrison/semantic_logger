@@ -20,7 +20,7 @@ module Appender
 
       SemanticLogger::Levels::LEVELS.each do |level|
         it "sends :#{level} notifications to New Relic" do
-          NewRelic::Agent.agent.log_event_aggregrator.stub(:record, method(:log_newrelic_stub)) do
+          NewRelic::Agent.agent.log_event_aggregator.stub(:record, method(:log_newrelic_stub)) do
             @appender.tagged("test") do
               @appender.send(level, @message)
             end

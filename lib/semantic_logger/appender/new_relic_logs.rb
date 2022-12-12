@@ -50,7 +50,7 @@ module SemanticLogger
       end
 
       def self.log_newrelic(message, level)
-        ::NewRelic::Agent.agent.log_event_aggregrator.record(message, level)
+        ::NewRelic::Agent.agent.log_event_aggregator.record(message, level)
       end
     end
   end

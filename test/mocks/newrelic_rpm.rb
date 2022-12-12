@@ -2,7 +2,7 @@
 
 module NewRelic
   module Agent
-    module LogEventAggregrator
+    module LogEventAggregator
       def self.record(message, level)
       end
     end
@@ -11,8 +11,8 @@ module NewRelic
       self
     end
 
-    def self.log_event_aggregrator
-      LogEventAggregrator
+    def self.log_event_aggregator
+      LogEventAggregator
     end
 
     def self.notice_error(message, hash)
