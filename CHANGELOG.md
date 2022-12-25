@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 - The Logfmt formatter can now parse Hashes and Arrays correctly.
 - Fixes a race condition in `SemancicLogger.reopen`.
+- Move initialization of `events` array in `CaptureLogEvents` to constructor.
+- Add `clear` method to `CaptureLogEvents`.
 
 ### Changed
 - Contributor experience related to RuboCop was improved with the
