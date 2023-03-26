@@ -27,7 +27,7 @@ end
 
 ### Puma
 
-If running Puma 2 in Clustered mode and you're preloading your application,
+If running Puma in Clustered mode and you're preloading your application,
 add the following to your worker boot code:
 
 ~~~ruby
