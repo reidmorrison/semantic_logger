@@ -55,6 +55,7 @@ and are therefore not automatically included by this gem:
 - Bugsnag Appender: gem 'bugsnag'
 - MongoDB Appender: gem 'mongo' 1.9.2 or above
 - NewRelic Appender: gem 'newrelic_rpm'
+- NewRelicLogs Appender: gem 'newrelic_rpm'
 - Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
 - Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'

@@ -34,6 +34,7 @@ module SemanticLogger
 
   module Test
     autoload :CaptureLogEvents,  "semantic_logger/test/capture_log_events"
+    autoload :Minitest,          "semantic_logger/test/minitest"
   end
 
   if defined?(JRuby)

@@ -599,16 +599,21 @@ The output above contains 2 stack traces, with the second stack trace starting a
 
 ### Synchronous Operation
 
-Sometimes it is useful to perform logging in the current thread instead of using a separate thread.
+Some users have requested the ability to bypass the separate logging thread.
+It forces logging to be performed in the current thread, instead of being performed asynchronously.
+Of course this means that all logging is performed in the current thread slowing it down, 
+depending on how many and which log appenders are being used.
 
-Some examples
-- In tests it would be easier to verify logging of metrics, messages, etc.
-- In forked environments not having to re-create the logging thread could be useful.
-- Other logging frameworks perform synchronous logging. Transitioning to Semantic Logger could be easier.
+It is _not_ recommended to use this feature since it disables a core design principle in Semantic Logger
+itself. If your application is single threaded and is not time critical, performing logging in the
+current may be useful for your application though.
+
+Some scenarious where it could be useful.
+- In forked environments not having to re-create the logging thread.
+- Short lived execution where creating a separate thread and then waiting for it to terminate on
+  exit may nor be desirable.
 - Logging maintains the current threads context.
 - Very few Ruby applications actually use threads.
-
-Of course this means that all logging is performed in the current thread slowing it down a little.
 
 Run Semantic Logger in Synchronous mode:
 ~~~ruby
@@ -628,4 +633,4 @@ Or, when using a Gemfile:
 gem "semantic_logger", require: "semantic_logger/sync"
 ~~~
 
-### [Next: Appenders ==>](appenders.html)
+### [Next: Testing ==>](testing.html)

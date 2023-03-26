@@ -1,14 +1,28 @@
 module SemanticLogger
-  # Thread that submits and processes log requests
+  # The SyncProcessor performs logging in the current thread.
+  #
+  # Appenders are designed to only be used by one thread at a time, so all calls
+  # are mutex protected in case SyncProcessor is being used in a multi-threaded environment.
   class SyncProcessor
-    extend Forwardable
+    def add(*args, &block)
+      @mutex.synchronize { @appenders.add(*args, &block) }
+    end
 
-    # Forward methods that can be called directly
-    def_delegator :@appenders, :add
-    def_delegator :@appenders, :log
-    def_delegator :@appenders, :flush
-    def_delegator :@appenders, :close
-    def_delegator :@appenders, :reopen
+    def log(*args, &block)
+      @mutex.synchronize { @appenders.log(*args, &block) }
+    end
+
+    def flush
+      @mutex.synchronize { @appenders.flush }
+    end
+
+    def close
+      @mutex.synchronize { @appenders.close }
+    end
+
+    def reopen(*args)
+      @mutex.synchronize { @appenders.reopen(*args) }
+    end
 
     # Allow the internal logger to be overridden from its default of $stderr
     #   Can be replaced with another Ruby logger or Rails logger, but never to
@@ -33,6 +47,7 @@ module SemanticLogger
     attr_reader :appenders
 
     def initialize(appenders = nil)
+      @mutex     = Mutex.new
       @appenders = appenders || Appenders.new(self.class.logger.dup)
     end
 
