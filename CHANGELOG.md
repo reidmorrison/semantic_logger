@@ -11,6 +11,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Add payload logging to `payload_includes` Minitest helper functionality.
 - Fix bug in `payload_includes` testing functionality where if a key is not in the payload the test would pass.
 
+- Quote 3.0 in CI configuration to prevent truncation.
+
 ## [4.13.0]
 
 - Add Minitest helper methods to assist with asserting logging events.
