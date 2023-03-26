@@ -4,9 +4,17 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+
+## [4.13.0]
+
+- Replace `autoload` with `require` for most requires since Ruby does not allow a require
+  during a signal trap for the extreme use case where the logger is called from the signal 
+  trap before the application has made any logging calls.
+
 - Move `newrelic_rpm.rb` mock to the `test/mocks` directory
 - Add `add_mocks_to_load_path`
 - Add NewRelicLogs formatter & appender
+
 - Move initialization of `events` array in `CaptureLogEvents` to constructor.
 - Add `clear` method to `CaptureLogEvents`.
 
@@ -14,8 +22,6 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Fix bug in `payload_includes` testing functionality where if a key is not in the payload the test would pass.
 
 - Quote 3.0 in CI configuration to prevent truncation.
-
-## [4.13.0]
 
 - Add Minitest helper methods to assist with asserting logging events.
 

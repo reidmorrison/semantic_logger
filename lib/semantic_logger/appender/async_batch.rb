@@ -1,5 +1,3 @@
-require "concurrent"
-
 module SemanticLogger
   module Appender
     # Log asynchronously in batches using a separate thread.
