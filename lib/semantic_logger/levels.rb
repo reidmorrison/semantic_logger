@@ -1,4 +1,4 @@
-require "logger/severity"
+require "logger"
 
 module SemanticLogger
   module Levels
