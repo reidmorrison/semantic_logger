@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add support for custom headers in HTTP appender.
+
 ## [4.13.0]
 
 - Replace `autoload` with `require` for most requires since Ruby does not allow a require

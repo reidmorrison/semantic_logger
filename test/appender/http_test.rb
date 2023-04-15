@@ -59,6 +59,18 @@ module Appender
         end
       end
 
+      it "supports custom headers" do
+        Net::HTTP.stub_any_instance(:start, true) do
+          request = nil
+          header = {"Authorization" => "Bearer BEARER_TOKEN"}
+          appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", header: header)
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(:info, @message)
+          end
+          assert_equal(header["Authorization"], request["Authorization"])
+        end
+      end
+
       # We need to use a valid address that doesn't resolve to a localhost
       # address in order to check the proxy.  Net::HTTP uses URI::Generic#find_proxy
       # to determine the proxy to use, which will return nil if the hostname resolves
