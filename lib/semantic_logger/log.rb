@@ -219,11 +219,11 @@ module SemanticLogger
 
       seconds = duration / 1000
       if seconds >= 86_400.0 # 1 day
-        "#{(seconds / 86_400).to_i}d #{Time.at(seconds).strftime('%-Hh %-Mm')}"
+        "#{(seconds / 86_400).to_i}d #{Time.at(seconds).utc.strftime('%-Hh %-Mm')}"
       elsif seconds >= 3600.0 # 1 hour
-        Time.at(seconds).strftime("%-Hh %-Mm")
+        Time.at(seconds).utc.strftime("%-Hh %-Mm")
       elsif seconds >= 60.0 # 1 minute
-        Time.at(seconds).strftime("%-Mm %-Ss")
+        Time.at(seconds).utc.strftime("%-Mm %-Ss")
       elsif seconds >= 1.0 # 1 second
         "#{format('%.3f', seconds)}s"
       else

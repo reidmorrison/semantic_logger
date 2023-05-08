@@ -77,7 +77,7 @@ module SemanticLogger
     #    # Log an exception in a semantic way
     #    logger.info("Parsing received XML", exc)
     #
-    SemanticLogger::LEVELS.each_with_index do |level, index|
+    SemanticLogger::Levels::LEVELS.each_with_index do |level, index|
       class_eval <<~METHODS, __FILE__, __LINE__ + 1
         def #{level}(message=nil, payload=nil, exception=nil, &block)
           if level_index <= #{index}

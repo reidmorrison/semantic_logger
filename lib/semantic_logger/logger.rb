@@ -1,4 +1,3 @@
-require "concurrent"
 module SemanticLogger
   # Logger stores the class name to be used for all log messages so that every
   # log message written by this instance will include the class name

@@ -26,18 +26,20 @@ module SemanticLogger
         assert_includes event.message, message_includes if message_includes
         assert_equal name, event.name, -> { "Mismatched log name for message: '#{msg}'" } if name
         assert_equal level, event.level, -> { "Mismatched log level for message: '#{msg}'" } if level
+
         if payload_includes
           payload_includes.each_pair do |key, expected_value|
             value = event.payload[key]
-            if value.nil?
-              assert_nil value, -> { "Mismatched key: #{key.inspect} in log payload for message: '#{msg}'" }
+            if expected_value.nil?
+              assert_nil value, -> { "Mismatched key: #{key.inspect} in log payload: #{event.payload} for message: '#{msg}'" }
             else
-              assert_equal expected_value, value, -> { "Mismatched key: #{key.inspect} in log payload for message: '#{msg}'" }
+              assert_equal expected_value, value, -> { "Mismatched key: #{key.inspect} in log payload: #{event.payload} for message: '#{msg}'" }
             end
           end
         elsif payload
-          assert_equal payload, event.payload, -> { "Mismatched log payload for message: '#{msg}'" }
+          assert_equal payload, event.payload, -> { "Mismatched log payload: #{event.payload} for message: '#{msg}'" }
         end
+
         assert_equal thread_name, event.thread_name, -> { "Mismatched thread_name for message: '#{msg}'" } if thread_name
         assert_equal tags, event.tags, -> { "Mismatched tags for message: '#{msg}'" } if tags
         assert_equal named_tags, event.named_tags, -> { "Mismatched named_tags for message: '#{msg}'" } if named_tags

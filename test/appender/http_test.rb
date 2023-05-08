@@ -59,6 +59,18 @@ module Appender
         end
       end
 
+      it "supports custom headers" do
+        Net::HTTP.stub_any_instance(:start, true) do
+          request = nil
+          header = {"Authorization" => "Bearer BEARER_TOKEN"}
+          appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", header: header)
+          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.send(:info, @message)
+          end
+          assert_equal(header["Authorization"], request["Authorization"])
+        end
+      end
+
       # We need to use a valid address that doesn't resolve to a localhost
       # address in order to check the proxy.  Net::HTTP uses URI::Generic#find_proxy
       # to determine the proxy to use, which will return nil if the hostname resolves
@@ -82,12 +94,12 @@ module Appender
       end
 
       it "uses the ENV proxy if specified" do
-        old_env_proxy = ENV["http_proxy"]
+        old_env_proxy = ENV.fetch("http_proxy", nil)
         ENV["http_proxy"] = "http://user:password@proxy.example.com:12345"
         Net::HTTP.stub_any_instance(:start, true) do
           appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path")
 
-          proxy_uri = URI.parse(ENV["http_proxy"])
+          proxy_uri = URI.parse(ENV.fetch("http_proxy", nil))
           assert(appender.http.proxy?)
           assert(appender.http.proxy_from_env?)
           assert_equal(proxy_uri.host, appender.http.proxy_address)
@@ -100,7 +112,7 @@ module Appender
       end
 
       it "doesn't use the ENV proxy if explicity requested" do
-        old_env_proxy = ENV["http_proxy"]
+        old_env_proxy = ENV.fetch("http_proxy", nil)
         ENV["http_proxy"] = "http://user:password@proxy.example.com:12345"
         Net::HTTP.stub_any_instance(:start, true) do
           appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path", proxy_url: nil)
