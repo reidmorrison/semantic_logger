@@ -232,7 +232,7 @@ module SemanticLogger
         end
         request.basic_auth(@username, @password) if @username
         response = @http.request(request)
-        if response.code == "200" || response.code == "201"
+        if response.is_a?(Net::HTTPSuccess)
           true
         else
           # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
