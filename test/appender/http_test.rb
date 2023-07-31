@@ -3,24 +3,24 @@ require_relative "../test_helper"
 # Unit Test for SemanticLogger::Appender::Http
 module Appender
   class HttpTest < Minitest::Test
-    response_mock = Struct.new(:code, :body)
-
     describe SemanticLogger::Appender::Http do
-      before do
+      let(:http_success) { Net::HTTPSuccess.new("1.1", "200", "OK") }
+      let(:log_message) { "AppenderHttpTest log message" }
+
+      let(:appender) do
         Net::HTTP.stub_any_instance(:start, true) do
-          @appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path")
+          SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path")
         end
-        @message = "AppenderHttpTest log message"
       end
 
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, @message)
+          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+            appender.send(level, log_message)
           end
           hash = JSON.parse(request.body)
-          assert_equal @message, hash["message"]
+          assert_equal log_message, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
         end
@@ -33,8 +33,8 @@ module Appender
             exc = e
           end
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, "Reading File", exc)
+          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+            appender.send(level, "Reading File", exc)
           end
           hash = JSON.parse(request.body)
           assert "Reading File", hash["message"]
@@ -46,11 +46,11 @@ module Appender
 
         it "send #{level} custom attributes" do
           request = nil
-          @appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            @appender.send(level, @message, key1: 1, key2: "a")
+          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+            appender.send(level, log_message, key1: 1, key2: "a")
           end
           hash = JSON.parse(request.body)
-          assert_equal @message, hash["message"]
+          assert_equal log_message, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
           assert payload = hash["payload"], hash
@@ -59,13 +59,23 @@ module Appender
         end
       end
 
+      it "supports http 204 success" do
+        http_success = Net::HTTPSuccess.new("1.1", "204", "OK")
+        request = nil
+        appender.http.stub(:request, ->(r) { request = r; http_success }) do
+          appender.info(log_message)
+        end
+        hash = JSON.parse(request.body)
+        assert_equal log_message, hash["message"]
+      end
+
       it "supports custom headers" do
         Net::HTTP.stub_any_instance(:start, true) do
           request = nil
           header = {"Authorization" => "Bearer BEARER_TOKEN"}
           appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", header: header)
-          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            appender.send(:info, @message)
+          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+            appender.info(log_message)
           end
           assert_equal(header["Authorization"], request["Authorization"])
         end

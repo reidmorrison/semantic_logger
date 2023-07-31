@@ -3,18 +3,21 @@ require_relative "../test_helper"
 module Appender
   class SignalfxTest < Minitest::Test
     describe SemanticLogger::Metric::Signalfx do
-      before do
-        @metric     = "/user/login"
-        @log        = SemanticLogger::Log.new("User", :debug)
-        @log.metric = @metric
+      let(:metric) { "/user/login" }
+      let(:log) do
+        log        = SemanticLogger::Log.new("User", :debug)
+        log.metric = metric
+        log
       end
+
+      let(:http_success) { Net::HTTPSuccess.new("1.1", "200", "OK") }
 
       let :appender do
         if ENV["SIGNALFX_TOKEN"]
           SemanticLogger::Metric::Signalfx.new(token: ENV["SIGNALFX_TOKEN"])
         else
           Net::HTTP.stub_any_instance(:start, true) do
-            @appender = SemanticLogger::Metric::Signalfx.new(token: "TEST")
+            SemanticLogger::Metric::Signalfx.new(token: "TEST")
           end
         end
       end
@@ -23,12 +26,10 @@ module Appender
         let :response do
           # Do not stub if the token is available in the environment
           if ENV["SIGNALFX_TOKEN"]
-            appender.log(@log)
+            appender.log(log)
           else
-            response_mock = Struct.new(:code, :body)
-            request       = nil
-            appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-              appender.log(@log)
+            appender.http.stub(:request, ->(_request) { http_success }) do
+              appender.log(log)
             end
           end
         end
@@ -38,18 +39,18 @@ module Appender
         end
 
         it "send custom counter metric when there is no duration" do
-          @log.metric     = "Filter/count"
-          @log.dimensions = {action: "hit", user: "jbloggs", state: "FL"}
+          log.metric     = "Filter/count"
+          log.dimensions = { action: "hit", user: "jbloggs", state: "FL" }
           assert response
         end
 
         it "send gauge metric when log includes duration" do
-          @log.duration = 1234
+          log.duration = 1234
           assert response
         end
 
         it "whitelists dimensions" do
-          @log.named_tags               = {user_id: 47, application: "sample", tracking_number: 7474, session_id: "hsdhngsd"}
+          log.named_tags               = { user_id: 47, application: "sample", tracking_number: 7474, session_id: "hsdhngsd" }
           appender.formatter.dimensions = %i[user_id application]
           assert response
         end
@@ -57,19 +58,19 @@ module Appender
 
       describe "should_log?" do
         it "logs metric only metric" do
-          assert appender.should_log?(@log)
+          assert appender.should_log?(log)
         end
 
         it "not logs when no metric" do
-          @log.message = "blah"
-          @log.metric  = nil
-          refute appender.should_log?(@log)
+          log.message = "blah"
+          log.metric  = nil
+          refute appender.should_log?(log)
         end
 
         it "logs metric only metric with dimensions" do
-          @log.metric     = "Filter/count"
-          @log.dimensions = {action: "hit", user: "jbloggs", state: "FL"}
-          assert appender.should_log?(@log)
+          log.metric     = "Filter/count"
+          log.dimensions = { action: "hit", user: "jbloggs", state: "FL" }
+          assert appender.should_log?(log)
         end
       end
     end
