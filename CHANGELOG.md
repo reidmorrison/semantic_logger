@@ -178,7 +178,7 @@ Note: See the readme for v4.9 upgrade instructions.
   * Appender.json_formatter (use SemanticLogger::Formatters::Json.new)
   * SemanticLogger::Base.payload (use SemanticLogger.named_tags)
   * SemanticLogger::Base.with_payload (use SemanticLogger.named_tagged)
-  * SemanticLogger::Log.has_paylod? (use SemanticLogger::Lab.payload?)
+  * SemanticLogger::Log.has_paylod? (use SemanticLogger::Log.payload?)
   * SemanticLogger::Log.formatted_time (use time.strftime(Formatters::Base.build_time_format))
   * SemanticLogger::Log.to_h (use Use SemanticLogger::Formatters::Raw)
 
