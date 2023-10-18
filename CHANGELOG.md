@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add support for Elasticsearch 7.x and 8.x in the Elasticsearch appender.
 - Add support for custom headers in HTTP appender.
 
 ## [4.13.0]
