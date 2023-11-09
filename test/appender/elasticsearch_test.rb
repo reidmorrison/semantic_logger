@@ -4,12 +4,20 @@ require_relative "../test_helper"
 module Appender
   class ElasticsearchTest < Minitest::Test
     describe SemanticLogger::Appender::Elasticsearch do
+      let :client_class do
+        if Gem::Version.new(::Elasticsearch::VERSION) < Gem::Version.new(8)
+          Elasticsearch::Transport::Client
+        else
+          Elasticsearch::Client
+        end
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["ELASTICSEARCH"]
             SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
           else
-            Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
+            client_class.stub_any_instance(:bulk, true) do
               SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
             end
           end
@@ -138,7 +146,7 @@ module Appender
               data_stream: true
             )
           else
-            Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
+            client_class.stub_any_instance(:bulk, true) do
               SemanticLogger::Appender::Elasticsearch.new(
                 url: "http://localhost:9200",
                 data_stream: true
@@ -220,7 +228,7 @@ module Appender
 
       describe "elasticsearch parameters" do
         let :appender do
-          Elasticsearch::Transport::Client.stub_any_instance(:bulk, true) do
+          client_class.stub_any_instance(:bulk, true) do
             SemanticLogger::Appender::Elasticsearch.new(
               hosts: [{host: "localhost", port: 9200}]
             )
