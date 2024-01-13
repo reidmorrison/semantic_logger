@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add support for Ruby 3.3
+
 ## [4.15.0]
 
 - Add support for Elasticsearch 7.x and 8.x in the Elasticsearch appender.
