@@ -1,7 +1,7 @@
 # Semantic Logger
 [![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://github.com/reidmorrison/semantic_logger/workflows/build/badge.svg)](https://github.com/reidmorrison/semantic_logger/actions?query=workflow%3Abuild) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg)
 
-Semantic Logger is a feature rich logging framework, and replacement for existing Ruby & Rails loggers.  
+Semantic Logger is a feature rich logging framework, and replacement for existing Ruby & Rails loggers.
 
 * https://logger.rocketjob.io/
 
@@ -21,7 +21,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * NewRelic
 * Splunk
 * MongoDB
-* Honeybadger
+* Honeybadger (exceptions and events)
 * Sentry (both with legacy `sentry-raven` and modern `sentry-ruby` gem)
 * HTTP
 * TCP
@@ -54,6 +54,8 @@ The following gems are only required when their corresponding appenders are bein
 and are therefore not automatically included by this gem:
 - Bugsnag Appender: gem 'bugsnag'
 - MongoDB Appender: gem 'mongo' 1.9.2 or above
+- Honeybadger Appender: gem 'honeybadger'
+- HoneybadgerEvents Appender: gem 'honeybadger'
 - NewRelic Appender: gem 'newrelic_rpm'
 - NewRelicLogs Appender: gem 'newrelic_rpm'
 - Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
@@ -129,16 +131,16 @@ logger.debug payload: {foo: 'foo', bar: 'bar'}
 Similarly, for measure blocks:
 
 ~~~ruby
-logger.measure_info('How long is the sleep', foo: 'foo', bar: 'bar') { sleep 1 } 
+logger.measure_info('How long is the sleep', foo: 'foo', bar: 'bar') { sleep 1 }
 ~~~
 
 Must be replaced with the following in v4:
 
 ~~~ruby
-logger.measure_info('How long is the sleep', payload: {foo: 'foo', bar: 'bar'}) { sleep 1 } 
+logger.measure_info('How long is the sleep', payload: {foo: 'foo', bar: 'bar'}) { sleep 1 }
 ~~~
 
-The common log call has not changed, and the payload is still logged directly: 
+The common log call has not changed, and the payload is still logged directly:
 
 ~~~ruby
 logger.debug('log this', foo: 'foo', bar: 'bar')

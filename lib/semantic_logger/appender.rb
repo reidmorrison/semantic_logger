@@ -9,6 +9,7 @@ module SemanticLogger
     autoload :File,              "semantic_logger/appender/file"
     autoload :Graylog,           "semantic_logger/appender/graylog"
     autoload :Honeybadger,       "semantic_logger/appender/honeybadger"
+    autoload :HoneybadgerEvents, "semantic_logger/appender/honeybadger_events"
     autoload :IO,                "semantic_logger/appender/io"
     autoload :Kafka,             "semantic_logger/appender/kafka"
     autoload :Sentry,            "semantic_logger/appender/sentry"

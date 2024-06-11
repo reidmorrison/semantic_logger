@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add appender for Honeybadger events/insights API
 - Add support for Ruby 3.3
 
 ## [4.15.0]
@@ -18,7 +19,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [4.13.0]
 
 - Replace `autoload` with `require` for most requires since Ruby does not allow a require
-  during a signal trap for the extreme use case where the logger is called from the signal 
+  during a signal trap for the extreme use case where the logger is called from the signal
   trap before the application has made any logging calls.
 
 - Move `newrelic_rpm.rb` mock to the `test/mocks` directory
@@ -52,7 +53,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
     - Updated RuboCop's target version to Ruby 2.7.5.
     - Updated minimum Ruby version to 2.7.5 as earlier versions are
       end-of-life.
-- Add mutexes to `SemanticLogger.sync!` in case some users are still using it in a 
+- Add mutexes to `SemanticLogger.sync!` in case some users are still using it in a
   multi-threaded environment.
 
 ## [4.11.0]
