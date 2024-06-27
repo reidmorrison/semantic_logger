@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 - Add support for Ruby 3.3
+- Allow SyncProcessor to be called from appenders
 - Fix incorrect metrics usage examples in documentation
 
 ## [4.15.0]

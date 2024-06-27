@@ -2,26 +2,26 @@ module SemanticLogger
   # The SyncProcessor performs logging in the current thread.
   #
   # Appenders are designed to only be used by one thread at a time, so all calls
-  # are mutex protected in case SyncProcessor is being used in a multi-threaded environment.
+  # are monitor protected in case SyncProcessor is being used in a multi-threaded environment.
   class SyncProcessor
     def add(*args, &block)
-      @mutex.synchronize { @appenders.add(*args, &block) }
+      @monitor.synchronize { @appenders.add(*args, &block) }
     end
 
     def log(*args, &block)
-      @mutex.synchronize { @appenders.log(*args, &block) }
+      @monitor.synchronize { @appenders.log(*args, &block) }
     end
 
     def flush
-      @mutex.synchronize { @appenders.flush }
+      @monitor.synchronize { @appenders.flush }
     end
 
     def close
-      @mutex.synchronize { @appenders.close }
+      @monitor.synchronize { @appenders.close }
     end
 
     def reopen(*args)
-      @mutex.synchronize { @appenders.reopen(*args) }
+      @monitor.synchronize { @appenders.reopen(*args) }
     end
 
     # Allow the internal logger to be overridden from its default of $stderr
@@ -47,7 +47,7 @@ module SemanticLogger
     attr_reader :appenders
 
     def initialize(appenders = nil)
-      @mutex     = Mutex.new
+      @monitor   = Monitor.new
       @appenders = appenders || Appenders.new(self.class.logger.dup)
     end
 
