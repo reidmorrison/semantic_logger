@@ -69,7 +69,7 @@ Send metrics to [Statsd](https://github.com/quasor/statsd) via UDP so it can rol
 [graphite](http://graphite.wikidot.com/) or [mongodb](http://mongodb.org).
 
 ~~~ruby
-subscriber = SemanticLogger::Metrics::Statsd.new(url: "udp://localhost:8125")
+subscriber = SemanticLogger::Metric::Statsd.new(url: "udp://localhost:8125")
 SemanticLogger.on_log(subscriber)
 ~~~
 
@@ -78,7 +78,7 @@ SemanticLogger.on_log(subscriber)
 To forward metrics to New Relic so that they can be displayed using custom dashboards:
 
 ~~~ruby
-subscriber = SemanticLogger::Metrics::NewRelic.new
+subscriber = SemanticLogger::Metric::NewRelic.new
 SemanticLogger.on_log(subscriber)
 ~~~
 
