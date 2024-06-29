@@ -18,6 +18,9 @@ require_relative "in_memory_metrics_appender"
 require_relative "in_memory_appender_helper"
 require "amazing_print"
 
+# Add Semantic Logger helpers for Minitest
+Minitest::Test.include SemanticLogger::Test::Minitest
+
 # Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
 class Minitest::Test
   # Use AwesomePrint to display diffs
