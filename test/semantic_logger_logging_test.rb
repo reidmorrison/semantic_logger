@@ -3,11 +3,9 @@ require_relative "test_helper"
 # API tests for SemanticLogger
 class SemanticLoggerLoggingTest < Minitest::Test
   describe SemanticLogger do
-    let :logger do
-      SemanticLogger["TestLogger"]
-    end
+    let(:logger) { SemanticLogger["TestLogger"] }
 
-    [:trace, :debug, :info, :warn].each_with_index do |level, level_index|
+    SemanticLogger::LEVELS.each_with_index do |level, level_index|
       describe "##{level}" do
         describe "positional arguments logs" do
           it "message only" do
