@@ -22,7 +22,7 @@ class MeasureTest < Minitest::Test
         describe ":min_duration" do
           it "not log when faster" do
             assert_equal "result", appender.send(measure_level, "hello world", min_duration: 2000) { "result" }
-            assert_nil appender.events
+            assert appender.events.empty?
           end
 
           it "log when slower" do
@@ -148,7 +148,7 @@ class MeasureTest < Minitest::Test
         describe ":min_duration" do
           it "not log when faster" do
             assert_equal "result", appender.measure(level, "hello world", min_duration: 2000) { "result" }
-            assert_nil appender.events
+            assert appender.events.empty?
           end
 
           it "log when slower" do
@@ -229,7 +229,7 @@ class MeasureTest < Minitest::Test
         describe ":min_duration" do
           it "not log when faster" do
             assert_equal "result", appender.send(measure_level, message: "hello world", min_duration: 2000) { "result" }
-            assert_nil appender.events
+            assert appender.events.empty?
           end
 
           it "log when slower" do

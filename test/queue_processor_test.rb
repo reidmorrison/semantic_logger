@@ -143,7 +143,7 @@ class QueueProcessorTest < Minitest::Test
         subject.send(:process_messages)
         assert appender.closed?
 
-        assert_nil logger.events
+        assert logger.events.empty?
       end
 
       it "processes messages" do
@@ -220,7 +220,7 @@ class QueueProcessorTest < Minitest::Test
     describe "#check_lag" do
       it "logs warning when lag is exceeded" do
         subject.send(:check_lag, log)
-        assert_nil logger.events
+        assert logger.events.empty?
       end
 
       describe "with very old message" do

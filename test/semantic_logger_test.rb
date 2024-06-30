@@ -149,7 +149,7 @@ class SemanticLoggerTest < Minitest::Test
           SemanticLogger.silence do
             logger.warn("Ignore me")
           end
-          assert_nil logger.events
+          assert logger.events.empty?
         end
 
         it "custom level" do

@@ -169,7 +169,7 @@ class LoggerTest < Minitest::Test
               payload:      { tracking_number: "123456", even: 2, more: "data" }
             )
 
-            assert_nil logger.events
+            assert logger.events.empty?
           end
 
           it "logs metric" do
@@ -213,21 +213,21 @@ class LoggerTest < Minitest::Test
               logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              assert_nil logger.events
+              assert logger.events.empty?
             end
 
             it "Module" do
               logger.filter = ComplexFilter
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              assert_nil logger.events
+              assert logger.events.empty?
             end
 
             it "RegExp" do
               logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              assert_nil logger.events
+              assert logger.events.empty?
             end
           end
 
@@ -236,21 +236,21 @@ class LoggerTest < Minitest::Test
               logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              assert_nil logger.events
+              assert logger.events.empty?
             end
 
             it "Module" do
               logger.filter = ComplexFilter
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              assert_nil logger.events
+              assert logger.events.empty?
             end
 
             it "RegExp" do
               logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
               logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              assert_nil logger.events
+              assert logger.events.empty?
             end
           end
 
@@ -260,7 +260,7 @@ class LoggerTest < Minitest::Test
 
               it "filters" do
                 logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-                assert_nil logger.events
+                assert logger.events.empty?
               end
             end
 
@@ -269,7 +269,7 @@ class LoggerTest < Minitest::Test
 
               it "filters" do
                 logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-                assert_nil logger.events
+                assert logger.events.empty?
               end
             end
 
@@ -278,7 +278,7 @@ class LoggerTest < Minitest::Test
 
               it "filters" do
                 logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-                assert_nil logger.events
+                assert logger.events.empty?
               end
             end
           end
@@ -291,7 +291,7 @@ class LoggerTest < Minitest::Test
         logger.level = :error
         logger.info("Exclude this log message")
 
-        assert_nil logger.events
+        assert logger.events.empty?
       end
     end
 
