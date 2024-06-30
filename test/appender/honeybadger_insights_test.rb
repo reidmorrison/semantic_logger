@@ -1,12 +1,12 @@
 require_relative "../test_helper"
 
-# Unit Test for SemanticLogger::Appender::Bugsnag
+# Unit Test for SemanticLogger::Appender::HoneybadgerInsights
 module Appender
-  class HoneybadgerEventsTest < Minitest::Test
-    describe SemanticLogger::Appender::HoneybadgerEvents do
+  class HoneybadgerInsightsTest < Minitest::Test
+    describe SemanticLogger::Appender::HoneybadgerInsights do
       before do
-        @appender = SemanticLogger::Appender::HoneybadgerEvents.new(level: :trace)
-        @message = "AppenderHoneybadgerEventsTest log message"
+        @appender = SemanticLogger::Appender::HoneybadgerInsights.new(level: :trace)
+        @message = "AppenderHoneybadgerInsightsTest log message"
       end
 
       SemanticLogger::Levels::LEVELS.each do |level|
@@ -36,7 +36,7 @@ module Appender
 
         refute_nil hash[:ts]
         assert_equal @message, hash[:message]
-        assert_equal :trace, hash[:level]
+        assert_equal :error, hash[:level]
 
         assert_equal ["test"], hash[:tags]
 
@@ -46,7 +46,7 @@ module Appender
         refute_nil hash[:duration]
         refute_nil hash[:duration_ms]
 
-        assert_equal 4, hash[:key3]
+        assert_equal 4, hash[:payload][:key3]
       end
     end
   end

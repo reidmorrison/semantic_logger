@@ -4,14 +4,14 @@ rescue LoadError
   raise LoadError, 'Gem honeybadger is required for logging purposes. Please add the gem "honeybadger" to your Gemfile.'
 end
 
-# Send log messages to honeybadger events API
+# Send log messages to honeybadger events/insights API
 #
 # Example:
-#   SemanticLogger.add_appender(appender: :honeybadger_events)
+#   SemanticLogger.add_appender(appender: :honeybadger_insights)
 #
 module SemanticLogger
   module Appender
-    class HoneybadgerEvents < SemanticLogger::Subscriber
+    class HoneybadgerInsights < SemanticLogger::Subscriber
       # Honeybadger Appender
       #
       # Parameters

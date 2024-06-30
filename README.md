@@ -55,7 +55,7 @@ and are therefore not automatically included by this gem:
 - Bugsnag Appender: gem 'bugsnag'
 - MongoDB Appender: gem 'mongo' 1.9.2 or above
 - Honeybadger Appender: gem 'honeybadger'
-- HoneybadgerEvents Appender: gem 'honeybadger'
+- HoneybadgerInsights Appender: gem 'honeybadger'
 - NewRelic Appender: gem 'newrelic_rpm'
 - NewRelicLogs Appender: gem 'newrelic_rpm'
 - Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
