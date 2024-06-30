@@ -58,11 +58,11 @@ class SemanticLoggerTest < Minitest::Test
       it "adds named tags" do
         events = semantic_logger_events do
           SemanticLogger.tagged(level1: 1) do
-            assert_equal({ level1: 1 }, SemanticLogger.named_tags)
+            assert_equal({level1: 1}, SemanticLogger.named_tags)
             SemanticLogger.tagged(level2: 2, more: "data") do
-              assert_equal({ level1: 1, level2: 2, more: "data" }, SemanticLogger.named_tags)
+              assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
               SemanticLogger.tagged(level3: 3) do
-                assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, SemanticLogger.named_tags)
+                assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
                 logger.info("Hello World")
               end
             end
@@ -73,7 +73,7 @@ class SemanticLoggerTest < Minitest::Test
         assert_semantic_logger_event(
           events.first,
           message:    "Hello World",
-          named_tags: { level1: 1, level2: 2, more: "data", level3: 3 }
+          named_tags: {level1: 1, level2: 2, more: "data", level3: 3}
         )
       end
     end
@@ -81,11 +81,11 @@ class SemanticLoggerTest < Minitest::Test
     describe ".named_tags" do
       it "named tags in creation order" do
         SemanticLogger.named_tagged(level1: 1) do
-          assert_equal({ level1: 1 }, SemanticLogger.named_tags)
+          assert_equal({level1: 1}, SemanticLogger.named_tags)
           SemanticLogger.named_tagged(level2: 2, more: "data") do
-            assert_equal({ level1: 1, level2: 2, more: "data" }, SemanticLogger.named_tags)
+            assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
             SemanticLogger.named_tagged(level3: 3) do
-              assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, SemanticLogger.named_tags)
+              assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
             end
           end
         end
@@ -108,7 +108,7 @@ class SemanticLoggerTest < Minitest::Test
         assert_semantic_logger_event(
           events.first,
           message:    "Hello World",
-          named_tags: { level1: 1, level2: 2, more: "data", level3: 3 }
+          named_tags: {level1: 1, level2: 2, more: "data", level3: 3}
         )
       end
     end
@@ -161,7 +161,7 @@ class SemanticLoggerTest < Minitest::Test
             end
           end
         end
-        assert_equal %W[fatal error], events.map(&:message)
+        assert_equal %w[fatal error], events.map(&:message)
       end
 
       it "not log at a level below a specific silence level" do
@@ -177,7 +177,7 @@ class SemanticLoggerTest < Minitest::Test
             end
           end
         end
-        assert_equal %W[fatal error warn info], events.map(&:message)
+        assert_equal %w[fatal error warn info], events.map(&:message)
       end
 
       # it "default silence level is :error, so should log everything else" do
@@ -194,7 +194,7 @@ class SemanticLoggerTest < Minitest::Test
           end
         end
 
-        assert_equal %W[fatal error warn info debug trace], events.map(&:message)
+        assert_equal %w[fatal error warn info debug trace], events.map(&:message)
       end
 
       it "log at a silence level below the default level" do
@@ -240,7 +240,7 @@ class SemanticLoggerTest < Minitest::Test
         assert_semantic_logger_event(
           events.first,
           message: "hello world",
-          context: { custom_info: "test" }
+          context: {custom_info: "test"}
         )
       end
     end

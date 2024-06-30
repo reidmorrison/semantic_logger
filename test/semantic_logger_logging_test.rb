@@ -74,7 +74,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -100,7 +100,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       :nil,
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -126,7 +126,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      20.3,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -140,7 +140,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "message with explicit payload" do
             events = semantic_logger_events do
-              logger.send(level, "hello world", payload: { user_id: 1234 })
+              logger.send(level, "hello world", payload: {user_id: 1234})
             end
 
             assert_equal 1, events.size
@@ -152,7 +152,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -166,7 +166,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "explicit payload only" do
             events = semantic_logger_events do
-              logger.send(level, payload: { user_id: 1234 })
+              logger.send(level, payload: {user_id: 1234})
             end
 
             assert_equal 1, events.size
@@ -178,7 +178,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       :nil,
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -193,7 +193,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
           it "message and payload from block" do
             events = semantic_logger_events do
               logger.send(level) do
-                { message: "hello world", payload: { user_id: 123 } }
+                {message: "hello world", payload: {user_id: 123}}
               end
             end
 
@@ -206,7 +206,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 123 },
+              payload:       {user_id: 123},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -216,13 +216,12 @@ class SemanticLoggerLoggingTest < Minitest::Test
               dimensions:    :nil,
               time:          Time
             )
-
           end
 
           it "payload from block" do
             events = semantic_logger_events do
               logger.send(level) do
-                { "test_key1" => "hello world", "test_key2" => "value2" }
+                {"test_key1" => "hello world", "test_key2" => "value2"}
               end
             end
 
@@ -235,7 +234,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       :nil,
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { "test_key1" => "hello world", "test_key2" => "value2" },
+              payload:       {"test_key1" => "hello world", "test_key2" => "value2"},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -245,11 +244,10 @@ class SemanticLoggerLoggingTest < Minitest::Test
               dimensions:    :nil,
               time:          Time
             )
-
           end
 
           it "message from hash does not modify hash" do
-            details = { message: "hello world" }
+            details = {message: "hello world"}
             events  = semantic_logger_events do
               logger.send(level, details)
             end
@@ -278,7 +276,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
           end
 
           it "message and explicit payload from hash does not modify hash" do
-            details = { message: "hello world", payload: { user_id: 1230 } }
+            details = {message: "hello world", payload: {user_id: 1230}}
             events  = semantic_logger_events do
               logger.send(level, details)
             end
@@ -292,7 +290,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 1230 },
+              payload:       {user_id: 1230},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -307,7 +305,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
           end
 
           it "message and implied payload from hash does not modify hash" do
-            details = { message: "hello world", user_id: 1230 }
+            details = {message: "hello world", user_id: 1230}
             events  = semantic_logger_events do
               logger.send(level, details)
             end
@@ -321,7 +319,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 1230 },
+              payload:       {user_id: 1230},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -338,7 +336,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "message with explicit payload and duration" do
             events = semantic_logger_events do
-              logger.send(level, "hello world", payload: { user_id: 1234 }, duration: 20.7)
+              logger.send(level, "hello world", payload: {user_id: 1234}, duration: 20.7)
             end
 
             assert_equal 1, events.size
@@ -350,7 +348,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      20.7,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -364,7 +362,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "explicit payload and metric only" do
             events = semantic_logger_events do
-              logger.send(level, payload: { user_id: 1234 }, metric: "sidekiq.job.failed")
+              logger.send(level, payload: {user_id: 1234}, metric: "sidekiq.job.failed")
             end
 
             assert_equal 1, events.size
@@ -376,7 +374,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       :nil,
               thread_name:   Thread.current.name,
               duration:      :nil,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -516,7 +514,6 @@ class SemanticLoggerLoggingTest < Minitest::Test
               dimensions:    :nil,
               time:          Time
             )
-
           end
 
           it "message with backtrace" do
@@ -534,7 +531,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
                 message:       "hello world",
                 thread_name:   Thread.current.name,
                 duration:      :nil,
-                payload:       { request_id: 1234 },
+                payload:       {request_id: 1234},
                 exception:     :nil,
                 backtrace:     Array,
                 tags:          [],
@@ -636,7 +633,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "does not log when below min_duration" do
             events = semantic_logger_events do
-              logger.send(level, "hello world", min_duration: 200, duration: 123.45, payload: { tracking_number: "123456", even: 2, more: "data" })
+              logger.send(level, "hello world", min_duration: 200, duration: 123.45, payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
             assert events.empty?
@@ -698,7 +695,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "message with explicit payload and duration" do
             events = semantic_logger_events do
-              logger.send(level, message: "hello world", payload: { user_id: 1234 }, duration: 20.7)
+              logger.send(level, message: "hello world", payload: {user_id: 1234}, duration: 20.7)
             end
 
             assert_equal 1, events.size
@@ -710,7 +707,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      20.7,
-              payload:       { user_id: 1234 },
+              payload:       {user_id: 1234},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -755,7 +752,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "does not log when below min_duration" do
             events = semantic_logger_events do
-              logger.send(level, message: "hello world", min_duration: 200, duration: 123.45, payload: { tracking_number: "123456", even: 2, more: "data" })
+              logger.send(level, message: "hello world", min_duration: 200, duration: 123.45, payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
             assert events.empty?
@@ -775,7 +772,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      123.45,
-              payload:       { tracking_number: "123456", even: 2, more: "data" },
+              payload:       {tracking_number: "123456", even: 2, more: "data"},
               exception:     :nil,
               tags:          [],
               named_tags:    {},
@@ -789,7 +786,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "logs at min_duration" do
             events = semantic_logger_events do
-              logger.send(level, message: "hello world", min_duration: 100, duration: 100.0, payload: { tracking_number: "123456", even: 2, more: "data" })
+              logger.send(level, message: "hello world", min_duration: 100, duration: 100.0, payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
             assert_equal 1, events.size
@@ -801,7 +798,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
               message:       "hello world",
               thread_name:   Thread.current.name,
               duration:      100.0,
-              payload:       { tracking_number: "123456", even: 2, more: "data" },
+              payload:       {tracking_number: "123456", even: 2, more: "data"},
               exception:     :nil,
               tags:          [],
               named_tags:    {},

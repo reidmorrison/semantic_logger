@@ -5,10 +5,6 @@ class LoggerTest < Minitest::Test
   describe SemanticLogger::Logger do
     include InMemoryAppenderHelper
 
-    let :dimensions do
-      {action: "hit", user: "jbloggs", state: "FL"}
-    end
-
     # Complex filters
     module ComplexFilter
       def self.call(log)

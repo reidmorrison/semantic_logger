@@ -4,16 +4,14 @@ require_relative "../test_helper"
 module Appender
   class GraylogTest < Minitest::Test
     describe SemanticLogger::Appender::Graylog do
-      before do
-        @appender = SemanticLogger::Appender::Graylog.new(level: :info)
-        @message  = "AppenderGraylogTest log message"
-      end
+      let(:appender) { SemanticLogger::Appender::Graylog.new(level: :info) }
+      let(:amessage) { "AppenderGraylogTest log message" }
 
       (SemanticLogger::LEVELS - %i[info warn error fatal]).each do |level|
         it "not send :#{level} notifications to Graylog" do
           hash = nil
-          @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
-            @appender.send(level, "AppenderGraylogTest #{level} message")
+          appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+            appender.send(level, "AppenderGraylogTest #{level} message")
           end
           assert_nil hash
         end
@@ -27,8 +25,8 @@ module Appender
         rescue Exception => e
           exc = e
         end
-        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
-          @appender.error "Reading File", exc
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.error "Reading File", exc
         end
         assert_equal "Reading File", hash[:short_message]
         assert_equal "NameError", hash[:exception][:name]
@@ -45,8 +43,8 @@ module Appender
         rescue Exception => e
           exc = e
         end
-        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
-          @appender.error exc
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.error exc
         end
         assert_equal exc.message, hash[:short_message]
         assert_equal exc.class.to_s, hash[:exception][:name]
@@ -58,8 +56,8 @@ module Appender
       it "send notifications to Graylog without exception message" do
         hash = nil
         exc  = nil
-        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
-          @appender.error exc
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.error exc
         end
         assert_equal hash[:short_message], "<no-exception-message>"
         assert_nil exc
@@ -68,20 +66,20 @@ module Appender
 
       it "send error notifications to Graylog with severity" do
         hash = nil
-        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
-          @appender.error @message
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.error amessage
         end
-        assert_equal @message, hash[:short_message]
+        assert_equal amessage, hash[:short_message]
         assert_equal 3, hash[:level]
         refute hash[:stack_trace]
       end
 
       it "send notification to Graylog with custom attributes" do
         hash = nil
-        @appender.notifier.stub(:notify!, ->(h) { hash = h }) do
-          @appender.error @message, key1: 1, key2: "a"
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.error amessage, key1: 1, key2: "a"
         end
-        assert_equal @message, hash[:short_message]
+        assert_equal amessage, hash[:short_message]
         assert_equal 3, hash[:level]
         refute hash[:stack_trace]
         assert payload = hash[:payload], hash

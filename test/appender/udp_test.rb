@@ -4,19 +4,17 @@ require_relative "../test_helper"
 module Appender
   class UdpTest < Minitest::Test
     describe SemanticLogger::Appender::Udp do
-      before do
-        @appender = SemanticLogger::Appender::Udp.new(server: "localhost:8088")
-        @message  = "AppenderUdpTest log message"
-      end
+      let(:appender) { SemanticLogger::Appender::Udp.new(server: "localhost:8088") }
+      let(:amessage) { "AppenderUdpTest log message" }
 
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           data = nil
-          @appender.socket.stub(:send, ->(d, _flags) { data = d }) do
-            @appender.send(level, @message)
+          appender.socket.stub(:send, ->(d, _flags) { data = d }) do
+            appender.send(level, amessage)
           end
           hash = JSON.parse(data)
-          assert_equal @message, hash["message"]
+          assert_equal amessage, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
         end
@@ -29,8 +27,8 @@ module Appender
             exc = e
           end
           data = nil
-          @appender.socket.stub(:send, ->(d, _flags) { data = d }) do
-            @appender.send(level, "Reading File", exc)
+          appender.socket.stub(:send, ->(d, _flags) { data = d }) do
+            appender.send(level, "Reading File", exc)
           end
           hash = JSON.parse(data)
           assert "Reading File", hash["message"]
@@ -42,11 +40,11 @@ module Appender
 
         it "send #{level} custom attributes" do
           data = nil
-          @appender.socket.stub(:send, ->(d, _flags) { data = d }) do
-            @appender.send(level, @message, key1: 1, key2: "a")
+          appender.socket.stub(:send, ->(d, _flags) { data = d }) do
+            appender.send(level, amessage, key1: 1, key2: "a")
           end
           hash = JSON.parse(data)
-          assert_equal @message, hash["message"]
+          assert_equal amessage, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
           assert payload = hash["payload"], hash

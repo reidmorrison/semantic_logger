@@ -36,6 +36,16 @@ class Minitest::Test
   end
 end
 
+SemanticLogger.default_level   = :trace
+SemanticLogger.backtrace_level = :trace
+SemanticLogger.add_appender(file_name: "test.log", formatter: :color)
+
+reporters = [
+  Minitest::Reporters::ProgressReporter.new,
+  SemanticLogger::Reporters::Minitest.new
+]
+Minitest::Reporters.use!(reporters)
+
 def add_mocks_to_load_path
   $LOAD_PATH.unshift File.join(File.dirname(__FILE__), "mocks")
 end

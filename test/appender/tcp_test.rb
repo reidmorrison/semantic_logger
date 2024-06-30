@@ -4,26 +4,29 @@ require_relative "../test_helper"
 module Appender
   class TcpTest < Minitest::Test
     describe SemanticLogger::Appender::Tcp do
-      before do
-        Net::TCPClient.stub_any_instance(:connect, true) do
-          @appender = SemanticLogger::Appender::Tcp.new(server: "localhost:8088")
-        end
-        @appender.tcp_client.instance_eval do
+      let(:appender) do
+        appender =
+          Net::TCPClient.stub_any_instance(:connect, true) do
+            SemanticLogger::Appender::Tcp.new(server: "localhost:8088")
+          end
+        appender.tcp_client.instance_eval do
           def retry_on_connection_failure
             yield
           end
         end
-        @message = "AppenderTcpTest log message"
+        appender
       end
+
+      let(:amessage) { "AppenderTcpTest log message" }
 
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           data = nil
-          @appender.tcp_client.stub(:write, ->(d) { data = d }) do
-            @appender.send(level, @message)
+          appender.tcp_client.stub(:write, ->(d) { data = d }) do
+            appender.send(level, amessage)
           end
           hash = JSON.parse(data)
-          assert_equal @message, hash["message"]
+          assert_equal amessage, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
         end
@@ -36,8 +39,8 @@ module Appender
             exc = e
           end
           data = nil
-          @appender.tcp_client.stub(:write, ->(d) { data = d }) do
-            @appender.send(level, "Reading File", exc)
+          appender.tcp_client.stub(:write, ->(d) { data = d }) do
+            appender.send(level, "Reading File", exc)
           end
           hash = JSON.parse(data)
           assert "Reading File", hash["message"]
@@ -49,11 +52,11 @@ module Appender
 
         it "send #{level} custom attributes" do
           data = nil
-          @appender.tcp_client.stub(:write, ->(d) { data = d }) do
-            @appender.send(level, @message, key1: 1, key2: "a")
+          appender.tcp_client.stub(:write, ->(d) { data = d }) do
+            appender.send(level, amessage, key1: 1, key2: "a")
           end
           hash = JSON.parse(data)
-          assert_equal @message, hash["message"]
+          assert_equal amessage, hash["message"]
           assert_equal level.to_s, hash["level"]
           refute hash["stack_trace"]
           assert payload = hash["payload"], hash

@@ -1,4 +1,4 @@
-source "http://rubygems.org"
+source "https://rubygems.org"
 
 gemspec
 
@@ -29,8 +29,8 @@ gem "mongo"
 # [optional] Net::TCP appender
 gem "net_tcp_client"
 # [optional] Splunk appender
-gem "splunk-sdk-ruby"
 gem "nokogiri"
+gem "splunk-sdk-ruby"
 # [optional] Statsd metrics
 gem "statsd-ruby"
 # [optional] legacy Sentry appender
@@ -40,6 +40,4 @@ gem "sentry-ruby"
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
 gem "syslog_protocol"
 
-group :development do
-  gem "rubocop", "~> 1.28", "< 1.29"
-end
+gem "rubocop", "~> 1.28.1", require: false

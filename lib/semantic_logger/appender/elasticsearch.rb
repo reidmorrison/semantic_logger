@@ -195,7 +195,7 @@ module SemanticLogger
           {"create" => {}}
         else
           bulk_index = {"index" => {"_index" => expanded_index_name}}
-          bulk_index["index"].merge!({ "_type" => type }) if version_supports_type?
+          bulk_index["index"].merge!({"_type" => type}) if version_supports_type?
           bulk_index
         end
       end
@@ -209,8 +209,6 @@ module SemanticLogger
 
         SemanticLogger::Formatters::Raw.new(time_format: :iso_8601, time_key: time_key)
       end
-
-      private
 
       def version_supports_type?
         Gem::Version.new(::Elasticsearch::VERSION) < Gem::Version.new(7)

@@ -34,6 +34,11 @@ module SemanticLogger
       def clear
         @events.clear
       end
+
+      # Support silencing of log messages
+      def level_index
+        @level_index || SemanticLogger.default_level_index
+      end
     end
   end
 end
