@@ -5,7 +5,36 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add support for Ruby 3.3
+- Allow SyncProcessor to be called from appenders
+- Fix incorrect metrics usage examples in documentation
+- Add `:duration_ms` to Logfmt fomatter
+
+## [4.15.0]
+
+- Add support for Elasticsearch 7.x and 8.x in the Elasticsearch appender.
+
+## [4.14.0]
+
+- Add support for custom headers in HTTP appender.
+
 ## [4.13.0]
+
+- Replace `autoload` with `require` for most requires since Ruby does not allow a require
+  during a signal trap for the extreme use case where the logger is called from the signal 
+  trap before the application has made any logging calls.
+
+- Move `newrelic_rpm.rb` mock to the `test/mocks` directory
+- Add `add_mocks_to_load_path`
+- Add NewRelicLogs formatter & appender
+
+- Move initialization of `events` array in `CaptureLogEvents` to constructor.
+- Add `clear` method to `CaptureLogEvents`.
+
+- Add payload logging to `payload_includes` Minitest helper functionality.
+- Fix bug in `payload_includes` testing functionality where if a key is not in the payload the test would pass.
+
+- Quote 3.0 in CI configuration to prevent truncation.
 
 - Add Minitest helper methods to assist with asserting logging events.
 
@@ -160,7 +189,7 @@ Note: See the readme for v4.9 upgrade instructions.
   * Appender.json_formatter (use SemanticLogger::Formatters::Json.new)
   * SemanticLogger::Base.payload (use SemanticLogger.named_tags)
   * SemanticLogger::Base.with_payload (use SemanticLogger.named_tagged)
-  * SemanticLogger::Log.has_paylod? (use SemanticLogger::Lab.payload?)
+  * SemanticLogger::Log.has_paylod? (use SemanticLogger::Log.payload?)
   * SemanticLogger::Log.formatted_time (use time.strftime(Formatters::Base.build_time_format))
   * SemanticLogger::Log.to_h (use Use SemanticLogger::Formatters::Raw)
 

@@ -3,16 +3,22 @@ require_relative "../test_helper"
 # Unit Test for SemanticLogger::Appender::Elasticsearch
 module Appender
   class ElasticsearchHttpTest < Minitest::Test
-    response_mock = Struct.new(:code, :body)
-
     describe SemanticLogger::Appender::ElasticsearchHttp do
-      let(:appender) { SemanticLogger::Appender::ElasticsearchHttp.new(url: "http://mockhost:9200") }
-      let(:amessage) { "AppenderElasticsearchTest log message" }
+      let(:http_success) { Net::HTTPSuccess.new("1.1", "200", "OK") }
+      let(:log_message) { "AppenderElasticsearchTest log message" }
+
+      let(:appender) do
+        Net::HTTP.stub_any_instance(:start, true) do
+          SemanticLogger::Appender::ElasticsearchHttp.new(
+            url: "http://localhost:9200"
+          )
+        end
+      end
 
       it "logs to daily indexes" do
         index = nil
         appender.stub(:post, ->(_json, ind) { index = ind }) do
-          appender.info amessage
+          appender.info log_message
         end
         assert_equal "/semantic_logger-#{Time.now.strftime('%Y.%m.%d')}/log", index
       end
@@ -20,24 +26,24 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            appender.send(level, amessage)
+          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+            appender.send(level, log_message)
           end
           message = JSON.parse(request.body)
-          assert_equal amessage, message["message"]
+          assert_equal log_message, message["message"]
           assert_equal level.to_s, message["level"]
           refute message["exception"]
         end
 
         it "sends #{level} exceptions" do
-          exc     = nil
+          exc = nil
           begin
             Uh oh
           rescue Exception => e
             exc = e
           end
           request = nil
-          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+          appender.http.stub(:request, ->(r) { request = r; http_success }) do
             appender.send(level, "Reading File", exc)
           end
           hash = JSON.parse(request.body)
@@ -51,11 +57,11 @@ module Appender
 
         it "sends #{level} custom attributes" do
           request = nil
-          appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
-            appender.send(level, amessage, key1: 1, key2: "a")
+          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+            appender.send(level, log_message, key1: 1, key2: "a")
           end
           message = JSON.parse(request.body)
-          assert_equal amessage, message["message"]
+          assert_equal log_message, message["message"]
           assert_equal level.to_s, message["level"]
           refute message["stack_trace"]
           assert payload = message["payload"], message

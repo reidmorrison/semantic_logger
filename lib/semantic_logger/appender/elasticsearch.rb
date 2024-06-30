@@ -37,6 +37,7 @@ module SemanticLogger
       #
       #   type: [String]
       #     Document type to associate with logs when they are written.
+      #     Deprecated in Elasticsearch 7.0.0.
       #     Default: 'log'
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
@@ -185,14 +186,22 @@ module SemanticLogger
 
       def bulk_index(log)
         expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
-        return { "create" => {} } if @data_stream
+        return  {"create" => {}} if @data_stream
 
-        { "index" => { "_index" => expanded_index_name, "_type" => type } }
+        bulk_index = {"index" => {"_index" => expanded_index_name}}
+        bulk_index["index"].merge!({ "_type" => type }) if version_supports_type?
+        bulk_index
       end
 
       def default_formatter
         time_key = @data_stream ? "@timestamp" : :timestamp
         SemanticLogger::Formatters::Raw.new(time_format: :iso_8601, time_key: time_key)
+      end
+
+      private
+
+      def version_supports_type?
+        Gem::Version.new(::Elasticsearch::VERSION) < Gem::Version.new(7)
       end
     end
   end

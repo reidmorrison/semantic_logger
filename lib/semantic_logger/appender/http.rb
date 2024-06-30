@@ -48,6 +48,11 @@ module SemanticLogger
       #   password: [String]
       #     Password for basic Authentication.
       #
+      #   header: [Hash]
+      #     Custom HTTP headers to send with each request.
+      #     Default: {} ( do not send any custom headers)
+      #     Example: {"Authorization" => "Bearer BEARER_TOKEN"}
+      #
       #   compress: [true|false]
       #     Whether to compress the JSON string with GZip.
       #     Default: false
@@ -95,6 +100,7 @@ module SemanticLogger
                      ssl: {},
                      username: nil,
                      password: nil,
+                     header: {},
                      proxy_url: :ENV,
                      open_timeout: 2.0,
                      read_timeout: 1.0,
@@ -118,7 +124,7 @@ module SemanticLogger
           "Content-Type" => "application/json",
           "Connection"   => "keep-alive",
           "Keep-Alive"   => "300"
-        }
+        }.merge(header)
         @header["Content-Encoding"] = "gzip" if @compress
 
         uri     = URI.parse(@url)
@@ -159,12 +165,11 @@ module SemanticLogger
           nil
         end
 
-        @http =
-          if @proxy_uri
-            Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
-          else
-            Net::HTTP.new(server, port, @proxy_url)
-          end
+        @http = if @proxy_uri
+                  Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
+                else
+                  Net::HTTP.new(server, port, @proxy_url)
+                end
 
         if @ssl_options
           @http.methods.grep(/\A(\w+)=\z/) do |meth|
@@ -227,7 +232,7 @@ module SemanticLogger
         end
         request.basic_auth(@username, @password) if @username
         response = @http.request(request)
-        if response.code == "200" || response.code == "201"
+        if response.is_a?(Net::HTTPSuccess)
           true
         else
           # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)

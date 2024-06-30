@@ -31,7 +31,7 @@ module SemanticLogger
       private
 
       def raw_to_logfmt
-        @parsed = @raw.slice(time_key, :level, :name, :message, :duration).merge(tag: "success")
+        @parsed = @raw.slice(time_key, :level, :name, :message, :duration, :duration_ms).merge(tag: "success")
         handle_tags
         handle_payload
         handle_exception

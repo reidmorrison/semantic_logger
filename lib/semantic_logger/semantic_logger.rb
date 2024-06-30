@@ -1,4 +1,3 @@
-require "concurrent"
 require "socket"
 
 module SemanticLogger
@@ -514,4 +513,27 @@ module SemanticLogger
   @backtrace_level       = :error
   @backtrace_level_index = Levels.index(@backtrace_level)
   @sync                  = false
+
+  # @formatter:off
+  module Metric
+    autoload :NewRelic,          "semantic_logger/metric/new_relic"
+    autoload :Signalfx,          "semantic_logger/metric/signalfx"
+    autoload :Statsd,            "semantic_logger/metric/statsd"
+  end
+
+  module Reporters
+    autoload :Minitest,          "semantic_logger/reporters/minitest"
+  end
+
+  module Test
+    autoload :CaptureLogEvents,  "semantic_logger/test/capture_log_events"
+    autoload :Minitest,          "semantic_logger/test/minitest"
+  end
+
+  if defined?(JRuby)
+    module JRuby
+      autoload :GarbageCollectionLogger, "semantic_logger/jruby/garbage_collection_logger"
+    end
+  end
+  # @formatter:on
 end

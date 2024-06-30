@@ -10,11 +10,15 @@ module Appender
         log
       end
 
+      let(:http_success) { Net::HTTPSuccess.new("1.1", "200", "OK") }
+
       let :appender do
         if ENV["SIGNALFX_TOKEN"]
           SemanticLogger::Metric::Signalfx.new(token: ENV["SIGNALFX_TOKEN"])
         else
-          SemanticLogger::Metric::Signalfx.new(token: "TEST", url: "http://mockhost")
+          Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Metric::Signalfx.new(token: "TEST")
+          end
         end
       end
 
@@ -24,9 +28,7 @@ module Appender
           if ENV["SIGNALFX_TOKEN"]
             appender.log(log)
           else
-            response_mock = Struct.new(:code, :body)
-            request       = nil
-            appender.http.stub(:request, ->(r) { request = r; response_mock.new("200", "ok") }) do
+            appender.http.stub(:request, ->(_request) { http_success }) do
               appender.log(log)
             end
           end

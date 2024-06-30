@@ -121,7 +121,7 @@ class LoggerTest < Minitest::Test
           end
 
           it "logs message without modifying the supplied hash" do
-            details = { message: "hello world" }
+            details = {message: "hello world"}
             logger.send(level, details)
 
             assert log = logger.events.first

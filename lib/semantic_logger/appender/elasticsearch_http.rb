@@ -26,6 +26,7 @@ module SemanticLogger
       #
       #   type: [String]
       #     Document type to associate with logs when they are written.
+      #     Deprecated in Elasticsearch 7.0.0
       #     Default: 'log'
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]

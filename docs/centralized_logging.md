@@ -119,6 +119,6 @@ Semantic Logger also supports several other centralized logging solutions:
 * Loggly
 * Syslog
 
-See [appenders](appenders.html) to configure appenders to forward log messages to the centralized logging solutions / log aggregrators.
+See [appenders](appenders.html) to configure appenders to forward log messages to the centralized logging solutions / log aggregators.
 
 ### [Next: Programmers Guide ==>](api.html)

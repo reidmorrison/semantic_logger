@@ -25,11 +25,16 @@ module SemanticLogger
       # By default collect all log levels, and collect metric only log events.
       def initialize(level: :trace, metrics: true)
         super(level: level, metrics: true)
+        @events = []
       end
 
       def log(log)
         Logger.call_subscribers(log)
-        (@events ||= []) << log
+        @events << log
+      end
+
+      def clear
+        @events.clear
       end
 
       # Support silencing of log messages
