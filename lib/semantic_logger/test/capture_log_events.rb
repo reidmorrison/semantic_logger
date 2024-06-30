@@ -39,6 +39,10 @@ module SemanticLogger
       def level_index
         @level_index || SemanticLogger.default_level_index
       end
+
+      def to_h
+        events.map(&:to_h)
+      end
     end
   end
 end

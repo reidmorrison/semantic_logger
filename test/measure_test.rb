@@ -304,8 +304,10 @@ class MeasureTest < Minitest::Test
           appender.warn "don't log me"
         end
 
+        assert_equal 1, appender.events.count, -> { appender.events.to_h.ai }
         assert log = appender.events.first
         assert_equal "hello world", log.message
+        assert_equal :warn, log.message
       end
 
       it "does not silence higher level messages" do
