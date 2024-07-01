@@ -147,7 +147,7 @@ module SemanticLogger
         @elasticsearch_args          = elasticsearch_args.dup
         @elasticsearch_args[:url]    = url if url && !elasticsearch_args[:hosts]
         @elasticsearch_args[:logger] = logger
-        @data_stream = data_stream
+        @data_stream                 = data_stream
 
         super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: false, &block)
         reopen
@@ -177,11 +177,12 @@ module SemanticLogger
       private
 
       def write_to_elasticsearch(messages)
-        bulk_result = if @data_stream
-                        @client.bulk(index: index, body: messages)
-                      else
-                        @client.bulk(body: messages)
-                      end
+        bulk_result =
+          if @data_stream
+            @client.bulk(index: index, body: messages)
+          else
+            @client.bulk(body: messages)
+          end
 
         return unless bulk_result["errors"]
 
@@ -191,22 +192,15 @@ module SemanticLogger
 
       def bulk_index(log)
         expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
-        if @data_stream
-          {"create" => {}}
-        else
-          bulk_index = {"index" => {"_index" => expanded_index_name}}
-          bulk_index["index"].merge!({"_type" => type}) if version_supports_type?
-          bulk_index
-        end
+        return {"create" => {}} if @data_stream
+
+        bulk_index = {"index" => {"_index" => expanded_index_name}}
+        bulk_index["index"].merge!({"_type" => type}) if version_supports_type?
+        bulk_index
       end
 
       def default_formatter
-        time_key = if @data_stream
-                     "@timestamp"
-                   else
-                     :timestamp
-                   end
-
+        time_key = @data_stream ? "@timestamp" : :timestamp
         SemanticLogger::Formatters::Raw.new(time_format: :iso_8601, time_key: time_key)
       end
 
