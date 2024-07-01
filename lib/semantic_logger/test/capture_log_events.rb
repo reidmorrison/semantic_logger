@@ -31,6 +31,11 @@ module SemanticLogger
         @events << log
       end
 
+      # Supports batching of log events
+      def batch(logs)
+        @events += log
+      end
+
       def clear
         @events.clear
       end

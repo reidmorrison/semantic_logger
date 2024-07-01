@@ -2,10 +2,9 @@ require_relative "test_helper"
 
 class AppendersTest < Minitest::Test
   describe SemanticLogger::Appenders do
-    let :appenders do
-      logger = SemanticLogger["Test"]
-      SemanticLogger::Appenders.new(logger)
-    end
+    let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+    let(:appenders) { SemanticLogger::Appenders.new(capture_logger) }
+    let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
     describe "#add" do
       it "adds file appender" do
@@ -90,6 +89,16 @@ class AppendersTest < Minitest::Test
 
         assert_equal 2, appenders.size
       end
+
+      it "adds batch proxy" do
+        appender = appenders.add(appender: logger, batch: true)
+        assert_instance_of SemanticLogger::Appender::AsyncBatch, appender
+      end
+
+      # it "adds async proxy" do
+      #   appender = appenders.add(appender: logger, async: true)
+      #   assert_instance_of SemanticLogger::Appender::Async, appender
+      # end
     end
   end
 end

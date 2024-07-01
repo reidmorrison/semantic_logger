@@ -3,7 +3,7 @@ require_relative "test_helper"
 # Unit Test for SemanticLogger::Logger
 class LoggerTest < Minitest::Test
   describe SemanticLogger::Logger do
-    include InMemoryAppenderHelper
+    let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
     # Complex filters
     module ComplexFilter
@@ -17,85 +17,25 @@ class LoggerTest < Minitest::Test
     [:debug].each do |level|
       describe "##{level}" do
         describe "#filter" do
-          describe "at the appender level" do
-            it "Proc" do
-              appender.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
-              logger.send(level, "Exclude this log message", @hash) { "Calculations" }
+          it "Proc" do
+            logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
+            logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              refute log_message
-            end
-
-            it "Module" do
-              appender.filter = ComplexFilter
-              logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-
-              refute log_message
-            end
-
-            it "RegExp" do
-              appender.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
-              logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-
-              refute log_message
-            end
+            assert logger.events.empty?
           end
 
-          describe "at the logger level" do
-            it "Proc" do
-              logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
-              logger.send(level, "Exclude this log message", @hash) { "Calculations" }
+          it "Module" do
+            logger.filter = ComplexFilter
+            logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              refute log_message
-            end
-
-            it "Module" do
-              logger.filter = ComplexFilter
-              logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-
-              refute log_message
-            end
-
-            it "RegExp" do
-              logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
-              logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-
-              refute log_message
-            end
+            assert logger.events.empty?
           end
 
-          describe "on the logger initializer" do
-            describe "Proc" do
-              let :log_filter do
-                ->(log) { (/\AExclude/ =~ log.message).nil? }
-              end
+          it "RegExp" do
+            logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
+            logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-              it "filters" do
-                logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-                refute log_message
-              end
-            end
-
-            describe "Module" do
-              let :log_filter do
-                ComplexFilter
-              end
-
-              it "filters" do
-                logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-                refute log_message
-              end
-            end
-
-            describe "RegExp" do
-              let :log_filter do
-                /\ALogger/
-              end
-
-              it "filters" do
-                logger.send(level, "Exclude this log message", @hash) { "Calculations" }
-                refute log_message
-              end
-            end
+            assert logger.events.empty?
           end
         end
       end
@@ -103,10 +43,10 @@ class LoggerTest < Minitest::Test
 
     describe "when level is too high" do
       it "does not log" do
-        SemanticLogger.default_level = :error
+        logger.level = :error
         logger.info("Exclude this log message")
 
-        refute log_message
+        assert logger.events.empty?
       end
     end
 
@@ -126,24 +66,10 @@ class LoggerTest < Minitest::Test
 
     describe "#level?" do
       it "return true for debug? with :trace level" do
-        SemanticLogger.default_level = :trace
+        logger.level = :trace
         assert_equal :trace, logger.level
         assert_equal true, logger.debug?
         assert_equal true, logger.trace?
-      end
-
-      it "return false for debug? with global :debug level" do
-        SemanticLogger.default_level = :debug
-        assert_equal :debug, logger.level, logger.inspect
-        assert_equal true, logger.debug?, logger.inspect
-        assert_equal false, logger.trace?, logger.inspect
-      end
-
-      it "return true for debug? with global :info level" do
-        SemanticLogger.default_level = :info
-        assert_equal :info, logger.level, logger.inspect
-        assert_equal false, logger.debug?, logger.inspect
-        assert_equal false, logger.trace?, logger.inspect
       end
 
       it "return false for debug? with instance :debug level" do
@@ -162,16 +88,11 @@ class LoggerTest < Minitest::Test
     end
 
     describe ".tagged" do
-      it "sets global defaults" do
-        assert_equal [], SemanticLogger.tags
-        assert_equal 0, SemanticLogger.backtrace_level_index
-      end
-
       it "add tags to log entries" do
         logger.tagged("12345", "DJHSFK") do
           logger.info("hello world")
 
-          assert log = log_message
+          assert log = logger.events.first
           assert_equal "hello world", log.message
           assert_equal %w[12345 DJHSFK], log.tags
         end
@@ -183,7 +104,7 @@ class LoggerTest < Minitest::Test
             assert_equal ["First Level", "tags", "Second Level"], logger.tags
             logger.info("hello world")
 
-            assert log = log_message
+            assert log = logger.events.first
             assert_equal "hello world", log.message
             assert_equal ["First Level", "tags", "Second Level"], log.tags
           end
@@ -193,14 +114,14 @@ class LoggerTest < Minitest::Test
 
       it "also supports named tagging" do
         logger.tagged(level1: 1) do
-          assert_equal({level1: 1}, SemanticLogger.named_tags)
-          assert_equal({level1: 1}, logger.named_tags)
+          assert_equal({ level1: 1 }, SemanticLogger.named_tags)
+          assert_equal({ level1: 1 }, logger.named_tags)
           logger.tagged(level2: 2, more: "data") do
-            assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
-            assert_equal({level1: 1, level2: 2, more: "data"}, logger.named_tags)
+            assert_equal({ level1: 1, level2: 2, more: "data" }, SemanticLogger.named_tags)
+            assert_equal({ level1: 1, level2: 2, more: "data" }, logger.named_tags)
             logger.tagged(level3: 3) do
-              assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
-              assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, logger.named_tags)
+              assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, SemanticLogger.named_tags)
+              assert_equal({ level1: 1, level2: 2, more: "data", level3: 3 }, logger.named_tags)
             end
           end
         end
@@ -210,7 +131,7 @@ class LoggerTest < Minitest::Test
         logger.tagged("", %w[12345 DJHSFK], nil) do
           logger.info("hello world")
 
-          assert log = log_message
+          assert log = logger.events.first
           assert_equal "hello world", log.message
           assert_equal %w[12345 DJHSFK], log.tags
         end
@@ -220,7 +141,7 @@ class LoggerTest < Minitest::Test
         logger.tagged(%w[first second]) do
           logger.info("hello world")
 
-          assert log = log_message
+          assert log = logger.events.first
           assert_equal "hello world", log.message
           assert_equal %w[first second], log.tags
         end

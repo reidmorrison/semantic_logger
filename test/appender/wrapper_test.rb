@@ -72,7 +72,7 @@ module Appender
           log.backtrace = backtrace
           appender.log(log.freeze)
           assert_match(
-            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+\ default_test.rb:35] User -- hello world/, mock_logger.message
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+\ default_test.rb:35\] User -- hello world/, mock_logger.message
           )
         end
 
