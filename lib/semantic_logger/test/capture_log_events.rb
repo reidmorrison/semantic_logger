@@ -33,6 +33,11 @@ module SemanticLogger
         @events << log
       end
 
+      # Supports batching of log events
+      def batch(logs)
+        @events += log
+      end
+
       def clear
         @events.clear
       end
@@ -40,6 +45,10 @@ module SemanticLogger
       # Support silencing of log messages
       def level_index
         @level_index || SemanticLogger.default_level_index
+      end
+
+      def to_h
+        events.map(&:to_h)
       end
     end
   end

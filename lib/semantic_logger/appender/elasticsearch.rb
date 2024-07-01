@@ -177,7 +177,13 @@ module SemanticLogger
       private
 
       def write_to_elasticsearch(messages)
-        bulk_result = @data_stream ? @client.bulk(index: index, body: messages) : @client.bulk(body: messages)
+        bulk_result =
+          if @data_stream
+            @client.bulk(index: index, body: messages)
+          else
+            @client.bulk(body: messages)
+          end
+
         return unless bulk_result["errors"]
 
         failed = bulk_result["items"].reject { |x| x["status"] == 201 }
@@ -186,10 +192,10 @@ module SemanticLogger
 
       def bulk_index(log)
         expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
-        return  {"create" => {}} if @data_stream
+        return {"create" => {}} if @data_stream
 
         bulk_index = {"index" => {"_index" => expanded_index_name}}
-        bulk_index["index"].merge!({ "_type" => type }) if version_supports_type?
+        bulk_index["index"].merge!({"_type" => type}) if version_supports_type?
         bulk_index
       end
 
@@ -197,8 +203,6 @@ module SemanticLogger
         time_key = @data_stream ? "@timestamp" : :timestamp
         SemanticLogger::Formatters::Raw.new(time_format: :iso_8601, time_key: time_key)
       end
-
-      private
 
       def version_supports_type?
         Gem::Version.new(::Elasticsearch::VERSION) < Gem::Version.new(7)

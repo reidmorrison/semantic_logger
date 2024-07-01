@@ -3,7 +3,7 @@ require_relative "test_helper"
 class MeasureTest < Minitest::Test
   describe "Measure" do
     let(:appender) { SemanticLogger::Test::CaptureLogEvents.new }
-    let(:payload) { { session_id: "HSSKLEU@JDK767", tracking_number: 12_345, message: "Message from payload" } }
+    let(:payload) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345, message: "Message from payload"} }
 
     # Ensure that any log level can be measured and logged
     SemanticLogger::LEVELS.each do |level|
@@ -304,8 +304,10 @@ class MeasureTest < Minitest::Test
           appender.warn "don't log me"
         end
 
+        assert_equal 1, appender.events.count, -> { appender.events.to_h.ai }
         assert log = appender.events.first
         assert_equal "hello world", log.message
+        assert_equal :info, log.level
       end
 
       it "does not silence higher level messages" do

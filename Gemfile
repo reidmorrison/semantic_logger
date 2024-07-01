@@ -23,6 +23,7 @@ gem "honeybadger"
 # [optional] Kafka appender
 gem "ruby-kafka"
 # [optional] MongoDB appender
+gem "base64"
 gem "mongo"
 # [optional] NewRelic appender ( Tests use a mock class )
 # gem 'newrelic_rpm'
@@ -38,6 +39,7 @@ gem "sentry-raven"
 # [optional] new Sentry appender
 gem "sentry-ruby"
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
+gem "syslog"
 gem "syslog_protocol"
 
-gem "rubocop"
+gem "rubocop", "~> 1.28.1", require: false

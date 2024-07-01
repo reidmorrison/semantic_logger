@@ -35,7 +35,7 @@ module Appender
     describe SemanticLogger::Appender::Wrapper do
       let(:mock_logger) { MockLogger.new }
       let(:appender) { SemanticLogger::Appender::Wrapper.new(logger: mock_logger) }
-      let(:ahash) { { session_id: "HSSKLEU@JDK767", tracking_number: 12_345 } }
+      let(:ahash) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345} }
       let(:hash_str) { ahash.inspect.sub("{", '\\{').sub("}", '\\}') }
       let(:file_name_reg_exp) { ' wrapper_test.rb:\d+' }
       let(:log) do
@@ -46,7 +46,7 @@ module Appender
       end
       let(:backtrace) do
         [
-          "test/formatters/default_test.rb:35:in `block (2 levels) in <class:DefaultTest>'",
+          "test/formatters/default_test.rb:35:in `block (2 levels) in <class:DefaultTest>'"
         ]
       end
 
@@ -72,7 +72,7 @@ module Appender
           log.backtrace = backtrace
           appender.log(log.freeze)
           assert_match(
-            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+\ default_test.rb:35] User -- hello world/, mock_logger.message
+            /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+\ default_test.rb:35\] User -- hello world/, mock_logger.message
           )
         end
 

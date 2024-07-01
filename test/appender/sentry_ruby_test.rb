@@ -67,7 +67,7 @@ module Appender
               SemanticLogger.tagged("tag 2") do
                 SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
                   ::Sentry.stub(:capture_message, capture) do
-                    args = { username: "joe", fingerprint: ["bar"], other: "unrelated" }
+                    args = {username: "joe", fingerprint: ["bar"], other: "unrelated"}
                     appender.error("some message", **args)
                   end
                 end

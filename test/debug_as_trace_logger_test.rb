@@ -12,7 +12,7 @@ class DebugAsTraceLoggerTest < Minitest::Test
 
   describe SemanticLogger::Logger do
     let(:logger) { LogTester.new("TestLogger") }
-    let(:payload) { { session_id: "HSSKLEU@JDK767", tracking_number: 12_345, message: "Message from payload" } }
+    let(:payload) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345, message: "Message from payload"} }
 
     describe ".level?" do
       it "return false for debug? with instance :debug level" do

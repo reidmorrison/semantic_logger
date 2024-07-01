@@ -3,13 +3,8 @@ require_relative "test_helper"
 class FormattersTest < Minitest::Test
   describe SemanticLogger::Formatters do
     describe ".factory" do
-      let :log do
-        SemanticLogger::Log.new("Test", :info)
-      end
-
-      let :appender do
-        SemanticLogger::Appender::IO.new($stdout)
-      end
+      let(:log) { SemanticLogger::Log.new("Test", :info) }
+      let(:appender) { SemanticLogger::Appender::IO.new($stdout) }
 
       it "from a symbol" do
         assert formatter = SemanticLogger::Formatters.factory(:raw)

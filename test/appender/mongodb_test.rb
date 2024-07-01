@@ -11,14 +11,14 @@ module Appender
       let(:appender) do
         SemanticLogger::Appender::MongoDB.new(
           uri:             "mongodb://#{ENV['MONGO_HOST']}/test",
-          collection_size: 10 * 1024 ** 2,
+          collection_size: 10 * 1024**2,
           host:            "test",
           application:     "test_application",
           level:           :trace
         )
       end
 
-      let(:ahash) { { tracking_number: 12_345, session_id: "HSSKLEU@JDK767" } }
+      let(:ahash) { {tracking_number: 12_345, session_id: "HSSKLEU@JDK767"} }
 
       after do
         appender.purge_all
