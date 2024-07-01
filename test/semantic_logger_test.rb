@@ -2,6 +2,8 @@ require_relative "test_helper"
 
 class SemanticLoggerTest < Minitest::Test
   describe SemanticLogger do
+    let(:logger) { SemanticLogger["TestLogger"] }
+
     describe ".add_appender" do
       before do
         @appender = nil
@@ -20,188 +22,226 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
-    describe "mock_logger" do
-      include InMemoryAppenderHelper
-
-      describe ".tagged" do
-        it "add tags to log entries" do
+    describe ".tagged" do
+      it "adds one tag" do
+        events = semantic_logger_events do
           SemanticLogger.tagged("12345", "DJHSFK") do
-            logger.info("Hello world")
-
-            assert log = log_message
-            assert_equal %w[12345 DJHSFK], log.tags
+            logger.info("Hello World")
           end
         end
 
-        it "add embedded tags to log entries" do
+        assert_equal 1, events.size
+        assert_semantic_logger_event(
+          events.first,
+          message: "Hello World",
+          tags:    %w[12345 DJHSFK]
+        )
+      end
+
+      it "add embedded tags" do
+        events = semantic_logger_events do
           SemanticLogger.tagged("First Level", "tags") do
             SemanticLogger.tagged("Second Level") do
-              logger.info("Hello world")
-
-              assert log = log_message
-              assert_equal ["First Level", "tags", "Second Level"], log.tags
+              logger.info("Hello World")
             end
-            assert_equal 2, SemanticLogger.tags.count, SemanticLogger.tags
-            assert_equal "First Level", SemanticLogger.tags.first
-            assert_equal "tags", SemanticLogger.tags.last
           end
         end
 
-        it "also supports named tagging" do
+        assert_equal 1, events.size
+        assert_semantic_logger_event(
+          events.first,
+          message: "Hello World",
+          tags:    ["First Level", "tags", "Second Level"]
+        )
+      end
+
+      it "adds named tags" do
+        events = semantic_logger_events do
           SemanticLogger.tagged(level1: 1) do
             assert_equal({level1: 1}, SemanticLogger.named_tags)
             SemanticLogger.tagged(level2: 2, more: "data") do
               assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
               SemanticLogger.tagged(level3: 3) do
                 assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
+                logger.info("Hello World")
               end
             end
           end
         end
-      end
 
-      describe ".named_tags" do
-        it "returns named tags in creation order" do
+        assert_equal 1, events.size
+        assert_semantic_logger_event(
+          events.first,
+          message:    "Hello World",
+          named_tags: {level1: 1, level2: 2, more: "data", level3: 3}
+        )
+      end
+    end
+
+    describe ".named_tags" do
+      it "named tags in creation order" do
+        SemanticLogger.named_tagged(level1: 1) do
+          assert_equal({level1: 1}, SemanticLogger.named_tags)
+          SemanticLogger.named_tagged(level2: 2, more: "data") do
+            assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
+            SemanticLogger.named_tagged(level3: 3) do
+              assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
+            end
+          end
+        end
+      end
+    end
+
+    describe ".named_tagged" do
+      it "logs named tags in creation order" do
+        events = semantic_logger_events do
           SemanticLogger.named_tagged(level1: 1) do
-            assert_equal({level1: 1}, SemanticLogger.named_tags)
             SemanticLogger.named_tagged(level2: 2, more: "data") do
-              assert_equal({level1: 1, level2: 2, more: "data"}, SemanticLogger.named_tags)
               SemanticLogger.named_tagged(level3: 3) do
-                assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, SemanticLogger.named_tags)
+                logger.info("Hello World")
               end
             end
           end
         end
+
+        assert_equal 1, events.size
+        assert_semantic_logger_event(
+          events.first,
+          message:    "Hello World",
+          named_tags: {level1: 1, level2: 2, more: "data", level3: 3}
+        )
       end
+    end
 
-      describe ".named_tagged" do
-        it "logs named tags in creation order" do
-          SemanticLogger.named_tagged(level1: 1) do
-            SemanticLogger.named_tagged(level2: 2, more: "data") do
-              SemanticLogger.named_tagged(level3: 3) do
-                logger.info("Hello world")
-
-                assert log = log_message
-                assert_equal({level1: 1, level2: 2, more: "data", level3: 3}, log.named_tags)
-              end
-            end
-          end
-        end
-      end
-
-      describe ".fast_tag" do
-        it "add string tag to log entries" do
+    describe ".fast_tag" do
+      it "add string tag to log entries" do
+        events = semantic_logger_events do
           logger.fast_tag("12345") do
-            logger.info("Hello world")
-
-            assert log = log_message
-            assert_equal %w[12345], log.tags
+            logger.info("Hello World")
           end
+        end
+
+        assert_equal 1, events.size
+        assert_semantic_logger_event(
+          events.first,
+          message: "Hello World",
+          tags:    %w[12345]
+        )
+      end
+    end
+
+    describe ".default_level" do
+      it "uses global default log level" do
+        # Uses global default level since logger does not have one set
+        SemanticLogger.stub(:default_level, :warn) do
+          assert_equal logger.level, :warn
         end
       end
 
-      describe ".default_level" do
-        before do
-          SemanticLogger.default_level = :debug
-        end
-
-        it "not log at a level below the global default" do
-          assert_equal :debug, SemanticLogger.default_level
-          assert_equal :debug, logger.level
-          logger.trace("hello world")
-
-          refute log_message
-        end
-
-        it "log at the instance level" do
-          assert_equal :debug, SemanticLogger.default_level
-          logger.level = :trace
-          assert_equal :trace, logger.level
-          logger.trace("hello world")
-
-          assert log = log_message
-          assert_equal :trace, log.level
-          assert_equal "hello world", log.message
-        end
-
-        it "not log at a level below the instance level" do
-          assert_equal :debug, SemanticLogger.default_level
-          logger.level = :warn
-          assert_equal :warn, logger.level
-          logger.debug("hello world")
-
-          refute log_message
+      it "logger retains explicit log level" do
+        # Retains the explicit log level even when global log level is different
+        logger.level = :trace
+        SemanticLogger.stub(:default_level, :warn) do
+          assert_equal logger.level, :trace
         end
       end
+    end
 
-      describe ".silence" do
-        before do
-          SemanticLogger.default_level = :info
-        end
-
-        it "not log at a level below the silence level" do
-          assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, logger.level
-          logger.silence do
-            logger.warn("hello world")
-            logger.info("hello world")
-            logger.debug("hello world")
-            logger.trace("hello world")
+    describe ".silence" do
+      it "not log at a level below the default silence level" do
+        events = semantic_logger_events(silence: false) do
+          SemanticLogger.stub(:default_level, :info) do
+            SemanticLogger.silence do
+              logger.fatal("fatal")
+              logger.error("error")
+              logger.warn("warn")
+              logger.info("info")
+              logger.debug("debug")
+              logger.trace("trace")
+            end
           end
-
-          refute log_message
         end
-
-        it "log at the instance level even with the silencer at a higher level" do
-          logger.level = :trace
-          assert_equal :trace, logger.level
-          logger.silence do
-            logger.trace("hello world")
-          end
-
-          assert log = log_message
-          assert_equal :trace, log.level
-          assert_equal "hello world", log.message
-        end
-
-        it "log at a silence level below the default level" do
-          assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, logger.level
-          logger.silence(:debug) do
-            logger.debug("hello world")
-          end
-
-          assert log = log_message
-          assert_equal :debug, log.level
-          assert_equal "hello world", log.message
-        end
+        assert_equal %w[fatal error], events.map(&:message)
       end
 
-      describe ".on_log" do
-        before do
-          SemanticLogger.default_level = :info
-        end
-
-        after do
-          SemanticLogger::Logger.subscribers.clear
-        end
-
-        it "registers a log listener" do
-          SemanticLogger.on_log do |log|
-            log.set_context(:custom_info, "test")
+      it "not log at a level below a specific silence level" do
+        events = semantic_logger_events(silence: false) do
+          SemanticLogger.stub(:default_level, :info) do
+            SemanticLogger.silence(:info) do
+              logger.fatal("fatal")
+              logger.error("error")
+              logger.warn("warn")
+              logger.info("info")
+              logger.debug("debug")
+              logger.trace("trace")
+            end
           end
-
-          assert_equal :info, SemanticLogger.default_level
-          assert_equal :info, logger.level
-          logger.silence(:debug) do
-            logger.debug("hello world")
-          end
-
-          assert log = log_message
-          assert_equal :debug, log.level
-          assert_equal "hello world", log.message
-          assert_equal "test", log.context[:custom_info]
         end
+        assert_equal %w[fatal error warn info], events.map(&:message)
+      end
+
+      # it "default silence level is :error, so should log everything else" do
+      it "silencer is ignored when logger has an explicit log level" do
+        logger.level = :trace
+        events       = semantic_logger_events(silence: false) do
+          SemanticLogger.silence(:debug) do
+            logger.fatal("fatal")
+            logger.error("error")
+            logger.warn("warn")
+            logger.info("info")
+            logger.debug("debug")
+            logger.trace("trace")
+          end
+        end
+
+        assert_equal %w[fatal error warn info debug trace], events.map(&:message)
+      end
+
+      it "log at a silence level below the default level" do
+        events = semantic_logger_events(silence: false) do
+          SemanticLogger.stub(:default_level, :info) do
+            assert_equal :info, logger.level
+            logger.silence(:debug) do
+              logger.debug("hello world")
+            end
+          end
+        end
+
+        assert_equal 1, events.size
+        assert_semantic_logger_event(
+          events.first,
+          message: "hello world",
+          level:   :debug
+        )
+      end
+    end
+
+    describe ".on_log" do
+      after do
+        # Clear on_log subscribers
+        SemanticLogger::Logger.subscribers.clear
+      end
+
+      it "registers a log listener" do
+        SemanticLogger.on_log do |log|
+          log.set_context(:custom_info, "test")
+        end
+
+        events = semantic_logger_events do
+          SemanticLogger.stub(:default_level, :info) do
+            assert_equal :info, logger.level
+            SemanticLogger.silence(:debug) do
+              logger.debug("hello world")
+            end
+          end
+        end
+
+        assert_equal 1, events.size
+        assert_semantic_logger_event(
+          events.first,
+          message: "hello world",
+          context: {custom_info: "test"}
+        )
       end
     end
   end

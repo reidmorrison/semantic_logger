@@ -37,7 +37,7 @@ class CaptureLogEventsTest < Minitest::Test
     end
 
     it "clears the events array when clear is called" do
-      capture_logger.info 'a message'
+      capture_logger.info "a message"
       assert_equal(1, capture_logger.events.size)
       capture_logger.clear
       assert_equal(0, capture_logger.events.size)

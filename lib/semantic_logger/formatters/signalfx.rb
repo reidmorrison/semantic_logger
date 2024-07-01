@@ -82,7 +82,10 @@ module SemanticLogger
         self.log    = log
         self.logger = logger
 
-        metric; time; value; format_dimensions
+        metric
+        time
+        value
+        format_dimensions
 
         # gauge, counter, or cumulative_counter
         data = {}
@@ -113,7 +116,10 @@ module SemanticLogger
           self.hash = {}
           self.log  = log
 
-          metric; time; value; format_dimensions
+          metric
+          time
+          value
+          format_dimensions
 
           if log.duration
             gauges = (data[:gauge] ||= [])

@@ -3,14 +3,19 @@ module SemanticLogger
     module Minitest
       # Returns [Array<SemanticLogger::Log>] the log events from Semantic Logger
       # captured whilst executing the supplied block.
-      def semantic_logger_events(klass = nil, &block)
+      #
+      # Notes:
+      # - All log messages are returned regardless of the global default log level.
+      def semantic_logger_events(deprecated_klass = nil, klass: deprecated_klass, silence: :trace, &block)
         logger = SemanticLogger::Test::CaptureLogEvents.new
         if klass
           klass.stub(:logger, logger, &block)
-        else
-          SemanticLogger.silence(:trace) do
+        elsif silence
+          SemanticLogger.silence(silence) do
             SemanticLogger::Logger.stub(:processor, logger, &block)
           end
+        else
+          SemanticLogger::Logger.stub(:processor, logger, &block)
         end
         logger.events
       end
@@ -18,35 +23,65 @@ module SemanticLogger
       # Verify a single log event has all the required attributes.
       def assert_semantic_logger_event(event, level: nil, name: nil, message: nil, message_includes: nil,
                                        payload: nil, payload_includes: nil,
+                                       exception: nil, exception_includes: nil, backtrace: nil,
                                        thread_name: nil, tags: nil, named_tags: nil, context: nil,
+                                       level_index: nil, duration: nil, time: nil,
                                        metric: nil, metric_amount: nil, dimensions: nil)
-        msg = message || message_includes || "no message"
-        assert event, "Log event missing for message: '#{msg}'"
-        assert_equal message, event.message if message
-        assert_includes event.message, message_includes if message_includes
-        assert_equal name, event.name, -> { "Mismatched log name for message: '#{msg}'" } if name
-        assert_equal level, event.level, -> { "Mismatched log level for message: '#{msg}'" } if level
+        assert event, "No log event occurred"
 
-        if payload_includes
-          payload_includes.each_pair do |key, expected_value|
-            value = event.payload[key]
-            if expected_value.nil?
-              assert_nil value, -> { "Mismatched key: #{key.inspect} in log payload: #{event.payload} for message: '#{msg}'" }
-            else
-              assert_equal expected_value, value, -> { "Mismatched key: #{key.inspect} in log payload: #{event.payload} for message: '#{msg}'" }
-            end
-          end
-        elsif payload
-          assert_equal payload, event.payload, -> { "Mismatched log payload: #{event.payload} for message: '#{msg}'" }
+        assert_semantic_logger_entry(event, :message, message)
+        assert_semantic_logger_entry(event, :name, name)
+        assert_semantic_logger_entry(event, :level, level)
+        assert_semantic_logger_entry(event, :thread_name, thread_name)
+        assert_semantic_logger_entry(event, :tags, tags)
+        assert_semantic_logger_entry(event, :named_tags, named_tags)
+        assert_semantic_logger_entry(event, :context, context)
+        assert_semantic_logger_entry(event, :metric, metric)
+        assert_semantic_logger_entry(event, :metric_amount, metric_amount)
+        assert_semantic_logger_entry(event, :dimensions, dimensions)
+        assert_semantic_logger_entry(event, :level_index, level_index)
+        assert_semantic_logger_entry(event, :duration, duration)
+        assert_semantic_logger_entry(event, :time, time)
+        assert_semantic_logger_entry(event, :exception, exception)
+        assert_semantic_logger_entry(event, :backtrace, backtrace)
+        assert_semantic_logger_entry(event, :payload, payload)
+
+        if message_includes
+          assert_includes(
+            event.message,
+            message_includes,
+            -> { "Expected message to include '#{message_includes}' in log event #{event.inspect}" }
+          )
         end
 
-        assert_equal thread_name, event.thread_name, -> { "Mismatched thread_name for message: '#{msg}'" } if thread_name
-        assert_equal tags, event.tags, -> { "Mismatched tags for message: '#{msg}'" } if tags
-        assert_equal named_tags, event.named_tags, -> { "Mismatched named_tags for message: '#{msg}'" } if named_tags
-        assert_equal context, event.context, -> { "Mismatched context for message: '#{msg}'" } if context
-        assert_equal metric, event.metric, -> { "Mismatched metric for message: '#{msg}'" } if metric
-        assert_equal metric_amount, event.metric_amount, -> { "Mismatched metric_amount for message: '#{msg}'" } if metric_amount
-        assert_equal dimensions, event.dimensions, -> { "Mismatched dimensions for message: '#{msg}'" } if dimensions
+        if payload_includes
+          payload_includes.each_pair do |key, expected|
+            actual = event.payload[key]
+            assert_semantic_logger_entry(event, "payload #{name}", expected, actual)
+          end
+        end
+
+        if exception_includes
+          payload_includes.each_pair do |key, expected|
+            actual = event.exception.send(key)
+            assert_semantic_logger_entry(event, "Exception #{name}", expected, actual)
+          end
+        end
+      end
+
+      private
+
+      def assert_semantic_logger_entry(event, name, expected, actual = event.send(name))
+        return if expected.nil?
+
+        case expected
+        when :nil
+          assert_nil actual, "Expected nil #{name} for log event: #{event.to_h.inspect}"
+        when Class
+          assert actual.is_a?(expected), -> { "Type #{expected} expected for #{name} in log event: #{event.to_h.inspect}" }
+        else
+          assert_equal expected, actual, "Mismatched #{name} for log event: #{event.to_h.inspect}"
+        end
       end
     end
   end

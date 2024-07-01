@@ -191,7 +191,7 @@ module SemanticLogger
         Net::TCPClient.logger      = logger
         Net::TCPClient.logger.name = "Net::TCPClient"
 
-        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: metrics, &block)
         reopen
       end
 

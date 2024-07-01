@@ -1,97 +1,121 @@
 require_relative "../test_helper"
 
-class TestLogger < Minitest::Test
+class CompatibilityTest < Minitest::Test
   describe SemanticLogger::Logger do
-    include InMemoryAppenderHelper
+    let(:logger) { SemanticLogger["TestLogger"] }
 
     it "#add" do
-      logger.add(Logger::INFO, "hello world", "progname") { "Data" }
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.add(Logger::INFO, "hello world", "progname") { "Data" }
+      end
 
-      assert log = log_message
       assert_equal "hello world -- progname -- Data", log.message
       assert_equal :info, log.level
     end
 
     it "#log" do
-      logger.log(Logger::FATAL, "hello world", "progname") { "Data" }
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.log(Logger::FATAL, "hello world", "progname") { "Data" }
+      end
 
-      assert log = log_message
       assert_equal "hello world -- progname -- Data", log.message
       assert_equal :fatal, log.level
     end
 
     describe "#info" do
       it "logs message" do
-        logger.info("hello1")
+        log = nil
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+          logger.info("hello1")
+        end
 
-        assert log = log_message
         assert_equal "hello1", log.message
         assert_equal :info, log.level
       end
 
       it "logs 2 messages" do
-        logger.info("hello1", "hello2")
+        log = nil
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+          logger.info("hello1", "hello2")
+        end
 
-        assert log = log_message
         assert_equal "hello1 -- hello2", log.message
         assert_equal :info, log.level
       end
 
       it "logs non-string" do
-        logger.info("hello1", true)
+        log = nil
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+          logger.info("hello1", true)
+        end
 
-        assert log = log_message
         assert_equal "hello1 -- true", log.message
         assert_equal :info, log.level
       end
 
       it "logs block result" do
-        logger.info("hello1", true) { "Data" }
+        log = nil
+        SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+          logger.info("hello1", true) { "Data" }
+        end
 
-        assert log = log_message
         assert_equal "hello1 -- true -- Data", log.message
         assert_equal :info, log.level
       end
     end
 
     it "#unknown" do
-      logger.unknown("hello world") { "Data" }
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.unknown("hello world") { "Data" }
+      end
 
-      assert log = log_message
       assert_equal "hello world -- Data", log.message
       assert_equal :error, log.level
       assert_equal "TestLogger", log.name
     end
 
     it "#unknown? as error?" do
-      SemanticLogger.default_level = :error
+      logger.level = :error
       assert logger.unknown?
-      logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
+      end
 
-      assert log = log_message
       assert_equal "hello world -- progname -- Data", log.message
       assert_equal :error, log.level
     end
 
     it "#unknown? as error? when false" do
-      SemanticLogger.default_level = :fatal
+      logger.level = :fatal
       refute logger.unknown?
-      logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
+      end
 
-      refute log_message
+      refute log
     end
 
     it "#silence_logger" do
-      logger.silence_logger do
-        logger.info "hello world"
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.silence_logger do
+          logger.info "hello world"
+        end
       end
-      refute log_message
+      refute log
     end
 
     it "#<< as info" do
-      logger << "hello world"
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger << "hello world"
+      end
 
-      assert log = log_message
       assert_equal "hello world", log.message
       assert_equal :info, log.level
     end
@@ -108,12 +132,13 @@ class TestLogger < Minitest::Test
     end
 
     it "#sev_threshold= as #level=" do
-      assert_equal :trace, logger.level
+      logger.level = :trace
       logger.sev_threshold = Logger::DEBUG
       assert_equal :debug, logger.level
     end
 
     it "#sev_threshold as #level" do
+      logger.level = :trace
       assert_equal :trace, logger.level
       assert_equal :trace, logger.sev_threshold
     end
@@ -132,18 +157,22 @@ class TestLogger < Minitest::Test
 
     it "#close NOOP" do
       logger.close
-      logger.info("hello world")
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.info("hello world")
+      end
 
-      assert log = log_message
       assert_equal "hello world", log.message
       assert_equal :info, log.level
     end
 
     it "#reopen NOOP" do
       logger.reopen
-      logger.info("hello world")
+      log = nil
+      SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
+        logger.info("hello world")
+      end
 
-      assert log = log_message
       assert_equal "hello world", log.message
       assert_equal :info, log.level
     end
