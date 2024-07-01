@@ -13,7 +13,7 @@ class FormattersTest < Minitest::Test
       end
 
       it "from a Hash (Symbol with options)" do
-        assert formatter = SemanticLogger::Formatters.factory(raw: { time_format: "%Y%m%d" })
+        assert formatter = SemanticLogger::Formatters.factory(raw: {time_format: "%Y%m%d"})
         assert formatter.is_a?(SemanticLogger::Formatters::Raw)
         assert result = formatter.call(log, appender)
         assert_equal "Test", result[:name]

@@ -47,12 +47,12 @@ module SemanticLogger
           end
 
           it "flattens payload information" do
-            log.payload = { shrek: "the ogre", controller: "some cotroller" }
+            log.payload = {shrek: "the ogre", controller: "some cotroller"}
             assert_match(/shrek="the ogre" controller="some cotroller"/, formatter.call(log, nil))
           end
 
           it "changes name to payload information" do
-            log.payload = { name: "shrek" }
+            log.payload = {name: "shrek"}
             assert_match(/name="shrek"/, formatter.call(log, nil))
           end
 
@@ -79,7 +79,7 @@ module SemanticLogger
             end
 
             it "changes name to exception" do
-              log.payload = { name: "shrek" }
+              log.payload = {name: "shrek"}
               set_exception
               assert_match(/name="RuntimeError"/, formatter.call(log, nil))
             end
@@ -98,7 +98,7 @@ module SemanticLogger
 
             describe "given a payload with tags key" do
               it "includes the value as a separate field" do
-                log.payload = { tags: "apples,bananas,pears" }
+                log.payload = {tags: "apples,bananas,pears"}
 
                 text = formatter.call(log, nil)
                 assert_match(/ruby=true/, text)
@@ -142,7 +142,7 @@ module SemanticLogger
 
             describe "given a payload with conflicting keys" do
               it "overrides the named tags" do
-                log.payload = { spaces: "You shall not pass" }
+                log.payload = {spaces: "You shall not pass"}
 
                 text = formatter.call(log, nil)
 

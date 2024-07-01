@@ -81,10 +81,10 @@ module Appender
           assert_equal "foo", @scope.transaction_name
           assert_equal "unrelated", @scope.extra[:other]
 
-          expected_tags = { "tag" => "tag 1, tag 2", "baz" => "quz", "some" => "tag" }
+          expected_tags = {"tag" => "tag 1, tag 2", "baz" => "quz", "some" => "tag"}
           assert_equal expected_tags, @scope.tags
 
-          expected_user_data = { id: 42, username: "joe" }
+          expected_user_data = {id: 42, username: "joe"}
           assert_equal expected_user_data, @scope.user
         end
       end

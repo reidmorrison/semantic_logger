@@ -37,11 +37,11 @@ module SemanticLogger
         end
 
         let :dimensions do
-          { action: "hit", user: "jbloggs", state: "FL" }
+          {action: "hit", user: "jbloggs", state: "FL"}
         end
 
         let :all_dimensions do
-          dims        = dimensions.merge(
+          dims = dimensions.merge(
             host:        SemanticLogger.host,
             application: SemanticLogger.application,
             environment: "test"
@@ -92,13 +92,13 @@ module SemanticLogger
           end
 
           it "only forwards whitelisted dimensions from named_tags" do
-            log.named_tags       = { user_id: 47, tracking_number: 7474, session_id: "hsdhngsd" }
+            log.named_tags       = {user_id: 47, tracking_number: 7474, session_id: "hsdhngsd"}
             formatter.dimensions = %i[user_id application]
             hash                 = result
             assert counters = hash["counter"], hash
             assert counter = counters.first, hash
-            expected = { "class" => "user", "action" => "login", "environment" => "test", "user_id" => "47",
-                         "host"  => SemanticLogger.host, "application" => SemanticLogger.application }
+            expected = {"class" => "user", "action" => "login", "environment" => "test", "user_id" => "47",
+                         "host" => SemanticLogger.host, "application" => SemanticLogger.application}
             assert_equal expected, counter["dimensions"], counter
           end
 

@@ -95,7 +95,7 @@ class QueueProcessorTest < Minitest::Test
     describe "#process" do
       it "processes messages from the queue" do
         subject.queue << log
-        subject.queue << { command: :close }
+        subject.queue << {command: :close}
         subject.send(:process)
 
         assert_equal 1, appender.events.count
@@ -103,7 +103,7 @@ class QueueProcessorTest < Minitest::Test
 
       it "logs messages" do
         subject.queue << log
-        subject.queue << { command: :close }
+        subject.queue << {command: :close}
         subject.send(:process)
 
         assert messages = logger.events.collect(&:message)
@@ -139,7 +139,7 @@ class QueueProcessorTest < Minitest::Test
 
     describe "#process_messages" do
       it "processes close command" do
-        subject.queue << { command: :close }
+        subject.queue << {command: :close}
         subject.send(:process_messages)
         assert appender.closed?
 
@@ -148,7 +148,7 @@ class QueueProcessorTest < Minitest::Test
 
       it "processes messages" do
         subject.queue << log
-        subject.queue << { command: :close }
+        subject.queue << {command: :close}
         subject.send(:process_messages)
 
         assert_equal 1, appender.events.count
@@ -163,7 +163,7 @@ class QueueProcessorTest < Minitest::Test
         log2.level   = :warn
         log2.message = "oh no"
         subject.queue << log2
-        subject.queue << { command: :close }
+        subject.queue << {command: :close}
         subject.send(:process_messages)
 
         assert_equal 2, appender.events.count
@@ -176,7 +176,7 @@ class QueueProcessorTest < Minitest::Test
         subject.instance_variable_set(:@retry_count, 30)
         assert_equal 30, subject.retry_count
         subject.queue << log
-        subject.queue << { command: :close }
+        subject.queue << {command: :close}
         subject.send(:process_messages)
         assert_equal 0, subject.retry_count
       end
@@ -277,7 +277,7 @@ class QueueProcessorTest < Minitest::Test
       describe "#process_messages_in_batches" do
         it "sends a partial batch" do
           subject.queue << log
-          subject.queue << { command: :close }
+          subject.queue << {command: :close}
           subject.send(:process_messages_in_batches)
 
           assert_equal [[log]], appender.batches
@@ -285,7 +285,7 @@ class QueueProcessorTest < Minitest::Test
 
         it "sends a full batch" do
           3.times { subject.queue << log }
-          subject.queue << { command: :close }
+          subject.queue << {command: :close}
           subject.send(:process_messages_in_batches)
 
           assert_equal [[log, log, log]], appender.batches
@@ -293,7 +293,7 @@ class QueueProcessorTest < Minitest::Test
 
         it "sends full and partial batch" do
           4.times { subject.queue << log }
-          subject.queue << { command: :close }
+          subject.queue << {command: :close}
           subject.send(:process_messages_in_batches)
 
           assert_equal [[log, log, log], [log]], appender.batches
@@ -301,7 +301,7 @@ class QueueProcessorTest < Minitest::Test
 
         it "sends 2 full batches" do
           6.times { subject.queue << log }
-          subject.queue << { command: :close }
+          subject.queue << {command: :close}
           subject.send(:process_messages_in_batches)
 
           assert_equal [[log, log, log], [log, log, log]], appender.batches

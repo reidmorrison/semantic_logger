@@ -30,9 +30,7 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(level: :error, **args, &block)
-        unless %i[info warn error fatal].include?(level)
-          raise "Bugsnag only supports :info, :warn, or :error log levels"
-        end
+        raise "Bugsnag only supports :info, :warn, or :error log levels" unless %i[info warn error fatal].include?(level)
 
         # Replace the Bugsnag logger so that we can identify its log messages and not forward them to Bugsnag
         ::Bugsnag.configure { |config| config.logger = SemanticLogger[Bugsnag] }

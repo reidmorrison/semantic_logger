@@ -121,7 +121,7 @@ module SemanticLogger
       def call(log, logger)
         h = SemanticLogger::Formatters::Raw.new.call(log, logger)
         h.delete(:time)
-        message               = {
+        message = {
           source:  logger.application,
           host:    logger.host,
           time:    log.time.utc.to_f,

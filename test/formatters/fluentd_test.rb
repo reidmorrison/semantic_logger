@@ -63,9 +63,9 @@ module SemanticLogger
         describe "call" do
           it "logs single-line json" do
             log.tags       = %w[first second third]
-            log.named_tags = { first: 1, second: 2, third: 3 }
+            log.named_tags = {first: 1, second: 2, third: 3}
             log.message    = "Hello World"
-            log.payload    = { first: 1, second: 2, third: 3 }
+            log.payload    = {first: 1, second: 2, third: 3}
             set_exception
             str = JSON.parse(formatter.call(log, nil))
             assert_equal str["exception"]["name"], "RuntimeError"

@@ -64,7 +64,7 @@ module Appender
 
         it "does not send metric only notifications" do
           exception, hash, severity = stub_bugsnag do
-            appender.debug metric: "my/custom/metric", payload: { hello: :world }
+            appender.debug metric: "my/custom/metric", payload: {hello: :world}
           end
           assert_nil exception
           assert_nil hash
