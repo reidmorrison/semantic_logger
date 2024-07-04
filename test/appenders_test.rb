@@ -1,6 +1,14 @@
 require_relative "test_helper"
 
 class AppendersTest < Minitest::Test
+  class BatchAppender < SemanticLogger::Subscriber
+    attr_accessor :batches
+
+    def batch(events)
+      (@batches ||= []) << events
+    end
+  end
+
   describe SemanticLogger::Appenders do
     let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
     let(:appenders) { SemanticLogger::Appenders.new(capture_logger) }
@@ -91,7 +99,7 @@ class AppendersTest < Minitest::Test
       end
 
       it "adds batch proxy" do
-        appender = appenders.add(appender: logger, batch: true)
+        appender = appenders.add(appender: BatchAppender.new, batch: true)
         assert_instance_of SemanticLogger::Appender::Async, appender
       end
 
