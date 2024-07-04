@@ -60,6 +60,10 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       #
+      #   metrics: [Boolean]
+      #     Also send metrics only events to rabbitmq.
+      #     Default: true
+      #
       # RabbitMQ Parameters:
       #
       #   rabbitmq_host: [String]
@@ -76,13 +80,15 @@ module SemanticLogger
       #     Default: nil
       #
       #   more parameters supported by Bunny: http://rubybunny.info/articles/connecting.html
-      def initialize(queue_name: "semantic_logger", rabbitmq_host: nil, metrics: false, **args, &block)
+      def initialize(queue_name: "semantic_logger", rabbitmq_host: nil,
+                     level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil, metrics: true,
+                     **args, &block)
         @queue_name             = queue_name
         @rabbitmq_args          = args.dup
         @rabbitmq_args[:host]   = rabbitmq_host
         @rabbitmq_args[:logger] = logger
 
-        super(level: level, formatter: formatter, filter: filter, application: application, host: host, metrics: metrics, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: metrics, &block)
         reopen
       end
 

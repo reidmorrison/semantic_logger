@@ -4,11 +4,8 @@ require_relative "../test_helper"
 module Appender
   class SentryTest < Minitest::Test
     describe SemanticLogger::Appender::SentryRuby do
-      before do
-        @appender                      = SemanticLogger::Appender::SentryRuby.new(level: :trace)
-        @message                       = "AppenderRavenTest log message"
-        SemanticLogger.backtrace_level = :error
-      end
+      let(:appender) { SemanticLogger::Appender::SentryRuby.new(level: :trace) }
+      let(:amessage) { "AppenderRavenTest log message" }
 
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
@@ -21,18 +18,12 @@ module Appender
           }
 
           ::Sentry.stub(:capture_message, capture) do
-            @appender.send(level, @message)
+            appender.send(level, amessage)
           end
 
-          assert_equal @message, error_message
+          assert_equal amessage, error_message
           assert_equal "SemanticLogger::Appender::SentryRuby", scope.extra[:name]
-
-          if %i[error fatal].include?(level)
-            assert hash.key?(:backtrace)
-          else
-            refute hash.key?(:backtrace)
-          end
-
+          assert hash.key?(:backtrace)
           assert_equal level, scope.level
         end
 
@@ -47,12 +38,12 @@ module Appender
           }
 
           ::Sentry.stub(:capture_exception, capture) do
-            @appender.send(level, @message, error)
+            appender.send(level, amessage, error)
           end
 
           assert_equal error.class.to_s, exception.class.to_s
           assert_equal error.message, exception.message
-          assert_equal @message, scope.extra[:message]
+          assert_equal amessage, scope.extra[:message]
           assert_equal level, scope.level
         end
       end
@@ -66,11 +57,8 @@ module Appender
           }
         end
 
-        before do
-          @appender = SemanticLogger::Appender::SentryRuby.new
-        end
-
         it "uses the tags and arguments" do
+          appender
           Sentry.with_scope do |scope|
             # sentry-only tag
             scope.set_tags("some" => "tag")
@@ -80,7 +68,7 @@ module Appender
                 SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
                   ::Sentry.stub(:capture_message, capture) do
                     args = {username: "joe", fingerprint: ["bar"], other: "unrelated"}
-                    @appender.error("some message", **args)
+                    appender.error("some message", **args)
                   end
                 end
               end

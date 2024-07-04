@@ -4,20 +4,21 @@ module SemanticLogger
     #
     # Example:
     #
-    # class UserTest < ActiveSupport::TestCase
-    #   describe User do
-    #     let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
-    #     let(:user) { User.new }
+    #   class UserTest < ActiveSupport::TestCase
+    #     describe User do
+    #       let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
+    #       let(:user) { User.new }
     #
-    #     it "logs message" do
-    #       user.stub(:logger, capture_logger) do
-    #         user.enable!
+    #       it "logs message" do
+    #         user.stub(:logger, logger) do
+    #           user.enable!
+    #         end
+    #         assert log = logger.events.first
+    #         assert_equal "Hello World", log.message
+    #         assert_equal :info, log.level
     #       end
-    #       assert_equal "Hello World", capture_logger.events.last.message
-    #       assert_equal :info, capture_logger.events.last.level
     #     end
     #   end
-    # end
     class CaptureLogEvents < SemanticLogger::Subscriber
       attr_accessor :events
 
@@ -28,11 +29,26 @@ module SemanticLogger
       end
 
       def log(log)
+        Logger.call_subscribers(log)
         @events << log
+      end
+
+      # Supports batching of log events
+      def batch(logs)
+        @events += log
       end
 
       def clear
         @events.clear
+      end
+
+      # Support silencing of log messages
+      def level_index
+        @level_index || SemanticLogger.default_level_index
+      end
+
+      def to_h
+        events.map(&:to_h)
       end
     end
   end

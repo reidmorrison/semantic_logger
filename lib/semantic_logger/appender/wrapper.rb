@@ -1,7 +1,6 @@
 # Send log messages to any standard Ruby logging class.
 #
 #  Forwards logging call to loggers such as Logger, log4r, etc.
-#
 module SemanticLogger
   module Appender
     class Wrapper < SemanticLogger::Subscriber
@@ -56,14 +55,21 @@ module SemanticLogger
       #  trace entries are mapped to debug since :trace is not supported by the
       #  Ruby or Rails Loggers
       def log(log)
-        @logger.send(log.level == :trace ? :debug : log.level, formatter.call(log, self))
+        level = log.level == :trace ? :debug : log.level
+        @logger.send(level, formatter.call(log, self))
         true
       end
 
       # Flush all pending logs to disk.
-      #  Waits for all sent documents to be writted to disk
+      #  Waits for all queued log messages to be written to disk.
       def flush
         @logger.flush if @logger.respond_to?(:flush)
+      end
+
+      # Close underlying log
+      #  Waits for all queued log messages to be written to disk.
+      def close
+        @logger.close if @logger.respond_to?(:close)
       end
     end
   end

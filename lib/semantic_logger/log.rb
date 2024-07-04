@@ -144,7 +144,9 @@ module SemanticLogger
       raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
 
       message = nil if message == ""
-      return payload if payload.key?(:payload)
+      if payload.key?(:payload)
+        return message ? payload.merge(message: message) : payload
+      end
 
       new_payload = {}
       args        = {}
@@ -248,7 +250,11 @@ module SemanticLogger
 
     # Extract the filename and line number from the last entry in the supplied backtrace
     def extract_file_and_line(stack, short_name = false)
+      return unless stack&.size&.positive?
+
       match = CALLER_REGEXP.match(stack.first)
+      return unless match
+
       [short_name ? File.basename(match[1]) : match[1], match[2].to_i]
     end
 
@@ -256,7 +262,7 @@ module SemanticLogger
     # in either the backtrace or exception
     def file_name_and_line(short_name = false)
       stack = backtrace || exception&.backtrace
-      extract_file_and_line(stack, short_name) if stack&.size&.positive?
+      extract_file_and_line(stack, short_name)
     end
 
     # Strip the standard Rails colorizing from the logged message

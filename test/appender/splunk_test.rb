@@ -1,7 +1,6 @@
 require_relative "../test_helper"
 
 # Unit Test for SemanticLogger::Appender::Splunk
-#
 module Appender
   class SplunkTest < Minitest::Test
     class Mock
@@ -14,20 +13,25 @@ module Appender
     end
 
     describe SemanticLogger::Appender::Splunk do
-      before do
-        SemanticLogger::Appender::Splunk.stub_any_instance(:reopen, nil) do
-          @appender = SemanticLogger::Appender::Splunk.new
+      let(:appender) do
+        mock = Module.new do
+          def self.indexes
+            {"main" => "main"}
+          end
         end
-        @message = "AppenderSplunkTest log message"
+        ::Splunk.stub(:connect, mock) do
+          SemanticLogger::Appender::Splunk.new
+        end
       end
+      let(:amessage) { "AppenderSplunkTest log message" }
 
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           mock = Mock.new
-          @appender.stub(:service_index, mock) do
-            @appender.send(level, @message)
+          appender.stub(:service_index, mock) do
+            appender.send(level, amessage)
           end
-          assert_equal @message, mock.message
+          assert_equal amessage, mock.message
           assert_equal level, mock.event[:event][:level]
           refute mock.event[:event][:exception]
         end
@@ -41,10 +45,10 @@ module Appender
           end
 
           mock = Mock.new
-          @appender.stub(:service_index, mock) do
-            @appender.send(level, @message, exc)
+          appender.stub(:service_index, mock) do
+            appender.send(level, amessage, exc)
           end
-          assert_equal @message, mock.message
+          assert_equal amessage, mock.message
 
           assert exception = mock.event[:event][:exception]
           assert "NameError", exception[:name]
@@ -55,10 +59,10 @@ module Appender
 
         it "sends #{level} custom attributes" do
           mock = Mock.new
-          @appender.stub(:service_index, mock) do
-            @appender.send(level, @message, key1: 1, key2: "a")
+          appender.stub(:service_index, mock) do
+            appender.send(level, amessage, key1: 1, key2: "a")
           end
-          assert_equal @message, mock.message
+          assert_equal amessage, mock.message
 
           assert event = mock.event[:event], mock.event.ai
           assert_equal level, event[:level]
@@ -70,10 +74,10 @@ module Appender
       end
 
       it "does not send :trace notifications to Splunk when set to :error" do
-        mock            = Mock.new
-        @appender.level = :error
-        @appender.stub(:service_index, mock) do
-          @appender.trace("AppenderSplunkTest trace message")
+        mock = Mock.new
+        appender.level = :error
+        appender.stub(:service_index, mock) do
+          appender.trace("AppenderSplunkTest trace message")
         end
         assert_nil mock.event
         assert_nil mock.message

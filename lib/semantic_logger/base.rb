@@ -342,9 +342,10 @@ module SemanticLogger
       # Add result of block to message or payload if not nil
       if block_given?
         result = yield(log)
-        if result.is_a?(String)
+        case result
+        when String
           log.message = log.message.nil? ? result : "#{log.message} -- #{result}"
-        elsif result.is_a?(Hash)
+        when Hash
           log.assign_hash(result)
         end
       end

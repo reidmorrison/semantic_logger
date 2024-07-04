@@ -5,8 +5,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
-- Add appender for Honeybadger events/insights API
-- Add support for Ruby 3.3
+## [4.16.0]
+
+- Add appender for Honeybadger Insights using the events API
+- Add support for Ruby 3.3.
+- Allow SyncProcessor to be called from appenders.
+- Fix incorrect metrics usage examples in documentation.
+- Add `:duration_ms` to Logfmt formatter.
+- Fixes #216 Log message from supplied message argument when payload contains payload key.
 
 ## [4.15.0]
 
