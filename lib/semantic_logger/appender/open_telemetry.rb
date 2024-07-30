@@ -43,15 +43,18 @@ module SemanticLogger
       def log(log)
         # return log_metric(log) if metrics && log.metric_only?
 
-        ap formatter.call(log, self)
-        ap log.payload
+        body        = formatter.call(log, self)
+        level       = body.delete(:level)
+        level_index = body.delete(:level_index)
+        time        = body.delete(:time)
+        payload     = body.delete(:payload)
 
         @logger.on_emit(
-          severity_text:   log.level.to_s,
-          severity_number: severity_number(log.level),
-          timestamp:       log.time,
-          body:            formatter.call(log, self),
-          attributes:      log.payload,
+          severity_text:   level,
+          severity_number: level_index,
+          timestamp:       time,
+          body:            body.transform_keys!(&:to_s),
+          attributes:      payload,
           context:         log.context[:open_telemetry] || ::OpenTelemetry::Context.current
         )
         true
@@ -76,25 +79,6 @@ module SemanticLogger
       #   ap log.payload
       #   true
       # end
-
-      def severity_number(severity)
-        case severity.downcase
-        when :trace
-          ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_TRACE
-        when :debug
-          ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_DEBUG
-        when :info
-          ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_INFO
-        when :warn
-          ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_WARN
-        when :error
-          ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_ERROR
-        when :fatal
-          ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_FATAL
-        else
-          ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_UNSPECIFIED
-        end
-      end
     end
   end
 end
