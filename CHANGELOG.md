@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
+- Fix Appenders#close referencing incorrect variable (#294)
 
 ## [4.16.0]
 
