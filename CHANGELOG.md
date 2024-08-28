@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add Honeybadger and Honeybadger Insights to Appenders doc.
+
 ## [4.16.0]
 
 - Add appender for Honeybadger Insights using the events API
