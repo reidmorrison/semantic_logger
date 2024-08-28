@@ -29,6 +29,8 @@ Log messages can be written to one or more of the following destinations at the 
 * MongoDB
 * Rollbar
 * Sentry
+* Honeybadger
+* Honeybadger Insights
 * Logger, log4r, etc.
 
 To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
@@ -738,6 +740,22 @@ SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
   logger.error("some message", username: "joe", fingerprint: ["bar"])
 end
 ~~~
+
+### Honeybadger and Honeybadger Insights
+
+Forward errors to Honeybadger.
+
+~~~ruby
+SemanticLogger.add_appender(appender: :honeybadger)
+~~~
+
+Forward all log messages to Honeybadger Insights as events.
+
+~~~ruby
+SemanticLogger.add_appender(appender: :honeybadger_insights)
+~~~
+
+Both appenders use the Honeybadger [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
 
 ### Logger, log4r, etc.
 
