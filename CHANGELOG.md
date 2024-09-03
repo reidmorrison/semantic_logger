@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Fix regression in `SemanticLogger::Appenders#close`
+
 ## [4.16.0]
 
 - Add appender for Honeybadger Insights using the events API
