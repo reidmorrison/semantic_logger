@@ -149,6 +149,25 @@ assert_semantic_logger_event(
 )
 ~~~
 
+### RSpec
+
+For RSpec users, this sample supplied by @jgascoignetaylor-godaddy will be useful:
+~~~ruby
+context 'when it blows up' do
+  let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+
+  it 'should should log the error' do
+    allow_any_instance_of(MyThing).to receive(:logger).and_return(capture_logger)
+    MyThing.new('asdf').do_something!
+
+    expect(capture_logger.events.last.message).to include('Here is a message')
+    expect(capture_logger.events.last.level).to eq(:error)
+  end
+end
+~~~
+
+Open to pull requests to implement the RSpec equivalent of the Minitest helpers: `SemanticLogger::Test::Minitest`.
+
 ### Other testing frameworks
 
 If you use another testing framework and would like to contribute helper methods similar
