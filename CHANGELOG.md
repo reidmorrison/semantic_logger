@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Correct `source_code_uri` URL
 
 ## [4.16.1]
 
