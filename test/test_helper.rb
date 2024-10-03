@@ -12,10 +12,6 @@ if ENV["LOGGER_SYNC"]
 else
   require "semantic_logger"
 end
-require_relative "in_memory_appender"
-require_relative "in_memory_batch_appender"
-require_relative "in_memory_metrics_appender"
-require_relative "in_memory_appender_helper"
 require "amazing_print"
 
 # Add Semantic Logger helpers for Minitest
