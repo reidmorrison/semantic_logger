@@ -211,7 +211,15 @@ module SemanticLogger
     end
 
     def named_tags
-      SemanticLogger.named_tags
+      SemanticLogger.named_tags.merge(@named_tags || {})
+    end
+
+    # Sets named tags which are local to the logger instance.
+    #
+    # Local named tags are merged into the log entry along with the thread-level ones
+    # and those set via `#tagged` or `#with_tags`.
+    def named_tags=(tags)
+      (@named_tags ||= {}).merge!(tags)
     end
 
     # Returns the list of tags pushed after flattening them out and removing blanks
@@ -327,6 +335,10 @@ module SemanticLogger
       end
 
       log = Log.new(name, level, index)
+
+      # Apply the named tags to the log entry
+      log.named_tags = named_tags
+
       should_log =
         if exception.nil? && payload.nil? && message.is_a?(Hash)
           # All arguments as a hash in the message.

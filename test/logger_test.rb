@@ -50,6 +50,14 @@ class LoggerTest < Minitest::Test
       end
     end
 
+    describe "#named_tags=" do
+      it "adds local named tags to logger" do
+        logger.named_tags = {test: "123"}
+        assert_equal({test: "123"}, logger.named_tags)
+        assert_equal({}, SemanticLogger.named_tags)
+      end
+    end
+
     describe "Compatibility" do
       # Ensure that any log level can be logged
       Logger::Severity.constants.each do |level|
@@ -151,6 +159,54 @@ class LoggerTest < Minitest::Test
         logger.tagged("12345", "DJHSFK") do |yielded_logger|
           assert_equal logger.object_id, yielded_logger.object_id
         end
+      end
+
+      it "adds logger-local named tags to log entries" do
+        logger.named_tags = {test: "123"}
+
+        logger.tagged do
+          logger.info("test")
+        end
+
+        assert log = logger.events.first
+        assert_equal({test: "123"}, log.named_tags)
+      end
+
+      it "does not change local tags" do
+        logger.named_tags = {test: "123"}
+
+        logger.tagged(foo: "bar") do
+          logger.info("test")
+        end
+
+        assert_equal({test: "123"}, logger.named_tags)
+        assert_equal({}, SemanticLogger.named_tags)
+        assert_equal({test: "123", foo: "bar"}, logger.events.first.named_tags)
+      end
+
+      it "does not override global tags" do
+        SemanticLogger.push_named_tags(global: true)
+        logger.named_tags = {test: "123"}
+
+        logger.info("test")
+
+        assert_equal({global: true, test: "123"}, logger.events.first.named_tags)
+        assert_equal({global: true}, SemanticLogger.named_tags)
+
+        SemanticLogger.pop_named_tags
+      end
+
+      it "does no add local named tags to other loggers in block" do
+        another_logger = SemanticLogger::Test::CaptureLogEvents.new
+        logger.named_tags = {test: "123"}
+
+        logger.tagged(foo: "bar") do
+          logger.info("has local tags")
+          another_logger.info("does not have local tags")
+        end
+
+        assert_equal({test: "123", foo: "bar"}, logger.events.first.named_tags)
+        assert_equal({foo: "bar"}, another_logger.events.first.named_tags)
       end
     end
   end
