@@ -74,7 +74,7 @@ Create a custom formatter:
 class MyFormatter < SemanticLogger::Formatters::Color
   # Return the complete log level name in uppercase
   def level
-    "#{color}log.level.upcase#{clear}"
+    "#{color}#{log.level.upcase}#{color_map.clear}"
   end
 end
 ~~~
