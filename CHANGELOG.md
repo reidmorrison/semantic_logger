@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 - Correct `source_code_uri` URL
+- Modify the logger debug behavior to return true regardless of the log level, ensuring dependent processes like state machines in solidus function correctly
 
 ## [4.16.1]
 

@@ -80,12 +80,8 @@ module SemanticLogger
     SemanticLogger::Levels::LEVELS.each_with_index do |level, index|
       class_eval <<~METHODS, __FILE__, __LINE__ + 1
         def #{level}(message=nil, payload=nil, exception=nil, &block)
-          if level_index <= #{index}
-            log_internal(:#{level}, #{index}, message, payload, exception, &block)
-            true
-          else
-            false
-          end
+          log_internal(:#{level}, #{index}, message, payload, exception, &block) if level_index <= #{index}
+          true
         end
 
         def #{level}?
