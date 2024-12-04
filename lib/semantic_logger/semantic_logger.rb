@@ -191,6 +191,71 @@ module SemanticLogger
     Logger.processor.appenders
   end
 
+  # Returns a new logging appender for use as a standalone destination for all log messages
+  # sent to this logging instance only.
+  #
+  # Useful to send log message to stdout or stderr only and not forward to any other appenders.
+  #
+  # If a block is supplied then it will be used to customize the format
+  # of the messages sent to that appender. See SemanticLogger::Logger.new for
+  # more information on custom formatters
+  #
+  # Notes:
+  # - Any log messages to this logger instance will not be forwarded to any other appenders.
+  # - Logging is performed in the current thread, unless `async: true` is specified.
+  #
+  # Parameters
+  #   file_name: [String]
+  #     File name to write log messages to.
+  #
+  #   Or,
+  #   io: [IO]
+  #     An IO Stream to log to.
+  #     For example $stdout, $stderr, etc.
+  #
+  #   Or,
+  #   appender: [Symbol]
+  #     A symbol identifying the appender to create.
+  #     For example:
+  #       :bugsnag, :elasticsearch, :graylog, :http, :mongodb, :new_relic, :splunk_http, :syslog, :wrapper
+  #
+  #   name: [String]
+  #     Name to be used in log messages.
+  #
+  #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+  #     Override the log level for this appender.
+  #     Default: SemanticLogger.default_level
+  #
+  #   formatter: [Symbol|Object|Proc]
+  #     Any of the following symbol values: :default, :color, :json, :logfmt, etc...
+  #       Or,
+  #     An instance of a class that implements #call
+  #       Or,
+  #     A Proc to be used to format the output from this appender
+  #     Default: :default
+  #
+  #   filter: [Regexp|Proc]
+  #     RegExp: Only include log messages where the class name matches the supplied.
+  #     regular expression. All other messages will be ignored.
+  #     Proc: Only include log messages where the supplied Proc returns true
+  #           The Proc must return true or false.
+  #
+  # Examples:
+  #
+  #   # Send all logging output to Standard Out (Screen)
+  #   logger = SemanticLogger.appender(name: "MyClass", io: $stdout)
+  #
+  #   # Only write to standard output and not forward to other appenders.
+  #   logger.info "Hello World"
+  #
+  #   # Send all logging output to a file
+  #   SemanticLogger.add_appender(file_name: 'logfile.log')
+  def self.appender(name: "SemanticLogger", **args, &block)
+    appender      = Appender.factory(**args, &block)
+    appender.name = name
+    appender
+  end
+
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
   def self.flush

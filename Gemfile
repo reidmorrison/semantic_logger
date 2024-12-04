@@ -14,8 +14,7 @@ gem "bugsnag"
 # [optional] Rabbitmq appender
 gem "bunny"
 # [optional] Elasticsearch appender
-# 7.14 has a breaking API change.
-gem "elasticsearch", "~>7.13.0"
+gem "elasticsearch"
 # [optional] Graylog appender
 gem "gelf"
 # [optional] Honeybadger appender
