@@ -49,9 +49,9 @@ module SemanticLogger
       closed_appenders = []
       each do |appender|
         logger.trace "Closing appender: #{appender.name}"
-        appenders << appender
         appender.flush
         appender.close
+        closed_appenders << appender
       rescue Exception => e
         logger.error "Failed to close appender: #{appender.name}", e
       end

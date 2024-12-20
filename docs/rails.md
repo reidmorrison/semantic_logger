@@ -252,9 +252,9 @@ To show the Action View rendering messages in production:
 config.rails_semantic_logger.rendered = true
 ~~~
 
-#### Awesome Print Options
+#### Amazing Print Options
 
-The default Awesome Print options can be changed by supplying any valid Awesome Print options:
+The default Amazing Print options can be changed by supplying any valid Amazing Print options:
 
 ~~~ruby
 config.rails_semantic_logger.ap_options = {multiline: false}
@@ -266,7 +266,7 @@ See the [Amazing Print Documentation](https://github.com/amazing-print/amazing_p
 Notes:
 
 * The option `:multiline` is set to false if not supplied.
-* Has no effect if Awesome Print is not installed.
+* Has no effect if Amazing Print is not installed.
 
 ### Additional appenders
 

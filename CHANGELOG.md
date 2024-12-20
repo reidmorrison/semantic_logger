@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Correct `source_code_uri` URL
+
+## [4.16.1]
+
+- Add Honeybadger and Honeybadger Insights to Appenders doc.
+- Fix regression in `SemanticLogger::Appenders#close`
+
 ## [4.16.0]
 
 - Add appender for Honeybadger Insights using the events API
