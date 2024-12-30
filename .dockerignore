@@ -1,0 +1,6 @@
+# Exclude unnecessary files
+.git
+.bundle
+tmp/
+log/
+coverage/
