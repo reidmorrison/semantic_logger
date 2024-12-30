@@ -16,25 +16,8 @@ module SemanticLogger
   module Formatters
     # Formatter for reporting to NewRelic's Logger
     #
-    # New Relic's logs do not support custom attributes out of the box, and therefore these
-    # have to be put into a single JSON serialized string under the +message+ key.
-    #
-    # In particular the following fields of the log object are serialized under the +message+
-    # key that's sent to NewRelic:
-    #
-    # * message
-    # * tags
-    # * named_tags
-    # * payload
-    # * metric
-    # * metric_amount
-    # * environment
-    # * application
-    #
-    # == New Relic Attributes not Supported
-    # * thread.id
-    # * class.name
-    # * method.name
+    # Newrelic gracefully handles (and flattens) any JSON based logs
+    # We construct the json and pass it to Newrelic for further processing.
     #
     # == Reference
     # * Logging specification
@@ -56,39 +39,68 @@ module SemanticLogger
       def call(log, logger)
         hash = super(log, logger)
 
-        message = {
-          message:    hash[:message].to_s,
-          tags:       hash[:tags] || [],
-          named_tags: hash[:named_tags] || {},
-
-          **hash.slice(:metric, :metric_amount, :environment, :application, :payload)
-        }
-
-        message.merge!(duration: hash[:duration_ms]) if hash.key?(:duration_ms)
-        message.merge!(duration_human: hash[:duration]) if hash.key?(:duration)
-
         result = {
           **new_relic_metadata,
-          message:       message.to_json,
+          message:       hash[:message].to_s,
+          tags:          hash[:tags] || [],
+          metric:        hash[:metric],
+          metric_amount: hash[:metric_amount],
+          environment:   hash[:environment],
+          application:   hash[:application],
+          payload:       hash[:payload],
           timestamp:     hash[:timestamp].to_i,
-          "log.level":   log.level.to_s.upcase,
-          "logger.name": log.name,
-          "thread.name": log.thread_name.to_s
-        }
+          logger: {
+            name: log.name
+          },
+          thread: {
+            name: log.thread_name.to_s
+          }
+        }.compact
+
+        if hash[:duration_ms] || hash[:duration]
+          result[:duration] = {
+            ms: hash[:duration_ms],
+            human: hash[:duration]
+          }.compact
+        end
 
         if hash[:exception]
-          result.merge!(
-            "error.message": hash[:exception][:message],
-            "error.class":   hash[:exception][:name],
-            "error.stack":   hash[:exception][:stack_trace].join("\n")
-          )
+          result[:error] = {
+            message: hash[:exception][:message],
+            class: hash[:exception][:name],
+            stack: hash[:exception][:stack_trace].join("\n")
+          }
         end
 
         if hash[:file]
-          result.merge!(
-            "file.name":   hash[:file],
-            "line.number": hash[:line].to_s
-          )
+          result[:file] = {
+            name: hash[:file]
+          }
+        end
+
+        if hash[:line]
+          result[:line] = {
+            number: hash[:line].to_s
+          }
+        end
+
+        # NOTE: Any named tags are merged directly into the result
+        # unless there are conflicts with other keys. In that
+        # case we clearly log this in the NR log entry so it can 
+        # be easily alerted on. 
+        if hash[:named_tags].is_a?(Hash)
+          result_keys = result.keys.to_set
+          named_tag_conflicts = []
+      
+          hash[:named_tags].each do |key, value|
+            if result_keys.include?(key)
+              named_tag_conflicts << key
+            else
+              result[key] = value
+            end
+          end
+      
+          result[:named_tag_conflicts] = named_tag_conflicts unless named_tag_conflicts.empty?
         end
 
         result
@@ -98,11 +110,14 @@ module SemanticLogger
 
       def new_relic_metadata
         {
-          "trace.id": NewRelic::Agent::Tracer.current_trace_id,
-          "span.id":  NewRelic::Agent::Tracer.current_span_id,
-          **NewRelic::Agent.linking_metadata
-        }.reject { |_k, v| v.nil? }.
-          map { |k, v| [k.to_sym, v] }.to_h
+          trace: {
+            id: NewRelic::Agent::Tracer.current_trace_id
+          },
+          span: {
+            id: NewRelic::Agent::Tracer.current_span_id
+          },
+          **NewRelic::Agent.linking_metadata.transform_keys(&:to_sym)
+        }
       end
     end
   end
