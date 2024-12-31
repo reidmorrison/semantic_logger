@@ -42,7 +42,7 @@ module SemanticLogger
         result = {
           **newrelic_metadata,
           message:       hash[:message].to_s,
-          tags:          hash[:tags] || [],
+          tags:          hash[:tags],
           metric:        hash[:metric],
           metric_amount: hash[:metric_amount],
           environment:   hash[:environment],

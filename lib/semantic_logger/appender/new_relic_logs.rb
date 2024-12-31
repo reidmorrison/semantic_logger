@@ -51,10 +51,10 @@ module SemanticLogger
           level = log.level.to_s.upcase       # Determine the log level
           self.class.log_newrelic(json_message, level)
         rescue JSON::GeneratorError => e
-          STDERR.puts("Failed to serialize log message to JSON: #{e.message}")
-          STDERR.puts("Problematic data: #{message.inspect}")
+          $stderr.puts("Failed to serialize log message to JSON: #{e.message}")
+          $stderr.puts("Problematic data: #{message.inspect}")
         rescue StandardError => e
-          STDERR.puts("Unexpected error while logging to New Relic: #{e.message}")
+          $stderr.puts("Unexpected error while logging to New Relic: #{e.message}")
         end
         true
       end

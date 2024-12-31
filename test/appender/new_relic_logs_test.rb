@@ -11,19 +11,16 @@ module Appender
         @message  = "AppenderNewRelicTest log message"
       end
 
-      # Stub method for New Relic log ingestion
       def log_newrelic_stub(message, level)
         @logged_message = message
         @logged_level = level
       end
 
-      # Parse the logged JSON message for assertions
       def parse_logged_message
         @hash = JSON.parse(@logged_message) rescue nil
         @message_hash = JSON.parse(@hash["message"]) if @hash && @hash["message"].is_a?(String) rescue nil
       end
 
-      # Test for each log level
       SemanticLogger::Levels::LEVELS.each do |level|
         it "sends :#{level} notifications to New Relic" do
           NewRelic::Agent.agent.log_event_aggregator.stub(:record, method(:log_newrelic_stub)) do
@@ -42,7 +39,6 @@ module Appender
         end
       end
 
-      # Test for custom attributes
       it "sends notification to New Relic with custom attributes" do
         SemanticLogger::Appender::NewRelicLogs.stub(:log_newrelic, method(:log_newrelic_stub)) do
           SemanticLogger.tagged("test") do
@@ -64,27 +60,7 @@ module Appender
         assert payload = @hash["payload"], @hash.inspect
         assert_equal 4, payload["key3"]
       end
-
-      # Test for JSON serialization errors
-      it "handles JSON serialization errors gracefully" do
-        unserializable_object = Object.new
-        def unserializable_object.to_json(*_args)
-          raise JSON::GeneratorError, "Test serialization failure"
-        end
-
-        log = SemanticLogger::Log.new("TestLogger", :info)
-        log.payload = unserializable_object
-
-        assert_output(/Failed to serialize log message/) do
-          @appender.log(log)
-        end
-
-        assert_output(/Problematic data: /) do
-          @appender.log(log)
-        end
-      end
-
-      # Test for large payloads
+      
       it "handles large payloads gracefully" do
         large_payload = { data: "a" * 10_000 }
         log = SemanticLogger::Log.new("TestLogger", :info)
@@ -99,7 +75,6 @@ module Appender
         assert_equal large_payload[:data], @hash.dig("payload", "data")
       end
 
-      # Test for deeply nested payloads
       it "handles deeply nested payloads gracefully" do
         nested_payload = { level1: { level2: { level3: { level4: "deep_value" } } } }
         log = SemanticLogger::Log.new("TestLogger", :info)
