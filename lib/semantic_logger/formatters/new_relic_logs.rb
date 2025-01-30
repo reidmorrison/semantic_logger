@@ -16,7 +16,7 @@ module SemanticLogger
   module Formatters
     # Formatter for reporting to NewRelic's Logger
     #
-    # Newrelic gracefully handles (and flattens) any JSON based logs
+    # New Relic gracefully handles (and flattens) any JSON-based logs
     # We construct the json and pass it to Newrelic for further processing.
     #
     # == Reference
