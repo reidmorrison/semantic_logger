@@ -3,7 +3,10 @@
 # Example:
 #   SemanticLogger.add_appender(
 #     metric: :loki,
-#     url: "https://logs-prod-001.grafana.net"
+#     url: "https://logs-prod-001.grafana.net",
+#     username: "grafana_username",
+#     password: "grafana_token_here",
+#     compress: true
 #   )
 module SemanticLogger
   module Metric
