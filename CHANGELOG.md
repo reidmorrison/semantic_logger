@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 - Correct `source_code_uri` URL
+- Add appender for Grafana Loki using the HTTP push API.
 
 ## [4.16.1]
 
