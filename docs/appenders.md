@@ -32,6 +32,7 @@ Log messages can be written to one or more of the following destinations at the 
 * Honeybadger
 * Honeybadger Insights
 * Logger, log4r, etc.
+- Grafana Loki
 
 To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
 Due to the architecture of Semantic Logger any performance difference between TCP and UDP will not
@@ -756,6 +757,22 @@ SemanticLogger.add_appender(appender: :honeybadger_insights)
 ~~~
 
 Both appenders use the Honeybadger [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
+
+### Grafana Loki
+
+Sends log messages to [Grafana Loki](https://grafana.com/docs/loki) using its [HTTP push API](https://grafana.com/docs/loki/latest/reference/loki-http-api/#ingest-logs)
+
+```ruby
+SemanticLogger.add_appender(
+  appender: :loki,
+  url: "https://logs-prod-001.grafana.net",
+  username: "grafana_username",
+  password: "grafana_token_here",
+  compress: true
+)
+```
+
+Configure the URL, username and password according to your Grafana Loki instance. The `compress` option can be set to `true` to compress the log messages.
 
 ### Logger, log4r, etc.
 

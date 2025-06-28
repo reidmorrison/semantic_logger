@@ -1,19 +1,19 @@
-# Forward application metrics to a Loki instance using HTTP.
+# Forward application metrics to a Loki instance using HTTP push API
 #
 # Example:
 #   SemanticLogger.add_appender(
-#     metric: :loki,
+#     appender: :loki,
 #     url: "https://logs-prod-001.grafana.net",
 #     username: "grafana_username",
 #     password: "grafana_token_here",
 #     compress: true
 #   )
 module SemanticLogger
-  module Metric
+  module Appender
     class Loki < SemanticLogger::Appender::Http
       INGESTION_PATH = "loki/api/v1/push".freeze
 
-      # Create Loki metrics appender.
+      # Create Grafana Loki appender.
       #
       # Parameters:
       #   filter: [Regexp|Proc]

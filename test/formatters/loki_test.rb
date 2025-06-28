@@ -30,7 +30,7 @@ module SemanticLogger
         end
 
         let(:appender) do
-          SemanticLogger::Metric::Loki.new(url: "https://example.com")
+          SemanticLogger::Appender::Loki.new(url: "https://example.com")
         end
 
         let(:formatter) do

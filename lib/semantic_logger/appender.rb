@@ -25,6 +25,7 @@ module SemanticLogger
     autoload :Udp,                 "semantic_logger/appender/udp"
     autoload :Wrapper,             "semantic_logger/appender/wrapper"
     autoload :SentryRuby,          "semantic_logger/appender/sentry_ruby"
+    autoload :Loki,                "semantic_logger/appender/loki"
     # @formatter:on
 
     # Returns [SemanticLogger::Subscriber] appender for the supplied options

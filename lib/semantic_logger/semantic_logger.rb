@@ -522,7 +522,6 @@ module SemanticLogger
     autoload :NewRelic,          "semantic_logger/metric/new_relic"
     autoload :Signalfx,          "semantic_logger/metric/signalfx"
     autoload :Statsd,            "semantic_logger/metric/statsd"
-    autoload :Loki,              "semantic_logger/metric/loki"
   end
 
   module Reporters
