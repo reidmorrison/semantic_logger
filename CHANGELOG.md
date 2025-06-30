@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 - Correct `source_code_uri` URL
+- Add :notime as a time_format for Formatters
+- Fix #316: syslog messages contains two timestamps
 
 ## [4.16.1]
 

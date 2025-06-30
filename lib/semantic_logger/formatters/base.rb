@@ -23,6 +23,7 @@ module SemanticLogger
       #     See Time#strftime for the format of this string.
       #     :iso_8601 Outputs an ISO8601 Formatted timestamp.
       #     :ms       Output in miliseconds since epoch.
+      #     :notime   Returns an empty string for time ( no time is output ).
       #     Default: '%Y-%m-%d %H:%M:%S.%<precision>N'
       #   log_host: [Boolean]
       #     Whether or not to include hostname in logs
@@ -81,7 +82,7 @@ module SemanticLogger
           time
         when :seconds
           time.to_f
-        when nil
+        when :notime
           ""
         else
           time.strftime(time_format)

@@ -14,7 +14,7 @@ module Appender
             syslog_appender.debug "AppenderSyslogTest log message"
           end
         end
-        assert_match(/D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
+        assert_match(/^ D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
       it "handle remote syslog over TCP" do
