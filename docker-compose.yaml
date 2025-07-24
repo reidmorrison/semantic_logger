@@ -1,0 +1,14 @@
+name: 'semanticlogger'
+services:
+  semanticlogger:
+    image: "slog"
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./:/opt/app:cached
+    environment:
+      - MONGO_HOST=mongodb:27017
+  mongodb: 
+    image: mongo
