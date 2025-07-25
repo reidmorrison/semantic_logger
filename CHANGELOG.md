@@ -5,7 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+## [4.17.0]
+
 - Correct `source_code_uri` URL
+- Add :notime as a time_format for Formatters
+- Fix #316: syslog messages contains two timestamps
 - Add appender for CloudWatch Logs
 - NR Integration: Ensures key/values are not nested under `messages`
 - NR Integration: Ensures structures are built for all nested json (I.E build an actual object instead of doing `span.id` as the key)
