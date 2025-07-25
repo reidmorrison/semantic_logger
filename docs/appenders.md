@@ -759,7 +759,6 @@ SemanticLogger.add_appender(appender: :honeybadger_insights)
 
 Both appenders use the Honeybadger [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
 
-
 ### Grafana Loki
 
 Sends log messages to [Grafana Loki](https://grafana.com/docs/loki) using its [HTTP push API](https://grafana.com/docs/loki/latest/reference/loki-http-api/#ingest-logs)
