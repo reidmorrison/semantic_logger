@@ -13,6 +13,7 @@ module SemanticLogger
     autoload :Logfmt,        "semantic_logger/formatters/logfmt"
     autoload :SyslogCee,     "semantic_logger/formatters/syslog_cee"
     autoload :NewRelicLogs,  "semantic_logger/formatters/new_relic_logs"
+    autoload :Loki,          "semantic_logger/formatters/loki"
 
     # Return formatter that responds to call.
     #

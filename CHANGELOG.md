@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [4.17.0]
 
 - Correct `source_code_uri` URL
+- Add appender for Grafana Loki using the HTTP push API.
 - Add :notime as a time_format for Formatters
 - Fix #316: syslog messages contains two timestamps
 - Add appender for CloudWatch Logs
