@@ -29,12 +29,8 @@ module SemanticLogger
           MOCK_LOGGER.new("test_host", "test_app", "TestLogger", "test")
         end
 
-        let(:appender) do
-          SemanticLogger::Appender::Loki.new(url: "https://example.com")
-        end
-
         let(:formatter) do
-          appender.formatter
+          SemanticLogger::Formatters::Loki.new
         end
 
         let(:parsed_output) { JSON.parse(formatter.call(log, logger)) }
