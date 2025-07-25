@@ -9,3 +9,4 @@ Gemfile.lock
 /docs/_site
 .rakeTasks
 /tags
+mise.toml
