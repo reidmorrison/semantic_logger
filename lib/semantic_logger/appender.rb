@@ -17,6 +17,7 @@ module SemanticLogger
     autoload :MongoDB,             "semantic_logger/appender/mongodb"
     autoload :NewRelic,            "semantic_logger/appender/new_relic"
     autoload :NewRelicLogs,        "semantic_logger/appender/new_relic_logs"
+    autoload :OpenTelemetry,       "semantic_logger/appender/open_telemetry"
     autoload :Rabbitmq,            "semantic_logger/appender/rabbitmq"
     autoload :Splunk,              "semantic_logger/appender/splunk"
     autoload :SplunkHttp,          "semantic_logger/appender/splunk_http"
