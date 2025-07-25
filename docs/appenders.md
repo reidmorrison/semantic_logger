@@ -31,6 +31,7 @@ Log messages can be written to one or more of the following destinations at the 
 * Sentry
 * Honeybadger
 * Honeybadger Insights
+* CloudWatch Logs
 * Logger, log4r, etc.
 - Grafana Loki
 
@@ -758,6 +759,7 @@ SemanticLogger.add_appender(appender: :honeybadger_insights)
 
 Both appenders use the Honeybadger [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
 
+
 ### Grafana Loki
 
 Sends log messages to [Grafana Loki](https://grafana.com/docs/loki) using its [HTTP push API](https://grafana.com/docs/loki/latest/reference/loki-http-api/#ingest-logs)
@@ -773,6 +775,21 @@ SemanticLogger.add_appender(
 ```
 
 Configure the URL, username and password according to your Grafana Loki instance. The `compress` option can be set to `true` to compress the log messages.
+
+### CloudWatch Logs
+
+Forward all log messages to CloudWatch Logs.
+
+Example:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:    :cloudwatch_logs,
+  client_kwargs: {region: "eu-west-1"},
+  group: "/my/application",
+  create_stream: true
+)
+~~~
 
 ### Logger, log4r, etc.
 

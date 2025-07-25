@@ -41,5 +41,7 @@ gem "sentry-ruby"
 # [optional] Syslog appender when communicating with a remote syslogd over TCP
 gem "syslog"
 gem "syslog_protocol"
+# [optional] CloudWatch Logs appender
+gem "aws-sdk-cloudwatchlogs"
 
 gem "rubocop", "~> 1.28.1", require: false

@@ -1,18 +1,19 @@
 module SemanticLogger
   module Formatters
-    autoload :Base,         "semantic_logger/formatters/base"
-    autoload :Color,        "semantic_logger/formatters/color"
-    autoload :Default,      "semantic_logger/formatters/default"
-    autoload :Json,         "semantic_logger/formatters/json"
-    autoload :Raw,          "semantic_logger/formatters/raw"
-    autoload :OneLine,      "semantic_logger/formatters/one_line"
-    autoload :Signalfx,     "semantic_logger/formatters/signalfx"
-    autoload :Syslog,       "semantic_logger/formatters/syslog"
-    autoload :Fluentd,      "semantic_logger/formatters/fluentd"
-    autoload :Logfmt,       "semantic_logger/formatters/logfmt"
-    autoload :SyslogCee,    "semantic_logger/formatters/syslog_cee"
-    autoload :SyslogCee,    "semantic_logger/formatters/syslog_cee"
-    autoload :Loki,         "semantic_logger/formatters/loki"
+    autoload :Base,          "semantic_logger/formatters/base"
+    autoload :Color,         "semantic_logger/formatters/color"
+    autoload :Default,       "semantic_logger/formatters/default"
+    autoload :Json,          "semantic_logger/formatters/json"
+    autoload :Raw,           "semantic_logger/formatters/raw"
+    autoload :OneLine,       "semantic_logger/formatters/one_line"
+    autoload :OpenTelemetry, "semantic_logger/formatters/open_telemetry"
+    autoload :Signalfx,      "semantic_logger/formatters/signalfx"
+    autoload :Syslog,        "semantic_logger/formatters/syslog"
+    autoload :Fluentd,       "semantic_logger/formatters/fluentd"
+    autoload :Logfmt,        "semantic_logger/formatters/logfmt"
+    autoload :SyslogCee,     "semantic_logger/formatters/syslog_cee"
+    autoload :NewRelicLogs,  "semantic_logger/formatters/new_relic_logs"
+    autoload :Loki,          "semantic_logger/formatters/loki"
 
     # Return formatter that responds to call.
     #
