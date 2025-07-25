@@ -33,7 +33,7 @@ Log messages can be written to one or more of the following destinations at the 
 * Honeybadger Insights
 * CloudWatch Logs
 * Logger, log4r, etc.
-- Grafana Loki
+* Grafana Loki
 
 To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
 Due to the architecture of Semantic Logger any performance difference between TCP and UDP will not
