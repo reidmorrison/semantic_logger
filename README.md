@@ -27,6 +27,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * TCP
 * UDP
 * Syslog
+* CloudWatch Logs
 * Add any existing Ruby logger as another destination.
 * Roll-your-own
 

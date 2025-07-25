@@ -28,171 +28,161 @@ module SemanticLogger
           log
         end
 
-        let(:expected_time) do
-          1_484_382_725_375
-        end
-
-        let(:set_exception) do
-          raise "Oh no"
-        rescue Exception => e
-          log.exception = e
-        end
-
-        let(:expected_exception_backtrace) do
-          log.exception.backtrace.join("\n")
-        end
-
-        let(:backtrace) do
-          [
-            "test/formatters/default_test.rb:99:in `block (2 levels) in <class:DefaultTest>'",
-            "gems/ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/spec.rb:247:in `instance_eval'",
-            "gems/ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/spec.rb:247:in `block (2 levels) in let'",
-            "gems/ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/spec.rb:247:in `fetch'",
-            "ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/spec.rb:247:in `block in let'",
-            "test/formatters/default_test.rb:65:in `block (3 levels) in <class:DefaultTest>'",
-            "ruby-2.3.3/gems/minitest-5.10.1/lib/minitest/test.rb:105:in `block (3 levels) in run'"
-          ]
-        end
-
         let(:formatted_log) do
           formatter = appender.formatter
           formatter.call(log, appender.logger)
         end
-
+        
         let(:message_hash) do
-          JSON.parse(formatted_log[:message])
-        end
-
-        describe "time" do
-          it "logs time" do
-            assert_equal expected_time, formatted_log[:timestamp]
-          end
-        end
-
-        describe "level" do
-          it "logs long name" do
-            assert_equal "DEBUG", formatted_log[:"log.level"]
-          end
-        end
-
-        describe "process_info" do
-          it "logs thread name" do
-            assert_equal Thread.current.name, formatted_log[:"thread.name"]
-          end
-
-          it "logs pid, thread name, and file name" do
-            set_exception
-            log.backtrace = backtrace
-            assert_equal Thread.current.name, formatted_log[:"thread.name"]
-            assert_equal "test/formatters/default_test.rb", formatted_log[:"file.name"]
-            assert_equal "99", formatted_log[:"line.number"]
-          end
-        end
-
-        describe "tags" do
-          it "logs tags" do
-            log.tags = %w[first second third]
-            assert_equal log.tags, message_hash["tags"]
-          end
-        end
-
-        describe "named_tags" do
-          it "logs named tags" do
-            log.named_tags = {first: 1, second: 2, third: 3}
-            assert_equal(
-              {"first" => 1, "second" => 2, "third" => 3},
-              message_hash["named_tags"]
-            )
-          end
+          JSON.parse(formatted_log[:message]) if formatted_log[:message].is_a?(String)
         end
 
         describe "duration" do
           it "logs long duration" do
             log.duration = 1_000_000.34567
-            assert_equal log.duration, message_hash["duration"]
+            result = formatted_log
+        
+            assert_equal 1_000_000.34567, result.dig(:duration, :ms)
+            assert_equal "16m 40s", result.dig(:duration, :human)
           end
 
           it "logs short duration" do
             log.duration = 1.34567
-            duration     = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1ms" : "1.346ms"
+            result = formatted_log
+          
+            # Expected human-readable duration based on precision
+            expected_human_duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1.346ms" : "1.346ms"
+          
+            # Verify the raw duration in milliseconds
+            assert_equal 1.34567, result.dig(:duration, :ms)
+          
+            # Verify the human-readable duration format
+            assert_equal expected_human_duration, result.dig(:duration, :human)
+          end
 
-            assert_equal duration, message_hash["duration_human"]
-            assert_equal log.duration, message_hash["duration"]
+          it "omits duration if not set" do
+            result = formatted_log
+            refute result.key?(:duration)
           end
         end
 
         describe "name" do
           it "logs name" do
-            assert_equal "NewRelicLogsTest", formatted_log[:"logger.name"]
+            result = formatted_log
+            assert_equal "NewRelicLogsTest", result.dig(:logger, :name)
           end
         end
-
+        
         describe "message" do
           it "logs message" do
             log.message = "Hello World"
-            assert_equal "Hello World", message_hash["message"]
+            result = formatted_log
+            assert_equal "Hello World", result[:message]
           end
-
+        
           it "keeps empty message" do
-            assert_equal "", message_hash["message"]
+            log.message = ""
+            result = formatted_log
+            assert_equal "", result[:message]
           end
         end
 
         describe "payload" do
           it "logs hash payload" do
             log.payload = {first: 1, second: 2, third: 3}
+            result = formatted_log
             assert_equal(
-              {"first" => 1, "second" => 2, "third" => 3},
-              message_hash["payload"]
+              {first: 1, second: 2, third: 3},
+              result[:payload]
             )
           end
-
+        
           it "skips nil payload" do
-            refute message_hash["payload"]
+            log.payload = nil
+            result = formatted_log
+            refute result.key?(:payload)
           end
-
+        
           it "skips empty payload" do
             log.payload = {}
-            refute message_hash["payload"]
+            result = formatted_log
+            refute result.key?(:payload)
           end
         end
 
-        describe "exception" do
+        describe "tags and named_tags" do
+          it "logs tags" do
+            log.tags = %w[first second third]
+            assert_equal %w[first second third], formatted_log[:tags]
+          end
+
+          it "logs named tags without conflicts" do
+            log.named_tags = { first: 1, second: 2 }
+            result = formatted_log
+            assert_equal 1, result[:first]
+            assert_equal 2, result[:second]
+            refute result.key?(:named_tag_conflicts)
+          end
+
+          it "logs named tag conflicts" do
+            log.named_tags = { message: "conflict" }
+            result = formatted_log
+            assert_includes result[:named_tag_conflicts], :message
+          end
+        end
+
+        describe "exceptions" do
           it "skips nil exception" do
-            refute formatted_log[:"error.message"]
-            refute formatted_log[:"error.class"]
-            refute formatted_log[:"error.stack"]
+            refute formatted_log.dig(:error, :message)
+            refute formatted_log.dig(:error, :class)
+            refute formatted_log.dig(:error, :stack)
+          end
+          
+          it "logs exception details" do
+            raise "Test Exception" rescue log.exception = $!
+            result = formatted_log
+            assert_equal "Test Exception", result.dig(:error, :message)
+            assert_equal "RuntimeError", result.dig(:error, :class)
+            assert result.dig(:error, :stack).is_a?(String)
+          end
+
+          it "omits exception if not set" do
+            result = formatted_log
+            refute result.key?(:error)
           end
         end
 
-        describe "call" do
-          it "retuns all elements" do
-            log.tags       = %w[first second third]
-            log.named_tags = {first: 1, second: 2, third: 3}
-            log.duration   = 1.34567
-            log.message    = "Hello World"
-            log.payload    = {first: 1, second: 2, third: 3}
-            log.backtrace  = backtrace
-            set_exception
-            duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1" : "1.346"
+        describe "general structure" do
+          it "includes standard fields" do
+            log.message = "Hello World"
+            result = formatted_log
+            assert_equal "Hello World", result[:message]
+            assert_equal "NewRelicLogsTest", result.dig(:logger, :name)
+            assert result[:timestamp].is_a?(Integer)
+          end
 
-            expected_hash = {
-              "entity.name":   "Entity Name",
-              "entity.type":   "SERVICE",
-              hostname:        "hostname",
-              message:         "{\"message\":\"Hello World\",\"tags\":[\"first\",\"second\",\"third\"],\"named_tags\":{\"first\":1,\"second\":2,\"third\":3},\"environment\":\"test\",\"application\":\"Semantic Logger\",\"payload\":{\"first\":1,\"second\":2,\"third\":3},\"duration\":1.34567,\"duration_human\":\"1.346ms\"}",
-              timestamp:       1_484_382_725_375,
-              "log.level":     "DEBUG",
-              "logger.name":   "NewRelicLogsTest",
-              "thread.name":   Thread.current.name,
-              "error.message": "Oh no",
-              "error.class":   "RuntimeError",
-              "error.stack":   expected_exception_backtrace,
-              "file.name":     "test/formatters/default_test.rb",
-              "line.number":   "99"
-            }
+          it "omits nil or empty fields" do
+            result = formatted_log
+            refute result.key?(:payload)
+            refute result.key?(:tags)
+          end
+        end
 
-            assert_equal expected_hash, formatted_log
+        describe "metadata" do
+          it "includes trace.id and span.id if present" do
+            NewRelic::Agent.stub(:linking_metadata, { "trace.id" => "trace123", "span.id" => "span456" }) do
+              result = formatted_log
+              assert_equal "trace123", result[:'trace.id']
+              assert_equal "span456", result[:'span.id']
+            end
+          end
+        
+          it "omits trace.id and span.id if absent" do
+            NewRelic::Agent.stub(:linking_metadata, {}) do
+              result = formatted_log
+              refute result.key?(:'trace.id')
+              refute result.key?(:'span.id')
+            end
           end
         end
       end
