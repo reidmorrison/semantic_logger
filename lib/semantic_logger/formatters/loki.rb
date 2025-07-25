@@ -137,14 +137,20 @@ module SemanticLogger
       end
 
       def stringify_hash(hash)
-        hash.stringify_keys.transform_values do |value|
-          case value
-          when Hash
-            stringify_hash(value).to_json
-          else
-            value.to_s
-          end
+        result = {}
+
+        hash.each do |key, value|
+          string_key = key.to_s
+
+          result[string_key] = case value
+                               when Hash
+                                 JSON.generate(stringify_hash(value))
+                               else
+                                 value.to_s
+                               end
         end
+
+        result
       end
     end
   end
