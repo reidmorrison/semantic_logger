@@ -1,5 +1,5 @@
 # Allow test to be run in-place without requiring a gem install
-$LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
+$LOAD_PATH.unshift "#{File.dirname(__FILE__)}/../lib"
 
 # Configure Rails Environment
 ENV["RAILS_ENV"] = "test"
@@ -22,17 +22,19 @@ require "amazing_print"
 Minitest::Test.include SemanticLogger::Test::Minitest
 
 # Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
-class Minitest::Test
-  # Use AwesomePrint to display diffs
-  define_method :mu_pp, &:awesome_inspect
+module Minitest
+  class Test
+    # Use AwesomePrint to display diffs
+    define_method :mu_pp, &:awesome_inspect
 
-  # Use AwesomePrint to display messages
-  def message(msg = nil, ending = nil)
-    proc {
-      msg            = msg.call.chomp(".") if msg.is_a?(Proc)
-      custom_message = "#{msg.ai}.\n" unless msg.nil? || msg.to_s.empty?
-      "#{custom_message}#{yield}#{ending || '.'}"
-    }
+    # Use AwesomePrint to display messages
+    def message(msg = nil, ending = nil)
+      proc {
+        msg            = msg.call.chomp(".") if msg.is_a?(Proc)
+        custom_message = "#{msg.ai}.\n" unless msg.nil? || msg.to_s.empty?
+        "#{custom_message}#{yield}#{ending || '.'}"
+      }
+    end
   end
 end
 

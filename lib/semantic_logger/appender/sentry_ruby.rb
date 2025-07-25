@@ -41,7 +41,7 @@ module SemanticLogger
         # Replace the Sentry Ruby logger so that we can identify its log
         # messages and not forward them to Sentry
         ::Sentry.init { |config| config.logger = SemanticLogger[::Sentry] } unless ::Sentry.initialized?
-        super(level: level, **args, &block)
+        super
       end
 
       # Send an error notification to sentry

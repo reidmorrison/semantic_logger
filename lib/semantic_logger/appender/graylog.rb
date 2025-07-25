@@ -25,7 +25,8 @@ module SemanticLogger
       class LevelMap
         attr_accessor :trace, :debug, :info, :warn, :error, :fatal
 
-        def initialize(trace: GELF::DEBUG, debug: GELF::DEBUG, info: GELF::INFO, warn: GELF::WARN, error: GELF::ERROR, fatal: GELF::FATAL)
+        def initialize(trace: GELF::DEBUG, debug: GELF::DEBUG, info: GELF::INFO, warn: GELF::WARN, error: GELF::ERROR,
+                       fatal: GELF::FATAL)
           @trace = trace
           @debug = debug
           @info  = info
@@ -88,7 +89,6 @@ module SemanticLogger
                      level_map: LevelMap.new,
                      **args,
                      &block)
-
         @url          = url
         @max_size     = max_size
         @gelf_options = gelf_options

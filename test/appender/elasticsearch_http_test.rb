@@ -26,7 +26,10 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil
-          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+          appender.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }) do
             appender.send(level, log_message)
           end
           message = JSON.parse(request.body)
@@ -43,7 +46,10 @@ module Appender
             exc = e
           end
           request = nil
-          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+          appender.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }) do
             appender.send(level, "Reading File", exc)
           end
           hash = JSON.parse(request.body)
@@ -57,7 +63,10 @@ module Appender
 
         it "sends #{level} custom attributes" do
           request = nil
-          appender.http.stub(:request, ->(r) { request = r; http_success }) do
+          appender.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }) do
             appender.send(level, log_message, key1: 1, key2: "a")
           end
           message = JSON.parse(request.body)

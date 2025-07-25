@@ -79,7 +79,6 @@ module SemanticLogger
                      formatter: nil,
                      **args,
                      &block)
-
         formatter ||= SemanticLogger::Formatters::Signalfx.new(token: token, dimensions: dimensions)
 
         super(url: url, formatter: formatter, **args, &block)

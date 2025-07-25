@@ -107,7 +107,6 @@ module SemanticLogger
                      continue_timeout: 1.0,
                      **args,
                      &block)
-
         @url              = url
         @proxy_url        = proxy_url
         @ssl_options      = ssl

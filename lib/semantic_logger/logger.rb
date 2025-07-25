@@ -57,7 +57,7 @@ module SemanticLogger
     #    Proc: Only include log messages where the supplied Proc returns true
     #          The Proc must return true or false
     def initialize(klass, level = nil, filter = nil)
-      super(klass, level, filter)
+      super
     end
 
     # Place log request on the queue for the Appender thread to write to each

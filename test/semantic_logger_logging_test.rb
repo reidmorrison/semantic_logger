@@ -466,7 +466,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "message with implied duration" do
             events = semantic_logger_events do
-              logger.send("measure_#{level}".to_sym, "hello world") { sleep 0.1 }
+              logger.send(:"measure_#{level}", "hello world") { sleep 0.1 }
             end
 
             assert_equal 1, events.size
@@ -633,7 +633,8 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "does not log when below min_duration" do
             events = semantic_logger_events do
-              logger.send(level, "hello world", min_duration: 200, duration: 123.45, payload: {tracking_number: "123456", even: 2, more: "data"})
+              logger.send(level, "hello world", min_duration: 200, duration: 123.45,
+payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
             assert events.empty?
@@ -752,7 +753,8 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "does not log when below min_duration" do
             events = semantic_logger_events do
-              logger.send(level, message: "hello world", min_duration: 200, duration: 123.45, payload: {tracking_number: "123456", even: 2, more: "data"})
+              logger.send(level, message: "hello world", min_duration: 200, duration: 123.45,
+payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
             assert events.empty?
@@ -760,7 +762,8 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "logs above min_duration" do
             events = semantic_logger_events do
-              logger.send(level, message: "hello world", min_duration: 100, duration: 123.45, tracking_number: "123456", even: 2, more: "data")
+              logger.send(level, message: "hello world", min_duration: 100, duration: 123.45,
+tracking_number: "123456", even: 2, more: "data")
             end
 
             assert_equal 1, events.size
@@ -786,7 +789,8 @@ class SemanticLoggerLoggingTest < Minitest::Test
 
           it "logs at min_duration" do
             events = semantic_logger_events do
-              logger.send(level, message: "hello world", min_duration: 100, duration: 100.0, payload: {tracking_number: "123456", even: 2, more: "data"})
+              logger.send(level, message: "hello world", min_duration: 100, duration: 100.0,
+payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
             assert_equal 1, events.size

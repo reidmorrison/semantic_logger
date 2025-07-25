@@ -139,7 +139,6 @@ module SemanticLogger
                      data_stream: false,
                      **elasticsearch_args,
                      &block)
-
         @url                         = url
         @index                       = index
         @date_pattern                = date_pattern

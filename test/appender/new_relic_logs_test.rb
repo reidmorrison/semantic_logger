@@ -17,8 +17,16 @@ module Appender
       end
 
       def parse_logged_message
-        @hash = JSON.parse(@logged_message) rescue nil
-        @message_hash = JSON.parse(@hash["message"]) if @hash && @hash["message"].is_a?(String) rescue nil
+        @hash = begin
+          JSON.parse(@logged_message)
+        rescue StandardError
+          nil
+        end
+        begin
+          @message_hash = JSON.parse(@hash["message"]) if @hash && @hash["message"].is_a?(String)
+        rescue StandardError
+          nil
+        end
       end
 
       SemanticLogger::Levels::LEVELS.each do |level|
@@ -60,9 +68,9 @@ module Appender
         assert payload = @hash["payload"], @hash.inspect
         assert_equal 4, payload["key3"]
       end
-      
+
       it "handles large payloads gracefully" do
-        large_payload = { data: "a" * 10_000 }
+        large_payload = {data: "a" * 10_000}
         log = SemanticLogger::Log.new("TestLogger", :info)
         log.payload = large_payload
 
@@ -76,7 +84,7 @@ module Appender
       end
 
       it "handles deeply nested payloads gracefully" do
-        nested_payload = { level1: { level2: { level3: { level4: "deep_value" } } } }
+        nested_payload = {level1: {level2: {level3: {level4: "deep_value"}}}}
         log = SemanticLogger::Log.new("TestLogger", :info)
         log.payload = nested_payload
 

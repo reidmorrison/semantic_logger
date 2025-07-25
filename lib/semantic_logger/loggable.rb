@@ -83,7 +83,6 @@ module SemanticLogger
                                 on_exception_level: nil,
                                 message: "##{method_name}",
                                 level: :info)
-
         # unless visibility = Utils.method_visibility(self, method_name)
         #   logger.warn("Unable to measure method: #{name}##{method_name} since it does not exist")
         #   return false
@@ -124,6 +123,7 @@ module SemanticLogger
         else
           mod = const_set(:SemanticLoggerMeasure, Module.new)
           prepend mod
+
           mod
         end
       end

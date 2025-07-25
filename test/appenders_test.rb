@@ -103,11 +103,11 @@ class AppendersTest < Minitest::Test
 
     describe "#close" do
       it "closes appenders" do
-        appender = appenders.add(file_name: "test.log")
+        appenders.add(file_name: "test.log")
 
         appenders.close
 
-        assert_equal 0, capture_logger.events.count { |it| it.message.match?(/failed/i) }
+        assert_equal(0, capture_logger.events.count { |it| it.message.match?(/failed/i) })
         assert_equal 0, appenders.size
       end
     end

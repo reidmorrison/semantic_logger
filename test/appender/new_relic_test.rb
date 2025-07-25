@@ -12,7 +12,10 @@ module Appender
       (SemanticLogger::LEVELS - %i[error fatal]).each do |level|
         it "does not send :#{level} notifications to New Relic" do
           exception = hash = nil
-          NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
+          NewRelic::Agent.stub(:notice_error, lambda { |exc, h|
+            exception = exc
+            hash = h
+          }) do
             appender.tagged("test") do
               appender.send(level, "AppenderNewRelicTest #{level} message")
             end
@@ -25,7 +28,10 @@ module Appender
       %i[error fatal].each do |level|
         it "sends :#{level} notifications to New Relic" do
           exception = hash = nil
-          NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
+          NewRelic::Agent.stub(:notice_error, lambda { |exc, h|
+            exception = exc
+            hash = h
+          }) do
             appender.tagged("test") do
               appender.send(level, amessage)
             end
@@ -40,7 +46,10 @@ module Appender
 
       it "send notification to New Relic with custom attributes" do
         exception = hash = nil
-        NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
+        NewRelic::Agent.stub(:notice_error, lambda { |exc, h|
+          exception = exc
+          hash = h
+        }) do
           SemanticLogger.tagged("test") do
             SemanticLogger.named_tagged(key1: 1, key2: "a") do
               appender.measure_error(message: amessage, payload: {key3: 4}) do
@@ -67,7 +76,10 @@ module Appender
 
       it "does not send metric only notifications" do
         exception = hash = nil
-        NewRelic::Agent.stub(:notice_error, ->(exc, h) { exception = exc; hash = h }) do
+        NewRelic::Agent.stub(:notice_error, lambda { |exc, h|
+          exception = exc
+          hash = h
+        }) do
           appender.debug metric: "my/custom/metric", payload: {hello: :world}
         end
         assert_nil exception

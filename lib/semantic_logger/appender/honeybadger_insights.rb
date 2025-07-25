@@ -38,7 +38,7 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       def initialize(level: :info, **args, &block)
-        super(level: level, **args, &block)
+        super
       end
 
       # Send log to honeybadger events API

@@ -2,7 +2,8 @@ require "socket"
 begin
   require "mongo"
 rescue LoadError
-  raise LoadError, 'Gem mongo is required for logging to MongoDB. Please add the gem "mongo" v2.0 or greater to your Gemfile.'
+  raise LoadError,
+        'Gem mongo is required for logging to MongoDB. Please add the gem "mongo" v2.0 or greater to your Gemfile.'
 end
 
 module SemanticLogger
@@ -110,7 +111,6 @@ module SemanticLogger
                      collection_max: nil,
                      **args,
                      &block)
-
         @client          = Mongo::Client.new(uri, logger: logger)
         @collection_name = collection_name
         @options         = {

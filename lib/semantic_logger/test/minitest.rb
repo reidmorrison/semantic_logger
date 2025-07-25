@@ -61,11 +61,11 @@ module SemanticLogger
           end
         end
 
-        if exception_includes
-          payload_includes.each_pair do |key, expected|
-            actual = event.exception.send(key)
-            assert_semantic_logger_entry(event, "Exception #{name}", expected, actual)
-          end
+        return unless exception_includes
+
+        payload_includes.each_pair do |key, expected|
+          actual = event.exception.send(key)
+          assert_semantic_logger_entry(event, "Exception #{name}", expected, actual)
         end
       end
 
@@ -78,7 +78,9 @@ module SemanticLogger
         when :nil
           assert_nil actual, "Expected nil #{name} for log event: #{event.to_h.inspect}"
         when Class
-          assert actual.is_a?(expected), -> { "Type #{expected} expected for #{name} in log event: #{event.to_h.inspect}" }
+          assert actual.is_a?(expected), lambda {
+            "Type #{expected} expected for #{name} in log event: #{event.to_h.inspect}"
+          }
         else
           assert_equal expected, actual, "Mismatched #{name} for log event: #{event.to_h.inspect}"
         end

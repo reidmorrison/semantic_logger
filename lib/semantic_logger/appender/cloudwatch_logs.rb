@@ -96,7 +96,8 @@ module SemanticLogger
         @buffered_logs = Concurrent::Array.new
         @client = Aws::CloudWatchLogs::Client.new(client_kwargs)
 
-        @task = Concurrent::TimerTask.new(execution_interval: force_flush_interval_seconds, interval_type: :fixed_rate) do
+        @task = Concurrent::TimerTask.new(execution_interval: force_flush_interval_seconds,
+                                          interval_type:      :fixed_rate) do
           put_log_events
         end
         @task.execute

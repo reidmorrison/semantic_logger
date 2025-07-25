@@ -34,7 +34,7 @@ module SemanticLogger
       end
 
       # Supports batching of log events
-      def batch(logs)
+      def batch(_logs)
         @events += log
       end
 

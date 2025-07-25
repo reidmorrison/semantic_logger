@@ -38,9 +38,6 @@ Metrics/BlockLength:
   Exclude:
     - "test/**/*"
     - "**/*/cli.rb"
-  IgnoredMethods:
-    - "aasm"
-    - "included"
 
 # Soften limits
 Metrics/ClassLength:

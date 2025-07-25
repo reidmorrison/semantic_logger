@@ -10,8 +10,8 @@ module Appender
 
       let(:appender) do
         SemanticLogger::Appender::MongoDB.new(
-          uri:             "mongodb://#{ENV['MONGO_HOST']}/test",
-          collection_size: 10 * 1024**2,
+          uri:             "mongodb://#{ENV.fetch('MONGO_HOST', nil)}/test",
+          collection_size: 10 * (1024**2),
           host:            "test",
           application:     "test_application",
           level:           :trace

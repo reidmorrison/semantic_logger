@@ -74,7 +74,6 @@ module SemanticLogger
                      compress: true,
                      **args,
                      &block)
-
         @source_type = source_type
         @index       = index
 

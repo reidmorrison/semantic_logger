@@ -7,7 +7,8 @@ module SemanticLogger
       begin
         Object.const_get(klass)
       rescue NameError
-        raise(ArgumentError, "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
+        raise(ArgumentError,
+              "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
       end
     end
 

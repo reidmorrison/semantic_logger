@@ -40,7 +40,6 @@ module SemanticLogger
                      max_queue_size: 10_000,
                      lag_check_interval: 1_000,
                      lag_threshold_s: 30)
-
         @appender           = appender
         @lag_check_interval = lag_check_interval
         @lag_threshold_s    = lag_threshold_s

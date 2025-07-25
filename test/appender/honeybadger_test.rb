@@ -24,7 +24,10 @@ module Appender
         it "sends #{level} exceptions" do
           error     = RuntimeError.new("Oh no, Error.")
           exception = hash = nil
-          Honeybadger.stub(:notify, ->(exc, h) { exception = exc; hash = h }) do
+          Honeybadger.stub(:notify, lambda { |exc, h|
+            exception = exc
+            hash = h
+          }) do
             appender.send(level, amessage, error)
           end
 

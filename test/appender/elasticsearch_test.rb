@@ -47,7 +47,7 @@ module Appender
           appender.close
         end
 
-        it 'uses :timestamp as time_key' do
+        it "uses :timestamp as time_key" do
           assert_equal :timestamp, appender.formatter.time_key
         end
 
@@ -91,7 +91,7 @@ module Appender
             log.payload = h
             request     = stub_client { appender.log(log) }
 
-            assert_nil = request[:index]
+            request[:index]
             assert hash = request[:body][1]
             refute hash[:stack_trace]
             assert_equal h, hash[:payload], hash
@@ -133,7 +133,10 @@ module Appender
 
         def stub_client(&block)
           request = nil
-          appender.client.stub(:bulk, ->(r) { request = r; {"status" => 201} }, &block)
+          appender.client.stub(:bulk, lambda { |r|
+            request = r
+            {"status" => 201}
+          }, &block)
           request
         end
       end
@@ -142,13 +145,13 @@ module Appender
         let :appender do
           if ENV["ELASTICSEARCH"]
             SemanticLogger::Appender::Elasticsearch.new(
-              url: "http://localhost:9200",
+              url:         "http://localhost:9200",
               data_stream: true
             )
           else
             client_class.stub_any_instance(:bulk, true) do
               SemanticLogger::Appender::Elasticsearch.new(
-                url: "http://localhost:9200",
+                url:         "http://localhost:9200",
                 data_stream: true
               )
             end
@@ -169,15 +172,15 @@ module Appender
           appender.close
         end
 
-        it 'uses @timestamp as time_key' do
-          assert_equal '@timestamp', appender.formatter.time_key
+        it "uses @timestamp as time_key" do
+          assert_equal "@timestamp", appender.formatter.time_key
         end
 
         describe "synchronous" do
           it "logs to data-stream index without date" do
             request = stub_client { appender.log(log) }
 
-            assert_equal 'semantic_logger', request[:index]
+            assert_equal "semantic_logger", request[:index]
             assert hash = request[:body][1]
             assert_equal log_message, hash[:message]
           end
@@ -206,7 +209,7 @@ module Appender
           it "logs multiple messages" do
             request = stub_client { appender.batch(logs) }
 
-            assert_equal 'semantic_logger', request[:index]
+            assert_equal "semantic_logger", request[:index]
             assert body = request[:body]
             assert_equal 6, body.size, body
 
@@ -221,7 +224,10 @@ module Appender
 
         def stub_client(&block)
           request = nil
-          appender.client.stub(:bulk, ->(r) { request = r; {"status" => 201} }, &block)
+          appender.client.stub(:bulk, lambda { |r|
+            request = r
+            {"status" => 201}
+          }, &block)
           request
         end
       end
@@ -340,7 +346,10 @@ module Appender
 
         def stub_client(&block)
           request = nil
-          appender.client.stub(:bulk, ->(r) { request = r; {"status" => 201} }, &block)
+          appender.client.stub(:bulk, lambda { |r|
+            request = r
+            {"status" => 201}
+          }, &block)
           request
         end
       end

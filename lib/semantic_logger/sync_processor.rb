@@ -4,12 +4,12 @@ module SemanticLogger
   # Appenders are designed to only be used by one thread at a time, so all calls
   # are monitor protected in case SyncProcessor is being used in a multi-threaded environment.
   class SyncProcessor
-    def add(*args, &block)
-      @monitor.synchronize { @appenders.add(*args, &block) }
+    def add(...)
+      @monitor.synchronize { @appenders.add(...) }
     end
 
-    def log(*args, &block)
-      @monitor.synchronize { @appenders.log(*args, &block) }
+    def log(...)
+      @monitor.synchronize { @appenders.log(...) }
     end
 
     def flush

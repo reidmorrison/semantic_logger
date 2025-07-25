@@ -19,11 +19,11 @@ module SemanticLogger
     # Futher Reading https://brandur.org/logfmt
     class Logfmt < Raw
       def initialize(time_format: :iso_8601, time_key: :timestamp, **args)
-        super(time_format: time_format, time_key: time_key, **args)
+        super
       end
 
       def call(log, logger)
-        @raw = super(log, logger)
+        @raw = super
 
         raw_to_logfmt
       end
@@ -40,11 +40,11 @@ module SemanticLogger
       end
 
       def handle_tags
-        tags = @raw.fetch(:tags){ [] }
-                    .each_with_object({}){ |tag, accum| accum[tag] = true }
+        tags = @raw.fetch(:tags) { [] }.
+               each_with_object({}) { |tag, accum| accum[tag] = true }
 
-        @parsed = @parsed.merge(tags)
-                         .merge(@raw.fetch(:named_tags){ {} })
+        @parsed = @parsed.merge(tags).
+                  merge(@raw.fetch(:named_tags) { {} })
       end
 
       def handle_payload

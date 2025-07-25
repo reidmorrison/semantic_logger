@@ -130,7 +130,6 @@ module SemanticLogger
                   payload: nil,
                   metric: nil,
                   metric_amount: nil)
-
       log = Log.new(name, level)
       return false unless meets_log_level?(log)
 
@@ -357,7 +356,6 @@ module SemanticLogger
     # Measure the supplied block and log the message
     def measure_internal(level, index, message, params)
       exception = nil
-      result    = nil
       # Single parameter is a hash
       if params.empty? && message.is_a?(Hash)
         params  = message
@@ -366,14 +364,13 @@ module SemanticLogger
       start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       begin
         if block_given?
-          result =
-            if (silence_level = params[:silence])
-              # In case someone accidentally sets `silence: true` instead of `silence: :error`
-              silence_level = :error if silence_level == true
-              silence(silence_level) { yield(params) }
-            else
-              yield(params)
-            end
+          if (silence_level = params[:silence])
+            # In case someone accidentally sets `silence: true` instead of `silence: :error`
+            silence_level = :error if silence_level == true
+            silence(silence_level) { yield(params) }
+          else
+            yield(params)
+          end
         end
       rescue Exception => e
         exception = e
@@ -408,8 +405,6 @@ module SemanticLogger
         # Log level may change during assign due to :on_exception_level
         self.log(log) if should_log && should_log?(log)
         raise exception if exception
-
-        result
       end
     end
 
@@ -421,7 +416,6 @@ module SemanticLogger
                        metric:,
                        log_exception:,
                        on_exception_level:)
-
       # Ignores filter, silence, payload
       exception = nil
       start     = Process.clock_gettime(Process::CLOCK_MONOTONIC)

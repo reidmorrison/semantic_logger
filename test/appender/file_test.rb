@@ -17,13 +17,14 @@ module Appender
       end
 
       after do
-        File.unlink(file_name) if File.exist?(file_name)
+        FileUtils.rm_f(file_name)
       end
 
       describe "#log" do
         it "logs output" do
           assert appender.log(log)
-          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{thread_name}\] User -- #{log_message}\n/, File.read(file_name))
+          assert_match(/\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:#{thread_name}\] User -- #{log_message}\n/,
+                       File.read(file_name))
         end
 
         it "does not reopen when not time to reopen" do
@@ -63,7 +64,7 @@ module Appender
             appender.retry_count = 0
             assert appender.log(log)
             File.unlink(file_name)
-            appender.instance_variable_get(:@file).stub(:write, -> _ { raise(IOError, "Oh no") }) do
+            appender.instance_variable_get(:@file).stub(:write, ->(_) { raise(IOError, "Oh no") }) do
               assert_raises IOError do
                 appender.log(log)
               end
@@ -256,7 +257,7 @@ module Appender
         it "date" do
           file_name = "log/production-%D.log"
           formatted = appender.send(:apply_format_directives, file_name)
-          assert_equal "log/production-#{Date.today.strftime("%Y%m%d")}.log", formatted
+          assert_equal "log/production-#{Date.today.strftime('%Y%m%d')}.log", formatted
         end
 
         it "time" do
@@ -266,7 +267,7 @@ module Appender
             Time.stub(:now, time) do
               appender.send(:apply_format_directives, file_name)
             end
-          assert_equal "log/production-#{time.strftime("%H%M%S")}.log", formatted
+          assert_equal "log/production-#{time.strftime('%H%M%S')}.log", formatted
         end
 
         it "combination" do
@@ -278,7 +279,8 @@ module Appender
                 appender.send(:apply_format_directives, file_name)
               end
             end
-          assert_equal "log/production-%-myserver-#{$$}-#{Date.today.strftime("%Y%m%d")}-#{time.strftime("%H%M%S")}.log", formatted
+          assert_equal "log/production-%-myserver-#{$$}-#{Date.today.strftime('%Y%m%d')}-#{time.strftime('%H%M%S')}.log",
+                       formatted
         end
 
         it "custom time" do
@@ -288,13 +290,13 @@ module Appender
             Time.stub(:now, time) do
               appender.send(:apply_format_directives, file_name)
             end
-          assert_equal "log/production-#{time.strftime("%H-%M-%S")}.log", formatted
+          assert_equal "log/production-#{time.strftime('%H-%M-%S')}.log", formatted
         end
 
         it "custom date" do
           file_name = "log/production-%Y-%C-%y-%m-%d-%j-%U-%W.log"
           formatted = appender.send(:apply_format_directives, file_name)
-          assert_equal "log/production-#{Date.today.strftime("%Y-%C-%y-%m-%d-%j-%U-%W")}.log", formatted
+          assert_equal "log/production-#{Date.today.strftime('%Y-%C-%y-%m-%d-%j-%U-%W')}.log", formatted
         end
       end
 

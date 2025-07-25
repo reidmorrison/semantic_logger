@@ -1,7 +1,8 @@
 begin
   require "newrelic_rpm"
 rescue LoadError
-  raise LoadError, 'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
+  raise LoadError,
+        'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
 end
 
 # Send Metrics to NewRelic
