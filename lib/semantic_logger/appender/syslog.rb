@@ -215,7 +215,7 @@ module SemanticLogger
       def default_formatter
         if protocol == :syslog
           # Format is text output without the time
-          SemanticLogger::Formatters::Default.new(time_format: nil)
+          SemanticLogger::Formatters::Default.new(time_format: :notime)
         else
           SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map, max_size: max_size)
         end
