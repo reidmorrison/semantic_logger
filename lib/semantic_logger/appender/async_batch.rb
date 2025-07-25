@@ -30,7 +30,6 @@ module SemanticLogger
                      lag_threshold_s: 30,
                      batch_size: 300,
                      batch_seconds: 5)
-
         @batch_size    = batch_size
         @batch_seconds = batch_seconds
         @signal        = Concurrent::Event.new
@@ -47,7 +46,7 @@ module SemanticLogger
 
       # Add log message for processing.
       def log(log)
-        result = super(log)
+        result = super
         # Wake up the processing thread since the number of queued messages has been exceeded.
         signal.set if queue.size >= batch_size
         result

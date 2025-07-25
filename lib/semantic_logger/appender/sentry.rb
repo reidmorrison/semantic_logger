@@ -1,7 +1,8 @@
 begin
   require "sentry-raven"
 rescue LoadError
-  raise LoadError, 'Gem sentry-raven is required for logging purposes. Please add the gem "sentry-raven" to your Gemfile.'
+  raise LoadError,
+        'Gem sentry-raven is required for logging purposes. Please add the gem "sentry-raven" to your Gemfile.'
 end
 
 # Send log messages to sentry
@@ -40,7 +41,7 @@ module SemanticLogger
       def initialize(level: :error, **args, &block)
         # Replace the Sentry Raven logger so that we can identify its log messages and not forward them to Sentry
         Raven.configure { |config| config.logger = SemanticLogger[Raven] }
-        super(level: level, **args, &block)
+        super
       end
 
       # Send an error notification to sentry

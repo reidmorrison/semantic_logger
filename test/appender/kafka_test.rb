@@ -13,7 +13,10 @@ module Appender
       it "sends log messages in JSON format" do
         message = nil
         options = nil
-        appender.send(:producer).stub(:produce, ->(value, *opts) { message = value; options = opts.first }) do
+        appender.send(:producer).stub(:produce, lambda { |value, *opts|
+          message = value
+          options = opts.first
+        }) do
           appender.info(amessage)
           appender.flush
         end

@@ -44,4 +44,4 @@ gem "syslog_protocol"
 # [optional] CloudWatch Logs appender
 gem "aws-sdk-cloudwatchlogs"
 
-gem "rubocop", "~> 1.28.1", require: false
+gem "rubocop", "~> 1.79.0", require: false

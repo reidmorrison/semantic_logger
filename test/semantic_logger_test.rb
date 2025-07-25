@@ -11,7 +11,7 @@ class SemanticLoggerTest < Minitest::Test
 
       after do
         SemanticLogger.remove_appender(@appender)
-        File.delete("sample.log") if File.exist?("sample.log")
+        FileUtils.rm_f("sample.log")
       end
 
       it "adds file appender" do

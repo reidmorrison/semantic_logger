@@ -1,7 +1,8 @@
 begin
   require "opentelemetry/logs"
 rescue LoadError
-  raise LoadError, 'Gem opentelemetry-logs-sdk is required for logging to Open Telemetry. Please add the gem "opentelemetry-logs-sdk" to your Gemfile.'
+  raise LoadError,
+        'Gem opentelemetry-logs-sdk is required for logging to Open Telemetry. Please add the gem "opentelemetry-logs-sdk" to your Gemfile.'
 end
 
 # Open Telemetry Appender
@@ -69,8 +70,6 @@ module SemanticLogger
       def close
         @logger.logger_provider.shutdown
       end
-
-      private
 
       # For logging metrics only log events.
       # def log_metric(log)

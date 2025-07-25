@@ -56,7 +56,6 @@ module SemanticLogger
                      url: "http://localhost:9200",
                      **http_args,
                      &block)
-
         @index = index
         @type  = type
         super(url: url, **http_args, &block)

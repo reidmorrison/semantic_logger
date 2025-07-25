@@ -10,7 +10,10 @@ module Appender
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
           error_message = hash = nil
-          Raven.stub(:capture_message, ->(msg, h) { error_message = msg; hash = h }) do
+          Raven.stub(:capture_message, lambda { |msg, h|
+            error_message = msg
+            hash = h
+          }) do
             appender.send(level, amessage)
           end
           assert_equal amessage, error_message
@@ -24,7 +27,10 @@ module Appender
         it "sends #{level} exceptions" do
           error     = RuntimeError.new("Oh no, Error.")
           exception = hash = nil
-          Raven.stub(:capture_exception, ->(exc, h) { exception = exc; hash = h }) do
+          Raven.stub(:capture_exception, lambda { |exc, h|
+            exception = exc
+            hash = h
+          }) do
             appender.send(level, amessage, error)
           end
 

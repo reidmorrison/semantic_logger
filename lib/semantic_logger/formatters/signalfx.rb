@@ -10,7 +10,6 @@ module SemanticLogger
                      counter_name: "Application.counter",
                      time_format: :ms,
                      **args)
-
         @token        = token
         @dimensions   = dimensions.map(&:to_sym) if dimensions
         @gauge_name   = gauge_name

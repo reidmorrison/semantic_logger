@@ -32,7 +32,7 @@ module SemanticLogger
           formatter = appender.formatter
           formatter.call(log, appender.logger)
         end
-        
+
         let(:message_hash) do
           JSON.parse(formatted_log[:message]) if formatted_log[:message].is_a?(String)
         end
@@ -41,7 +41,7 @@ module SemanticLogger
           it "logs long duration" do
             log.duration = 1_000_000.34567
             result = formatted_log
-        
+
             assert_equal 1_000_000.34567, result.dig(:duration, :ms)
             assert_equal "16m 40s", result.dig(:duration, :human)
           end
@@ -49,13 +49,13 @@ module SemanticLogger
           it "logs short duration" do
             log.duration = 1.34567
             result = formatted_log
-          
+
             # Expected human-readable duration based on precision
             expected_human_duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1.346ms" : "1.346ms"
-          
+
             # Verify the raw duration in milliseconds
             assert_equal 1.34567, result.dig(:duration, :ms)
-          
+
             # Verify the human-readable duration format
             assert_equal expected_human_duration, result.dig(:duration, :human)
           end
@@ -72,14 +72,14 @@ module SemanticLogger
             assert_equal "NewRelicLogsTest", result.dig(:logger, :name)
           end
         end
-        
+
         describe "message" do
           it "logs message" do
             log.message = "Hello World"
             result = formatted_log
             assert_equal "Hello World", result[:message]
           end
-        
+
           it "keeps empty message" do
             log.message = ""
             result = formatted_log
@@ -96,13 +96,13 @@ module SemanticLogger
               result[:payload]
             )
           end
-        
+
           it "skips nil payload" do
             log.payload = nil
             result = formatted_log
             refute result.key?(:payload)
           end
-        
+
           it "skips empty payload" do
             log.payload = {}
             result = formatted_log
@@ -117,7 +117,7 @@ module SemanticLogger
           end
 
           it "logs named tags without conflicts" do
-            log.named_tags = { first: 1, second: 2 }
+            log.named_tags = {first: 1, second: 2}
             result = formatted_log
             assert_equal 1, result[:first]
             assert_equal 2, result[:second]
@@ -125,7 +125,7 @@ module SemanticLogger
           end
 
           it "logs named tag conflicts" do
-            log.named_tags = { message: "conflict" }
+            log.named_tags = {message: "conflict"}
             result = formatted_log
             assert_includes result[:named_tag_conflicts], :message
           end
@@ -137,9 +137,13 @@ module SemanticLogger
             refute formatted_log.dig(:error, :class)
             refute formatted_log.dig(:error, :stack)
           end
-          
+
           it "logs exception details" do
-            raise "Test Exception" rescue log.exception = $!
+            begin
+              raise "Test Exception"
+            rescue StandardError
+              log.exception = $!
+            end
             result = formatted_log
             assert_equal "Test Exception", result.dig(:error, :message)
             assert_equal "RuntimeError", result.dig(:error, :class)
@@ -170,18 +174,18 @@ module SemanticLogger
 
         describe "metadata" do
           it "includes trace.id and span.id if present" do
-            NewRelic::Agent.stub(:linking_metadata, { "trace.id" => "trace123", "span.id" => "span456" }) do
+            NewRelic::Agent.stub(:linking_metadata, {"trace.id" => "trace123", "span.id" => "span456"}) do
               result = formatted_log
-              assert_equal "trace123", result[:'trace.id']
-              assert_equal "span456", result[:'span.id']
+              assert_equal "trace123", result[:"trace.id"]
+              assert_equal "span456", result[:"span.id"]
             end
           end
-        
+
           it "omits trace.id and span.id if absent" do
             NewRelic::Agent.stub(:linking_metadata, {}) do
               result = formatted_log
-              refute result.key?(:'trace.id')
-              refute result.key?(:'span.id')
+              refute result.key?(:"trace.id")
+              refute result.key?(:"span.id")
             end
           end
         end

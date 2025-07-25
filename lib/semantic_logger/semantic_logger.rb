@@ -82,7 +82,7 @@ module SemanticLogger
   end
 
   @application = ENV["SEMANTIC_LOGGER_APP"] || "Semantic Logger"
-  @environment = ENV["SEMANTIC_LOGGER_ENV"] || ENV["RAILS_ENV"] || ENV["RACK_ENV"]
+  @environment = ENV["SEMANTIC_LOGGER_ENV"] || ENV["RAILS_ENV"] || ENV.fetch("RACK_ENV", nil)
 
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger

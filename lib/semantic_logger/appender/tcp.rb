@@ -1,7 +1,8 @@
 begin
   require "net/tcp_client"
 rescue LoadError
-  raise LoadError, 'Gem net_tcp_client is required for logging over TCP. Please add the gem "net_tcp_client" to your Gemfile.'
+  raise LoadError,
+        'Gem net_tcp_client is required for logging over TCP. Please add the gem "net_tcp_client" to your Gemfile.'
 end
 
 raise "Net::TCPClient v2.0 or greater is required to log over TCP" unless Net::TCPClient::VERSION.to_f >= 2.0

@@ -14,7 +14,7 @@ Gem::Specification.new do |s|
   s.summary               = "Feature rich logging framework, and replacement for existing Ruby & Rails loggers."
   s.files                 = Dir["lib/**/*", "LICENSE.txt", "Rakefile", "README.md"]
   s.license               = "Apache-2.0"
-  s.required_ruby_version = ">= 2.5"
+  s.required_ruby_version = ">= 2.7"
   s.add_dependency "concurrent-ruby", "~> 1.0"
   s.metadata = {
     "bug_tracker_uri"       => "https://github.com/reidmorrison/semantic_logger/issues",

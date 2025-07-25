@@ -85,7 +85,6 @@ module SemanticLogger
                log_exception: :full,
                on_exception_level: nil,
                dimensions: nil)
-
       self.message       = message
       self.payload       = payload
       self.duration      = duration
@@ -114,7 +113,7 @@ module SemanticLogger
 
       # Elastic logging: Log when :duration exceeds :min_duration
       # Except if there is an exception when it will always be logged
-      return false if duration && ((duration < min_duration) && exception.nil?)
+      return false if duration && (duration < min_duration) && exception.nil?
 
       if backtrace
         self.backtrace = Utils.extract_backtrace(backtrace)
@@ -129,8 +128,8 @@ module SemanticLogger
     def assign_hash(hash)
       self.payload ||= {}
       hash.each_pair do |key, value|
-        if respond_to?("#{key}=".to_sym)
-          public_send("#{key}=".to_sym, value)
+        if respond_to?(:"#{key}=")
+          public_send(:"#{key}=", value)
         else
           payload[key] = value
         end
@@ -281,7 +280,8 @@ module SemanticLogger
       !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
     end
 
-    def to_h(host = SemanticLogger.host, application = SemanticLogger.application, environment = SemanticLogger.environment)
+    def to_h(host = SemanticLogger.host, application = SemanticLogger.application,
+             environment = SemanticLogger.environment)
       logger = Struct.new(:host, :application, :environment).new(host, application, environment)
       SemanticLogger::Formatters::Raw.new.call(self, logger)
     end

@@ -131,7 +131,6 @@ module SemanticLogger
                      tcp_client: {},
                      **args,
                      &block)
-
         @options            = options
         @facility           = facility
         @max_size           = max_size

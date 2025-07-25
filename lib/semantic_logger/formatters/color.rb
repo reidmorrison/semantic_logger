@@ -128,7 +128,7 @@ module SemanticLogger
 
       def call(log, logger)
         self.color = color_map[log.level]
-        super(log, logger)
+        super
       end
     end
   end

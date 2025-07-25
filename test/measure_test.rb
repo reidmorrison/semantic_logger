@@ -7,7 +7,7 @@ class MeasureTest < Minitest::Test
 
     # Ensure that any log level can be measured and logged
     SemanticLogger::LEVELS.each do |level|
-      measure_level = "measure_#{level}".to_sym
+      measure_level = :"measure_#{level}"
 
       describe "##{measure_level}" do
         it "logs" do
@@ -26,7 +26,10 @@ class MeasureTest < Minitest::Test
           end
 
           it "log when slower" do
-            assert_equal "result", appender.send(measure_level, "hello world", min_duration: 200, payload: payload) { sleep 0.5; "result" }
+            assert_equal "result", appender.send(measure_level, "hello world", min_duration: 200, payload: payload) {
+              sleep 0.5
+              "result"
+            }
 
             assert log = appender.events.first
             assert_equal "hello world", log.message
@@ -152,7 +155,10 @@ class MeasureTest < Minitest::Test
           end
 
           it "log when slower" do
-            assert_equal "result", appender.measure(level, "hello world", min_duration: 200, payload: payload) { sleep 0.5; "result" }
+            assert_equal "result", appender.measure(level, "hello world", min_duration: 200, payload: payload) {
+              sleep 0.5
+              "result"
+            }
             assert log = appender.events.first
             assert_equal "hello world", log.message
           end
@@ -233,7 +239,10 @@ class MeasureTest < Minitest::Test
           end
 
           it "log when slower" do
-            assert_equal "result", appender.send(measure_level, message: "hello world", min_duration: 200, payload: payload) { sleep 0.5; "result" }
+            assert_equal "result", appender.send(measure_level, message: "hello world", min_duration: 200, payload: payload) {
+              sleep 0.5
+              "result"
+            }
 
             assert log = appender.events.first
             assert_equal "hello world", log.message
@@ -253,7 +262,9 @@ class MeasureTest < Minitest::Test
 
         it ":on_exception_level" do
           assert_raises RuntimeError do
-            appender.send(measure_level, message: "hello world", payload: payload, on_exception_level: :fatal) { raise "Test" }
+            appender.send(measure_level, message: "hello world", payload: payload, on_exception_level: :fatal) do
+              raise "Test"
+            end
           end
 
           assert log = appender.events.first

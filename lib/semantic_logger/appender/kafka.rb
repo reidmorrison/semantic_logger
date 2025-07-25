@@ -1,7 +1,8 @@
 begin
   require "kafka"
 rescue LoadError
-  raise LoadError, 'Gem ruby-kafka is required for logging to Elasticsearch. Please add the gem "ruby-kafka" to your Gemfile.'
+  raise LoadError,
+        'Gem ruby-kafka is required for logging to Elasticsearch. Please add the gem "ruby-kafka" to your Gemfile.'
 end
 
 require "date"
@@ -127,7 +128,6 @@ module SemanticLogger
                      topic: "log_messages", partition: nil, partition_key: nil, key: nil,
                      delivery_threshold: 100, delivery_interval: 10, required_acks: 1,
                      metrics: true, **args, &block)
-
         @seed_brokers             = seed_brokers
         @client_id                = client_id
         @connect_timeout          = connect_timeout

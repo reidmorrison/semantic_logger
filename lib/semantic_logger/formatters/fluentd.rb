@@ -19,7 +19,7 @@ module SemanticLogger
 
       def process_info
         # Ignore fields: pid, thread, file and line by default
-        super() if need_process_info
+        super if need_process_info
       end
     end
   end

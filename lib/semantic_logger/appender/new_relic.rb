@@ -1,7 +1,8 @@
 begin
   require "newrelic_rpm"
 rescue LoadError
-  raise LoadError, 'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
+  raise LoadError,
+        'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
 end
 
 # Send log messages to NewRelic
@@ -32,7 +33,7 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(level: :error, **args, &block)
-        super(level: level, **args, &block)
+        super
       end
 
       # Returns [Hash] of parameters to send to New Relic.

@@ -1,7 +1,8 @@
 begin
   require "newrelic_rpm"
 rescue LoadError
-  raise LoadError, 'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
+  raise LoadError,
+        'Gem newrelic_rpm is required for logging to New Relic. Please add the gem "newrelic_rpm" to your Gemfile.'
 end
 
 require "semantic_logger/formatters/new_relic_logs"
@@ -40,7 +41,7 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(formatter: SemanticLogger::Formatters::NewRelicLogs.new, **args, &block)
-        super(formatter: formatter, **args, &block)
+        super
       end
 
       # Send an error notification to New Relic
@@ -51,10 +52,10 @@ module SemanticLogger
           level = log.level.to_s.upcase       # Determine the log level
           self.class.log_newrelic(json_message, level)
         rescue JSON::GeneratorError => e
-          $stderr.puts("Failed to serialize log message to JSON: #{e.message}")
-          $stderr.puts("Problematic data: #{message.inspect}")
+          warn("Failed to serialize log message to JSON: #{e.message}")
+          warn("Problematic data: #{message.inspect}")
         rescue StandardError => e
-          $stderr.puts("Unexpected error while logging to New Relic: #{e.message}")
+          warn("Unexpected error while logging to New Relic: #{e.message}")
         end
         true
       end

@@ -74,7 +74,11 @@ module Appender
 
       def stub_bugsnag(&block)
         exception = hash = level = nil
-        appender.stub(:bugsnag_notify, ->(exc, h, l) { exception = exc; hash = h; level = l }, &block)
+        appender.stub(:bugsnag_notify, lambda { |exc, h, l|
+          exception = exc
+          hash = h
+          level = l
+        }, &block)
         [exception, hash, level]
       end
     end
