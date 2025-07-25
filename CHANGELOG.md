@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [unreleased]
 
 - Correct `source_code_uri` URL
+- Add appender for CloudWatch Logs
 - NR Integration: Ensures key/values are not nested under `messages`
 - NR Integration: Ensures structures are built for all nested json (I.E build an actual object instead of doing `span.id` as the key)
 - NR Integration: Named tags will instead be added directly to the JSON.  `named_tags` now adds key value pairs to object instead of nesting.  

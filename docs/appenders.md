@@ -31,6 +31,7 @@ Log messages can be written to one or more of the following destinations at the 
 * Sentry
 * Honeybadger
 * Honeybadger Insights
+* CloudWatch Logs
 * Logger, log4r, etc.
 
 To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
@@ -756,6 +757,21 @@ SemanticLogger.add_appender(appender: :honeybadger_insights)
 ~~~
 
 Both appenders use the Honeybadger [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
+
+### CloudWatch Logs
+
+Forward all log messages to CloudWatch Logs.
+
+Example:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:    :cloudwatch_logs,
+  client_kwargs: {region: "eu-west-1"},
+  group: "/my/application",
+  create_stream: true
+)
+~~~
 
 ### Logger, log4r, etc.
 

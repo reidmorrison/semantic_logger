@@ -4,6 +4,7 @@ module SemanticLogger
     autoload :Async,               "semantic_logger/appender/async"
     autoload :AsyncBatch,          "semantic_logger/appender/async_batch"
     autoload :Bugsnag,             "semantic_logger/appender/bugsnag"
+    autoload :CloudwatchLogs,      "semantic_logger/appender/cloudwatch_logs"
     autoload :Elasticsearch,       "semantic_logger/appender/elasticsearch"
     autoload :ElasticsearchHttp,   "semantic_logger/appender/elasticsearch_http"
     autoload :File,                "semantic_logger/appender/file"
