@@ -5,6 +5,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Fix the experimental OpenTelemetry formatter so its payload method coerces values.
+  Ensures every attribute value is OTLP‑compatible.
+
 ## [4.17.0]
 
 - Correct `source_code_uri` URL
