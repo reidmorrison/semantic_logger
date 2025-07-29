@@ -2,6 +2,9 @@ require "json"
 module SemanticLogger
   module Formatters
     class OpenTelemetry < Raw
+      # primitives allowed by OTLP logs in Ruby: String, Integer, Float, TrueClass, FalseClass
+      PRIMS = [String, Integer, Float, TrueClass, FalseClass].freeze
+
       # Log level
       def level
         hash[:level]       = log.level.to_s
@@ -12,10 +15,35 @@ module SemanticLogger
       def payload
         return unless log.payload.respond_to?(:empty?) && !log.payload.empty?
 
-        hash[:payload] = log.payload.transform_keys!(&:to_s)
+        hash[:payload] = coerce_map(log.payload)
       end
 
       private
+
+      def coerce_value(v)
+        case v
+        when *PRIMS then v
+        when Array  then v.map { |e| coerce_value(e) }.compact   # arrays of scalars only.
+        when NilClass then nil                                   # drop nils by caller.
+        else v.to_s                                              # stringify objects / hashes.
+        end
+      end
+
+      def coerce_map(h)
+        h.each_with_object({}) do |(k, v), out|
+          next if v.nil?
+
+          out[k.to_s] =
+            if v.is_a?(Hash)
+              # Stringify whole hash.
+              v.transform_values { |vv| coerce_value(vv) }.
+                transform_keys!(&:to_s).
+                to_json
+            else
+              coerce_value(v)
+            end
+        end
+      end
 
       def severity_number(severity)
         case severity
