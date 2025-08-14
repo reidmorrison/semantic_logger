@@ -7,7 +7,7 @@
 module SemanticLogger
   class Base
     # Class name to be logged
-    attr_accessor :name, :filter
+    attr_accessor :name, :filter, :child_named_tags
 
     # Set the logging level for this logger
     #
@@ -250,6 +250,14 @@ module SemanticLogger
       meets_log_level?(log) && !filtered?(log)
     end
 
+    # Creates a new logger with the given instance named tags
+    def child(**named_tags)
+      new_named_tags = child_named_tags.merge(named_tags)
+      new_logger = dup
+      new_logger.child_named_tags = new_named_tags
+      new_logger
+    end
+
     private
 
     # Initializer for Abstract Class SemanticLogger::Base
@@ -290,6 +298,7 @@ module SemanticLogger
       else
         self.level = level
       end
+      @child_named_tags = {}
     end
 
     # Return the level index for fast comparisons
@@ -349,6 +358,9 @@ module SemanticLogger
         end
       end
 
+      # Add child named tags to the log
+      log.payload = child_named_tags.merge(log.payload || {})
+
       # Log level may change during assign due to :on_exception_level
       self.log(log) if should_log && should_log?(log)
     end
@@ -388,6 +400,9 @@ module SemanticLogger
 
         # Extract options after block completes so that block can modify any of the options
         payload = params[:payload]
+
+        # Add child named tags
+        payload = child_named_tags.merge(payload || {})
 
         # May return false due to elastic logging
         should_log = log.assign(
