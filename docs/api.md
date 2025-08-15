@@ -633,4 +633,18 @@ Or, when using a Gemfile:
 gem "semantic_logger", require: "semantic_logger/sync"
 ~~~
 
+### Child Logger
+
+It is possible to create child loggers with pre-set instance tags.
+Any log message emitted by a logger with pre-set instance tags will include these tags along with the message data.
+
+~~~ruby
+logger = SemanticLogger["MyClass"]
+child_logger1 = logger.child(tag1: "value1", tag2: "value2")
+child_logger2 = child_logger1.child(tag3: "value3")
+
+# Will include tag1, tag2, tag3 and tag4 in the output
+child_logger2.info("Some message", tag4: "value4")
+~~~
+
 ### [Next: Testing ==>](testing.html)

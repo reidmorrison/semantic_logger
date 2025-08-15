@@ -153,5 +153,18 @@ class LoggerTest < Minitest::Test
         end
       end
     end
+
+    describe ".child" do
+      it "creates a child logger" do
+        tag_data = {tag1: "value1", tag2: "value2"}
+        child_logger = logger.child(**tag_data)
+        child_logger.info("hello world")
+
+        assert_equal tag_data, child_logger.child_named_tags
+        assert log = child_logger.events.first
+        assert_equal "hello world", log.message
+        assert_equal tag_data, log.payload
+      end
+    end
   end
 end
