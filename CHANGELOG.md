@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add high priority fields (timestamp, level, level index and message) to beginning of JSON object output when using JSON formatter to ensure log entries are parsable even when JSON logs are mangled
+
 ## [4.17.0]
 
 - Correct `source_code_uri` URL
