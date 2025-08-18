@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Ensures every attribute value is OTLP‑compatible.
 - Fix missing trace.id/span.id in NewRelic logs
 - Fix opentelemetry-logs-sdk logger does not expose logger_provider, causing NoMethodError on flush/close.
+- Add high priority fields (timestamp, level, level index and message) to beginning of JSON object output when using JSON formatter to ensure log entries are parsable even when JSON logs are mangled
 
 ## [4.17.0]
 
