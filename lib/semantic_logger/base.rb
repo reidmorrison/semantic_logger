@@ -6,8 +6,18 @@
 #
 module SemanticLogger
   class Base
+    # Creates a copy of an existing logger.
+    # This method can be overridden by subclasses to provide a specialized implementation.
+    # `child` logger uses this method.
+    def self.copy(instance)
+      raise ArgumentError, "Cannot copy instances different from #{self}" if instance.class != self
+
+      instance.dup
+    end
+
     # Class name to be logged
     attr_accessor :name, :filter
+    attr_reader :instance_named_tags
 
     # Set the logging level for this logger
     #
@@ -250,6 +260,21 @@ module SemanticLogger
       meets_log_level?(log) && !filtered?(log)
     end
 
+    # Creates a new logger with the given instance named tags
+    def child(**named_tags)
+      new_named_tags = instance_named_tags.merge(named_tags)
+      new_logger = self.class.copy(self)
+      new_logger.instance_named_tags = new_named_tags
+      new_logger
+    end
+
+    protected
+
+    def instance_named_tags=(named_tags)
+      # Prevent accidental mutation of log named tags
+      @instance_named_tags = named_tags.dup.freeze
+    end
+
     private
 
     # Initializer for Abstract Class SemanticLogger::Base
@@ -275,7 +300,7 @@ module SemanticLogger
     #          (/\AExclude/ =~ log.message).nil?
     #        end
     #      end
-    def initialize(klass, level = nil, filter = nil)
+    def initialize(klass, level = nil, filter = nil, instance_named_tags = {})
       # Support filtering all messages to this logger instance.
       unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc) || filter.respond_to?(:call)
         raise ":filter must be a Regexp, Proc, or implement :call"
@@ -290,6 +315,7 @@ module SemanticLogger
       else
         self.level = level
       end
+      self.instance_named_tags = instance_named_tags
     end
 
     # Return the level index for fast comparisons
@@ -325,7 +351,7 @@ module SemanticLogger
         payload = nil
       end
 
-      log = Log.new(name, level, index)
+      log = Log.new(name, level, index, instance_named_tags)
       should_log =
         if exception.nil? && payload.nil? && message.is_a?(Hash)
           # All arguments as a hash in the message.
@@ -376,7 +402,7 @@ module SemanticLogger
         exception = e
       ensure
         # Must use ensure block otherwise a `return` in the yield above will skip the log entry
-        log = Log.new(name, level, index)
+        log = Log.new(name, level, index, instance_named_tags)
         exception ||= params[:exception]
         message   = params[:message] if params[:message]
         duration  =

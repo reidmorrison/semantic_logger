@@ -64,6 +64,10 @@ module SemanticLogger
       # Named Tags
       def named_tags
         hash[:named_tags] = log.named_tags if log.named_tags && !log.named_tags.empty?
+        # TODO: Test
+        # TODO: Different hash entry instead?
+        # Always overrides thread named_tags with instance_named_tags
+        hash[:named_tags] = hash.fetch(:named_tags, {}).merge(log.instance_named_tags) if log.instance_named_tags && !log.instance_named_tags.empty?
       end
 
       # Duration

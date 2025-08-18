@@ -28,6 +28,9 @@ module SemanticLogger
   # tags
   #   Any tags active on the thread when the log call was made
   #
+  # instance_named_tags
+  #   Any named tags active on the logger instance when the log call was made
+  #
   # level_index
   #   Internal index of the log level
   #
@@ -55,16 +58,17 @@ module SemanticLogger
 
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
-                  :tags, :named_tags, :context,
+                  :tags, :named_tags, :instance_named_tags, :context,
                   :metric, :metric_amount, :dimensions
 
-    def initialize(name, level, index = nil)
+    def initialize(name, level, index = nil, instance_named_tags = {})
       @level       = level
       @thread_name = Thread.current.name
       @name        = name
       @time        = Time.now
       @tags        = SemanticLogger.tags
       @named_tags  = SemanticLogger.named_tags
+      @instance_named_tags = instance_named_tags
       @level_index = index.nil? ? Levels.index(level) : index
     end
 

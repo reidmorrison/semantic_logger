@@ -108,8 +108,12 @@ module SemanticLogger
     #   metrics: [Boolean]
     #     Whether to log metric only entries with this subscriber.
     #     Default: false
+    #
+    #   instance_named_tags: [Hash]
+    #     Named tags to be added to all log messages for this subscriber
+    #     Default: {}
     def initialize(level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil,
-                   metrics: false, &block)
+                   metrics: false, instance_named_tags: {}, &block)
       self.formatter = block || formatter
       @application   = application
       @environment   = environment
@@ -118,7 +122,7 @@ module SemanticLogger
 
       # Subscribers don't take a class name, so use this class name if a subscriber
       # is logged to directly.
-      super(self.class, level, filter)
+      super(self.class, level, filter, instance_named_tags)
     end
 
     # Return the level index for fast comparisons.

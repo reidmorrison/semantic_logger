@@ -56,7 +56,11 @@ module SemanticLogger
     #    regular expression. All other messages will be ignored
     #    Proc: Only include log messages where the supplied Proc returns true
     #          The Proc must return true or false
-    def initialize(klass, level = nil, filter = nil)
+    #
+    #  instance_named_tags
+    #    Named tags to be added to all log messages for this logger instance
+    #    Default: {}
+    def initialize(klass, level = nil, filter = nil, instance_named_tags = {})
       super
     end
 

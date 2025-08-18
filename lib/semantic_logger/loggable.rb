@@ -42,7 +42,7 @@ module SemanticLogger
 
         # Returns [SemanticLogger::Logger] class level logger
         def self.logger
-          @semantic_logger ||= SemanticLogger[self]
+          @semantic_logger ||= SemanticLogger[self].child(**@logger_instance_named_tags)
         end
 
         # Replace instance class level logger
@@ -112,6 +112,10 @@ module SemanticLogger
         MEASURE_METHOD
         # {"#{visibility} :#{method_name}" unless visibility == :public}
         true
+      end
+
+      def logger_child(**named_tags)
+        @logger_instance_named_tags = named_tags
       end
 
       private
