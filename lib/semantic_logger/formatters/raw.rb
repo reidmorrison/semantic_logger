@@ -117,11 +117,12 @@ module SemanticLogger
         self.log    = log
         self.logger = logger
 
+        time
+        level
+        message
         host
         application
         environment
-        time
-        level
         pid
         thread_name
         file_name_and_line
@@ -129,7 +130,6 @@ module SemanticLogger
         tags
         named_tags
         name
-        message
         payload
         exception
         metric
