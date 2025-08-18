@@ -89,8 +89,8 @@ class AppenderFileTest < Minitest::Test
     end
 
     describe "sample child class logger" do
-      it "has child named tags set" do
-        assert_equal TestChildClassLogger::TAG_DATA, TestChildClassLogger.logger.child_named_tags
+      it "has instance named tags set" do
+        assert_equal TestChildClassLogger::TAG_DATA, TestChildClassLogger.logger.instance_named_tags
       end
     end
   end

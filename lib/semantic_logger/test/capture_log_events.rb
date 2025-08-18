@@ -20,6 +20,12 @@ module SemanticLogger
     #     end
     #   end
     class CaptureLogEvents < SemanticLogger::Subscriber
+      def self.copy(instance)
+        new_instance = super
+        new_instance.events = []
+        new_instance
+      end
+
       attr_accessor :events
 
       # By default collect all log levels, and collect metric only log events.

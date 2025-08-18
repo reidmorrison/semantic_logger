@@ -155,15 +155,35 @@ class LoggerTest < Minitest::Test
     end
 
     describe ".child" do
-      it "creates a child logger" do
-        tag_data = {tag1: "value1", tag2: "value2"}
-        child_logger = logger.child(**tag_data)
+      it "creates a child logger with instance named tags merged with parent" do
+        parent_tag_data = {parent_tag: "parent_value"}
+        child_tag_data = {tag1: "value1", tag2: "value2"}
+        parent_logger = logger.child(**parent_tag_data)
+        child_logger = parent_logger.child(**child_tag_data)
+
         child_logger.info("hello world")
 
-        assert_equal tag_data, child_logger.child_named_tags
-        assert log = child_logger.events.first
-        assert_equal "hello world", log.message
-        assert_equal tag_data, log.payload
+        assert_equal parent_tag_data, parent_logger.instance_named_tags
+        assert_equal parent_tag_data.merge(child_tag_data), child_logger.instance_named_tags
+      end
+
+      it "outputs log entries with different instance named tags from the parent" do
+        parent_tag_data = {parent_tag: "parent_value"}
+        child_tag_data = {tag1: "value1", tag2: "value2"}
+        parent_logger = logger.child(**parent_tag_data)
+        child_logger = parent_logger.child(**child_tag_data)
+
+        parent_logger.info("hello parent")
+
+        assert log_parent = parent_logger.events.first
+        assert_equal "hello parent", log_parent.message
+        assert_equal parent_tag_data, log_parent.instance_named_tags
+
+        child_logger.info("hello child")
+
+        assert log_child = child_logger.events.first
+        assert_equal "hello child", log_child.message
+        assert_equal parent_tag_data.merge(child_tag_data), log_child.instance_named_tags
       end
     end
   end
