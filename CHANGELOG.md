@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Fix opentelemetry-logs-sdk logger does not expose logger_provider, causing NoMethodError on flush/close.
+
 ## [4.17.0]
 
 - Correct `source_code_uri` URL
