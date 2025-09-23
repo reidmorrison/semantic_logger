@@ -16,6 +16,7 @@ Gem::Specification.new do |s|
   s.license               = "Apache-2.0"
   s.required_ruby_version = ">= 2.7"
   s.add_dependency "concurrent-ruby", "~> 1.0"
+  s.add_dependency "logger", "~> 1.7"
   s.metadata = {
     "bug_tracker_uri"       => "https://github.com/reidmorrison/semantic_logger/issues",
     "documentation_uri"     => "https://logger.rocketjob.io",
