@@ -47,7 +47,7 @@ module SemanticLogger
         hash = super
 
         result = {
-          **newrelic_metadata,
+          **linking_metadata(log),
           message:       hash[:message].to_s,
           tags:          hash[:tags],
           metric:        hash[:metric],
@@ -115,11 +115,9 @@ module SemanticLogger
 
       private
 
-      # NOTE: This function will already include trace.id and span.id if they
-      # are available so I believe the previous implementation of this is redundant
-      # https://rubydoc.info/gems/newrelic_rpm/NewRelic/Agent#linking_metadata-instance_method
-      def newrelic_metadata
-        NewRelic::Agent.linking_metadata.transform_keys(&:to_sym)
+      # returns "entity.name", "trace.id" etc from NewRelic::Agent.linking_metadata
+      def linking_metadata(log)
+        (log.context && log.context[:new_relic_metadata]) || {}
       end
     end
   end

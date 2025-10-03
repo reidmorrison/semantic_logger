@@ -9,6 +9,11 @@ module Appender
       before do
         @appender = SemanticLogger::Appender::NewRelicLogs.new
         @message  = "AppenderNewRelicTest log message"
+        NewRelic::Agent.metadata_enabled = true
+      end
+
+      after do
+        NewRelic::Agent.metadata_enabled = false
       end
 
       def log_newrelic_stub(message, level)
@@ -67,6 +72,17 @@ module Appender
         assert_equal "a", @hash["key2"]
         assert payload = @hash["payload"], @hash.inspect
         assert_equal 4, payload["key3"]
+      end
+
+      it "includes NewRelic's linking metadata" do
+        NewRelic::Agent.agent.log_event_aggregator.stub(:record, method(:log_newrelic_stub)) do
+          log = SemanticLogger::Log.new("TestLogger", :info)
+          SemanticLogger::Logger.call_subscribers(log)
+          @appender.log(log)
+        end
+        parse_logged_message
+        refute_nil @hash, "Expected @hash to be parsed JSON"
+        assert_equal "Entity Name", @hash["entity.name"]
       end
 
       it "handles large payloads gracefully" do
