@@ -32,7 +32,7 @@ add the following to your worker boot code:
 
 ~~~ruby
 # config/puma.rb
-on_worker_boot do
+before_worker_boot do
   # Re-open appenders after forking the process
   SemanticLogger.reopen
 end
