@@ -174,19 +174,18 @@ module SemanticLogger
 
         describe "metadata" do
           it "includes trace.id and span.id if present" do
-            NewRelic::Agent.stub(:linking_metadata, {"trace.id" => "trace123", "span.id" => "span456"}) do
-              result = formatted_log
-              assert_equal "trace123", result[:"trace.id"]
-              assert_equal "span456", result[:"span.id"]
-            end
+            # Simulate recording a log message within a Rails transaction, where trace.id has been set on the current thread
+            log.set_context(:new_relic_metadata, {"trace.id" => "trace123", "span.id" => "span456"})
+            # ... which is then formatted on the async appender thread
+            result = formatted_log
+            assert_equal "trace123", result["trace.id"]
+            assert_equal "span456", result["span.id"]
           end
 
           it "omits trace.id and span.id if absent" do
-            NewRelic::Agent.stub(:linking_metadata, {}) do
-              result = formatted_log
-              refute result.key?(:"trace.id")
-              refute result.key?(:"span.id")
-            end
+            result = formatted_log
+            refute result.key?("trace.id")
+            refute result.key?("span.id")
           end
         end
       end

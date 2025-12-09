@@ -24,8 +24,18 @@ module NewRelic
     def self.increment_metric(name, count = 1)
     end
 
+    class << self
+      # this isn't part of the real NewRelic Agent, it's just used to avoid
+      # polluting log context in tests that don't expect it
+      attr_accessor :metadata_enabled
+    end
+
     def self.linking_metadata
-      {"entity.name" => "Entity Name", "entity.type" => "SERVICE", "hostname" => "hostname"}
+      if metadata_enabled
+        {"entity.name" => "Entity Name", "entity.type" => "SERVICE", "hostname" => "hostname"}
+      else
+        {}
+      end
     end
 
     module Tracer
