@@ -12,7 +12,7 @@ end
 module SemanticLogger
   module Appender
     class OpenTelemetry < SemanticLogger::Subscriber
-      attr_reader :name, :version, :logger
+      attr_reader :name, :version, :provider, :logger
 
       CAPTURE_CONTEXT = ->(log) { log.set_context(:open_telemetry, ::OpenTelemetry::Context.current) }
 
@@ -30,9 +30,10 @@ module SemanticLogger
                      metrics: true,
                      **args,
                      &block)
-        @name    = name
-        @version = version
-        @logger  = ::OpenTelemetry.logger_provider.logger(name: @name, version: @version)
+        @name      = name
+        @version   = version
+        @provider  = ::OpenTelemetry.logger_provider
+        @logger    = @provider.logger(name: @name, version: @version)
 
         # Capture the current Open Telemetry context when a log entry is captured.
         # Prevents duplicate subscribers as long as it is from a constant.
@@ -63,12 +64,23 @@ module SemanticLogger
 
       # Flush all pending logs.
       def flush
-        @logger.logger_provider.force_flush
+        return unless @provider
+
+        @provider.force_flush if @provider.respond_to?(:force_flush)
+      rescue StandardError => e
+        # Swallow to avoid noisy shutdown exceptions.
+        SemanticLogger.logger.warn("Flush failed: #{e.class}: #{e.message}")
       end
 
-      # Flush pending logs and close the appender
+      # Close the appender and release resources.
       def close
-        @logger.logger_provider.shutdown
+        return unless @provider
+
+        @provider.shutdown if @provider.respond_to?(:shutdown)
+      rescue StandardError => e
+        SemanticLogger.logger.warn("Shutdown failed: #{e.class}: #{e.message}")
+      ensure
+        @provider = nil
       end
 
       # For logging metrics only log events.

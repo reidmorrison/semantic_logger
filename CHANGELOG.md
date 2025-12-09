@@ -7,6 +7,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 - Fix the experimental OpenTelemetry formatter so its payload method coerces values.
   Ensures every attribute value is OTLP‑compatible.
+- Fix missing trace.id/span.id in NewRelic logs
+- Fix opentelemetry-logs-sdk logger does not expose logger_provider, causing NoMethodError on flush/close.
 
 ## [4.17.0]
 
