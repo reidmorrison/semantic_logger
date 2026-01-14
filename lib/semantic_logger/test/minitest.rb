@@ -24,7 +24,8 @@ module SemanticLogger
       def assert_semantic_logger_event(event, level: nil, name: nil, message: nil, message_includes: nil,
                                        payload: nil, payload_includes: nil,
                                        exception: nil, exception_includes: nil, backtrace: nil,
-                                       thread_name: nil, tags: nil, named_tags: nil, context: nil,
+                                       thread_name: nil, tags: nil, instance_tags: nil,
+                                       named_tags: nil, instance_named_tags: nil, context: nil,
                                        level_index: nil, duration: nil, time: nil,
                                        metric: nil, metric_amount: nil, dimensions: nil)
         assert event, "No log event occurred"
@@ -34,7 +35,9 @@ module SemanticLogger
         assert_semantic_logger_entry(event, :level, level)
         assert_semantic_logger_entry(event, :thread_name, thread_name)
         assert_semantic_logger_entry(event, :tags, tags)
+        assert_semantic_logger_entry(event, :instance_tags, instance_tags)
         assert_semantic_logger_entry(event, :named_tags, named_tags)
+        assert_semantic_logger_entry(event, :instance_named_tags, instance_named_tags)
         assert_semantic_logger_entry(event, :context, context)
         assert_semantic_logger_entry(event, :metric, metric)
         assert_semantic_logger_entry(event, :metric_amount, metric_amount)

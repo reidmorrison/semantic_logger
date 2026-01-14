@@ -633,4 +633,39 @@ Or, when using a Gemfile:
 gem "semantic_logger", require: "semantic_logger/sync"
 ~~~
 
+### Instance Tagged Logger
+
+It is possible to create loggers with pre-set instance tags using `tagged` without a block.
+Any log message emitted by a logger with pre-set instance tags will include these tags along with the message data.
+
+~~~ruby
+logger = SemanticLogger["MyClass"]
+
+# Named tags
+tagged_logger = logger.tagged(user: "alice", request_id: "123")
+tagged_logger.info("Some message")  # includes user and request_id
+
+# Positional tags
+tagged_logger = logger.tagged("tag1", "tag2")
+tagged_logger.info("Some message")  # includes tag1 and tag2
+
+# Both positional and named tags
+tagged_logger = logger.tagged("request", user: "alice")
+tagged_logger.info("Some message")  # includes "request" tag and user named tag
+
+# Chaining
+child_logger = logger.tagged(user: "alice").tagged(request_id: "123")
+child_logger.info("Some message")  # includes both user and request_id
+~~~
+
+When calling `tagged` with a block on an instance-tagged logger, the instance tags are pushed to the thread for the duration of the block:
+
+~~~ruby
+tagged_logger = logger.tagged("instance_tag", user: "alice")
+
+tagged_logger.tagged("block_tag", request_id: "123") do
+  logger.info("Hello")  # tags: [instance_tag, block_tag], named_tags: {user: alice, request_id: 123}
+end
+~~~
+
 ### [Next: Testing ==>](testing.html)

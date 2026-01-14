@@ -6,8 +6,18 @@
 #
 module SemanticLogger
   class Base
+    # Creates a copy of an existing logger.
+    # This method can be overridden by subclasses to provide a specialized implementation.
+    # `child` logger uses this method.
+    def self.copy(instance)
+      raise ArgumentError, "Cannot copy instances different from #{self}" if instance.class != self
+
+      instance.dup
+    end
+
     # Class name to be logged
     attr_accessor :name, :filter
+    attr_reader :instance_named_tags, :instance_tags
 
     # Set the logging level for this logger
     #
@@ -130,7 +140,7 @@ module SemanticLogger
                   payload: nil,
                   metric: nil,
                   metric_amount: nil)
-      log = Log.new(name, level)
+      log = Log.new(name, level, nil, instance_tags, instance_named_tags)
       return false unless meets_log_level?(log)
 
       backtrace =
@@ -185,20 +195,42 @@ module SemanticLogger
     #   to:
     #     `logger.tagged('first', 'more', 'other')`
     # - For better performance with clean tags, see `SemanticLogger.tagged`.
-    def tagged(*tags)
-      block = -> { yield(self) }
-      # Allow named tags to be passed into the logger
-      # Rails::Rack::Logger passes logs as an array with a single argument
-      if tags.size == 1 && !tags.first.is_a?(Array)
-        tag = tags[0]
-        return yield if tag.nil? || tag == ""
+    def tagged(*tags, **named_tags, &block)
+      # Without a block: return a child logger with instance tags
+      unless block
+        return self if tags.empty? && named_tags.empty?
 
-        return tag.is_a?(Hash) ? SemanticLogger.named_tagged(tag, &block) : SemanticLogger.fast_tag(tag.to_s, &block)
+        return child(*tags, **named_tags)
       end
 
+      # With a block: push instance tags + block tags to thread for duration of block
+      # Combine instance tags with block tags
+      combined_tags = instance_tags.empty? ? tags : instance_tags + tags
+      # Combine instance named tags with block named tags
+      combined_named_tags = instance_named_tags.empty? ? named_tags : instance_named_tags.merge(named_tags)
+
+      # Wrap yielder with named_tagged if there are combined named tags
+      yielder = -> { yield(self) }
+      if combined_named_tags.any?
+        inner_yielder = yielder
+        yielder = -> { SemanticLogger.named_tagged(combined_named_tags, &inner_yielder) }
+      end
+
+      # Handle positional tags
+      # Allow named tags to be passed into the logger
+      # Rails::Rack::Logger passes logs as an array with a single argument
+      if combined_tags.size == 1 && !combined_tags.first.is_a?(Array)
+        tag = combined_tags[0]
+        return yielder.call if tag.nil? || tag == ""
+
+        return SemanticLogger.fast_tag(tag.to_s, &yielder)
+      end
+
+      return yielder.call if combined_tags.empty?
+
       # Need to flatten and reject empties to support calls from Rails 4
-      new_tags = tags.flatten.collect(&:to_s).reject(&:empty?)
-      SemanticLogger.tagged(*new_tags, &block)
+      new_tags = combined_tags.flatten.collect(&:to_s).reject(&:empty?)
+      SemanticLogger.tagged(*new_tags, &yielder)
     end
 
     # :nodoc:
@@ -250,7 +282,29 @@ module SemanticLogger
       meets_log_level?(log) && !filtered?(log)
     end
 
+    protected
+
+    def instance_tags=(tags)
+      # Prevent accidental mutation of log tags
+      @instance_tags = tags.dup.freeze
+    end
+
+    def instance_named_tags=(named_tags)
+      # Prevent accidental mutation of log named tags
+      @instance_named_tags = named_tags.dup.freeze
+    end
+
     private
+
+    # Creates a new logger with the given instance tags
+    def child(*tags, **named_tags)
+      new_tags = instance_tags + tags
+      new_named_tags = instance_named_tags.merge(named_tags)
+      new_logger = self.class.copy(self)
+      new_logger.instance_tags = new_tags
+      new_logger.instance_named_tags = new_named_tags
+      new_logger
+    end
 
     # Initializer for Abstract Class SemanticLogger::Base
     #
@@ -275,7 +329,7 @@ module SemanticLogger
     #          (/\AExclude/ =~ log.message).nil?
     #        end
     #      end
-    def initialize(klass, level = nil, filter = nil)
+    def initialize(klass, level = nil, filter = nil, instance_tags = [], instance_named_tags = {})
       # Support filtering all messages to this logger instance.
       unless filter.nil? || filter.is_a?(Regexp) || filter.is_a?(Proc) || filter.respond_to?(:call)
         raise ":filter must be a Regexp, Proc, or implement :call"
@@ -290,6 +344,8 @@ module SemanticLogger
       else
         self.level = level
       end
+      self.instance_tags = instance_tags
+      self.instance_named_tags = instance_named_tags
     end
 
     # Return the level index for fast comparisons
@@ -325,7 +381,7 @@ module SemanticLogger
         payload = nil
       end
 
-      log = Log.new(name, level, index)
+      log = Log.new(name, level, index, instance_tags, instance_named_tags)
       should_log =
         if exception.nil? && payload.nil? && message.is_a?(Hash)
           # All arguments as a hash in the message.
@@ -376,7 +432,7 @@ module SemanticLogger
         exception = e
       ensure
         # Must use ensure block otherwise a `return` in the yield above will skip the log entry
-        log = Log.new(name, level, index)
+        log = Log.new(name, level, index, instance_tags, instance_named_tags)
         exception ||= params[:exception]
         message   = params[:message] if params[:message]
         duration  =
@@ -424,7 +480,7 @@ module SemanticLogger
       rescue Exception => e
         exception = e
       ensure
-        log = Log.new(name, level, index)
+        log = Log.new(name, level, index, instance_tags, instance_named_tags)
         # May return false due to elastic logging
         should_log = log.assign(
           message:            message,
