@@ -93,6 +93,11 @@ module SemanticLogger
       self.dimensions    = dimensions
 
       if exception
+        unless exception.is_a?(Exception)
+          exception = ArgumentError.new("Invalid value for logger exception: #{exception.inspect}")
+          exception.set_backtrace(Utils.extract_backtrace(caller))
+        end
+
         case log_exception
         when :full
           self.exception = exception

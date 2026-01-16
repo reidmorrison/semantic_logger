@@ -600,6 +600,38 @@ class SemanticLoggerLoggingTest < Minitest::Test
             )
           end
 
+          it "wraps invalid exception value in ArgumentError" do
+            events = semantic_logger_events do
+              logger.send(level, "hello world", exception: "ClientFailure")
+            end
+
+            assert_equal 1, events.size
+            event = events.first
+
+            assert_semantic_logger_event(
+              event,
+              name:          "TestLogger",
+              level:         level,
+              level_index:   level_index,
+              message:       "hello world",
+              thread_name:   Thread.current.name,
+              duration:      :nil,
+              payload:       :nil,
+              tags:          [],
+              named_tags:    {},
+              context:       :nil,
+              metric:        :nil,
+              metric_amount: :nil,
+              dimensions:    :nil,
+              time:          Time
+            )
+
+            assert_instance_of ArgumentError, event.exception
+            assert_equal "Invalid value for logger exception: \"ClientFailure\"", event.exception.message
+            assert event.exception.backtrace
+            assert event.exception.backtrace.size.positive?
+          end
+
           it "message with backtrace and exception" do
             SemanticLogger.stub(:backtrace_level_index, 0) do
               exc    = RuntimeError.new("Test")
