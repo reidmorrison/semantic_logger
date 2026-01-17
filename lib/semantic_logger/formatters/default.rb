@@ -32,16 +32,39 @@ module SemanticLogger
 
       # Tags
       def tags
-        "[#{log.tags.join('] [')}]" if log.tags && !log.tags.empty?
+        instance_tags = log.instance_tags
+        tags          = log.tags
+        has_instance  = instance_tags && !instance_tags.empty?
+        has_tags      = tags && !tags.empty?
+
+        case
+        when has_instance && has_tags then combined = tags + instance_tags
+        when has_instance             then combined = instance_tags
+        when has_tags                 then combined = tags
+        else                               combined = nil
+        end
+        return nil unless combined
+
+        "[#{combined.join('] [')}]"
       end
 
       # Named Tags
       def named_tags
-        named_tags = log.named_tags
-        return if named_tags.nil? || named_tags.empty?
+        named_tags          = log.named_tags
+        instance_named_tags = log.instance_named_tags
+        has_named           = named_tags && !named_tags.empty?
+        has_instance        = instance_named_tags && !instance_named_tags.empty?
+
+        case
+        when has_named && has_instance then merged = named_tags.merge(instance_named_tags)
+        when has_named                 then merged = named_tags
+        when has_instance              then merged = instance_named_tags
+        else                                merged = nil
+        end
+        return nil unless merged
 
         list = []
-        named_tags.each_pair { |name, value| list << "#{name}: #{value}" }
+        merged.each_pair { |name, value| list << "#{name}: #{value}" }
         "{#{list.join(', ')}}"
       end
 

@@ -58,12 +58,23 @@ module SemanticLogger
 
       # Tags
       def tags
-        hash[:tags] = log.tags if log.tags && !log.tags.empty?
+        instance_tags = log.instance_tags
+        tags          = log.tags
+        has_instance  = instance_tags && !instance_tags.empty?
+        has_tags      = tags && !tags.empty?
+
+        case
+        when has_instance && has_tags then hash[:tags] = tags + instance_tags
+        when has_instance             then hash[:tags] = instance_tags
+        when has_tags                 then hash[:tags] = tags
+        else                               nil
+        end
       end
 
       # Named Tags
       def named_tags
         hash[:named_tags] = log.named_tags if log.named_tags && !log.named_tags.empty?
+        hash[:named_tags] = hash.fetch(:named_tags, {}).merge(log.instance_named_tags) if log.instance_named_tags && !log.instance_named_tags.empty?
       end
 
       # Duration

@@ -27,6 +27,15 @@ class AppenderFileTest < Minitest::Test
     include SemanticLogger::Loggable
   end
 
+  class TestTaggedClassLogger
+    include SemanticLogger::Loggable
+
+    POSITIONAL_TAG_DATA = ["tag1", "tag2"].freeze
+    TAG_DATA = {tag1: "value1", tag2: "value2"}.freeze
+
+    logger_tagged(*POSITIONAL_TAG_DATA, **TAG_DATA)
+  end
+
   describe SemanticLogger::Loggable do
     describe "inheritance" do
       it "should give child classes their own logger" do
@@ -77,6 +86,16 @@ class AppenderFileTest < Minitest::Test
 
       it "has instance level logger" do
         TestAttribute.new.logger.is_a?(SemanticLogger::Logger)
+      end
+    end
+
+    describe "sample tagged class logger" do
+      it "has instance named tags set" do
+        assert_equal TestTaggedClassLogger::TAG_DATA, TestTaggedClassLogger.logger.instance_named_tags
+      end
+
+      it "has instance tags set" do
+        assert_equal TestTaggedClassLogger::POSITIONAL_TAG_DATA, TestTaggedClassLogger.logger.instance_tags
       end
     end
   end

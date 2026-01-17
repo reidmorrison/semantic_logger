@@ -62,7 +62,9 @@ module SemanticLogger
             h[name] = value unless value.empty?
           end
         else
-          log.named_tags.each_pair do |name, value|
+          named_tags = log.named_tags
+          named_tags = named_tags.merge(log.instance_named_tags) if log.instance_named_tags && !log.instance_named_tags.empty?
+          named_tags.each_pair do |name, value|
             name  = name.to_sym
             value = value.to_s
             next if value.empty?

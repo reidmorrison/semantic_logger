@@ -70,11 +70,22 @@ module SemanticLogger
       end
 
       def tags
-        stream[:stream][:tags] = log.tags if log.tags.respond_to?(:empty?) && !log.tags.empty?
+        instance_tags = log.instance_tags
+        tags          = log.tags
+        has_instance  = instance_tags.respond_to?(:empty?) && !instance_tags.empty?
+        has_tags      = tags.respond_to?(:empty?) && !tags.empty?
+
+        case
+        when has_instance && has_tags then stream[:stream][:tags] = tags + instance_tags
+        when has_instance             then stream[:stream][:tags] = instance_tags
+        when has_tags                 then stream[:stream][:tags] = tags
+        else                               nil
+        end
       end
 
       def named_tags
         stream[:stream].merge!(log.named_tags) if log.named_tags.respond_to?(:empty?) && !log.named_tags.empty?
+        stream[:stream].merge!(log.instance_named_tags) if log.instance_named_tags.respond_to?(:empty?) && !log.instance_named_tags.empty?
       end
 
       def context
