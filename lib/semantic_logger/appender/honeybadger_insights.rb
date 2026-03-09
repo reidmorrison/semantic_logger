@@ -43,7 +43,7 @@ module SemanticLogger
 
       # Send log to honeybadger events API
       def log(log)
-        event = formatter.call(log, self)
+        event = formatter.call(log, self).merge(event_type: "log")
 
         ::Honeybadger.event(event)
 
