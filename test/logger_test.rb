@@ -64,6 +64,33 @@ class LoggerTest < Minitest::Test
       end
     end
 
+    describe "#with_level" do
+      it "temporarily changes logging level during the execution of the given block" do
+        logger.level = :error
+
+        assert_equal :error, logger.level
+
+        logger.debug("not logged")
+
+        logger.with_level(:debug) do
+          assert_equal :debug, logger.level
+
+          logger.debug("logged")
+        end
+
+        assert_equal :error, logger.level
+
+        events = logger.events
+
+        assert_equal 1, events.size
+
+        event = events.first
+
+        assert_equal "logged", event.message
+        assert_equal :debug, event.level
+      end
+    end
+
     describe "#level?" do
       it "return true for debug? with :trace level" do
         logger.level = :trace
