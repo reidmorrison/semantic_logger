@@ -20,6 +20,15 @@ module Appender
           assert_equal @message, hash[:message]
           assert_equal level, hash[:level]
         end
+
+        it "includes an event_type of 'log' in the notification" do
+          hash = nil
+          Honeybadger.stub(:event, ->(h) { hash = h }) do
+            @appender.send(level, @message)
+          end
+
+          assert_equal "log", hash[:event_type]
+        end
       end
 
       it "send notification to Honeybadger with custom attributes" do
