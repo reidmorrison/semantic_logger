@@ -34,6 +34,19 @@ module SemanticLogger
       @level || SemanticLogger.default_level
     end
 
+    # Set the logging level for this logger during the execution of the given block
+    #
+    # Refer to the documentation for `#level=` for more information about the possible log levels.
+    def with_level(new_level)
+      old_level = level
+
+      self.level = new_level
+
+      yield
+    ensure
+      self.level = old_level
+    end
+
     # Implement the log level calls
     #   logger.debug(message, hash|exception=nil, &block)
     #
