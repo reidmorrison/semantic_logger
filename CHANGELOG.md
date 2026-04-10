@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Fix opentelemetry-logs-sdk logger does not expose logger_provider, causing NoMethodError on flush/close.
 - Fix invalid exception instance causing NoMethodError when retrieving backtrace
 - Add event_type to Honeybadger Insights payloads
+- Pin minitest to < 6.0 to avoid breaking changes
 
 ## [4.17.0]
 
