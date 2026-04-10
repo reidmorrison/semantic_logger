@@ -23,7 +23,7 @@ module SemanticLogger
 
     attr_reader :appenders
 
-    def initialize(max_queue_size: -1)
+    def initialize(max_queue_size: 10_000)
       @appenders = Appenders.new(self.class.logger.dup)
       super(appender: @appenders, max_queue_size: max_queue_size)
     end
