@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Fix invalid exception instance causing NoMethodError when retrieving backtrace
 - Pin minitest to < 6.0 to avoid breaking changes
 - Add `with_level` method to `Base` to allow changing log level during block execution, in analogue to `Logger.with_level`.
+- Add event_type to Honeybadger Insights payloads
 
 ## [4.17.0]
 
