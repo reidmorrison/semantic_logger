@@ -271,7 +271,10 @@ module SemanticLogger
 
     # Strip the standard Rails colorizing from the logged message
     def cleansed_message
-      message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, "").strip
+      msg = message.to_s
+      return msg.strip unless msg.include?("\e")
+
+      msg.gsub(/\e\[[\d;]*[mz]?|\e/, "").strip
     end
 
     # Return the payload in text form
