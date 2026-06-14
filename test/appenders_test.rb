@@ -1,6 +1,32 @@
 require_relative "test_helper"
 
 class AppendersTest < Minitest::Test
+  class RaisingLogAppender < SemanticLogger::Test::CaptureLogEvents
+    def log(_log)
+      raise "log boom"
+    end
+  end
+
+  class RaisingFlushAppender < SemanticLogger::Test::CaptureLogEvents
+    def flush
+      raise "flush boom"
+    end
+  end
+
+  class ReopenAppender < SemanticLogger::Test::CaptureLogEvents
+    attr_reader :reopened
+
+    def reopen
+      @reopened = true
+    end
+  end
+
+  class RaisingReopenAppender < SemanticLogger::Test::CaptureLogEvents
+    def reopen
+      raise "reopen boom"
+    end
+  end
+
   describe SemanticLogger::Appenders do
     let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
     let(:appenders) { SemanticLogger::Appenders.new(capture_logger) }
@@ -109,6 +135,60 @@ class AppendersTest < Minitest::Test
 
         assert_equal(0, capture_logger.events.count { |it| it.message.match?(/failed/i) })
         assert_equal 0, appenders.size
+      end
+    end
+
+    describe "#log" do
+      it "continues to remaining appenders when one raises and records the failure" do
+        failing   = RaisingLogAppender.new
+        recording = SemanticLogger::Test::CaptureLogEvents.new
+        appenders << failing
+        appenders << recording
+
+        log         = SemanticLogger::Log.new("Test", :info)
+        log.message = "hello"
+        appenders.log(log)
+
+        assert_includes recording.events, log
+        assert(capture_logger.events.any? { |it| it.message.include?("Failed to log to appender") })
+      end
+    end
+
+    describe "#flush" do
+      it "flushes remaining appenders when one raises and records the failure" do
+        failing   = RaisingFlushAppender.new
+        recording = SemanticLogger::Test::CaptureLogEvents.new
+        appenders << failing
+        appenders << recording
+
+        appenders.flush
+
+        assert(capture_logger.events.any? { |it| it.message.include?("Failed to flush appender") })
+      end
+    end
+
+    describe "#reopen" do
+      it "reopens appenders that support it and skips those that do not" do
+        reopenable     = ReopenAppender.new
+        not_reopenable = SemanticLogger::Test::CaptureLogEvents.new
+        appenders << reopenable
+        appenders << not_reopenable
+
+        appenders.reopen
+
+        assert reopenable.reopened
+      end
+
+      it "continues to remaining appenders when one raises and records the failure" do
+        failing  = RaisingReopenAppender.new
+        succeeds = ReopenAppender.new
+        appenders << failing
+        appenders << succeeds
+
+        appenders.reopen
+
+        assert succeeds.reopened
+        assert(capture_logger.events.any? { |it| it.message.include?("Failed to re-open appender") })
       end
     end
   end

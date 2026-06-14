@@ -47,7 +47,7 @@ module SemanticLogger
         else
           amount = (log.metric_amount || 1).round
           if amount.negative?
-            amount.times { @statsd.decrement(metric) }
+            amount.abs.times { @statsd.decrement(metric) }
           else
             amount.times { @statsd.increment(metric) }
           end

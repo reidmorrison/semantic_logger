@@ -216,6 +216,38 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".flush, .close, and .reopen" do
+      it "delegate to the processor" do
+        mock = Minitest::Mock.new
+        mock.expect(:flush, nil)
+        mock.expect(:close, nil)
+        mock.expect(:reopen, nil)
+
+        SemanticLogger::Logger.stub(:processor, mock) do
+          SemanticLogger.flush
+          SemanticLogger.close
+          SemanticLogger.reopen
+        end
+
+        mock.verify
+      end
+    end
+
+    describe ".sync! and .sync?" do
+      it "switches the global processor to a SyncProcessor" do
+        original = SemanticLogger::Logger.instance_variable_get(:@processor)
+        begin
+          SemanticLogger.sync!
+          assert SemanticLogger.sync?
+          assert_kind_of SemanticLogger::SyncProcessor, SemanticLogger::Logger.processor
+          # The appenders are carried over to the synchronous processor.
+          assert_same original.appenders, SemanticLogger::Logger.processor.appenders if original
+        ensure
+          SemanticLogger::Logger.instance_variable_set(:@processor, original)
+        end
+      end
+    end
+
     describe ".on_log" do
       after do
         # Clear on_log subscribers
