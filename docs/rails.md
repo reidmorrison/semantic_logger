@@ -279,13 +279,13 @@ config.semantic_logger.add_appender(file_name: "log/#{Rails.env}.json", formatte
 Example, also log to a local Syslog:
 
 ~~~ruby
-config.semantic_logger.add_appender(appender: syslog)
+config.semantic_logger.add_appender(appender: :syslog)
 ~~~
 
 Example, also log to a local Syslog such as syslog-ng over TCP:
 
 ~~~ruby
-config.semantic_logger.add_appender(appender: syslog, url: "tcp://myloghost:514")
+config.semantic_logger.add_appender(appender: :syslog, url: "tcp://myloghost:514")
 ~~~
 
 Example, also log to elasticsearch:

@@ -75,7 +75,7 @@ kill -TTIN 1234
 
 ### JRuby Garbage collection event logging
 
-For JRuby, any Garbage Collection events that take longer than 10ms are logged
+For JRuby, any Garbage Collection events that take longer than 100ms are logged
 as a warning to the regular log file and other appenders.
 
 This information is critical in high load scenarios to give visibility on any

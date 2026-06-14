@@ -508,11 +508,8 @@ create a file called `<Rails Root>/config/initializers/mongodb.rb` with
 the following contents and restart the application.
 
 ~~~ruby
-client   = Mongo::MongoClient.new("127.0.0.1", 27017)
-database = client["test"]
-
 appender = SemanticLogger::Appender::MongoDB.new(
-  db:              database,
+  uri:             "mongodb://127.0.0.1:27017/test",
   collection_size: 1024**3, # 1.gigabyte
   application:     Rails.application.class.name
 )

@@ -12,7 +12,7 @@ end
 #     appender: :rabbitmq,
 #
 #     # Name of the queue in RabbitMQ where to publish the logs. This queue will be bound to "amqp.direct" exchange.
-#     queue: 'semantic_logger',
+#     queue_name: 'semantic_logger',
 #
 #     # This host will be used for RabbitMQ connection.
 #     # NOTE this is different than :host option which is used by the logger directly.

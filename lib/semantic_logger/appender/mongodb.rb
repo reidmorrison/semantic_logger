@@ -36,11 +36,8 @@ module SemanticLogger
     # Example:
     #   require 'semantic_logger'
     #
-    #   client   = Mongo::MongoClient.new
-    #   database = client['test']
-    #
     #   appender = SemanticLogger::Appender::MongoDB.new(
-    #     db:              database,
+    #     uri:             'mongodb://127.0.0.1:27017/test',
     #     collection_size: 1024**3 # 1.gigabyte
     #   )
     #   SemanticLogger.add_appender(appender: appender)

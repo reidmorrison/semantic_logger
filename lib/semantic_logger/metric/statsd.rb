@@ -24,7 +24,7 @@ module SemanticLogger
       # Example:
       #   SemanticLogger.add_appender(
       #     metric: :statsd,
-      #     url:    'localhost:8125'
+      #     url:    'udp://localhost:8125'
       #   )
       def initialize(url: "udp://localhost:8125")
         @url = url

@@ -71,7 +71,7 @@ Send metrics to [Statsd](https://github.com/quasor/statsd) via UDP so it can rol
 ~~~ruby
 SemanticLogger.add_appender(
   metric: :statsd,
-  url:    'localhost:8125'
+  url:    'udp://localhost:8125'
 )
 ~~~
 

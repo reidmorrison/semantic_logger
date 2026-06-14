@@ -31,18 +31,18 @@ require "semantic_logger"
 # Log everything to development.log
 SemanticLogger.add_appender(file_name: "development.log")
 
-# Log everything except any messages from "MyClass" to summary.log
+# Log _only_ messages from "MyClass" to my_class.log
 appender = SemanticLogger.add_appender(
   file_name: "my_class.log",
-  # Filter out log entries where the class name is "MyClass"
+  # Only include log entries where the class name matches "MyClass"
   filter:    /MyClass/
 )
 
 logger1 = SemanticLogger["MyClass"]
-logger1.info "This will _only_ be logged to "my_class.log""
+logger1.info "This will be logged to development.log and my_class.log"
 
 logger2 = SemanticLogger["OtherClass"]
-logger2.info "This will be logged to development.log and 'my_class.log'"
+logger2.info "This will _only_ be logged to development.log"
 ~~~
 
 Example Using a Proc filter, log everything to one file, log everything except

@@ -446,7 +446,7 @@ Some third party gems log a large amount of information at debug level since the
 do not use Semantic Logger and do not have access to the `:trace` level for logging.
 
 To map the `:debug` logging calls for these existing libraries to `:trace`, replace
-its logger with an instance of `DebugAsTraceLogger::SemanticLogger`
+its logger with an instance of `SemanticLogger::DebugAsTraceLogger`
 
 ~~~ruby
 # Example, log debug level messages as trace:
