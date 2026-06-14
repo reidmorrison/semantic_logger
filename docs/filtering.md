@@ -4,23 +4,25 @@ layout: default
 
 ## Filtering
 
-Filtering is useful to reduce log output for excessive log messages. It is can
-be used for example where a Library is logging messages and we do not want to modify
-that library.
+A filter controls which log entries are written, selecting them by class name or by any property
+of the entry. It is useful to quiet a noisy library without modifying it, or to send only certain
+messages to a particular appender.
 
-Additionally a filter can be used to filter out or in specific log messages to certain
-appenders. For example, only log messages from specific classes or with specific content
-to a specific appender.
+A filter is one of:
+
+* A **regular expression**, matched against the class name of the logger. Only entries whose class
+  name matches are logged.
+* A **Proc**, which receives the entire log event and returns `true` to keep the entry, or `false`
+  to drop it. For the structure of the log event, see [Log Event](log_struct.html).
+
+Filters can be applied at two levels:
+
+* **Per appender**, where the filter affects only what that one destination writes.
+* **Per logger**, where the filter affects every appender, but only for that one logger instance.
 
 ### Appender specific log filtering
 
-Filters can be supplied to most appenders on the initializer, or can be setup
-by using the accessors. A filter is either a regular expression matching what
-messages to include, or is a Proc (Block of code) that returns `true` to allow the
-message to be logged, or `false` indicating the message should not be logged.
-
-When using a Proc, it is passed the entire `Log Struct`.
-For the format of the `Log Struct`, see [Log Struct](log_struct.html)
+Supply a `filter:` when adding an appender, or set it afterwards with the `filter=` accessor.
 
 Example. Using a regular expression filter, log everything to one file,
 log _only_ messages from a particular class to the second file:
