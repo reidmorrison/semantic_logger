@@ -4,7 +4,7 @@ layout: default
 
 ## What is Semantic Logger?
 
-Semantic Logger is a feature rich logging framework for Ruby, and a drop-in replacement
+Semantic Logger is a feature rich logging framework for Ruby, and a replacement
 for the built-in Ruby and Rails loggers.
 
 It does two things that ordinary loggers do not:
@@ -61,7 +61,7 @@ search, filter, and build dashboards on those fields directly, no log parsing re
   log aggregator, written from the same log call.
 * **Many destinations at once.** Write to a file, the screen, and a remote service simultaneously,
   each with its own log level and format. See [Appenders](appenders.html).
-* **A drop-in replacement.** It supports the standard `debug`/`info`/`warn`/`error`/`fatal` API, so
+* **A familiar API.** It supports the standard `debug`/`info`/`warn`/`error`/`fatal` API, so
   existing code and other gems keep working. You mostly just change how the logger is created.
 * **Built for production.** Per-class log levels, change the log level of a running process with a
   [signal](signals.html), tagged logging for tracing requests across threads, automatic exception

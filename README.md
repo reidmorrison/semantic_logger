@@ -1,7 +1,7 @@
 # Semantic Logger
 [![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://github.com/reidmorrison/semantic_logger/workflows/build/badge.svg)](https://github.com/reidmorrison/semantic_logger/actions?query=workflow%3Abuild) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg)
 
-Semantic Logger is a feature rich logging framework, and a drop-in replacement for the existing
+Semantic Logger is a feature rich logging framework, and a replacement for the existing
 Ruby and Rails loggers.
 
 It differs from ordinary loggers in two important ways:
@@ -192,6 +192,11 @@ SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
 ~~~
 
 If running rails, see: [Semantic Logger Rails](https://logger.rocketjob.io/rails.html)
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up the project, run the
+tests, and an overview of the architecture, including a class diagram.
 
 ## Author
 
