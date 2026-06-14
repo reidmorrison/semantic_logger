@@ -120,6 +120,7 @@ Naming/VariableNumber:
     - 'lib/semantic_logger/formatters/json.rb'
     - 'lib/semantic_logger/formatters/logfmt.rb'
     - 'test/formatters/default_test.rb'
+    - 'test/formatters/raw_test.rb'
 
 # Offense count: 3
 Style/DocumentDynamicEvalDefinition:
