@@ -16,6 +16,16 @@ require "openssl"
 #     appender: :http,
 #     url:      'http://localhost:8088/path'
 #   )
+#
+# Batching:
+# By default each log message is posted individually. To post multiple log
+# messages in a single request as a JSON array (for example to the Filebeat
+# http_endpoint input), enable batching when adding the appender:
+#   SemanticLogger.add_appender(
+#     appender: :http,
+#     url:      'http://localhost:8088/path',
+#     batch:    true
+#   )
 module SemanticLogger
   module Appender
     class Http < SemanticLogger::Subscriber
@@ -189,6 +199,21 @@ module SemanticLogger
         message = formatter.call(log, self)
         logger.trace(message)
         post(message)
+      end
+
+      # Forward a batch of log messages to the HTTP Server in a single request.
+      # Only used when the appender is created with `batch: true`.
+      def batch(logs)
+        message = formatter.batch(logs, self)
+        logger.trace(message)
+        post(message)
+      end
+
+      # The HTTP appender supports batching, but only when explicitly requested
+      # via `batch: true`, so that the default behaviour (one request per log
+      # message) is preserved.
+      def batch_by_default?
+        false
       end
 
       private

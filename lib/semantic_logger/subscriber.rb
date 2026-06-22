@@ -84,6 +84,13 @@ module SemanticLogger
       !console_stream.nil?
     end
 
+    # Whether an appender that implements #batch should be wrapped in a batch
+    # proxy automatically. Appenders that support batching but should only batch
+    # when explicitly requested (via `batch: true`) override this to return false.
+    def batch_by_default?
+      true
+    end
+
     private
 
     # Initializer for Abstract Class SemanticLogger::Subscriber

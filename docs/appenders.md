@@ -695,6 +695,36 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+#### Batching
+
+By default each log message is sent in its own HTTP request. To instead send
+multiple log messages in a single request as a JSON array, enable batching with
+`batch: true`. This is useful for endpoints that accept an array of objects and
+create one document per element, such as the
+[Filebeat http_endpoint input](https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-input-http_endpoint.html).
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :http,
+  url:      "http://localhost:8088/path",
+  batch:    true
+)
+~~~
+
+When batching is enabled the appender runs in its own thread and flushes a batch
+once `batch_size` messages have accumulated (default: 300) or `batch_seconds`
+have elapsed (default: 5), whichever comes first:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:      :http,
+  url:           "http://localhost:8088/path",
+  batch:         true,
+  batch_size:    100,
+  batch_seconds: 10
+)
+~~~
+
 ### TCP Appender (+SSL)
 
 The TCP appender supports sending JSON or other formatted messages to services that can accept log messages
