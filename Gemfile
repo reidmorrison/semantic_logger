@@ -10,7 +10,7 @@ gem "minitest-shared_description"
 gem "minitest-stub_any_instance"
 gem "rake"
 gem "simplecov", require: false
-gem "solargraph", require: false
+gem "solargraph", require: false, platform: :ruby
 
 # [optional] Bugsnag appender
 gem "bugsnag"

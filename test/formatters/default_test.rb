@@ -157,7 +157,12 @@ module SemanticLogger
           it "logs hash payload" do
             log.payload = {first: 1, second: 2, third: 3}
 
-            assert_equal "-- {first: 1, second: 2, third: 3}", formatter.payload
+            # Ruby 3.4 changed the way hashes are displayed
+            if RUBY_VERSION < "3.4"
+              assert_equal "-- {:first=>1, :second=>2, :third=>3}", formatter.payload
+            else
+              assert_equal "-- {first: 1, second: 2, third: 3}", formatter.payload
+            end
           end
 
           it "skips nil payload" do
@@ -198,6 +203,13 @@ module SemanticLogger
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1" : "1.346"
             str      = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"
+
+            # Ruby 3.4 changed the way hashes are displayed
+            str = if RUBY_VERSION < "3.4"
+                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
+                  else
+                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"
+                  end
 
             assert_equal str, formatter.call(log, nil).lines.first
           end
