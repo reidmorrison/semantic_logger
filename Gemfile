@@ -3,7 +3,8 @@ source "https://rubygems.org"
 gemspec
 
 gem "amazing_print"
-gem "minitest", "< 6.0"
+gem "minitest", "~> 6.0"
+gem "minitest-mock"
 gem "minitest-reporters"
 gem "minitest-shared_description"
 gem "minitest-stub_any_instance"

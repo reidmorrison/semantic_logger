@@ -21,6 +21,7 @@ $LOAD_PATH.unshift "#{File.dirname(__FILE__)}/../lib"
 ENV["RAILS_ENV"] = "test"
 
 require "minitest/autorun"
+require "minitest/mock"
 require "minitest/reporters"
 require "minitest/stub_any_instance"
 if ENV["LOGGER_SYNC"]
@@ -59,7 +60,7 @@ SemanticLogger.backtrace_level = :trace
 SemanticLogger.add_appender(file_name: "test.log", formatter: :color)
 
 reporters = [
-  Minitest::Reporters::ProgressReporter.new,
+  Minitest::Reporters::DefaultReporter.new,
   SemanticLogger::Reporters::Minitest.new
 ]
 Minitest::Reporters.use!(reporters)
