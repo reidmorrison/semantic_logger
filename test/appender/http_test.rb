@@ -71,6 +71,42 @@ module Appender
         end
       end
 
+      describe "batch" do
+        let(:log1) do
+          log         = SemanticLogger::Log.new("User", :info)
+          log.message = "message 1"
+          log
+        end
+
+        let(:log2) do
+          log         = SemanticLogger::Log.new("User", :warn)
+          log.message = "message 2"
+          log
+        end
+
+        it "is not batched by default" do
+          refute_predicate appender, :batch_by_default?
+        end
+
+        it "posts multiple log messages as a single JSON array" do
+          request = nil
+          appender.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }) do
+            appender.batch([log1, log2])
+          end
+          array = JSON.parse(request.body)
+
+          assert_kind_of Array, array
+          assert_equal 2, array.size
+          assert_equal "message 1", array[0]["message"]
+          assert_equal "info", array[0]["level"]
+          assert_equal "message 2", array[1]["message"]
+          assert_equal "warn", array[1]["level"]
+        end
+      end
+
       it "supports http 204 success" do
         http_success = Net::HTTPSuccess.new("1.1", "204", "OK")
         request = nil

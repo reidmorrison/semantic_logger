@@ -39,8 +39,9 @@ module SemanticLogger
                      &)
       appender = build(**args, &)
 
-      # If appender implements #batch, then it should use the batch proxy by default.
-      batch    = true if batch.nil? && appender.respond_to?(:batch)
+      # If appender implements #batch, then it should use the batch proxy by default,
+      # unless the appender opts out of batching by default (e.g. the HTTP appender).
+      batch    = true if batch.nil? && appender.respond_to?(:batch) && appender.batch_by_default?
 
       if batch == true
         Appender::AsyncBatch.new(
