@@ -20,12 +20,14 @@ class AppenderTest < Minitest::Test
       describe "with :metric" do
         it "builds a metric subscriber from a Symbol" do
           appender = build(metric: :statsd)
+
           assert_kind_of SemanticLogger::Metric::Statsd, appender
         end
 
         it "returns the supplied metric Subscriber instance" do
           metric   = SemanticLogger::Metric::Statsd.new
           appender = build(metric: metric)
+
           assert_same metric, appender
         end
 

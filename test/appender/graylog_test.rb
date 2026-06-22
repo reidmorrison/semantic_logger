@@ -13,6 +13,7 @@ module Appender
           appender.notifier.stub(:notify!, ->(h) { hash = h }) do
             appender.send(level, "AppenderGraylogTest #{level} message")
           end
+
           assert_nil hash
         end
       end
@@ -28,11 +29,12 @@ module Appender
         appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           appender.error "Reading File", exc
         end
+
         assert_equal "Reading File", hash[:short_message]
         assert_equal "NameError", hash[:exception][:name]
         assert_match "undefined local variable or method", hash[:exception][:message]
         assert_equal 3, hash[:level], "Should be error level (3)"
-        assert hash[:exception][:stack_trace].first.include?(__FILE__), hash[:exception]
+        assert_includes hash[:exception][:stack_trace].first, __FILE__, hash[:exception]
       end
 
       it "send exception notifications to Graylog without log message" do
@@ -46,11 +48,12 @@ module Appender
         appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           appender.error exc
         end
+
         assert_equal exc.message, hash[:short_message]
         assert_equal exc.class.to_s, hash[:exception][:name]
         assert_match exc.message, hash[:exception][:message]
         assert_equal 3, hash[:level], "Should be error level (3)"
-        assert hash[:exception][:stack_trace].first.include?(__FILE__), hash[:exception]
+        assert_includes hash[:exception][:stack_trace].first, __FILE__, hash[:exception]
       end
 
       it "send notifications to Graylog without exception message" do
@@ -59,7 +62,8 @@ module Appender
         appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           appender.error exc
         end
-        assert_equal hash[:short_message], "<no-exception-message>"
+
+        assert_equal "<no-exception-message>", hash[:short_message]
         assert_nil exc
         assert_equal 3, hash[:level], "Should be error level (3)"
       end
@@ -69,6 +73,7 @@ module Appender
         appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           appender.error amessage
         end
+
         assert_equal amessage, hash[:short_message]
         assert_equal 3, hash[:level]
         refute hash[:stack_trace]
@@ -79,6 +84,7 @@ module Appender
         appender.notifier.stub(:notify!, ->(h) { hash = h }) do
           appender.error amessage, key1: 1, key2: "a"
         end
+
         assert_equal amessage, hash[:short_message]
         assert_equal 3, hash[:level]
         refute hash[:stack_trace]

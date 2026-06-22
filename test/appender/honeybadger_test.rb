@@ -13,6 +13,7 @@ module Appender
           Honeybadger.stub(:notify, ->(h) { hash = h }) do
             appender.send(level, amessage)
           end
+
           assert_equal amessage, hash[:error_message]
           assert_equal "SemanticLogger::Appender::Honeybadger", hash[:error_class]
 

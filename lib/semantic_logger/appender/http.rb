@@ -106,7 +106,7 @@ module SemanticLogger
                      read_timeout: 1.0,
                      continue_timeout: 1.0,
                      **args,
-                     &block)
+                     &)
         @url              = url
         @proxy_url        = proxy_url
         @ssl_options      = ssl
@@ -151,7 +151,7 @@ module SemanticLogger
 
         @http = nil
 
-        super(**args, &block)
+        super(**args, &)
         reopen
       end
 

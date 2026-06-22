@@ -35,56 +35,64 @@ class AppendersTest < Minitest::Test
     describe "#add" do
       it "adds file appender" do
         appender = appenders.add(file_name: "sample.log")
-        assert appender.is_a?(SemanticLogger::Appender::File)
-        assert appenders.include?(appender)
-        assert appender.formatter.is_a?(SemanticLogger::Formatters::Default)
+
+        assert_kind_of SemanticLogger::Appender::File, appender
+        assert_includes appenders, appender
+        assert_kind_of SemanticLogger::Formatters::Default, appender.formatter
       end
 
       it "adds file appender with json format" do
         appender = appenders.add(file_name: "sample.log", formatter: :json)
-        assert appender.is_a?(SemanticLogger::Appender::File)
-        assert appenders.include?(appender)
-        assert appender.formatter.is_a?(SemanticLogger::Formatters::Json), appender.formatter.inspect
+
+        assert_kind_of SemanticLogger::Appender::File, appender
+        assert_includes appenders, appender
+        assert_kind_of SemanticLogger::Formatters::Json, appender.formatter, appender.formatter.inspect
       end
 
       it "adds stream appender" do
         appender = appenders.add(io: $stdout)
-        assert appender.is_a?(SemanticLogger::Appender::IO)
-        assert appenders.include?(appender)
+
+        assert_kind_of SemanticLogger::Appender::IO, appender
+        assert_includes appenders, appender
       end
 
       it "adds symbol appender" do
         appender = appenders.add(appender: :wrapper, logger: Logger.new($stdout))
-        assert appender.is_a?(SemanticLogger::Appender::Wrapper), -> { appender.ai }
-        assert appenders.include?(appender)
+
+        assert_kind_of SemanticLogger::Appender::Wrapper, appender, -> { appender.ai }
+        assert_includes appenders, appender
       end
 
       it "adds symbol appender with underscores" do
         appender = appenders.add(appender: :bugsnag)
-        assert appender.is_a?(SemanticLogger::Appender::Bugsnag), -> { appender.ai }
-        assert appenders.include?(appender)
+
+        assert_kind_of SemanticLogger::Appender::Bugsnag, appender, -> { appender.ai }
+        assert_includes appenders, appender
       end
 
       it "adds logger wrapper appender" do
         appender = appenders.add(logger: ::Logger.new($stdout))
-        assert appender.is_a?(SemanticLogger::Appender::Wrapper)
-        assert appender.logger.is_a?(::Logger)
-        assert appenders.include?(appender)
-        assert appender.formatter.is_a?(SemanticLogger::Formatters::Default)
+
+        assert_kind_of SemanticLogger::Appender::Wrapper, appender
+        assert_kind_of ::Logger, appender.logger
+        assert_includes appenders, appender
+        assert_kind_of SemanticLogger::Formatters::Default, appender.formatter
       end
 
       it "adds logger wrapper appender with color formatter" do
         appender = appenders.add(logger: ::Logger.new($stdout), formatter: :color)
-        assert appender.is_a?(SemanticLogger::Appender::Wrapper)
-        assert appender.logger.is_a?(::Logger)
-        assert appenders.include?(appender)
-        assert appender.formatter.is_a?(SemanticLogger::Formatters::Color)
+
+        assert_kind_of SemanticLogger::Appender::Wrapper, appender
+        assert_kind_of ::Logger, appender.logger
+        assert_includes appenders, appender
+        assert_kind_of SemanticLogger::Formatters::Color, appender.formatter
       end
 
       it "adds appender" do
         appender = appenders.add(appender: SemanticLogger::Appender::IO.new($stdout))
-        assert appender.is_a?(SemanticLogger::Appender::IO), appender.ai
-        assert appenders.include?(appender)
+
+        assert_kind_of SemanticLogger::Appender::IO, appender, appender.ai
+        assert_includes appenders, appender
       end
 
       it "fails to add invalid logger appender" do
@@ -95,12 +103,15 @@ class AppendersTest < Minitest::Test
 
       it "prevents adding multiple console loggers" do
         appender = appenders.add(io: $stdout)
-        assert appenders.include?(appender)
+
+        assert_includes appenders, appender
 
         appender = appenders.add(io: $stdout)
+
         assert_nil appender
 
         appender = appenders.add(io: $stderr)
+
         assert_nil appender
 
         assert_equal 1, appenders.size
@@ -108,16 +119,19 @@ class AppendersTest < Minitest::Test
 
       it "allows adding multiple loggers" do
         appender = appenders.add(io: $stdout)
-        assert appenders.include?(appender)
+
+        assert_includes appenders, appender
 
         appender = appenders.add(file_name: "test.log")
-        assert appenders.include?(appender)
+
+        assert_includes appenders, appender
 
         assert_equal 2, appenders.size
       end
 
       it "adds batch proxy" do
         appender = appenders.add(appender: logger, batch: true)
+
         assert_instance_of SemanticLogger::Appender::AsyncBatch, appender
       end
 

@@ -23,6 +23,7 @@ module Appender
           custom = Net::HTTP.stub_any_instance(:start, true) do
             SemanticLogger::Appender::Loki.new(url: "http://localhost:3100", path: "custom/push")
           end
+
           assert_equal "/custom/push", custom.path
         end
 
@@ -45,6 +46,7 @@ module Appender
             appender.send(level, log_message)
           end
           stream = JSON.parse(request.body)["streams"].first
+
           assert_equal level.to_s, stream["stream"]["level"]
           assert_equal log_message, stream["values"].first[1]
         end
@@ -65,6 +67,7 @@ module Appender
           end
           stream  = JSON.parse(request.body)["streams"].first
           payload = stream["values"].first[2]
+
           assert_equal level.to_s, stream["stream"]["level"]
           assert_equal "NameError", payload["exception_name"]
           assert_match(/undefined local variable or method/, payload["exception_message"])
@@ -80,11 +83,13 @@ module Appender
             appender.send(level, log_message, key1: 1, key2: "a")
           end
           stream = JSON.parse(request.body)["streams"].first
+
           assert_equal level.to_s, stream["stream"]["level"]
           assert_equal log_message, stream["values"].first[1]
 
           # Loki only accepts strings as payload keys and values.
           payload = stream["values"].first[2]
+
           assert_equal "1", payload["key1"], payload
           assert_equal "a", payload["key2"], payload
         end
@@ -108,6 +113,7 @@ module Appender
           end
 
           streams = JSON.parse(request.body)["streams"]
+
           assert_equal 2, streams.size
           assert_equal "info",   streams[0]["stream"]["level"]
           assert_equal "first",  streams[0]["values"].first[1]

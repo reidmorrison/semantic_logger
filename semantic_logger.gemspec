@@ -12,12 +12,15 @@ Gem::Specification.new do |s|
   s.authors               = ["Reid Morrison"]
   s.homepage              = "https://logger.rocketjob.io"
   s.summary               = "Feature rich logging framework, and replacement for existing Ruby & Rails loggers."
+  s.description           = "Semantic Logger is a feature rich logging framework, and replacement for existing Ruby & Rails loggers. " \
+                            "It logs to multiple destinations asynchronously via a background thread, with structured (semantic) payloads."
   s.files                 = Dir["lib/**/*", "LICENSE.txt", "Rakefile", "README.md"]
   s.license               = "Apache-2.0"
-  s.required_ruby_version = ">= 2.7"
+  s.required_ruby_version = ">= 3.2"
   s.add_dependency "concurrent-ruby", "~> 1.0"
   s.metadata = {
     "bug_tracker_uri"       => "https://github.com/reidmorrison/semantic_logger/issues",
+    "changelog_uri"         => "https://github.com/reidmorrison/semantic_logger/releases",
     "documentation_uri"     => "https://logger.rocketjob.io",
     "source_code_uri"       => "https://github.com/reidmorrison/semantic_logger/tree/v#{SemanticLogger::VERSION}",
     "rubygems_mfa_required" => "true"

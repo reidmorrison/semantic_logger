@@ -48,6 +48,7 @@ module SemanticLogger
               log_environment: false,
               precision:       3
             )
+
             assert_equal "%Y", custom.time_format
             refute custom.log_host
             refute custom.log_application
@@ -73,38 +74,45 @@ module SemanticLogger
 
           it "returns nil when there is no time format" do
             formatter.time_format = nil
+
             assert_nil formatter.time
           end
 
           it "supports :ms" do
             formatter.time_format = :ms
+
             assert_equal (log_time.to_f * 1_000).to_i, formatter.time
           end
 
           it "supports :seconds" do
             formatter.time_format = :seconds
+
             assert_equal log_time.to_f, formatter.time
           end
 
           it "supports iso 8601" do
             custom     = SemanticLogger::Formatters::Base.new(time_format: :iso_8601) # rubocop:disable Naming/VariableNumber
             custom.log = log
+
             assert_equal log_time.utc.iso8601(custom.precision), custom.time
           end
 
           it "supports rfc 3339" do
             custom     = SemanticLogger::Formatters::Base.new(time_format: :rfc_3339) # rubocop:disable Naming/VariableNumber
             custom.log = log
+
             assert_equal log_time.utc.to_datetime.rfc3339, custom.time
           end
 
           it "supports :notime" do
             formatter.time_format = :notime
+
             assert_equal "", formatter.time
           end
 
           it "supports :none" do
             formatter.time_format = :none
+
             assert_kind_of Time, formatter.time
           end
         end

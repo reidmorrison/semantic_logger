@@ -66,6 +66,7 @@ module Appender
           exception, hash, severity = stub_bugsnag do
             appender.debug metric: "my/custom/metric", payload: {hello: :world}
           end
+
           assert_nil exception
           assert_nil hash
           assert_nil severity

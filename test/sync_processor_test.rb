@@ -22,6 +22,7 @@ module SemanticLogger
           begin
             replacement = SemanticLogger::Appender::IO.new($stdout)
             SemanticLogger::SyncProcessor.logger = replacement
+
             assert_same replacement, SemanticLogger::SyncProcessor.logger
           ensure
             SemanticLogger::SyncProcessor.logger = original
@@ -42,6 +43,7 @@ module SemanticLogger
       describe "#add" do
         it "adds an appender" do
           added = processor.add(io: $stdout)
+
           assert_includes processor.appenders, added
         end
       end
@@ -51,6 +53,7 @@ module SemanticLogger
           log         = SemanticLogger::Log.new("Test", :info)
           log.message = "hello"
           processor.log(log)
+
           assert_includes appender.events, log
         end
       end

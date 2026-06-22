@@ -542,7 +542,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
                 dimensions:    :nil,
                 time:          Time
               )
-              assert events.first.backtrace.size.positive?, events.first.backtrace
+              assert_predicate events.first.backtrace.size, :positive?, events.first.backtrace
             end
           end
 
@@ -629,7 +629,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
             assert_instance_of ArgumentError, event.exception
             assert_equal "Invalid value for logger exception: \"ClientFailure\"", event.exception.message
             assert event.exception.backtrace
-            assert event.exception.backtrace.size.positive?
+            assert_predicate event.exception.backtrace.size, :positive?
           end
 
           it "message with backtrace and exception" do
@@ -659,7 +659,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
                 time:          Time
               )
               assert events.first.backtrace
-              assert events.first.backtrace.size.positive?, events.first.backtrace
+              assert_predicate events.first.backtrace.size, :positive?, events.first.backtrace
             end
           end
 
@@ -669,7 +669,7 @@ class SemanticLoggerLoggingTest < Minitest::Test
 payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
-            assert events.empty?
+            assert_empty events
           end
         end
 
@@ -779,7 +779,7 @@ payload: {tracking_number: "123456", even: 2, more: "data"})
                 time:          Time
               )
               assert events.first.backtrace
-              assert events.first.backtrace.size.positive?, events.first.backtrace
+              assert_predicate events.first.backtrace.size, :positive?, events.first.backtrace
             end
           end
 
@@ -789,7 +789,7 @@ payload: {tracking_number: "123456", even: 2, more: "data"})
 payload: {tracking_number: "123456", even: 2, more: "data"})
             end
 
-            assert events.empty?
+            assert_empty events
           end
 
           it "logs above min_duration" do

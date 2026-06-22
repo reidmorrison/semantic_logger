@@ -68,7 +68,8 @@ module SemanticLogger
             log.payload    = {first: 1, second: 2, third: 3}
             set_exception
             str = JSON.parse(formatter.call(log, nil))
-            assert_equal str["exception"]["name"], "RuntimeError"
+
+            assert_equal "RuntimeError", str["exception"]["name"]
           end
         end
       end

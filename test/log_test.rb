@@ -25,6 +25,7 @@ module SemanticLogger
 
         it "uses the supplied index when given" do
           log = SemanticLogger::Log.new("LogTest", :info, 99)
+
           assert_equal 99, log.level_index
         end
 
@@ -42,9 +43,10 @@ module SemanticLogger
 
         it "assigns the core fields" do
           log.assign(message: "Hello", payload: {a: 1}, duration: 5.0, metric: "m", metric_amount: 2)
+
           assert_equal "Hello", log.message
           assert_equal({a: 1}, log.payload)
-          assert_equal 5.0, log.duration
+          assert_in_delta(5.0, log.duration)
           assert_equal "m", log.metric
           assert_equal 2, log.metric_amount
         end
@@ -60,17 +62,20 @@ module SemanticLogger
         describe "exception handling" do
           it "assigns the exception when log_exception is :full" do
             log.assign(exception: exception, log_exception: :full)
+
             assert_equal exception, log.exception
           end
 
           it "folds the exception into the message when log_exception is :partial" do
             log.assign(message: "Boom", exception: exception, log_exception: :partial)
+
             assert_nil log.exception
             assert_equal "Boom -- Exception: RuntimeError: An exception", log.message
           end
 
           it "ignores the exception when log_exception is :none" do
             log.assign(message: "Boom", exception: exception, log_exception: :none)
+
             assert_nil log.exception
             assert_equal "Boom", log.message
           end
@@ -83,12 +88,14 @@ module SemanticLogger
 
           it "coerces a non-exception into an ArgumentError" do
             log.assign(exception: "not an exception")
+
             assert_kind_of ArgumentError, log.exception
             assert_match(/Invalid value for logger exception/, log.exception.message)
           end
 
           it "changes the level when on_exception_level is supplied" do
             log.assign(exception: exception, on_exception_level: :fatal)
+
             assert_equal :fatal, log.level
             assert_equal SemanticLogger::Levels.index(:fatal), log.level_index
           end
@@ -97,6 +104,7 @@ module SemanticLogger
         describe "backtrace" do
           it "extracts a supplied backtrace" do
             log.assign(message: "Hello", backtrace: ["/app/foo.rb:1", "/app/bar.rb:2"])
+
             assert_equal ["/app/foo.rb:1", "/app/bar.rb:2"], log.backtrace
           end
 
@@ -104,6 +112,7 @@ module SemanticLogger
             with_backtrace_level(:trace) do
               log = SemanticLogger::Log.new("LogTest", :info)
               log.assign(message: "Hello")
+
               refute_nil log.backtrace
             end
           end
@@ -112,6 +121,7 @@ module SemanticLogger
             with_backtrace_level(:fatal) do
               log = SemanticLogger::Log.new("LogTest", :info)
               log.assign(message: "Hello")
+
               assert_nil log.backtrace
             end
           end
@@ -121,12 +131,14 @@ module SemanticLogger
       describe "#assign_hash" do
         it "assigns known keys to self and unknown keys to the payload" do
           log.assign_hash(message: "Hello", user: "joe")
+
           assert_equal "Hello", log.message
           assert_equal({user: "joe"}, log.payload)
         end
 
         it "leaves the payload nil when only known keys are supplied" do
           log.assign_hash(message: "Hello")
+
           assert_nil log.payload
         end
 
@@ -144,26 +156,31 @@ module SemanticLogger
 
         it "splits non-payload keys out of the payload" do
           args = log.extract_arguments(user: "joe", duration: 5)
+
           assert_equal({payload: {user: "joe"}, duration: 5}, args)
         end
 
         it "returns the hash unchanged when it already has a :payload key" do
           args = log.extract_arguments(payload: {a: 1}, message: "hi")
+
           assert_equal({payload: {a: 1}, message: "hi"}, args)
         end
 
         it "merges a supplied message when a :payload key is present" do
           args = log.extract_arguments({payload: {a: 1}}, "hello")
+
           assert_equal({payload: {a: 1}, message: "hello"}, args)
         end
 
         it "treats an empty message as no message" do
           args = log.extract_arguments({user: "joe"}, "")
+
           assert_equal({payload: {user: "joe"}}, args)
         end
 
         it "lets a supplied message take precedence over a payload message key" do
           args = log.extract_arguments({message: "inner"}, "outer")
+
           assert_equal({payload: {message: "inner"}, message: "outer"}, args)
         end
       end
@@ -184,12 +201,14 @@ module SemanticLogger
 
           collected = []
           log.each_exception { |e, depth| collected << [e.message, depth] }
+
           assert_equal [["the effect", 0], ["the cause", 1]], collected
         end
 
         it "does not yield when there is no exception" do
           yielded = false
           log.each_exception { yielded = true }
+
           refute yielded
         end
       end
@@ -198,6 +217,7 @@ module SemanticLogger
         it "joins the exception backtrace" do
           exception.set_backtrace(%w[line1 line2])
           log.exception = exception
+
           assert_equal "line1\nline2", log.backtrace_to_s
         end
 
@@ -215,27 +235,32 @@ module SemanticLogger
         it "formats sub-second durations" do
           log.duration = 1.34567
           expected = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1ms" : "1.346ms"
+
           assert_equal expected, log.duration_to_s
           assert_equal expected, log.duration_human
         end
 
         it "formats seconds" do
           log.duration = 1_000.0
+
           assert_equal "1.000s", log.duration_human
         end
 
         it "formats minutes" do
           log.duration = 60_000.0
+
           assert_equal "1m 0s", log.duration_human
         end
 
         it "formats hours" do
           log.duration = 3_600_000.0
+
           assert_equal "1h 0m", log.duration_human
         end
 
         it "formats days" do
           log.duration = 86_400_000.0
+
           assert_equal "1d 0h 0m", log.duration_human
         end
       end
@@ -268,12 +293,14 @@ module SemanticLogger
 
         it "uses the log backtrace" do
           log.backtrace = stack
+
           assert_equal ["/path/to/file.rb", 42], log.file_name_and_line
         end
 
         it "falls back to the exception backtrace" do
           exception.set_backtrace(stack)
           log.exception = exception
+
           assert_equal ["/path/to/file.rb", 42], log.file_name_and_line
         end
       end
@@ -281,25 +308,28 @@ module SemanticLogger
       describe "#cleansed_message" do
         it "strips ANSI color codes and surrounding whitespace" do
           log.message = "  \e[31mError\e[0m  "
+
           assert_equal "Error", log.cleansed_message
         end
       end
 
       describe "#payload? and #payload_to_s" do
         it "is false for a nil payload" do
-          refute log.payload?
+          refute_predicate log, :payload?
           assert_nil log.payload_to_s
         end
 
         it "is false for an empty payload" do
           log.payload = {}
-          refute log.payload?
+
+          refute_predicate log, :payload?
           assert_nil log.payload_to_s
         end
 
         it "is true for a populated payload" do
           log.payload = {a: 1}
-          assert log.payload?
+
+          assert_predicate log, :payload?
           assert_equal log.payload.inspect, log.payload_to_s
         end
       end
@@ -308,6 +338,7 @@ module SemanticLogger
         it "returns a raw hash including the supplied host, application, and environment" do
           log.message = "Hello"
           hash = log.to_h("my_host", "my_app", "my_env")
+
           assert_equal "my_host", hash[:host]
           assert_equal "my_app",  hash[:application]
           assert_equal "my_env",  hash[:environment]
@@ -319,12 +350,14 @@ module SemanticLogger
       describe "#set_context" do
         it "lazily initializes and assigns context" do
           log.set_context(:request_id, "abc")
+
           assert_equal({request_id: "abc"}, log.context)
         end
 
         it "merges additional context entries" do
           log.set_context(:request_id, "abc")
           log.set_context(:user, "joe")
+
           assert_equal({request_id: "abc", user: "joe"}, log.context)
         end
       end
@@ -332,17 +365,19 @@ module SemanticLogger
       describe "#metric_only?" do
         it "is true when only a metric is present" do
           log.metric = "user/login"
-          assert log.metric_only?
+
+          assert_predicate log, :metric_only?
         end
 
         it "is false when a message is present" do
           log.metric  = "user/login"
           log.message = "Hello"
-          refute log.metric_only?
+
+          refute_predicate log, :metric_only?
         end
 
         it "is false without a metric" do
-          refute log.metric_only?
+          refute_predicate log, :metric_only?
         end
       end
 

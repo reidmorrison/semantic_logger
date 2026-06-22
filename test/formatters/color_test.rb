@@ -69,6 +69,7 @@ module SemanticLogger
         describe "tags" do
           it "logs tags" do
             log.tags = %w[first second third]
+
             assert_equal "[#{color}first#{clear}] [#{color}second#{clear}] [#{color}third#{clear}]", formatter.tags
           end
         end
@@ -76,6 +77,7 @@ module SemanticLogger
         describe "named_tags" do
           it "logs named tags" do
             log.named_tags = {first: 1, second: 2, third: 3}
+
             assert_equal "{#{color}first: 1#{clear}, #{color}second: 2#{clear}, #{color}third: 3#{clear}}",
                          formatter.named_tags
           end
@@ -84,12 +86,14 @@ module SemanticLogger
         describe "duration" do
           it "logs long duration" do
             log.duration = 1_000_000.34567
+
             assert_equal "(#{bold}16m 40s#{clear})", formatter.duration
           end
 
           it "logs short duration" do
             log.duration = 1.34567
             duration     = SemanticLogger::Formatters::Base::PRECISION == 3 ? "(#{bold}1ms#{clear})" : "(#{bold}1.346ms#{clear})"
+
             assert_equal duration, formatter.duration
           end
         end
@@ -103,6 +107,7 @@ module SemanticLogger
         describe "payload" do
           it "logs hash payload" do
             log.payload = {first: 1, second: 2, third: 3}
+
             assert_equal "-- #{log.payload.ai(multiline: false)}", formatter.payload
           end
 
@@ -112,6 +117,7 @@ module SemanticLogger
 
           it "skips empty payload" do
             log.payload = {}
+
             refute formatter.payload
           end
         end
@@ -120,6 +126,7 @@ module SemanticLogger
           it "logs exception" do
             set_exception
             str = "-- Exception: #{color}RuntimeError: Oh no#{clear}\n"
+
             assert_equal str, formatter.exception.lines.first
           end
 
@@ -146,6 +153,7 @@ module SemanticLogger
             str      = "#{expected_time} #{color}D#{clear} [#{$$}:#{Thread.current.name} default_test.rb:35] [#{color}first#{clear}] [#{color}second#{clear}] [#{color}third#{clear}] {#{color}first: 1#{clear}, #{color}second: 2#{clear}, #{color}third: 3#{clear}} (#{bold}#{duration}ms#{clear}) #{color}ColorTest#{clear} -- Hello World -- #{{
               first: 1, second: 2, third: 3
             }.ai(multiline: false)} -- Exception: #{color}RuntimeError: Oh no#{clear}\n"
+
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end

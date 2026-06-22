@@ -38,9 +38,9 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
-      def initialize(prefix: "Custom", **args, &block)
+      def initialize(prefix: "Custom", **args, &)
         @prefix = prefix
-        super(**args, &block)
+        super(**args, &)
       end
 
       # Returns metric name to use.

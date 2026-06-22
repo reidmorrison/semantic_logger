@@ -184,7 +184,7 @@ module SemanticLogger
       #   )
       def initialize(separator: "\n",
                      level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil, metrics: false,
-                     **tcp_client_args, &block)
+                     **tcp_client_args, &)
         @separator       = separator
         @tcp_client_args = tcp_client_args
 
@@ -192,7 +192,7 @@ module SemanticLogger
         Net::TCPClient.logger      = logger
         Net::TCPClient.logger.name = "Net::TCPClient"
 
-        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: metrics, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: metrics, &)
         reopen
       end
 

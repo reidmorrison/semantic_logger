@@ -19,6 +19,7 @@ module Appender
           )
 
           bunny_args = bunny.args.first
+
           assert_equal "localhost", bunny_args[:host]
           assert_equal "the-username", bunny_args[:username]
           assert_equal "the-password", bunny_args[:password]
@@ -29,6 +30,7 @@ module Appender
 
           assert_equal "test_queue", bunny.published.first[:queue]
           h = JSON.parse(bunny.published.first[:message])
+
           assert_equal "info", h["level"]
           assert_equal message, h["message"]
           assert_equal "SemanticLogger::Appender::Rabbitmq", h["name"]

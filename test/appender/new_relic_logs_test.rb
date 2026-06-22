@@ -43,6 +43,7 @@ module Appender
           end
 
           parse_logged_message
+
           refute_nil @hash, "Expected @hash to be parsed JSON"
           assert_equal @message, @hash["message"]
           assert_equal ["test"], @hash["tags"]
@@ -64,6 +65,7 @@ module Appender
         end
 
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal @message, @hash["message"]
         assert_equal ["test"], @hash["tags"]
@@ -81,6 +83,7 @@ module Appender
           @appender.log(log)
         end
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal "Entity Name", @hash["entity.name"]
       end
@@ -95,6 +98,7 @@ module Appender
         end
 
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal large_payload[:data], @hash.dig("payload", "data")
       end
@@ -109,6 +113,7 @@ module Appender
         end
 
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal "deep_value", @hash.dig("payload", "level1", "level2", "level3", "level4")
       end

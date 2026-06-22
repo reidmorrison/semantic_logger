@@ -16,6 +16,7 @@ module Appender
           }) do
             appender.send(level, amessage)
           end
+
           assert_equal amessage, error_message
           assert_equal "SemanticLogger::Appender::Sentry", hash[:extra][:name]
 

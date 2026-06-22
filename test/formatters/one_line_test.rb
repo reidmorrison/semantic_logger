@@ -34,6 +34,7 @@ module SemanticLogger
         describe "message" do
           it "logs message" do
             log.message = "Hello \nWorld\n"
+
             assert_equal "-- Hello World", formatter.message
           end
 
@@ -45,6 +46,7 @@ module SemanticLogger
         describe "exception" do
           it "logs exception" do
             set_exception
+
             assert_equal "-- Exception: RuntimeError: Oh no", formatter.exception
           end
 
