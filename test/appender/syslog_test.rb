@@ -14,6 +14,7 @@ module Appender
             syslog_appender.debug "AppenderSyslogTest log message"
           end
         end
+
         assert_match(/^ D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
@@ -27,6 +28,7 @@ module Appender
             end
           end
         end
+
         assert_match(/<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message)
       end
 
@@ -36,6 +38,7 @@ module Appender
         UDPSocket.stub_any_instance(:send, ->(msg, _num, _host, _port) { message = msg }) do
           syslog_appender.debug "AppenderSyslogTest log message"
         end
+
         assert_match(/<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 

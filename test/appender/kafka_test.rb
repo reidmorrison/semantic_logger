@@ -22,6 +22,7 @@ module Appender
         end
 
         h = JSON.parse(message)
+
         assert_equal "info", h["level"]
         assert_equal amessage, h["message"]
         assert_equal "SemanticLogger::Appender::Kafka", h["name"]

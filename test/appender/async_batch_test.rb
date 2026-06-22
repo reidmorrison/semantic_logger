@@ -20,12 +20,15 @@ module Appender
 
         it "logs messages after a flush" do
           logger.info("hello world1")
+
           refute appender.message
 
           logger.info("hello world2")
+
           refute appender.message
 
           logger.info("hello world3")
+
           refute appender.message
 
           # Calls flush

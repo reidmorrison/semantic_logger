@@ -56,6 +56,7 @@ module SemanticLogger
             expected.each do |lvl, severity_number|
               entry = SemanticLogger::Log.new("OpenTelemetryTest", lvl)
               result = formatter.call(entry, appender)
+
               assert_equal severity_number, result[:level_index], "level #{lvl.inspect}"
             end
           end
@@ -82,26 +83,31 @@ module SemanticLogger
 
           it "passes primitive values through unchanged" do
             log.payload = {count: 5, ratio: 1.5, name: "abc", flag: true}
+
             assert_equal({"count" => 5, "ratio" => 1.5, "name" => "abc", "flag" => true}, formatted[:payload])
           end
 
           it "drops nil values" do
             log.payload = {present: 1, missing: nil}
+
             assert_equal({"present" => 1}, formatted[:payload])
           end
 
           it "stringifies non-primitive scalar values" do
             log.payload = {sym: :a_symbol}
+
             assert_equal({"sym" => "a_symbol"}, formatted[:payload])
           end
 
           it "compacts arrays of scalars" do
             log.payload = {list: [1, nil, "two", :three]}
+
             assert_equal({"list" => [1, "two", "three"]}, formatted[:payload])
           end
 
           it "serializes nested hashes to JSON strings" do
             log.payload = {nested: {a: 1, b: :two}}
+
             assert_equal({"a" => 1, "b" => "two"}.to_json, formatted[:payload]["nested"])
           end
         end

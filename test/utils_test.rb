@@ -84,6 +84,7 @@ module SemanticLogger
             "/gems/foo/lib/semantic_logger/log.rb:40"
           ]
           result = SemanticLogger::Utils.extract_backtrace(stack)
+
           assert_equal "/app/models/user.rb:30", result.first
           # Trailing semantic_logger entries are left in place.
           assert_includes result, "/gems/foo/lib/semantic_logger/log.rb:40"
@@ -93,6 +94,7 @@ module SemanticLogger
       describe ".strip_path?" do
         it "is true for gem paths" do
           gem_path = "#{Gem.default_dir}/gems/foo/lib/foo.rb:10"
+
           assert SemanticLogger::Utils.strip_path?(gem_path)
         end
 

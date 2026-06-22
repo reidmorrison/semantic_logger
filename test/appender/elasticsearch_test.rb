@@ -58,6 +58,7 @@ module Appender
               appender.info log_message
             end
             index = bulk_index["index"]["_index"]
+
             assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
           end
 
@@ -83,7 +84,7 @@ module Appender
             assert exception = hash[:exception]
             assert_equal "NameError", exception[:name]
             assert_match "undefined local variable or method", exception[:message]
-            assert exception[:stack_trace].first.include?(__FILE__), exception
+            assert_includes exception[:stack_trace].first, __FILE__, exception
           end
 
           it "logs payload" do
@@ -92,6 +93,7 @@ module Appender
             request     = stub_client { appender.log(log) }
 
             request[:index]
+
             assert hash = request[:body][1]
             refute hash[:stack_trace]
             assert_equal h, hash[:payload], hash
@@ -122,6 +124,7 @@ module Appender
             assert_equal 6, body.size, body
 
             index = "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}"
+
             assert_equal index, body[0]["index"]["_index"]
             assert_equal "hello world1", body[1][:message]
             assert_equal index, body[2]["index"]["_index"]
@@ -272,6 +275,7 @@ module Appender
               appender.info log_message
             end
             index = bulk_index["index"]["_index"]
+
             assert_equal "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}", index
           end
 
@@ -297,7 +301,7 @@ module Appender
             assert exception = hash[:exception]
             assert_equal "NameError", exception[:name]
             assert_match "undefined local variable or method", exception[:message]
-            assert exception[:stack_trace].first.include?(__FILE__), exception
+            assert_includes exception[:stack_trace].first, __FILE__, exception
           end
 
           it "logs payload" do
@@ -335,6 +339,7 @@ module Appender
             assert_equal 6, body.size, body
 
             index = "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}"
+
             assert_equal index, body[0]["index"]["_index"]
             assert_equal "hello world1", body[1][:message]
             assert_equal index, body[2]["index"]["_index"]

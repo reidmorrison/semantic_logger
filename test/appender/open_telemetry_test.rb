@@ -59,6 +59,7 @@ module Appender
 
             assert_equal 1, records.size
             record = records.first
+
             assert_equal level.to_s, record.severity_text
             refute_equal(
               ::OpenTelemetry::Logs::SeverityNumber::SEVERITY_NUMBER_UNSPECIFIED,
@@ -92,6 +93,7 @@ module Appender
       describe "flush" do
         it "is a no-op once the provider is closed" do
           appender.close
+
           assert_nil appender.flush
         end
 
@@ -106,6 +108,7 @@ module Appender
         it "shuts down the provider and clears it" do
           target = appender
           target.close
+
           assert_nil target.provider
         end
 
@@ -114,6 +117,7 @@ module Appender
           target.provider.stub(:shutdown, ->(*) { raise "boom" }) do
             target.close
           end
+
           assert_nil target.provider
         end
       end

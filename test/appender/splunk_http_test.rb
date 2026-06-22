@@ -27,6 +27,7 @@ module Appender
           end
           body    = decompress_data(request.body)
           message = JSON.parse(body)
+
           assert_equal log_message, message["event"]["message"]
           assert_equal level.to_s, message["event"]["level"]
           refute message["event"]["exception"]
@@ -48,12 +49,13 @@ module Appender
           end
           body = decompress_data(request.body)
           hash = JSON.parse(body)
+
           assert "Reading File", hash["message"]
           assert exception = hash["event"]["exception"]
           assert "NameError", exception["name"]
           assert "undefined local variable or method", exception["message"]
           assert_equal level.to_s, hash["event"]["level"]
-          assert exception["stack_trace"].first.include?(__FILE__), exception
+          assert_includes exception["stack_trace"].first, __FILE__, exception
         end
 
         it "sends #{level} custom attributes" do
@@ -66,6 +68,7 @@ module Appender
           end
           body    = decompress_data(request.body)
           message = JSON.parse(body)
+
           assert event = message["event"], message.ai
           refute_includes message["event"], "host"
           assert_equal log_message, event["message"]

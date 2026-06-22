@@ -53,19 +53,22 @@ class AppenderFileTest < Minitest::Test
         assert_equal Base.name, Base.logger.name
         assert_equal Subclass.name, Subclass.logger.name
         child_logger = Subclass.logger
+
         refute_equal child_logger, Base.logger
-        assert_equal child_logger.object_id, Subclass.logger.object_id
+        assert_same child_logger, Subclass.logger
       end
 
       it "should give child objects their own logger" do
         subclass = Subclass.new
         base     = Base.new
+
         assert_equal subclass.class.name, subclass.logger.name
         assert_equal base.class.name, base.logger.name
         assert_equal subclass.class.name, subclass.logger.name
         child_logger = subclass.logger
+
         refute_equal child_logger, base.logger
-        assert_equal child_logger.object_id, subclass.logger.object_id
+        assert_same child_logger, subclass.logger
       end
 
       it "should allow mixins to call parent logger" do
@@ -75,6 +78,7 @@ class AppenderFileTest < Minitest::Test
         Base.logger.stub(:info, ->(description) { called = true if description == "perform" }) do
           base.perform
         end
+
         assert called, "Did not call the correct logger"
       end
 
@@ -85,6 +89,7 @@ class AppenderFileTest < Minitest::Test
         Subclass.logger.stub(:info, ->(description) { called = true if description == "process" }) do
           subclass.process
         end
+
         assert called, "Did not call the correct logger"
       end
     end
@@ -105,6 +110,7 @@ class AppenderFileTest < Minitest::Test
         original = TestAttribute.logger
         begin
           TestAttribute.logger = custom
+
           assert_same custom, TestAttribute.logger
           assert_same custom, TestAttribute.new.logger
         ensure
@@ -116,6 +122,7 @@ class AppenderFileTest < Minitest::Test
         custom   = SemanticLogger::Test::CaptureLogEvents.new
         instance = TestAttribute.new
         instance.logger = custom
+
         assert_same custom, instance.logger
         refute_same custom, TestAttribute.new.logger
       end
@@ -152,13 +159,14 @@ class AppenderFileTest < Minitest::Test
 
       it "does not log when the duration is below min_duration" do
         assert_equal :done, Measured.new.quick
-        assert capture.events.empty?
+        assert_empty capture.events
       end
 
       it "runs the method without logging when the level is not met" do
         capture.level = :fatal
+
         assert_equal 8, Measured.new.double(4)
-        assert capture.events.empty?
+        assert_empty capture.events
       end
     end
   end

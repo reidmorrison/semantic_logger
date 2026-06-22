@@ -32,6 +32,7 @@ module Appender
         it "adds log messages to the buffer" do
           assert_empty appender.buffered_logs
           appender.log(log_event)
+
           refute_empty appender.buffered_logs
         end
       end
@@ -41,15 +42,17 @@ module Appender
           mock_client.expect :put_log_events, nil, [Hash]
           appender.log(log_event)
           appender.flush
+
           assert_empty appender.buffered_logs
         end
       end
 
       describe "#close" do
         it "shuts down the timer task" do
-          assert appender.task.running?
+          assert_predicate appender.task, :running?
           appender.close
-          refute appender.task.running?
+
+          refute_predicate appender.task, :running?
         end
       end
     end

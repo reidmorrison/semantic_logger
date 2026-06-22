@@ -52,18 +52,21 @@ module SemanticLogger
           it "omits host when log_host is false" do
             formatter = SemanticLogger::Formatters::Raw.new(log_host: false)
             formatter.call(log, appender)
+
             refute formatter.hash.key?(:host)
           end
 
           it "omits application when log_application is false" do
             formatter = SemanticLogger::Formatters::Raw.new(log_application: false)
             formatter.call(log, appender)
+
             refute formatter.hash.key?(:application)
           end
 
           it "omits environment when log_environment is false" do
             formatter = SemanticLogger::Formatters::Raw.new(log_environment: false)
             formatter.call(log, appender)
+
             refute formatter.hash.key?(:environment)
           end
 
@@ -71,6 +74,7 @@ module SemanticLogger
             appender = Struct.new(:host, :application, :environment).new(nil, nil, nil)
             formatter = SemanticLogger::Formatters::Raw.new
             formatter.call(log, appender)
+
             refute formatter.hash.key?(:host)
             refute formatter.hash.key?(:application)
             refute formatter.hash.key?(:environment)
@@ -89,6 +93,7 @@ module SemanticLogger
           it "supports a custom time_key" do
             formatter = SemanticLogger::Formatters::Raw.new(time_key: :timestamp)
             formatter.call(log, appender)
+
             assert formatter.hash.key?(:timestamp)
             refute formatter.hash.key?(:time)
           end
@@ -96,6 +101,7 @@ module SemanticLogger
           it "supports a time_format" do
             formatter = SemanticLogger::Formatters::Raw.new(time_format: :iso_8601)
             formatter.call(log, appender)
+
             assert_equal "2017-01-14T08:32:05.375276Z", formatter.hash[:time]
           end
         end
@@ -116,6 +122,7 @@ module SemanticLogger
         describe "thread_name" do
           it "logs the thread name" do
             log.thread_name = "main-thread"
+
             assert_equal "main-thread", formatter.hash[:thread]
           end
         end
@@ -123,6 +130,7 @@ module SemanticLogger
         describe "file_name_and_line" do
           it "logs file and line from the backtrace" do
             log.backtrace = backtrace
+
             assert_equal "test/formatters/raw_test.rb", formatter.hash[:file]
             assert_equal 99, formatter.hash[:line]
           end
@@ -136,7 +144,8 @@ module SemanticLogger
         describe "duration" do
           it "logs duration_ms and human duration" do
             log.duration = 1.34567
-            assert_equal 1.34567, formatter.hash[:duration_ms]
+
+            assert_in_delta(1.34567, formatter.hash[:duration_ms])
             assert_equal log.duration_human, formatter.hash[:duration]
           end
 
@@ -149,11 +158,13 @@ module SemanticLogger
         describe "tags" do
           it "logs tags" do
             log.tags = %w[first second]
+
             assert_equal %w[first second], formatter.hash[:tags]
           end
 
           it "skips empty tags" do
             log.tags = []
+
             refute formatter.hash.key?(:tags)
           end
         end
@@ -161,11 +172,13 @@ module SemanticLogger
         describe "named_tags" do
           it "logs named tags" do
             log.named_tags = {first: 1, second: 2}
+
             assert_equal({first: 1, second: 2}, formatter.hash[:named_tags])
           end
 
           it "skips empty named tags" do
             log.named_tags = {}
+
             refute formatter.hash.key?(:named_tags)
           end
         end
@@ -179,6 +192,7 @@ module SemanticLogger
         describe "message" do
           it "logs the message" do
             log.message = "Hello World"
+
             assert_equal "Hello World", formatter.hash[:message]
           end
 
@@ -190,11 +204,13 @@ module SemanticLogger
         describe "payload" do
           it "logs a hash payload" do
             log.payload = {first: 1, second: 2}
+
             assert_equal({first: 1, second: 2}, formatter.hash[:payload])
           end
 
           it "skips an empty payload" do
             log.payload = {}
+
             refute formatter.hash.key?(:payload)
           end
 
@@ -207,6 +223,7 @@ module SemanticLogger
           it "logs the exception" do
             set_exception
             exception = formatter.hash[:exception]
+
             assert_equal "RuntimeError", exception[:name]
             assert_equal "Oh no", exception[:message]
             assert exception.key?(:stack_trace)
@@ -236,6 +253,7 @@ module SemanticLogger
           it "logs metric and amount" do
             log.metric        = "user/login"
             log.metric_amount = 3
+
             assert_equal "user/login", formatter.hash[:metric]
             assert_equal 3, formatter.hash[:metric_amount]
           end
@@ -253,6 +271,7 @@ module SemanticLogger
 
           it "includes the core fields" do
             hash = formatter.call(log, appender)
+
             assert_equal :debug, hash[:level]
             assert_equal "RawTest", hash[:name]
             assert_equal $$, hash[:pid]

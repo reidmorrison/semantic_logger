@@ -79,7 +79,8 @@ class CompatibilityTest < Minitest::Test
 
     it "#unknown? as error?" do
       logger.level = :error
-      assert logger.unknown?
+
+      assert_predicate logger, :unknown?
       log = nil
       SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
@@ -91,7 +92,8 @@ class CompatibilityTest < Minitest::Test
 
     it "#unknown? as error? when false" do
       logger.level = :fatal
-      refute logger.unknown?
+
+      refute_predicate logger, :unknown?
       log = nil
       SemanticLogger::Logger.processor.stub(:log, ->(_log) { log = _log }) do
         logger.log(Logger::UNKNOWN, "hello world", "progname") { "Data" }
@@ -107,6 +109,7 @@ class CompatibilityTest < Minitest::Test
           logger.info "hello world"
         end
       end
+
       refute log
     end
 
@@ -123,6 +126,7 @@ class CompatibilityTest < Minitest::Test
     it "#progname= as #name=" do
       assert_equal "TestLogger", logger.name
       logger.progname = "NewTest"
+
       assert_equal "NewTest", logger.name
     end
 
@@ -134,11 +138,13 @@ class CompatibilityTest < Minitest::Test
     it "#sev_threshold= as #level=" do
       logger.level = :trace
       logger.sev_threshold = Logger::DEBUG
+
       assert_equal :debug, logger.level
     end
 
     it "#sev_threshold as #level" do
       logger.level = :trace
+
       assert_equal :trace, logger.level
       assert_equal :trace, logger.sev_threshold
     end
@@ -146,12 +152,14 @@ class CompatibilityTest < Minitest::Test
     it "#formatter NOOP" do
       assert_nil logger.formatter
       logger.formatter = "blah"
+
       assert_equal "blah", logger.formatter
     end
 
     it "#datetime_format NOOP" do
       assert_nil logger.datetime_format
       logger.datetime_format = "blah"
+
       assert_equal "blah", logger.datetime_format
     end
 

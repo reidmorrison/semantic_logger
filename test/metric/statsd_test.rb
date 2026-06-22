@@ -64,12 +64,14 @@ module Metric
         it "sets the namespace from the url path" do
           subscriber = SemanticLogger::Metric::Statsd.new(url: "udp://localhost:8125/my_app")
           subscriber.reopen
+
           assert_equal "my_app", subscriber.instance_variable_get(:@statsd).namespace
         end
 
         it "leaves the namespace unset when no path is supplied" do
           subscriber = SemanticLogger::Metric::Statsd.new
           subscriber.reopen
+
           assert_nil subscriber.instance_variable_get(:@statsd).namespace
         end
       end
@@ -77,28 +79,33 @@ module Metric
       describe "#log" do
         it "sends a timing when the log has a duration" do
           appender.log(metric_log(duration: 200))
+
           assert_equal [[metric, 200]], fake.timings
           assert_empty fake.increments
         end
 
         it "increments once by default" do
           appender.log(metric_log)
+
           assert_equal [metric], fake.increments
         end
 
         it "increments by the metric amount" do
           appender.log(metric_log(metric_amount: 3))
+
           assert_equal [metric, metric, metric], fake.increments
         end
 
         it "decrements for a negative metric amount" do
           appender.log(metric_log(metric_amount: -2))
+
           assert_equal [metric, metric], fake.decrements
           assert_empty fake.increments
         end
 
         it "rounds a fractional metric amount" do
           appender.log(metric_log(metric_amount: 2.9))
+
           assert_equal [metric, metric, metric], fake.increments
         end
       end

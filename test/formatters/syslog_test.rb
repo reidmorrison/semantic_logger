@@ -37,6 +37,7 @@ module SemanticLogger
 
           it "converts a level_map hash into a LevelMap" do
             mapped = SemanticLogger::Formatters::Syslog.new(level_map: {warn: ::Syslog::LOG_NOTICE})
+
             assert_instance_of SemanticLogger::Formatters::Syslog::LevelMap, mapped.level_map
             assert_equal ::Syslog::LOG_NOTICE, mapped.level_map[:warn]
             # Unspecified levels keep their defaults.
@@ -46,6 +47,7 @@ module SemanticLogger
           it "accepts a LevelMap instance" do
             level_map = SemanticLogger::Formatters::Syslog::LevelMap.new(info: ::Syslog::LOG_ALERT)
             mapped    = SemanticLogger::Formatters::Syslog.new(level_map: level_map)
+
             assert_same level_map, mapped.level_map
           end
         end
@@ -53,6 +55,7 @@ module SemanticLogger
         describe SemanticLogger::Formatters::Syslog::LevelMap do
           it "maps the default semantic levels to syslog levels" do
             map = SemanticLogger::Formatters::Syslog::LevelMap.new
+
             assert_equal ::Syslog::LOG_DEBUG,   map[:trace]
             assert_equal ::Syslog::LOG_INFO,    map[:debug]
             assert_equal ::Syslog::LOG_NOTICE,  map[:info]
@@ -63,6 +66,7 @@ module SemanticLogger
 
           it "allows individual levels to be overridden" do
             map = SemanticLogger::Formatters::Syslog::LevelMap.new(warn: ::Syslog::LOG_NOTICE)
+
             assert_equal ::Syslog::LOG_NOTICE, map[:warn]
             assert_equal ::Syslog::LOG_ERR,    map[:error]
           end
@@ -77,12 +81,14 @@ module SemanticLogger
         describe "#call" do
           it "wraps the message in a syslog packet" do
             packet = formatter.call(log, appender.logger)
+
             assert_includes packet, "hello world"
             assert_includes packet, appender.logger.host
           end
 
           it "uses the application name as the syslog tag without spaces" do
             packet = formatter.call(log, appender.logger)
+
             assert_includes packet, appender.logger.application.delete(" ")
           end
         end

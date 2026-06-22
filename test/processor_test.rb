@@ -39,6 +39,7 @@ module SemanticLogger
           begin
             replacement = SemanticLogger::Appender::IO.new($stdout)
             SemanticLogger::Processor.logger = replacement
+
             assert_equal replacement, SemanticLogger::Processor.logger
           ensure
             SemanticLogger::Processor.logger = original
@@ -57,17 +58,18 @@ module SemanticLogger
 
         it "honours the supplied max_queue_size" do
           processor = SemanticLogger::Processor.new(max_queue_size: 42).tap { |p| created << p }
+
           assert_equal 42, processor.max_queue_size
         end
 
         it "starts the worker thread" do
-          assert processor.active?
+          assert_predicate processor, :active?
         end
       end
 
       describe "#start" do
         it "returns false when the worker thread is already active" do
-          assert processor.active?
+          assert_predicate processor, :active?
           refute processor.start
         end
 
@@ -75,10 +77,11 @@ module SemanticLogger
           thread = processor.instance_variable_get(:@thread)
           thread.kill
           thread.join
-          refute processor.active?
+
+          refute_predicate processor, :active?
 
           assert processor.start
-          assert processor.active?
+          assert_predicate processor, :active?
         end
       end
     end

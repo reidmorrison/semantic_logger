@@ -28,10 +28,11 @@ module Appender
         it "handle no arguments" do
           appender.debug
           document = appender.collection.find.first
+
           assert_equal :debug, document["level"]
           assert_nil document["message"]
           assert_equal Thread.current.name, document["thread"]
-          assert document["time"].is_a?(Time)
+          assert_kind_of Time, document["time"]
           assert_nil document["payload"]
           assert_equal $$, document["pid"]
           assert_equal "test", document["host"]
@@ -42,10 +43,11 @@ module Appender
           appender.debug(payload: ahash)
 
           document = appender.collection.find.first
+
           assert_equal :debug, document["level"]
           assert_nil document["message"]
           assert_equal Thread.current.name, document["thread"]
-          assert document["time"].is_a?(Time)
+          assert_kind_of Time, document["time"]
           assert payload = document["payload"]
           assert_equal 12_345, payload["tracking_number"], payload
           assert_equal "HSSKLEU@JDK767", payload["session_id"]
@@ -58,10 +60,11 @@ module Appender
           appender.debug("hello world", ahash)
 
           document = appender.collection.find.first
+
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
           assert_equal Thread.current.name, document["thread"]
-          assert document["time"].is_a?(Time)
+          assert_kind_of Time, document["time"]
           assert payload = document["payload"]
           assert_equal 12_345, payload["tracking_number"], payload
           assert_equal "HSSKLEU@JDK767", payload["session_id"]
@@ -74,10 +77,11 @@ module Appender
           appender.debug("hello world")
 
           document = appender.collection.find.first
+
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
           assert_equal Thread.current.name, document["thread"]
-          assert document["time"].is_a?(Time)
+          assert_kind_of Time, document["time"]
           assert_equal $$, document["pid"]
           assert_equal "test", document["host"]
           assert_equal "test_application", document["application"]
@@ -90,10 +94,11 @@ module Appender
           it "logs" do
             appender.send(level, "hello world -- Calculations", ahash)
             document = appender.collection.find.first
+
             assert_equal level, document["level"]
             assert_equal "hello world -- Calculations", document["message"]
             assert_equal Thread.current.name, document["thread"]
-            assert document["time"].is_a?(Time)
+            assert_kind_of Time, document["time"]
             assert payload = document["payload"]
             assert_equal 12_345, payload["tracking_number"], payload
             assert_equal "HSSKLEU@JDK767", payload["session_id"]

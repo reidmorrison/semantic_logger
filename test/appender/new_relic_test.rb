@@ -20,6 +20,7 @@ module Appender
               appender.send(level, "AppenderNewRelicTest #{level} message")
             end
           end
+
           assert_nil exception
           assert_nil hash
         end
@@ -36,6 +37,7 @@ module Appender
               appender.send(level, amessage)
             end
           end
+
           assert_equal "RuntimeError", exception.class.to_s
           assert_equal amessage, exception.message
           assert_equal ["test"], hash[:custom_params][:tags]
@@ -58,6 +60,7 @@ module Appender
             end
           end
         end
+
         assert_equal "RuntimeError", exception.class.to_s
         assert_equal amessage, exception.message
         assert params = hash[:custom_params], hash
@@ -82,6 +85,7 @@ module Appender
         }) do
           appender.debug metric: "my/custom/metric", payload: {hello: :world}
         end
+
         assert_nil exception
         assert_nil hash
       end

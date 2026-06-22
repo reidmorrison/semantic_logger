@@ -32,6 +32,7 @@ module SemanticLogger
 
         it "returns a JSON string" do
           result = formatter.call(log, appender)
+
           assert_kind_of String, result
           assert JSON.parse(result)
         end
@@ -48,6 +49,7 @@ module SemanticLogger
         it "honours a custom time_key" do
           formatter = SemanticLogger::Formatters::Json.new(time_key: :ts)
           parsed    = JSON.parse(formatter.call(log, appender))
+
           assert parsed.key?("ts")
           refute parsed.key?("timestamp")
         end
@@ -55,6 +57,7 @@ module SemanticLogger
         it "honours a custom time_format" do
           formatter = SemanticLogger::Formatters::Json.new(time_format: "%Y-%m-%d")
           parsed    = JSON.parse(formatter.call(log, appender))
+
           assert_equal "2017-01-14", parsed["timestamp"]
         end
 

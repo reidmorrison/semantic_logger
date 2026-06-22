@@ -48,11 +48,13 @@ module SemanticLogger
 
           it "flattens payload information" do
             log.payload = {shrek: "the ogre", controller: "some cotroller"}
+
             assert_match(/shrek="the ogre" controller="some cotroller"/, formatter.call(log, nil))
           end
 
           it "changes name to payload information" do
             log.payload = {name: "shrek"}
+
             assert_match(/name="shrek"/, formatter.call(log, nil))
           end
 
@@ -65,22 +67,26 @@ module SemanticLogger
           describe "when exception ocurrs" do
             it "has tag exception" do
               set_exception
+
               assert_match(/tag="exception"/, formatter.call(log, nil))
             end
 
             it "flattens exception info" do
               set_exception
+
               assert_match(/message="Oh no"/, formatter.call(log, nil))
             end
 
             it "flattens the stacktrace" do
               set_exception
+
               assert_match(/stack_trace="\[\\"/, formatter.call(log, nil))
             end
 
             it "changes name to exception" do
               log.payload = {name: "shrek"}
               set_exception
+
               assert_match(/name="RuntimeError"/, formatter.call(log, nil))
             end
           end
@@ -92,6 +98,7 @@ module SemanticLogger
 
             it "formats the tag as a 'true' value" do
               text = formatter.call(log, nil)
+
               assert_match(/ruby=true/, text)
               assert_match(/rails=true/, text)
             end
@@ -101,6 +108,7 @@ module SemanticLogger
                 log.payload = {tags: "apples,bananas,pears"}
 
                 text = formatter.call(log, nil)
+
                 assert_match(/ruby=true/, text)
                 assert_match(/rails=true/, text)
                 assert_match(/tags="apples,bananas,pears"/, text)
@@ -115,6 +123,7 @@ module SemanticLogger
 
             it "formats the tag as a 'true' value" do
               text = formatter.call(log, nil)
+
               assert_match(/second breakfast=true/, text)
               assert_match(/"elevensies"=true/, text)
               assert_match(/'lunch'=true/, text)
@@ -162,6 +171,7 @@ module SemanticLogger
 
             it "overrides the timestamp" do
               text = formatter.call(log, nil)
+
               refute_match(/timestamp=/, text)
               assert_match(/ts="2020-07-20T08:32:05.375276Z"/, text)
             end

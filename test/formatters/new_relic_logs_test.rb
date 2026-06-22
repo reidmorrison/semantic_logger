@@ -42,7 +42,7 @@ module SemanticLogger
             log.duration = 1_000_000.34567
             result = formatted_log
 
-            assert_equal 1_000_000.34567, result.dig(:duration, :ms)
+            assert_in_delta(1_000_000.34567, result.dig(:duration, :ms))
             assert_equal "16m 40s", result.dig(:duration, :human)
           end
 
@@ -54,7 +54,7 @@ module SemanticLogger
             expected_human_duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1.346ms" : "1.346ms"
 
             # Verify the raw duration in milliseconds
-            assert_equal 1.34567, result.dig(:duration, :ms)
+            assert_in_delta(1.34567, result.dig(:duration, :ms))
 
             # Verify the human-readable duration format
             assert_equal expected_human_duration, result.dig(:duration, :human)
@@ -62,6 +62,7 @@ module SemanticLogger
 
           it "omits duration if not set" do
             result = formatted_log
+
             refute result.key?(:duration)
           end
         end
@@ -69,6 +70,7 @@ module SemanticLogger
         describe "name" do
           it "logs name" do
             result = formatted_log
+
             assert_equal "NewRelicLogsTest", result.dig(:logger, :name)
           end
         end
@@ -77,12 +79,14 @@ module SemanticLogger
           it "logs message" do
             log.message = "Hello World"
             result = formatted_log
+
             assert_equal "Hello World", result[:message]
           end
 
           it "keeps empty message" do
             log.message = ""
             result = formatted_log
+
             assert_equal "", result[:message]
           end
         end
@@ -91,6 +95,7 @@ module SemanticLogger
           it "logs hash payload" do
             log.payload = {first: 1, second: 2, third: 3}
             result = formatted_log
+
             assert_equal(
               {first: 1, second: 2, third: 3},
               result[:payload]
@@ -100,12 +105,14 @@ module SemanticLogger
           it "skips nil payload" do
             log.payload = nil
             result = formatted_log
+
             refute result.key?(:payload)
           end
 
           it "skips empty payload" do
             log.payload = {}
             result = formatted_log
+
             refute result.key?(:payload)
           end
         end
@@ -113,12 +120,14 @@ module SemanticLogger
         describe "tags and named_tags" do
           it "logs tags" do
             log.tags = %w[first second third]
+
             assert_equal %w[first second third], formatted_log[:tags]
           end
 
           it "logs named tags without conflicts" do
             log.named_tags = {first: 1, second: 2}
             result = formatted_log
+
             assert_equal 1, result[:first]
             assert_equal 2, result[:second]
             refute result.key?(:named_tag_conflicts)
@@ -127,6 +136,7 @@ module SemanticLogger
           it "logs named tag conflicts" do
             log.named_tags = {message: "conflict"}
             result = formatted_log
+
             assert_includes result[:named_tag_conflicts], :message
           end
         end
@@ -145,13 +155,15 @@ module SemanticLogger
               log.exception = $!
             end
             result = formatted_log
+
             assert_equal "Test Exception", result.dig(:error, :message)
             assert_equal "RuntimeError", result.dig(:error, :class)
-            assert result.dig(:error, :stack).is_a?(String)
+            assert_kind_of String, result.dig(:error, :stack)
           end
 
           it "omits exception if not set" do
             result = formatted_log
+
             refute result.key?(:error)
           end
         end
@@ -160,13 +172,15 @@ module SemanticLogger
           it "includes standard fields" do
             log.message = "Hello World"
             result = formatted_log
+
             assert_equal "Hello World", result[:message]
             assert_equal "NewRelicLogsTest", result.dig(:logger, :name)
-            assert result[:timestamp].is_a?(Integer)
+            assert_kind_of Integer, result[:timestamp]
           end
 
           it "omits nil or empty fields" do
             result = formatted_log
+
             refute result.key?(:payload)
             refute result.key?(:tags)
           end
@@ -178,12 +192,14 @@ module SemanticLogger
             log.set_context(:new_relic_metadata, {"trace.id" => "trace123", "span.id" => "span456"})
             # ... which is then formatted on the async appender thread
             result = formatted_log
+
             assert_equal "trace123", result["trace.id"]
             assert_equal "span456", result["span.id"]
           end
 
           it "omits trace.id and span.id if absent" do
             result = formatted_log
+
             refute result.key?("trace.id")
             refute result.key?("span.id")
           end
