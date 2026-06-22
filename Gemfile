@@ -8,6 +8,7 @@ gem "minitest-reporters"
 gem "minitest-shared_description"
 gem "minitest-stub_any_instance"
 gem "rake"
+gem "simplecov", require: false
 
 # [optional] Bugsnag appender
 gem "bugsnag"

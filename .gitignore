@@ -7,6 +7,7 @@ Gemfile.lock
 .bundle
 *.log
 /docs/_site
+/coverage
 .rakeTasks
 /tags
 mise.toml
