@@ -191,6 +191,31 @@ Note:
   It does not contain any embedded newlines.
 * If a field has a nil value it is excluded from the output json.
 
+#### Fluentd log format
+
+The `:fluentd` formatter is the same as `:json`, except that it renames the log
+level fields to `severity` and `severity_index` so they are recognized by the
+Kubernetes Fluentd log collector.
+
+~~~ruby
+SemanticLogger.add_appender(io: $stdout, formatter: :fluentd)
+~~~
+
+Differences from the standard JSON format:
+
+* The `level` / `level_index` fields are named `severity` / `severity_index`.
+* `host` is excluded by default, since under Fluentd it is usually the (not very
+  useful) container id. Pass `log_host: true` to include it.
+* The process fields `pid`, `thread`, `file`, and `line` are excluded by default.
+  Pass `need_process_info: true` to include them.
+
+To override any of these defaults, construct the formatter explicitly:
+
+~~~ruby
+formatter = SemanticLogger::Formatters::Fluentd.new(log_host: true, need_process_info: true)
+SemanticLogger.add_appender(io: $stdout, formatter: formatter)
+~~~
+
 ### IO Streams
 
 Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdout
