@@ -56,6 +56,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * UDP
 * Syslog
 * CloudWatch Logs
+* OpenTelemetry
 * Add any existing Ruby logger as another destination.
 * Roll-your-own
 
@@ -94,6 +95,7 @@ and are therefore not automatically included by this gem:
 - Kafka Appender: gem 'ruby-kafka'
 - Legacy Sentry Appender: gem 'sentry-raven' (deprecated)
 - Sentry Appender: gem 'sentry-ruby'
+- OpenTelemetry Appender: gem 'opentelemetry-logs-sdk' (plus an exporter, e.g. 'opentelemetry-exporter-otlp-logs')
 
 ## Upgrading to Semantic Logger v4.9
 

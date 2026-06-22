@@ -82,6 +82,7 @@ the "Gem" column below and is loaded only when that appender is used.
 | [Splunk over TCP/SDK](#splunk-http) | `appender: :splunk` | `splunk-sdk-ruby` |
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
+| [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
 | [Logstash](#logstash) | `logger:` | `logstash-logger` |
 | [logentries.com](#logentriescom) | `appender: :tcp` | `net_tcp_client` |
 | [loggly.com](#logglycom) | `appender: :http` | |
@@ -858,6 +859,47 @@ SemanticLogger.add_appender(
   create_stream: true
 )
 ~~~
+
+### OpenTelemetry
+
+Send log messages to [OpenTelemetry](https://opentelemetry.io) through its
+[Logs API](https://opentelemetry.io/docs/specs/otel/logs/), so they can be exported to any
+OpenTelemetry-compatible backend (the OTLP collector, Honeycomb, Datadog, Grafana, and so on).
+
+This appender requires the `opentelemetry-logs-sdk` gem, plus an exporter such as
+`opentelemetry-exporter-otlp-logs`. Add them to your `Gemfile`:
+
+~~~ruby
+gem "opentelemetry-logs-sdk"
+gem "opentelemetry-exporter-otlp-logs"
+~~~
+
+Configure the OpenTelemetry SDK once when your application starts, then add the appender.
+`OpenTelemetry::SDK.configure` reads the standard `OTEL_*` environment variables (for example
+`OTEL_EXPORTER_OTLP_ENDPOINT`) and installs a logger provider, which the appender picks up
+automatically:
+
+~~~ruby
+require "opentelemetry-logs-sdk"
+require "opentelemetry-exporter-otlp-logs"
+
+OpenTelemetry::SDK.configure
+
+SemanticLogger.add_appender(appender: :open_telemetry)
+~~~
+
+Each log entry is emitted with its level mapped to the matching OpenTelemetry severity number, the
+message as the record body, and the payload as record attributes.
+
+The appender registers a `SemanticLogger.on_log` subscriber that captures the current
+OpenTelemetry context at the moment each entry is logged, so log records are correlated with the
+active trace and span.
+
+| Option | Description |
+|--------|-------------|
+| `name` | Instrumentation scope name reported to OpenTelemetry. Defaults to `"SemanticLogger"`. |
+| `version` | Instrumentation scope version. Defaults to the Semantic Logger gem version. |
+| `metrics` | Whether to forward metric-only log entries. Defaults to `true`. |
 
 ### Logger, log4r, etc.
 

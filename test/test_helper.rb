@@ -1,3 +1,19 @@
+# Start code coverage before any application code is loaded.
+if ENV["COVERAGE"]
+  require "simplecov"
+  SimpleCov.start do
+    command_name(ENV["LOGGER_SYNC"] ? "Minitest-sync" : "Minitest")
+    add_filter "/test/"
+    track_files "lib/**/*.rb"
+
+    add_group "Appenders", "lib/semantic_logger/appender"
+    add_group "Formatters", "lib/semantic_logger/formatters"
+    add_group "Metrics", "lib/semantic_logger/metric"
+    add_group "Reporters", "lib/semantic_logger/reporters"
+    add_group "Test Support", "lib/semantic_logger/test"
+  end
+end
+
 # Allow test to be run in-place without requiring a gem install
 $LOAD_PATH.unshift "#{File.dirname(__FILE__)}/../lib"
 

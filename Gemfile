@@ -8,6 +8,7 @@ gem "minitest-reporters"
 gem "minitest-shared_description"
 gem "minitest-stub_any_instance"
 gem "rake"
+gem "simplecov", require: false
 
 # [optional] Bugsnag appender
 gem "bugsnag"
@@ -27,6 +28,8 @@ gem "base64"
 gem "mongo"
 # [optional] NewRelic appender ( Tests use a mock class )
 # gem 'newrelic_rpm'
+# [optional] Open Telemetry appender
+gem "opentelemetry-logs-sdk"
 # [optional] Net::TCP appender
 gem "net_tcp_client"
 # [optional] Splunk appender

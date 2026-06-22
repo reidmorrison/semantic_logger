@@ -92,7 +92,13 @@ Since changes cannot be made directly to the Semantic Logger repository, fork it
 
        LOGGER_SYNC=1 bundle exec rake
 
-   Some appender tests require MongoDB. See `docker-compose.yaml` to run the tests with a MongoDB container.
+   Some appender tests require MongoDB. The quickest way to provide one is to start the MongoDB container
+   defined in `docker-compose.yaml`:
+
+       docker-compose up -d mongodb
+
+   By default the tests connect to `127.0.0.1:27017`. Set the `MONGO_HOST` environment variable to point at a
+   MongoDB instance running elsewhere.
 
 6. Run the linter
 
