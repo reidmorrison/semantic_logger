@@ -275,7 +275,12 @@ module SemanticLogger
       extract_file_and_line(stack, short_name)
     end
 
-    # Strip the standard Rails colorizing from the logged message
+    # Strip the standard Rails colorizing from the logged message.
+    #
+    # Note: This unconditionally *strips* ANSI colorization, and is used to keep
+    # terminal escape codes out of structured (JSON/Loki) output. It is distinct
+    # from Formatters::Base#escape_control_characters, which instead *escapes*
+    # (preserves) control characters and is opt-in for the text formatters.
     def cleansed_message
       msg = message.to_s
       return msg.strip unless msg.include?("\e")

@@ -6,7 +6,8 @@ module SemanticLogger
                     :escape_control_chars
 
       # Printable escapes for the most common control characters. Any other
-      # control character is escaped to its hexadecimal `\xHH` form by #cleanse.
+      # control character is escaped to its hexadecimal `\xHH` form by
+      # #escape_control_characters.
       CONTROL_CHAR_ESCAPES = {
         "\n" => "\\n",
         "\r" => "\\r",
@@ -96,7 +97,11 @@ module SemanticLogger
       # value with any control characters replaced by a printable escaped form
       # so that untrusted log data cannot forge log entries or inject terminal
       # escape sequences. Otherwise the value is returned unchanged.
-      def cleanse(value)
+      #
+      # Note: This escapes (preserves) control characters, and is opt-in. It is
+      # distinct from Log#cleansed_message, which unconditionally *strips* ANSI
+      # colorization from the message for structured (JSON/Loki) output.
+      def escape_control_characters(value)
         return value unless escape_control_chars && value
 
         value.to_s.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
