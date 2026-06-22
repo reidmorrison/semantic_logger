@@ -72,6 +72,47 @@ module SemanticLogger
             assert_equal "RuntimeError", str["exception"]["name"]
           end
         end
+
+        describe "process info" do
+          let(:log) do
+            log             = SemanticLogger::Log.new("FluentdTest", level)
+            log.time        = log_time
+            log.thread_name = "worker-1"
+            log.backtrace   = backtrace
+            log
+          end
+
+          it "excludes pid, thread, file and line by default" do
+            hash = JSON.parse(formatter.call(log, nil))
+
+            refute hash.key?("pid"), "expected pid to be excluded"
+            refute hash.key?("thread"), "expected thread to be excluded"
+            refute hash.key?("file"), "expected file to be excluded"
+            refute hash.key?("line"), "expected line to be excluded"
+          end
+
+          it "excludes host by default" do
+            logger    = Struct.new(:host).new("my-host")
+            formatter = SemanticLogger::Formatters::Fluentd.new(log_application: false, log_environment: false)
+            hash      = JSON.parse(formatter.call(log, logger))
+
+            refute hash.key?("host"), "expected host to be excluded even when the logger has one"
+          end
+
+          it "includes pid, thread, file and line when need_process_info is true" do
+            formatter = SemanticLogger::Formatters::Fluentd.new(
+              log_host:          false,
+              log_application:   false,
+              need_process_info: true
+            )
+            hash = JSON.parse(formatter.call(log, nil))
+
+            assert_equal $$, hash["pid"]
+            assert_equal "worker-1", hash["thread"]
+            assert hash.key?("file"), "expected file to be included"
+            assert hash.key?("line"), "expected line to be included"
+          end
+        end
       end
     end
   end
