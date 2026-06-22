@@ -29,10 +29,10 @@ module SemanticLogger
                      formatter: SemanticLogger::Formatters::OpenTelemetry.new,
                      metrics: true,
                      **args,
-                     &block)
+                     &)
         # Base#initialize (via Subscriber) overwrites @name with the class name,
         # so call super first and then assign our own attributes.
-        super(formatter: formatter, metrics: metrics, **args, &block)
+        super(formatter: formatter, metrics: metrics, **args, &)
 
         @name      = name
         @version   = version

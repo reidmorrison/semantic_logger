@@ -38,7 +38,7 @@ module SemanticLogger
       #    logger.info('Hello World', some: :payload)
       #
       # Install the `rails_semantic_logger` gem to replace the Rails logger with Semantic Logger.
-      def initialize(logger:, **args, &block)
+      def initialize(logger:, **args, &)
         @logger = logger
 
         # Check if the custom appender responds to all the log levels. For example Ruby ::Logger
@@ -48,7 +48,7 @@ module SemanticLogger
                 "Supplied logger does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..-1].inspect}")
         end
 
-        super(**args, &block)
+        super(**args, &)
       end
 
       # Pass log calls to the underlying Rails, log4j or Ruby logger

@@ -55,10 +55,10 @@ module SemanticLogger
                      type: "log",
                      url: "http://localhost:9200",
                      **http_args,
-                     &block)
+                     &)
         @index = index
         @type  = type
-        super(url: url, **http_args, &block)
+        super(url: url, **http_args, &)
 
         @request_path = "#{@path.end_with?('/') ? @path : "#{@path}/"}#{@index}-%Y.%m.%d"
         @logging_path = "#{@request_path}/#{type}"

@@ -35,8 +35,8 @@ module SemanticLogger
                      max_queue_size: 10_000, lag_check_interval: 1_000, lag_threshold_s: 30,
                      batch_size: 300, batch_seconds: 5,
                      **args,
-                     &block)
-      appender = build(**args, &block)
+                     &)
+      appender = build(**args, &)
 
       # If appender implements #batch, then it should use the batch proxy by default.
       batch    = true if batch.nil? && appender.respond_to?(:batch)
@@ -62,13 +62,13 @@ module SemanticLogger
     end
 
     # Returns [Subscriber] instance from the supplied options.
-    def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &block)
+    def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &)
       if file_name
-        SemanticLogger::Appender::File.new(file_name, **args, &block)
+        SemanticLogger::Appender::File.new(file_name, **args, &)
       elsif io
-        SemanticLogger::Appender::IO.new(io, **args, &block)
+        SemanticLogger::Appender::IO.new(io, **args, &)
       elsif logger
-        SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &block)
+        SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &)
       elsif appender
         if appender.is_a?(Symbol)
           SemanticLogger::Utils.constantize_symbol(appender).new(**args)

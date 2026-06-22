@@ -126,7 +126,7 @@ module SemanticLogger
             it "adds to the stream" do
               log.tags = [:test1, "test2"]
 
-              assert_equal ["test1", "test2"], stream_data["tags"]
+              assert_equal %w[test1 test2], stream_data["tags"]
             end
           end
 

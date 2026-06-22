@@ -244,13 +244,13 @@ module SemanticLogger
     end
 
     # :nodoc:
-    def silence(new_level = :error, &block)
-      SemanticLogger.silence(new_level, &block)
+    def silence(new_level = :error, &)
+      SemanticLogger.silence(new_level, &)
     end
 
     # :nodoc:
-    def fast_tag(tag, &block)
-      SemanticLogger.fast_tag(tag, &block)
+    def fast_tag(tag, &)
+      SemanticLogger.fast_tag(tag, &)
     end
 
     # Write log data to underlying data storage

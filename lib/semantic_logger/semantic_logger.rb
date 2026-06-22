@@ -162,8 +162,8 @@ module SemanticLogger
   #   logger = SemanticLogger['Example']
   #   logger.info "Hello World"
   #   logger.debug("Login time", user: 'Joe', duration: 100, ip_address: '127.0.0.1')
-  def self.add_appender(**args, &block)
-    appender = appenders.add(**args, &block)
+  def self.add_appender(**args, &)
+    appender = appenders.add(**args, &)
     # Start appender thread if it is not already running
     Logger.processor.start
     appender
@@ -236,8 +236,8 @@ module SemanticLogger
   # Note:
   # * This callback is called within the thread of the application making the logging call.
   # * If these callbacks are slow they will slow down the application.
-  def self.on_log(object = nil, &block)
-    Logger.subscribe(object, &block)
+  def self.on_log(object = nil, &)
+    Logger.subscribe(object, &)
   end
 
   # Add signal handlers for Semantic Logger
@@ -342,13 +342,13 @@ module SemanticLogger
   #     `logger.tagged([['first', nil], nil, ['more'], 'other'])`
   #   to the equivalent of:
   #     `logger.tagged('first', 'more', 'other')`
-  def self.tagged(*tags, &block)
+  def self.tagged(*tags, &)
     return yield if tags.empty?
 
     # Allow named tags to be passed into the logger
     if tags.size == 1
       tag = tags[0]
-      return tag.is_a?(Hash) ? named_tagged(tag, &block) : fast_tag(tag, &block)
+      return tag.is_a?(Hash) ? named_tagged(tag, &) : fast_tag(tag, &)
     end
 
     begin

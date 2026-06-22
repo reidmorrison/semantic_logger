@@ -37,11 +37,11 @@ module SemanticLogger
       end
 
       # :nodoc:
-      def add(severity, message = nil, progname = nil, &block)
+      def add(severity, message = nil, progname = nil, &)
         index = Levels.index(severity)
         if level_index <= index
           level = Levels.level(index)
-          log_internal(level, index, message, progname, &block)
+          log_internal(level, index, message, progname, &)
           true
         else
           false

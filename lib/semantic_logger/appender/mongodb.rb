@@ -107,7 +107,7 @@ module SemanticLogger
                      collection_size: 1024**3,
                      collection_max: nil,
                      **args,
-                     &block)
+                     &)
         @client          = Mongo::Client.new(uri, logger: logger)
         @collection_name = collection_name
         @options         = {
@@ -122,7 +122,7 @@ module SemanticLogger
         # Create the collection and necessary indexes
         create_indexes
 
-        super(**args, &block)
+        super(**args, &)
       end
 
       # After forking an active process call #reopen to re-open

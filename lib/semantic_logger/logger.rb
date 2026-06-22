@@ -65,9 +65,9 @@ module SemanticLogger
     #
     # Subscribers are called inline before handing off to the queue so that
     # they can capture additional context information as needed.
-    def log(log, message = nil, progname = nil, &block)
+    def log(log, message = nil, progname = nil, &)
       # Compatibility with ::Logger
-      return add(log, message, progname, &block) unless log.is_a?(SemanticLogger::Log)
+      return add(log, message, progname, &) unless log.is_a?(SemanticLogger::Log)
 
       Logger.call_subscribers(log)
 
