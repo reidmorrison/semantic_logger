@@ -73,9 +73,15 @@ module SemanticLogger
       super && (log.metric_only? ? metrics? : true)
     end
 
-    # Whether this appender is logging to stdout or stderror
+    # The console stream this appender writes to, if any.
+    # Returns one of :stdout, :stderr, or nil when not writing to a console stream.
+    def console_stream
+      nil
+    end
+
+    # Whether this appender is logging to stdout or stderr.
     def console_output?
-      false
+      !console_stream.nil?
     end
 
     private

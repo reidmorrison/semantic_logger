@@ -159,5 +159,11 @@ class SubscriberTest < Minitest::Test
         refute_predicate appender, :console_output?
       end
     end
+
+    describe "#console_stream" do
+      it "is nil by default" do
+        assert_nil appender.console_stream
+      end
+    end
   end
 end

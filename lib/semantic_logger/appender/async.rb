@@ -20,6 +20,8 @@ module SemanticLogger
       def_delegator :@appender, :level=
       def_delegator :@appender, :logger
       def_delegator :@appender, :logger=
+      def_delegator :@appender, :console_stream
+      def_delegator :@appender, :console_output?
 
       # Appender proxy to allow an existing appender to run asynchronously in a separate thread.
       #
