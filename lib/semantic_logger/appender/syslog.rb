@@ -213,8 +213,9 @@ module SemanticLogger
       # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender depending on the protocal selected
       def default_formatter
         if protocol == :syslog
-          # Format is text output without the time
-          SemanticLogger::Formatters::Default.new(time_format: :notime)
+          # Format is text output without the time.
+          # Escape control characters so untrusted log data cannot forge syslog entries.
+          SemanticLogger::Formatters::Default.new(time_format: :notime, escape_control_chars: true)
         else
           SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map, max_size: max_size)
         end
