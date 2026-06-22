@@ -28,6 +28,8 @@ gem "base64"
 gem "mongo"
 # [optional] NewRelic appender ( Tests use a mock class )
 # gem 'newrelic_rpm'
+# [optional] Open Telemetry appender
+gem "opentelemetry-logs-sdk"
 # [optional] Net::TCP appender
 gem "net_tcp_client"
 # [optional] Splunk appender

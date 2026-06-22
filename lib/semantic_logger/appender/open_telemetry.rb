@@ -30,6 +30,10 @@ module SemanticLogger
                      metrics: true,
                      **args,
                      &block)
+        # Base#initialize (via Subscriber) overwrites @name with the class name,
+        # so call super first and then assign our own attributes.
+        super(formatter: formatter, metrics: metrics, **args, &block)
+
         @name      = name
         @version   = version
         @provider  = ::OpenTelemetry.logger_provider
@@ -38,8 +42,6 @@ module SemanticLogger
         # Capture the current Open Telemetry context when a log entry is captured.
         # Prevents duplicate subscribers as long as it is from a constant.
         SemanticLogger.on_log(CAPTURE_CONTEXT)
-
-        super(formatter: formatter, metrics: metrics, **args, &block)
       end
 
       def log(log)
@@ -57,7 +59,7 @@ module SemanticLogger
           timestamp:       time,
           body:            body.transform_keys!(&:to_s),
           attributes:      payload,
-          context:         log.context[:open_telemetry] || ::OpenTelemetry::Context.current
+          context:         (log.context && log.context[:open_telemetry]) || ::OpenTelemetry::Context.current
         )
         true
       end
@@ -69,7 +71,7 @@ module SemanticLogger
         @provider.force_flush if @provider.respond_to?(:force_flush)
       rescue StandardError => e
         # Swallow to avoid noisy shutdown exceptions.
-        SemanticLogger.logger.warn("Flush failed: #{e.class}: #{e.message}")
+        SemanticLogger::Processor.logger.warn("Flush failed: #{e.class}: #{e.message}")
       end
 
       # Close the appender and release resources.
@@ -78,7 +80,7 @@ module SemanticLogger
 
         @provider.shutdown if @provider.respond_to?(:shutdown)
       rescue StandardError => e
-        SemanticLogger.logger.warn("Shutdown failed: #{e.class}: #{e.message}")
+        SemanticLogger::Processor.logger.warn("Shutdown failed: #{e.class}: #{e.message}")
       ensure
         @provider = nil
       end

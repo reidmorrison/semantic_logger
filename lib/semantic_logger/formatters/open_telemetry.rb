@@ -8,7 +8,7 @@ module SemanticLogger
       # Log level
       def level
         hash[:level]       = log.level.to_s
-        hash[:level_index] = severity_number(log.level_index)
+        hash[:level_index] = severity_number(log.level)
       end
 
       # Payload is submitted directly as attributes
