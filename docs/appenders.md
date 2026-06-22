@@ -136,6 +136,16 @@ For performance reasons the log file is not re-opened with every call.
 When the log file needs to be rotated, use a copy-truncate operation rather
 than deleting the file.
 
+Log files frequently contain sensitive information. By default the file is created
+using the process umask (the standard Ruby behavior). To restrict access, supply the
+`permissions:` option, which is applied both when the file is created and to an
+existing log file:
+
+~~~ruby
+# Owner read/write, group read, no access for others:
+SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
+~~~
+
 #### JSON log format
 
 When writing json log output, it has the following layout:

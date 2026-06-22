@@ -4,12 +4,23 @@ module SemanticLogger
   module Utils
     def self.constantize_symbol(symbol, namespace = "SemanticLogger::Appender")
       klass = "#{namespace}::#{camelize(symbol.to_s)}"
-      begin
-        Object.const_get(klass)
-      rescue NameError
+      constant =
+        begin
+          Object.const_get(klass)
+        rescue NameError
+          raise(ArgumentError,
+                "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
+        end
+
+      # The resolved constant is instantiated by the caller, so ensure it is
+      # actually a class within the expected namespace rather than some other
+      # constant that happens to share the name.
+      unless constant.is_a?(Class)
         raise(ArgumentError,
-              "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
+              "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. #{klass} is not a class.")
       end
+
+      constant
     end
 
     # Borrow from Rails, when not running Rails

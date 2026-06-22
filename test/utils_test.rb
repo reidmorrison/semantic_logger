@@ -19,6 +19,16 @@ module SemanticLogger
           end
           assert_match(/Could not convert symbol/, error.message)
         end
+
+        it "raises when the symbol resolves to a constant that is not a class" do
+          SemanticLogger::Utils.const_set(:NotAClass, 42)
+          error = assert_raises ArgumentError do
+            SemanticLogger::Utils.constantize_symbol(:not_a_class, "SemanticLogger::Utils")
+          end
+          assert_match(/is not a class/, error.message)
+        ensure
+          SemanticLogger::Utils.send(:remove_const, :NotAClass)
+        end
       end
 
       describe ".camelize" do

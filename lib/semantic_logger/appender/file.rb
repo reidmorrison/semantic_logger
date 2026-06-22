@@ -7,7 +7,7 @@ module SemanticLogger
   module Appender
     class File < SemanticLogger::Subscriber
       attr_accessor :file_name, :retry_count, :append, :exclusive_lock, :encoding,
-                    :reopen_period, :reopen_count, :reopen_size
+                    :reopen_period, :reopen_count, :reopen_size, :permissions
       attr_reader :log_count, :log_size, :current_file_name, :reopen_at
 
       # Create an appender to log to a named file.
@@ -73,6 +73,13 @@ module SemanticLogger
       #     Encoding to use when writing to the file.
       #     Default: Encoding::BINARY
       #
+      #   :permissions [Integer]
+      #     Octal file permissions to apply to the log file.
+      #     Log files frequently contain sensitive information, so restrict access
+      #     by supplying for example `0o640` (owner read/write, group read).
+      #     Applied both when the file is created and to an existing log file.
+      #     Default: nil (use the process umask, the standard Ruby behavior)
+      #
       #   :retry_count [Integer]
       #     Number of times to attempt to re-open the file name when an error occurs trying to
       #     write to the file.
@@ -123,7 +130,7 @@ module SemanticLogger
       #    logger = SemanticLogger["test"]
       #    logger.info "Hello World"
       def initialize(file_name, retry_count: 1, append: true, reopen_period: nil, reopen_count: 0, reopen_size: 0,
-                     encoding: Encoding::BINARY, exclusive_lock: false, **args, &)
+                     encoding: Encoding::BINARY, exclusive_lock: false, permissions: nil, **args, &)
         if !file_name.is_a?(String) || file_name.empty?
           raise(ArgumentError, "SemanticLogging::Appender::File file_name must be a non-empty string")
         end
@@ -137,6 +144,7 @@ module SemanticLogger
         @reopen_size    = reopen_size
         @encoding       = encoding
         @exclusive_lock = exclusive_lock
+        @permissions    = permissions
         @log_count      = 0
         @log_size       = 0
         @reopen_at      = nil
@@ -170,7 +178,15 @@ module SemanticLogger
 
         options = ::File::WRONLY | ::File::CREAT
         options |= ::File::APPEND if append
-        @file = ::File.open(current_file_name, options)
+        @file =
+          if permissions
+            ::File.open(current_file_name, options, permissions)
+          else
+            ::File.open(current_file_name, options)
+          end
+        # File.open only applies the permissions when creating the file, so also
+        # enforce them on an already existing log file.
+        @file.chmod(permissions) if permissions
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @file.sync = true

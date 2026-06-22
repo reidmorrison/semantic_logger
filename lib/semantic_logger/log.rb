@@ -129,11 +129,17 @@ module SemanticLogger
       true
     end
 
+    # Keys that #assign_hash may assign directly to a log attribute. Every other
+    # key is folded into the payload, preventing a supplied hash from overwriting
+    # sensitive fields such as :level, :name, or :time, and keeping this path
+    # consistent with #extract_arguments.
+    ASSIGNABLE_KEYS = (NON_PAYLOAD_KEYS + %i[payload]).freeze
+
     # Assign known keys to self, all other keys to the payload.
     def assign_hash(hash)
       self.payload ||= {}
       hash.each_pair do |key, value|
-        if respond_to?(:"#{key}=")
+        if ASSIGNABLE_KEYS.include?(key) && respond_to?(:"#{key}=")
           public_send(:"#{key}=", value)
         else
           payload[key] = value
