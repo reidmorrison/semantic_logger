@@ -259,4 +259,4 @@ and then written to one or more appenders on a separate thread.
 
 ![Class diagram](images/class_diagram.png "Class Diagram")
 
-### [Next: Log Event ==>](log_struct.html)
+### [Next: Security ==>](security.html)
