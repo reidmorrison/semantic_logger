@@ -330,7 +330,7 @@ module SemanticLogger
       if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
         exception = message
         message   = nil
-      elsif exception.nil? && payload && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
+      elsif exception.nil? && payload.respond_to?(:backtrace) && payload.respond_to?(:message)
         exception = payload
         payload   = nil
       elsif payload && !payload.is_a?(Hash)
@@ -343,7 +343,7 @@ module SemanticLogger
         if exception.nil? && payload.nil? && message.is_a?(Hash)
           # All arguments as a hash in the message.
           log.assign(**log.extract_arguments(message))
-        elsif exception.nil? && message && payload && payload.is_a?(Hash)
+        elsif exception.nil? && message && payload.is_a?(Hash)
           # Message supplied along with a hash with the remaining arguments.
           log.assign(**log.extract_arguments(payload, message))
         else
