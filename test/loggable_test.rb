@@ -27,6 +27,25 @@ class AppenderFileTest < Minitest::Test
     include SemanticLogger::Loggable
   end
 
+  class Measured
+    include SemanticLogger::Loggable
+
+    def double(value)
+      value * 2
+    end
+    logger_measure_method :double
+
+    def explode
+      raise "boom"
+    end
+    logger_measure_method :explode, level: :error
+
+    def quick
+      :done
+    end
+    logger_measure_method :quick, min_duration: 60_000
+  end
+
   describe SemanticLogger::Loggable do
     describe "inheritance" do
       it "should give child classes their own logger" do
@@ -77,6 +96,69 @@ class AppenderFileTest < Minitest::Test
 
       it "has instance level logger" do
         TestAttribute.new.logger.is_a?(SemanticLogger::Logger)
+      end
+    end
+
+    describe "#logger=" do
+      it "overrides the class level logger" do
+        custom   = SemanticLogger::Test::CaptureLogEvents.new
+        original = TestAttribute.logger
+        begin
+          TestAttribute.logger = custom
+          assert_same custom, TestAttribute.logger
+          assert_same custom, TestAttribute.new.logger
+        ensure
+          TestAttribute.logger = original
+        end
+      end
+
+      it "overrides an individual instance logger" do
+        custom   = SemanticLogger::Test::CaptureLogEvents.new
+        instance = TestAttribute.new
+        instance.logger = custom
+        assert_same custom, instance.logger
+        refute_same custom, TestAttribute.new.logger
+      end
+    end
+
+    describe "#logger_measure_method" do
+      let(:capture) { SemanticLogger::Test::CaptureLogEvents.new }
+
+      before do
+        Measured.logger = capture
+      end
+
+      after do
+        Measured.logger = nil
+      end
+
+      it "logs the method duration and returns the result" do
+        assert_equal 8, Measured.new.double(4)
+
+        assert log = capture.events.first
+        assert_equal "#double", log.message
+        assert_equal :info, log.level
+        assert_equal "#{Measured.name}/double", log.metric
+        refute_nil log.duration
+      end
+
+      it "logs and re-raises when the method raises" do
+        assert_raises(RuntimeError) { Measured.new.explode }
+
+        assert log = capture.events.first
+        assert_equal :error, log.level
+        assert_match(/Exception: RuntimeError: boom/, log.message)
+      end
+
+      it "does not log when the duration is below min_duration" do
+        assert_equal :done, Measured.new.quick
+        assert capture.events.empty?
+      end
+
+      it "runs the method without logging when the level is not met" do
+        capture.level = :fatal
+        assert_equal 8, Measured.new.double(4)
+        assert capture.events.empty?
       end
     end
   end

@@ -31,12 +31,10 @@ The following capabilities are available by using the corresponding signal:
 The global default logging level can be changed by sending the process a SIGUSR2
 signal without having to restart the process.
 
-When the signal is sent, the global default log level rotates through the following
-log levels in the following order, starting from the current global default level:
+When the signal is sent, the global default log level rotates through the
+log levels in this order, starting from the current global default level:
 
-~~~ruby
-  :fatal, :error, :warn, :info, :debug, :trace
-~~~
+    :fatal, :error, :warn, :info, :debug, :trace
 
 If the current level is `:trace` it wraps around back to `:fatal`
 
@@ -75,7 +73,7 @@ kill -TTIN 1234
 
 ### JRuby Garbage collection event logging
 
-For JRuby, any Garbage Collection events that take longer than 10ms are logged
+For JRuby, any Garbage Collection events that take longer than 100ms are logged
 as a warning to the regular log file and other appenders.
 
 This information is critical in high load scenarios to give visibility on any

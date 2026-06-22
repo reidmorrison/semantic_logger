@@ -40,13 +40,11 @@ module SemanticLogger
                      path: INGESTION_PATH,
                      **args,
                      &block)
-
         super(url: "#{url}/#{path}", formatter: formatter, header: header, **args, &block)
       end
 
       def log(log)
         message = formatter.call(log, self)
-        puts message
         logger.trace(message)
         post(message)
       end

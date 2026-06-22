@@ -54,7 +54,7 @@ module SemanticLogger
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
       def initialize(facility: ::Syslog::LOG_USER, level_map: LevelMap.new, max_size: Integer)
         @facility  = facility
-        @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(level_map)
+        @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(**level_map)
         @max_size = max_size
         super()
       end

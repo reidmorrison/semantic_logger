@@ -1,13 +1,41 @@
 # Semantic Logger
 [![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://github.com/reidmorrison/semantic_logger/workflows/build/badge.svg)](https://github.com/reidmorrison/semantic_logger/actions?query=workflow%3Abuild) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg)
 
-Semantic Logger is a feature rich logging framework, and replacement for existing Ruby & Rails loggers.
+Semantic Logger is a feature rich logging framework, and a replacement for the existing
+Ruby and Rails loggers.
 
-* https://logger.rocketjob.io/
+It differs from ordinary loggers in two important ways:
+
+1. **It logs structured data, not just strings.** Along with the text message, each log entry can
+   carry a payload (any Hash), an exception, a duration, metrics, and tags. That data is preserved
+   all the way to the destination, so it stays searchable instead of being flattened into text.
+2. **It logs asynchronously.** Log events are pushed onto an in-memory queue and written to their
+   destinations by a separate background thread, so your application is not blocked while logs are
+   written. Semantic Logger can log thousands of lines per second without slowing the application
+   down.
+
+```ruby
+require "semantic_logger"
+
+SemanticLogger.default_level = :info
+SemanticLogger.add_appender(io: $stdout, formatter: :color)
+
+logger = SemanticLogger["MyApp"]
+
+# A plain message, plus structured data that stays searchable
+logger.info("Queried users table", duration: 54, result: :ok, table: "users")
+```
+
+When running Rails, use
+[rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger) instead, since it
+replaces the Rails default logger with Semantic Logger automatically.
 
 ## Documentation
 
-[Semantic Logger Guide](https://logger.rocketjob.io/)
+Start with the [Introduction](https://logger.rocketjob.io/), then the
+[Programmer's Guide](https://logger.rocketjob.io/api.html).
+
+* Full guide: [https://logger.rocketjob.io/](https://logger.rocketjob.io/)
 
 ## Logging Destinations
 
@@ -164,6 +192,11 @@ SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
 ~~~
 
 If running rails, see: [Semantic Logger Rails](https://logger.rocketjob.io/rails.html)
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up the project, run the
+tests, and an overview of the architecture, including a class diagram.
 
 ## Author
 

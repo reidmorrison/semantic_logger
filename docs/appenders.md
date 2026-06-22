@@ -4,40 +4,112 @@ layout: default
 
 ## Appenders
 
-Appenders are destinations that log messages can be written to.
+An **appender** is a destination that log messages are written to. Semantic Logger can write to
+several appenders at the same time, each with its own log level and format. For example you might
+log colorized text to the screen, JSON to a file, and errors to an external service, all from the
+same log call.
 
-Log messages can be written to one or more of the following destinations at the same time:
+### Adding an appender
 
-* Text File
-* $stderr or $stdout ( any IO stream )
-* Syslog
-* Graylog
-* Elasticsearch
-* Splunk
-* logentries.com
-* loggly.com
-* Logstash
-* Papertrail
-* New Relic
-* Bugsnag
-* Signalfx
-* Apache Kafka
-* RabbitMQ (AMQP)
-* HTTP(S)
-* TCP (+ SSL)
-* UDP
-* MongoDB
-* Rollbar
-* Sentry
-* Honeybadger
-* Honeybadger Insights
-* CloudWatch Logs
-* Logger, log4r, etc.
-* Grafana Loki
+Every destination is configured through a single method, `SemanticLogger.add_appender`. The keyword
+you use selects the kind of destination:
 
-To ensure no log messages are lost it is recommend to use TCP over UDP for logging purposes.
-Due to the architecture of Semantic Logger any performance difference between TCP and UDP will not
-impact the performance of you application.
+~~~ruby
+# A text file
+SemanticLogger.add_appender(file_name: "development.log")
+
+# An IO stream, such as the screen
+SemanticLogger.add_appender(io: $stdout)
+
+# A built-in appender, selected by name
+SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200")
+
+# An existing Ruby or Rails logger
+SemanticLogger.add_appender(logger: Logger.new($stdout))
+
+# A metrics destination
+SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
+~~~
+
+Call `add_appender` once per destination, usually when your application starts.
+
+### Common options
+
+In addition to its own settings, most appenders accept these options:
+
+| Option | Description |
+|--------|-------------|
+| `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level`. |
+| `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Customize](customize.html). |
+| `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](filtering.html). |
+| `application`, `environment`, `host` | Override the global values for this appender only. |
+
+For example, write only warnings and above to a file, formatted as JSON:
+
+~~~ruby
+SemanticLogger.add_appender(file_name: "errors.log", level: :warn, formatter: :json)
+~~~
+
+### Available destinations
+
+Appenders for third party services require their backing gem to be installed. The gem is listed in
+the "Gem" column below and is loaded only when that appender is used.
+
+**Files and streams**
+
+| Destination | `add_appender` argument | Gem |
+|-------------|-------------------------|-----|
+| [Text file](#text-file) | `file_name:` | |
+| [IO stream](#io-streams) (`$stdout`, `$stderr`, ...) | `io:` | |
+| [Another Ruby or Rails logger](#logger-log4r-etc) | `logger:` | |
+
+**Network protocols**
+
+| Destination | `add_appender` argument | Gem |
+|-------------|-------------------------|-----|
+| [HTTP(S)](#https) | `appender: :http` | |
+| [TCP (+SSL)](#tcp-appender-ssl) | `appender: :tcp` | `net_tcp_client` |
+| [UDP](#udp-appender) | `appender: :udp` | |
+| [Syslog](#syslog) | `appender: :syslog` | `syslog_protocol`, `net_tcp_client` (remote) |
+
+**Centralized logging and log aggregators**
+
+| Destination | `add_appender` argument | Gem |
+|-------------|-------------------------|-----|
+| [Elasticsearch](#elasticsearch) | `appender: :elasticsearch` | `elasticsearch` |
+| [Graylog](#graylog) | `appender: :graylog` | `gelf` |
+| [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
+| [Splunk over TCP/SDK](#splunk-http) | `appender: :splunk` | `splunk-sdk-ruby` |
+| [Grafana Loki](#grafana-loki) | `appender: :loki` | |
+| [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
+| [Logstash](#logstash) | `logger:` | `logstash-logger` |
+| [logentries.com](#logentriescom) | `appender: :tcp` | `net_tcp_client` |
+| [loggly.com](#logglycom) | `appender: :http` | |
+| [Papertrail](#papertrail) | `appender: :syslog` | `syslog_protocol`, `net_tcp_client` |
+
+**Error and exception monitoring**
+
+| Destination | `add_appender` argument | Gem |
+|-------------|-------------------------|-----|
+| [Bugsnag](#bugsnag) | `appender: :bugsnag` | `bugsnag` |
+| [Sentry](#sentry) | `appender: :sentry_ruby` | `sentry-ruby` |
+| [Honeybadger](#honeybadger-and-honeybadger-insights) | `appender: :honeybadger` | `honeybadger` |
+| [Honeybadger Insights](#honeybadger-and-honeybadger-insights) | `appender: :honeybadger_insights` | `honeybadger` |
+| [New Relic](#newrelic) | `appender: :new_relic` | `newrelic_rpm` |
+| [Rollbar](#rollbar) | via `SemanticLogger.on_log` | `rollbar` |
+
+**Databases and message queues**
+
+| Destination | `add_appender` argument | Gem |
+|-------------|-------------------------|-----|
+| [MongoDB](#mongodb) | `appender: :mongodb` | `mongo` |
+| [Apache Kafka](#apache-kafka) | `appender: :kafka` | `ruby-kafka` |
+| [RabbitMQ](#rabbitmq-amqp) | `appender: :rabbitmq` | `bunny` |
+
+For metrics destinations such as Statsd, SignalFx, and New Relic, see [Metrics](metrics.html).
+
+> **Tip:** To ensure no log messages are lost, prefer TCP over UDP. Because of Semantic Logger's
+> asynchronous design, the performance difference between the two will not impact your application.
 
 ### Text File
 
@@ -508,11 +580,8 @@ create a file called `<Rails Root>/config/initializers/mongodb.rb` with
 the following contents and restart the application.
 
 ~~~ruby
-client   = Mongo::MongoClient.new("127.0.0.1", 27017)
-database = client["test"]
-
 appender = SemanticLogger::Appender::MongoDB.new(
-  db:              database,
+  uri:             "mongodb://127.0.0.1:27017/test",
   collection_size: 1024**3, # 1.gigabyte
   application:     Rails.application.class.name
 )
