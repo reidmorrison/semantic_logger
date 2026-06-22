@@ -176,6 +176,40 @@ concurrent threads simply enqueue events, and each appender writes them out sequ
 correct order. For the rare cases where you want logging to happen inline on the calling thread,
 see [Synchronous Operation](api.html#synchronous-operation).
 
+### Non-blocking (dropping) mode
+
+By default the in-memory queue is capped (`max_queue_size`, default `10,000`). When the queue is
+full, for example because an appender cannot keep up, calls to `logger.info` block until space
+becomes available. This guarantees no log message is lost, at the cost of (briefly) slowing down
+the application.
+
+For workloads where application availability matters more than complete logs, enable
+`non_blocking` so that log messages are dropped instead of blocking the calling thread once the
+queue is full:
+
+~~~ruby
+SemanticLogger.add_appender(
+  file_name:    "production.log",
+  async:        true,
+  non_blocking: true
+)
+~~~
+
+When messages are dropped, the count is logged to the internal logger at most once every
+`dropped_message_report_seconds` (default `30`) so that dropped messages do not go unnoticed:
+
+~~~ruby
+SemanticLogger.add_appender(
+  file_name:                      "production.log",
+  async:                          true,
+  non_blocking:                   true,
+  dropped_message_report_seconds: 60
+)
+~~~
+
+`non_blocking` only applies to a capped queue; an uncapped queue (`max_queue_size: -1`) never
+blocks and never drops, but can grow without bound.
+
 ### Ruby Support
 
 For the complete list of supported Ruby versions, see

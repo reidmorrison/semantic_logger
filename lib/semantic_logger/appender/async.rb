@@ -6,8 +6,8 @@ module SemanticLogger
     class Async
       extend Forwardable
 
-      attr_accessor :lag_check_interval, :lag_threshold_s
-      attr_reader :queue, :appender, :max_queue_size
+      attr_accessor :lag_check_interval, :lag_threshold_s, :dropped_message_report_seconds
+      attr_reader :queue, :appender, :max_queue_size, :non_blocking
 
       # Forward methods that can be called directly
       def_delegator :@appender, :name
@@ -36,15 +36,34 @@ module SemanticLogger
       #   lag_check_interval: [Integer]
       #     Number of messages to process before checking for slow logging.
       #     Default: 1,000
+      #
+      #   non_blocking: [true|false]
+      #     Whether to drop log messages instead of blocking the calling thread when the queue is full.
+      #     When true and the queue is capped, attempts to add to a full queue return immediately and
+      #     the message is dropped. The number of dropped messages is logged to the internal logger
+      #     periodically (see dropped_message_report_seconds). Only applies to a capped queue.
+      #     Default: false
+      #
+      #   dropped_message_report_seconds: [Integer]
+      #     When non_blocking is enabled, log the count of dropped messages to the internal logger
+      #     at most once every this number of seconds.
+      #     Default: 30
       def initialize(appender:,
                      max_queue_size: 10_000,
                      lag_check_interval: 1_000,
-                     lag_threshold_s: 30)
-        @appender           = appender
-        @lag_check_interval = lag_check_interval
-        @lag_threshold_s    = lag_threshold_s
-        @thread             = nil
-        @max_queue_size     = max_queue_size
+                     lag_threshold_s: 30,
+                     non_blocking: false,
+                     dropped_message_report_seconds: 30)
+        @appender                       = appender
+        @lag_check_interval             = lag_check_interval
+        @lag_threshold_s                = lag_threshold_s
+        @thread                         = nil
+        @max_queue_size                 = max_queue_size
+        @non_blocking                   = non_blocking
+        @dropped_message_report_seconds = dropped_message_report_seconds
+        @dropped_message_count          = 0
+        @dropped_message_reported_at    = Time.now
+        @dropped_message_mutex          = Mutex.new
         create_queue
         thread
       end
@@ -67,6 +86,12 @@ module SemanticLogger
         @capped
       end
 
+      # Returns [true|false] whether messages are dropped instead of blocking when the queue is full.
+      # Only a capped queue can drop messages.
+      def non_blocking?
+        @non_blocking && capped?
+      end
+
       # Returns [Thread] the worker thread.
       #
       # Starts the worker thread if not running.
@@ -82,8 +107,19 @@ module SemanticLogger
       end
 
       # Add log message for processing.
+      #
+      # When non-blocking and the queue is full, the message is dropped instead of blocking the
+      # calling thread, and the count of dropped messages is reported periodically.
       def log(log)
-        queue << log
+        if non_blocking?
+          begin
+            queue.push(log, true)
+          rescue ThreadError
+            message_dropped
+          end
+        else
+          queue << log
+        end
       end
 
       # Flush all queued log entries disk, database, etc.
@@ -176,6 +212,24 @@ module SemanticLogger
           logger.warn "Async: Appender thread: Ignoring unknown command: #{message[:command]}"
         end
         true
+      end
+
+      # Record a dropped message, reporting the running count to the internal logger at most
+      # once every dropped_message_report_seconds.
+      def message_dropped
+        @dropped_message_mutex.synchronize do
+          @dropped_message_count += 1
+          diff = Time.now - @dropped_message_reported_at
+          return if diff < dropped_message_report_seconds
+
+          logger.warn(
+            "Async: Dropped #{@dropped_message_count} log messages in the last #{diff.round} seconds. " \
+            "The queue is full (max_queue_size: #{max_queue_size}). " \
+            "Consider reducing the log level, increasing max_queue_size, or changing the appenders"
+          )
+          @dropped_message_count       = 0
+          @dropped_message_reported_at = Time.now
+        end
       end
 
       def check_lag(log)
