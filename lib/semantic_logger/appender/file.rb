@@ -123,7 +123,7 @@ module SemanticLogger
       #    logger = SemanticLogger["test"]
       #    logger.info "Hello World"
       def initialize(file_name, retry_count: 1, append: true, reopen_period: nil, reopen_count: 0, reopen_size: 0,
-                     encoding: Encoding::BINARY, exclusive_lock: false, **args, &block)
+                     encoding: Encoding::BINARY, exclusive_lock: false, **args, &)
         if !file_name.is_a?(String) || file_name.empty?
           raise(ArgumentError, "SemanticLogging::Appender::File file_name must be a non-empty string")
         end
@@ -141,7 +141,7 @@ module SemanticLogger
         @log_size       = 0
         @reopen_at      = nil
 
-        super(**args, &block)
+        super(**args, &)
       end
 
       # After forking an active process call #reopen to re-open

@@ -24,7 +24,7 @@ module SemanticLogger
       # Example:
       #   SemanticLogger.add_appender(
       #     metric: :statsd,
-      #     url:    'localhost:8125'
+      #     url:    'udp://localhost:8125'
       #   )
       def initialize(url: "udp://localhost:8125")
         @url = url
@@ -47,7 +47,7 @@ module SemanticLogger
         else
           amount = (log.metric_amount || 1).round
           if amount.negative?
-            amount.times { @statsd.decrement(metric) }
+            amount.abs.times { @statsd.decrement(metric) }
           else
             amount.times { @statsd.increment(metric) }
           end

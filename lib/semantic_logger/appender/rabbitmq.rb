@@ -12,7 +12,7 @@ end
 #     appender: :rabbitmq,
 #
 #     # Name of the queue in RabbitMQ where to publish the logs. This queue will be bound to "amqp.direct" exchange.
-#     queue: 'semantic_logger',
+#     queue_name: 'semantic_logger',
 #
 #     # This host will be used for RabbitMQ connection.
 #     # NOTE this is different than :host option which is used by the logger directly.
@@ -82,13 +82,13 @@ module SemanticLogger
       #   more parameters supported by Bunny: http://rubybunny.info/articles/connecting.html
       def initialize(queue_name: "semantic_logger", rabbitmq_host: nil,
                      level: nil, formatter: nil, filter: nil, application: nil, environment: nil, host: nil, metrics: true,
-                     **args, &block)
+                     **args, &)
         @queue_name             = queue_name
         @rabbitmq_args          = args.dup
         @rabbitmq_args[:host]   = rabbitmq_host
         @rabbitmq_args[:logger] = logger
 
-        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: metrics, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: metrics, &)
         reopen
       end
 

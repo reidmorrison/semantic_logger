@@ -39,14 +39,12 @@ module SemanticLogger
                      header: {"Content-Type" => "application/json"},
                      path: INGESTION_PATH,
                      **args,
-                     &block)
-
-        super(url: "#{url}/#{path}", formatter: formatter, header: header, **args, &block)
+                     &)
+        super(url: "#{url}/#{path}", formatter: formatter, header: header, **args, &)
       end
 
       def log(log)
         message = formatter.call(log, self)
-        puts message
         logger.trace(message)
         post(message)
       end

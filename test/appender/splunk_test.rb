@@ -31,6 +31,7 @@ module Appender
           appender.stub(:service_index, mock) do
             appender.send(level, amessage)
           end
+
           assert_equal amessage, mock.message
           assert_equal level, mock.event[:event][:level]
           refute mock.event[:event][:exception]
@@ -48,13 +49,14 @@ module Appender
           appender.stub(:service_index, mock) do
             appender.send(level, amessage, exc)
           end
+
           assert_equal amessage, mock.message
 
           assert exception = mock.event[:event][:exception]
           assert "NameError", exception[:name]
           assert "undefined local variable or method", exception[:message]
           assert_equal level, mock.event[:event][:level]
-          assert exception[:stack_trace].first.include?(__FILE__), exception
+          assert_includes exception[:stack_trace].first, __FILE__, exception
         end
 
         it "sends #{level} custom attributes" do
@@ -62,6 +64,7 @@ module Appender
           appender.stub(:service_index, mock) do
             appender.send(level, amessage, key1: 1, key2: "a")
           end
+
           assert_equal amessage, mock.message
 
           assert event = mock.event[:event], mock.event.ai
@@ -79,6 +82,7 @@ module Appender
         appender.stub(:service_index, mock) do
           appender.trace("AppenderSplunkTest trace message")
         end
+
         assert_nil mock.event
         assert_nil mock.message
       end

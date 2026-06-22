@@ -9,8 +9,8 @@ module SemanticLogger
       super()
     end
 
-    def add(**args, &block)
-      appender = SemanticLogger::Appender.factory(**args, &block)
+    def add(**args, &)
+      appender = SemanticLogger::Appender.factory(**args, &)
 
       if appender.respond_to?(:console_output?) && appender.console_output? && console_output?
         logger.warn "Ignoring attempt to add a second console appender: #{appender.class.name} since it would result in duplicate console output."

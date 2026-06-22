@@ -56,12 +56,14 @@ module SemanticLogger
           it "supports time_format" do
             formatter = SemanticLogger::Formatters::Default.new(time_format: "%H:%M:%S")
             formatter.call(log, nil)
+
             assert_equal "08:32:05", formatter.time
           end
 
           it "supports time_format of iso_8601" do
             formatter = SemanticLogger::Formatters::Default.new(time_format: :iso_8601)
             formatter.call(log, nil)
+
             assert_equal "2017-01-14T08:32:05.375276Z", formatter.time
           end
 
@@ -69,6 +71,7 @@ module SemanticLogger
             it "follows it for default time format" do
               formatter = SemanticLogger::Formatters::Default.new(precision: 2)
               formatter.call(log, nil)
+
               assert_equal "2017-01-14 08:32:05.37", formatter.time
             end
 
@@ -76,6 +79,7 @@ module SemanticLogger
               formatter = SemanticLogger::Formatters::Default.new(precision:   2,
                                                                   time_format: :iso_8601)
               formatter.call(log, nil)
+
               assert_equal "2017-01-14T08:32:05.37Z", formatter.time
             end
           end
@@ -95,6 +99,7 @@ module SemanticLogger
           it "logs pid, thread name, and file name" do
             set_exception
             log.backtrace = backtrace
+
             assert_equal "[#{$$}:#{Thread.current.name} default_test.rb:99]", formatter.process_info
           end
         end
@@ -102,6 +107,7 @@ module SemanticLogger
         describe "tags" do
           it "logs tags" do
             log.tags = %w[first second third]
+
             assert_equal "[first] [second] [third]", formatter.tags
           end
         end
@@ -109,6 +115,7 @@ module SemanticLogger
         describe "named_tags" do
           it "logs named tags" do
             log.named_tags = {first: 1, second: 2, third: 3}
+
             assert_equal "{first: 1, second: 2, third: 3}", formatter.named_tags
           end
         end
@@ -116,12 +123,14 @@ module SemanticLogger
         describe "duration" do
           it "logs long duration" do
             log.duration = 1_000_000.34567
+
             assert_equal "(16m 40s)", formatter.duration
           end
 
           it "logs short duration" do
             log.duration = 1.34567
             duration     = SemanticLogger::Formatters::Base::PRECISION == 3 ? "(1ms)" : "(1.346ms)"
+
             assert_equal duration, formatter.duration
           end
         end
@@ -135,6 +144,7 @@ module SemanticLogger
         describe "message" do
           it "logs message" do
             log.message = "Hello World"
+
             assert_equal "-- Hello World", formatter.message
           end
 
@@ -146,7 +156,13 @@ module SemanticLogger
         describe "payload" do
           it "logs hash payload" do
             log.payload = {first: 1, second: 2, third: 3}
-            assert_equal "-- #{{:first=>1, :second=>2, :third=>3}}", formatter.payload
+
+            # Ruby 3.4 changed the way hashes are displayed
+            if RUBY_VERSION < "3.4"
+              assert_equal "-- {:first=>1, :second=>2, :third=>3}", formatter.payload
+            else
+              assert_equal "-- {first: 1, second: 2, third: 3}", formatter.payload
+            end
           end
 
           it "skips nil payload" do
@@ -155,6 +171,7 @@ module SemanticLogger
 
           it "skips empty payload" do
             log.payload = {}
+
             refute formatter.payload
           end
         end
@@ -162,6 +179,7 @@ module SemanticLogger
         describe "exception" do
           it "logs exception" do
             set_exception
+
             assert_match(/-- Exception: RuntimeError: Oh no/, formatter.exception)
           end
 
@@ -184,7 +202,15 @@ module SemanticLogger
             log.backtrace  = backtrace
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1" : "1.346"
-            str      = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- #{{:first=>1, :second=>2, :third=>3}} -- Exception: RuntimeError: Oh no\n"
+            str      = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"
+
+            # Ruby 3.4 changed the way hashes are displayed
+            str = if RUBY_VERSION < "3.4"
+                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
+                  else
+                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"
+                  end
+
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end

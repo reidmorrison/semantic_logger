@@ -67,21 +67,25 @@ module SemanticLogger
 
           it "process log with payload" do
             log.payload = {is_test: true}
+
             assert_match(/"is_test":true/, formatter.call(log, appender.logger))
           end
 
           it "includes host name" do
             formatted_log = formatter.call(log, appender.logger)
+
             assert_equal true, formatted_log.include?(appender.logger.host)
           end
 
           it "includes application name" do
             formatted_log = formatter.call(log, appender.logger)
+
             assert_equal true, formatted_log.include?(appender.logger.application)
           end
 
           it "includes environment" do
             formatted_log = formatter.call(log, appender.logger)
+
             assert_equal true, formatted_log.include?(appender.logger.environment)
           end
 
@@ -92,11 +96,13 @@ module SemanticLogger
           describe "when exception was raised" do
             it "logs exception name" do
               set_exception
+
               assert_match(/"name":"RuntimeError"/, formatter.call(log, appender.logger))
             end
 
             it "logs exception message" do
               set_exception
+
               assert_match(/"message":"Oh no"/, formatter.call(log, appender.logger))
             end
           end

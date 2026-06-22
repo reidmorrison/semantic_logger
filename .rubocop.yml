@@ -1,11 +1,15 @@
 inherit_from: .rubocop_todo.yml
 
+plugins:
+  - rubocop-minitest
+  - rubocop-rake
+
 AllCops:
   Exclude:
     - ".git/**/*"
     - "docs/**/*"
   NewCops: enable
-  TargetRubyVersion: 2.7
+  TargetRubyVersion: 3.2
 
 #
 # RuboCop built-in settings.

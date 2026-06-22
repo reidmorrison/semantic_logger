@@ -39,7 +39,7 @@ Other helper methods on the log event object:
 |duration_human|`String`|The duration in human readable form.|
 |duration_to_s|`String`|The duration as a string in milli-seconds.|
 |each_exception|Enumerator|Iterate over the chain of exception objects.|
-|file_name_and_line(backtrace)|`[String,String]`|The file name and line number from the supplied backtrace.|
+|file_name_and_line(short_name = false)|`[String,String]`|The file name and line number from the log event's backtrace or exception. Pass `true` to return just the base file name.|
 |level_to_s|`String`|Single character upper case log level.|
 |metric_only?|`true` or `false`|A metric only event has a metric, but no message or exception. For example human readable text logs do not log metric only events, whereas JSON (machine readable) appenders generally would.|
 |payload_to_s|`String` or `nil`|The payload in text form, or nil if no payload present.|

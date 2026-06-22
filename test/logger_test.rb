@@ -21,21 +21,21 @@ class LoggerTest < Minitest::Test
             logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
             logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-            assert logger.events.empty?
+            assert_empty logger.events
           end
 
           it "Module" do
             logger.filter = ComplexFilter
             logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-            assert logger.events.empty?
+            assert_empty logger.events
           end
 
           it "RegExp" do
             logger.filter = ->(log) { (/\AExclude/ =~ log.message).nil? }
             logger.send(level, "Exclude this log message", @hash) { "Calculations" }
 
-            assert logger.events.empty?
+            assert_empty logger.events
           end
         end
       end
@@ -46,7 +46,7 @@ class LoggerTest < Minitest::Test
         logger.level = :error
         logger.info("Exclude this log message")
 
-        assert logger.events.empty?
+        assert_empty logger.events
       end
     end
 
@@ -94,6 +94,7 @@ class LoggerTest < Minitest::Test
     describe "#level?" do
       it "return true for debug? with :trace level" do
         logger.level = :trace
+
         assert_equal :trace, logger.level
         assert_equal true, logger.debug?
         assert_equal true, logger.trace?
@@ -101,6 +102,7 @@ class LoggerTest < Minitest::Test
 
       it "return false for debug? with instance :debug level" do
         logger.level = :debug
+
         assert_equal :debug, logger.level, logger.inspect
         assert_equal true, logger.debug?, logger.inspect
         assert_equal false, logger.trace?, logger.inspect
@@ -108,6 +110,7 @@ class LoggerTest < Minitest::Test
 
       it "return true for debug? with instance :info level" do
         logger.level = :info
+
         assert_equal :info, logger.level, logger.inspect
         assert_equal false, logger.debug?, logger.inspect
         assert_equal false, logger.trace?, logger.inspect
@@ -176,7 +179,7 @@ class LoggerTest < Minitest::Test
 
       it "yields self to be compatible with rails tagged logger" do
         logger.tagged("12345", "DJHSFK") do |yielded_logger|
-          assert_equal logger.object_id, yielded_logger.object_id
+          assert_same logger, yielded_logger
         end
       end
     end

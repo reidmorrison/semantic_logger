@@ -4,9 +4,19 @@ layout: default
 
 ## Rails
 
-The `rails_semantic_logger` gem replaces the default Rails logger with Semantic Logger.
-It also reduces Rails logging output in production to almost a single line
-for every Controller-Action call.
+[rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger) is a companion gem
+that wires Semantic Logger into Rails for you. Once installed it:
+
+* Replaces the default Rails logger with Semantic Logger, so Rails, your application code, and many
+  common gems all log through it.
+* Collapses the several lines Rails normally logs per request into a single, structured "Completed"
+  line in production, while keeping the individual fields (controller, action, status, durations,
+  and so on) searchable.
+* Lets you keep logging to the standard Rails log file, or send logs anywhere Semantic Logger
+  supports. See [Appenders](appenders.html).
+
+This page covers the Rails-specific configuration. For the logging API itself, see the
+[Programmer's Guide](api.html).
 
 ### Rails Support
 
@@ -279,13 +289,13 @@ config.semantic_logger.add_appender(file_name: "log/#{Rails.env}.json", formatte
 Example, also log to a local Syslog:
 
 ~~~ruby
-config.semantic_logger.add_appender(appender: syslog)
+config.semantic_logger.add_appender(appender: :syslog)
 ~~~
 
 Example, also log to a local Syslog such as syslog-ng over TCP:
 
 ~~~ruby
-config.semantic_logger.add_appender(appender: syslog, url: "tcp://myloghost:514")
+config.semantic_logger.add_appender(appender: :syslog, url: "tcp://myloghost:514")
 ~~~
 
 Example, also log to elasticsearch:
@@ -342,7 +352,7 @@ Custom Example, create `app/lib/my_formatter.rb`:
   class MyFormatter < SemanticLogger::Formatters::Color
     # Return the complete log level name in uppercase
     def level
-      "#{color}log.level.upcase#{color_map.clear}"
+      "#{color}#{log.level.upcase}#{color_map.clear}"
     end
   end
 ~~~

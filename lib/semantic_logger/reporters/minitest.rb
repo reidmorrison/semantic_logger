@@ -28,18 +28,18 @@ module SemanticLogger
       attr_accessor :io
 
       def before_test(test)
-        logger.info("START #{test.class_name} #{test.name}")
+        logger.info("START #{test.class.name} #{test.name}")
       end
 
       def after_test(test)
         if test.error?
-          logger.benchmark_error("FAIL #{test.class_name} #{test.name}", duration: test.time * 1_000,
+          logger.benchmark_error("FAIL #{test.class.name} #{test.name}", duration: test.time * 1_000,
                                                                          metric:   "minitest/fail")
         elsif test.skipped?
-          logger.benchmark_warn("SKIP #{test.class_name} #{test.name}", duration: test.time * 1_000,
+          logger.benchmark_warn("SKIP #{test.class.name} #{test.name}", duration: test.time * 1_000,
                                                                         metric:   "minitest/skip")
         else
-          logger.benchmark_info("PASS #{test.class_name} #{test.name}", duration: test.time * 1_000,
+          logger.benchmark_info("PASS #{test.class.name} #{test.name}", duration: test.time * 1_000,
                                                                         metric:   "minitest/pass")
         end
       end

@@ -4,13 +4,21 @@ layout: default
 
 ## Centralized Logging
 
-Semantic Logger directly supports a centralized logging system consisting of:
+When you run more than one process or server, reading log files one at a time stops scaling. A
+centralized logging system collects the log events from every process into one place where you can
+search, filter, and build dashboards across all of them at once. This is where Semantic Logger's
+structured output pays off: the payload, tags, duration, and metrics on each entry arrive as real
+fields, not text that has to be re-parsed.
 
-* Semantic Logger
-* Elasticsearch
-    * Distributed, scalable, and highly available data store
-* Kibana
-    * Analytics and search dashboard for Elasticsearch
+This page walks through one popular stack as a concrete example:
+
+* **Semantic Logger** forwards structured events from your application.
+* **Elasticsearch** stores and indexes them. It is a distributed, scalable, highly available data
+  store.
+* **Kibana** provides search and dashboards on top of Elasticsearch.
+
+Semantic Logger also works with several other aggregators (Graylog, Splunk, Loggly, Logstash, and
+Syslog). See [Other solutions](#other-solutions) below and [Appenders](appenders.html).
 
 ### Installation
 

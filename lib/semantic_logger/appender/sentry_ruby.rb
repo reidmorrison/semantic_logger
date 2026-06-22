@@ -133,10 +133,10 @@ module SemanticLogger
       #
       def extract_tags!(context)
         named_tags = context.delete(:named_tags) || {}
-        named_tags = named_tags.map { |k, v| [k.to_s, v.to_s] }.to_h
+        named_tags = named_tags.to_h { |k, v| [k.to_s, v.to_s] }
         tags = context.delete(:tags)
         named_tags.merge!("tag" => tags.join(", ")) { |_, v1, v2| "#{v1}, #{v2}" } if tags
-        named_tags.map { |k, v| [k[0...32], v[0...256]] }.to_h
+        named_tags.to_h { |k, v| [k[0...32], v[0...256]] }
       end
     end
   end

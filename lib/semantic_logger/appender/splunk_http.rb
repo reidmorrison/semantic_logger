@@ -73,11 +73,11 @@ module SemanticLogger
                      index: nil,
                      compress: true,
                      **args,
-                     &block)
+                     &)
         @source_type = source_type
         @index       = index
 
-        super(compress: compress, **args, &block)
+        super(compress: compress, **args, &)
 
         # Put splunk auth token in the header of every HTTP post.
         @header["Authorization"] = "Splunk #{token}"

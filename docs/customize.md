@@ -4,13 +4,14 @@ layout: default
 
 ## Custom Formatters
 
-The formatting for each appender can be replaced with custom code. To replace the
-existing formatter supply a block of code when creating the appender.
+The formatting for each appender can be replaced with custom code. To replace the existing
+formatter, supply a block of code when creating the appender.
 
-The formatter proc receives a single parameter which is the entire `Log Struct`.
-For the format of the `Log Struct`, see [Log Struct](log_struct.html)
+The formatter is called with two arguments: the log event, and the appender it is formatting for.
+A block (Proc) may ignore the second argument and accept just the log event. For the structure of
+the log event, see [Log Event](log_struct.html).
 
-#### Example: Formatter that just returns the Log Struct
+#### Example: Formatter that just returns the log event
 
 ~~~ruby
 require "semantic_logger"
@@ -18,7 +19,7 @@ require "semantic_logger"
 SemanticLogger.default_level = :trace
 
 formatter = Proc.new do |log|
-  # This formatter just returns the log struct as a string
+  # This formatter just returns the log event as a string
   log.inspect
 end
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
@@ -28,7 +29,7 @@ logger.info "Hello World"
 ~~~
 Output:
 
-    #<struct SemanticLogger::Log level=:info, thread_name=70167090649820, name="Hello", message="Hello World", payload=nil, time=2012-10-24 10:09:33 -0400, duration=nil, tags=nil, level_index=2>
+    #<SemanticLogger::Log:0x00007f8a1b0c2d40 @level=:info, @thread_name="70167090649820", @name="Hello", @time=2012-10-24 10:09:33 -0400, @tags=[], @named_tags={}, @level_index=2, @message="Hello World", @payload=nil, @duration=nil, @metric=nil, @metric_amount=nil, @dimensions=nil>
 
 
 #### Example: Replace the default log file formatter
@@ -145,8 +146,8 @@ To write your own log appender it should meet the following requirements:
 * Implement #flush if the resource can be flushed
 * Write a test for the new appender
 
-The #log method takes the `Log Struct` as a parameter.
-For the format of the `Log Struct`, see [Log Struct](log_struct.html)
+The `#log` method receives the log event as its parameter.
+For the structure of the log event, see [Log Event](log_struct.html).
 
 Basic outline for an Appender:
 
@@ -168,7 +169,7 @@ class SimpleAppender < SemanticLogger::Subscriber
     p log
 
     # Display the formatted output
-    puts formatter.call(log)
+    puts formatter.call(log, self)
   end
 
   # Optional

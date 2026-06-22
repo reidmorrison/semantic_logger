@@ -43,6 +43,7 @@ module Appender
           end
 
           parse_logged_message
+
           refute_nil @hash, "Expected @hash to be parsed JSON"
           assert_equal @message, @hash["message"]
           assert_equal ["test"], @hash["tags"]
@@ -64,6 +65,7 @@ module Appender
         end
 
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal @message, @hash["message"]
         assert_equal ["test"], @hash["tags"]
@@ -81,6 +83,7 @@ module Appender
           @appender.log(log)
         end
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal "Entity Name", @hash["entity.name"]
       end
@@ -95,6 +98,7 @@ module Appender
         end
 
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal large_payload[:data], @hash.dig("payload", "data")
       end
@@ -109,8 +113,44 @@ module Appender
         end
 
         parse_logged_message
+
         refute_nil @hash, "Expected @hash to be parsed JSON"
         assert_equal "deep_value", @hash.dig("payload", "level1", "level2", "level3", "level4")
+      end
+
+      it "rescues a JSON serialization error and does not raise" do
+        # Raise the appender level so its own warn calls do not recurse back into #log.
+        @appender.level = :fatal
+
+        unserializable = Object.new
+        def unserializable.to_json(*)
+          raise JSON::GeneratorError, "cannot serialize"
+        end
+        # Set @formatter directly: passing a callable to #stub or #formatter= would be
+        # invoked rather than returned, masking the path under test.
+        @appender.instance_variable_set(:@formatter, ->(_log, _appender) { unserializable })
+        log = SemanticLogger::Log.new("TestLogger", :info)
+
+        NewRelic::Agent.agent.log_event_aggregator.stub(:record, method(:log_newrelic_stub)) do
+          assert_equal true, @appender.log(log)
+        end
+
+        # log_newrelic is never reached when serialization fails.
+        assert_nil @logged_message
+      end
+
+      it "rescues an unexpected error and does not raise" do
+        # Raise the appender level so its own warn calls do not recurse back into #log.
+        @appender.level = :fatal
+
+        @appender.instance_variable_set(:@formatter, ->(_log, _appender) { raise "boom" })
+        log = SemanticLogger::Log.new("TestLogger", :info)
+
+        NewRelic::Agent.agent.log_event_aggregator.stub(:record, method(:log_newrelic_stub)) do
+          assert_equal true, @appender.log(log)
+        end
+
+        assert_nil @logged_message
       end
     end
   end

@@ -29,6 +29,7 @@ module Appender
 
         it "does not reopen when not time to reopen" do
           appender.log(log)
+
           refute appender.send(:time_to_reopen?)
           refute_file_reopened(appender) do
             appender.stub(:time_to_reopen?, false) do
@@ -62,14 +63,16 @@ module Appender
 
           it "when retry is disabled" do
             appender.retry_count = 0
+
             assert appender.log(log)
             File.unlink(file_name)
+
             appender.instance_variable_get(:@file).stub(:write, ->(_) { raise(IOError, "Oh no") }) do
               assert_raises IOError do
                 appender.log(log)
               end
             end
-            refute File.exist?(file_name)
+            refute_path_exists file_name
           end
         end
       end
@@ -88,6 +91,7 @@ module Appender
         it "Creates a new file on reopen" do
           assert appender.log(log)
           File.unlink(file_name)
+
           assert appender.reopen
           assert appender.log(log)
           assert_equal 1, File.read(file_name).lines.count
@@ -95,6 +99,7 @@ module Appender
 
         it "exclusive_lock" do
           appender.exclusive_lock = true
+
           assert appender.reopen
           assert appender.log(log)
           assert_equal 1, File.read(file_name).lines.count
@@ -112,6 +117,7 @@ module Appender
 
         it "flushes output after logging" do
           appender.debug("Hello")
+
           assert appender.flush
         end
       end
@@ -127,14 +133,17 @@ module Appender
           it "opens a new log file after 10 log entries" do
             assert_equal 0, appender.log_count
             9.times { appender.info("Hello") }
+
             assert_equal 9, appender.log_count
 
             refute appender.send(:time_to_reopen?)
             appender.info("Hello")
+
             assert appender.send(:time_to_reopen?)
             assert_equal 10, appender.log_count
 
             appender.info("Hello")
+
             assert_equal 1, appender.log_count
           end
         end
@@ -145,11 +154,13 @@ module Appender
           it "opens a new log file after every 250 bytes written" do
             assert_equal 0, appender.log_size
             appender.info("Hello world how are you doing")
-            assert appender.log_size > 10
+
+            assert_operator appender.log_size, :>, 10
             refute appender.send(:time_to_reopen?)
             file_handle = appender.instance_variable_get(:@file).object_id
             assert_file_reopened(appender) do
               10.times { appender.info("Hello world how are you doing") }
+
               refute_equal file_handle, appender.instance_variable_get(:@file).object_id
             end
           end
@@ -163,6 +174,7 @@ module Appender
 
             Time.stub(:now, current_time) do
               appender.info("Hello world how are you doing")
+
               refute appender.send(:time_to_reopen?)
             end
             assert_equal Time.parse("2015-12-09 17:51:00"), appender.reopen_at
@@ -180,25 +192,30 @@ module Appender
           it "logs small messages" do
             assert_equal 0, appender.log_count
             9.times { appender.info("Hello") }
+
             assert_equal 9, appender.log_count
 
             refute appender.send(:time_to_reopen?)
             appender.info("Hello")
+
             assert appender.send(:time_to_reopen?)
             assert_equal 10, appender.log_count
 
             appender.info("Hello")
+
             assert_equal 1, appender.log_count
           end
 
           it "logs large messages" do
             assert_equal 0, appender.log_count
             5.times { appender.info("Hello world how are you doing this time around with some larger messages?") }
+
             assert_equal 5, appender.log_count
 
             refute appender.send(:time_to_reopen?)
             assert_file_reopened(appender) do
               5.times { appender.info("Hello world how are you doing this time around with some larger messages?") }
+
               refute_equal 10, appender.log_count
             end
           end
@@ -209,6 +226,7 @@ module Appender
         it "explicit %" do
           file_name = "log/production-%%.log"
           formatted = appender.send(:apply_format_directives, file_name)
+
           assert_equal "log/production-%.log", formatted
         end
 
@@ -218,6 +236,7 @@ module Appender
             SemanticLogger.stub(:host, "myserver.domain.org") do
               appender.send(:apply_format_directives, file_name)
             end
+
           assert_equal "log/production-myserver.log", formatted
         end
 
@@ -227,6 +246,7 @@ module Appender
             SemanticLogger.stub(:host, "myserver.domain.org") do
               appender.send(:apply_format_directives, file_name)
             end
+
           assert_equal "log/production-myserver.domain.org.log", formatted
         end
 
@@ -236,6 +256,7 @@ module Appender
             SemanticLogger.stub(:application, "my_app") do
               appender.send(:apply_format_directives, file_name)
             end
+
           assert_equal "log/production-my_app.log", formatted
         end
 
@@ -245,18 +266,21 @@ module Appender
             SemanticLogger.stub(:environment, "this_environment") do
               appender.send(:apply_format_directives, file_name)
             end
+
           assert_equal "log/production-this_environment.log", formatted
         end
 
         it "process id" do
           file_name = "log/production-%p.log"
           formatted = appender.send(:apply_format_directives, file_name)
+
           assert_equal "log/production-#{$$}.log", formatted
         end
 
         it "date" do
           file_name = "log/production-%D.log"
           formatted = appender.send(:apply_format_directives, file_name)
+
           assert_equal "log/production-#{Date.today.strftime('%Y%m%d')}.log", formatted
         end
 
@@ -267,6 +291,7 @@ module Appender
             Time.stub(:now, time) do
               appender.send(:apply_format_directives, file_name)
             end
+
           assert_equal "log/production-#{time.strftime('%H%M%S')}.log", formatted
         end
 
@@ -279,6 +304,7 @@ module Appender
                 appender.send(:apply_format_directives, file_name)
               end
             end
+
           assert_equal "log/production-%-myserver-#{$$}-#{Date.today.strftime('%Y%m%d')}-#{time.strftime('%H%M%S')}.log",
                        formatted
         end
@@ -290,12 +316,14 @@ module Appender
             Time.stub(:now, time) do
               appender.send(:apply_format_directives, file_name)
             end
+
           assert_equal "log/production-#{time.strftime('%H-%M-%S')}.log", formatted
         end
 
         it "custom date" do
           file_name = "log/production-%Y-%C-%y-%m-%d-%j-%U-%W.log"
           formatted = appender.send(:apply_format_directives, file_name)
+
           assert_equal "log/production-#{Date.today.strftime('%Y-%C-%y-%m-%d-%j-%U-%W')}.log", formatted
         end
       end
@@ -306,6 +334,7 @@ module Appender
             Time.stub(:now, current_time) do
               appender.send(:next_reopen_period, "1m")
             end
+
           assert_equal Time.parse("2015-12-09 17:51:00"), reopen_at
         end
 
@@ -348,31 +377,37 @@ module Appender
       describe "#calculate_reopen_at" do
         it "rounds off the next minute" do
           reopen_at = appender.send(:calculate_reopen_at, 1, "m", current_time)
+
           assert_equal Time.parse("2015-12-09 17:51:00"), reopen_at
         end
 
         it "rounds off multiple minutes" do
           reopen_at = appender.send(:calculate_reopen_at, 10, "m", current_time)
+
           assert_equal Time.parse("2015-12-09 18:00:00"), reopen_at
         end
 
         it "rounds off the next hour" do
           reopen_at = appender.send(:calculate_reopen_at, 1, "h", current_time)
+
           assert_equal Time.parse("2015-12-09 18:00:00"), reopen_at
         end
 
         it "rounds off multiple minutes" do
           reopen_at = appender.send(:calculate_reopen_at, 10, "h", current_time)
+
           assert_equal Time.parse("2015-12-10 03:00:00"), reopen_at
         end
 
         it "rounds off the next day" do
           reopen_at = appender.send(:calculate_reopen_at, 1, "d", current_time)
+
           assert_equal Time.parse("2015-12-10 00:00:00"), reopen_at
         end
 
         it "rounds off multiple days" do
           reopen_at = appender.send(:calculate_reopen_at, 10, "d", current_time)
+
           assert_equal Time.parse("2015-12-19 00:00:00"), reopen_at
         end
       end
@@ -380,13 +415,15 @@ module Appender
       def assert_file_reopened(appender)
         before_log = appender.instance_variable_get(:@file)
         yield
-        refute_equal before_log.object_id, appender.instance_variable_get(:@file).object_id
+
+        refute_same before_log, appender.instance_variable_get(:@file)
       end
 
       def refute_file_reopened(appender)
         before_log = appender.instance_variable_get(:@file)
         yield
-        assert_equal before_log.object_id, appender.instance_variable_get(:@file).object_id
+
+        assert_same before_log, appender.instance_variable_get(:@file)
       end
     end
   end

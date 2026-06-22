@@ -88,13 +88,13 @@ module SemanticLogger
                      gelf_options: {},
                      level_map: LevelMap.new,
                      **args,
-                     &block)
+                     &)
         @url          = url
         @max_size     = max_size
         @gelf_options = gelf_options
         @level_map    = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(level_map)
 
-        super(**args, &block)
+        super(**args, &)
         reopen
       end
 

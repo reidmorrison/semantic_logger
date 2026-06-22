@@ -250,7 +250,7 @@ module SemanticLogger
       "#{$$}:#{format("%.#{thread_name_length}s", thread_name)}#{file_name}"
     end
 
-    CALLER_REGEXP = /^(.*):(\d+).*/.freeze
+    CALLER_REGEXP = /^(.*):(\d+).*/
 
     # Extract the filename and line number from the last entry in the supplied backtrace
     def extract_file_and_line(stack, short_name = false)

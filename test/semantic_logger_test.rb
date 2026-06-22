@@ -16,9 +16,10 @@ class SemanticLoggerTest < Minitest::Test
 
       it "adds file appender" do
         @appender = SemanticLogger.add_appender(file_name: "sample.log")
-        assert @appender.is_a?(SemanticLogger::Appender::File)
-        assert SemanticLogger.appenders.include?(@appender)
-        assert @appender.formatter.is_a?(SemanticLogger::Formatters::Default)
+
+        assert_kind_of SemanticLogger::Appender::File, @appender
+        assert_includes SemanticLogger.appenders, @appender
+        assert_kind_of SemanticLogger::Formatters::Default, @appender.formatter
       end
     end
 
@@ -134,15 +135,16 @@ class SemanticLoggerTest < Minitest::Test
       it "uses global default log level" do
         # Uses global default level since logger does not have one set
         SemanticLogger.stub(:default_level, :warn) do
-          assert_equal logger.level, :warn
+          assert_equal :warn, logger.level
         end
       end
 
       it "logger retains explicit log level" do
         # Retains the explicit log level even when global log level is different
         logger.level = :trace
+
         SemanticLogger.stub(:default_level, :warn) do
-          assert_equal logger.level, :trace
+          assert_equal :trace, logger.level
         end
       end
     end
@@ -161,6 +163,7 @@ class SemanticLoggerTest < Minitest::Test
             end
           end
         end
+
         assert_equal %w[fatal error], events.map(&:message)
       end
 
@@ -177,6 +180,7 @@ class SemanticLoggerTest < Minitest::Test
             end
           end
         end
+
         assert_equal %w[fatal error warn info], events.map(&:message)
       end
 
@@ -216,6 +220,39 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".flush, .close, and .reopen" do
+      it "delegate to the processor" do
+        mock = Minitest::Mock.new
+        mock.expect(:flush, nil)
+        mock.expect(:close, nil)
+        mock.expect(:reopen, nil)
+
+        SemanticLogger::Logger.stub(:processor, mock) do
+          SemanticLogger.flush
+          SemanticLogger.close
+          SemanticLogger.reopen
+        end
+
+        mock.verify
+      end
+    end
+
+    describe ".sync! and .sync?" do
+      it "switches the global processor to a SyncProcessor" do
+        original = SemanticLogger::Logger.instance_variable_get(:@processor)
+        begin
+          SemanticLogger.sync!
+
+          assert_predicate SemanticLogger, :sync?
+          assert_kind_of SemanticLogger::SyncProcessor, SemanticLogger::Logger.processor
+          # The appenders are carried over to the synchronous processor.
+          assert_same original.appenders, SemanticLogger::Logger.processor.appenders if original
+        ensure
+          SemanticLogger::Logger.instance_variable_set(:@processor, original)
+        end
+      end
+    end
+
     describe ".on_log" do
       after do
         # Clear on_log subscribers
@@ -242,6 +279,155 @@ class SemanticLoggerTest < Minitest::Test
           message: "hello world",
           context: {custom_info: "test"}
         )
+      end
+    end
+
+    describe ".host=" do
+      it "overrides and returns the host" do
+        original = SemanticLogger.host
+        begin
+          SemanticLogger.host = "my-host"
+
+          assert_equal "my-host", SemanticLogger.host
+        ensure
+          SemanticLogger.host = original
+        end
+      end
+    end
+
+    describe ".application=" do
+      it "overrides and returns the application" do
+        original = SemanticLogger.application
+        begin
+          SemanticLogger.application = "My App"
+
+          assert_equal "My App", SemanticLogger.application
+        ensure
+          SemanticLogger.application = original
+        end
+      end
+    end
+
+    describe ".environment=" do
+      it "overrides and returns the environment" do
+        original = SemanticLogger.environment
+        begin
+          SemanticLogger.environment = "staging"
+
+          assert_equal "staging", SemanticLogger.environment
+        ensure
+          SemanticLogger.environment = original
+        end
+      end
+    end
+
+    describe ".clear_appenders!" do
+      it "closes the processor" do
+        mock = Minitest::Mock.new
+        mock.expect(:close, nil)
+
+        SemanticLogger::Logger.stub(:processor, mock) do
+          SemanticLogger.clear_appenders!
+        end
+
+        mock.verify
+      end
+    end
+
+    describe ".queue_size" do
+      it "returns the size of the processor queue" do
+        queue = Minitest::Mock.new
+        queue.expect(:size, 7)
+        processor = Minitest::Mock.new
+        processor.expect(:queue, queue)
+
+        SemanticLogger::Logger.stub(:processor, processor) do
+          assert_equal 7, SemanticLogger.queue_size
+        end
+
+        processor.verify
+        queue.verify
+      end
+    end
+
+    describe ".lag_check_interval" do
+      it "reads and writes the value via the processor" do
+        processor = Minitest::Mock.new
+        processor.expect(:lag_check_interval, 1_000)
+        processor.expect(:lag_check_interval=, nil, [2_000])
+        processor.expect(:lag_threshold_s, 30)
+
+        SemanticLogger::Logger.stub(:processor, processor) do
+          assert_equal 1_000, SemanticLogger.lag_check_interval
+          SemanticLogger.lag_check_interval = 2_000
+
+          assert_equal 30, SemanticLogger.lag_threshold_s
+        end
+
+        processor.verify
+      end
+    end
+
+    describe ".add_signal_handler" do
+      # Capture the blocks registered with Signal.trap instead of actually
+      # installing handlers, so they can be invoked directly.
+      def capture_signal_handlers(*args)
+        traps = {}
+
+        Signal.stub(:trap, ->(signal, &block) { traps[signal] = block }) do
+          assert_equal true, SemanticLogger.add_signal_handler(*args)
+        end
+        traps
+      end
+
+      it "registers the default log level and thread dump handlers" do
+        traps = capture_signal_handlers
+
+        assert traps.key?("USR2"), "Expected a USR2 (log level) handler"
+        assert traps.key?("TTIN"), "Expected a TTIN (thread dump) handler"
+      end
+
+      it "rotates to a more detailed level on the log level signal" do
+        traps    = capture_signal_handlers
+        original = SemanticLogger.default_level
+        begin
+          SemanticLogger.default_level = :info
+          semantic_logger_events { traps["USR2"].call }
+          # :info rotates one step more detailed to :debug
+          assert_equal :debug, SemanticLogger.default_level
+        ensure
+          SemanticLogger.default_level = original
+        end
+      end
+
+      it "wraps around to :fatal from :trace on the log level signal" do
+        traps    = capture_signal_handlers
+        original = SemanticLogger.default_level
+        begin
+          SemanticLogger.default_level = :trace
+          semantic_logger_events { traps["USR2"].call }
+
+          assert_equal :fatal, SemanticLogger.default_level
+        ensure
+          SemanticLogger.default_level = original
+        end
+      end
+
+      it "logs a thread dump on the thread dump signal" do
+        traps  = capture_signal_handlers
+        events = semantic_logger_events do
+          traps["TTIN"].call
+        end
+
+        assert_operator events.size, :>=, 1, "Expected at least one backtrace log event"
+        assert_semantic_logger_event(events.first, name: "Thread Dump")
+      end
+
+      it "does not register a handler that is set to nil" do
+        traps = capture_signal_handlers(nil, "TTIN")
+
+        refute traps.key?("USR2"), "Did not expect a USR2 handler"
+        assert traps.key?("TTIN"), "Expected a TTIN handler"
       end
     end
   end

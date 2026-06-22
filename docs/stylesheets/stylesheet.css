@@ -56,6 +56,9 @@ a {
       margin-left: 0; } }
 
 .page-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
   color: #fff;
   text-align: center;
   background-color: #363899;

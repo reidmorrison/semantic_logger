@@ -20,6 +20,7 @@ module Appender
         appender.stub(:post, ->(_json, ind) { index = ind }) do
           appender.info log_message
         end
+
         assert_equal "/semantic_logger-#{Time.now.strftime('%Y.%m.%d')}/log", index
       end
 
@@ -33,6 +34,7 @@ module Appender
             appender.send(level, log_message)
           end
           message = JSON.parse(request.body)
+
           assert_equal log_message, message["message"]
           assert_equal level.to_s, message["level"]
           refute message["exception"]
@@ -53,12 +55,13 @@ module Appender
             appender.send(level, "Reading File", exc)
           end
           hash = JSON.parse(request.body)
+
           assert_equal "Reading File", hash["message"], hash
           assert exception = hash["exception"]
           assert_equal "NameError", exception["name"]
           assert_match "undefined local variable or method", exception["message"]
           assert_equal level.to_s, hash["level"]
-          assert exception["stack_trace"].first.include?(__FILE__), exception
+          assert_includes exception["stack_trace"].first, __FILE__, exception
         end
 
         it "sends #{level} custom attributes" do
@@ -70,6 +73,7 @@ module Appender
             appender.send(level, log_message, key1: 1, key2: "a")
           end
           message = JSON.parse(request.body)
+
           assert_equal log_message, message["message"]
           assert_equal level.to_s, message["level"]
           refute message["stack_trace"]
