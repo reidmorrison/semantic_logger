@@ -34,6 +34,7 @@ module SemanticLogger
     def self.factory(async: false, batch: nil,
                      max_queue_size: 10_000, lag_check_interval: 1_000, lag_threshold_s: 30,
                      batch_size: 300, batch_seconds: 5,
+                     non_blocking: false, dropped_message_report_seconds: 30,
                      **args,
                      &)
       appender = build(**args, &)
@@ -43,18 +44,22 @@ module SemanticLogger
 
       if batch == true
         Appender::AsyncBatch.new(
-          appender:        appender,
-          max_queue_size:  max_queue_size,
-          lag_threshold_s: lag_threshold_s,
-          batch_size:      batch_size,
-          batch_seconds:   batch_seconds
+          appender:                       appender,
+          max_queue_size:                 max_queue_size,
+          lag_threshold_s:                lag_threshold_s,
+          batch_size:                     batch_size,
+          batch_seconds:                  batch_seconds,
+          non_blocking:                   non_blocking,
+          dropped_message_report_seconds: dropped_message_report_seconds
         )
       elsif async == true
         Appender::Async.new(
-          appender:           appender,
-          max_queue_size:     max_queue_size,
-          lag_check_interval: lag_check_interval,
-          lag_threshold_s:    lag_threshold_s
+          appender:                       appender,
+          max_queue_size:                 max_queue_size,
+          lag_check_interval:             lag_check_interval,
+          lag_threshold_s:                lag_threshold_s,
+          non_blocking:                   non_blocking,
+          dropped_message_report_seconds: dropped_message_report_seconds
         )
       else
         appender
