@@ -306,10 +306,20 @@ module SemanticLogger
       end
 
       describe "#cleansed_message" do
-        it "strips ANSI color codes and surrounding whitespace" do
-          log.message = "  \e[31mError\e[0m  "
+        {
+          "\e[32m[SUCCESS] User profile updated successfully!\e[0m" => "[SUCCESS] User profile updated successfully!",
+          "[SUCCESS] User profile updated successfully!"            => "[SUCCESS] User profile updated successfully!",
+          "  \e[31mError\e[0m  "                                    => "Error",
+          "\e[31;1mBold red\e[0m and \e[34mblue\e[0m"               => "Bold red and blue",
+          "\etest string \n"                                        => "test string",
+          " test strip string \n"                                   => "test strip string",
+          "no escapes here"                                         => "no escapes here"
+        }.each_pair do |message, expected|
+          it "cleanses #{message.inspect}" do
+            log.message = message
 
-          assert_equal "Error", log.cleansed_message
+            assert_equal expected, log.cleansed_message
+          end
         end
       end
 
