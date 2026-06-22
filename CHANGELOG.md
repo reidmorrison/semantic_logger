@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add upgrading guide to docs site covering v4.0 through v4.18, replace README upgrade sections with a link to the new page.
+
+## [4.18.0]
+
 - Fix the experimental OpenTelemetry formatter so its payload method coerces values.
   Ensures every attribute value is OTLP‑compatible.
 - Fix missing trace.id/span.id in NewRelic logs
