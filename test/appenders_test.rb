@@ -101,7 +101,7 @@ class AppendersTest < Minitest::Test
         end
       end
 
-      it "prevents adding multiple console loggers" do
+      it "prevents adding a second appender to the same console stream" do
         appender = appenders.add(io: $stdout)
 
         assert_includes appenders, appender
@@ -110,11 +110,20 @@ class AppendersTest < Minitest::Test
 
         assert_nil appender
 
-        appender = appenders.add(io: $stderr)
-
-        assert_nil appender
-
         assert_equal 1, appenders.size
+      end
+
+      it "allows adding separate stdout and stderr console appenders" do
+        stdout_appender = appenders.add(io: $stdout)
+
+        assert_includes appenders, stdout_appender
+
+        stderr_appender = appenders.add(io: $stderr)
+
+        assert_includes appenders, stderr_appender
+
+        assert_equal 2, appenders.size
+        assert_equal %i[stdout stderr], appenders.console_streams
       end
 
       it "allows adding multiple loggers" do

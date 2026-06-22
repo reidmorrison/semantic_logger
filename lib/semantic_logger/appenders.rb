@@ -12,8 +12,9 @@ module SemanticLogger
     def add(**args, &)
       appender = SemanticLogger::Appender.factory(**args, &)
 
-      if appender.respond_to?(:console_output?) && appender.console_output? && console_output?
-        logger.warn "Ignoring attempt to add a second console appender: #{appender.class.name} since it would result in duplicate console output."
+      stream = appender.respond_to?(:console_stream) && appender.console_stream
+      if stream && console_streams.include?(stream)
+        logger.warn "Ignoring attempt to add a second #{stream} console appender since it would result in duplicate console output."
         return
       end
 
@@ -21,10 +22,15 @@ module SemanticLogger
       appender
     end
 
+    # The console streams (:stdout and/or :stderr) already being written to by the existing appenders.
+    def console_streams
+      filter_map { |appender| appender.console_stream if appender.respond_to?(:console_stream) }
+    end
+
     # Whether any of the existing appenders already output to the console?
     # I.e. Writes to stdout or stderr.
     def console_output?
-      any? { |appender| appender.respond_to?(:console_output?) && appender.console_output? }
+      console_streams.any?
     end
 
     def log(log)

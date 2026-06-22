@@ -50,6 +50,27 @@ module Appender
           refute_predicate appender, :console_output?
         end
       end
+
+      describe "#console_stream" do
+        it "is :stdout when writing to stdout" do
+          appender = SemanticLogger::Appender::IO.new($stdout)
+
+          assert_equal :stdout, appender.console_stream
+        end
+
+        it "is :stderr when writing to stderr" do
+          appender = SemanticLogger::Appender::IO.new($stderr)
+
+          assert_equal :stderr, appender.console_stream
+        end
+
+        it "is nil for other streams" do
+          io       = StringIO.new
+          appender = SemanticLogger::Appender::IO.new(io)
+
+          assert_nil appender.console_stream
+        end
+      end
     end
   end
 end

@@ -200,6 +200,26 @@ Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdo
 SemanticLogger.add_appender(io: $stderr, level: :error)
 ~~~
 
+#### Splitting output across stdout and stderr
+
+A common operational pattern is to route lower severity messages to `$stdout` and
+warnings and errors to `$stderr`. Semantic Logger allows one appender per console
+stream, so a separate `$stdout` and `$stderr` appender can be added at the same time.
+Use `level:` and/or `filter:` to control what each one writes:
+
+~~~ruby
+stdout_filter = ->(log) { %i[trace debug info].include?(log.level) }
+
+# Informational messages to stdout:
+SemanticLogger.add_appender(io: $stdout, formatter: :color, level: :trace, filter: stdout_filter)
+
+# Warnings and above to stderr:
+SemanticLogger.add_appender(io: $stderr, formatter: :color, level: :warn)
+~~~
+
+Adding a second appender for a console stream that already has one is ignored (to
+avoid duplicate console output), but `$stdout` and `$stderr` are tracked separately.
+
 ### Syslog
 
 Log to a local Syslog daemon
