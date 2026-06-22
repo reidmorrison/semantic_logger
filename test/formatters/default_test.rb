@@ -151,6 +151,55 @@ module SemanticLogger
           it "skips empty message" do
             refute formatter.message
           end
+
+          it "preserves control characters by default" do
+            log.message = "Hello\nInjected line\e[31m"
+
+            assert_equal "-- Hello\nInjected line\e[31m", formatter.message
+          end
+        end
+
+        describe "escape_control_chars" do
+          let(:formatter) do
+            formatter = SemanticLogger::Formatters::Default.new(escape_control_chars: true)
+            formatter.call(log, nil)
+            formatter
+          end
+
+          it "escapes newlines and ANSI escapes in the message" do
+            log.message = "Hello\nInjected line\e[31m"
+
+            assert_equal "-- Hello\\nInjected line\\e[31m", formatter.message
+          end
+
+          it "escapes carriage returns, tabs, and other control characters" do
+            log.message = "a\rb\tc\x00d"
+
+            assert_equal "-- a\\rb\\tc\\x00d", formatter.message
+          end
+
+          it "escapes control characters in tags" do
+            injected = "bad\ninjected"
+            log.tags = ["good", injected]
+
+            assert_equal "[good] [bad\\ninjected]", formatter.tags
+          end
+
+          it "escapes control characters in named tags" do
+            log.named_tags = {user: "bad\nname"}
+
+            assert_equal "{user: bad\\nname}", formatter.named_tags
+          end
+
+          it "escapes control characters in the exception message" do
+            begin
+              raise "boom\ninjected"
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_match(/-- Exception: RuntimeError: boom\\ninjected/, formatter.exception)
+          end
         end
 
         describe "payload" do
