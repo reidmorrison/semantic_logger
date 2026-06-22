@@ -11,6 +11,60 @@ The formatter is called with two arguments: the log event, and the appender it i
 A block (Proc) may ignore the second argument and accept just the log event. For the structure of
 the log event, see [Log Event](log_struct.html).
 
+## Pattern Formatter
+
+For simple layout changes there is no need to write a custom formatter class. The built-in
+`:pattern` formatter builds each log line from a pattern string supplied directly in the
+configuration.
+
+Placeholders use the form `%{directive}`. To emit a literal `%{...}`, escape it as `%%{...}`.
+
+~~~ruby
+# A simple message-only format on stdout, for end users:
+SemanticLogger.add_appender(
+  io:        $stdout,
+  formatter: {pattern: {pattern: "%{message}"}}
+)
+
+# A timestamped format to a file, at a different level:
+SemanticLogger.add_appender(
+  file_name: "application.log",
+  level:     :debug,
+  formatter: {pattern: {pattern: "%{time} %{level} %{name} -- %{message}"}}
+)
+~~~
+
+The pattern is parsed once when the appender is created, so formatting every log entry is fast.
+An unknown directive (or an argument supplied to a directive that does not take one) raises an
+error immediately, when the appender is configured.
+
+Available directives:
+
+| Directive              | Description                                              |
+|------------------------|----------------------------------------------------------|
+| `%{time}`              | Formatted timestamp.                                     |
+| `%{level}`             | Full level name, e.g. `debug`.                           |
+| `%{level_short}`       | Single character level, e.g. `D`.                        |
+| `%{name}`              | Logger / class name.                                     |
+| `%{message}`           | Log message.                                             |
+| `%{payload}`           | Payload rendered as a string.                            |
+| `%{exception}`         | Exception class, message, and backtrace.                 |
+| `%{duration}`          | Human readable duration, e.g. `1.2ms`.                   |
+| `%{duration_ms}`       | Duration in milliseconds (numeric).                      |
+| `%{thread_name}`       | Name of the thread that logged the message.              |
+| `%{pid}`               | Process id.                                              |
+| `%{file_name_and_line}`| Ruby file name and line number, e.g. `app.rb:42`.        |
+| `%{tags}`              | Tags, comma separated.                                   |
+| `%{named_tags}`        | All named tags. One tag with `%{named_tags:request_id}`. |
+| `%{host}`              | Host name.                                               |
+| `%{application}`       | Application name.                                        |
+| `%{environment}`       | Environment name.                                        |
+
+When the pattern is omitted it defaults to a layout similar to the default text formatter:
+`%{time} %{level} [%{pid}:%{thread_name}] %{name} -- %{message}`.
+
+For anything the pattern formatter cannot express, supply custom code instead.
+
 #### Example: Formatter that just returns the log event
 
 ~~~ruby
