@@ -34,8 +34,8 @@ module SemanticLogger
       end
 
       # Supports batching of log events
-      def batch(_logs)
-        @events += log
+      def batch(logs)
+        logs.each { |log| self.log(log) }
       end
 
       def clear

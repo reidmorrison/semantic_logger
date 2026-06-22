@@ -46,5 +46,18 @@ class CaptureLogEventsTest < Minitest::Test
 
       assert_equal(0, capture_logger.events.size)
     end
+
+    it "captures a batch of log events" do
+      logs = %w[first second].map do |message|
+        log         = SemanticLogger::Log.new("Test", :info)
+        log.message = message
+        log
+      end
+
+      capture_logger.batch(logs)
+
+      assert_equal %w[first second], capture_logger.events.map(&:message)
+      assert_equal %i[info info], capture_logger.events.map(&:level)
+    end
   end
 end
