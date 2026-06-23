@@ -66,6 +66,8 @@ module SemanticLogger
         @dropped_message_count          = 0
         @dropped_message_reported_at    = Time.now
         @dropped_message_mutex          = Mutex.new
+        @processed_count                = 0
+        @dropped_count                  = 0
         create_queue
         thread
       end
@@ -106,6 +108,30 @@ module SemanticLogger
       # Returns true if the worker thread is active
       def active?
         @thread&.alive?
+      end
+
+      # Returns [Hash] operational statistics for this appender.
+      #
+      #   name:           [String]  Name of the wrapped appender.
+      #   async:          [true]    This appender logs asynchronously via a separate thread.
+      #   thread_active:  [Boolean] Whether the worker thread is currently running.
+      #   queue_size:     [Integer] Number of log messages currently waiting to be written.
+      #   capped:         [Boolean] Whether the queue has a maximum size.
+      #   max_queue_size: [Integer] Maximum queue size, or nil when uncapped.
+      #   processed:      [Integer] Cumulative number of log messages written since startup.
+      #   dropped:        [Integer] Cumulative number of log messages dropped because the queue
+      #                             was full (only possible when non_blocking is enabled).
+      def stats
+        {
+          name:           name,
+          async:          true,
+          thread_active:  active? || false,
+          queue_size:     queue.size,
+          capped:         capped?,
+          max_queue_size: capped? ? max_queue_size : nil,
+          processed:      @processed_count,
+          dropped:        @dropped_count
+        }
       end
 
       # Add log message for processing.
@@ -187,6 +213,7 @@ module SemanticLogger
         while (message = queue.pop)
           if message.is_a?(Log)
             appender.log(message)
+            @processed_count += 1
             count += 1
             # Check every few log messages whether this appender thread is falling behind
             if count > lag_check_interval
@@ -221,6 +248,7 @@ module SemanticLogger
       def message_dropped
         @dropped_message_mutex.synchronize do
           @dropped_message_count += 1
+          @dropped_count         += 1
           diff = Time.now - @dropped_message_reported_at
           return if diff < dropped_message_report_seconds
 

@@ -504,6 +504,27 @@ module SemanticLogger
     Logger.processor.queue.size
   end
 
+  # Returns [Hash] operational statistics for the logging pipeline.
+  #
+  # Useful for exporting Semantic Logger's own health to a monitoring system such as
+  # Prometheus, statsd, etc. The returned Hash contains:
+  #
+  #   queue_size:     [Integer] Number of log messages waiting on the main pipeline queue.
+  #   capped:         [Boolean] Whether the main queue has a maximum size.
+  #   max_queue_size: [Integer] Maximum queue size, or nil when uncapped.
+  #   thread_active:  [Boolean] Whether the main pipeline thread is running.
+  #   processed:      [Integer] Cumulative number of log messages processed since startup.
+  #   dropped:        [Integer] Cumulative number of log messages dropped at the main queue.
+  #   appenders:      [Array<Hash>] Per-appender statistics. Appenders that run their own
+  #                                 async thread report their queue_size and processed/dropped
+  #                                 counts; appenders that log inline report `async: false`.
+  #
+  # All counters are cumulative since process startup. They are thread-safe to read and
+  # are maintained without adding any locking to the logging hot path.
+  def self.stats
+    Logger.processor.stats
+  end
+
   # Returns the check_interval which is the number of messages between checks
   # to determine if the appender thread is falling behind.
   def self.lag_check_interval

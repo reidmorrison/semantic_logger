@@ -33,6 +33,21 @@ module SemanticLogger
       console_streams.any?
     end
 
+    # Returns [Array<Hash>] operational statistics for each appender.
+    #
+    # Appenders that run asynchronously (see SemanticLogger::Appender::Async#stats) report
+    # their queue size and processed/dropped counts. Appenders that log inline on the
+    # processor thread report only their name with `async: false`.
+    def stats
+      map do |appender|
+        if appender.respond_to?(:stats)
+          appender.stats
+        else
+          {name: appender.name, async: false}
+        end
+      end
+    end
+
     def log(log)
       each do |appender|
         appender.log(log) if appender.should_log?(log)

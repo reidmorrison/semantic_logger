@@ -67,6 +67,25 @@ module SemanticLogger
         end
       end
 
+      describe "#stats" do
+        it "reports pipeline statistics including per-appender stats" do
+          stats = processor.stats
+
+          assert_kind_of Integer, stats[:queue_size]
+          assert_kind_of Integer, stats[:processed]
+          assert_equal 0, stats[:dropped]
+          assert_predicate processor, :active?
+          assert stats[:thread_active]
+          assert_kind_of Array, stats[:appenders]
+        end
+
+        it "includes an entry per appender" do
+          processor.appenders.add(io: StringIO.new)
+
+          assert_equal processor.appenders.size, processor.stats[:appenders].size
+        end
+      end
+
       describe "#start" do
         it "returns false when the worker thread is already active" do
           assert_predicate processor, :active?
