@@ -92,6 +92,7 @@ and are therefore not automatically included by this gem:
 - Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
 - Elasticsearch Appender: gem 'elasticsearch'
+- OpenSearch Appender: gem 'opensearch-ruby'
 - Kafka Appender: gem 'ruby-kafka'
 - Legacy Sentry Appender: gem 'sentry-raven' (deprecated)
 - Sentry Appender: gem 'sentry-ruby'
