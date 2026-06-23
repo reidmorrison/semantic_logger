@@ -3,6 +3,7 @@ module SemanticLogger
     autoload :Base,          "semantic_logger/formatters/base"
     autoload :Color,         "semantic_logger/formatters/color"
     autoload :Default,       "semantic_logger/formatters/default"
+    autoload :Ecs,           "semantic_logger/formatters/ecs"
     autoload :Json,          "semantic_logger/formatters/json"
     autoload :Raw,           "semantic_logger/formatters/raw"
     autoload :OneLine,       "semantic_logger/formatters/one_line"
