@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Add per-logger (child logger) tags: calling `logger.tagged(...)` (or `with_tags`) without a
+  block now returns a new logger instance that permanently carries the supplied positional and/or
+  named tags, scoped to that logger only. Resolves #165. Combines the approaches from #301 (theocodes)
+  and #321 (Fire-Dragon-DoL).
 - Add upgrading guide to docs site covering v4.0 through v4.18, replace README upgrade sections with a link to the new page.
 
 ## [4.18.0]
