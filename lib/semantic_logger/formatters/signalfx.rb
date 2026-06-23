@@ -101,7 +101,7 @@ module SemanticLogger
           data[:counter] = [hash]
         end
 
-        data.to_json
+        Utils.to_json(data)
       end
 
       # Returns [Hash] a batch of log messages.
@@ -138,7 +138,7 @@ module SemanticLogger
           end
         end
 
-        data.to_json
+        Utils.to_json(data)
       end
 
       private

@@ -38,7 +38,7 @@ module SemanticLogger
 
       def call(log, logger)
         hash = super
-        create_syslog_packet("@cee: #{hash.to_json}")
+        create_syslog_packet("@cee: #{Utils.to_json(hash)}")
       end
 
       private
