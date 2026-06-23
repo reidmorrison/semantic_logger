@@ -183,5 +183,110 @@ class LoggerTest < Minitest::Test
         end
       end
     end
+
+    describe "#tagged without a block (child logger)" do
+      it "returns a new logger instance, not self" do
+        child = logger.tagged(cart_id: 5)
+
+        refute_same logger, child
+        assert_kind_of logger.class, child
+      end
+
+      it "adds named instance tags to every entry from the child" do
+        child = logger.tagged(cart_id: 5)
+        child.info("hello")
+
+        assert log = child.events.last
+        assert_equal({cart_id: 5}, log.named_tags)
+      end
+
+      it "adds positional instance tags to every entry from the child" do
+        child = logger.tagged("service-a")
+        child.info("hello")
+
+        assert log = child.events.last
+        assert_equal ["service-a"], log.tags
+      end
+
+      it "supports mixing positional and named tags" do
+        child = logger.tagged("service-a", cart_id: 5)
+        child.info("hello")
+
+        assert log = child.events.last
+        assert_equal ["service-a"], log.tags
+        assert_equal({cart_id: 5}, log.named_tags)
+      end
+
+      it "does not add instance tags to the parent logger" do
+        logger.tagged(cart_id: 5)
+        logger.info("hello")
+
+        assert log = logger.events.last
+        assert_empty log.named_tags
+        assert_empty logger.instance_named_tags
+      end
+
+      it "does not add instance tags to other loggers within a thread block" do
+        another = SemanticLogger::Test::CaptureLogEvents.new
+        child   = logger.tagged(cart_id: 5)
+
+        SemanticLogger.tagged("request-1") do
+          child.info("from child")
+          another.info("from another")
+        end
+
+        assert_equal ["request-1"], child.events.last.tags
+        assert_equal({cart_id: 5}, child.events.last.named_tags)
+        assert_equal ["request-1"], another.events.last.tags
+        assert_empty another.events.last.named_tags
+      end
+
+      it "layers thread context with instance tags, instance named tags winning on conflict" do
+        child = logger.tagged("instance-pos", scope: "instance")
+
+        SemanticLogger.named_tagged(scope: "thread", request_id: "123") do
+          SemanticLogger.tagged("thread-pos") do
+            child.info("hello")
+          end
+        end
+
+        assert log = child.events.last
+        assert_equal %w[thread-pos instance-pos], log.tags
+        assert_equal({scope: "instance", request_id: "123"}, log.named_tags)
+      end
+
+      it "merges tags cumulatively for nested child loggers" do
+        child      = logger.tagged("a", one: 1)
+        grandchild = child.tagged("b", two: 2)
+        grandchild.info("hello")
+
+        assert log = grandchild.events.last
+        assert_equal %w[a b], log.tags
+        assert_equal({one: 1, two: 2}, log.named_tags)
+      end
+
+      it "leaves the parent unchanged when building a grandchild" do
+        child = logger.tagged("a", one: 1)
+        child.tagged("b", two: 2)
+
+        assert_equal ["a"], child.instance_tags
+        assert_equal({one: 1}, child.instance_named_tags)
+      end
+
+      it "applies instance tags to measure entries" do
+        child = logger.tagged(cart_id: 5)
+        child.measure_info("timed") { :result }
+
+        assert log = child.events.last
+        assert_equal({cart_id: 5}, log.named_tags)
+      end
+
+      it "ignores blank positional tags for rails compatibility" do
+        child = logger.tagged("", nil, "real")
+        child.info("hello")
+
+        assert_equal ["real"], child.events.last.tags
+      end
+    end
   end
 end

@@ -407,6 +407,53 @@ SemanticLogger.tagged(user: "Jack", zip_code: 12345) do
 end
 ~~~
 
+### Per-logger tags (child loggers)
+
+The block form of `tagged` above scopes its tags to the current thread, so they apply
+to every logger used inside the block. Sometimes it is more convenient to bind tags to
+a single logger instance instead, for example when a logger is owned by an object that
+has its own identity (such as an ActiveRecord model or a background job).
+
+Calling `tagged` (or its alias `with_tags`) **without a block** returns a new "child"
+logger that permanently carries the supplied tags. Every log entry emitted by that
+child, and only that child, includes the tags, even across threads:
+
+~~~ruby
+class Cart
+  include SemanticLogger::Loggable
+
+  def initialize(id)
+    @id     = id
+    # Bind this Cart's identity to its own logger instance.
+    @logger = SemanticLogger["Cart"].tagged(cart_id: id)
+  end
+
+  attr_reader :logger
+
+  def add_item(item_id)
+    # Automatically tagged with cart_id, without wrapping every method in a block.
+    logger.info("Added item", item_id: item_id)
+  end
+end
+~~~
+
+Both positional and named tags are supported, and may be mixed:
+
+~~~ruby
+logger = SemanticLogger["Payments"].tagged("billing", region: "eu")
+logger.info("Charged card") # tagged with ["billing"] and {region: "eu"}
+~~~
+
+Notes:
+
+- The original logger is never modified; `tagged` returns a copy. Child loggers can be
+  nested, with each level adding to the tags inherited from its parent.
+- Instance tags are combined with any thread tags from a surrounding `tagged` block:
+  positional tags from the thread come first, then the logger's instance tags. For named
+  tags, the logger's own tags win on a key conflict since they represent its identity.
+- Child loggers are ordinary logger instances; they are not registered anywhere, so they
+  are garbage collected along with the object that owns them.
+
 ### Named threads
 
 Semantic Logger logs the name or id of the thread in every log message.
