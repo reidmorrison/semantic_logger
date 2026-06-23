@@ -226,6 +226,66 @@ formatter = SemanticLogger::Formatters::Fluentd.new(log_host: true, need_process
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 ~~~
 
+#### ECS (Elastic Common Schema) log format
+
+The `:ecs` formatter emits each log event using the nested field names defined by
+the [Elastic Common Schema](https://www.elastic.co/docs/reference/ecs) (targeting
+ECS 8.x), so logs integrate cleanly with Filebeat and the Elastic stack
+(Elasticsearch, Kibana) without an ingest pipeline to rename fields.
+
+Like `:json`, it produces a single line of JSON per event, so it works with the
+appenders that write or post JSON: an IO stream (`io: $stdout`), a file
+(`file_name:`), and the HTTP appender. The typical deployment writes ECS JSON to
+stdout or a log file and lets Filebeat or Elastic Agent ship it to Elasticsearch:
+
+~~~ruby
+# Ship via Filebeat / Elastic Agent tailing stdout or a file:
+SemanticLogger.add_appender(io: $stdout, formatter: :ecs)
+SemanticLogger.add_appender(file_name: "production.log", formatter: :ecs)
+~~~
+
+The Semantic Logger fields are mapped to ECS as follows:
+
+| Semantic Logger | ECS |
+| :--- | :--- |
+| `time` | `@timestamp` |
+| `level` | `log.level` |
+| `name` | `log.logger` |
+| `file` / `line` | `log.origin.file.name` / `log.origin.file.line` |
+| `message` | `message` |
+| `thread` | `process.thread.name` |
+| `pid` | `process.pid` |
+| `host` | `host.hostname` |
+| `application` | `service.name` |
+| `environment` | `service.environment` |
+| `exception` | `error.type` / `error.message` / `error.stack_trace` |
+| `duration` | `event.duration` (nanoseconds) |
+| `tags` | `tags` |
+| `named_tags` | `labels.*` |
+| `payload`, `metric`, `metric_amount` | nested under a custom namespace (see below) |
+
+ECS reserves the top-level field names it defines, so Semantic Logger data that
+has no native ECS home (the `payload`, `metric`, and `metric_amount`) is nested
+under a custom top-level namespace, `semantic_logger` by default. A proper-noun
+namespace is [the approach ECS recommends](https://www.elastic.co/docs/reference/ecs/ecs-custom-fields-in-ecs)
+for custom fields, since it is guaranteed never to collide with a current or
+future ECS field.
+
+Use the `namespace:` option to rename it:
+
+~~~ruby
+formatter = SemanticLogger::Formatters::Ecs.new(namespace: "my_app")
+SemanticLogger.add_appender(io: $stdout, formatter: formatter)
+~~~
+
+Or set `namespace: nil` to merge the payload directly into ECS `labels` alongside
+the named tags:
+
+~~~ruby
+formatter = SemanticLogger::Formatters::Ecs.new(namespace: nil)
+SemanticLogger.add_appender(io: $stdout, formatter: formatter)
+~~~
+
 ### IO Streams
 
 Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdout

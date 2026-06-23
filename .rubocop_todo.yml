@@ -160,6 +160,7 @@ Naming/VariableNumber:
     - 'lib/semantic_logger/appender/elasticsearch.rb'
     - 'lib/semantic_logger/appender/honeybadger_insights.rb'
     - 'lib/semantic_logger/formatters/base.rb'
+    - 'lib/semantic_logger/formatters/ecs.rb'
     - 'lib/semantic_logger/formatters/fluentd.rb'
     - 'lib/semantic_logger/formatters/json.rb'
     - 'lib/semantic_logger/formatters/logfmt.rb'
