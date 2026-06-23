@@ -301,6 +301,19 @@ module SemanticLogger
             assert_equal 100, payload_obj["metric_value"]
             assert_equal "RuntimeError", payload_obj["exception_name"]
           end
+
+          # Issue #180: .to_json raises Encoding::UndefinedConversionError on non UTF-8 data.
+          it "serializes non UTF-8 data without raising" do
+            log.message    = "Bad: \xE2".b
+            log.tags       = ["Tag: \xE2".b]
+            log.named_tags = {"name\xE2".b => "val\xE2".b}
+            log.payload    = {"key\xE2".b => "value\xE2".b}
+
+            assert_equal "Bad: ", values_data[1]
+            assert_equal ["Tag: "], stream_data["tags"]
+            assert_equal "val", stream_data["name"]
+            assert_equal "value", values_data[2]["key"]
+          end
         end
 
         describe "#batch" do

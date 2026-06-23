@@ -98,7 +98,7 @@ module SemanticLogger
         }
         message[:sourcetype]  = source_type if source_type
         message[:index]       = index if index
-        message.to_json
+        Utils.to_json(message)
       end
     end
   end
