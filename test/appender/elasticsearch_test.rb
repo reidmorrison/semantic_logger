@@ -54,7 +54,7 @@ module Appender
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil
-            appender.stub(:write_to_elasticsearch, ->(messages) { bulk_index = messages.first }) do
+            appender.stub(:bulk_write, ->(messages) { bulk_index = messages.first }) do
               appender.info log_message
             end
             index = bulk_index["index"]["_index"]
@@ -271,7 +271,7 @@ module Appender
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil
-            appender.stub(:write_to_elasticsearch, ->(messages) { bulk_index = messages.first }) do
+            appender.stub(:bulk_write, ->(messages) { bulk_index = messages.first }) do
               appender.info log_message
             end
             index = bulk_index["index"]["_index"]

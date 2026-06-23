@@ -1,0 +1,212 @@
+require "date"
+
+module SemanticLogger
+  module Appender
+    # Abstract base appender for Elasticsearch-compatible search engines.
+    #
+    # Implements the shared bulk-indexing pipeline used by both the
+    # {Elasticsearch} and {OpenSearch} appenders. Subclasses only need to
+    # supply the backing client class (and, optionally, whether the server
+    # version still supports document `_type`).
+    #
+    # This class is internal: applications add an appender via
+    # `SemanticLogger.add_appender(appender: :elasticsearch, ...)` or
+    # `appender: :opensearch`, never by referencing this class directly.
+    class ElasticsearchBase < SemanticLogger::Subscriber
+      attr_accessor :url, :index, :date_pattern, :type, :client, :flush_interval, :timeout_interval, :batch_size,
+                    :client_args
+
+      # Create an Elasticsearch-compatible appender over persistent HTTP(S).
+      #
+      # Parameters:
+      #   index: [String]
+      #     Prefix of the index to store the logs in.
+      #     The final index appends the date so that indexes are used per day.
+      #       I.e. The final index will look like 'semantic_logger-YYYY.MM.DD'
+      #     Default: 'semantic_logger'
+      #
+      #   date_pattern: [String]
+      #     The time format used to generate the full index name. Useful
+      #       if you want monthly indexes ('%Y.%m') or weekly ('%Y.%W').
+      #     Default: '%Y.%m.%d'
+      #
+      #   type: [String]
+      #     Document type to associate with logs when they are written.
+      #     Deprecated in Elasticsearch 7.0.0, unused by OpenSearch.
+      #     Default: 'log'
+      #
+      #   level: [:trace | :debug | :info | :warn | :error | :fatal]
+      #     Override the log level for this appender.
+      #     Default: SemanticLogger.default_level
+      #
+      #   formatter: [Object|Proc|Symbol|Hash]
+      #     An instance of a class that implements #call, or a Proc to be used to format
+      #     the output from this appender
+      #     Default: :raw_json (See: #call)
+      #
+      #   filter: [Regexp|Proc]
+      #     RegExp: Only include log messages where the class name matches the supplied.
+      #     regular expression. All other messages will be ignored.
+      #     Proc: Only include log messages where the supplied Proc returns true
+      #           The Proc must return true or false.
+      #
+      #   host: [String]
+      #     Name of this host to appear in log messages.
+      #     Default: SemanticLogger.host
+      #
+      #   application: [String]
+      #     Name of this application to appear in log messages.
+      #     Default: SemanticLogger.application
+      #
+      # Client Parameters (passed through to the backing client):
+      #   url: [String]
+      #     Fully qualified address to the service.
+      #     Default: 'http://localhost:9200'
+      #
+      #   hosts: [String|Hash|Array]
+      #     Single host passed as a String or Hash, or multiple hosts
+      #     passed as an Array; `host` or `url` keys are also valid.
+      #     Note:
+      #       :url above is ignored when supplying this option.
+      #
+      #   resurrect_after [Float]
+      #     After how many seconds a dead connection should be tried again.
+      #
+      #   reload_connections [true|false|Integer]
+      #     Reload connections after X requests.
+      #     Default: false
+      #
+      #   randomize_hosts [true|false]
+      #     Shuffle connections on initialization and reload.
+      #     Default: false
+      #
+      #   sniffer_timeout [Integer]
+      #     Timeout for reloading connections in seconds.
+      #     Default: 1
+      #
+      #   retry_on_failure [true|false|Integer]
+      #     Retry X times when request fails before raising and exception.
+      #     Default: false
+      #
+      #   retry_on_status [Array<Number>]
+      #     Retry when specific status codes are returned.
+      #
+      #   reload_on_failure [true|false]
+      #     Reload connections after failure.
+      #     Default: false
+      #
+      #   request_timeout [Integer]
+      #     The request timeout to be passed to transport in options.
+      #
+      #   adapter [Symbol]
+      #     A specific adapter for Faraday (e.g. `:patron`)
+      #
+      #   transport_options [Hash]
+      #     Options to be passed to the `Faraday::Connection` constructor.
+      #
+      #   transport_class [Constant]
+      #     A specific transport class to use, will be initialized by
+      #     the client and passed hosts and all arguments.
+      #
+      #   transport [Object]
+      #     A specific transport instance.
+      #
+      #   serializer_class [Constant]
+      #     A specific serializer class to use, will be initialized by
+      #     the transport and passed the transport instance.
+      #
+      #   selector
+      #     An instance of a connection selector strategy.
+      #
+      #   send_get_body_as [String]
+      #     Specify the HTTP method to use for GET requests with a body.
+      #     Default: 'GET'
+      def initialize(url: "http://localhost:9200",
+                     index: "semantic_logger",
+                     date_pattern: "%Y.%m.%d",
+                     type: "log",
+                     level: nil,
+                     formatter: nil,
+                     filter: nil,
+                     application: nil,
+                     environment: nil,
+                     host: nil,
+                     data_stream: false,
+                     **client_args,
+                     &)
+        @url                  = url
+        @index                = index
+        @date_pattern         = date_pattern
+        @type                 = type
+        @client_args          = client_args.dup
+        @client_args[:url]    = url if url && !client_args[:hosts]
+        @client_args[:logger] = logger
+        @data_stream          = data_stream
+
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: false, &)
+        reopen
+      end
+
+      def reopen
+        @client = client_class.new(@client_args)
+      end
+
+      # Log to the index for today
+      def log(log)
+        bulk_payload = formatter.call(log, self)
+        bulk_write([bulk_index(log), bulk_payload])
+        true
+      end
+
+      def batch(logs)
+        messages = []
+        logs.each do |log|
+          messages << bulk_index(log) << formatter.call(log, self)
+        end
+
+        bulk_write(messages)
+        true
+      end
+
+      private
+
+      # The backing client class, e.g. ::Elasticsearch::Client or ::OpenSearch::Client.
+      def client_class
+        raise NotImplementedError, "#{self.class} must implement #client_class"
+      end
+
+      def bulk_write(messages)
+        bulk_result =
+          if @data_stream
+            @client.bulk(index: index, body: messages)
+          else
+            @client.bulk(body: messages)
+          end
+
+        return unless bulk_result["errors"]
+
+        failed = bulk_result["items"].reject { |x| x["status"] == 201 }
+        logger.error("#{self.class.name}: Write failed. Messages discarded. : #{failed}")
+      end
+
+      def bulk_index(log)
+        expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
+        return {"create" => {}} if @data_stream
+
+        bulk_index = {"index" => {"_index" => expanded_index_name}}
+        bulk_index["index"].merge!({"_type" => type}) if version_supports_type?
+        bulk_index
+      end
+
+      def default_formatter
+        time_key = @data_stream ? "@timestamp" : :timestamp
+        SemanticLogger::Formatters::Raw.new(time_format: :iso_8601, time_key: time_key)
+      end
+
+      # Modern Elasticsearch (>= 7) and OpenSearch no longer support document `_type`.
+      def version_supports_type?
+        false
+      end
+    end
+  end
+end

@@ -77,6 +77,7 @@ the "Gem" column below and is loaded only when that appender is used.
 | Destination | `add_appender` argument | Gem |
 |-------------|-------------------------|-----|
 | [Elasticsearch](#elasticsearch) | `appender: :elasticsearch` | `elasticsearch` |
+| [OpenSearch](#opensearch) | `appender: :opensearch` | `opensearch-ruby` |
 | [Graylog](#graylog) | `appender: :graylog` | `gelf` |
 | [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
 | [Splunk over TCP/SDK](#splunk-http) | `appender: :splunk` | `splunk-sdk-ruby` |
@@ -484,6 +485,27 @@ Example:
 ~~~ruby
 SemanticLogger.add_appender(
   appender:    :elasticsearch,
+  url:         "http://localhost:9200",
+  index:       "my-index",
+  data_stream: true
+)
+~~~
+
+### OpenSearch
+
+Forward all log messages to OpenSearch (for example AWS OpenSearch).
+
+OpenSearch is a fork of Elasticsearch and uses the same bulk indexing API, so this
+appender accepts the same options as the [Elasticsearch](#elasticsearch) appender. Use
+it together with the `opensearch-ruby` gem when talking to an OpenSearch server, since
+recent `elasticsearch` gems reject non-Elasticsearch servers with an
+`Elasticsearch::UnsupportedProductError`.
+
+Example:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:    :opensearch,
   url:         "http://localhost:9200",
   index:       "my-index",
   data_stream: true
