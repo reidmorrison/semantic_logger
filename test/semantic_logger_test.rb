@@ -227,6 +227,9 @@ class SemanticLoggerTest < Minitest::Test
         mock.expect(:close, nil)
         mock.expect(:reopen, nil)
 
+        # Clear the per-process reopen guard so reopen is not skipped.
+        SemanticLogger.instance_variable_set(:@reopened_pid, nil)
+
         SemanticLogger::Logger.stub(:processor, mock) do
           SemanticLogger.flush
           SemanticLogger.close

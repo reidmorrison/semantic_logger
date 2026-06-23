@@ -97,6 +97,57 @@ and are therefore not automatically included by this gem:
 - Sentry Appender: gem 'sentry-ruby'
 - OpenTelemetry Appender: gem 'opentelemetry-logs-sdk' (plus an exporter, e.g. 'opentelemetry-exporter-otlp-logs')
 
+## Upgrading to Semantic Logger v5.0
+
+- Ruby 3.2 is now the minimum runtime version.
+
+### Appenders are now reopened automatically after a fork
+
+Previously, after a process forked (Puma, Unicorn, Resque, Spring, Phusion
+Passenger, parallel tests, etc.) you had to call `SemanticLogger.reopen` yourself
+in an `after_fork` style hook, otherwise logging would silently stop in the child.
+
+As of v5, Semantic Logger installs a `Process._fork` hook (Ruby 3.1+) that calls
+`SemanticLogger.reopen` automatically in the child process after `fork`,
+`Process.daemon`, `IO.popen`, `Kernel#system`, and backticks. No configuration is
+required for the common cases.
+
+**Recommended:** remove all of your existing manual reopen calls. For example,
+delete code such as:
+
+~~~ruby
+# config/unicorn.conf.rb
+after_fork do |server, worker|
+  SemanticLogger.reopen
+end
+
+# config/puma.rb
+before_worker_boot do
+  SemanticLogger.reopen
+end
+
+# Resque / Spring / Passenger
+Resque.after_fork  { SemanticLogger.reopen }
+Spring.after_fork  { SemanticLogger.reopen }
+PhusionPassenger.on_event(:starting_worker_process) { |forked| SemanticLogger.reopen if forked }
+~~~
+
+Leaving these in place is safe, since `SemanticLogger.reopen` now no-ops when it
+has already run in the current process after a fork, but they are no longer needed.
+
+**Opt out:** to restore the previous behavior and manage reopen yourself, disable
+the automatic hook during application boot:
+
+~~~ruby
+SemanticLogger.reopen_on_fork = false
+~~~
+
+If you need to reopen within the same process (for example after an external log
+rotation that did not fork), call `SemanticLogger.reopen(force: true)` to bypass
+the per-process guard.
+
+If you use Rails Semantic Logger, upgrade it alongside Semantic Logger v5.
+
 ## Upgrading to Semantic Logger v4.9
 
 These changes should not be noticeable by the majority of users of Semantic Logger, since
