@@ -138,7 +138,7 @@ module SemanticLogger
                      host: nil,
                      data_stream: false,
                      **elasticsearch_args,
-                     &block)
+                     &)
         @url                         = url
         @index                       = index
         @date_pattern                = date_pattern
@@ -148,7 +148,7 @@ module SemanticLogger
         @elasticsearch_args[:logger] = logger
         @data_stream                 = data_stream
 
-        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: false, &block)
+        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: false, &)
         reopen
       end
 

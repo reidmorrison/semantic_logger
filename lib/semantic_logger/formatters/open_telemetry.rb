@@ -5,10 +5,19 @@ module SemanticLogger
       # primitives allowed by OTLP logs in Ruby: String, Integer, Float, TrueClass, FalseClass
       PRIMS = [String, Integer, Float, TrueClass, FalseClass].freeze
 
+      # Returns the attributes hash submitted to the OpenTelemetry SDK.
+      #
+      # Unlike the JSON formatters there is no single `.to_json` boundary here:
+      # the hash is handed to the OTLP exporter, which requires valid UTF-8. Cleanse
+      # the whole structure so binary / non UTF-8 strings cannot break the export.
+      def call(log, logger)
+        Utils.encode_utf8(super)
+      end
+
       # Log level
       def level
         hash[:level]       = log.level.to_s
-        hash[:level_index] = severity_number(log.level_index)
+        hash[:level_index] = severity_number(log.level)
       end
 
       # Payload is submitted directly as attributes
@@ -35,10 +44,11 @@ module SemanticLogger
 
           out[k.to_s] =
             if v.is_a?(Hash)
-              # Stringify whole hash.
-              v.transform_values { |vv| coerce_value(vv) }.
-                transform_keys!(&:to_s).
-                to_json
+              # Stringify whole hash. Cleanse here too: this runs while building the
+              # hash, before the top-level call cleanse, so it must not raise on its own.
+              Utils.to_json(
+                v.transform_values { |vv| coerce_value(vv) }.transform_keys!(&:to_s)
+              )
             else
               coerce_value(v)
             end

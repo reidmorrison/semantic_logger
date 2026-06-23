@@ -34,27 +34,33 @@ module SemanticLogger
     def self.factory(async: false, batch: nil,
                      max_queue_size: 10_000, lag_check_interval: 1_000, lag_threshold_s: 30,
                      batch_size: 300, batch_seconds: 5,
+                     non_blocking: false, dropped_message_report_seconds: 30,
                      **args,
-                     &block)
-      appender = build(**args, &block)
+                     &)
+      appender = build(**args, &)
 
-      # If appender implements #batch, then it should use the batch proxy by default.
-      batch    = true if batch.nil? && appender.respond_to?(:batch)
+      # If appender implements #batch, then it should use the batch proxy by default,
+      # unless the appender opts out of batching by default (e.g. the HTTP appender).
+      batch    = true if batch.nil? && appender.respond_to?(:batch) && appender.batch_by_default?
 
       if batch == true
         Appender::AsyncBatch.new(
-          appender:        appender,
-          max_queue_size:  max_queue_size,
-          lag_threshold_s: lag_threshold_s,
-          batch_size:      batch_size,
-          batch_seconds:   batch_seconds
+          appender:                       appender,
+          max_queue_size:                 max_queue_size,
+          lag_threshold_s:                lag_threshold_s,
+          batch_size:                     batch_size,
+          batch_seconds:                  batch_seconds,
+          non_blocking:                   non_blocking,
+          dropped_message_report_seconds: dropped_message_report_seconds
         )
       elsif async == true
         Appender::Async.new(
-          appender:           appender,
-          max_queue_size:     max_queue_size,
-          lag_check_interval: lag_check_interval,
-          lag_threshold_s:    lag_threshold_s
+          appender:                       appender,
+          max_queue_size:                 max_queue_size,
+          lag_check_interval:             lag_check_interval,
+          lag_threshold_s:                lag_threshold_s,
+          non_blocking:                   non_blocking,
+          dropped_message_report_seconds: dropped_message_report_seconds
         )
       else
         appender
@@ -62,13 +68,13 @@ module SemanticLogger
     end
 
     # Returns [Subscriber] instance from the supplied options.
-    def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &block)
+    def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &)
       if file_name
-        SemanticLogger::Appender::File.new(file_name, **args, &block)
+        SemanticLogger::Appender::File.new(file_name, **args, &)
       elsif io
-        SemanticLogger::Appender::IO.new(io, **args, &block)
+        SemanticLogger::Appender::IO.new(io, **args, &)
       elsif logger
-        SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &block)
+        SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &)
       elsif appender
         if appender.is_a?(Symbol)
           SemanticLogger::Utils.constantize_symbol(appender).new(**args)

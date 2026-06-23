@@ -9,7 +9,12 @@ module SemanticLogger
 
       # Returns log messages in JSON format
       def call(log, logger)
-        super.to_json
+        Utils.to_json(super)
+      end
+
+      # Returns a batch of log messages as a single JSON array.
+      def batch(logs, logger)
+        "[#{logs.map { |log| call(log, logger) }.join(',')}]"
       end
     end
   end

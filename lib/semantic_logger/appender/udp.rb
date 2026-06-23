@@ -61,11 +61,11 @@ module SemanticLogger
       #     appender: :udp,
       #     server:   'server:3300'
       #   )
-      def initialize(server:, udp_flags: 0, metrics: true, **args, &block)
+      def initialize(server:, udp_flags: 0, metrics: true, **args, &)
         @server    = server
         @udp_flags = udp_flags
 
-        super(metrics: metrics, **args, &block)
+        super(metrics: metrics, **args, &)
         reopen
       end
 

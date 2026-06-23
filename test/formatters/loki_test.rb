@@ -84,6 +84,7 @@ module SemanticLogger
 
           it "includes payload in values as the third element (hash)" do
             log.payload = {data: "sample", number: 123, array: [1, 2, 3]}
+
             assert_equal(
               {"data" => "sample", "number" => "123", "array" => "[1, 2, 3]"},
               values_data[2]
@@ -92,6 +93,7 @@ module SemanticLogger
 
           it "serializes nested hashes in the payload as JSON" do
             log.payload = {nested: {number: 1}}
+
             assert_equal({"nested" => "{\"number\":\"1\"}"}, values_data[2])
           end
 
@@ -126,7 +128,7 @@ module SemanticLogger
             it "adds to the stream" do
               log.tags = [:test1, "test2"]
 
-              assert_equal ["test1", "test2"], stream_data["tags"]
+              assert_equal %w[test1 test2], stream_data["tags"]
             end
           end
 
@@ -168,6 +170,7 @@ module SemanticLogger
           describe "when message is nil" do
             it "includes empty string for message" do
               log.message = nil
+
               assert_equal "", values_data[1]
             end
           end
@@ -175,6 +178,7 @@ module SemanticLogger
           describe "when payload is nil" do
             it "includes empty hash for payload" do
               log.payload = nil
+
               assert_equal({}, values_data[2])
             end
           end
@@ -182,6 +186,7 @@ module SemanticLogger
           describe "when payload is empty hash" do
             it "includes empty hash for payload" do
               log.payload = {}
+
               assert_equal({}, values_data[2])
             end
           end
@@ -207,6 +212,7 @@ module SemanticLogger
                 level
                 thread
               ]
+
               assert_equal(expected_keys, stream_data.keys)
             end
           end
@@ -223,6 +229,7 @@ module SemanticLogger
                 level
                 thread
               ]
+
               assert_equal(expected_keys, stream_data.keys)
             end
           end
@@ -232,6 +239,7 @@ module SemanticLogger
             log.metric_amount = 100
 
             payload_obj = values_data[2]
+
             assert_equal "my_metric", payload_obj["metric"]
             assert_equal 100, payload_obj["metric_value"]
           end
@@ -242,6 +250,7 @@ module SemanticLogger
             log.metric_amount = 100
 
             payload_obj = values_data[2]
+
             assert_equal "sample", payload_obj["data"]
             assert_equal "my_metric", payload_obj["metric"]
             assert_equal 100, payload_obj["metric_value"]
@@ -252,6 +261,7 @@ module SemanticLogger
               log.duration = 123.456
               log.stub(:duration_human, "123.46ms") do
                 payload_obj = values_data[2]
+
                 assert_equal "123.456", payload_obj["duration"]
                 assert_equal "123.46ms", payload_obj["duration_human"]
               end
@@ -272,6 +282,7 @@ module SemanticLogger
             set_exception
 
             payload_obj = values_data[2]
+
             assert_equal "RuntimeError", payload_obj["exception_name"]
             assert_equal "Oh no", payload_obj["exception_message"]
             assert_kind_of String, payload_obj["stack_trace"]
@@ -289,6 +300,19 @@ module SemanticLogger
             assert_equal "my_metric", payload_obj["metric"]
             assert_equal 100, payload_obj["metric_value"]
             assert_equal "RuntimeError", payload_obj["exception_name"]
+          end
+
+          # Issue #180: .to_json raises Encoding::UndefinedConversionError on non UTF-8 data.
+          it "serializes non UTF-8 data without raising" do
+            log.message    = "Bad: \xE2".b
+            log.tags       = ["Tag: \xE2".b]
+            log.named_tags = {"name\xE2".b => "val\xE2".b}
+            log.payload    = {"key\xE2".b => "value\xE2".b}
+
+            assert_equal "Bad: ", values_data[1]
+            assert_equal ["Tag: "], stream_data["tags"]
+            assert_equal "val", stream_data["name"]
+            assert_equal "value", values_data[2]["key"]
           end
         end
 

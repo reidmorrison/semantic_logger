@@ -22,7 +22,7 @@ class MeasureTest < Minitest::Test
         describe ":min_duration" do
           it "not log when faster" do
             assert_equal "result", appender.send(measure_level, "hello world", min_duration: 2000) { "result" }
-            assert appender.events.empty?
+            assert_empty appender.events
           end
 
           it "log when slower" do
@@ -75,7 +75,7 @@ class MeasureTest < Minitest::Test
             end
 
             assert log = appender.events.first
-            assert log.exception.is_a?(RuntimeError)
+            assert_kind_of RuntimeError, log.exception
             assert log.exception.backtrace
             assert_equal level, log.level
             assert_equal "hello world", log.message
@@ -104,6 +104,7 @@ class MeasureTest < Minitest::Test
 
         it ":metric" do
           metric_name = "/my/custom/metric"
+
           assert_equal "result", appender.send(measure_level, "hello world", metric: metric_name) { "result" }
 
           assert log = appender.events.first
@@ -116,12 +117,13 @@ class MeasureTest < Minitest::Test
 
             assert log = appender.events.first
             assert log.backtrace
-            assert log.backtrace.size.positive?
+            assert_predicate log.backtrace.size, :positive?
 
             # Extract file name and line number from backtrace
             h = log.to_h
+
             assert_match(/measure_test.rb/, h[:file], h)
-            assert h[:line].is_a?(Integer)
+            assert_kind_of Integer, h[:line]
           end
         end
       end
@@ -151,7 +153,7 @@ class MeasureTest < Minitest::Test
         describe ":min_duration" do
           it "not log when faster" do
             assert_equal "result", appender.measure(level, "hello world", min_duration: 2000) { "result" }
-            assert appender.events.empty?
+            assert_empty appender.events
           end
 
           it "log when slower" do
@@ -188,6 +190,7 @@ class MeasureTest < Minitest::Test
 
         it ":metric" do
           metric_name = "/my/custom/metric"
+
           assert_equal "result", appender.measure(level, "hello world", metric: metric_name) { "result" }
 
           assert log = appender.events.first
@@ -200,12 +203,13 @@ class MeasureTest < Minitest::Test
 
             assert log = appender.events.first
             assert log.backtrace
-            assert log.backtrace.size.positive?
+            assert_predicate log.backtrace.size, :positive?
 
             # Extract file name and line number from backtrace
             h = log.to_h
+
             assert_match(/measure_test.rb/, h[:file], h)
-            assert h[:line].is_a?(Integer)
+            assert_kind_of Integer, h[:line]
           end
         end
       end
@@ -235,7 +239,7 @@ class MeasureTest < Minitest::Test
         describe ":min_duration" do
           it "not log when faster" do
             assert_equal "result", appender.send(measure_level, message: "hello world", min_duration: 2000) { "result" }
-            assert appender.events.empty?
+            assert_empty appender.events
           end
 
           it "log when slower" do
@@ -275,6 +279,7 @@ class MeasureTest < Minitest::Test
 
         it ":metric" do
           metric_name = "/my/custom/metric"
+
           assert_equal "result", appender.send(measure_level, message: "hello world", metric: metric_name) { "result" }
 
           assert log = appender.events.first
@@ -287,12 +292,13 @@ class MeasureTest < Minitest::Test
 
             assert log = appender.events.first
             assert log.backtrace
-            assert log.backtrace.size.positive?
+            assert_predicate log.backtrace.size, :positive?
 
             # Extract file name and line number from backtrace
             h = log.to_h
+
             assert_match(/measure_test.rb/, h[:file], h)
-            assert h[:line].is_a?(Integer)
+            assert_kind_of Integer, h[:line]
           end
         end
       end
@@ -327,6 +333,7 @@ class MeasureTest < Minitest::Test
           appender.debug("hello world", payload) { "Calculations" }
           first = appender.events.first
         end
+
         assert_equal "hello world -- Calculations", first.message
         assert_equal payload, first.payload
 

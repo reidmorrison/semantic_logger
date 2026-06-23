@@ -40,6 +40,28 @@ All loggers and appenders use the global `SemanticLogger.default_level` by defau
 unless they have been explicity set to another level. In which case changing
 `SemanticLogger.default_level` will not affect that particular logger or appender.
 
+### Application, environment, and host name
+
+Semantic Logger can include the application name, environment, and host name in every log entry.
+Not every appender uses these fields, but structured appenders (JSON, Elasticsearch, Splunk, and
+so on) and centralized logging systems rely on them to tell apart logs coming from different
+applications and servers.
+
+~~~ruby
+SemanticLogger.application = "my_app"
+SemanticLogger.environment = "production"
+SemanticLogger.host        = "web-server-1"
+~~~
+
+When not set explicitly, these default to:
+
+- `application`: the `SEMANTIC_LOGGER_APP` environment variable, otherwise `"Semantic Logger"`.
+- `environment`: the first of `SEMANTIC_LOGGER_ENV`, `RAILS_ENV`, or `RACK_ENV` that is set.
+- `host`: the machine's host name.
+
+Each value can also be overridden for a single appender by passing `application:`, `environment:`,
+or `host:` when calling `add_appender`. See [Appenders](appenders.html).
+
 ### Creating an instance of a logger
 
 To create a stand-alone logger instance by supplying the name of the class/application:
@@ -202,6 +224,23 @@ The additional payload is machine readable so that we don't have to write comple
 regular expressions so that a program can analyze log output. With the MongoDB
 appender the payload is written directly to MongoDB as part of the document and
 is therefore fully searchable
+
+### Capturing Backtraces
+
+Semantic Logger can capture the file name and line number where each log entry was created, include
+it in the log output, and forward it to error services such as Bugsnag.
+
+Capturing a backtrace is expensive, so it is controlled by its own level, which defaults to
+`:error`. Only log entries at this level or higher capture a backtrace:
+
+~~~ruby
+# Capture backtraces for :error and :fatal log entries (the default)
+SemanticLogger.backtrace_level = :error
+~~~
+
+To capture a backtrace for every log entry, set it to `:trace`. To turn backtrace capture off
+entirely, set it to `nil`. It is strongly recommended to leave this at `:error` or higher in
+production.
 
 ### Measure Everything
 
@@ -446,7 +485,7 @@ Some third party gems log a large amount of information at debug level since the
 do not use Semantic Logger and do not have access to the `:trace` level for logging.
 
 To map the `:debug` logging calls for these existing libraries to `:trace`, replace
-its logger with an instance of `DebugAsTraceLogger::SemanticLogger`
+its logger with an instance of `SemanticLogger::DebugAsTraceLogger`
 
 ~~~ruby
 # Example, log debug level messages as trace:
@@ -530,6 +569,86 @@ messages to be written:
 # Flush all appenders and wait for them to complete flushing
 SemanticLogger.flush
 ~~~
+
+### Managing appenders
+
+`SemanticLogger.add_appender` returns the appender it created, which can be used to remove that
+appender later:
+
+~~~ruby
+appender = SemanticLogger.add_appender(file_name: "development.log")
+
+# ... later
+SemanticLogger.remove_appender(appender)
+~~~
+
+Other appender management methods:
+
+~~~ruby
+# The list of currently active appenders
+SemanticLogger.appenders
+
+# Remove and close every appender
+SemanticLogger.clear_appenders!
+
+# Flush all appenders, then close them ( called automatically at process exit )
+SemanticLogger.close
+~~~
+
+After forking a process, call `SemanticLogger.reopen` to re-open file handles and restart the
+background thread. See [Process Forking](forking.html).
+
+### Capturing context with on_log
+
+Register a block to be called for every log entry, just before it is placed on the queue. The block
+runs inline on the thread that created the log entry, so it can capture request-scoped or
+thread-local context that would otherwise be lost once the entry is handed off to the background
+thread.
+
+~~~ruby
+SemanticLogger.on_log do |log|
+  log.set_context(:request_id, Thread.current[:request_id])
+end
+~~~
+
+Because these callbacks run on the application's own thread, keep them fast. The captured context
+is available to appenders and formatters as `log.context`.
+
+### Monitoring the background log thread
+
+Because logging happens on a background thread, that thread can occasionally fall behind, for
+example when an appender is slow or a sudden burst of logging occurs. By default the queue holds up
+to 10,000 entries, after which logging calls block until there is room, so that no log entries are
+lost.
+
+Inspect the queue at runtime:
+
+~~~ruby
+# Number of log entries still waiting to be written
+SemanticLogger.queue_size
+~~~
+
+Semantic Logger also logs a warning when an entry has been waiting on the queue for too long. The
+threshold, and how often it is checked, can be inspected and tuned:
+
+~~~ruby
+# Warn when an entry has been on the queue longer than this many seconds ( default: 30 )
+SemanticLogger.lag_threshold_s
+
+# Number of messages to process between lag checks ( default: 1,000 )
+SemanticLogger.lag_check_interval = 1_000
+~~~
+
+If a single destination is slow, such as a remote HTTP service, give just that appender its own
+background thread so it cannot hold up the others:
+
+~~~ruby
+# Run this appender on its own thread with its own queue
+SemanticLogger.add_appender(appender: :http, url: "https://example.com/log", async: true)
+~~~
+
+If a sustained burst is overwhelming logging, reduce the volume by raising the log level, reduce the
+number of appenders, or speed up the slow appender.
 
 ### Replacing loggers in other Gems
 

@@ -29,14 +29,18 @@ module SemanticLogger
                      max_queue_size: 10_000,
                      lag_threshold_s: 30,
                      batch_size: 300,
-                     batch_seconds: 5)
+                     batch_seconds: 5,
+                     non_blocking: false,
+                     dropped_message_report_seconds: 30)
         @batch_size    = batch_size
         @batch_seconds = batch_seconds
         @signal        = Concurrent::Event.new
         super(
-          appender:        appender,
-          max_queue_size:  max_queue_size,
-          lag_threshold_s: lag_threshold_s
+          appender:                       appender,
+          max_queue_size:                 max_queue_size,
+          lag_threshold_s:                lag_threshold_s,
+          non_blocking:                   non_blocking,
+          dropped_message_report_seconds: dropped_message_report_seconds
         )
 
         return if appender.respond_to?(:batch)

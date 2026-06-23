@@ -4,19 +4,28 @@ layout: default
 
 ## Metrics
 
-When logging data it is also useful to gather metrics that can be used in dashboards to track:
+A **metric** is a named number that Semantic Logger emits alongside a log entry, so the same call
+that records what happened can also feed your dashboards and alerts. Metrics are useful to track
+things like:
 
-* Duration of blocks of code.
-* Quantity of each error or any other count.
-* Total amount of purchases by department over time.
-* etc...
+* How long a block of code takes to run.
+* How often an error, or any other event, occurs.
+* Running totals, such as the amount purchased per department over time.
+
+You attach a metric to an ordinary log or `measure_` call by adding the `:metric` option and a name.
+Any registered [metric subscriber](#metric-subscribers) (Statsd, New Relic, and so on) is then
+notified, asynchronously, on the background log thread. Metrics are subject to the same log level
+and filtering as the log entry they ride along with, so a metric on a `:trace` call is not emitted
+when the level is `:info`.
+
+There are two kinds of metric: **duration** metrics and **counting** metrics.
 
 ### Duration Metrics
 
 Log how long it took to call an external interface and send that duration as a metric to all
 metric subscribers.
 
-To set any duration based metric, add `:metric` option to any `measure_` logging call,
+To set any duration based metric, add the `:metric` option to any `measure_` logging call,
 along with a name for the metric:
 
 ~~~ruby
@@ -71,7 +80,7 @@ Send metrics to [Statsd](https://github.com/quasor/statsd) via UDP so it can rol
 ~~~ruby
 SemanticLogger.add_appender(
   metric: :statsd,
-  url:    'localhost:8125'
+  url:    'udp://localhost:8125'
 )
 ~~~
 
@@ -90,15 +99,13 @@ they can be displayed using their custom dashboards.
 
 ### Notes
 
-Performance
+**Performance:** Metric subscribers run on the background logging thread, so emitting a metric never
+slows down the thread that logged it.
 
-* All metrics all called in the separate logging thread so as not to impact the thread that created
-the metric.
-
-Log level
-
-* Metrics are only forwarded for log messages that are not filtered out or do not exceed or meet the current log level.
-* For example, use `:trace` level metrics during testing that are not visible when the log level is `:info`.
-* For example, `:trace` metrics can be turned on again by sending the `-SIGUSR2` [signal](signals.html) to the process to change the log level.
+**Log level:** A metric is only emitted when its log entry is actually logged, so it follows the
+same log level and filtering rules as any other entry. You can use this to your advantage: keep
+detailed `:trace` level metrics in the code where they stay dormant under an `:info` level, then
+turn them on when needed, for example by sending the `SIGUSR2` [signal](signals.html) to lower the
+log level on a running process.
 
 ### [Next: Signals ==>](signals.html)

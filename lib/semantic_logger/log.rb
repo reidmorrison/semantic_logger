@@ -250,7 +250,7 @@ module SemanticLogger
       "#{$$}:#{format("%.#{thread_name_length}s", thread_name)}#{file_name}"
     end
 
-    CALLER_REGEXP = /^(.*):(\d+).*/.freeze
+    CALLER_REGEXP = /^(.*):(\d+).*/
 
     # Extract the filename and line number from the last entry in the supplied backtrace
     def extract_file_and_line(stack, short_name = false)
@@ -271,7 +271,10 @@ module SemanticLogger
 
     # Strip the standard Rails colorizing from the logged message
     def cleansed_message
-      message.to_s.gsub(/(\e(\[([\d;]*[mz]?))?)?/, "").strip
+      msg = message.to_s
+      return msg.strip unless msg.include?("\e")
+
+      msg.gsub(/\e\[[\d;]*[mz]?|\e/, "").strip
     end
 
     # Return the payload in text form

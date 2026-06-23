@@ -21,26 +21,43 @@ class CaptureLogEventsTest < Minitest::Test
       user.stub(:logger, capture_logger) do
         user.enable!
       end
+
       assert_equal "Hello World", capture_logger.events.last.message
       assert_equal :info, capture_logger.events.last.level
       assert_equal "User/enabled", capture_logger.events.last.metric
-      refute capture_logger.events.last.metric_only?
+      refute_predicate capture_logger.events.last, :metric_only?
     end
 
     it "metric only event" do
       user.stub(:logger, capture_logger) do
         user.disable!
       end
+
       assert_equal :info, capture_logger.events.last.level
       assert_equal "User/disabled", capture_logger.events.last.metric
-      assert capture_logger.events.last.metric_only?
+      assert_predicate capture_logger.events.last, :metric_only?
     end
 
     it "clears the events array when clear is called" do
       capture_logger.info "a message"
+
       assert_equal(1, capture_logger.events.size)
       capture_logger.clear
+
       assert_equal(0, capture_logger.events.size)
+    end
+
+    it "captures a batch of log events" do
+      logs = %w[first second].map do |message|
+        log         = SemanticLogger::Log.new("Test", :info)
+        log.message = message
+        log
+      end
+
+      capture_logger.batch(logs)
+
+      assert_equal %w[first second], capture_logger.events.map(&:message)
+      assert_equal %i[info info], capture_logger.events.map(&:level)
     end
   end
 end

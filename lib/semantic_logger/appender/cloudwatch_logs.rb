@@ -54,7 +54,7 @@ module SemanticLogger
       #     Note that currently CloudWatch Logs has 10000 hard limit.
       #     Default: 4000
       def initialize(
-        *args,
+        *,
         group:,
         client_kwargs: {},
         stream: nil,
@@ -62,8 +62,8 @@ module SemanticLogger
         create_stream: true,
         force_flush_interval_seconds: 5,
         max_buffered_events: 4_000,
-        **kwargs,
-        &block
+        **,
+        &
       )
         @group = group
         @client_kwargs = client_kwargs
@@ -73,7 +73,7 @@ module SemanticLogger
         @force_flush_interval_seconds = force_flush_interval_seconds
         @max_buffered_events = max_buffered_events
 
-        super(*args, **kwargs, &block)
+        super(*, **, &)
         reopen
       end
 

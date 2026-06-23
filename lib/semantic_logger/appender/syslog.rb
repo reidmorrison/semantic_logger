@@ -130,7 +130,7 @@ module SemanticLogger
                      options: ::Syslog::LOG_PID | ::Syslog::LOG_CONS,
                      tcp_client: {},
                      **args,
-                     &block)
+                     &)
         @options            = options
         @facility           = facility
         @max_size           = max_size
@@ -165,7 +165,7 @@ module SemanticLogger
           end
         end
 
-        super(**args, &block)
+        super(**args, &)
         reopen
       end
 

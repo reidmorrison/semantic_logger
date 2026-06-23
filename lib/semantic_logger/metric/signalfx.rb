@@ -78,10 +78,10 @@ module SemanticLogger
                      url: "https://ingest.signalfx.com",
                      formatter: nil,
                      **args,
-                     &block)
+                     &)
         formatter ||= SemanticLogger::Formatters::Signalfx.new(token: token, dimensions: dimensions)
 
-        super(url: url, formatter: formatter, **args, &block)
+        super(url: url, formatter: formatter, **args, &)
 
         @header["X-SF-TOKEN"] = token
         @full_url             = "#{url}/#{END_POINT}"

@@ -37,13 +37,13 @@ module SemanticLogger
       #
       #    logger = SemanticLogger['test']
       #    logger.info 'Hello World'
-      def initialize(io, **args, &block)
+      def initialize(io, **args, &)
         @io = io
         unless @io.respond_to?(:write)
           raise(ArgumentError, "SemanticLogging::Appender::IO io is not a valid IO instance: #{io.inspect}")
         end
 
-        super(**args, &block)
+        super(**args, &)
       end
 
       def log(log)
@@ -60,8 +60,12 @@ module SemanticLogger
         @io.flush if @io.respond_to?(:flush)
       end
 
-      def console_output?
-        [$stderr, $stdout].include?(@io)
+      def console_stream
+        if @io.equal?($stdout)
+          :stdout
+        elsif @io.equal?($stderr)
+          :stderr
+        end
       end
     end
   end

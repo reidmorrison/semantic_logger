@@ -36,11 +36,8 @@ module SemanticLogger
     # Example:
     #   require 'semantic_logger'
     #
-    #   client   = Mongo::MongoClient.new
-    #   database = client['test']
-    #
     #   appender = SemanticLogger::Appender::MongoDB.new(
-    #     db:              database,
+    #     uri:             'mongodb://127.0.0.1:27017/test',
     #     collection_size: 1024**3 # 1.gigabyte
     #   )
     #   SemanticLogger.add_appender(appender: appender)
@@ -110,7 +107,7 @@ module SemanticLogger
                      collection_size: 1024**3,
                      collection_max: nil,
                      **args,
-                     &block)
+                     &)
         @client          = Mongo::Client.new(uri, logger: logger)
         @collection_name = collection_name
         @options         = {
@@ -125,7 +122,7 @@ module SemanticLogger
         # Create the collection and necessary indexes
         create_indexes
 
-        super(**args, &block)
+        super(**args, &)
       end
 
       # After forking an active process call #reopen to re-open

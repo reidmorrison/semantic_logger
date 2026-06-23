@@ -3,11 +3,14 @@ source "https://rubygems.org"
 gemspec
 
 gem "amazing_print"
-gem "minitest", "< 6.0"
+gem "minitest", "~> 6.0"
+gem "minitest-mock"
 gem "minitest-reporters"
 gem "minitest-shared_description"
 gem "minitest-stub_any_instance"
 gem "rake"
+gem "simplecov", require: false
+gem "solargraph", require: false, platform: :ruby
 
 # [optional] Bugsnag appender
 gem "bugsnag"
@@ -27,6 +30,8 @@ gem "base64"
 gem "mongo"
 # [optional] NewRelic appender ( Tests use a mock class )
 # gem 'newrelic_rpm'
+# [optional] Open Telemetry appender
+gem "opentelemetry-logs-sdk"
 # [optional] Net::TCP appender
 gem "net_tcp_client"
 # [optional] Splunk appender
@@ -45,3 +50,5 @@ gem "syslog_protocol"
 gem "aws-sdk-cloudwatchlogs"
 
 gem "rubocop", "~> 1.79.0", require: false
+gem "rubocop-minitest", require: false
+gem "rubocop-rake", require: false

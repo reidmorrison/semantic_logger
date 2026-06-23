@@ -18,12 +18,12 @@ module SemanticLogger
 
       # Application name
       def application
-        hash[:application] = logger.application if log_application && logger && logger.application
+        hash[:application] = logger.application if log_application && logger&.application
       end
 
       # Environment
       def environment
-        hash[:environment] = logger.environment if log_environment && logger && logger.environment
+        hash[:environment] = logger.environment if log_environment && logger&.environment
       end
 
       # Date & time

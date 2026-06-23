@@ -127,7 +127,7 @@ module SemanticLogger
                      ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil, ssl_ca_certs_from_system: false,
                      topic: "log_messages", partition: nil, partition_key: nil, key: nil,
                      delivery_threshold: 100, delivery_interval: 10, required_acks: 1,
-                     metrics: true, **args, &block)
+                     metrics: true, **args, &)
         @seed_brokers             = seed_brokers
         @client_id                = client_id
         @connect_timeout          = connect_timeout
@@ -144,7 +144,7 @@ module SemanticLogger
         @delivery_interval        = delivery_interval
         @required_acks            = required_acks
 
-        super(metrics: metrics, **args, &block)
+        super(metrics: metrics, **args, &)
         reopen
       end
 

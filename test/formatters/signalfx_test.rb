@@ -68,6 +68,7 @@ module SemanticLogger
 
           it "send counter metric when there is no duration" do
             hash = result
+
             assert counters = hash["counter"], hash
             assert counter = counters.first, hash
             assert_equal counter_metric_name, counter["metric"], counter
@@ -79,6 +80,7 @@ module SemanticLogger
           it "send gauge metric when log includes duration" do
             log.duration = 1234
             hash         = result
+
             assert counters = hash["gauge"], hash
             assert counter = counters.first, hash
             assert_equal average_metric_name, counter["metric"], counter
@@ -90,6 +92,7 @@ module SemanticLogger
           it "also sends counter metric when gauge metric is sent" do
             log.duration = 1234
             hash         = result
+
             assert counters = hash["counter"], hash
             assert counter = counters.first, hash
             assert_equal counter_metric_name, counter["metric"], counter
@@ -102,6 +105,7 @@ module SemanticLogger
             log.named_tags       = {user_id: 47, tracking_number: 7474, session_id: "hsdhngsd"}
             formatter.dimensions = %i[user_id application]
             hash                 = result
+
             assert counters = hash["counter"], hash
             assert counter = counters.first, hash
             assert_equal(
@@ -150,10 +154,11 @@ module SemanticLogger
           it "sends gauge metrics" do
             logs.each { |log| log.duration = 3.5 }
             hash = result
+
             assert gauges = hash["gauge"], hash
             assert_equal 3, gauges.size
             assert_equal average_metric_name, gauges[0]["metric"]
-            assert_equal 3.5, gauges[0]["value"]
+            assert_in_delta(3.5, gauges[0]["value"])
             assert_equal average_metric_name, gauges[1]["metric"]
             assert_equal average_metric_name, gauges[2]["metric"]
           end

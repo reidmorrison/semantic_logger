@@ -55,6 +55,7 @@ module Appender
           log.message = nil
           log.level   = :debug
           appender.log(log.freeze)
+
           assert_match(
             /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+\] User/, mock_logger.message
           )
@@ -62,6 +63,7 @@ module Appender
 
         it "message" do
           appender.log(log.freeze)
+
           assert_match(
             /\d+-\d+-\d+ \d+:\d+:\d+.\d+ I \[\d+:\w+\] User -- hello world/, mock_logger.message
           )
@@ -71,6 +73,7 @@ module Appender
           log.level     = :warn
           log.backtrace = backtrace
           appender.log(log.freeze)
+
           assert_match(
             /\d+-\d+-\d+ \d+:\d+:\d+.\d+ W \[\d+:\w+\ default_test.rb:35\] User -- hello world/, mock_logger.message
           )
@@ -80,6 +83,7 @@ module Appender
           log.level   = :error
           log.payload = ahash
           appender.log(log.freeze)
+
           assert_match(
             /\d+-\d+-\d+ \d+:\d+:\d+.\d+ E \[\d+:\w+\] User -- hello world -- #{hash_str}/, mock_logger.message
           )
@@ -88,6 +92,7 @@ module Appender
         it "trace as debug" do
           log.level = :trace
           appender.log(log.freeze)
+
           assert_match(
             /\d+-\d+-\d+ \d+:\d+:\d+.\d+ T \[\d+:\w+\] User -- hello world/, mock_logger.message
           )
@@ -96,6 +101,7 @@ module Appender
         it "fatal" do
           log.level = :fatal
           appender.log(log.freeze)
+
           assert_match(
             /\d+-\d+-\d+ \d+:\d+:\d+.\d+ F \[\d+:\w+\] User -- hello world/, mock_logger.message
           )

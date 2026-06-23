@@ -17,6 +17,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Pin minitest to < 6.0 to avoid breaking changes
 - Add `with_level` method to `Base` to allow changing log level during block execution, in analogue to `Logger.with_level`.
 - Add event_type to Honeybadger Insights payloads
+- Fix StatsD metric appender: negative metric amounts were silently ignored, so the decrement was never sent.
+- Fix Syslog formatter raising when `level_map` is supplied as a Hash.
+- Remove stray `puts` debug output from the Loki appender.
 
 ## [4.17.0]
 
