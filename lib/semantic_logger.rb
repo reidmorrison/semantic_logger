@@ -18,6 +18,14 @@ require "semantic_logger/logger"
 require "semantic_logger/debug_as_trace_logger"
 require "semantic_logger/semantic_logger"
 
+# Automatically reopen appenders in the child process after a fork.
+# Enabled by default; opt out with `SemanticLogger.reopen_on_fork = false`.
+# Skipped on platforms without `Process._fork` (e.g. JRuby), which cannot fork.
+if Process.respond_to?(:_fork)
+  require "semantic_logger/core_ext/process"
+  Process.singleton_class.prepend(SemanticLogger::CoreExt::Process)
+end
+
 # Flush all appenders at exit, waiting for outstanding messages on the queue
 # to be written first.
 at_exit do

@@ -32,7 +32,9 @@ module SemanticLogger
 
       # Tags
       def tags
-        "[#{log.tags.join('] [')}]" if log.tags && !log.tags.empty?
+        return if log.tags.nil? || log.tags.empty?
+
+        "[#{log.tags.map { |tag| escape_control_characters(tag) }.join('] [')}]"
       end
 
       # Named Tags
@@ -41,7 +43,7 @@ module SemanticLogger
         return if named_tags.nil? || named_tags.empty?
 
         list = []
-        named_tags.each_pair { |name, value| list << "#{name}: #{value}" }
+        named_tags.each_pair { |name, value| list << "#{escape_control_characters(name)}: #{escape_control_characters(value)}" }
         "{#{list.join(', ')}}"
       end
 
@@ -57,7 +59,7 @@ module SemanticLogger
 
       # Log message
       def message
-        "-- #{log.message}" if log.message
+        "-- #{escape_control_characters(log.message)}" if log.message
       end
 
       # Payload
@@ -70,7 +72,7 @@ module SemanticLogger
 
       # Exception
       def exception
-        "-- Exception: #{log.exception.class}: #{log.exception.message}\n#{log.backtrace_to_s}" if log.exception
+        "-- Exception: #{log.exception.class}: #{escape_control_characters(log.exception.message)}\n#{log.backtrace_to_s}" if log.exception
       end
 
       # Default text log format

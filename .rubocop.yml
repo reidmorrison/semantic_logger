@@ -48,6 +48,8 @@ Metrics/ClassLength:
   Max: 250
   Exclude:
     - "test/**/*"
+    # Large abstract base class shared by Logger and Subscriber.
+    - "lib/semantic_logger/base.rb"
 
 # Soften limits
 Metrics/MethodLength:

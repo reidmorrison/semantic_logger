@@ -145,6 +145,23 @@ module SemanticLogger
         it "returns self" do
           assert_equal log, log.assign_hash(message: "Hello")
         end
+
+        it "does not overwrite first-class attributes from the supplied hash" do
+          log.assign_hash(level: :fatal, name: "Spoofed", time: "now", user: "joe")
+
+          # The protected fields are unchanged and routed to the payload instead.
+          refute_equal :fatal, log.level
+          refute_equal "Spoofed", log.name
+          assert_equal({level: :fatal, name: "Spoofed", time: "now", user: "joe"}, log.payload)
+        end
+
+        it "still assigns non-payload keys such as duration" do
+          log.assign_hash(message: "Hello", duration: 123)
+
+          assert_equal "Hello", log.message
+          assert_equal 123, log.duration
+          assert_nil log.payload
+        end
       end
 
       describe "#extract_arguments" do

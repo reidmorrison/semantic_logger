@@ -92,90 +92,67 @@ and are therefore not automatically included by this gem:
 - Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
 - Elasticsearch Appender: gem 'elasticsearch'
+- OpenSearch Appender: gem 'opensearch-ruby'
 - Kafka Appender: gem 'ruby-kafka'
 - Legacy Sentry Appender: gem 'sentry-raven' (deprecated)
 - Sentry Appender: gem 'sentry-ruby'
 - OpenTelemetry Appender: gem 'opentelemetry-logs-sdk' (plus an exporter, e.g. 'opentelemetry-exporter-otlp-logs')
 
-## Upgrading to Semantic Logger v4.9
+## Upgrading to Semantic Logger v5.0
 
-These changes should not be noticeable by the majority of users of Semantic Logger, since
-they are to the internal API. It is possible that advanced users may be using these internal
-API's directly.
+- Ruby 3.2 is now the minimum runtime version.
 
-This does not affect any calls to the public api `SemanticLogger.add_appender`.
+### Appenders are now reopened automatically after a fork
 
-File and IO are now separate appenders. When creating the File appender explicitly, its arguments
-have changed. For example, when requesting an IO stream, it needs to be changed from:
+Previously, after a process forked (Puma, Unicorn, Resque, Spring, Phusion
+Passenger, parallel tests, etc.) you had to call `SemanticLogger.reopen` yourself
+in an `after_fork` style hook, otherwise logging would silently stop in the child.
 
-~~~ruby
-SemanticLogger::Appender::File.new(io: $stderr)
-~~~
-to:
-~~~ruby
-SemanticLogger::Appender::IO.new($stderr)
-~~~
+As of v5, Semantic Logger installs a `Process._fork` hook (Ruby 3.1+) that calls
+`SemanticLogger.reopen` automatically in the child process after `fork`,
+`Process.daemon`, `IO.popen`, `Kernel#system`, and backticks. No configuration is
+required for the common cases.
 
-Additionally, this needs to be changed from:
-~~~ruby
-SemanticLogger::Appender::File.new(file_name: "file.log")
-~~~
-to:
-~~~ruby
-SemanticLogger::Appender::File.new("file.log")
-~~~
-
-Rails Semantic Logger, if used, needs to be upgraded to v4.9 when upgrading to Semantic Logger v4.9.
-
-## Upgrading to Semantic Logger v4.4
-
-With some forking frameworks it is necessary to call `reopen` after the fork. With v4.4 the
-workaround for Ruby 2.5 crashes is no longer needed.
-I.e. Please remove the following line if being called anywhere:
+**Recommended:** remove all of your existing manual reopen calls. For example,
+delete code such as:
 
 ~~~ruby
-SemanticLogger::Processor.instance.instance_variable_set(:@queue, Queue.new)
+# config/unicorn.conf.rb
+after_fork do |server, worker|
+  SemanticLogger.reopen
+end
+
+# config/puma.rb
+before_worker_boot do
+  SemanticLogger.reopen
+end
+
+# Resque / Spring / Passenger
+Resque.after_fork  { SemanticLogger.reopen }
+Spring.after_fork  { SemanticLogger.reopen }
+PhusionPassenger.on_event(:starting_worker_process) { |forked| SemanticLogger.reopen if forked }
 ~~~
 
-## Upgrading to Semantic Logger v4.0
+Leaving these in place is safe, since `SemanticLogger.reopen` now no-ops when it
+has already run in the current process after a fork, but they are no longer needed.
 
-The following changes need to be made when upgrading to V4:
-- Ruby V2.3 / JRuby V9.1 is now the minimum runtime version.
-- Replace calls to Logger#with_payload with SemanticLogger.named_tagged.
-- Replace calls to Logger#payload with SemanticLogger.named_tags.
-- MongoDB Appender requires Mongo Ruby Client V2 or greater.
-- Appenders now write payload data in a seperate :payload tag instead of mixing them
-  directly into the root elements to avoid name clashes.
-
-As a result any calls like the following:
+**Opt out:** to restore the previous behavior and manage reopen yourself, disable
+the automatic hook during application boot:
 
 ~~~ruby
-logger.debug foo: 'foo', bar: 'bar'
+SemanticLogger.reopen_on_fork = false
 ~~~
 
-Must be replaced with the following in v4:
+If you need to reopen within the same process (for example after an external log
+rotation that did not fork), call `SemanticLogger.reopen(force: true)` to bypass
+the per-process guard.
 
-~~~ruby
-logger.debug payload: {foo: 'foo', bar: 'bar'}
-~~~
+If you use Rails Semantic Logger, upgrade it alongside Semantic Logger v5.
 
-Similarly, for measure blocks:
+## Upgrading
 
-~~~ruby
-logger.measure_info('How long is the sleep', foo: 'foo', bar: 'bar') { sleep 1 }
-~~~
-
-Must be replaced with the following in v4:
-
-~~~ruby
-logger.measure_info('How long is the sleep', payload: {foo: 'foo', bar: 'bar'}) { sleep 1 }
-~~~
-
-The common log call has not changed, and the payload is still logged directly:
-
-~~~ruby
-logger.debug('log this', foo: 'foo', bar: 'bar')
-~~~
+See the [Upgrading Guide](https://logger.rocketjob.io/upgrading.html) for instructions on
+upgrading between major versions.
 
 ## Install
 

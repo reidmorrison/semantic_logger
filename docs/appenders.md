@@ -77,6 +77,7 @@ the "Gem" column below and is loaded only when that appender is used.
 | Destination | `add_appender` argument | Gem |
 |-------------|-------------------------|-----|
 | [Elasticsearch](#elasticsearch) | `appender: :elasticsearch` | `elasticsearch` |
+| [OpenSearch](#opensearch) | `appender: :opensearch` | `opensearch-ruby` |
 | [Graylog](#graylog) | `appender: :graylog` | `gelf` |
 | [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
 | [Splunk over TCP/SDK](#splunk-http) | `appender: :splunk` | `splunk-sdk-ruby` |
@@ -135,6 +136,16 @@ SemanticLogger.add_appender(file_name: "development.log", formatter: :json)
 For performance reasons the log file is not re-opened with every call.
 When the log file needs to be rotated, use a copy-truncate operation rather
 than deleting the file.
+
+Log files frequently contain sensitive information. By default the file is created
+using the process umask (the standard Ruby behavior). To restrict access, supply the
+`permissions:` option, which is applied both when the file is created and to an
+existing log file:
+
+~~~ruby
+# Owner read/write, group read, no access for others:
+SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
+~~~
 
 #### JSON log format
 
@@ -216,6 +227,66 @@ formatter = SemanticLogger::Formatters::Fluentd.new(log_host: true, need_process
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 ~~~
 
+#### ECS (Elastic Common Schema) log format
+
+The `:ecs` formatter emits each log event using the nested field names defined by
+the [Elastic Common Schema](https://www.elastic.co/docs/reference/ecs) (targeting
+ECS 8.x), so logs integrate cleanly with Filebeat and the Elastic stack
+(Elasticsearch, Kibana) without an ingest pipeline to rename fields.
+
+Like `:json`, it produces a single line of JSON per event, so it works with the
+appenders that write or post JSON: an IO stream (`io: $stdout`), a file
+(`file_name:`), and the HTTP appender. The typical deployment writes ECS JSON to
+stdout or a log file and lets Filebeat or Elastic Agent ship it to Elasticsearch:
+
+~~~ruby
+# Ship via Filebeat / Elastic Agent tailing stdout or a file:
+SemanticLogger.add_appender(io: $stdout, formatter: :ecs)
+SemanticLogger.add_appender(file_name: "production.log", formatter: :ecs)
+~~~
+
+The Semantic Logger fields are mapped to ECS as follows:
+
+| Semantic Logger | ECS |
+| :--- | :--- |
+| `time` | `@timestamp` |
+| `level` | `log.level` |
+| `name` | `log.logger` |
+| `file` / `line` | `log.origin.file.name` / `log.origin.file.line` |
+| `message` | `message` |
+| `thread` | `process.thread.name` |
+| `pid` | `process.pid` |
+| `host` | `host.hostname` |
+| `application` | `service.name` |
+| `environment` | `service.environment` |
+| `exception` | `error.type` / `error.message` / `error.stack_trace` |
+| `duration` | `event.duration` (nanoseconds) |
+| `tags` | `tags` |
+| `named_tags` | `labels.*` |
+| `payload`, `metric`, `metric_amount` | nested under a custom namespace (see below) |
+
+ECS reserves the top-level field names it defines, so Semantic Logger data that
+has no native ECS home (the `payload`, `metric`, and `metric_amount`) is nested
+under a custom top-level namespace, `semantic_logger` by default. A proper-noun
+namespace is [the approach ECS recommends](https://www.elastic.co/docs/reference/ecs/ecs-custom-fields-in-ecs)
+for custom fields, since it is guaranteed never to collide with a current or
+future ECS field.
+
+Use the `namespace:` option to rename it:
+
+~~~ruby
+formatter = SemanticLogger::Formatters::Ecs.new(namespace: "my_app")
+SemanticLogger.add_appender(io: $stdout, formatter: formatter)
+~~~
+
+Or set `namespace: nil` to merge the payload directly into ECS `labels` alongside
+the named tags:
+
+~~~ruby
+formatter = SemanticLogger::Formatters::Ecs.new(namespace: nil)
+SemanticLogger.add_appender(io: $stdout, formatter: formatter)
+~~~
+
 ### IO Streams
 
 Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdout
@@ -293,6 +364,19 @@ If logging to a remote Syslog server using TCP, add the following lines to your 
 ~~~ruby
 gem "syslog_protocol"
 gem "net_tcp_client"
+~~~
+
+Syslog frames each record, so embedded newlines or other control characters in
+untrusted log data could otherwise forge or split records. The syslog formatters
+therefore escape control characters by default. To restore the previous behavior of
+passing control characters through unchanged:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :syslog,
+  url:       "tcp://myloghost:514",
+  formatter: {syslog: {escape_control_chars: false}}
+)
 ~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
@@ -401,6 +485,27 @@ Example:
 ~~~ruby
 SemanticLogger.add_appender(
   appender:    :elasticsearch,
+  url:         "http://localhost:9200",
+  index:       "my-index",
+  data_stream: true
+)
+~~~
+
+### OpenSearch
+
+Forward all log messages to OpenSearch (for example AWS OpenSearch).
+
+OpenSearch is a fork of Elasticsearch and uses the same bulk indexing API, so this
+appender accepts the same options as the [Elasticsearch](#elasticsearch) appender. Use
+it together with the `opensearch-ruby` gem when talking to an OpenSearch server, since
+recent `elasticsearch` gems reject non-Elasticsearch servers with an
+`Elasticsearch::UnsupportedProductError`.
+
+Example:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:    :opensearch,
   url:         "http://localhost:9200",
   index:       "my-index",
   data_stream: true
@@ -806,6 +911,21 @@ SemanticLogger.add_appender(
 ~~~
 
 See [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client) for the remaining options that can be set when the appender is added.
+
+The TCP and UDP appenders separate records with a newline (and the Syslog appender
+frames its own packets), so they default to the JSON formatter, which escapes any
+embedded newlines and is safe to use with untrusted log data. If you replace the
+formatter with a text formatter such as `:default` or `:color`, enable
+`escape_control_chars` so that a newline in the log data cannot forge or split a
+record:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :tcp,
+  server:    "localhost:8088",
+  formatter: {default: {escape_control_chars: true}}
+)
+~~~
 
 ### UDP Appender
 

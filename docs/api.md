@@ -407,6 +407,53 @@ SemanticLogger.tagged(user: "Jack", zip_code: 12345) do
 end
 ~~~
 
+### Per-logger tags (child loggers)
+
+The block form of `tagged` above scopes its tags to the current thread, so they apply
+to every logger used inside the block. Sometimes it is more convenient to bind tags to
+a single logger instance instead, for example when a logger is owned by an object that
+has its own identity (such as an ActiveRecord model or a background job).
+
+Calling `tagged` (or its alias `with_tags`) **without a block** returns a new "child"
+logger that permanently carries the supplied tags. Every log entry emitted by that
+child, and only that child, includes the tags, even across threads:
+
+~~~ruby
+class Cart
+  include SemanticLogger::Loggable
+
+  def initialize(id)
+    @id     = id
+    # Bind this Cart's identity to its own logger instance.
+    @logger = SemanticLogger["Cart"].tagged(cart_id: id)
+  end
+
+  attr_reader :logger
+
+  def add_item(item_id)
+    # Automatically tagged with cart_id, without wrapping every method in a block.
+    logger.info("Added item", item_id: item_id)
+  end
+end
+~~~
+
+Both positional and named tags are supported, and may be mixed:
+
+~~~ruby
+logger = SemanticLogger["Payments"].tagged("billing", region: "eu")
+logger.info("Charged card") # tagged with ["billing"] and {region: "eu"}
+~~~
+
+Notes:
+
+- The original logger is never modified; `tagged` returns a copy. Child loggers can be
+  nested, with each level adding to the tags inherited from its parent.
+- Instance tags are combined with any thread tags from a surrounding `tagged` block:
+  positional tags from the thread come first, then the logger's instance tags. For named
+  tags, the logger's own tags win on a key conflict since they represent its identity.
+- Child loggers are ordinary logger instances; they are not registered anywhere, so they
+  are garbage collected along with the object that owns them.
+
 ### Named threads
 
 Semantic Logger logs the name or id of the thread in every log message.
@@ -627,6 +674,38 @@ Inspect the queue at runtime:
 # Number of log entries still waiting to be written
 SemanticLogger.queue_size
 ~~~
+
+For a fuller operational picture, including per-appender queues, use `SemanticLogger.stats`. It
+returns a Hash describing the main pipeline and every appender, which is handy for exporting
+Semantic Logger's own health to a monitoring system such as Prometheus or statsd:
+
+~~~ruby
+SemanticLogger.stats
+# => {
+#      queue_size:     0,       # entries waiting on the main pipeline queue
+#      capped:         true,    # whether the main queue has a maximum size
+#      max_queue_size: 10_000,  # nil when uncapped
+#      thread_active:  true,    # whether the main pipeline thread is running
+#      processed:      1_532,   # cumulative entries processed since startup
+#      dropped:        0,       # cumulative entries dropped at the main queue
+#      appenders: [
+#        { name: "SemanticLogger::Appender::File", async: false },
+#        { name:           "SemanticLogger::Appender::Http",
+#          async:          true,    # this appender has its own thread and queue
+#          thread_active:  true,
+#          queue_size:     3,
+#          capped:         true,
+#          max_queue_size: 10_000,
+#          processed:      1_529,
+#          dropped:        0 }
+#      ]
+#    }
+~~~
+
+The `processed` and `dropped` counters are cumulative since process startup. Reading `stats` is
+thread-safe and adds no locking to the logging hot path. Appenders that log inline on the pipeline
+thread report only their `name` with `async: false`; appenders given their own thread (see below)
+also report their own queue size and counters.
 
 Semantic Logger also logs a warning when an entry has been waiting on the queue for too long. The
 threshold, and how often it is checked, can be inspected and tuned:

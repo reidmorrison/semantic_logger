@@ -20,6 +20,11 @@ when the level is `:info`.
 
 There are two kinds of metric: **duration** metrics and **counting** metrics.
 
+> **Not to be confused with operational stats.** The metrics on this page are *application*
+> metrics that your code emits about what it is doing. To monitor Semantic Logger's *own* health
+> instead, such as queue sizes and the number of log entries processed or dropped, use
+> [`SemanticLogger.stats`](api.html#monitoring-the-background-log-thread).
+
 ### Duration Metrics
 
 Log how long it took to call an external interface and send that duration as a metric to all

@@ -10,7 +10,7 @@ module SemanticLogger
         self.logger = logger
         self.log = log
 
-        {streams: [build_stream]}.to_json
+        Utils.to_json({streams: [build_stream]})
       end
 
       # Returns [String] a JSON batch of logs
@@ -22,7 +22,7 @@ module SemanticLogger
           build_stream
         end
 
-        {streams: streams}.to_json
+        Utils.to_json({streams: streams})
       end
 
       private
@@ -82,7 +82,7 @@ module SemanticLogger
 
         log.context.each do |key, value|
           serialized_value = if value.is_a?(Hash)
-                               value.to_json
+                               Utils.to_json(value)
                              else
                                value.to_s
                              end
@@ -144,7 +144,7 @@ module SemanticLogger
 
           result[string_key] = case value
                                when Hash
-                                 JSON.generate(stringify_hash(value))
+                                 Utils.to_json(stringify_hash(value))
                                else
                                  value.to_s
                                end

@@ -58,8 +58,8 @@ module SemanticLogger
       def log(log)
         begin
           message = formatter.call(log, self) # Generate the structured log
-          json_message = message.to_json      # Convert the log to JSON
-          level = log.level.to_s.upcase       # Determine the log level
+          json_message = Utils.to_json(message) # Convert the log to JSON, repairing any non UTF-8 data
+          level = log.level.to_s.upcase # Determine the log level
           self.class.log_newrelic(json_message, level)
         rescue JSON::GeneratorError => e
           warn("Failed to serialize log message to JSON: #{e.message}")

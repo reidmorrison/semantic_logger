@@ -227,6 +227,9 @@ class SemanticLoggerTest < Minitest::Test
         mock.expect(:close, nil)
         mock.expect(:reopen, nil)
 
+        # Clear the per-process reopen guard so reopen is not skipped.
+        SemanticLogger.instance_variable_set(:@reopened_pid, nil)
+
         SemanticLogger::Logger.stub(:processor, mock) do
           SemanticLogger.flush
           SemanticLogger.close
@@ -347,6 +350,20 @@ class SemanticLoggerTest < Minitest::Test
 
         processor.verify
         queue.verify
+      end
+    end
+
+    describe ".stats" do
+      it "delegates to the processor" do
+        expected  = {queue_size: 0, processed: 5, dropped: 0, appenders: []}
+        processor = Minitest::Mock.new
+        processor.expect(:stats, expected)
+
+        SemanticLogger::Logger.stub(:processor, processor) do
+          assert_equal expected, SemanticLogger.stats
+        end
+
+        processor.verify
       end
     end
 

@@ -64,9 +64,9 @@ module SemanticLogger
         flattened = @parsed.map do |key, value|
           case value
           when Hash, Array
-            "#{key}=#{value.to_s.to_json}"
+            "#{key}=#{Utils.to_json(value.to_s)}"
           else
-            "#{key}=#{value.to_json}"
+            "#{key}=#{Utils.to_json(value)}"
           end
         end
 

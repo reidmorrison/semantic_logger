@@ -77,6 +77,32 @@ module Appender
         end
       end
 
+      describe "permissions" do
+        it "applies the supplied permissions when creating the file" do
+          FileUtils.rm_f(file_name)
+          appender = SemanticLogger::Appender::File.new(file_name, permissions: 0o640)
+          appender.log(log)
+
+          assert_equal "100640", format("%o", File.stat(file_name).mode)
+        end
+
+        it "applies the supplied permissions to an existing file" do
+          File.write(file_name, "existing\n")
+          File.chmod(0o666, file_name)
+          appender = SemanticLogger::Appender::File.new(file_name, permissions: 0o600)
+          appender.log(log)
+
+          assert_equal "100600", format("%o", File.stat(file_name).mode)
+        end
+
+        it "leaves permissions to the umask by default" do
+          FileUtils.rm_f(file_name)
+          appender.log(log)
+
+          refute_nil File.stat(file_name).mode
+        end
+      end
+
       describe "#reopen" do
         it "Opens a new file" do
           assert appender.log(log)
