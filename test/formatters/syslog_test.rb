@@ -50,6 +50,33 @@ module SemanticLogger
 
             assert_same level_map, mapped.level_map
           end
+
+          it "escapes control characters by default" do
+            assert SemanticLogger::Formatters::Syslog.new.escape_control_chars
+          end
+
+          it "allows escaping to be disabled" do
+            refute SemanticLogger::Formatters::Syslog.new(escape_control_chars: false).escape_control_chars
+          end
+        end
+
+        describe "control characters" do
+          it "escapes embedded newlines in the packet so records cannot be forged" do
+            log.message = "hello\nFORGED record"
+            packet      = formatter.call(log, appender.logger)
+
+            assert_includes packet, "hello\\nFORGED record"
+            refute_includes packet, "hello\nFORGED record"
+          end
+
+          it "preserves embedded newlines when escaping is disabled" do
+            appender.formatter = SemanticLogger::Formatters::Syslog.new(escape_control_chars: false)
+            formatter          = appender.formatter
+            formatter.max_size = appender.max_size
+            log.message        = "hello\nworld"
+
+            assert_includes formatter.call(log, appender.logger), "hello\nworld"
+          end
         end
 
         describe SemanticLogger::Formatters::Syslog::LevelMap do

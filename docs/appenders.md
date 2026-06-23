@@ -136,6 +136,16 @@ For performance reasons the log file is not re-opened with every call.
 When the log file needs to be rotated, use a copy-truncate operation rather
 than deleting the file.
 
+Log files frequently contain sensitive information. By default the file is created
+using the process umask (the standard Ruby behavior). To restrict access, supply the
+`permissions:` option, which is applied both when the file is created and to an
+existing log file:
+
+~~~ruby
+# Owner read/write, group read, no access for others:
+SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
+~~~
+
 #### JSON log format
 
 When writing json log output, it has the following layout:
@@ -293,6 +303,19 @@ If logging to a remote Syslog server using TCP, add the following lines to your 
 ~~~ruby
 gem "syslog_protocol"
 gem "net_tcp_client"
+~~~
+
+Syslog frames each record, so embedded newlines or other control characters in
+untrusted log data could otherwise forge or split records. The syslog formatters
+therefore escape control characters by default. To restore the previous behavior of
+passing control characters through unchanged:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :syslog,
+  url:       "tcp://myloghost:514",
+  formatter: {syslog: {escape_control_chars: false}}
+)
 ~~~
 
 Note: `:trace` level messages are mapped to `:debug`.
@@ -806,6 +829,21 @@ SemanticLogger.add_appender(
 ~~~
 
 See [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client) for the remaining options that can be set when the appender is added.
+
+The TCP and UDP appenders separate records with a newline (and the Syslog appender
+frames its own packets), so they default to the JSON formatter, which escapes any
+embedded newlines and is safe to use with untrusted log data. If you replace the
+formatter with a text formatter such as `:default` or `:color`, enable
+`escape_control_chars` so that a newline in the log data cannot forge or split a
+record:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :tcp,
+  server:    "localhost:8088",
+  formatter: {default: {escape_control_chars: true}}
+)
+~~~
 
 ### UDP Appender
 

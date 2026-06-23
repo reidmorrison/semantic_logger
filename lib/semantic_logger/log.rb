@@ -129,11 +129,17 @@ module SemanticLogger
       true
     end
 
+    # Keys that #assign_hash may assign directly to a log attribute. Every other
+    # key is folded into the payload, preventing a supplied hash from overwriting
+    # sensitive fields such as :level, :name, or :time, and keeping this path
+    # consistent with #extract_arguments.
+    ASSIGNABLE_KEYS = (NON_PAYLOAD_KEYS + %i[payload]).freeze
+
     # Assign known keys to self, all other keys to the payload.
     def assign_hash(hash)
       self.payload ||= {}
       hash.each_pair do |key, value|
-        if respond_to?(:"#{key}=")
+        if ASSIGNABLE_KEYS.include?(key) && respond_to?(:"#{key}=")
           public_send(:"#{key}=", value)
         else
           payload[key] = value
@@ -269,7 +275,12 @@ module SemanticLogger
       extract_file_and_line(stack, short_name)
     end
 
-    # Strip the standard Rails colorizing from the logged message
+    # Strip the standard Rails colorizing from the logged message.
+    #
+    # Note: This unconditionally *strips* ANSI colorization, and is used to keep
+    # terminal escape codes out of structured (JSON/Loki) output. It is distinct
+    # from Formatters::Base#escape_control_characters, which instead *escapes*
+    # (preserves) control characters and is opt-in for the text formatters.
     def cleansed_message
       msg = message.to_s
       return msg.strip unless msg.include?("\e")

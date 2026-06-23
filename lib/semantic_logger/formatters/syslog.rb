@@ -49,14 +49,25 @@ module SemanticLogger
       #   level_map: [Hash | SemanticLogger::Formatters::Syslog::LevelMap]
       #     Supply a custom map of SemanticLogger levels to syslog levels.
       #
+      #   escape_control_chars: [Boolean]
+      #     Replace control characters (newlines, the ANSI escape, etc.) in
+      #     untrusted log data with a printable escaped form so that they cannot
+      #     forge or split syslog records.
+      #     Default: true (unlike other formatters, since syslog frames records
+      #     with a separator)
+      #
       #   Example:
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
-      def initialize(facility: ::Syslog::LOG_USER, level_map: LevelMap.new, max_size: Integer)
+      def initialize(facility: ::Syslog::LOG_USER, level_map: LevelMap.new, max_size: Integer,
+                     escape_control_chars: true, **args)
         @facility  = facility
         @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(**level_map)
         @max_size = max_size
-        super()
+        # Syslog frames records with a separator, so embedded newlines or other
+        # control characters in untrusted log data can forge or split records.
+        # Default to escaping them, overridable for backwards compatibility.
+        super(escape_control_chars: escape_control_chars, **args)
       end
 
       # Time is part of the syslog packet and is not included in the formatted message.
