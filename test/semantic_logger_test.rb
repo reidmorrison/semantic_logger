@@ -353,6 +353,20 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".stats" do
+      it "delegates to the processor" do
+        expected  = {queue_size: 0, processed: 5, dropped: 0, appenders: []}
+        processor = Minitest::Mock.new
+        processor.expect(:stats, expected)
+
+        SemanticLogger::Logger.stub(:processor, processor) do
+          assert_equal expected, SemanticLogger.stats
+        end
+
+        processor.verify
+      end
+    end
+
     describe ".lag_check_interval" do
       it "reads and writes the value via the processor" do
         processor = Minitest::Mock.new

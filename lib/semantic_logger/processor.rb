@@ -35,5 +35,26 @@ module SemanticLogger
       thread
       true
     end
+
+    # Returns [Hash] operational statistics for the logging pipeline.
+    #
+    #   queue_size:     [Integer] Number of log messages waiting on the main pipeline queue.
+    #   capped:         [Boolean] Whether the main queue has a maximum size.
+    #   max_queue_size: [Integer] Maximum queue size, or nil when uncapped.
+    #   thread_active:  [Boolean] Whether the main pipeline thread is running.
+    #   processed:      [Integer] Cumulative number of log messages processed since startup.
+    #   dropped:        [Integer] Cumulative number of log messages dropped at the main queue.
+    #   appenders:      [Array<Hash>] Per-appender statistics, see Appenders#stats.
+    def stats
+      {
+        queue_size:     queue.size,
+        capped:         capped?,
+        max_queue_size: capped? ? max_queue_size : nil,
+        thread_active:  active? || false,
+        processed:      @processed_count,
+        dropped:        @dropped_count,
+        appenders:      appenders.stats
+      }
+    end
   end
 end

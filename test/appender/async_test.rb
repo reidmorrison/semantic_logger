@@ -40,6 +40,54 @@ module Appender
         end
       end
 
+      describe "stats" do
+        it "reports operational statistics" do
+          proxy = SemanticLogger::Appender::Async.new(appender: appender, max_queue_size: 100)
+          stats = proxy.stats
+
+          assert_equal appender.name, stats[:name]
+          assert stats[:async]
+          assert stats[:capped]
+          assert_equal 100, stats[:max_queue_size]
+          assert_equal 0, stats[:dropped]
+          assert_kind_of Integer, stats[:queue_size]
+          assert_kind_of Integer, stats[:processed]
+        ensure
+          proxy&.close
+        end
+
+        it "reports nil max_queue_size for an uncapped queue" do
+          proxy = SemanticLogger::Appender::Async.new(appender: appender, max_queue_size: -1)
+          stats = proxy.stats
+
+          refute stats[:capped]
+          assert_nil stats[:max_queue_size]
+        ensure
+          proxy&.close
+        end
+
+        it "counts dropped messages" do
+          proxy = SemanticLogger::Appender::Async.new(
+            appender:                       appender,
+            max_queue_size:                 2,
+            non_blocking:                   true,
+            dropped_message_report_seconds: 0
+          )
+
+          # Stop the worker thread so the queue is not drained while we fill it.
+          worker = proxy.instance_variable_get(:@thread)
+          worker.kill
+          worker.join
+
+          log = SemanticLogger::Log.new("Test", :info)
+          4.times { proxy.log(log) }
+
+          assert_equal 2, proxy.stats[:dropped]
+        ensure
+          proxy&.queue&.clear
+        end
+      end
+
       describe "non_blocking" do
         # Records warnings logged to the internal logger.
         let :recording_logger do

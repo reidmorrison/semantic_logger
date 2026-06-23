@@ -675,6 +675,38 @@ Inspect the queue at runtime:
 SemanticLogger.queue_size
 ~~~
 
+For a fuller operational picture, including per-appender queues, use `SemanticLogger.stats`. It
+returns a Hash describing the main pipeline and every appender, which is handy for exporting
+Semantic Logger's own health to a monitoring system such as Prometheus or statsd:
+
+~~~ruby
+SemanticLogger.stats
+# => {
+#      queue_size:     0,       # entries waiting on the main pipeline queue
+#      capped:         true,    # whether the main queue has a maximum size
+#      max_queue_size: 10_000,  # nil when uncapped
+#      thread_active:  true,    # whether the main pipeline thread is running
+#      processed:      1_532,   # cumulative entries processed since startup
+#      dropped:        0,       # cumulative entries dropped at the main queue
+#      appenders: [
+#        { name: "SemanticLogger::Appender::File", async: false },
+#        { name:           "SemanticLogger::Appender::Http",
+#          async:          true,    # this appender has its own thread and queue
+#          thread_active:  true,
+#          queue_size:     3,
+#          capped:         true,
+#          max_queue_size: 10_000,
+#          processed:      1_529,
+#          dropped:        0 }
+#      ]
+#    }
+~~~
+
+The `processed` and `dropped` counters are cumulative since process startup. Reading `stats` is
+thread-safe and adds no locking to the logging hot path. Appenders that log inline on the pipeline
+thread report only their `name` with `async: false`; appenders given their own thread (see below)
+also report their own queue size and counters.
+
 Semantic Logger also logs a warning when an entry has been waiting on the queue for too long. The
 threshold, and how often it is checked, can be inspected and tuned:
 

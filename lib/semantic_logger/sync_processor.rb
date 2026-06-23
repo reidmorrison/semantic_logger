@@ -9,7 +9,28 @@ module SemanticLogger
     end
 
     def log(...)
-      @monitor.synchronize { @appenders.log(...) }
+      @monitor.synchronize do
+        @processed_count += 1
+        @appenders.log(...)
+      end
+    end
+
+    # Returns [Hash] operational statistics for the logging pipeline.
+    #
+    # In synchronous mode there is no queue: messages are written inline on the calling
+    # thread, so queue_size is always 0 and no messages can be dropped.
+    def stats
+      @monitor.synchronize do
+        {
+          queue_size:     0,
+          capped:         false,
+          max_queue_size: nil,
+          thread_active:  false,
+          processed:      @processed_count,
+          dropped:        0,
+          appenders:      @appenders.stats
+        }
+      end
     end
 
     def flush
@@ -47,8 +68,9 @@ module SemanticLogger
     attr_reader :appenders
 
     def initialize(appenders = nil)
-      @monitor   = Monitor.new
-      @appenders = appenders || Appenders.new(self.class.logger.dup)
+      @monitor         = Monitor.new
+      @appenders       = appenders || Appenders.new(self.class.logger.dup)
+      @processed_count = 0
     end
 
     def start
