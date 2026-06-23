@@ -202,14 +202,43 @@ module SemanticLogger
     Logger.processor.close
   end
 
-  # After forking an active process call SemanticLogger.reopen to re-open
-  # any open file handles etc to resources.
+  # Re-open any open file handles etc. to resources.
+  #
+  # Called automatically in the child process after a fork (see reopen_on_fork?),
+  # and may also be called manually.
+  #
+  # To avoid reopening twice after a single fork (for example when the automatic
+  # fork hook and a framework's `after_fork` callback both fire), reopen is a no-op
+  # if it has already run in the current process. Pass `force: true` to override
+  # this guard and reopen unconditionally, for example when re-opening file handles
+  # in the same process after an external log rotation.
   #
   # Note:
   #   Not all appender's implement reopen.
   #   Check the code for each appender you are using before relying on this behavior.
-  def self.reopen
+  def self.reopen(force: false)
+    return if !force && @reopened_pid == ::Process.pid
+
     Logger.processor.reopen
+    @reopened_pid = ::Process.pid
+  end
+
+  # Whether appenders are automatically reopened in the child process after a fork.
+  #
+  # Enabled by default. A `Process._fork` hook (Ruby 3.1+) calls SemanticLogger.reopen
+  # in the child after `fork`, `Process.daemon`, `IO.popen`, `Kernel#system`, and
+  # backticks, so framework specific `after_fork` hooks (Puma, Unicorn, Resque,
+  # Spring, etc.) are no longer required.
+  def self.reopen_on_fork?
+    @reopen_on_fork != false
+  end
+
+  # Enable or disable automatic reopening of appenders after a fork.
+  #
+  #   # Opt out of the automatic behavior and manage reopen manually:
+  #   SemanticLogger.reopen_on_fork = false
+  def self.reopen_on_fork=(reopen_on_fork)
+    @reopen_on_fork = reopen_on_fork
   end
 
   # Supply a callback to be called whenever a log entry is created.

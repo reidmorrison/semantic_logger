@@ -33,9 +33,9 @@ bundle exec ruby -Itest test/logger_test.rb
 bundle exec ruby -Itest test/logger_test.rb -n /pattern/
 ```
 
-Some appender tests need MongoDB. CI runs against Ruby 2.7–3.4 with a MongoDB service on `127.0.0.1:27017` (`MONGO_HOST` env var). Use `docker compose up` (see `docker-compose.yaml` / `Dockerfile`) to run tests with a MongoDB container locally.
+Some appender tests need MongoDB. CI runs against Ruby 3.2–4.0 with a MongoDB service on `127.0.0.1:27017` (`MONGO_HOST` env var). Use `docker compose up` (see `docker-compose.yaml` / `Dockerfile`) to run tests with a MongoDB container locally.
 
-The minimum supported Ruby is 2.7, and rubocop's `TargetRubyVersion` is pinned to 2.7 — do not use syntax newer than that in `lib/`.
+The minimum supported Ruby is 3.2 (as of v5; see `gemspec` and `.rubocop.yml`'s `TargetRubyVersion`) — do not use syntax newer than that in `lib/`.
 
 ## Architecture
 
@@ -65,7 +65,7 @@ To add a new appender or formatter, add the class under the respective directory
 - **Levels** ([lib/semantic_logger/levels.rb](lib/semantic_logger/levels.rb)) — `:trace, :debug, :info, :warn, :error, :fatal`. Comparisons use a pre-computed integer `level_index` for speed; this is a recurring performance pattern, do not replace it with symbol comparisons.
 - **Tags & named tags** — thread-local context stored in `Thread.current[:semantic_logger_tags]` / `[:semantic_logger_named_tags]`. The fast paths (`SemanticLogger.tagged`, `.push_tags`, `.fast_tag`) assume clean string tags; the slower instance methods on `Base` flatten/reject-empty for Rails compatibility.
 - **`on_log` subscribers** ([lib/semantic_logger/logger.rb](lib/semantic_logger/logger.rb)) — callbacks run **inline on the calling thread** (before the queue hand-off) so they can capture request-scoped context. Keep them fast.
-- **Forking** — after `fork`, file handles and the queue must be re-created via `SemanticLogger.reopen` → `Appenders#reopen` → `Async#reopen`. `at_exit` in [lib/semantic_logger.rb](lib/semantic_logger.rb) flushes the queue on shutdown.
+- **Forking** — after `fork`, file handles and the queue must be re-created via `SemanticLogger.reopen` → `Appenders#reopen` → `Async#reopen`. As of v5 this happens automatically: a `Process._fork`/`daemon` hook ([lib/semantic_logger/core_ext/process.rb](lib/semantic_logger/core_ext/process.rb), prepended in [lib/semantic_logger.rb](lib/semantic_logger.rb)) calls `reopen` in the child unless `SemanticLogger.reopen_on_fork = false`. `reopen` is guarded to run once per process (pid-based; bypass with `reopen(force: true)`). `at_exit` in [lib/semantic_logger.rb](lib/semantic_logger.rb) flushes the queue on shutdown.
 - **`Loggable`** ([lib/semantic_logger/loggable.rb](lib/semantic_logger/loggable.rb)) — mixin giving a class both `self.logger` and instance `logger`, plus `logger_measure_method` which wraps a method (via a prepended module) to log its duration.
 
 ## Testing conventions
