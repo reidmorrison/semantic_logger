@@ -42,7 +42,7 @@ Available directives:
 
 | Directive              | Description                                              |
 |------------------------|----------------------------------------------------------|
-| `%{time}`              | Formatted timestamp.                                     |
+| `%{time}`              | Formatted timestamp. A strftime format may be supplied, e.g. `%{time:%Y-%m-%dT%H:%M:%S.%6N}`. |
 | `%{level}`             | Full level name, e.g. `debug`.                           |
 | `%{level_short}`       | Single character level, e.g. `D`.                        |
 | `%{name}`              | Logger / class name.                                     |

@@ -21,7 +21,8 @@ module SemanticLogger
     #   )
     #
     # Available directives:
-    #   time                 Formatted timestamp.
+    #   time                 Formatted timestamp. Optionally accepts a strftime
+    #                        format, e.g. time:%Y-%m-%dT%H:%M:%S.%6N.
     #   level                Full level name, e.g. "debug".
     #   level_short          Single character level, e.g. "D".
     #   name                 Logger / class name.
@@ -50,7 +51,7 @@ module SemanticLogger
       # The directives that may appear in a pattern. The value is whether the
       # directive accepts a parameter, e.g. %{named_tags:request_id}.
       DIRECTIVES = {
-        time:              false,
+        time:              true,
         level:             false,
         level_short:       false,
         name:              false,
@@ -89,6 +90,15 @@ module SemanticLogger
         # is just a walk over the pre-compiled tokens (no regex on the hot path).
         # Unknown directives raise here, at configuration time, not per log.
         @tokens = compile(pattern)
+      end
+
+      # Formatted timestamp. With a strftime format argument, e.g.
+      # %{time:%Y-%m-%dT%H:%M:%S.%6N}, the time is formatted with that string.
+      # Without an argument it uses the formatter's configured time_format.
+      def time(format = nil)
+        return super() if format.nil?
+
+        log.time.strftime(format)
       end
 
       # Full level name, e.g. "debug" (Default formatter uses the short "D").

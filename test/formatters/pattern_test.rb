@@ -38,6 +38,14 @@ module SemanticLogger
           it "interpolates the formatted time" do
             assert_equal "2017-01-14 08:32:05.375276", formatted("%{time}")
           end
+
+          it "formats with a supplied strftime argument" do
+            assert_equal "2017-01-14T08:32:05", formatted("%{time:%Y-%m-%dT%H:%M:%S}")
+          end
+
+          it "preserves colons within the strftime argument" do
+            assert_equal "08:32:05", formatted("%{time:%H:%M:%S}")
+          end
         end
 
         describe "level" do
