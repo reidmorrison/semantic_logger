@@ -249,6 +249,17 @@ class QueueProcessorTest < Minitest::Test
         assert batches = processor.appender.batches
         assert_equal 5, batches.sum(&:size)
       end
+
+      it "stops the worker thread on close" do
+        processor = start(batch: true, batch_size: 3, batch_seconds: 60)
+        thread    = processor.instance_variable_get(:@thread)
+
+        assert processor.close
+        assert_predicate appender, :closed
+        thread.join(1)
+
+        refute_predicate thread, :alive?, "worker thread must terminate after close"
+      end
     end
   end
 end

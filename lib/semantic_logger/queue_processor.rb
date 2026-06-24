@@ -84,7 +84,8 @@ module SemanticLogger
       @non_blocking                   = non_blocking
       @dropped_message_report_seconds = dropped_message_report_seconds
       @thread                         = nil
-      @signal                         = Concurrent::Event.new
+      # Only batch mode parks the worker on the signal; streaming mode never touches it.
+      @signal                         = Concurrent::Event.new if batch
       @dropped_message_count          = 0
       @dropped_message_reported_at    = Time.now
       @dropped_message_mutex          = Mutex.new
@@ -137,21 +138,24 @@ module SemanticLogger
     # When non-blocking and the queue is full, the message is dropped instead of blocking the
     # calling thread, and the count of dropped messages is reported periodically.
     def log(log)
+      enqueued = true
       if non_blocking?
         begin
           queue.push(log, true)
         rescue ThreadError
           message_dropped
-          return false
+          enqueued = false
         end
       else
         queue << log
       end
 
-      # For batches wake up the processing thread once the number of queued messages has been exceeded.
+      # For batches wake up the processing thread once the number of queued messages has been
+      # exceeded. Also wake it on a drop so it drains the full queue rather than waiting out the
+      # batch interval.
       signal.set if batch? && (queue.size >= batch_size)
 
-      true
+      enqueued
     end
 
     # Flush all queued log entries to the appender.
@@ -262,7 +266,9 @@ module SemanticLogger
           appender.batch(logs)
           @processed_count += logs.size
         end
-        messages.each { |message| process_message(message) }
+        # Stop processing once a command (e.g. :close) signals the thread to terminate.
+        break if messages.any? { |message| !process_message(message) }
+
         signal.reset unless queue.size >= batch_size
       end
     end
