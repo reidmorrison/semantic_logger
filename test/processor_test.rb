@@ -14,7 +14,7 @@ module SemanticLogger
 
       after do
         created.each do |p|
-          thread = p.instance_variable_get(:@thread)
+          thread = p.processor.instance_variable_get(:@thread)
           next unless thread
 
           thread.kill
@@ -93,7 +93,7 @@ module SemanticLogger
         end
 
         it "returns true and starts the thread when not active" do
-          thread = processor.instance_variable_get(:@thread)
+          thread = processor.processor.instance_variable_get(:@thread)
           thread.kill
           thread.join
 

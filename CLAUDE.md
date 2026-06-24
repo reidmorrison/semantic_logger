@@ -8,6 +8,8 @@ Semantic Logger is a Ruby gem: a feature-rich, multi-destination logging framewo
 
 Rails users should use the sister gem `rails_semantic_logger`, not this gem directly.
 
+**Sister gem version lockstep:** `rails_semantic_logger` is locked to the same major version of this gem (its gemspec pins `semantic_logger "~> 4.16"`, i.e. v4). Major-version changes here must be mirrored there. As of this v5 work `rails_semantic_logger` is still on v4 and has **not** yet been upgraded; the internal refactors in v5 (the `QueueProcessor` extraction and the removal of `Appender::AsyncBatch`) will need to be accounted for when upgrading it. It does not reference `AsyncBatch` directly, so the removal itself is not a blocker, but the v5 bump is a coordinated follow-up. The sister gem lives at `/Users/reidmo/src/rails_semantic_logger` (when checked out locally).
+
 ## Public interface
 
 The **only** public-facing interface is the `SemanticLogger` module itself ([lib/semantic_logger/semantic_logger.rb](lib/semantic_logger/semantic_logger.rb)): its module methods (`SemanticLogger[...]`, `add_appender`, `default_level=`, `tagged`, `silence`, `flush`, `reopen`, etc.) plus the `Loggable` mixin. Everything else (`Logger`, `Base`, `Processor`, `Subscriber`, `Appender::*`, `Formatters::*`, `Log`, ...) is **internal** and may be refactored freely, as long as the public interface keeps working.
@@ -51,7 +53,13 @@ The logging pipeline has four layers. Understanding the hand-off between them is
 
 ### Sync vs. Async layering
 
-`Appender::Async` ([lib/semantic_logger/appender/async.rb](lib/semantic_logger/appender/async.rb)) and `Appender::AsyncBatch` are **proxies** that wrap a real appender and run it in a separate thread with a queue. `Appender.factory` ([lib/semantic_logger/appender.rb](lib/semantic_logger/appender.rb)) decides at construction time whether to wrap an appender in `Async`/`AsyncBatch` (batch is automatic if the appender implements `#batch`). Note the two distinct uses of "async": the global `Processor` is one `Async` (the main pipeline thread), and an *individual* appender can additionally be made async/batched.
+`Appender::Async` ([lib/semantic_logger/appender/async.rb](lib/semantic_logger/appender/async.rb)) is a **proxy** that wraps a real appender and runs it in a separate thread with a queue, in either streaming or batched mode. `Appender.factory` ([lib/semantic_logger/appender.rb](lib/semantic_logger/appender.rb)) decides at construction time whether to wrap an appender in `Async` and whether to enable batching (batch is automatic if the appender implements `#batch` and opts in via `#batch_by_default?`, or explicit via `batch: true`). Note the two distinct uses of "async": the global `Processor` is one `Async` (the main pipeline thread), and an *individual* appender can additionally be made async/batched.
+
+The thread + queue machinery itself lives in **`SemanticLogger::QueueProcessor`** ([lib/semantic_logger/queue_processor.rb](lib/semantic_logger/queue_processor.rb)), an internal class that the proxy delegates to. It owns the worker thread, the (capped or uncapped) queue, lag checking, non-blocking drop mode, the processed/dropped counters, and **both** processing loops (streaming vs. batched, switched by `batch?`). `Async` is a thin proxy: it forwards `name`/`level`/`logger`/… to the wrapped appender and `log`/`flush`/`close`/`reopen`/`queue`/`batch?`/`batch_size`/… to its `QueueProcessor`.
+
+There used to be a separate `Appender::AsyncBatch < Async` subclass; it was removed in v5 once batching moved entirely into `QueueProcessor`. `batch: true` now returns a `SemanticLogger::Appender::Async` (with `batch?` true), not an `AsyncBatch`. If you reintroduce a batch-specific proxy, keep the single `QueueProcessor` as the engine rather than duplicating the loops.
+
+**Backward-compat bar for appenders/formatters:** anyone may have written their own `Subscriber`-derived appender or a custom formatter, so treat the appender/formatter contract as public even though the classes are nominally internal. Concretely: an appender's `#log(log)` / `#batch(logs)` / `#flush` / `#close` / `#reopen` / `#should_log?(log)` signatures, the `#batch` + `#batch_by_default?` opt-in mechanism, and a formatter's `#call(log, logger)` signature must keep working unchanged. The `Log` object handed to appenders is **not frozen** — appenders/formatters may continue to read and (historically) mutate it on the worker thread; do not introduce `Log#freeze` on the queue hand-off without a major-version change.
 
 ### Factory pattern
 

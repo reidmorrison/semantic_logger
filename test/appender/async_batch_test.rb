@@ -14,8 +14,9 @@ module Appender
           SemanticLogger.add_appender(appender: appender, batch: true)
         end
 
-        it "uses the batch proxy" do
-          assert_instance_of SemanticLogger::Appender::AsyncBatch, added_appender
+        it "uses an async proxy in batch mode" do
+          assert_instance_of SemanticLogger::Appender::Async, added_appender
+          assert_predicate added_appender, :batch?
         end
 
         it "logs messages after a flush" do
@@ -46,8 +47,9 @@ module Appender
           SemanticLogger.add_appender(appender: appender, batch: true, batch_size: 1)
         end
 
-        it "uses the batch proxy" do
-          assert_instance_of SemanticLogger::Appender::AsyncBatch, added_appender
+        it "uses an async proxy in batch mode" do
+          assert_instance_of SemanticLogger::Appender::Async, added_appender
+          assert_predicate added_appender, :batch?
         end
 
         it "logs message immediately" do

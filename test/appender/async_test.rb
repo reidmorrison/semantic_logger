@@ -75,7 +75,7 @@ module Appender
           )
 
           # Stop the worker thread so the queue is not drained while we fill it.
-          worker = proxy.instance_variable_get(:@thread)
+          worker = proxy.thread
           worker.kill
           worker.join
 
@@ -139,7 +139,7 @@ module Appender
           proxy.logger = recording_logger
 
           # Stop the worker thread so the queue is not drained while we fill it.
-          worker = proxy.instance_variable_get(:@thread)
+          worker = proxy.thread
           worker.kill
           worker.join
 

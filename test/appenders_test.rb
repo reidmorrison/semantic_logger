@@ -141,7 +141,8 @@ class AppendersTest < Minitest::Test
       it "adds batch proxy" do
         appender = appenders.add(appender: logger, batch: true)
 
-        assert_instance_of SemanticLogger::Appender::AsyncBatch, appender
+        assert_instance_of SemanticLogger::Appender::Async, appender
+        assert_predicate appender, :batch?
       end
 
       # it "adds async proxy" do

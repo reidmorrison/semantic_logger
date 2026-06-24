@@ -4,6 +4,32 @@ layout: default
 
 ## Upgrading
 
+### Upgrading to Semantic Logger v5.0
+
+#### `SemanticLogger::Appender::AsyncBatch` has been removed
+
+The internal asynchronous proxy classes have been consolidated. Batch processing now runs through
+the same `SemanticLogger::Appender::Async` proxy (backed by an internal `QueueProcessor`), so the
+separate `SemanticLogger::Appender::AsyncBatch` class no longer exists.
+
+This only affects code that referenced the class directly, which is uncommon since appenders are
+added through `SemanticLogger.add_appender`. The `batch:`, `batch_size:`, and `batch_seconds:`
+options are unchanged:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :http, url: "https://example.com/log", batch: true)
+~~~
+
+What changed:
+
+- `SemanticLogger.add_appender(..., batch: true)` now returns a `SemanticLogger::Appender::Async`
+  (with `#batch?` returning `true`) instead of a `SemanticLogger::Appender::AsyncBatch`.
+- Referencing the constant `SemanticLogger::Appender::AsyncBatch` now raises `NameError`.
+
+If you have a custom appender or test asserting on the proxy class, change
+`instance_of?`/`is_a?(SemanticLogger::Appender::AsyncBatch)` checks to
+`SemanticLogger::Appender::Async` and, if needed, check `appender.batch?`.
+
 ### Upgrading to Semantic Logger v4.18
 
 #### Async queue is now bounded by default

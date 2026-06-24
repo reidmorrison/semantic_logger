@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+- Consolidate the asynchronous appender proxies: the worker thread and queue now live in an
+  internal `SemanticLogger::QueueProcessor`, and `SemanticLogger::Appender::AsyncBatch` has been
+  removed. `batch: true` now returns a `SemanticLogger::Appender::Async` (with `#batch?` true).
+  See the v5.0 upgrading guide.
 - Add per-logger (child logger) tags: calling `logger.tagged(...)` (or `with_tags`) without a
   block now returns a new logger instance that permanently carries the supplied positional and/or
   named tags, scoped to that logger only. Resolves #165. Combines the approaches from #301 (theocodes)
