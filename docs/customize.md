@@ -48,12 +48,15 @@ Available directives:
 | `%{name}`              | Logger / class name.                                     |
 | `%{message}`           | Log message.                                             |
 | `%{payload}`           | Payload rendered as a string.                            |
-| `%{exception}`         | Exception class, message, and backtrace.                 |
+| `%{exception_class}`   | Class of the logged exception, e.g. `RuntimeError`.      |
+| `%{exception_message}` | Message of the logged exception.                         |
+| `%{backtrace}`         | Backtrace of the logged exception.                       |
 | `%{duration}`          | Human readable duration, e.g. `1.2ms`.                   |
 | `%{duration_ms}`       | Duration in milliseconds (numeric).                      |
 | `%{thread_name}`       | Name of the thread that logged the message.              |
 | `%{pid}`               | Process id.                                              |
-| `%{file_name_and_line}`| Ruby file name and line number, e.g. `app.rb:42`.        |
+| `%{file_name}`         | Ruby file name that logged the message, e.g. `app.rb`.   |
+| `%{line}`              | Line number within the Ruby file, e.g. `42`.             |
 | `%{tags}`              | Tags, comma separated.                                   |
 | `%{named_tags}`        | All named tags. One tag with `%{named_tags:request_id}`. |
 | `%{host}`              | Host name.                                               |

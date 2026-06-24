@@ -27,12 +27,15 @@ module SemanticLogger
     #   name                 Logger / class name.
     #   message              Log message.
     #   payload              Payload rendered as a string.
-    #   exception            Exception class, message, and backtrace.
+    #   exception_class      Class of the logged exception, e.g. "RuntimeError".
+    #   exception_message    Message of the logged exception.
+    #   backtrace            Backtrace of the logged exception.
     #   duration             Human readable duration, e.g. "1.2ms".
     #   duration_ms          Duration in milliseconds (numeric).
     #   thread_name          Name of the thread that logged the message.
     #   pid                  Process id.
-    #   file_name_and_line   Ruby file name and line number, e.g. "app.rb:42".
+    #   file_name            Ruby file name that logged the message, e.g. "app.rb".
+    #   line                 Line number within the Ruby file, e.g. 42.
     #   tags                 Tags, comma separated.
     #   named_tags           All named tags, or one tag with named_tags:key.
     #   host                 Host name.
@@ -47,23 +50,26 @@ module SemanticLogger
       # The directives that may appear in a pattern. The value is whether the
       # directive accepts a parameter, e.g. %{named_tags:request_id}.
       DIRECTIVES = {
-        time:               false,
-        level:              false,
-        level_short:        false,
-        name:               false,
-        message:            false,
-        payload:            false,
-        exception:          false,
-        duration:           false,
-        duration_ms:        false,
-        thread_name:        false,
-        pid:                false,
-        file_name_and_line: false,
-        tags:               false,
-        named_tags:         true,
-        host:               false,
-        application:        false,
-        environment:        false
+        time:              false,
+        level:             false,
+        level_short:       false,
+        name:              false,
+        message:           false,
+        payload:           false,
+        exception_class:   false,
+        exception_message: false,
+        backtrace:         false,
+        duration:          false,
+        duration_ms:       false,
+        thread_name:       false,
+        pid:               false,
+        file_name:         false,
+        line:              false,
+        tags:              false,
+        named_tags:        true,
+        host:              false,
+        application:       false,
+        environment:       false
       }.freeze
 
       # A single interpolated directive within a compiled pattern.
@@ -95,9 +101,9 @@ module SemanticLogger
         log.level_to_s
       end
 
-      # Raw log message (without the "-- " prefix the Default formatter adds).
+      # Log message (without the "-- " prefix the Default formatter adds).
       def message
-        log.message
+        escape_control_characters(log.message)
       end
 
       # Raw payload rendered as a string.
@@ -105,11 +111,19 @@ module SemanticLogger
         log.payload_to_s
       end
 
-      # Exception class, message, and backtrace.
-      def exception
-        return unless log.exception
+      # Class of the logged exception, e.g. "RuntimeError".
+      def exception_class
+        log.exception&.class
+      end
 
-        "#{log.exception.class}: #{log.exception.message}\n#{log.backtrace_to_s}"
+      # Message of the logged exception.
+      def exception_message
+        escape_control_characters(log.exception&.message)
+      end
+
+      # Backtrace of the logged exception.
+      def backtrace
+        log.backtrace_to_s if log.exception
       end
 
       # Human readable duration (without the Default formatter's surrounding parentheses).
@@ -122,9 +136,21 @@ module SemanticLogger
         log.duration
       end
 
+      # Name of the Ruby file that logged the message, e.g. "app.rb".
+      def file_name
+        log.file_name_and_line(true)&.first
+      end
+
+      # Line number within the Ruby file that logged the message.
+      def line
+        log.file_name_and_line(true)&.last
+      end
+
       # Tags joined by a comma (without the Default formatter's surrounding brackets).
       def tags
-        log.tags.join(", ") if log.tags && !log.tags.empty?
+        return if log.tags.nil? || log.tags.empty?
+
+        log.tags.map { |tag| escape_control_characters(tag) }.join(", ")
       end
 
       # With a key: the value of a single named tag, e.g. %{named_tags:request_id}.
@@ -134,9 +160,9 @@ module SemanticLogger
         return if named.nil? || named.empty?
 
         if key
-          named[key.to_sym] || named[key.to_s]
+          escape_control_characters(named[key.to_sym] || named[key.to_s])
         else
-          named.map { |name, value| "#{name}: #{value}" }.join(", ")
+          named.map { |name, value| "#{escape_control_characters(name)}: #{escape_control_characters(value)}" }.join(", ")
         end
       end
 

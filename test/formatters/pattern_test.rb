@@ -83,18 +83,31 @@ module SemanticLogger
         end
 
         describe "exception" do
-          it "interpolates the exception class and message" do
+          let(:log_with_exception) do
             begin
               raise "Oh no"
             rescue StandardError => e
               log.exception = e
             end
+            log
+          end
 
-            assert_includes formatted("%{exception}"), "RuntimeError: Oh no"
+          it "interpolates the exception class" do
+            assert_equal "RuntimeError", formatted("%{exception_class}", log_with_exception)
+          end
+
+          it "interpolates the exception message" do
+            assert_equal "Oh no", formatted("%{exception_message}", log_with_exception)
+          end
+
+          it "interpolates the exception backtrace" do
+            assert_includes formatted("%{backtrace}", log_with_exception), "pattern_test.rb"
           end
 
           it "is blank when there is no exception" do
-            assert_equal "", formatted("%{exception}")
+            assert_equal "", formatted("%{exception_class}")
+            assert_equal "", formatted("%{exception_message}")
+            assert_equal "", formatted("%{backtrace}")
           end
         end
 
@@ -132,15 +145,27 @@ module SemanticLogger
           end
         end
 
-        describe "file_name_and_line" do
-          it "interpolates the file name and line from the backtrace" do
+        describe "file_name" do
+          it "interpolates the file name from the backtrace" do
             log.backtrace = backtrace
 
-            assert_equal "pattern_test.rb:42", formatted("%{file_name_and_line}")
+            assert_equal "pattern_test.rb", formatted("%{file_name}")
           end
 
           it "is blank without a backtrace" do
-            assert_equal "", formatted("%{file_name_and_line}")
+            assert_equal "", formatted("%{file_name}")
+          end
+        end
+
+        describe "line" do
+          it "interpolates the line number from the backtrace" do
+            log.backtrace = backtrace
+
+            assert_equal "42", formatted("%{line}")
+          end
+
+          it "is blank without a backtrace" do
+            assert_equal "", formatted("%{line}")
           end
         end
 
@@ -193,6 +218,53 @@ module SemanticLogger
         describe "environment" do
           it "interpolates the appender environment" do
             assert_equal "myenv", formatted("%{environment}", log, logger)
+          end
+        end
+
+        describe "escape_control_chars" do
+          def escaped(pattern, log_entry = log)
+            Pattern.new(pattern: pattern, escape_control_chars: true).call(log_entry, nil)
+          end
+
+          it "preserves control characters by default" do
+            log.message = "line1\nline2"
+
+            assert_equal "line1\nline2", formatted("%{message}")
+          end
+
+          it "escapes control characters in the message when enabled" do
+            log.message = "line1\nline2"
+
+            assert_equal "line1\\nline2", escaped("%{message}")
+          end
+
+          it "escapes the ANSI escape in the message when enabled" do
+            log.message = "\e[31mred\e[0m"
+
+            assert_equal "\\e[31mred\\e[0m", escaped("%{message}")
+          end
+
+          it "escapes control characters in tags when enabled" do
+            log.tags = ["safe", "ev\nil"] # rubocop:disable Style/WordArray -- the second tag contains a newline
+
+            assert_equal "safe, ev\\nil", escaped("%{tags}")
+          end
+
+          it "escapes control characters in named tags when enabled" do
+            log.named_tags = {user: "ev\nil"}
+
+            assert_equal "user: ev\\nil", escaped("%{named_tags}")
+            assert_equal "ev\\nil", escaped("%{named_tags:user}")
+          end
+
+          it "escapes control characters in the exception message when enabled" do
+            begin
+              raise "first\nsecond"
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_equal "first\\nsecond", escaped("%{exception_message}")
           end
         end
 
