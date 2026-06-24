@@ -6,6 +6,14 @@ layout: default
 
 ### Upgrading to Semantic Logger v5.0
 
+#### Minimum Ruby version is now 3.2
+
+Semantic Logger v5 requires Ruby 3.2 or later. Earlier Ruby versions are end-of-life and are no
+longer supported or tested.
+
+If you are on an older Ruby, upgrade Ruby before upgrading Semantic Logger, or stay on the v4.x
+series.
+
 #### `SemanticLogger::Appender::AsyncBatch` has been removed
 
 The internal asynchronous proxy classes have been consolidated. Batch processing now runs through
@@ -29,6 +37,68 @@ What changed:
 If you have a custom appender or test asserting on the proxy class, change
 `instance_of?`/`is_a?(SemanticLogger::Appender::AsyncBatch)` checks to
 `SemanticLogger::Appender::Async` and, if needed, check `appender.batch?`.
+
+#### Appenders are reopened automatically after fork
+
+Previously, applications that fork (Puma, Unicorn, Spring, Resque, `Process.daemon`, etc.) had to
+call `SemanticLogger.reopen` themselves in an after-fork hook, otherwise the child shared the
+parent's file handles and background thread.
+
+In v5 this happens automatically: a `Process._fork` / `Process.daemon` hook calls
+`SemanticLogger.reopen` in the child process. The call is guarded to run once per process.
+
+For most applications you can now **remove** the manual reopen hook, for example:
+
+~~~ruby
+# No longer needed in v5 — handled automatically:
+before_fork { SemanticLogger.flush }
+after_fork  { SemanticLogger.reopen }
+~~~
+
+If you have a reason to manage this yourself (for example you reopen at a very specific point in
+your boot sequence), disable the automatic behaviour:
+
+~~~ruby
+SemanticLogger.reopen_on_fork = false
+~~~
+
+#### Recommended: enable logger caching
+
+By default `SemanticLogger[SomeClass]` returns a **new** `Logger` instance on every call. This means
+that if one part of the code obtains a logger and later changes its `level` (or filter), other
+holders of "the same" logger do not see the change, because they hold different instances.
+
+v5 adds opt-in caching so that a `Class` or `Module` maps to a single shared `Logger` instance:
+
+~~~ruby
+SemanticLogger.cache_loggers = true
+~~~
+
+With caching enabled:
+
+- `SemanticLogger[MyClass]` and the `Loggable` mixin's `MyClass.logger` return the **same** instance.
+- Changing that logger's level or filter is visible to every holder.
+- Strings (`SemanticLogger["Name"]`) always get a fresh instance, and anonymous classes (no `name`)
+  are never cached.
+
+Enabling caching is recommended for most applications. It is opt-in (default `false`) to preserve
+existing behaviour for code that relied on getting an independent logger per call. If you need to
+discard cached loggers (for example in tests, or after redefining a class), call
+`SemanticLogger.clear_logger_cache`.
+
+#### Control characters are escaped in Syslog output
+
+To prevent log-injection via embedded control characters (newlines, escape sequences, etc.), the
+Syslog formatter now escapes control characters in records by default. If you relied on raw control
+characters reaching syslog, this output now differs. The text formatters (default, color) also gain
+an opt-in `escape_control_characters` option (default `false`) for the same protection. See the
+[Security](security.html) page for details.
+
+#### `Formatters::Base#cleanse` renamed
+
+The internal `SemanticLogger::Formatters::Base#cleanse` method was renamed to
+`#escape_control_characters`. This only affects custom formatters or subclasses that called the old
+method name directly; update them to call `#escape_control_characters`.
 
 ### Upgrading to Semantic Logger v4.18
 

@@ -3,22 +3,72 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [unreleased]
+## [5.0.0 unreleased]
 
+### Breaking changes
+
+See the [v5.0 upgrading guide](https://logger.rocketjob.io/upgrading.html) for migration details.
+
+- Ruby 3.2 is now the minimum supported runtime. Earlier versions are end-of-life and are no
+  longer tested.
 - Consolidate the asynchronous appender proxies: the worker thread and queue now live in an
   internal `SemanticLogger::QueueProcessor`, and `SemanticLogger::Appender::AsyncBatch` has been
   removed. `batch: true` now returns a `SemanticLogger::Appender::Async` (with `#batch?` true).
-  See the v5.0 upgrading guide.
+- Appenders are now reopened automatically in the child process after `fork` (and `Process.daemon`).
+  A `Process._fork` hook calls `SemanticLogger.reopen` for you, so most applications no longer need
+  an `after_fork`/`after_worker_boot` hook. Disable with `SemanticLogger.reopen_on_fork = false`.
+  Resolves #338.
+- Rename `SemanticLogger::Formatters::Base#cleanse` to `#escape_control_characters`. Custom
+  formatters or subclasses that called the old method name must be updated.
+- Syslog records now escape control characters by default to prevent log injection. Resolves #190.
+
+### New features
+
+- Add opt-in logger caching: `SemanticLogger.cache_loggers = true` makes `SemanticLogger[Class]`
+  (and the `Loggable` mixin) return a single shared `Logger` instance per class, so a later
+  `level=`/filter change is visible to every holder of that logger. Disabled by default; strings
+  and anonymous classes are never cached. Use `SemanticLogger.clear_logger_cache` to discard the
+  cache.
+- Add per-logger (child logger) tags: calling `logger.tagged(...)` (or `with_tags`) without a
+  block now returns a new logger instance that permanently carries the supplied positional and/or
+  named tags, scoped to that logger only. Resolves #165. Combines the approaches from #301 (theocodes)
+  and #321 (Fire-Dragon-DoL).
+- Add a configuration-driven Pattern formatter (`:pattern`) that renders log layouts from a
+  format string of directives. Resolves #78.
+- Add an ECS (Elastic Common Schema) formatter (`:ecs`). Resolves #295.
+- Add an OpenSearch appender (`appender: :opensearch`), sharing an Elasticsearch base. Resolves #189.
+- Add batch support to the HTTP appender (`batch: true`), posting an array of log events per
+  request. Resolves #278.
+- Allow separate stdout and stderr console appenders so warnings and errors can be routed to
+  stderr independently. Resolves #203.
+- Add non-blocking (drop) mode for async appenders: `non_blocking: true` drops messages instead of
+  blocking the calling thread once a capped queue is full, reporting dropped counts at most once
+  every `dropped_message_report_seconds` (default `30`).
 - Add retry-with-backoff for the asynchronous worker thread. When an appender raises while
   processing messages, the thread restarts with an increasing back-off and stops after
   `async_max_retries` (default `100`) consecutive failures instead of retrying forever. The
   counter resets after any message is processed successfully. Set `async_max_retries: -1` to
   restore the previous behaviour of retrying indefinitely.
-- Add per-logger (child logger) tags: calling `logger.tagged(...)` (or `with_tags`) without a
-  block now returns a new logger instance that permanently carries the supplied positional and/or
-  named tags, scoped to that logger only. Resolves #165. Combines the approaches from #301 (theocodes)
-  and #321 (Fire-Dragon-DoL).
-- Add upgrading guide to docs site covering v4.0 through v4.18, replace README upgrade sections with a link to the new page.
+- Add `SemanticLogger.stats` for operational metrics about the async queues (processed/dropped
+  counts, queue depth). Distinct from application metrics. Resolves #164.
+- Add an opt-in `escape_control_characters` option to the text formatters (default, color) to
+  escape control characters in formatted output.
+- Add a `permissions:` option to the file appender to restrict log file permissions on creation
+  and on existing files.
+
+### Fixes
+
+- Enforce UTF-8 encoding on JSON (and JSON-based) output to avoid `Encoding::UndefinedConversionError`
+  on invalid byte sequences. Resolves #180.
+- Fix the Fluentd formatter so `process_info` (pid, thread name) is excluded correctly. Resolves #190.
+- Fix `ArgumentError` in `CaptureLogEvents#batch`. Resolves #327.
+- Harden constant resolution and payload assignment against untrusted input.
+
+### Documentation
+
+- Add a Security documentation page.
+- Add upgrading guide to docs site covering v4.0 through v5.0, replace README upgrade sections with
+  a link to the new page.
 
 ## [4.18.0]
 
