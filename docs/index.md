@@ -229,6 +229,13 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+To restore the previous behaviour of retrying indefinitely (never giving up), set
+`async_max_retries: -1`. The back-off still applies and still resets after a successful message:
+
+~~~ruby
+SemanticLogger.add_appender(file_name: "production.log", async: true, async_max_retries: -1)
+~~~
+
 ### Ruby Support
 
 For the complete list of supported Ruby versions, see

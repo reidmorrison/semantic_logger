@@ -188,6 +188,27 @@ class QueueProcessorTest < Minitest::Test
         assert(messages.any? { |m| m.include?("Stopping after 2 failed retries") })
       end
 
+      it "retries indefinitely when async_max_retries is -1" do
+        processor = build(async_max_retries: -1)
+        attempts  = 0
+        # Raise on the first 5 attempts, then return normally to end processing.
+        flaky     = lambda do
+          attempts += 1
+          raise "boom" if attempts <= 5
+        end
+
+        processor.stub(:sleep, nil) do
+          processor.stub(:process_messages, flaky) do
+            processor.send(:process)
+          end
+        end
+
+        assert_equal 6, attempts
+        messages = internal_logger.events.map(&:message)
+
+        refute(messages.any? { |m| m.include?("Stopping after") }, "must not give up when retries are unlimited")
+      end
+
       it "sleeps with an increasing back-off between retries" do
         processor = build(async_max_retries: 3)
         slept     = []

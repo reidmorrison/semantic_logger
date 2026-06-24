@@ -80,6 +80,7 @@ module SemanticLogger
       #     Maximum number of consecutive times to restart the worker thread (with a back-off)
       #     after it raises an exception while processing messages, before giving up and stopping
       #     the thread. The counter resets after any message is processed successfully.
+      #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour).
       #     Default: 100
       def initialize(appender:, **args)
         @appender  = appender

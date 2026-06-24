@@ -72,6 +72,8 @@ module SemanticLogger
     #     (1s, then 2s, ...) as a back-off. Once this many consecutive retries are exhausted the
     #     thread stops instead of restarting. The counter resets to zero whenever a message is
     #     processed successfully.
+    #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour). The back-off
+    #         still applies, and still resets after any successful message.
     #     Default: 100
     def initialize(appender:,
                    max_queue_size: 10_000,
@@ -219,9 +221,10 @@ module SemanticLogger
       begin
         batch? ? process_messages_in_batches : process_messages
       rescue StandardError => e
-        if retry_count < async_max_retries
+        if async_max_retries == -1 || retry_count < async_max_retries
           @retry_count += 1
-          safe_log(:warn, "Async: Restarting due to exception, retry #{retry_count} of #{async_max_retries}, sleeping #{retry_count}s", e)
+          limit = async_max_retries == -1 ? "unlimited" : async_max_retries
+          safe_log(:warn, "Async: Restarting due to exception, retry #{retry_count} of #{limit}, sleeping #{retry_count}s", e)
           sleep(retry_count)
           retry
         else
