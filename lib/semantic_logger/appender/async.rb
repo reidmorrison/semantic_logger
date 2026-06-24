@@ -75,6 +75,13 @@ module SemanticLogger
       #     When non_blocking is enabled, log the count of dropped messages to the internal logger
       #     at most once every this number of seconds.
       #     Default: 30
+      #
+      #   async_max_retries: [Integer]
+      #     Maximum number of consecutive times to restart the worker thread (with a back-off)
+      #     after it raises an exception while processing messages, before giving up and stopping
+      #     the thread. The counter resets after any message is processed successfully.
+      #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour).
+      #     Default: 100
       def initialize(appender:, **args)
         @appender  = appender
         @processor = QueueProcessor.start(appender: appender, **args)

@@ -9,6 +9,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   internal `SemanticLogger::QueueProcessor`, and `SemanticLogger::Appender::AsyncBatch` has been
   removed. `batch: true` now returns a `SemanticLogger::Appender::Async` (with `#batch?` true).
   See the v5.0 upgrading guide.
+- Add retry-with-backoff for the asynchronous worker thread. When an appender raises while
+  processing messages, the thread restarts with an increasing back-off and stops after
+  `async_max_retries` (default `100`) consecutive failures instead of retrying forever. The
+  counter resets after any message is processed successfully. Set `async_max_retries: -1` to
+  restore the previous behaviour of retrying indefinitely.
 - Add per-logger (child logger) tags: calling `logger.tagged(...)` (or `with_tags`) without a
   block now returns a new logger instance that permanently carries the supplied positional and/or
   named tags, scoped to that logger only. Resolves #165. Combines the approaches from #301 (theocodes)

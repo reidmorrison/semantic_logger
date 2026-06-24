@@ -210,6 +210,32 @@ SemanticLogger.add_appender(
 `non_blocking` only applies to a capped queue; an uncapped queue (`max_queue_size: -1`) never
 blocks and never drops, but can grow without bound.
 
+### Worker thread retries
+
+If an appender raises while the background worker thread is writing a message, the thread logs the
+error and restarts so that a transient failure (for example a brief network blip for a remote
+appender) does not permanently stop logging. Each restart first sleeps with an increasing back-off
+(1 second, then 2, ...), and the count resets as soon as a message is processed successfully.
+
+After `async_max_retries` (default `100`) consecutive failed restarts the worker thread stops
+instead of restarting, to avoid spinning forever on a persistent failure:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:          :http,
+  url:               "https://example.com/log",
+  async:             true,
+  async_max_retries: 20
+)
+~~~
+
+To restore the previous behaviour of retrying indefinitely (never giving up), set
+`async_max_retries: -1`. The back-off still applies and still resets after a successful message:
+
+~~~ruby
+SemanticLogger.add_appender(file_name: "production.log", async: true, async_max_retries: -1)
+~~~
+
 ### Ruby Support
 
 For the complete list of supported Ruby versions, see
