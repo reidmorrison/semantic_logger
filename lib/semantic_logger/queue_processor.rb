@@ -14,7 +14,7 @@ module SemanticLogger
     attr_accessor :lag_check_interval, :lag_threshold_s, :dropped_message_report_seconds,
                   :batch_size, :batch_seconds
     attr_reader :appender, :queue, :max_queue_size, :non_blocking, :signal,
-                :processed_count, :dropped_count
+                :processed_count, :dropped_count, :async_max_retries, :retry_count
 
     # Create a new processor and start its worker thread.
     def self.start(**args)
@@ -65,6 +65,14 @@ module SemanticLogger
     #     When non_blocking is enabled, log the count of dropped messages to the internal logger
     #     at most once every this number of seconds.
     #     Default: 30
+    #
+    #   async_max_retries: [Integer]
+    #     Maximum number of consecutive times to restart the worker thread after it raises an
+    #     exception while processing messages. Each restart first sleeps for `retry_count` seconds
+    #     (1s, then 2s, ...) as a back-off. Once this many consecutive retries are exhausted the
+    #     thread stops instead of restarting. The counter resets to zero whenever a message is
+    #     processed successfully.
+    #     Default: 100
     def initialize(appender:,
                    max_queue_size: 10_000,
                    lag_check_interval: 1_000,
@@ -73,7 +81,8 @@ module SemanticLogger
                    batch_size: 300,
                    batch_seconds: 5,
                    non_blocking: false,
-                   dropped_message_report_seconds: 30)
+                   dropped_message_report_seconds: 30,
+                   async_max_retries: 100)
       @appender                       = appender
       @max_queue_size                 = max_queue_size
       @lag_check_interval             = lag_check_interval
@@ -83,6 +92,8 @@ module SemanticLogger
       @batch_seconds                  = batch_seconds
       @non_blocking                   = non_blocking
       @dropped_message_report_seconds = dropped_message_report_seconds
+      @async_max_retries              = async_max_retries
+      @retry_count                    = 0
       @thread                         = nil
       # Only batch mode parks the worker on the signal; streaming mode never touches it.
       @signal                         = Concurrent::Event.new if batch
@@ -109,7 +120,7 @@ module SemanticLogger
     def thread
       return @thread if @thread&.alive?
 
-      @thread = Thread.new { process }
+      @thread = spawn_worker
     end
 
     # Returns [true|false] whether the worker thread is running.
@@ -177,10 +188,18 @@ module SemanticLogger
       create_queue
 
       @thread&.kill if @thread&.alive?
-      @thread = Thread.new { process }
+      @thread = spawn_worker
     end
 
     private
+
+    # Start the worker thread, naming it after the internal logger.
+    def spawn_worker
+      Thread.new do
+        Thread.current.name = logger.name
+        process
+      end
+    end
 
     def create_queue
       if max_queue_size == -1
@@ -196,13 +215,18 @@ module SemanticLogger
     def process
       # This thread is designed to never go down unless the main thread terminates
       # or the appender is closed.
-      Thread.current.name = logger.name
       logger.trace "Async: Appender thread active"
       begin
         batch? ? process_messages_in_batches : process_messages
       rescue StandardError => e
-        safe_log(:error, "Async: Restarting due to exception", e)
-        retry
+        if retry_count < async_max_retries
+          @retry_count += 1
+          safe_log(:warn, "Async: Restarting due to exception, retry #{retry_count} of #{async_max_retries}, sleeping #{retry_count}s", e)
+          sleep(retry_count)
+          retry
+        else
+          safe_log(:error, "Async: Stopping after #{retry_count} failed retries", e)
+        end
       rescue Exception => e
         safe_log(:error, "Async: Stopping due to fatal exception", e)
       ensure
@@ -226,6 +250,7 @@ module SemanticLogger
         if message.is_a?(Log)
           appender.log(message)
           @processed_count += 1
+          @retry_count = 0 unless retry_count.zero?
           count += 1
           # Check every few log messages whether this appender thread is falling behind
           if count > lag_check_interval
@@ -265,6 +290,7 @@ module SemanticLogger
         if logs.size.positive?
           appender.batch(logs)
           @processed_count += logs.size
+          @retry_count = 0 unless retry_count.zero?
         end
         # Stop processing once a command (e.g. :close) signals the thread to terminate.
         break if messages.any? { |message| !process_message(message) }

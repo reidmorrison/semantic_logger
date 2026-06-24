@@ -29,6 +29,9 @@ class QueueProcessorTest < Minitest::Test
     end
   end
 
+  # A non-StandardError exception, used to exercise the fatal (non-retryable) path in #process.
+  class FatalError < Exception; end # rubocop:disable Lint/InheritException
+
   describe SemanticLogger::QueueProcessor do
     let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
@@ -157,6 +160,75 @@ class QueueProcessorTest < Minitest::Test
         processor.send(:process_messages)
 
         assert_equal 1, processor.processed_count
+      end
+    end
+
+    describe "#process retry-with-backoff" do
+      it "retries on StandardError up to async_max_retries, then stops" do
+        processor = build(async_max_retries: 2)
+        attempts  = 0
+        boom      = lambda do
+          attempts += 1
+          raise "boom"
+        end
+
+        processor.stub(:sleep, nil) do
+          processor.stub(:process_messages, boom) do
+            processor.send(:process)
+          end
+        end
+
+        assert_equal 3, attempts, "expected initial attempt + 2 retries"
+        assert_equal 2, processor.retry_count
+
+        messages = internal_logger.events.map(&:message)
+        retries  = messages.count { |m| m.include?("Restarting due to exception, retry") }
+
+        assert_equal 2, retries
+        assert(messages.any? { |m| m.include?("Stopping after 2 failed retries") })
+      end
+
+      it "sleeps with an increasing back-off between retries" do
+        processor = build(async_max_retries: 3)
+        slept     = []
+
+        processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+          processor.stub(:process_messages, -> { raise "boom" }) do
+            processor.send(:process)
+          end
+        end
+
+        assert_equal [1, 2, 3], slept
+      end
+
+      it "resets the retry count after a message is processed successfully" do
+        processor = build(async_max_retries: 5)
+        processor.instance_variable_set(:@retry_count, 3)
+        processor.queue << new_log
+        processor.queue << {command: :close}
+
+        processor.send(:process_messages)
+
+        assert_equal 0, processor.retry_count
+      end
+
+      it "stops immediately, without retrying, on a non-StandardError exception" do
+        processor = build(async_max_retries: 5)
+        attempts  = 0
+        fatal     = lambda do
+          attempts += 1
+          raise FatalError, "fatal"
+        end
+
+        processor.stub(:sleep, nil) do
+          processor.stub(:process_messages, fatal) do
+            processor.send(:process)
+          end
+        end
+
+        assert_equal 1, attempts
+        assert_equal 0, processor.retry_count
+        assert(internal_logger.events.map(&:message).any? { |m| m.include?("fatal exception") })
       end
     end
 
