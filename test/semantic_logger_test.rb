@@ -1,8 +1,81 @@
 require_relative "test_helper"
 
+# A named class used as a logger cache key in the ".[]" tests.
+class CachedSample
+  include SemanticLogger::Loggable
+end
+
 class SemanticLoggerTest < Minitest::Test
   describe SemanticLogger do
     let(:logger) { SemanticLogger["TestLogger"] }
+
+    describe ".[]" do
+      after do
+        SemanticLogger.cache_loggers = false
+      end
+
+      it "returns a new instance for a string" do
+        refute_same SemanticLogger["MyClass"], SemanticLogger["MyClass"]
+      end
+
+      it "returns a new instance for a class when caching is disabled" do
+        refute_predicate SemanticLogger, :cache_loggers?
+        refute_same SemanticLogger[CachedSample], SemanticLogger[CachedSample]
+      end
+
+      describe "with caching enabled" do
+        before do
+          SemanticLogger.cache_loggers = true
+        end
+
+        it "returns the same instance for a class" do
+          assert_same SemanticLogger[CachedSample], SemanticLogger[CachedSample]
+        end
+
+        it "still returns a new instance for a string" do
+          refute_same SemanticLogger["MyClass"], SemanticLogger["MyClass"]
+        end
+
+        it "does not cache anonymous classes" do
+          anonymous = Class.new
+
+          refute_same SemanticLogger[anonymous], SemanticLogger[anonymous]
+        end
+
+        it "shares level changes across holders of the cached logger" do
+          one = SemanticLogger[CachedSample]
+          two = SemanticLogger[CachedSample]
+          one.level = :trace
+
+          assert_equal :trace, two.level
+        ensure
+          one&.level = nil
+        end
+
+        it "builds fresh instances after the cache is cleared" do
+          first = SemanticLogger[CachedSample]
+          SemanticLogger.clear_logger_cache
+
+          refute_same first, SemanticLogger[CachedSample]
+        end
+
+        it "shares the cached logger with the Loggable mixin" do
+          CachedSample.instance_variable_set(:@semantic_logger, nil)
+
+          assert_same SemanticLogger[CachedSample], CachedSample.logger
+        ensure
+          CachedSample.instance_variable_set(:@semantic_logger, nil)
+        end
+      end
+
+      it "clears the cache and returns fresh instances after disabling" do
+        SemanticLogger.cache_loggers = true
+        cached = SemanticLogger[CachedSample]
+        SemanticLogger.cache_loggers = false
+
+        refute_same cached, SemanticLogger[CachedSample]
+      end
+    end
 
     describe ".add_appender" do
       before do

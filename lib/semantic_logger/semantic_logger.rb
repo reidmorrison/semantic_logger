@@ -4,9 +4,42 @@ module SemanticLogger
   # Logging levels in order of most detailed to most severe
   LEVELS = Levels::LEVELS
 
-  # Return a logger for the supplied class or class_name
+  # Return a logger for the supplied class or class_name.
+  #
+  # When `SemanticLogger.cache_loggers` is enabled (opt-in, default off) and a
+  # Class or Module is supplied, the same Logger instance is returned for every
+  # call with that class. This makes it possible to obtain a logger once and
+  # later change its level (or filter) and have every holder of that logger see
+  # the change.
+  #
+  # A String is always given its own new Logger instance, even when caching is
+  # enabled: callers that pass a string typically want an independent logger
+  # (for example to set a different level per call site). Anonymous classes
+  # (those with no `name`) are never cached, to avoid pinning short-lived
+  # dynamically created classes in memory.
   def self.[](klass)
-    Logger.new(klass)
+    return Logger.new(klass) if !@cache_loggers || klass.is_a?(String) || klass.name.nil?
+
+    logger_cache.compute_if_absent(klass) { Logger.new(klass) }
+  end
+
+  # Whether `SemanticLogger[Class]` returns a shared, cached Logger instance per
+  # class. Disabled by default. Strings are never cached (see #[]).
+  def self.cache_loggers=(cache_loggers)
+    @cache_loggers = cache_loggers
+    clear_logger_cache unless cache_loggers
+  end
+
+  # Returns whether logger caching is enabled.
+  def self.cache_loggers?
+    @cache_loggers
+  end
+
+  # Discard all cached loggers so that subsequent `SemanticLogger[Class]` calls
+  # build fresh instances. Primarily useful in tests, or after redefining a
+  # class that was previously cached.
+  def self.clear_logger_cache
+    @logger_cache&.clear
   end
 
   # Sets the global default log level
@@ -566,6 +599,14 @@ module SemanticLogger
   @backtrace_level       = :error
   @backtrace_level_index = Levels.index(@backtrace_level)
   @sync                  = false
+  @cache_loggers         = false
+  @logger_cache          = nil
+
+  # Lazily initialized thread-safe cache of one Logger per Class/Module.
+  def self.logger_cache
+    @logger_cache ||= Concurrent::Map.new
+  end
+  private_class_method :logger_cache
 
   # @formatter:off
   module Metric

@@ -83,6 +83,38 @@ All logger instances forward their log messages to the global Appender Thread th
 does the actual logging to each appender, see [Appenders](appenders.html) for a list of available
 Appenders.
 
+#### Caching loggers
+
+By default `SemanticLogger[...]` returns a brand new logger instance on every
+call. Enable logger caching to have a single shared logger returned per class:
+
+~~~ruby
+SemanticLogger.cache_loggers = true
+
+SemanticLogger[MyClass].equal?(SemanticLogger[MyClass]) # => true
+~~~
+
+This makes it possible to obtain a logger once and later change its level (or
+filter) so that every holder of that logger sees the change:
+
+~~~ruby
+SemanticLogger[MyClass].level = :debug
+~~~
+
+Notes:
+
+- Caching is **opt-in** and disabled by default.
+- Only Classes and Modules are cached. A String always returns a new instance,
+  since string call sites commonly want an independent logger (for example to
+  set a different level per call site).
+- Anonymous classes (those without a name) are never cached.
+- With caching enabled, `SemanticLogger[MyClass]` and the
+  [`SemanticLogger::Loggable`](#using-the-semanticloggerloggable-mixin) mixin's
+  `MyClass.logger` return the same instance.
+- Setting `SemanticLogger.cache_loggers = false` clears the cache. It can also be
+  cleared explicitly with `SemanticLogger.clear_logger_cache`, for example after
+  redefining a class.
+
 #### Using the SemanticLogger::Loggable Mixin
 
 Rather than creating logger instances above inside classes it is recommended to
