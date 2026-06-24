@@ -2,7 +2,6 @@ module SemanticLogger
   module Appender
     # @formatter:off
     autoload :Async,               "semantic_logger/appender/async"
-    autoload :AsyncBatch,          "semantic_logger/appender/async_batch"
     autoload :Bugsnag,             "semantic_logger/appender/bugsnag"
     autoload :CloudwatchLogs,      "semantic_logger/appender/cloudwatch_logs"
     autoload :Elasticsearch,       "semantic_logger/appender/elasticsearch"
@@ -46,8 +45,9 @@ module SemanticLogger
       batch    = true if batch.nil? && appender.respond_to?(:batch) && appender.batch_by_default?
 
       if batch == true
-        Appender::AsyncBatch.new(
+        Appender::Async.new(
           appender:                       appender,
+          batch:                          true,
           max_queue_size:                 max_queue_size,
           lag_threshold_s:                lag_threshold_s,
           batch_size:                     batch_size,

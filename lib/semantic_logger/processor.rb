@@ -51,8 +51,8 @@ module SemanticLogger
         capped:         capped?,
         max_queue_size: capped? ? max_queue_size : nil,
         thread_active:  active? || false,
-        processed:      @processed_count,
-        dropped:        @dropped_count,
+        processed:      processed_count,
+        dropped:        dropped_count,
         appenders:      appenders.stats
       }
     end

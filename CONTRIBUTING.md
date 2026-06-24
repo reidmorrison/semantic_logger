@@ -152,9 +152,10 @@ The pipeline has four layers, and understanding the hand-off between them is the
 2. **`SemanticLogger::Base`** is the abstract superclass of both `Logger` and `Subscriber`. It metaprograms
    the per-level methods (`debug`/`info`/`warn`/..., plus `measure_*`) and parses the flexible call
    signatures into a populated `Log`.
-3. **`SemanticLogger::Processor`** is a singleton that *is* an `Appender::Async`. It owns the background
-   thread and the queue, and fans each `Log` out to the `Appenders` collection. `SyncProcessor` is the
-   inline replacement used when `SemanticLogger.sync!` is called.
+3. **`SemanticLogger::Processor`** is a singleton that *is* an `Appender::Async`, so it runs on a background
+   thread with a queue (both owned by an internal `QueueProcessor`) and fans each `Log` out to the
+   `Appenders` collection. `SyncProcessor` is the inline replacement used when `SemanticLogger.sync!` is
+   called.
 4. **`SemanticLogger::Subscriber`** is the abstract base class for all appenders. Each appender writes a
    `Log` to one destination using its own `Formatter`.
 
@@ -218,12 +219,17 @@ classDiagram
 
     %% ===== Async pipeline =====
     class Async {
-        +queue
         +appender
+        +processor
         +log(log) / flush() / close()
-        +active?()
+        +queue / active?() / stats()
     }
-    class AsyncBatch
+    class QueueProcessor {
+        +queue / thread
+        +log(log) / flush() / close()
+        +active?() / reopen()
+        +batch?
+    }
     class Processor {
         <<singleton>>
         +appenders
@@ -239,10 +245,10 @@ classDiagram
     }
     class ConcurrentArray["Concurrent::Array"]
 
-    Async <|-- AsyncBatch
     Async <|-- Processor
     ConcurrentArray <|-- Appenders
-    Async o--> "1" Subscriber : wraps real appender
+    Async *--> "1" QueueProcessor : owns
+    QueueProcessor o--> "1" Subscriber : wraps real appender
     Processor *--> "1" Appenders : owns
     SyncProcessor *--> "1" Appenders : owns
     Appenders o--> "*" Subscriber : fans out to
