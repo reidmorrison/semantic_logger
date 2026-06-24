@@ -100,3 +100,10 @@ Style/SpecialGlobalVars:
 # Make it easier for developers to move between Elixir and Ruby.
 Style/StringLiterals:
   EnforcedStyle: double_quotes
+
+# The Pattern formatter uses %{...} template tokens as its own pattern syntax,
+# not as Ruby format strings, so the annotated-token preference does not apply.
+Style/FormatStringToken:
+  Exclude:
+    - "lib/semantic_logger/formatters/pattern.rb"
+    - "test/formatters/pattern_test.rb"
