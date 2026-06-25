@@ -100,6 +100,14 @@ The internal `SemanticLogger::Formatters::Base#cleanse` method was renamed to
 `#escape_control_characters`. This only affects custom formatters or subclasses that called the old
 method name directly; update them to call `#escape_control_characters`.
 
+#### Rails: appenders are now configured in one block
+
+If you use [rails_semantic_logger](rails.html), the companion gem's v5 release moves appender
+configuration into a single `config.rails_semantic_logger.appenders do |appenders| ... end` block.
+The v4 options (`format`, `add_file_appender`, `ap_options`, `filter`, `console_logger`) still work
+but are deprecated and will be removed in v6. See
+[Migrating from v4 to v5](rails.html#migrating-from-v4-to-v5) for the full before/after mapping.
+
 ### Upgrading to Semantic Logger v4.18
 
 #### Async queue is now bounded by default
