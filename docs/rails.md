@@ -530,6 +530,20 @@ config.rails_semantic_logger.replace_sidekiq_logger     = false
 config.rails_semantic_logger.replace_solid_queue_logger = false
 ~~~
 
+#### Sidekiq job lifecycle messages
+
+For every Sidekiq job, Rails Semantic Logger emits a `Start #perform` and a `Completed #perform`
+entry (with the `sidekiq.queue.latency` and `sidekiq.job.perform` metrics). On very high job volumes
+these can add noise and cost in log aggregation tools. To turn them off (the job still runs and any
+exceptions are still logged):
+
+~~~ruby
+# config/initializers/sidekiq.rb
+RailsSemanticLogger::Sidekiq::JobLogger.perform_messages = false
+~~~
+
+This defaults to `true`, so the messages are emitted unless you opt out.
+
 ### Custom controller base class
 
 If your application uses a controller base class other than `ActionController::Base` or
