@@ -16,108 +16,418 @@ that wires Semantic Logger into Rails for you. Once installed it:
 * Replaces the default Rails logger with Semantic Logger, so Rails, your application code, and many
   common gems all log through it.
 * Collapses the several lines Rails normally logs per request into a single, structured "Completed"
-  line in production, while keeping the individual fields (controller, action, status, durations,
-  and so on) searchable.
-* Lets you keep logging to the standard Rails log file, or send logs anywhere Semantic Logger
-  supports. See [Appenders](appenders.html).
+  line, while keeping the individual fields (controller, action, status, durations, and so on)
+  searchable.
+* Lets you send logs anywhere Semantic Logger supports: the standard Rails log file, standard out as
+  JSON for a container platform, a centralized log service, or several of these at once.
 
-This page covers the Rails-specific configuration. For the logging API itself, see the
-[Programmer's Guide](api.html).
+This page is a step-by-step guide that assumes no prior knowledge of either gem. Work through it
+top to bottom: each section builds on the previous one. For the underlying logging API (logging
+methods, tags, metrics, and so on) see the [Programmer's Guide](api.html), and for the full catalog
+of log destinations see [Appenders](appenders.html).
 
-### Rails Support
+> **Upgrading from v4?** The way appenders (log destinations) are configured changed in v5. Jump to
+> [Migrating from v4 to v5](#migrating-from-v4-to-v5), then come back here.
 
-For the complete list of supported Ruby and Rails versions, see
-the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/master/.github/workflows/ci.yml).
+### Requirements
+
+Rails Semantic Logger v5 requires **Ruby 3.2 or later** and **Rails 7.2 or later**. For the exact
+list of tested Ruby and Rails versions, see the
+[CI workflow](https://github.com/reidmorrison/rails_semantic_logger/blob/master/.github/workflows/ci.yml).
 
 ### Installation
 
-Add the following lines to Gemfile
+Add the following lines to your `Gemfile`:
 
 ~~~ruby
-gem "amazing_print"
 gem "rails_semantic_logger"
+gem "amazing_print" # optional
 ~~~
 
-The gem `amazing_print` is optional, but is recommended to get colorized output of semantic data
-(Hash output).
+`amazing_print` is optional but recommended: it produces colorized, readable output of the
+structured data (the Hash payload) in development.
 
-Install required gems with bundler
+Install with bundler:
 
     bundle install
 
-This will automatically replace the standard Rails logger with Semantic Logger
-which will write all log data to the configured Rails log file.
+That is all that is required. Rails Semantic Logger automatically replaces the standard Rails logger
+with Semantic Logger and writes to the usual Rails log file.
 
-### Conflicting Gems
+#### Remove conflicting gems
 
-Remove all of the following gems since they conflict or duplicate what Rails Semantic Logger already
-achieves.
+Remove the following gems if present. They conflict with or duplicate what Rails Semantic Logger
+already does:
 
-* lograge
-* rails_stdout_logging
-* rails_12factor
+* `lograge`
+* `rails_stdout_logging`
+* `rails_12factor`
 
-### Process Forking
+### Out of the box
 
-See [Process Forking](operations.html#process-forking) if you use Unicorn or Puma.
+With no configuration at all, Rails Semantic Logger:
 
-### Heroku
+* Writes to `log/<environment>.log` (for example `log/development.log`), the same file Rails uses.
+* Colorizes that output when Rails colorized logging is enabled (the default in development).
+* Logs to **standard out** when you run `rails server`, so you see requests in your terminal.
+* Logs to **standard error** when you run `rails console`, so log lines do not get mixed up with
+  the return values of the commands you type.
+* Replaces the multi-line Rails request log with a single structured "Completed" line.
 
-#### Log to standard out.
-
-When running on Heroku all logging needs to be set to standard out.
-
-Add the following to `config/environments/production.rb`:
-
-~~~ruby
-if ENV["RAILS_LOG_TO_STDOUT"].present?
-  $stdout.sync = true
-  config.rails_semantic_logger.add_file_appender = false
-  config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
-end
-~~~
-
-Heroku sets the `RAILS_LOG_TO_STDOUT` environment variable to `true`.
-
-#### Setting the log level.
-
-The log level is usually set with the config setting `config.log_level`, but
-Heroku also allows the log level to be set via the `LOG_LEVEL` environment variable.
-
-`heroku config:set LOG_LEVEL=DEBUG`
-
-To enable the above log level environment variable for Heroku, add the following to `config/environments/production.rb`:
-
-~~~ruby
-if ENV["LOG_LEVEL"].present?
-  config.log_level = ENV["LOG_LEVEL"].downcase.strip.to_sym
-end
-~~~
-
-### Configuration
-
-The configuration can be set in either `config/application.rb` or the environment specific file in
-`config/environments`.
-
-#### Standard Rails log output for a single page request
+Standard Rails log output for a single page request:
 
 ![Rails Default](images/rails_default.png)
 
-#### Rails log output for the same single page request after adding the `rails_semantic_logger` gem:
+The same request after adding the `rails_semantic_logger` gem:
 
 ![Rails Single Line](images/rails_single_line.png)
 
-#### Re-enable Started, Processing, and Rendered messages
+The rest of this page shows how to change **where** logs go and **how** they are formatted (the
+appenders block), and then how to fine-tune **what** Rails logs.
+
+Configuration goes in `config/application.rb` (for all environments) or in an environment file under
+`config/environments/` (for one environment).
+
+---
+
+## Configuring where logs go: the appenders block
+
+An **appender** is a destination for log output: a file, standard out, a centralized log service,
+and so on. You declare the appenders you want inside a single block:
 
 ~~~ruby
-config.rails_semantic_logger.started    = true
-config.rails_semantic_logger.processing = true
-config.rails_semantic_logger.rendered   = true
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :color)
+end
+~~~
+
+There are three ways to declare an appender. **The method name says _when_ the appender is created;
+the arguments say _where_ it writes and _how_ it is formatted.**
+
+| Method | Created when… | Default destination |
+|--------|---------------|---------------------|
+| `add` | Always, during Rails initialization | (you must specify one) |
+| `add_server` | Only when serving requests: `rails server`, a rack server, Sidekiq in server mode | `$stdout` |
+| `add_console` | Only inside a `rails console` session | `$stderr` |
+
+The arguments to all three are exactly the arguments to `SemanticLogger.add_appender` (covered in
+detail in [the next section](#appender-options-and-destinations)), so anything Semantic Logger can
+log to, any of these can declare.
+
+> **Important:** As soon as you declare **any** appender in this block, Rails Semantic Logger stops
+> adding **all** of its automatic appenders: the default `log/<env>.log` file, the standard-out
+> logger it normally adds under `rails server`, and the standard-error logger it normally adds in
+> `rails console`. The block becomes the single source of truth for every destination. So declare
+> what you want: `add` for an always-on destination (such as the file log), `add_server` for screen
+> output while serving, and `add_console` for the Rails console.
+
+### Step 1: a single log file
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :color)
+end
+~~~
+
+### Step 2: add a JSON file for a log aggregator
+
+Keep the human-readable color log and *also* write a JSON file for ingestion by Elasticsearch,
+Splunk, Datadog, and the like:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :color)
+  appenders.add(file_name: "log/#{Rails.env}.json", formatter: :json)
+end
+~~~
+
+You can declare as many appenders as you like; every log entry is sent to all of them.
+
+### Step 3: log to the screen only while serving
+
+`add_server` declares an appender that is created **only** when the application is actually serving
+requests (under `rails server`, a rack server, or Sidekiq in server mode), and never during rake
+tasks, runners, or generators. It defaults to `$stdout`:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :json)
+  appenders.add_server(formatter: :color) # → $stdout, only when serving
+end
+~~~
+
+### Step 4: a dedicated console logger
+
+`add_console` declares an appender created **only** inside a `rails console` session. It defaults to
+`$stderr` so log output does not interleave with the results of the expressions you type:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :json)
+  appenders.add_server(formatter: :color)  # $stdout while serving
+  appenders.add_console(formatter: :color) # $stderr inside `rails console`
+end
+~~~
+
+### Several appenders in one context
+
+Because each call simply appends to its context, a context can have more than one appender. For
+example, write a color stream *and* a JSON file, but only while serving:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add_server(io: $stdout, formatter: :color)
+  appenders.add_server(file_name: "log/#{Rails.env}.log", formatter: :json)
+end
+~~~
+
+---
+
+## Appender options and destinations
+
+Every `add`, `add_server`, and `add_console` call accepts the same arguments as
+`SemanticLogger.add_appender`. This section is the one-stop reference for those arguments, written as
+Rails examples. For the complete list of destinations and their service-specific options, see
+[Appenders](appenders.html).
+
+### Common options
+
+In addition to a destination, most appenders accept these options:
+
+| Option | Description |
+|--------|-------------|
+| `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level` (which Rails Semantic Logger sets from `config.log_level`). |
+| `formatter` | How to format the output: `:default`, `:color`, `:json`, `:logfmt`, `:one_line`, or a custom formatter (see [Output formats](#output-formats)). |
+| `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
+| `application`, `environment`, `host` | Override the global values for this appender only. |
+
+For example, send only warnings and above to a separate JSON file:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :color)
+  appenders.add(file_name: "log/#{Rails.env}_errors.json", formatter: :json, level: :warn)
+end
+~~~
+
+### Destinations
+
+The destination is chosen by the argument you pass:
+
+| Destination | Argument | Notes |
+|-------------|----------|-------|
+| Text or JSON file | `file_name:` | A path under `log/`. |
+| IO stream | `io:` | `$stdout`, `$stderr`, or any `IO`. |
+| Built-in appender | `appender: :name` | Selects a packaged appender by name (syslog, elasticsearch, http, bugsnag, and many more). |
+| Existing Ruby/Rails logger | `logger:` | Wrap another logger instance. |
+| Metrics destination | `metric:` | See [Metrics](metrics.html). |
+
+A few common examples, all inside the appenders block:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  # Local file
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :color)
+
+  # Local Syslog
+  appenders.add(appender: :syslog)
+
+  # Remote syslog such as syslog-ng over TCP
+  appenders.add(appender: :syslog, url: "tcp://myloghost:514")
+
+  # Elasticsearch
+  appenders.add(appender: :elasticsearch, url: "http://localhost:9200")
+
+  # A generic HTTP(S) endpoint
+  appenders.add(appender: :http, url: "https://logs.example.com/ingest")
+
+  # Bugsnag (errors and above)
+  appenders.add(appender: :bugsnag, level: :error)
+end
+~~~
+
+Appenders for third-party services require their backing gem to be installed. See
+[Appenders](appenders.html) for the full list of destinations, their gems, and their options.
+
+### Output formats
+
+The `formatter:` option controls how each appender renders a log entry. Because it is per appender,
+you can write color to the screen and JSON to a file at the same time.
+
+| Formatter | Output |
+|-----------|--------|
+| `:default` | Plain text, no color. |
+| `:color` | Plain text with color (uses Amazing Print for the payload when installed). |
+| `:json` | One JSON object per entry. |
+| `:logfmt` | `key=value` logfmt output. |
+| `:one_line` | Each entry reduced to a single line. |
+| A class instance | Any instance of a class derived from `SemanticLogger::Formatters::Base`. |
+| A `Proc` | Called with the `log` entry; returns the formatted output. |
+
+JSON example:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.json", formatter: :json)
+end
+~~~
+
+Custom formatter. Create `app/lib/my_formatter.rb`:
+
+~~~ruby
+# A custom colorized formatter
+class MyFormatter < SemanticLogger::Formatters::Color
+  # Return the complete log level name in uppercase
+  def level
+    "#{color}#{log.level.upcase}#{color_map.clear}"
+  end
+end
+~~~
+
+Then use it:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: MyFormatter.new)
+end
+~~~
+
+See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb)
+for the methods you can override, and [Custom formatters](config.html#custom-formatters) for more on formatters.
+
+#### Amazing Print options for the color formatter
+
+The color formatter renders the payload Hash with Amazing Print. To pass options to it, give the
+`:color` formatter a Hash:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(
+    file_name: "log/#{Rails.env}.log",
+    formatter: {color: {ap: {multiline: false}}}
+  )
+end
+~~~
+
+See the [Amazing Print documentation](https://github.com/amazing-print/amazing_print) for the
+available options (or set defaults in a `~/.aprc` file). This has no effect if Amazing Print is not
+installed.
+
+---
+
+## Common recipes
+
+### Development
+
+Color to both the log file and the screen:
+
+~~~ruby
+# config/environments/development.rb
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/development.log", formatter: :color)
+end
+~~~
+
+(The default already does this, so in development you often need no configuration at all.)
+
+### Production on a container platform (Docker, Kubernetes, Heroku)
+
+On a container platform the convention is to log JSON to standard out and let the platform collect
+it. Use `add` (not `add_server`) so that rake tasks and one-off processes also log to stdout:
+
+~~~ruby
+# config/environments/production.rb
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(io: $stdout, formatter: :json)
+end
+~~~
+
+Because the block disables the automatic appenders, this JSON-to-stdout appender is the *only*
+destination: there is no default file log and no separate color logger under `rails server`, which
+is exactly what a container platform wants.
+
+On Heroku, also allow the log level to be set from the environment:
+
+~~~ruby
+config.log_level = ENV["LOG_LEVEL"].presence&.downcase&.to_sym || :info
+~~~
+
+`heroku config:set LOG_LEVEL=debug`
+
+### Production writing to files plus an error service
+
+~~~ruby
+# config/environments/production.rb
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/production.json", formatter: :json)
+  appenders.add(appender: :bugsnag, level: :error)
+end
+~~~
+
+### Other app servers: puma, rackup, Passenger, Unicorn
+
+`add_server` appenders are created automatically under `rails server` and Sidekiq in server mode,
+because those have a definitive startup hook. App servers started **directly** (bare `puma`,
+`rackup`, Passenger, Unicorn) have no such first-party hook, and Rails Semantic Logger deliberately
+does **not** guess (a detection that only sometimes works is worse than none).
+
+If you start your app with one of those servers and want your `add_server` appenders created, call
+the helper from that server's own boot hook. For example, in `config/puma.rb`:
+
+~~~ruby
+on_booted { RailsSemanticLogger.add_server_appenders }
+~~~
+
+Alternatively, if you simply want a destination created in every context, declare it with `add`
+instead of `add_server`.
+
+### Sidekiq
+
+Sidekiq in server mode is treated as a serving context, so `add_server` appenders are created
+automatically. No extra configuration is required.
+
+---
+
+## Tuning what Rails logs
+
+The options below adjust Rails' own log output. They are independent of the appenders block and can
+be combined with it.
+
+### Log level
+
+~~~ruby
+# One of :trace, :debug, :info, :warn, :error, :fatal
+config.log_level = :debug
+~~~
+
+To change the level inside a running `rails console`:
+
+~~~ruby
+SemanticLogger.default_level = :debug
+~~~
+
+### Re-enable Started, Processing, and Rendered messages
+
+By default these messages are logged at `:debug` so they do not appear in production. To show them:
+
+~~~ruby
+config.rails_semantic_logger.started    = true # Rack "Started" line
+config.rails_semantic_logger.processing = true # Controller "Processing" line
+config.rails_semantic_logger.rendered   = true # Action View render lines
 ~~~
 
 ![Semantic](images/rails_semantic.png)
 
-#### Original Rails messages with semantic logger formatting
+### Keep Rails' original wording
+
+By default Action Controller and Active Record messages are converted to structured data:
+
+~~~
+Rack -- Started -- { :ip => "127.0.0.1", :method => "GET", :path => "/users" }
+UserController -- Completed #index -- { :action => "index", :db_runtime => 54.64, :format => "HTML", :method => "GET", :path => "/users", :status => 200, :status_message => "OK", :view_runtime => 709.88 }
+~~~
+
+To keep Rails' original text messages (with Semantic Logger formatting) instead:
 
 ~~~ruby
 config.rails_semantic_logger.semantic   = false
@@ -128,9 +438,58 @@ config.rails_semantic_logger.rendered   = true
 
 ![Semantic Disabled](images/rails_semantic_false.png)
 
-#### Include the file name and line number in the source code where the message originated
-**Warning:** Either set this to `nil` (to disable it completely) or to a high log level (`:fatal` or `:error`) in your production environment otherwise you risk encountering a memory leak due to the very high number of
-objects allocated when Ruby backtraces are created. This is best used in development for debugging purposes.
+### Quiet asset logging
+
+Rails logs asset requests at the debug level, which can clutter development logs:
+
+~~~
+Rack -- Started -- {:ip => "127.0.0.1", :method => "GET", :path => "/assets/application.css"}
+~~~
+
+To silence them:
+
+~~~ruby
+config.rails_semantic_logger.quiet_assets = true
+~~~
+
+### Color output
+
+Color is chosen per appender with the `formatter:` option: use `:color` for colorized output and
+`:default` for plain text (see [Output formats](#output-formats)). For example, color on screen and
+plain text in a file:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log", formatter: :default)
+  appenders.add_server(formatter: :color)
+end
+~~~
+
+The Rails `config.colorize_logging` setting does **not** affect appenders declared in the block; it
+only influences the deprecated default file appender (see
+[Deprecated configuration options](#deprecated-configuration-options)).
+
+### Named tags
+
+Add tags to every log entry on a per-request basis by setting `config.log_tags` to a Hash:
+
+~~~ruby
+config.log_tags = {
+  request_id: :request_id,
+  ip:         :remote_ip,
+  user:       ->(request) { request.cookie_jar["login"] }
+}
+~~~
+
+Notes:
+
+* If a value returns `nil`, that key is omitted for that request.
+* To turn named tags off in development, set `config.log_tags = nil` in
+  `config/environments/development.rb`.
+
+### Source file name and line number
+
+To include the file and line number where each message originated:
 
 ~~~ruby
 config.semantic_logger.backtrace_level = :info
@@ -138,336 +497,92 @@ config.semantic_logger.backtrace_level = :info
 
 ![with_source](images/rails_with_backtrace.png)
 
-The above output shows 3 web requests where the source file name was `log_subscriber.rb` and line number `11`.
+**Warning:** capturing a backtrace for every log entry allocates many objects. In production set this
+to `nil` (disabled) or to a high level such as `:error`. By default backtraces are only captured for
+`:error` and `:fatal`. This feature is best used in development.
 
-#### Log Level
+### Add custom data to the Completed message
 
-To change the log level:
-
-~~~ruby
-# Set to the log level to :trace, :debug, :info, :warn, :error, or :fatal
-config.log_level = :debug
-~~~
-
-To change the log level when running inside of a running Rails console:
-~~~ruby
-SemanticLogger.default_level = :debug
-~~~
-
-#### Named Tags
-
-Named tags can be added to every log message on a per web request basis, by overriding the Rails built-in
-`config.log_tags` with a hash value.
-
-For example, add the following to application.rb, or replace the existing `config.log_tags` entry:
+Add an `append_info_to_payload` method to a controller to include extra fields in its Completed
+message:
 
 ~~~ruby
-  config.log_tags = {
-    request_id: :request_id,
-    ip:         :remote_ip,
-    user:       -> request { request.cookie_jar["login"] }
-  }
-~~~
-
-Note:
-* If a value returns nil, that key and value will be left out of the named tags for that request.
-* `:request_id` above is for Rails 5 and above. With Rails 4.2 use `:uuid`
-
-To turn off named tags in development, add the following to `config/environments/development.rb`
-~~~ruby
-config.log_tags        = nil
-~~~
-
-#### Rails Console Logging
-
-By default the Rails Semantic Logger adds a logger to stderr when running inside a rails console.
-
-To disable this behavior:
-
-~~~ruby
-config.rails_semantic_logger.console_logger = false
-~~~
-
-#### Quiet asset logging
-
-Rails logs asset retrievals at the debug level. These log entries can quickly clutter the log output:
-
-~~~
-Rack -- Started -- {:ip => "127.0.0.1", :method => "GET", :path => "/assets/rocket_job_mission_control/rocket-icon-64x64.png"}
-~~~
-
-To turn off the asset logging:
-
-~~~ruby
-config.rails_semantic_logger.quiet_assets = true
-~~~
-
-#### Colorize Logging
-
-If the Rails colorized logging is enabled, then the colorized formatter will be used
-by default. To disable colorized logging in both Rails and Semantic Logger:
-
-~~~ruby
-config.colorize_logging = false
-~~~
-
-#### Semantic log output
-
-By default Action Controller and Active Record text messages are converted to semantic data (Hash):
-
-~~~
-Rack -- Started -- { :ip => "127.0.0.1", :method => "GET", :path => "/users" }
-UserController -- Completed #index -- { :action => "index", :db_runtime => 54.64, :format => "HTML", :method => "GET", :mongo_runtime => 0.0, :path => "/users", :status => 200, :status_message => "OK", :view_runtime => 709.88 }
-~~~
-
-To disable semantic message conversion:
-
-~~~ruby
-config.rails_semantic_logger.semantic = false
-~~~
-
-#### Started message
-
-By default the Started message is logged at the debug level so that it does not appear in production.
-
-~~~
-Rack -- Started -- { :ip => "127.0.0.1", :method => "GET", :path => "/users" }
-~~~
-
-To show Rack started messages in production:
-
-~~~ruby
-config.rails_semantic_logger.started = true
-~~~
-
-#### Processing message
-
-By default the Controller Processing message is logged at the debug level so that it does not appear in production.
-
-~~~
-UserController -- Processing #index
-~~~
-
-To show the Controller Processing message in production:
-
-~~~ruby
-config.rails_semantic_logger.processing = true
-~~~
-
-#### View Rendering messages
-
-By default the Action View rendering messages are logged at the debug level so that they do not appear in production.
-
-~~~
-ActionView::Base --   Rendered data/search/_user.html.haml (46.7ms)
-~~~
-
-To show the Action View rendering messages in production:
-
-~~~ruby
-config.rails_semantic_logger.rendered = true
-~~~
-
-#### Amazing Print Options
-
-The default Amazing Print options can be changed by supplying any valid Amazing Print options:
-
-~~~ruby
-config.rails_semantic_logger.ap_options = {multiline: false}
-~~~
-
-The defaults can also changed be creating a `~/.aprc` file.
-See the [Amazing Print Documentation](https://github.com/amazing-print/amazing_print)
-
-Notes:
-
-* The option `:multiline` is set to false if not supplied.
-* Has no effect if Amazing Print is not installed.
-
-### Additional appenders
-
-Example, also log to a JSON log file, for consumption by ELK, Splunk, etc.:
-
-~~~ruby
-config.semantic_logger.add_appender(file_name: "log/#{Rails.env}.json", formatter: :json)
-~~~
-
-Example, also log to a local Syslog:
-
-~~~ruby
-config.semantic_logger.add_appender(appender: :syslog)
-~~~
-
-Example, also log to a local Syslog such as syslog-ng over TCP:
-
-~~~ruby
-config.semantic_logger.add_appender(appender: :syslog, url: "tcp://myloghost:514")
-~~~
-
-Example, also log to elasticsearch:
-
-~~~ruby
-config.semantic_logger.add_appender(appender: :elasticsearch, url: "http://localhost:9200")
-~~~
-
-Example, also log to BugSnag:
-
-~~~ruby
-config.semantic_logger.add_appender(appender: :bugsnag)
-~~~
-
-See [Appenders](appenders.html) for the complete list of available appenders.
-
-#### Output Format
-
-The Rails log file and Rails Server standard out logging can be modified directly with the format config option.
-
-~~~ruby
-  config.rails_semantic_logger.format = :default
-~~~
-
-Valid options:
-* :default
-    * Plain text output with no color.
-* :color
-    * Plain text output with color.
-* :json
-    * JSON output format.
-* :logfmt
-    * logfmt output format.
-* :one_line
-    * Reduce each log message to a single line.
-* `Object`
-    An instance of any class that derives from `SemanticLogger::Formatters::Base`.
-
-* `Proc`
-    A block that will be called to format the output.
-    It is supplied with the `log` entry and should return the formatted data.
-
-Note:
-* `:default` is automatically changed to `:color` if `config.colorize_logging` is not `false`.
-
-JSON Example, in `application.rb`:
-~~~ruby
-  config.rails_semantic_logger.format = :json
-~~~
-
-Custom Example, create `app/lib/my_formatter.rb`:
-~~~ruby
-  # My Custom colorized formatter
-  class MyFormatter < SemanticLogger::Formatters::Color
-    # Return the complete log level name in uppercase
-    def level
-      "#{color}#{log.level.upcase}#{color_map.clear}"
-    end
-  end
-~~~
-
-In `application.rb`:
-~~~ruby
-  config.rails_semantic_logger.format = MyFormatter.new
-~~~
-
-See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb) for the other methods that can be overridden.
-
-To modify and use a different base formatter choose from [the complete list of formatters](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/formatters).
-
-#### Disable default Rails file logging
-
-When running in an environment where local file logging is not available, or to completely replace the file logger,
-disable the default rails file logging by setting:
-
-~~~ruby
-config.rails_semantic_logger.add_file_appender = false
-~~~
-
-After disabling the default file logging another appender needs to be added before any logging will be sent anywhere.
-For example to create a JSON only log file:
-
-~~~ruby
-config.semantic_logger.add_appender(file_name: "log/json.log", formatter: :json)
-~~~
-
-Notes:
-* If the default file logger is not used then any logging failures will be written to stderror.
-* When running the Rails server, it automatically adds an appender that logs to standard out.
-    * To disable the Rails server standard out logging add the following option when starting it from the command line:
-        * `bin/rails s --daemon`
-    * Or if running Puma, add the `--quiet` option.
-* It is usually a good idea to turn off standard out logging in production.
-
-#### Adding custom data to the Rails Completed log message
-
-During Controller-action processing custom data can be added to the Rails Completed message.
-
-Add a method called `append_info_to_payload` to the controller to modify the payload that is logged:
-
-~~~ruby
-class ThingController
+class ThingController < ApplicationController
   private
 
   def append_info_to_payload(payload)
     super
-    payload[:user_id] = 42
+    payload[:user_id] = current_user&.id
   end
 end
 ~~~
 
-#### Log file name and line number
+### Customize the Completed message text
 
-In development to log the file and line number from which every log message originated:
+Provide a Proc to build the Action Controller message from the message and payload:
 
 ~~~ruby
-# Log file name and line number for log messages at this level and above
-config.semantic_logger.backtrace_level = :debug
+config.rails_semantic_logger.action_message_format = ->(message, payload) do
+  "#{message} - #{payload[:controller]}##{payload[:action]}"
+end
 ~~~
 
-By default backtraces are only captured for `:error` and `:fatal` levels since capturing a backtrace
-for every log message is expensive.
+### Background job loggers
 
-This feature can be used in production, but use with care since setting the level too low will slow down the application.
+By default Rails Semantic Logger replaces the Sidekiq and SolidQueue loggers. To leave them alone:
 
-### Custom Controller Base Class
+~~~ruby
+config.rails_semantic_logger.replace_sidekiq_logger     = false
+config.rails_semantic_logger.replace_solid_queue_logger = false
+~~~
 
-If your application is using a custom controller base class other than `ActionController::Base` or `ActionController::API`,
-then Rails Semantic Logger will fall back to the `ActionController::Base` logger instance.
-This is not ideal since all log entries from that controller will now have the name `ActionController::Base`.
+### Custom controller base class
 
-To make the log entries use the correct class name add the following to your custom controller class:
+If your application uses a controller base class other than `ActionController::Base` or
+`ActionController::API`, Rails Semantic Logger falls back to the `ActionController::Base` logger, so
+those entries are named `ActionController::Base`. To give them the correct class name, include the
+mixin in your base class:
+
 ~~~ruby
 include SemanticLogger::Loggable
 ~~~
 
-Or, if the custom controller base class is inside of a third party gem, add an initializer with:
+If the base class lives in a third-party gem, do it from an initializer:
+
 ~~~ruby
 CustomControllerBase.include(SemanticLogger::Loggable)
 ~~~
 
-Where `CustomControllerBase` is the name of the custom controller base class.
+---
 
-### Log Rotation
+## Operational notes
 
-Since the log file is not re-opened with every call, when the log file needs
-to be rotated, use a copy-truncate operation over deleting the file.
+### Process forking
 
-Sample Log rotation file for Linux:
+If you use a forking server (Puma, Unicorn) or fork worker processes, see
+[Process Forking](operations.html#process-forking). With Semantic Logger v5 appenders are reopened automatically after
+a fork, so the manual `after_fork { SemanticLogger.reopen }` hook is usually no longer needed.
+
+### Log rotation
+
+Because the log file is held open between writes, rotate it with a **copy-truncate** strategy rather
+than deleting and recreating the file. Example `logrotate` configuration for Linux:
 
 ~~~
-/var/www/rails/my_rails_app/shared/log/*.log {
-        daily
-        missingok
-        copytruncate
-        rotate 14
-        compress
-        delaycompress
-        notifempty
+/var/www/my_app/shared/log/*.log {
+  daily
+  missingok
+  copytruncate
+  rotate 14
+  compress
+  delaycompress
+  notifempty
 }
 ~~~
 
-### Replacing Existing loggers
+### Loggers that are replaced automatically
 
-Rails Semantic Logger automatically replaces the default loggers for the following gems
-after they have been initialized:
+After they initialize, Rails Semantic Logger replaces the loggers of these libraries when present:
 
 - Bugsnag
 - Mongoid
@@ -477,3 +592,73 @@ after they have been initialized:
 - Sidekiq
 - Sidetiq
 - DelayedJob
+
+---
+
+## Migrating from v4 to v5
+
+### Ruby and Rails minimums
+
+v5 requires Ruby 3.2+ and Rails 7.2+. It also depends on Semantic Logger v5; review the
+[Semantic Logger upgrade notes](upgrading.html) for changes there (the most relevant for Rails apps
+is that appenders are now reopened automatically after fork, so you can remove manual reopen hooks).
+
+### Appender configuration is the main change
+
+In v4 the log file, its format, and any extra destinations were configured through several separate
+options (`format`, `add_file_appender`, `ap_options`, `filter`, `console_logger`) plus direct
+`config.semantic_logger.add_appender(...)` calls. In v5 all of that lives in one place, the
+[appenders block](#configuring-where-logs-go-the-appenders-block).
+
+These v4 options still work in v5 but emit a deprecation warning and will be **removed in v6**.
+Migrate them as follows:
+
+| v4 | v5 |
+|----|----|
+| `config.rails_semantic_logger.format = :json` | `appenders.add(file_name: "log/#{Rails.env}.log", formatter: :json)` |
+| `config.rails_semantic_logger.add_file_appender = false` then `config.semantic_logger.add_appender(...)` | Declare your destinations with `appenders.add(...)` (declaring any appender already replaces the default file appender) |
+| `config.rails_semantic_logger.ap_options = {multiline: false}` | `appenders.add(..., formatter: {color: {ap: {multiline: false}}})` |
+| `config.rails_semantic_logger.filter = /MyClass/` | `appenders.add(..., filter: /MyClass/)` |
+| `config.rails_semantic_logger.console_logger = false` | Omit `add_console` (declare a console appender only if you want one) |
+
+A v4 Heroku / standard-out configuration like:
+
+~~~ruby
+# v4
+if ENV["RAILS_LOG_TO_STDOUT"].present?
+  $stdout.sync = true
+  config.rails_semantic_logger.add_file_appender = false
+  config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
+end
+~~~
+
+becomes, in v5:
+
+~~~ruby
+# v5
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(io: $stdout, formatter: :json)
+end
+~~~
+
+### Server standard-out behavior
+
+In v4, running `rails server` always added a standard-out logger, which you suppressed with
+`bin/rails s --daemon` or Puma's `--quiet`. In v5 this is the job of `add_server`: when you use the
+appenders block, declare an `add_server` appender to log to the screen while serving, or omit it to
+stay silent. If you do not use the appenders block at all, the v4 behavior is preserved.
+
+---
+
+## Deprecated configuration options
+
+The following options still function in v5 for backward compatibility but emit deprecation warnings
+and will be **removed in v6**. Each is replaced by the [appenders block](#configuring-where-logs-go-the-appenders-block).
+
+| Deprecated option | Replacement |
+|-------------------|-------------|
+| `config.rails_semantic_logger.format` | `formatter:` on each appender, e.g. `appenders.add(file_name: ..., formatter: :json)` |
+| `config.rails_semantic_logger.ap_options` | `formatter: {color: {ap: {...}}}` on the appender |
+| `config.rails_semantic_logger.filter` | `filter:` on the appender |
+| `config.rails_semantic_logger.console_logger` | Declare (or omit) an `add_console` appender |
+| `config.rails_semantic_logger.add_file_appender` | Declare appenders in the block (doing so already replaces the default file appender) |
