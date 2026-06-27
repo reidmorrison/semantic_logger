@@ -3,6 +3,12 @@ layout: default
 ---
 
 ## Upgrading
+{:.no_toc}
+
+**Contents**
+
+* TOC
+{:toc}
 
 ### Upgrading to Semantic Logger v5.0
 

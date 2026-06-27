@@ -3,6 +3,12 @@ layout: default
 ---
 
 ## Rails
+{:.no_toc}
+
+**Contents**
+
+* TOC
+{:toc}
 
 [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger) is a companion gem
 that wires Semantic Logger into Rails for you. Once installed it:
@@ -53,7 +59,7 @@ achieves.
 
 ### Process Forking
 
-See [Process Forking](forking.html) if you use Unicorn or Puma.
+See [Process Forking](operations.html#process-forking) if you use Unicorn or Puma.
 
 ### Heroku
 
@@ -471,5 +477,3 @@ after they have been initialized:
 - Sidekiq
 - Sidetiq
 - DelayedJob
-
-### [Next: Centralized Logging ==>](centralized_logging.html)

@@ -3,114 +3,164 @@ layout: default
 ---
 
 ## Metrics
+{:.no_toc}
+
+**Contents**
+
+* TOC
+{:toc}
 
 A **metric** is a named number that Semantic Logger emits alongside a log entry, so the same call
-that records what happened can also feed your dashboards and alerts. Metrics are useful to track
-things like:
+that records *what happened* can also feed your dashboards and alerts.
 
-* How long a block of code takes to run.
-* How often an error, or any other event, occurs.
+Use metrics to track things like:
+
+* How often an event happens (an error, a sign-up, a cache miss).
+* How long something takes (an external API call, a database query).
 * Running totals, such as the amount purchased per department over time.
 
-You attach a metric to an ordinary log or `measure_` call by adding the `:metric` option and a name.
-Any registered [metric subscriber](#metric-subscribers) (Statsd, New Relic, and so on) is then
-notified, asynchronously, on the background log thread. Metrics are subject to the same log level
-and filtering as the log entry they ride along with, so a metric on a `:trace` call is not emitted
-when the level is `:info`.
+There are two parts to using metrics:
 
-There are two kinds of metric: **duration** metrics and **counting** metrics.
+1. **Emit** a metric by adding the `:metric` option to any log or `measure_` call. This is covered in
+   Steps 1 to 3 below.
+2. **Subscribe** a destination (Statsd, New Relic, SignalFx, and so on) that receives those metrics.
+   Until a subscriber is registered, the `:metric` option is harmless and the number goes nowhere.
+   See [Send metrics to a backend](#send-metrics-to-a-backend).
 
-> **Not to be confused with operational stats.** The metrics on this page are *application*
-> metrics that your code emits about what it is doing. To monitor Semantic Logger's *own* health
-> instead, such as queue sizes and the number of log entries processed or dropped, use
-> [`SemanticLogger.stats`](api.html#monitoring-the-background-log-thread).
+Metric subscribers are notified asynchronously on the background log thread, so emitting a metric
+never slows the calling thread. A metric rides along with its log entry, so it obeys the same level
+and [filtering](config.html#filtering) rules: a metric on a `:trace` call is not emitted while the
+level is `:info`.
 
-### Duration Metrics
+> **Not to be confused with operational stats.** The metrics on this page are *application* metrics
+> that your code emits about what it is doing. To monitor Semantic Logger's *own* health instead,
+> such as queue sizes and the number of log entries processed or dropped, use
+> [`SemanticLogger.stats`](operations.html#monitoring-the-background-thread).
 
-Log how long it took to call an external interface and send that duration as a metric to all
-metric subscribers.
+## Step 1: Count something
 
-To set any duration based metric, add the `:metric` option to any `measure_` logging call,
-along with a name for the metric:
-
-~~~ruby
-logger.measure_info("Called supplier", metric: "supplier/add_user") do
-  # Code to call external service ...
-end
-~~~
-
-Using keyword arguments, add the `:metric` option to any level based logging call,
-along with a name for the metric as well as the required `:duration` in ms.
+The simplest metric counts how often something happens. Add `:metric` with a name to any log call,
+and the metric is incremented by 1:
 
 ~~~ruby
-logger.info(message: "Called supplier", metric: "supplier/add_user", duration: 100.23)
+logger.info(message: "Signed up", metric: "users/signup")
 ~~~
 
-### Counting Metrics
-
-Counting metrics can be incremented or decremented as part of a logging call.
-Using keyword arguments, add the `:metric` option.
+Supply `:metric_amount` to change the amount. To decrement:
 
 ~~~ruby
-logger.info(message: "Called supplier", metric: "supplier/called_user")
+logger.info(message: "Item removed", metric: "cart/items", metric_amount: -1)
 ~~~
 
-In the above example the metric `supplier/called_user` is incremented by 1.
-
-To decrement a metric:
-
-~~~ruby
-logger.info(message: "Called supplier", metric: "supplier/called_user", metric_amount: -1)
-~~~
-
-To increment total counters, such as the total dollar amount of purchases by department:
+To add to a running total, such as the dollar amount of purchases per department:
 
 ~~~ruby
 logger.info(message: "Purchase complete", metric: "departments/clothing", metric_amount: 189.42)
 ~~~
 
-Note: Statsd total counters only supports integers, floats are rounded to the nearest integer.
+Note: Statsd counters are integers, so float amounts are rounded to the nearest integer.
 
-### Metric Subscribers
+## Step 2: Measure how long something takes
 
-Subscribers will receive every log message that has a `:metric` option
-specified. The subscribers are called asynchronously from the Appender Thread so
-as not to impact the original thread that logged the message.
-
-#### Statsd
-
-Send metrics to [Statsd](https://github.com/quasor/statsd) via UDP so it can roll them up and send them to
-[graphite](http://graphite.wikidot.com/) or [mongodb](http://mongodb.org).
+A duration metric records elapsed time. The easiest way is to add `:metric` to a `measure_` block
+(see [Measure how long something takes](api.html#step-6-measure-how-long-something-takes) in the
+Guide). The measured duration becomes the metric:
 
 ~~~ruby
-SemanticLogger.add_appender(
-  metric: :statsd,
-  url:    'udp://localhost:8125'
-)
+logger.measure_info("Called supplier", metric: "supplier/add_user") do
+  # Code to call the external service ...
+end
 ~~~
 
-#### New Relic
+When you already have the duration, emit it on a plain log call by supplying both `:metric` and
+`:duration` (in milliseconds):
 
-To forward metrics to New Relic so that they can be displayed using custom dashboards:
+~~~ruby
+logger.info(message: "Called supplier", metric: "supplier/add_user", duration: 100.23)
+~~~
+
+## Step 3: Break a metric down with dimensions
+
+Dimensions are key/value labels attached to a metric, so a backend that supports them (such as
+SignalFx) can slice it, for example by user, action, or state. Add them with the `:dimensions`
+option:
+
+~~~ruby
+# A counter, broken down by user:
+logger.info(metric: "filters.count", dimensions: {user: "jbloggs"})
+
+# A gauge with an amount and dimensions:
+logger.info(metric: "filters.average", metric_amount: 1.2, dimensions: {user: "jbloggs"})
+~~~
+
+Not every backend supports dimensions. **Statsd** and **New Relic** ignore any metric that carries
+dimensions; **SignalFx** is built around them. See each subscriber below.
+
+## Send metrics to a backend
+
+A metric goes nowhere until a **metric subscriber** is registered. Add one with
+`SemanticLogger.add_appender(metric: ...)`, usually when your application starts. A subscriber
+receives every logged entry that has a `:metric`, asynchronously on the background thread.
+
+### Statsd
+
+Send metrics to [Statsd](https://github.com/statsd/statsd) over UDP, which can roll them up and
+forward them to [Graphite](https://graphiteapp.org), MongoDB, and others:
+
+~~~ruby
+SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
+~~~
+
+Counters are integers (float amounts are rounded). Does not support dimensions.
+
+### New Relic
+
+Forward metrics to New Relic so they can be displayed on custom dashboards:
 
 ~~~ruby
 SemanticLogger.add_appender(metric: :new_relic)
 ~~~
 
-#### Elasticsearch & Splunk
+Does not support dimensions.
 
-Metrics are sent as part of the log message to Elasticsearch and Splunk so that
-they can be displayed using their custom dashboards.
+### SignalFx
 
-### Notes
+Forward metrics to [SignalFx](https://www.splunk.com/en_us/products/infrastructure-monitoring.html),
+which is built around dimensions:
 
-**Performance:** Metric subscribers run on the background logging thread, so emitting a metric never
-slows down the thread that logged it.
+~~~ruby
+SemanticLogger.add_appender(metric: :signalfx, token: "SIGNALFX_ORG_ACCESS_TOKEN")
+~~~
 
-**Log level:** A metric is only emitted when its log entry is actually logged, so it follows the
-same log level and filtering rules as any other entry. You can use this to your advantage: keep
-detailed `:trace` level metrics in the code where they stay dormant under an `:info` level, then
-turn them on when needed, for example by sending the `SIGUSR2` [signal](signals.html) to lower the
-log level on a running process.
+`application` and `host` are always sent as dimensions. To also forward specific named tags as
+dimensions whenever they are present on a log entry, list them:
 
-### [Next: Signals ==>](signals.html)
+~~~ruby
+SemanticLogger.add_appender(
+  metric:     :signalfx,
+  token:      "SIGNALFX_ORG_ACCESS_TOKEN",
+  dimensions: [:user_id, :state]
+)
+~~~
+
+When a duration metric has no dimensions, SignalFx receives both a gauge and a counter, so you can
+chart both the timing and the number of occurrences. When dimensions are present, the metric is sent
+as-is.
+
+### Elasticsearch and Splunk
+
+These are ordinary log [appenders](appenders.html), not metric subscribers, but a metric is part of
+the log entry, so `metric`, `metric_amount`, and any dimensions are written into the document
+automatically. You can build dashboards on those fields directly, without registering a separate
+metric subscriber.
+
+## How metrics behave
+
+**Asynchronous.** Subscribers run on the background logging thread, so emitting a metric never slows
+down the thread that logged it.
+
+**Follows the log level.** A metric is emitted only when its log entry is actually logged, so it
+obeys the same log level and filtering as any other entry. Use this to your advantage: leave detailed
+`:trace` level metrics in the code where they stay dormant under an `:info` level, then turn them on
+when needed, for example by sending the `SIGUSR2` [signal](operations.html#linux-signals) to lower
+the log level on a running process.
