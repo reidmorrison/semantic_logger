@@ -569,6 +569,35 @@ CustomControllerBase.include(SemanticLogger::Loggable)
 
 ---
 
+## Metrics (prototype)
+
+> **Prototype:** metrics support and the metric names below are an early prototype and **subject to
+> change** in a future release. Do not hard-code these names into long-lived dashboards or alerts yet.
+
+In addition to the structured log entry, Rails Semantic Logger attaches a Semantic Logger
+[metric](metrics.html) to each entry that is logged at `:info`, `:warn`, or `:error`. When the entry
+carries a duration (a request, query, render, job run, ...) the metric records that timing; otherwise
+it acts as an event counter. Wire up a metrics appender (StatsD, Prometheus, ...) and these flow
+through automatically alongside the logs.
+
+Metric names follow `rails.<component>.<event>`, where `<component>` is the Rails component with its
+`action_`/`active_` prefix dropped:
+
+| Component | Metrics |
+| --- | --- |
+| Action Controller | `rails.controller.process_action`, `rails.controller.send_file`, `rails.controller.send_data`, `rails.controller.redirect_to`, `rails.controller.halted_callback`, `rails.controller.rescue_from_callback`, and the fragment-cache events (`rails.controller.write_fragment`, `read_fragment`, `exist_fragment`, `expire_fragment`, `expire_page`, `write_page`) |
+| Action View | `rails.view.render.template`, `rails.view.render.partial`, `rails.view.render.layout`, `rails.view.render.collection` |
+| Active Job | `rails.job.<event>` for every job event (`enqueue`, `enqueue_at`, `enqueue_all`, `perform_start`, `perform`, `enqueue_retry`, `retry_stopped`, `discard`, and the Rails 8.1 Continuation events `interrupt`, `resume`, `step_skipped`, `step_started`, `step`) |
+| Action Mailer | `rails.mailer.deliver` |
+| Solid Queue | `rails.solid_queue.<event>` for every Solid Queue event logged at info/warn/error (e.g. `rails.solid_queue.start_process`, `rails.solid_queue.thread_error`) |
+
+Entries logged at `:debug` carry **no** metric. Because ActiveRecord logs SQL at `:debug`, there is
+currently no `rails.db`/`rails.record` SQL metric, and Action View render metrics are only emitted
+when rendered events are raised to `:info` (see
+[Re-enable Started, Processing, and Rendered messages](#re-enable-started-processing-and-rendered-messages)).
+
+---
+
 ## Operational notes
 
 ### Process forking
