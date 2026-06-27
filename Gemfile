@@ -9,6 +9,7 @@ gem "minitest-reporters"
 gem "minitest-shared_description"
 gem "minitest-stub_any_instance"
 gem "rake"
+gem "rspec"
 gem "simplecov", require: false
 gem "solargraph", require: false, platform: :ruby
 
