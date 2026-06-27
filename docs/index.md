@@ -10,8 +10,8 @@ layout: default
 * TOC
 {:toc}
 
-Semantic Logger is a feature rich logging framework for Ruby, and a replacement
-for the built-in Ruby and Rails loggers.
+Semantic Logger is a high-performance, asynchronous structured logging framework
+for Ruby and Rails.
 
 It does two things that ordinary loggers do not:
 

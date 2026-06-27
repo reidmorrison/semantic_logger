@@ -11,9 +11,9 @@ Gem::Specification.new do |s|
   s.platform              = Gem::Platform::RUBY
   s.authors               = ["Reid Morrison"]
   s.homepage              = "https://logger.rocketjob.io"
-  s.summary               = "Feature rich logging framework, and replacement for existing Ruby & Rails loggers."
-  s.description           = "Semantic Logger is a feature rich logging framework, and replacement for existing Ruby & Rails loggers. " \
-                            "It logs to multiple destinations asynchronously via a background thread, with structured (semantic) payloads."
+  s.summary               = "High-performance, asynchronous structured logging framework for Ruby & Rails."
+  s.description           = "Semantic Logger is a high-performance, asynchronous structured logging framework for Ruby & Rails. " \
+                            "It logs to multiple destinations via a background thread, preserving structured (semantic) payloads."
   s.files                 = Dir["lib/**/*", "LICENSE.txt", "Rakefile", "README.md"]
   s.license               = "Apache-2.0"
   s.required_ruby_version = ">= 3.2"
