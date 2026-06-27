@@ -3,6 +3,12 @@ layout: default
 ---
 
 ## Security
+{:.no_toc}
+
+**Contents**
+
+* TOC
+{:toc}
 
 Logging frameworks sit on a sensitive boundary: they take data from all over an
 application, including data that originated from untrusted users, and write it to
@@ -34,7 +40,7 @@ form (for example a newline becomes `\n`):
 SemanticLogger.add_appender(file_name: "production.log", formatter: {default: {escape_control_chars: true}})
 ~~~
 
-See [Escaping Control Characters](customize.html#escaping-control-characters) for
+See [Escaping Control Characters](config.html#escaping-control-characters) for
 details.
 
 The record-framed network appenders are already safe by default:
@@ -67,7 +73,7 @@ end
 ~~~
 
 Redaction can also be applied to a single logger or appender with a `filter` that
-mutates the log and returns `true`. See [Filtering](filtering.html) for examples.
+mutates the log and returns `true`. See [Filtering](config.html#filtering) for examples.
 
 Rails applications should use the sister gem
 [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger), which
@@ -111,5 +117,3 @@ the consuming application, which should run a tool such as
 [bundler-audit](https://github.com/rubysec/bundler-audit) against its own
 `Gemfile.lock`. Pinning dependencies with a committed lockfile, and verifying it in CI
 with `bundle install --frozen`, prevents an unexpected dependency from being pulled in.
-
-### [Next: Log Event ==>](log_struct.html)
