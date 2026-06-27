@@ -3,23 +3,56 @@ layout: default
 ---
 
 ## Testing
+{:.no_toc}
 
-New with Semantic Logger v4.13.
+**Contents**
 
-When writing tests we want to verify that the correct log messages, metrics, etc.
-are being created by the application.
-Since Semantic Logger uses a global logging mechanism we can't use the regular logging to
-verify logging events.
+* TOC
+{:toc}
 
-### Minitest helpers
+When testing application code, you often want to assert that it logged the right thing: the expected
+message, level, payload, or metric. Semantic Logger logs through a global, asynchronous pipeline, so
+you cannot simply read it back from a normal appender. Instead it ships a test helper that **captures
+log events in memory** during a block, so you can make assertions on them.
 
-To add the Minitest helper methods, add the following line to `test_helper.rb`:
+The events are captured as raw `SemanticLogger::Log` objects, before any appender or formatter runs,
+so your assertions are not affected by how logging happens to be configured.
+
+The fastest path is the Minitest helpers below. RSpec and other frameworks are covered further down.
+
+## Minitest
+
+### Step 1: install the helpers
+
+Add the helper methods to your tests, once, in `test_helper.rb`:
 
 ~~~ruby
 Minitest::Test.include SemanticLogger::Test::Minitest
 ~~~
 
-Example test file:
+### Step 2: capture events
+
+Wrap the code under test in `semantic_logger_events`. It returns every log event created during the
+block:
+
+~~~ruby
+messages = semantic_logger_events do
+  User.new.enable!
+end
+~~~
+
+By default it captures events from every class. To capture only the events from one class, pass that
+class:
+
+~~~ruby
+messages = semantic_logger_events(ApiClient) do
+  # Only ApiClient log events created during this block are captured.
+end
+~~~
+
+### Step 3: assert on the events
+
+Check how many events were produced, then assert on each one with `assert_semantic_logger_event`:
 
 ~~~ruby
 require_relative "test_helper"
@@ -28,21 +61,20 @@ class UserTest < ActiveSupport::TestCase
   describe User do
     it "logs message" do
       messages = semantic_logger_events do
-        # Captures all log events during this block
         User.new.enable!
       end
 
-      # Confirm the number of expected messages
+      # How many events were logged
       assert_equal 2, messages.count, messages
 
-      # Confirm that the first log message includes the following elements
+      # The first event
       assert_semantic_logger_event(
         messages[0],
         level:   :info,
         message: "User enabled"
       )
 
-      # Confirm that the second log message includes the following elements
+      # The second event
       assert_semantic_logger_event(
         messages[1],
         level:   :debug,
@@ -53,63 +85,34 @@ class UserTest < ActiveSupport::TestCase
 end
 ~~~
 
-For more examples on testing log messages,
-see [Rails Semantic Logger tests](https://github.com/reidmorrison/rails_semantic_logger/blob/master/test/active_record_test.rb).
+Every argument other than the event itself is optional, so you assert only on what matters to the
+test. The available checks are:
 
-#### Capturing Events
+| Argument | Checks |
+|----------|--------|
+| `message` | Exact match of the text message. |
+| `message_includes` | Partial (substring) match of the message. |
+| `level` | Log level: `:trace`, `:debug`, `:info`, `:warn`, `:error`, `:fatal`. |
+| `payload` | Exact match of the payload Hash. |
+| `payload_includes` | Partial match: the given keys/values, ignoring any others. |
+| `tags` | Tags active on the thread when logged. |
+| `named_tags` | Named tags active on the thread when logged. |
+| `name` | Class name of the logger. |
+| `exception` | The Ruby exception that was logged. |
+| `metric` | The metric name. |
+| `metric_amount` | The metric amount. |
+| `dimensions` | The metric dimensions. |
+| `context` | Named contexts captured with the entry. |
+| `time` | When the entry was created. |
+| `duration` | Duration of a measure call, in milliseconds. |
+| `backtrace` | The captured backtrace, if any. |
+| `thread_name` | Name of the thread that logged the entry. |
 
-The method `semantic_logger_events` returns all captured log events that occurred during the supplied block.
+### Match part of a message or payload
 
-~~~ruby
-messages = semantic_logger_events do
-  # ... Captures all log events during this block
-end
-~~~
+For assertions that should not break on incidental detail, match partially.
 
-By default `semantic_logger_events` captures all log events. To narrow the events to only those
-captured by a specific class, supply the class name. For Example:
-
-~~~ruby
-messages = semantic_logger_events(ApiClient) do
-  # ... Only captures ApiClient log events created during this block.
-end
-~~~
-
-#### Verifying a log event
-
-Use `assert_semantic_logger_event` to verify that a single log event has all the required attributes.
-
-~~~ruby
-assert_semantic_logger_event(
-  messages[0],
-  level:   :info,
-  message: "User enabled",
-)
-~~~
-
-All arguments other than `event` are optional:
-
-- `event`: `SemanticLogger::Log` the event captured.
-- `message`: Text message to be logged.
-- `message_includes`: A partial match of the message.
-- `level`: Log level of the supplied log call: `:trace, :debug, :info, :warn, :error, :fatal`.
-- `payload`: Exact match of hash of payload items.
-- `payload_includes`: Partial match of payload items.
-- `tags`: Any tags active on the thread when the log call was made.
-- `named_tags`: Any tags active on the thread when the log call was made.
-- `name`: Class name supplied to the logging instance.
-- `exception`: Ruby Exception object that was logged.
-- `metric`: The metric text supplied.
-- `metric_amount`: Used for numeric or counter metrics.
-- `dimensions`: Any dimensions captured.
-- `context`: Hash of named contexts that were captured when the log entry was created.
-- `time`: The time at which the log entry was created.
-- `duration`: The time taken to complete a measure call in milli-seconds.
-- `backtrace`: The backtrace captured if active.
-- `thread_name`: Name of the thread in which the logging call was called.
-
-Instead of asserting an exact match on the `message`, a partial match can be supplied using `message_includes`. For
-example:
+Use `message_includes` for a substring of the message:
 
 ~~~ruby
 assert_semantic_logger_event(
@@ -119,72 +122,63 @@ assert_semantic_logger_event(
 )
 ~~~
 
-To verify a partial payload, and ignore any extra keys in the payload, use `payload_includes` to
-specify the partial payload.
-
-Example, asserts the entire payload is an exact match:
+Use `payload_includes` to assert specific payload keys while ignoring any extras. Compare with
+`payload`, which must match the whole Hash exactly:
 
 ~~~ruby
+# Exact: the payload must be exactly these keys and values
 assert_semantic_logger_event(
   messages[0],
   level:   :info,
   message: "User enabled",
-  payload: {
-    first_name: "Jack",
-    last_name:  "Jones"
-  }
+  payload: {first_name: "Jack", last_name: "Jones"}
 )
-~~~
 
-Example, asserts a partial payload matches:
-
-~~~ruby
+# Partial: first_name must be present, other keys are ignored
 assert_semantic_logger_event(
   messages[0],
   level:            :info,
   message:          "User enabled",
-  payload_includes: {
-    first_name: "Jack"
-  }
+  payload_includes: {first_name: "Jack"}
 )
 ~~~
 
-### RSpec
+For more examples, see the
+[Rails Semantic Logger tests](https://github.com/reidmorrison/rails_semantic_logger/blob/master/test/active_record_test.rb).
 
-For RSpec users, this sample supplied by @jgascoignetaylor-godaddy will be useful:
+## RSpec
+
+There is no RSpec port of the Minitest helpers yet (pull requests welcome). In the meantime, capture
+events with `SemanticLogger::Test::CaptureLogEvents` and stub it in as the logger:
+
 ~~~ruby
-context 'when it blows up' do
+context "when it blows up" do
   let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
-  it 'should should log the error' do
+  it "logs the error" do
     allow_any_instance_of(MyThing).to receive(:logger).and_return(capture_logger)
-    MyThing.new('asdf').do_something!
+    MyThing.new("asdf").do_something!
 
-    expect(capture_logger.events.last.message).to include('Here is a message')
+    expect(capture_logger.events.last.message).to include("Here is a message")
     expect(capture_logger.events.last.level).to eq(:error)
   end
 end
 ~~~
 
-Open to pull requests to implement the RSpec equivalent of the Minitest helpers: `SemanticLogger::Test::Minitest`.
+(Sample courtesy of @jgascoignetaylor-godaddy.)
 
-### Other testing frameworks
+## Other test frameworks
 
-If you use another testing framework and would like to contribute helper methods similar
-to the ones supplied in Semantic Logger for Minitest, we would welcome a pull request.
-
-The approach is to stub out the Semantic Logger and replace it with an instance of
-`SemanticLogger::Test::CaptureLogEvents`. It looks and feels like a regular logging class,
-except that it retains the log events in memory. The raw events are captured so that tests are not
-affected by configured appenders or their formats.
-
-Define a special test logger to capture log events:
+The same approach works anywhere: replace the logger with a
+`SemanticLogger::Test::CaptureLogEvents` instance. It looks and behaves like a normal logger, but
+keeps the raw log events in memory instead of writing them, so your assertions are unaffected by the
+configured appenders or their formats.
 
 ~~~ruby
-let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
+logger = SemanticLogger::Test::CaptureLogEvents.new
 ~~~
 
-To capture just the log events from a specific class, stub the logger on that class:
+Stub it onto a single class to capture just that class's logging:
 
 ~~~ruby
 User.stub(:logger, logger) do
@@ -192,7 +186,7 @@ User.stub(:logger, logger) do
 end
 ~~~
 
-Or, to capture all log events from all classes, stub the global logger:
+Or stub the global processor to capture logging from every class:
 
 ~~~ruby
 SemanticLogger::Logger.stub(:processor, logger) do
@@ -200,6 +194,7 @@ SemanticLogger::Logger.stub(:processor, logger) do
 end
 ~~~
 
-The log events are now available in `logger.events`.
+Either way, the captured events are available as `logger.events`.
 
-### [Next: Appenders ==>](appenders.html)
+If you add helper methods for another framework like the Minitest ones, a pull request would be
+welcome.

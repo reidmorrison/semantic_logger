@@ -396,7 +396,7 @@ module SemanticLogger
     end
 
     # Log message at the specified level
-    def log_internal(level, index, message = nil, payload = nil, exception = nil)
+    def log_internal(level, index, message = nil, payload = nil, exception = nil, &block)
       # Handle variable number of arguments by detecting exception object and payload hash.
       if exception.nil? && payload.nil? && message.respond_to?(:backtrace) && message.respond_to?(:message)
         exception = message
@@ -423,18 +423,26 @@ module SemanticLogger
         end
 
       # Add result of block to message or payload if not nil
-      if block_given?
-        result = yield(log)
-        case result
-        when String
-          log.message = log.message.nil? ? result : "#{log.message} -- #{result}"
-        when Hash
-          log.assign_hash(result)
-        end
-      end
+      apply_block_result(log, &block) if block
 
       # Log level may change during assign due to :on_exception_level
       self.log(log) if should_log && should_log?(log)
+    end
+
+    # Merge the result of a logging block into the log entry.
+    #
+    # Zero-arity blocks (e.g. `logger.info { "msg" }` or a zero-arity lambda) are called without
+    # arguments. Lambdas enforce their arity, so yielding the log to a zero-arity lambda would
+    # raise ArgumentError. Blocks that accept an argument still receive the log so they can read
+    # or mutate it.
+    def apply_block_result(log, &block)
+      result = block.arity.zero? ? block.call : block.call(log)
+      case result
+      when String
+        log.message = log.message.nil? ? result : "#{log.message} -- #{result}"
+      when Hash
+        log.assign_hash(result)
+      end
     end
 
     # Measure the supplied block and log the message

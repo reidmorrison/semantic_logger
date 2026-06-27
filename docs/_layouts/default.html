@@ -28,21 +28,10 @@
         </a>
       </td>
       <td>
-        <a href="index.html" class="btn">Home</a>
-        <a href="rails.html" class="btn">Rails</a>
-        <a href="centralized_logging.html" class="btn">Centralized Logging</a>
-        <a href="api.html" class="btn">Guide</a>
-        <a href="testing.html" class="btn">Testing</a>
-        <a href="appenders.html" class="btn">Appenders</a>
-        <a href="metrics.html" class="btn">Metrics</a>
-        <a href="signals.html" class="btn">Signals</a>
-        <a href="forking.html" class="btn">Forking</a>
-        <a href="log_rotation.html" class="btn">Log Rotation</a>
-        <a href="filtering.html" class="btn">Filtering</a>
-        <a href="customize.html" class="btn">Customize</a>
-        <a href="security.html" class="btn">Security</a>
-        <a href="log_struct.html" class="btn">Log Event</a>
-        <a href="upgrading.html" class="btn">Upgrading</a>
+        {% assign current_page = page.name | replace: '.md', '.html' %}
+        {% assign nav_items = "index.html=Home,api.html=Guide,config.html=Configuration,appenders.html=Appenders,metrics.html=Metrics,operations.html=Operations,security.html=Security,log.html=Log Event,testing.html=Testing,rails.html=Rails,upgrading.html=Upgrading" | split: ',' %}
+        {% for item in nav_items %}{% assign pair = item | split: '=' %}
+        <a href="{{ pair[0] }}" class="btn{% if pair[0] == current_page %} active{% endif %}">{{ pair[1] }}</a>{% endfor %}
         <a href="https://github.com/reidmorrison/semantic_logger" class="btn">GitHub</a>
         <h1 class="project-name">Semantic Logger</h1>
         <h2 class="project-tagline">Semantic Logger is a feature rich logging framework, and replacement for existing
@@ -56,6 +45,21 @@
   <section class="main-content">
     {{content}}
   </section>
+
+  <script>
+    // Keep anchor / TOC jumps clear of the sticky header by matching
+    // scroll-padding-top to the header's actual height (it varies by breakpoint).
+    (function () {
+      var header = document.querySelector(".page-header");
+      if (!header) return;
+      function setOffset() {
+        document.documentElement.style.scrollPaddingTop = header.offsetHeight + "px";
+      }
+      setOffset();
+      window.addEventListener("resize", setOffset);
+      window.addEventListener("load", setOffset);
+    })();
+  </script>
 </body>
 
 </html>

@@ -3,6 +3,12 @@ layout: default
 ---
 
 ## Rails
+{:.no_toc}
+
+**Contents**
+
+* TOC
+{:toc}
 
 [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger) is a companion gem
 that wires Semantic Logger into Rails for you. Once installed it:
@@ -192,7 +198,7 @@ In addition to a destination, most appenders accept these options:
 |--------|-------------|
 | `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level` (which Rails Semantic Logger sets from `config.log_level`). |
 | `formatter` | How to format the output: `:default`, `:color`, `:json`, `:logfmt`, `:one_line`, or a custom formatter (see [Output formats](#output-formats)). |
-| `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](filtering.html). |
+| `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
 
 For example, send only warnings and above to a separate JSON file:
@@ -287,7 +293,7 @@ end
 ~~~
 
 See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb)
-for the methods you can override, and [Customize](customize.html) for more on formatters.
+for the methods you can override, and [Custom formatters](config.html#custom-formatters) for more on formatters.
 
 #### Amazing Print options for the color formatter
 
@@ -554,7 +560,7 @@ CustomControllerBase.include(SemanticLogger::Loggable)
 ### Process forking
 
 If you use a forking server (Puma, Unicorn) or fork worker processes, see
-[Process Forking](forking.html). With Semantic Logger v5 appenders are reopened automatically after
+[Process Forking](operations.html#process-forking). With Semantic Logger v5 appenders are reopened automatically after
 a fork, so the manual `after_fork { SemanticLogger.reopen }` hook is usually no longer needed.
 
 ### Log rotation
@@ -656,5 +662,3 @@ and will be **removed in v6**. Each is replaced by the [appenders block](#config
 | `config.rails_semantic_logger.filter` | `filter:` on the appender |
 | `config.rails_semantic_logger.console_logger` | Declare (or omit) an `add_console` appender |
 | `config.rails_semantic_logger.add_file_appender` | Declare appenders in the block (doing so already replaces the default file appender) |
-
-### [Next: Centralized Logging ==>](centralized_logging.html)

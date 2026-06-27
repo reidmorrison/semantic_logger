@@ -3,6 +3,12 @@ layout: default
 ---
 
 ## What is Semantic Logger?
+{:.no_toc}
+
+**Contents**
+
+* TOC
+{:toc}
 
 Semantic Logger is a feature rich logging framework for Ruby, and a replacement
 for the built-in Ruby and Rails loggers.
@@ -64,7 +70,7 @@ search, filter, and build dashboards on those fields directly, no log parsing re
 * **A familiar API.** It supports the standard `debug`/`info`/`warn`/`error`/`fatal` API, so
   existing code and other gems keep working. You mostly just change how the logger is created.
 * **Built for production.** Per-class log levels, change the log level of a running process with a
-  [signal](signals.html), tagged logging for tracing requests across threads, automatic exception
+  [signal](operations.html#linux-signals), tagged logging for tracing requests across threads, automatic exception
   capture, and [metrics](metrics.html) for dashboards.
 
 ## Quick start
@@ -174,71 +180,16 @@ the writing happens off to the side, the thread that called `logger.info` return
 This design is why Semantic Logger is both fast and thread safe: log calls from hundreds of
 concurrent threads simply enqueue events, and each appender writes them out sequentially in the
 correct order. For the rare cases where you want logging to happen inline on the calling thread,
-see [Synchronous Operation](api.html#synchronous-operation).
+see [Synchronous Operation](operations.html#synchronous-operation).
 
-### Non-blocking (dropping) mode
-
-By default the in-memory queue is capped (`max_queue_size`, default `10,000`). When the queue is
-full, for example because an appender cannot keep up, calls to `logger.info` block until space
-becomes available. This guarantees no log message is lost, at the cost of (briefly) slowing down
-the application.
-
-For workloads where application availability matters more than complete logs, enable
-`non_blocking` so that log messages are dropped instead of blocking the calling thread once the
-queue is full:
-
-~~~ruby
-SemanticLogger.add_appender(
-  file_name:    "production.log",
-  async:        true,
-  non_blocking: true
-)
-~~~
-
-When messages are dropped, the count is logged to the internal logger at most once every
-`dropped_message_report_seconds` (default `30`) so that dropped messages do not go unnoticed:
-
-~~~ruby
-SemanticLogger.add_appender(
-  file_name:                      "production.log",
-  async:                          true,
-  non_blocking:                   true,
-  dropped_message_report_seconds: 60
-)
-~~~
-
-`non_blocking` only applies to a capped queue; an uncapped queue (`max_queue_size: -1`) never
-blocks and never drops, but can grow without bound.
-
-### Worker thread retries
-
-If an appender raises while the background worker thread is writing a message, the thread logs the
-error and restarts so that a transient failure (for example a brief network blip for a remote
-appender) does not permanently stop logging. Each restart first sleeps with an increasing back-off
-(1 second, then 2, ...), and the count resets as soon as a message is processed successfully.
-
-After `async_max_retries` (default `100`) consecutive failed restarts the worker thread stops
-instead of restarting, to avoid spinning forever on a persistent failure:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender:          :http,
-  url:               "https://example.com/log",
-  async:             true,
-  async_max_retries: 20
-)
-~~~
-
-To restore the previous behaviour of retrying indefinitely (never giving up), set
-`async_max_retries: -1`. The back-off still applies and still resets after a successful message:
-
-~~~ruby
-SemanticLogger.add_appender(file_name: "production.log", async: true, async_max_retries: -1)
-~~~
+This design is also tunable for production workloads. The in-memory queue is capped by default
+(blocking when full so that no log message is lost), but it can instead drop messages to protect
+application availability, give a slow appender its own thread, retry transient appender failures,
+and be monitored at runtime. See
+[Performance and reliability tuning](operations.html#performance-and-reliability-tuning) in the
+Configuration guide.
 
 ### Ruby Support
 
 For the complete list of supported Ruby versions, see
 the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/master/.github/workflows/ci.yml).
-
-### [Next: Rails ==>](rails.html)

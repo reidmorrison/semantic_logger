@@ -3,16 +3,22 @@ layout: default
 ---
 
 ## Appenders
+{:.no_toc}
 
-An **appender** is a destination that log messages are written to. Semantic Logger can write to
-several appenders at the same time, each with its own log level and format. For example you might
-log colorized text to the screen, JSON to a file, and errors to an external service, all from the
-same log call.
+**Contents**
 
-### Adding an appender
+* TOC
+{:toc}
 
-Every destination is configured through a single method, `SemanticLogger.add_appender`. The keyword
-you use selects the kind of destination:
+An **appender** is a destination that log entries are written to: a file, the screen, a database, or
+a remote service. Semantic Logger can write to several appenders at the same time, each with its own
+log level and format, all from the same log call. For example you might log colorized text to the
+screen, JSON to a file, and errors to an external service simultaneously.
+
+## Step 1: Add a destination
+
+Every destination is added through one method, `SemanticLogger.add_appender`, usually once at startup.
+The keyword you pass selects the kind of destination:
 
 ~~~ruby
 # A text file
@@ -27,21 +33,24 @@ SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:920
 # An existing Ruby or Rails logger
 SemanticLogger.add_appender(logger: Logger.new($stdout))
 
-# A metrics destination
+# A metrics destination (see the Metrics guide)
 SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
 ~~~
 
-Call `add_appender` once per destination, usually when your application starts.
+In a Rails app using [rails_semantic_logger](rails.html), put `add_appender` calls in an initializer
+such as `config/initializers/semantic_logger.rb`. Otherwise add them wherever you configure Semantic
+Logger when the application boots.
 
-### Common options
+## Step 2: Set the level, format, and filter
 
-In addition to its own settings, most appenders accept these options:
+In addition to its own settings, almost every appender accepts these common options, so each
+destination can keep a different subset of the logs in a different format:
 
 | Option | Description |
 |--------|-------------|
 | `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level`. |
-| `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Customize](customize.html). |
-| `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](filtering.html). |
+| `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Custom formatters](config.html#custom-formatters). |
+| `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
 
 For example, write only warnings and above to a file, formatted as JSON:
@@ -50,10 +59,14 @@ For example, write only warnings and above to a file, formatted as JSON:
 SemanticLogger.add_appender(file_name: "errors.log", level: :warn, formatter: :json)
 ~~~
 
-### Available destinations
+## Step 3: Pick your destinations
 
-Appenders for third party services require their backing gem to be installed. The gem is listed in
-the "Gem" column below and is loaded only when that appender is used.
+The tables below list every built-in destination. Pick the ones you need and jump to their section
+for a full example.
+
+Appenders for third-party services need their backing gem (shown in the "Gem" column). Add it to your
+`Gemfile` and run `bundle install`, or `gem install` it directly. The gem is loaded lazily the first
+time the appender is used, and is never a hard dependency of Semantic Logger itself.
 
 **Files and streams**
 
@@ -113,48 +126,90 @@ For metrics destinations such as Statsd, SignalFx, and New Relic, see [Metrics](
 > **Tip:** To ensure no log messages are lost, prefer TCP over UDP. Because of Semantic Logger's
 > asynchronous design, the performance difference between the two will not impact your application.
 
+## Files and streams
+
 ### Text File
 
-Log to file with the standard formatter:
+Log to a file, choosing a formatter to suit the reader:
 
 ~~~ruby
+# Standard text:
 SemanticLogger.add_appender(file_name: "development.log")
-~~~
 
-Log to file with the standard colorized formatter:
-
-~~~ruby
+# Colorized text, for a terminal:
 SemanticLogger.add_appender(file_name: "development.log", formatter: :color)
-~~~
 
-Log to file in JSON format:
-
-~~~ruby
+# JSON, for a machine:
 SemanticLogger.add_appender(file_name: "development.log", formatter: :json)
 ~~~
 
-For performance reasons the log file is not re-opened with every call.
-When the log file needs to be rotated, use a copy-truncate operation rather
-than deleting the file.
+For performance the log file is not re-opened on every call, so rotate it with a copy-truncate
+operation rather than deleting the file. See [Log rotation](operations.html#log-rotation).
 
-Log files frequently contain sensitive information. By default the file is created
-using the process umask (the standard Ruby behavior). To restrict access, supply the
-`permissions:` option, which is applied both when the file is created and to an
-existing log file:
+Log files frequently contain sensitive information. By default the file is created using the process
+umask (the standard Ruby behavior). To restrict access, supply `permissions:`, applied both when the
+file is created and to an existing log file:
 
 ~~~ruby
 # Owner read/write, group read, no access for others:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
 
-#### JSON log format
+### IO Streams
 
-When writing json log output, it has the following layout:
+Log to any IO stream instance, such as `$stdout` or `$stderr`:
+
+~~~ruby
+# Log errors and above to standard error:
+SemanticLogger.add_appender(io: $stderr, level: :error)
+~~~
+
+#### Splitting output across stdout and stderr
+
+A common pattern routes lower severity entries to `$stdout` and warnings and errors to `$stderr`.
+Semantic Logger allows one appender per console stream, so add one for each and use `level:` and/or
+`filter:` to control what each writes:
+
+~~~ruby
+stdout_filter = ->(log) { %i[trace debug info].include?(log.level) }
+
+# Informational messages to stdout:
+SemanticLogger.add_appender(io: $stdout, formatter: :color, level: :trace, filter: stdout_filter)
+
+# Warnings and above to stderr:
+SemanticLogger.add_appender(io: $stderr, formatter: :color, level: :warn)
+~~~
+
+Adding a second appender for a console stream that already has one is ignored (to avoid duplicate
+console output), but `$stdout` and `$stderr` are tracked separately.
+
+### Logger, log4r, etc.
+
+Semantic Logger can write to another logging library, either to gain the Semantic Logger interface
+while still writing to an existing destination, or to reach a destination it does not support natively:
+
+~~~ruby
+ruby_logger = Logger.new($stdout)
+
+# Log to an existing Ruby Logger instance
+SemanticLogger.add_appender(logger: ruby_logger)
+~~~
+
+Note: `:trace` level messages are mapped to `:debug`.
+
+## Structured output formats
+
+The file, IO, and HTTP appenders can emit machine-readable output by choosing a structured
+`formatter`. All three formats below produce a single line of JSON per entry.
+
+### JSON
+
+`formatter: :json` produces output with this layout:
 
 ~~~json
 {
   "timestamp": "ISO-8601",
-  
+
   "application": "Application name",
   "environment": "Custom Environment name",
   "host": "Host name",
@@ -162,7 +217,7 @@ When writing json log output, it has the following layout:
   "thread": "Thread name or id",
   "file": "filename",
   "line": "line number",
-  
+
   "level": "trace|debug|info|warn|error|fatal",
   "level_index": "0|1|2|3|4|5",
   "message": "The message text without any colorization",
@@ -172,17 +227,17 @@ When writing json log output, it has the following layout:
   "duration_ms": "Duration in milliseconds",
   "metric": "Name of the metric",
   "metric_amount": "Size of the metric, usually 1",
-  
+
   "named_tags": {
     "tag1": "any named tags will be inside this named_tags tag",
     "tag2": "any named tags will be inside this named_tags tag"
   },
-  
+
   "payload": {
     "field1": "any custom payload fields will be inside this payload tag",
     "field2": "any custom payload fields will be inside this payload tag"
   },
-  
+
   "exception": {
     "name": "Exception class name",
     "message": "Exception message",
@@ -196,56 +251,50 @@ When writing json log output, it has the following layout:
 }
 ~~~
 
-Note: 
-* The above JSON layout is formatted for readability. 
-  The actual json layout will be a single line terminated with a single newline.
-  It does not contain any embedded newlines.
-* If a field has a nil value it is excluded from the output json.
+Notes:
 
-#### Fluentd log format
+* The layout above is formatted for readability. The real output is a single line terminated by one
+  newline, with no embedded newlines.
+* A field with a `nil` value is excluded from the output.
 
-The `:fluentd` formatter is the same as `:json`, except that it renames the log
-level fields to `severity` and `severity_index` so they are recognized by the
-Kubernetes Fluentd log collector.
+### Fluentd
+
+`formatter: :fluentd` is the same as `:json`, except it renames the log level fields to `severity` and
+`severity_index` so they are recognized by the Kubernetes Fluentd log collector:
 
 ~~~ruby
 SemanticLogger.add_appender(io: $stdout, formatter: :fluentd)
 ~~~
 
-Differences from the standard JSON format:
+Differences from `:json`:
 
-* The `level` / `level_index` fields are named `severity` / `severity_index`.
-* `host` is excluded by default, since under Fluentd it is usually the (not very
-  useful) container id. Pass `log_host: true` to include it.
-* The process fields `pid`, `thread`, `file`, and `line` are excluded by default.
-  Pass `need_process_info: true` to include them.
+* `level` / `level_index` become `severity` / `severity_index`.
+* `host` is excluded by default (under Fluentd it is usually the not-very-useful container id). Pass
+  `log_host: true` to include it.
+* The process fields `pid`, `thread`, `file`, and `line` are excluded by default. Pass
+  `need_process_info: true` to include them.
 
-To override any of these defaults, construct the formatter explicitly:
+Construct the formatter explicitly to override these defaults:
 
 ~~~ruby
 formatter = SemanticLogger::Formatters::Fluentd.new(log_host: true, need_process_info: true)
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 ~~~
 
-#### ECS (Elastic Common Schema) log format
+### ECS (Elastic Common Schema)
 
-The `:ecs` formatter emits each log event using the nested field names defined by
-the [Elastic Common Schema](https://www.elastic.co/docs/reference/ecs) (targeting
-ECS 8.x), so logs integrate cleanly with Filebeat and the Elastic stack
-(Elasticsearch, Kibana) without an ingest pipeline to rename fields.
-
-Like `:json`, it produces a single line of JSON per event, so it works with the
-appenders that write or post JSON: an IO stream (`io: $stdout`), a file
-(`file_name:`), and the HTTP appender. The typical deployment writes ECS JSON to
-stdout or a log file and lets Filebeat or Elastic Agent ship it to Elasticsearch:
+`formatter: :ecs` emits each entry using the nested field names of the
+[Elastic Common Schema](https://www.elastic.co/docs/reference/ecs) (targeting ECS 8.x), so logs
+integrate cleanly with Filebeat and the Elastic stack without an ingest pipeline to rename fields. The
+typical deployment writes ECS JSON to stdout or a file and lets Filebeat or Elastic Agent ship it to
+Elasticsearch:
 
 ~~~ruby
-# Ship via Filebeat / Elastic Agent tailing stdout or a file:
 SemanticLogger.add_appender(io: $stdout, formatter: :ecs)
 SemanticLogger.add_appender(file_name: "production.log", formatter: :ecs)
 ~~~
 
-The Semantic Logger fields are mapped to ECS as follows:
+Semantic Logger fields map to ECS as follows:
 
 | Semantic Logger | ECS |
 | :--- | :--- |
@@ -265,85 +314,168 @@ The Semantic Logger fields are mapped to ECS as follows:
 | `named_tags` | `labels.*` |
 | `payload`, `metric`, `metric_amount` | nested under a custom namespace (see below) |
 
-ECS reserves the top-level field names it defines, so Semantic Logger data that
-has no native ECS home (the `payload`, `metric`, and `metric_amount`) is nested
-under a custom top-level namespace, `semantic_logger` by default. A proper-noun
-namespace is [the approach ECS recommends](https://www.elastic.co/docs/reference/ecs/ecs-custom-fields-in-ecs)
-for custom fields, since it is guaranteed never to collide with a current or
-future ECS field.
-
-Use the `namespace:` option to rename it:
+ECS reserves the top-level field names it defines, so Semantic Logger data with no native ECS home
+(`payload`, `metric`, and `metric_amount`) is nested under a custom top-level namespace,
+`semantic_logger` by default. A proper-noun namespace is
+[the approach ECS recommends](https://www.elastic.co/docs/reference/ecs/ecs-custom-fields-in-ecs) for
+custom fields, since it never collides with a current or future ECS field. Rename it with
+`namespace:`:
 
 ~~~ruby
 formatter = SemanticLogger::Formatters::Ecs.new(namespace: "my_app")
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 ~~~
 
-Or set `namespace: nil` to merge the payload directly into ECS `labels` alongside
-the named tags:
+Or set `namespace: nil` to merge the payload directly into ECS `labels` alongside the named tags:
 
 ~~~ruby
 formatter = SemanticLogger::Formatters::Ecs.new(namespace: nil)
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 ~~~
 
-### IO Streams
+## Network protocols
 
-Semantic Logger can log data to any IO Stream instance, such as $stderr or $stdout
+### HTTP(S)
 
-~~~ruby
-# Log errors and above to standard error:
-SemanticLogger.add_appender(io: $stderr, level: :error)
-~~~
-
-#### Splitting output across stdout and stderr
-
-A common operational pattern is to route lower severity messages to `$stdout` and
-warnings and errors to `$stderr`. Semantic Logger allows one appender per console
-stream, so a separate `$stdout` and `$stderr` appender can be added at the same time.
-Use `level:` and/or `filter:` to control what each one writes:
+The HTTP appender sends JSON to most services that accept log messages over HTTP or HTTPS:
 
 ~~~ruby
-stdout_filter = ->(log) { %i[trace debug info].include?(log.level) }
+SemanticLogger.add_appender(appender: :http, url: "http://localhost:8088/path")
 
-# Informational messages to stdout:
-SemanticLogger.add_appender(io: $stdout, formatter: :color, level: :trace, filter: stdout_filter)
-
-# Warnings and above to stderr:
-SemanticLogger.add_appender(io: $stderr, formatter: :color, level: :warn)
+# For HTTPS, just change the scheme:
+SemanticLogger.add_appender(appender: :http, url: "https://localhost:8088/path")
 ~~~
 
-Adding a second appender for a console stream that already has one is ignored (to
-avoid duplicate console output), but `$stdout` and `$stderr` are tracked separately.
+The JSON being sent can be customized with a formatter:
+
+~~~ruby
+formatter = Proc.new do |log, logger|
+  h = log.to_h(logger.host, logger.application)
+
+  # Change time from iso8601 to seconds since epoch
+  h[:timestamp] = log.time.utc.to_f
+
+  # Render to JSON
+  h.to_json
+end
+
+SemanticLogger.add_appender(appender: :http, url: "https://localhost:8088/path", formatter: formatter)
+~~~
+
+#### Batching
+
+By default each entry is sent in its own HTTP request. To send multiple entries in one request as a
+JSON array, enable batching with `batch: true`. This suits endpoints that accept an array and create
+one document per element, such as the
+[Filebeat http_endpoint input](https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-input-http_endpoint.html):
+
+~~~ruby
+SemanticLogger.add_appender(appender: :http, url: "http://localhost:8088/path", batch: true)
+~~~
+
+With batching the appender runs on its own thread and flushes once `batch_size` entries have
+accumulated (default 300) or `batch_seconds` have elapsed (default 5), whichever comes first:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:      :http,
+  url:           "http://localhost:8088/path",
+  batch:         true,
+  batch_size:    100,
+  batch_seconds: 10
+)
+~~~
+
+### TCP Appender (+SSL)
+
+The TCP appender sends JSON or other formatted messages to services that accept log messages over TCP,
+optionally with SSL:
+
+~~~ruby
+# Plain TCP:
+SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088")
+
+# TCP with SSL:
+SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088", ssl: true)
+
+# With self-signed certificates, or to disable server certificate verification:
+SemanticLogger.add_appender(
+  appender: :tcp,
+  server:   "localhost:8088",
+  ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE}
+)
+~~~
+
+Customize the message with a formatter:
+
+~~~ruby
+formatter = Proc.new do |log, logger|
+  h = log.to_h(logger.host, logger.application)
+  h[:timestamp] = log.time.utc.to_f # seconds since epoch
+  h.to_json
+end
+
+SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088", formatter: formatter)
+~~~
+
+See [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client) for the remaining connection
+options.
+
+The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
+which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter
+such as `:default` or `:color`, enable `escape_control_chars` so a newline in the data cannot forge or
+split a record:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :tcp,
+  server:    "localhost:8088",
+  formatter: {default: {escape_control_chars: true}}
+)
+~~~
+
+### UDP Appender
+
+The UDP appender sends JSON or other formatted messages over UDP:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :udp, server: "localhost:8088")
+~~~
+
+Customize the message with a formatter:
+
+~~~ruby
+formatter = Proc.new do |log, logger|
+  h = log.to_h(logger.host, logger.application)
+  h[:timestamp] = log.time.utc.to_f # seconds since epoch
+  h.to_json
+end
+
+SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", formatter: formatter)
+~~~
 
 ### Syslog
 
-Log to a local Syslog daemon
+Log to a local Syslog daemon:
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :syslog)
 ~~~
 
-Log to a remote Syslog server using TCP with packet size 2048 bytes. By default the size is 1024 bytes:
+Log to a remote Syslog server over TCP (the `net_tcp_client` and `syslog_protocol` gems are required).
+The default packet size is 1024 bytes:
 
 ~~~ruby
-SemanticLogger.add_appender(
-  appender: :syslog,
-  url:      "tcp://myloghost:514",
-  max_size: 2048
-)
+SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514", max_size: 2048)
 ~~~
 
-Log to a remote Syslog server using UDP:
+Or over UDP (the `syslog_protocol` gem is required):
 
 ~~~ruby
-SemanticLogger.add_appender(
-  appender: :syslog,
-  url:      "udp://myloghost:514"
-)
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514")
 ~~~
 
-Optional: Add filter to exclude health_check, or other log entries:
+Add a filter to exclude noisy entries such as health checks:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -353,23 +485,9 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-If logging to a remote Syslog server using UDP, add the following line to your `Gemfile`:
-
-~~~ruby
-gem "syslog_protocol"
-~~~
-
-If logging to a remote Syslog server using TCP, add the following lines to your `Gemfile`:
-
-~~~ruby
-gem "syslog_protocol"
-gem "net_tcp_client"
-~~~
-
-Syslog frames each record, so embedded newlines or other control characters in
-untrusted log data could otherwise forge or split records. The syslog formatters
-therefore escape control characters by default. To restore the previous behavior of
-passing control characters through unchanged:
+Syslog frames each record, so embedded newlines or other control characters in untrusted data could
+forge or split records. The syslog formatters therefore escape control characters by default. To pass
+them through unchanged:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -381,106 +499,12 @@ SemanticLogger.add_appender(
 
 Note: `:trace` level messages are mapped to `:debug`.
 
-### Graylog
-
-Send all log messages to a centralized logging server running [Graylog](https://www.graylog.org).
-
-The Graylog appender retains all Semantic information when forwarding to Graylog.
-( I.e. Data is sent as JSON and avoids the loss of semantic information which would gave occurred
-had the log information been converted to text.)
-
-For Rails applications, or running bundler, add the following line to the file `Gemfile`:
-
-~~~ruby
-gem "gelf"
-~~~
-
-Install gems:
-
-~~~
-bundle install
-~~~
-
-If not using Bundler:
-
-~~~
-gem install gelf
-~~~
-
-To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
-create a file called `<Rails Root>/config/initializers/graylog.rb` with
-the following contents and restart the application.
-
-To use the TCP Protocol:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :graylog,
-  url:      "tcp://localhost:12201"
-)
-~~~
-
-Or, to use the UDP Protocol:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :graylog,
-  url:      "udp://localhost:12201"
-)
-~~~
-
-If not using Rails, the `facility` can be removed, or set to a custom string describing the application.
-
-Note: `:trace` level messages are mapped to `:debug`.
-
-### Splunk HTTP
-
-In order to write messages to the Splunk HTTP Collector, follow the Splunk instructions
-to enable the [HTTP Event Collector](http://dev.splunk.com/view/event-collector/SP-CAAAE7F).
-The instructions also include information on how to generate a token that needs to be supplied below.
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :splunk_http,
-  url:      "http://localhost:8088/services/collector/event",
-  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-)
-~~~
-
-Once log messages have been sent, open the Splunk web interface and select Search.
-To start with limit the message source to the newly added host:
-
-If the machine's name generating the messages is `hostname`, Search for: `host=hostname`
-
-Then change the output list to table view and select only these "interesting columns":
-
-* host
-* duration
-* name
-* level
-* message
-
-If HTTPS is being used for the Splunk HTTP Collector, update the url accordingly:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :splunk_http,
-  url:      "https://localhost:8088/services/collector/event",
-  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-)
-~~~
-
-#### Splunk HTTP Performance
-
-In testing against a local Splunk instance the performance was only about 30 log messages per second.
-For much better performance consider using the TCP appender to write to Splunk, it achieved 1,400 messages
-per second with non-ssl. With SSL over TCP to Splunk it was logging just over 1,200 log messages per second.
+## Centralized logging and aggregators
 
 ### Elasticsearch
 
-Forward all log messages to Elasticsearch.
-
-Example:
+Forward all log entries to Elasticsearch (requires the `elasticsearch` gem). By default entries are
+written to a daily index named `semantic_logger-YYYY.MM.DD`; override it with `index:`:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -491,17 +515,15 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+For an end-to-end walkthrough with Kibana, see [Centralized Logging](operations.html#centralized-logging).
+
 ### OpenSearch
 
-Forward all log messages to OpenSearch (for example AWS OpenSearch).
-
-OpenSearch is a fork of Elasticsearch and uses the same bulk indexing API, so this
-appender accepts the same options as the [Elasticsearch](#elasticsearch) appender. Use
-it together with the `opensearch-ruby` gem when talking to an OpenSearch server, since
-recent `elasticsearch` gems reject non-Elasticsearch servers with an
-`Elasticsearch::UnsupportedProductError`.
-
-Example:
+Forward all log entries to OpenSearch, for example AWS OpenSearch (requires the `opensearch-ruby`
+gem). OpenSearch is a fork of Elasticsearch and uses the same bulk indexing API, so this appender
+accepts the same options as [Elasticsearch](#elasticsearch). Use it instead of the Elasticsearch
+appender when talking to an OpenSearch server, since recent `elasticsearch` gems reject
+non-Elasticsearch servers with an `Elasticsearch::UnsupportedProductError`:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -512,12 +534,136 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+### Graylog
+
+Send log entries to a [Graylog](https://www.graylog.org) server (requires the `gelf` gem). Data is
+sent as JSON, so all of the semantic structure is retained rather than being flattened into text.
+
+Over TCP:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :graylog, url: "tcp://localhost:12201")
+~~~
+
+Or over UDP:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :graylog, url: "udp://localhost:12201")
+~~~
+
+If not using Rails, the `facility` can be removed, or set to a custom string describing the
+application. Note: `:trace` level messages are mapped to `:debug`.
+
+### Splunk HTTP
+
+To write to the Splunk HTTP Collector, follow the Splunk instructions to enable the
+[HTTP Event Collector](http://dev.splunk.com/view/event-collector/SP-CAAAE7F) and generate a token:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :splunk_http,
+  url:      "http://localhost:8088/services/collector/event",
+  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+)
+~~~
+
+For HTTPS, change the URL scheme to `https`. Once entries have been sent, open the Splunk web
+interface, select Search, limit to the new host (`host=hostname`), switch to table view, and select
+the interesting columns: `host`, `duration`, `name`, `level`, `message`.
+
+**Performance:** against a local Splunk instance, the HTTP collector handled only about 30 entries per
+second. For much higher throughput, write to Splunk with the [TCP appender](#tcp-appender-ssl)
+instead, which reached about 1,400 entries per second (1,200 with SSL).
+
+### Grafana Loki
+
+Send log entries to [Grafana Loki](https://grafana.com/docs/loki) via its
+[HTTP push API](https://grafana.com/docs/loki/latest/reference/loki-http-api/#ingest-logs):
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :loki,
+  url:      "https://logs-prod-001.grafana.net",
+  username: "grafana_username",
+  password: "grafana_token_here",
+  compress: true
+)
+~~~
+
+Set the URL, username, and password to match your Loki instance. Set `compress: true` to compress the
+log messages.
+
+### CloudWatch Logs
+
+Forward all log entries to AWS CloudWatch Logs (requires the `aws-sdk-cloudwatchlogs` gem):
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:      :cloudwatch_logs,
+  client_kwargs: {region: "eu-west-1"},
+  group:         "/my/application",
+  create_stream: true
+)
+~~~
+
+### OpenTelemetry
+
+Send log entries to [OpenTelemetry](https://opentelemetry.io) through its
+[Logs API](https://opentelemetry.io/docs/specs/otel/logs/), so they can be exported to any
+OpenTelemetry-compatible backend (the OTLP collector, Honeycomb, Datadog, Grafana, and so on).
+
+This appender requires the `opentelemetry-logs-sdk` gem plus an exporter such as
+`opentelemetry-exporter-otlp-logs`:
+
+~~~ruby
+gem "opentelemetry-logs-sdk"
+gem "opentelemetry-exporter-otlp-logs"
+~~~
+
+Configure the OpenTelemetry SDK once at startup, then add the appender. `OpenTelemetry::SDK.configure`
+reads the standard `OTEL_*` environment variables (for example `OTEL_EXPORTER_OTLP_ENDPOINT`) and
+installs a logger provider, which the appender picks up automatically:
+
+~~~ruby
+require "opentelemetry-logs-sdk"
+require "opentelemetry-exporter-otlp-logs"
+
+OpenTelemetry::SDK.configure
+
+SemanticLogger.add_appender(appender: :open_telemetry)
+~~~
+
+Each entry is emitted with its level mapped to the matching OpenTelemetry severity number, the message
+as the record body, and the payload as record attributes. The appender registers a
+`SemanticLogger.on_log` subscriber that captures the current OpenTelemetry context as each entry is
+logged, so log records are correlated with the active trace and span.
+
+| Option | Description |
+|--------|-------------|
+| `name` | Instrumentation scope name reported to OpenTelemetry. Defaults to `"SemanticLogger"`. |
+| `version` | Instrumentation scope version. Defaults to the Semantic Logger gem version. |
+| `metrics` | Whether to forward metric-only log entries. Defaults to `true`. |
+
+### Logstash
+
+Forward log entries to Logstash through the `logstash-logger` gem. Configure a `LogStashLogger` and
+hand it to Semantic Logger as a `logger:` appender:
+
+~~~ruby
+require "logstash-logger"
+
+# See https://github.com/dwbutler/logstash-logger for further options
+log_stash = LogStashLogger.new(type: :tcp, host: "localhost", port: 5229)
+
+SemanticLogger.add_appender(logger: log_stash)
+~~~
+
+Note: `:trace` level messages are mapped to `:debug`.
+
 ### logentries.com
 
-Follow the instructions on [logentries](https://logentries.com/doc/input-token/)
-to obtain a token.
-
-Replace `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` below with the above token.
+Obtain a token by following the [logentries instructions](https://logentries.com/doc/input-token/),
+then prefix each JSON line with the token using a small custom formatter over the TCP appender:
 
 ~~~ruby
 module Logentries
@@ -540,30 +686,8 @@ SemanticLogger.add_appender(appender: :tcp, server: "api.logentries.com:20000", 
 
 ### loggly.com
 
-After signing up with Loggly obtain the token by logging into Loggly.com
-Navigate to `Source Setup` -> `Customer Tokens` and copy the token
-
-Replace `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` below with the above token.
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :http,
-  url:      "http://logs-01.loggly.com/inputs/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/tag/semantic_logger/"
-)
-~~~
-
-Once log messages have been sent, open the Loggly web interface and select Search.
-To isolate the new messages start with the following search: `tag:"semantic_logger"`
-
-In the Field Explorer change to Grid view and add the following fields using `Add as column to Grid`:
-
-* host
-* duration
-* name
-* level
-* message
-
-If HTTPS is being used for Loggly, update the url accordingly:
+After signing up with Loggly, obtain a token under `Source Setup` -> `Customer Tokens`, then post to
+the Loggly input URL with the HTTP appender:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -572,174 +696,142 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-### Logstash
-
-Forward log messages to Logstash.
-
-For Rails applications, or running bundler, add the following line to the file `Gemfile`:
-
-~~~ruby
-gem "logstash-logger"
-~~~
-
-Install gems:
-
-~~~
-bundle install
-~~~
-
-If not using Bundler:
-
-~~~
-gem install logstash-logger
-~~~
-
-If running Rails create an initializer with the following code, otherwise add the code
-to your program:
-
-~~~ruby
-require "logstash-logger"
-
-# Use the TCP logger
-# See https://github.com/dwbutler/logstash-logger for further options
-log_stash = LogStashLogger.new(type: :tcp, host: "localhost", port: 5229)
-
-SemanticLogger.add_appender(logger: log_stash)
-~~~
-
-Note: `:trace` level messages are mapped to `:debug`.
+Once entries have been sent, open the Loggly web interface, select Search, and start with
+`tag:"semantic_logger"`. In the Field Explorer switch to Grid view and add the columns `host`,
+`duration`, `name`, `level`, and `message`.
 
 ### Papertrail
 
-Papertrail accepts log messages via TLS TCP in syslog format.
-
-Sample configuration:
+Papertrail accepts log entries over TLS TCP in syslog format:
 
 ~~~ruby
 config.semantic_logger.add_appender(
-    appender: :syslog,
-    url:      "tcp://something.papertrailapp.com:1234",
-    tcp_client: {
-      ssl: {
-        ca_file: File.join(Rails.root, "config", "papertrail-bundle.pem")
-      }
+  appender:   :syslog,
+  url:        "tcp://something.papertrailapp.com:1234",
+  tcp_client: {
+    ssl: {
+      ca_file: File.join(Rails.root, "config", "papertrail-bundle.pem")
     }
-  )
+  }
+)
 ~~~
 
-For more information see the following section from [Papertrail's documentation](http://help.papertrailapp.com/kb/configuration/encrypting-remote-syslog-with-tls-ssl/). 
+See [Papertrail's documentation](http://help.papertrailapp.com/kb/configuration/encrypting-remote-syslog-with-tls-ssl/)
+for more.
+
+## Error and exception monitoring
+
+> **Note:** These appenders forward the payload as supplied. Take care not to push sensitive
+> information in tags or a payload.
 
 ### Bugsnag
 
-Forward `:info`, `:warn`, or `:error` log messages to Bugsnag.
-
-Note: Payload information is not filtered, so take care not to push any sensitive
-information when logging with tags or a payload.
-
-Configure Bugsnag following the [Ruby Bugsnag documentation](https://bugsnag.com/docs/notifiers/ruby#sending-handled-exceptions).
-
-To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
-create a file called `<Rails Root>/config/initializers/bugsnag.rb` with
-the following contents and restart the application.
-
-Send `:error` messages to Bugsnag:
+Forward `:info`, `:warn`, or `:error` entries to Bugsnag (requires the `bugsnag` gem). Configure
+Bugsnag following the
+[Ruby Bugsnag documentation](https://bugsnag.com/docs/notifiers/ruby#sending-handled-exceptions), then
+add the appender, choosing the minimum level to forward:
 
 ~~~ruby
+# :error and above (the default)
 SemanticLogger.add_appender(appender: :bugsnag)
-~~~
 
-Or, for a standalone installation add the code above after initializing Semantic Logger.
-
-Send `:warn` and `:error` messages to Bugsnag:
-
-~~~ruby
+# :warn and above
 SemanticLogger.add_appender(appender: :bugsnag, level: :warn)
-~~~
 
-Send `:info`, `:warn` and `:error` messages to Bugsnag:
-
-~~~ruby
+# :info and above
 SemanticLogger.add_appender(appender: :bugsnag, level: :info)
 ~~~
 
-### NewRelic
+### Sentry
 
-NewRelic supports Error Events in both it's paid and free subscriptions.
-
-Adding the New Relic appender will by default send `:error` and `:fatal` log entries to
-New Relic as error events.
-
-Note: Payload information is not filtered, so take care not to push any sensitive
-information when logging with tags or a payload.
-
-For Rails applications, or running bundler, add the following line to the bottom of the file `Gemfile`:
+Use the `sentry-ruby` gem and the corresponding appender (the older `sentry-raven` gem works but is
+deprecated):
 
 ~~~ruby
-gem "newrelic_rpm"
+SemanticLogger.add_appender(appender: :sentry_ruby)
 ~~~
 
-Install gems:
+Some logging context is forwarded to Sentry:
 
-~~~
-bundle install
+* From named tags, `transaction_name`. See
+  <https://docs.sentry.io/platforms/ruby/enriching-events/transaction-name/>.
+* From named tags or payload, `user` is built from the `user_id`, `username`, `user_email`, and
+  `ip_address` keys, plus any `user` key that is itself a hash. See
+  <https://docs.sentry.io/platforms/ruby/enriching-events/identify-user/>.
+* From the payload, `fingerprint` configures grouping granularity. See
+  <https://docs.sentry.io/platforms/ruby/usage/sdk-fingerprinting/>.
+* Named tags are sent as Sentry tags. See
+  <https://docs.sentry.io/platforms/ruby/enriching-events/tags/>.
+* Unnamed tags are sent as the `:tag` tag, separated by commas.
+* Everything else from the payload and context is added to `extras`.
+
+~~~ruby
+SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
+  logger.error("some message", username: "joe", fingerprint: ["bar"])
+end
 ~~~
 
-If not using Bundler:
+### Honeybadger and Honeybadger Insights
 
-~~~
-gem install newrelic_rpm
+Forward errors to Honeybadger (requires the `honeybadger` gem):
+
+~~~ruby
+SemanticLogger.add_appender(appender: :honeybadger)
 ~~~
 
-To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
-create a file called `<Rails Root>/config/initializers/new_relic.rb` with
-the following contents and restart the application.
+Or forward all log entries to Honeybadger Insights as events:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :honeybadger_insights)
+~~~
+
+Both appenders use the Honeybadger
+[gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
+
+### NewRelic
+
+New Relic supports Error Events on both its paid and free plans. The appender sends `:error` and
+`:fatal` entries to New Relic as error events by default (requires the `newrelic_rpm` gem):
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :new_relic)
-~~~
 
-To also send warnings to NewRelic:
-
-~~~ruby
+# To also send warnings:
 SemanticLogger.add_appender(appender: :new_relic, level: :warn)
 ~~~
 
-### MongoDB
+### Rollbar
 
-Write log messages as documents into a MongoDB capped collection.
-
-For Rails applications, or running bundler, add the following line to the file `Gemfile`:
+Rollbar needs its own current-thread context, so it cannot run as a regular appender unless logging is
+[synchronous](operations.html#synchronous-operation). Integrate it with an `on_log` subscriber instead
+(as recommended by @gingerlime):
 
 ~~~ruby
-gem "mongo"
+SemanticLogger.on_log do |log|
+  next unless log.try(:level) == :error
+
+  err = RuntimeError.new(log.try(:message))
+  err.set_backtrace(log.backtrace) if log.backtrace
+  Rollbar.error(err, :log_extra => log.to_h)
+end
 ~~~
 
-Install gems:
+## Databases and message queues
 
-~~~
-bundle install
-~~~
+### MongoDB
 
-If not using Bundler:
-
-~~~
-gem install mongo
-~~~
-
-To add to a Rails application that already uses [Rails Semantic Logger](rails.html)
-create a file called `<Rails Root>/config/initializers/mongodb.rb` with
-the following contents and restart the application.
+Write log entries as documents into a MongoDB capped collection (requires the `mongo` gem):
 
 ~~~ruby
 appender = SemanticLogger::Appender::MongoDB.new(
   uri:             "mongodb://127.0.0.1:27017/test",
-  collection_size: 1024**3, # 1.gigabyte
+  collection_size: 1024**3, # 1 gigabyte
   application:     Rails.application.class.name
 )
 SemanticLogger.add_appender(appender: appender)
 ~~~
 
-The following is written to Mongo:
+Each entry is stored as a document:
 
 ~~~javascript
 > db.semantic_logger.findOne()
@@ -759,18 +851,18 @@ The following is written to Mongo:
 
 ### Apache Kafka
 
-Publish log messages to an Apache Kafka broker.
+Publish log entries to an Apache Kafka broker (requires the `ruby-kafka` gem):
 
 ~~~ruby
 SemanticLogger.add_appender(
   appender:     :kafka,
-  seed_brokers: ["kafka1:9092", "kafka2:9092"],
+  seed_brokers: ["kafka1:9092", "kafka2:9092"]
 )
 ~~~
 
 ### RabbitMQ (AMQP)
 
-Stream log messages through a queue on RabbitMQ broker.
+Stream log entries through a queue on a RabbitMQ broker (requires the `bunny` gem):
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -778,386 +870,36 @@ SemanticLogger.add_appender(
   queue_name:    "semantic_logger",
   rabbitmq_host: "localhost",
   username:      "the-username",
-  password:      "the-password",
+  password:      "the-password"
 )
 ~~~
 
-### HTTP(S)
+## Logging to several destinations at once
 
-The HTTP appender supports sending JSON messages to most services that can accept log messages
-in JSON format via HTTP or HTTPS.
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :http,
-  url:      "http://localhost:8088/path"
-)
-~~~
-
-To send messages via HTTPS, change the url to:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :http,
-  url:      "https://localhost:8088/path"
-)
-~~~
-
-The JSON being sent can be modified as needed.
-
-Example, customize the JSON being sent:
-
-~~~ruby
-formatter = Proc.new do |log, logger|
-  h = log.to_h(logger.host, logger.application)
-
-  # Change time from iso8601 to seconds since epoch
-  h[:timestamp] = log.time.utc.to_f
-
-  # Render to JSON
-  h.to_json
-end
-
-SemanticLogger.add_appender(
-  appender:  :http,
-  url:       "https://localhost:8088/path",
-  formatter: formatter
-)
-~~~
-
-#### Batching
-
-By default each log message is sent in its own HTTP request. To instead send
-multiple log messages in a single request as a JSON array, enable batching with
-`batch: true`. This is useful for endpoints that accept an array of objects and
-create one document per element, such as the
-[Filebeat http_endpoint input](https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-input-http_endpoint.html).
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :http,
-  url:      "http://localhost:8088/path",
-  batch:    true
-)
-~~~
-
-When batching is enabled the appender runs in its own thread and flushes a batch
-once `batch_size` messages have accumulated (default: 300) or `batch_seconds`
-have elapsed (default: 5), whichever comes first:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender:      :http,
-  url:           "http://localhost:8088/path",
-  batch:         true,
-  batch_size:    100,
-  batch_seconds: 10
-)
-~~~
-
-### TCP Appender (+SSL)
-
-The TCP appender supports sending JSON or other formatted messages to services that can accept log messages
-via TCP or TCP with SSL.
-
-Send messages in JSON format over TCP:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :tcp,
-  server:   "localhost:8088"
-)
-~~~
-
-Send messages in JSON format over TCP with SSL enabled:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :tcp,
-  server:   "localhost:8088",
-  ssl:      true
-)
-~~~
-
-When using self-signed certificates, or to disable verification of the server SSL certificate:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :tcp,
-  server:   "localhost:8088",
-  ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE}
-)
-~~~
-
-Example, customize the message being sent:
-
-~~~ruby
-formatter = Proc.new do |log, logger|
-  h = log.to_h(logger.host, logger.application)
-
-  # Change time from iso8601 to seconds since epoch
-  h[:timestamp] = log.time.utc.to_f
-
-  # Render to JSON
-  h.to_json
-end
-
-SemanticLogger.add_appender(
-  appender: :tcp,
-  server:   "localhost:8088",
-  ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE},
-  formatter: formatter
-)
-~~~
-
-See [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client) for the remaining options that can be set when the appender is added.
-
-The TCP and UDP appenders separate records with a newline (and the Syslog appender
-frames its own packets), so they default to the JSON formatter, which escapes any
-embedded newlines and is safe to use with untrusted log data. If you replace the
-formatter with a text formatter such as `:default` or `:color`, enable
-`escape_control_chars` so that a newline in the log data cannot forge or split a
-record:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender:  :tcp,
-  server:    "localhost:8088",
-  formatter: {default: {escape_control_chars: true}}
-)
-~~~
-
-### UDP Appender
-
-The UDP appender supports sending JSON or other formatted messages to services that can accept log messages
-via UDP.
-
-Send messages in JSON format over UDP:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :udp,
-  server:   "localhost:8088"
-)
-~~~
-
-Example, customize the message being sent:
-
-~~~ruby
-formatter = Proc.new do |log, logger|
-  h = log.to_h(logger.host, logger.application)
-
-  # Change time from iso8601 to seconds since epoch
-  h[:timestamp] = log.time.utc.to_f
-
-  # Render to JSON
-  h.to_json
-end
-
-SemanticLogger.add_appender(
-  appender:  :udp,
-  server:    "localhost:8088",
-  formatter: formatter
-)
-~~~
-
-### Rollbar
-
-In order to integrate Rollbar error handling into Semantic Logger it requires it's own 
-current thread context. As such, it cannot use a regular appender unless running
-in Synchronous logging mode.
-
-As recommended by @gingerlime, to enable Rollbar for Semantic Logger add the following initializer:
-~~~ruby
-SemanticLogger.on_log do |log|
-  next unless log.try(:level) == :error
-
-  err = RuntimeError.new(log.try(:message))
-  err.set_backtrace(log.backtrace) if log.backtrace
-  Rollbar.error(err, :log_extra => log.to_h)
-end
-~~~
-
-### Sentry
-
-Usage of `sentry-raven` gem is possible but the gem itself is deprecated.
-
-Use the `sentry-ruby` gem instead, and the corresponding appender:
-
-~~~ruby
-SemanticLogger.add_appender(appender: :sentry_ruby)
-~~~
-
-Some of the logging context will be sent to Sentry:
-
-* From named tags, `transaction_name`.
-  See <https://docs.sentry.io/platforms/ruby/enriching-events/transaction-name/>.
-* From either named tags or payload, `user` is built based on `user_id`,
-  `username`, `user_email`, `ip_address` keys plus any additional `user` key
-  that happens to be a hash.
-  See <https://docs.sentry.io/platforms/ruby/enriching-events/identify-user/>.
-* From the payload, `fingerprint` can be used to configure grouping
-  granularity. See <https://docs.sentry.io/platforms/ruby/usage/sdk-fingerprinting/>.
-* Named tags are sent as tags. See <https://docs.sentry.io/platforms/ruby/enriching-events/tags/>
-* The unnamed tags are sent in as the `:tag` tag, separated by commas. An existing
-* Everything else from payload and context is added to the `extras`.
-
-~~~ruby
-SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
-  logger.error("some message", username: "joe", fingerprint: ["bar"])
-end
-~~~
-
-### Honeybadger and Honeybadger Insights
-
-Forward errors to Honeybadger.
-
-~~~ruby
-SemanticLogger.add_appender(appender: :honeybadger)
-~~~
-
-Forward all log messages to Honeybadger Insights as events.
-
-~~~ruby
-SemanticLogger.add_appender(appender: :honeybadger_insights)
-~~~
-
-Both appenders use the Honeybadger [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
-
-### Grafana Loki
-
-Sends log messages to [Grafana Loki](https://grafana.com/docs/loki) using its [HTTP push API](https://grafana.com/docs/loki/latest/reference/loki-http-api/#ingest-logs)
-
-```ruby
-SemanticLogger.add_appender(
-  appender: :loki,
-  url: "https://logs-prod-001.grafana.net",
-  username: "grafana_username",
-  password: "grafana_token_here",
-  compress: true
-)
-```
-
-Configure the URL, username and password according to your Grafana Loki instance. The `compress` option can be set to `true` to compress the log messages.
-
-### CloudWatch Logs
-
-Forward all log messages to CloudWatch Logs.
-
-Example:
-
-~~~ruby
-SemanticLogger.add_appender(
-  appender:    :cloudwatch_logs,
-  client_kwargs: {region: "eu-west-1"},
-  group: "/my/application",
-  create_stream: true
-)
-~~~
-
-### OpenTelemetry
-
-Send log messages to [OpenTelemetry](https://opentelemetry.io) through its
-[Logs API](https://opentelemetry.io/docs/specs/otel/logs/), so they can be exported to any
-OpenTelemetry-compatible backend (the OTLP collector, Honeycomb, Datadog, Grafana, and so on).
-
-This appender requires the `opentelemetry-logs-sdk` gem, plus an exporter such as
-`opentelemetry-exporter-otlp-logs`. Add them to your `Gemfile`:
-
-~~~ruby
-gem "opentelemetry-logs-sdk"
-gem "opentelemetry-exporter-otlp-logs"
-~~~
-
-Configure the OpenTelemetry SDK once when your application starts, then add the appender.
-`OpenTelemetry::SDK.configure` reads the standard `OTEL_*` environment variables (for example
-`OTEL_EXPORTER_OTLP_ENDPOINT`) and installs a logger provider, which the appender picks up
-automatically:
-
-~~~ruby
-require "opentelemetry-logs-sdk"
-require "opentelemetry-exporter-otlp-logs"
-
-OpenTelemetry::SDK.configure
-
-SemanticLogger.add_appender(appender: :open_telemetry)
-~~~
-
-Each log entry is emitted with its level mapped to the matching OpenTelemetry severity number, the
-message as the record body, and the payload as record attributes.
-
-The appender registers a `SemanticLogger.on_log` subscriber that captures the current
-OpenTelemetry context at the moment each entry is logged, so log records are correlated with the
-active trace and span.
-
-| Option | Description |
-|--------|-------------|
-| `name` | Instrumentation scope name reported to OpenTelemetry. Defaults to `"SemanticLogger"`. |
-| `version` | Instrumentation scope version. Defaults to the Semantic Logger gem version. |
-| `metrics` | Whether to forward metric-only log entries. Defaults to `true`. |
-
-### Logger, log4r, etc.
-
-Semantic Logger can log to other logging libraries:
-
-* Replace the existing log library to take advantage of the extensive Semantic Logger interface
-while still writing to the existing destinations.
-* Or, write to a destination not currently supported by Semantic Logger.
-
-~~~ruby
-ruby_logger = Logger.new($stdout)
-
-# Log to an existing Ruby Logger instance
-SemanticLogger.add_appender(logger: ruby_logger)
-~~~
-
-Note: `:trace` level messages are mapped to `:debug`.
-
-### Multiple Appenders
-
-Messages can be logged to multiple appenders at the same time.
-
-Example, log to a local file and to a remote Syslog server such as syslog-ng over TCP:
-
-~~~ruby
-require "semantic_logger"
-SemanticLogger.default_level = :trace
-SemanticLogger.add_appender(file_name: "development.log", formatter: :color)
-SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514")
-~~~
-
-### Appender Logging Levels
-
-The logging level for each appender can be set explicitly. This supports:
-
-* Only write a sub-set of messages to a particular destination.
-    * For example, level of `:error` will only send error messages to this appender
-      when other appenders may also be writing `:info`, etc.
-
-Stand alone example:
+Add as many appenders as you like; every entry is written to all of them. Use a per-appender `level`
+so each destination keeps a different subset.
 
 ~~~ruby
 require "semantic_logger"
 
-# Set default log level for new logger instances
 SemanticLogger.default_level = :info
 
-# Log all warning messages and above to warnings.log
+# Everything at :warn and above to one file:
 SemanticLogger.add_appender(file_name: "log/warnings.log", level: :warn)
 
-# Log all trace messages and above to trace.log
+# Everything at :trace and above to another:
 SemanticLogger.add_appender(file_name: "log/trace.log", level: :trace)
 
 logger = SemanticLogger["MyClass"]
 logger.level = :trace
 logger.trace "This is a trace message"
-logger.info "This is an info message"
-logger.warn "This is a warning message"
+logger.info  "This is an info message"
+logger.warn  "This is a warning message"
 ~~~
 
-The output is as follows:
+Each file receives only the entries at or above its level:
 
-~~~bash
+~~~
 ==> trace.log <==
 2013-08-02 14:15:56.733532 T [35669:70176909690580] MyClass -- This is a trace message
 2013-08-02 14:15:56.734273 I [35669:70176909690580] MyClass -- This is an info message
@@ -1167,20 +909,24 @@ The output is as follows:
 2013-08-02 14:15:56.735273 W [35669:70176909690580] MyClass -- This is a warning message
 ~~~
 
-### Standalone
+A common combination is colorized text to a local file plus a remote aggregator:
 
-Appenders can be created and logged to directly with the same API as for all other logging.
-Supports logging specific activity in the current thread to a separate appender without it
-being written to the appenders that have been registered in Semantic Logger.
+~~~ruby
+SemanticLogger.add_appender(file_name: "development.log", formatter: :color)
+SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514")
+~~~
 
-Example:
+## Standalone appenders
+
+An appender can be created and logged to directly, using the same API as any logger. This is useful to
+send specific activity on the current thread to a separate destination, without writing it to the
+appenders registered with Semantic Logger:
 
 ~~~ruby
 require "semantic_logger"
 
 appender = SemanticLogger::Appender::File.new("separate.log", level: :info, formatter: :color)
 
-# Use appender directly, without using global Semantic Logger
 appender.warn "Only send this to separate.log"
 
 appender.measure_info "Called supplier" do
@@ -1188,7 +934,5 @@ appender.measure_info "Called supplier" do
 end
 ~~~
 
-Note: Once an appender has been registered with Semantic Logger it must not be called
-      directly, otherwise non-deterministic concurrency issues will arise when it is used across threads.
-
-### [Next: Metrics ==>](metrics.html)
+Note: once an appender has been registered with Semantic Logger, do not also call it directly.
+Non-deterministic concurrency issues arise when it is used across threads.
