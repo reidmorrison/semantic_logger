@@ -21,4 +21,11 @@ Rake::TestTask.new(:test) do |t|
   t.warning = false
 end
 
-task default: :test
+begin
+  require "rspec/core/rake_task"
+  RSpec::Core::RakeTask.new(:spec)
+rescue LoadError
+  # RSpec is only available in the test/development environment.
+end
+
+task default: %i[test spec]

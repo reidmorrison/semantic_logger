@@ -41,6 +41,7 @@ Layout/SpaceInsideHashLiteralBraces:
 Metrics/BlockLength:
   Exclude:
     - "test/**/*"
+    - "spec/**/*"
     - "**/*/cli.rb"
 
 # Soften limits
@@ -48,6 +49,7 @@ Metrics/ClassLength:
   Max: 250
   Exclude:
     - "test/**/*"
+    - "spec/**/*"
     # Large abstract base class shared by Logger and Subscriber.
     - "lib/semantic_logger/base.rb"
 
@@ -64,7 +66,7 @@ Metrics/ParameterLists:
 
 # Initialization Vector abbreviation
 Naming/MethodParameterName:
-  AllowedNames: ['iv', '_', 'io', 'ap']
+  AllowedNames: ['iv', '_', 'io', 'ap', 'on']
 
 # Does not allow Symbols to load
 Security/YAMLLoad:

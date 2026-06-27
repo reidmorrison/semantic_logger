@@ -58,16 +58,16 @@ module SemanticLogger
           payload_includes.each_pair do |key, expected|
             actual = event.payload[key]
 
-            assert_semantic_logger_entry(event, "payload #{name}", expected, actual)
+            assert_semantic_logger_entry(event, "payload #{key}", expected, actual)
           end
         end
 
         return unless exception_includes
 
-        payload_includes.each_pair do |key, expected|
+        exception_includes.each_pair do |key, expected|
           actual = event.exception.send(key)
 
-          assert_semantic_logger_entry(event, "Exception #{name}", expected, actual)
+          assert_semantic_logger_entry(event, "exception #{key}", expected, actual)
         end
       end
 

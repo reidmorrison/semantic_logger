@@ -18,7 +18,7 @@ log events in memory** during a block, so you can make assertions on them.
 The events are captured as raw `SemanticLogger::Log` objects, before any appender or formatter runs,
 so your assertions are not affected by how logging happens to be configured.
 
-The fastest path is the Minitest helpers below. RSpec and other frameworks are covered further down.
+Helpers are provided for both Minitest and RSpec. Other frameworks are covered further down.
 
 ## Minitest
 
@@ -148,24 +148,109 @@ For more examples, see the
 
 ## RSpec
 
-There is no RSpec port of the Minitest helpers yet (pull requests welcome). In the meantime, capture
-events with `SemanticLogger::Test::CaptureLogEvents` and stub it in as the logger:
+The RSpec helpers mirror the Minitest ones: a capture helper plus matchers for asserting on the
+captured events.
+
+### Step 1: install the helpers
+
+Require the helpers and include them, once, in `spec_helper.rb`:
 
 ~~~ruby
-context "when it blows up" do
-  let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+require "semantic_logger/test/rspec"
 
-  it "logs the error" do
-    allow_any_instance_of(MyThing).to receive(:logger).and_return(capture_logger)
-    MyThing.new("asdf").do_something!
+RSpec.configure do |config|
+  config.include SemanticLogger::Test::RSpec
+end
+~~~
 
-    expect(capture_logger.events.last.message).to include("Here is a message")
-    expect(capture_logger.events.last.level).to eq(:error)
+### Step 2: capture events
+
+Wrap the code under test in `capture_semantic_logger_events`. It returns every log event created
+during the block, regardless of the global default log level:
+
+~~~ruby
+events = capture_semantic_logger_events do
+  User.new.enable!
+end
+~~~
+
+By default it captures events from every class. To capture only the events from one class, pass that
+class:
+
+~~~ruby
+events = capture_semantic_logger_events(ApiClient) do
+  # Only ApiClient log events created during this block are captured.
+end
+~~~
+
+### Step 3: assert on the events
+
+Use `be_a_semantic_logger_event` to assert on a single captured event:
+
+~~~ruby
+RSpec.describe User do
+  it "logs message" do
+    events = capture_semantic_logger_events do
+      User.new.enable!
+    end
+
+    expect(events.count).to eq(2)
+
+    expect(events[0]).to be_a_semantic_logger_event(
+      level:   :info,
+      message: "User enabled"
+    )
+
+    expect(events[1]).to be_a_semantic_logger_event(
+      level:   :debug,
+      message: "Completed"
+    )
   end
 end
 ~~~
 
-(Sample courtesy of @jgascoignetaylor-godaddy.)
+Every argument is optional, so you assert only on what matters to the test. The available checks are
+the same as the [Minitest table above](#step-3-assert-on-the-events), plus `message_includes`,
+`payload_includes`, and `exception_includes` for partial matches:
+
+~~~ruby
+expect(events[0]).to be_a_semantic_logger_event(
+  level:            :info,
+  message_includes: "enabled",
+  payload_includes: {first_name: "Jack"}
+)
+~~~
+
+An expected value that is a Class matches by type, and `:nil` asserts the attribute is `nil`:
+
+~~~ruby
+expect(events[0]).to be_a_semantic_logger_event(time: Time, exception: :nil)
+~~~
+
+### Match against a list of events
+
+`a_semantic_logger_event` is a composable alias, so it works inside `include` and other matchers:
+
+~~~ruby
+expect(events).to include(
+  a_semantic_logger_event(message: "User enabled")
+)
+~~~
+
+### Assert directly on a block
+
+`log_semantic_logger_event` captures the events for you and passes if any of them match. Pass `on:`
+to capture only one class's events:
+
+~~~ruby
+expect { User.new.enable! }.to(
+  log_semantic_logger_event(level: :info, message: "User enabled")
+)
+
+expect { ApiClient.new.call }.to(
+  log_semantic_logger_event(on: ApiClient, metric: "ApiClient/call")
+)
+~~~
 
 ## Other test frameworks
 
