@@ -33,7 +33,7 @@ of log destinations see [Appenders](appenders.html).
 
 Rails Semantic Logger v5 requires **Ruby 3.2 or later** and **Rails 7.2 or later**. For the exact
 list of tested Ruby and Rails versions, see the
-[CI workflow](https://github.com/reidmorrison/rails_semantic_logger/blob/master/.github/workflows/ci.yml).
+[CI workflow](https://github.com/reidmorrison/rails_semantic_logger/blob/main/.github/workflows/ci.yml).
 
 ### Installation
 
@@ -292,7 +292,7 @@ config.rails_semantic_logger.appenders do |appenders|
 end
 ~~~
 
-See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb)
+See [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/main/lib/semantic_logger/formatters/color.rb)
 for the methods you can override, and [Custom formatters](config.html#custom-formatters) for more on formatters.
 
 #### Amazing Print options for the color formatter

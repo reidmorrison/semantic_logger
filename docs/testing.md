@@ -144,7 +144,7 @@ assert_semantic_logger_event(
 ~~~
 
 For more examples, see the
-[Rails Semantic Logger tests](https://github.com/reidmorrison/rails_semantic_logger/blob/master/test/active_record_test.rb).
+[Rails Semantic Logger tests](https://github.com/reidmorrison/rails_semantic_logger/blob/main/test/active_record_test.rb).
 
 ## RSpec
 

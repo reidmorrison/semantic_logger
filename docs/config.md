@@ -438,9 +438,9 @@ SemanticLogger.add_appender(file_name: "development.log", formatter: NoPidFormat
 ~~~
 
 See
-[SemanticLogger::Formatters::Default](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/default.rb)
+[SemanticLogger::Formatters::Default](https://github.com/reidmorrison/semantic_logger/blob/main/lib/semantic_logger/formatters/default.rb)
 and
-[SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/formatters/color.rb)
+[SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/main/lib/semantic_logger/formatters/color.rb)
 for all the methods that can be overridden.
 
 To replace the formatter on an appender that is already installed, for example in a Rails app:
@@ -544,10 +544,10 @@ SemanticLogger.add_appender(appender: SimpleAppender.new)
 ~~~
 
 Look at the
-[existing appenders](https://github.com/reidmorrison/semantic_logger/tree/master/lib/semantic_logger/appender)
+[existing appenders](https://github.com/reidmorrison/semantic_logger/tree/main/lib/semantic_logger/appender)
 for good examples. To have a custom appender included in the standard list, submit it with complete
 working tests; see the
-[Graylog Appender Test](https://github.com/reidmorrison/semantic_logger/blob/master/test/appender/graylog_test.rb)
+[Graylog Appender Test](https://github.com/reidmorrison/semantic_logger/blob/main/test/appender/graylog_test.rb)
 for an example.
 
 ---
