@@ -168,6 +168,23 @@ module SemanticLogger
           assert_equal "Hello", last_log.message
           assert_equal({user: "joe"}, last_log.payload)
         end
+
+        it "supports a zero-arity lambda" do
+          logger.info(&-> { "From lambda" })
+
+          assert_equal "From lambda", last_log.message
+        end
+
+        it "passes the log to a block that accepts an argument" do
+          yielded = nil
+          logger.info("Hello") do |log|
+            yielded = log
+            nil
+          end
+
+          assert_instance_of SemanticLogger::Log, yielded
+          assert_equal "Hello", yielded.message
+        end
       end
 
       describe "#measure_<level>" do

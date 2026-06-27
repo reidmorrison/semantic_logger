@@ -62,6 +62,8 @@ See the [v5.0 upgrading guide](https://logger.rocketjob.io/upgrading.html) for m
   on invalid byte sequences. Resolves #180.
 - Fix the Fluentd formatter so `process_info` (pid, thread name) is excluded correctly. Resolves #190.
 - Fix `ArgumentError` in `CaptureLogEvents#batch`. Resolves #327.
+- Support zero-arity blocks and lambdas in the log methods, so `logger.info(&-> { "msg" })` no
+  longer raises `ArgumentError`. Blocks that accept an argument still receive the `Log`. Resolves #361.
 - Harden constant resolution and payload assignment against untrusted input.
 
 ### Documentation
