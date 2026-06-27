@@ -192,4 +192,4 @@ Configuration guide.
 ### Ruby Support
 
 For the complete list of supported Ruby versions, see
-the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/master/.github/workflows/ci.yml).
+the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/main/.github/workflows/ci.yml).
