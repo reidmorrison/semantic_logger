@@ -1,8 +1,8 @@
 # Semantic Logger
 [![Gem Version](https://img.shields.io/gem/v/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![Build Status](https://github.com/reidmorrison/semantic_logger/workflows/build/badge.svg)](https://github.com/reidmorrison/semantic_logger/actions?query=workflow%3Abuild) [![Downloads](https://img.shields.io/gem/dt/semantic_logger.svg)](https://rubygems.org/gems/semantic_logger) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg)
 
-Semantic Logger is a feature rich logging framework, and a replacement for the existing
-Ruby and Rails loggers.
+Semantic Logger is a high-performance, asynchronous structured logging framework for Ruby
+and Rails.
 
 It differs from ordinary loggers in two important ways:
 
