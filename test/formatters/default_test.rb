@@ -251,7 +251,6 @@ module SemanticLogger
             log.backtrace  = backtrace
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1" : "1.346"
-            str      = "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"
 
             # Ruby 3.4 changed the way hashes are displayed
             str = if RUBY_VERSION < "3.4"

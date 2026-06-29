@@ -55,3 +55,4 @@ gem "aws-sdk-cloudwatchlogs"
 gem "rubocop", "~> 1.79.0", require: false
 gem "rubocop-minitest", require: false
 gem "rubocop-rake", require: false
+gem "rubocop-rspec", require: false

@@ -3,11 +3,14 @@ inherit_from: .rubocop_todo.yml
 plugins:
   - rubocop-minitest
   - rubocop-rake
+  - rubocop-rspec
 
 AllCops:
   Exclude:
     - ".git/**/*"
     - "docs/**/*"
+    # CI installs gems into vendor/bundle via bundler-cache; don't lint them.
+    - "vendor/**/*"
   NewCops: enable
   TargetRubyVersion: 3.2
 
@@ -36,6 +39,11 @@ Layout/HashAlignment:
 # Match existing layout
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
+
+# Allow several expectations per example; specs commonly assert on multiple
+# attributes of a captured log event in one example.
+RSpec/MultipleExpectations:
+  Enabled: false
 
 # Support long block lengths for tests
 Metrics/BlockLength:

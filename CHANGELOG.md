@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [5.0.0 unreleased]
+## [5.0.0] 2026-06-29
 
 ### Breaking changes
 
@@ -55,6 +55,11 @@ See the [v5.0 upgrading guide](https://logger.rocketjob.io/upgrading.html) for m
   escape control characters in formatted output.
 - Add a `permissions:` option to the file appender to restrict log file permissions on creation
   and on existing files.
+- Add first-class RSpec test support (`SemanticLogger::Test::RSpec`), mirroring the existing
+  Minitest helpers: `capture_semantic_logger_events`, the `be_a_semantic_logger_event` and
+  `a_semantic_logger_event` matchers (with `message_includes` / `payload_includes` /
+  `exception_includes` partial matches), and the `log_semantic_logger_event` block matcher.
+  Resolves #371.
 
 ### Fixes
 
@@ -65,6 +70,9 @@ See the [v5.0 upgrading guide](https://logger.rocketjob.io/upgrading.html) for m
 - Support zero-arity blocks and lambdas in the log methods, so `logger.info(&-> { "msg" })` no
   longer raises `ArgumentError`. Blocks that accept an argument still receive the `Log`. Resolves #361.
 - Harden constant resolution and payload assignment against untrusted input.
+- Fix the Minitest `assert_semantic_logger_event` helper so `exception_includes` no longer
+  iterates `payload_includes`, which raised when `exception_includes` was given without
+  `payload_includes`.
 
 ### Documentation
 
