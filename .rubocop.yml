@@ -3,6 +3,7 @@ inherit_from: .rubocop_todo.yml
 plugins:
   - rubocop-minitest
   - rubocop-rake
+  - rubocop-rspec
 
 AllCops:
   Exclude:
@@ -36,6 +37,11 @@ Layout/HashAlignment:
 # Match existing layout
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
+
+# Allow several expectations per example; specs commonly assert on multiple
+# attributes of a captured log event in one example.
+RSpec/MultipleExpectations:
+  Enabled: false
 
 # Support long block lengths for tests
 Metrics/BlockLength:
