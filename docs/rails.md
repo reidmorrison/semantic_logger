@@ -346,6 +346,27 @@ Because the block disables the automatic appenders, this JSON-to-stdout appender
 destination: there is no default file log and no separate color logger under `rails server`, which
 is exactly what a container platform wants.
 
+To keep one configuration that works both locally and in-cluster, gate the JSON appender on an
+environment variable that is only set in the container platform. For example, in
+`config/application.rb` (so it applies to every environment), switch to JSON on standard out only
+when running inside Kubernetes:
+
+~~~ruby
+# config/application.rb
+config.semantic_logger.application = "my_application"
+config.semantic_logger.environment = ENV["STACK_NAME"] || Rails.env
+config.log_level = ENV["LOG_LEVEL"] || :info
+
+if ENV["LOG_TO_CONSOLE"] || ENV["KUBERNETES_SERVICE_HOST"]
+  config.rails_semantic_logger.appenders do |appenders|
+    appenders.add(io: $stdout, formatter: :json)
+  end
+end
+~~~
+
+Outside the cluster the block is skipped, so the default `log/<env>.log` file and the usual screen
+loggers apply; inside the cluster JSON to stdout becomes the only destination.
+
 On Heroku, also allow the log level to be set from the environment:
 
 ~~~ruby
@@ -690,6 +711,39 @@ In v4, running `rails server` always added a standard-out logger, which you supp
 `bin/rails s --daemon` or Puma's `--quiet`. In v5 this is the job of `add_server`: when you use the
 appenders block, declare an `add_server` appender to log to the screen while serving, or omit it to
 stay silent. If you do not use the appenders block at all, the v4 behavior is preserved.
+
+---
+
+## Migrating from earlier versions
+
+These notes apply to upgrades between older releases and are retained for reference.
+
+### v4.16: Sidekiq metrics support
+
+Rails Semantic Logger added support for Sidekiq metrics, available when the JSON logging format is
+used:
+
+* `sidekiq.job.perform` &mdash; the duration of each Sidekiq job; `duration` contains the time in
+  milliseconds that the job took to run.
+* `sidekiq.queue.latency` &mdash; the time between when a Sidekiq job was enqueued and when it was
+  started; `metric_amount` contains the time in milliseconds that the job was waiting in the queue.
+
+### v4.15 and v4.16: Sidekiq support
+
+Rails Semantic Logger introduced direct support for Sidekiq v4, v5, v6, and v7. Remove any previous
+custom patches or configurations used to make Sidekiq work with Semantic Logger. To see the complete
+list of patches and to contribute your own, see
+[Sidekiq Patches](https://github.com/reidmorrison/rails_semantic_logger/blob/main/lib/rails_semantic_logger/extensions/sidekiq/sidekiq.rb).
+
+### v4.4
+
+With some forking frameworks it was necessary to call `reopen` after the fork. As of v4.4 the
+workaround for Ruby 2.5 crashes is no longer needed. Remove the following line if it is called
+anywhere:
+
+~~~ruby
+SemanticLogger::Processor.instance.instance_variable_set(:@queue, Queue.new)
+~~~
 
 ---
 
