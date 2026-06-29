@@ -693,6 +693,39 @@ stay silent. If you do not use the appenders block at all, the v4 behavior is pr
 
 ---
 
+## Migrating from earlier versions
+
+These notes apply to upgrades between older releases and are retained for reference.
+
+### v4.16: Sidekiq metrics support
+
+Rails Semantic Logger added support for Sidekiq metrics, available when the JSON logging format is
+used:
+
+* `sidekiq.job.perform` &mdash; the duration of each Sidekiq job; `duration` contains the time in
+  milliseconds that the job took to run.
+* `sidekiq.queue.latency` &mdash; the time between when a Sidekiq job was enqueued and when it was
+  started; `metric_amount` contains the time in milliseconds that the job was waiting in the queue.
+
+### v4.15 and v4.16: Sidekiq support
+
+Rails Semantic Logger introduced direct support for Sidekiq v4, v5, v6, and v7. Remove any previous
+custom patches or configurations used to make Sidekiq work with Semantic Logger. To see the complete
+list of patches and to contribute your own, see
+[Sidekiq Patches](https://github.com/reidmorrison/rails_semantic_logger/blob/main/lib/rails_semantic_logger/extensions/sidekiq/sidekiq.rb).
+
+### v4.4
+
+With some forking frameworks it was necessary to call `reopen` after the fork. As of v4.4 the
+workaround for Ruby 2.5 crashes is no longer needed. Remove the following line if it is called
+anywhere:
+
+~~~ruby
+SemanticLogger::Processor.instance.instance_variable_set(:@queue, Queue.new)
+~~~
+
+---
+
 ## Deprecated configuration options
 
 The following options still function in v5 for backward compatibility but emit deprecation warnings
