@@ -346,6 +346,27 @@ Because the block disables the automatic appenders, this JSON-to-stdout appender
 destination: there is no default file log and no separate color logger under `rails server`, which
 is exactly what a container platform wants.
 
+To keep one configuration that works both locally and in-cluster, gate the JSON appender on an
+environment variable that is only set in the container platform. For example, in
+`config/application.rb` (so it applies to every environment), switch to JSON on standard out only
+when running inside Kubernetes:
+
+~~~ruby
+# config/application.rb
+config.semantic_logger.application = "my_application"
+config.semantic_logger.environment = ENV["STACK_NAME"] || Rails.env
+config.log_level = ENV["LOG_LEVEL"] || :info
+
+if ENV["LOG_TO_CONSOLE"] || ENV["KUBERNETES_SERVICE_HOST"]
+  config.rails_semantic_logger.appenders do |appenders|
+    appenders.add(io: $stdout, formatter: :json)
+  end
+end
+~~~
+
+Outside the cluster the block is skipped, so the default `log/<env>.log` file and the usual screen
+loggers apply; inside the cluster JSON to stdout becomes the only destination.
+
 On Heroku, also allow the log level to be set from the environment:
 
 ~~~ruby
