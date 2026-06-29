@@ -9,6 +9,8 @@ AllCops:
   Exclude:
     - ".git/**/*"
     - "docs/**/*"
+    # CI installs gems into vendor/bundle via bundler-cache; don't lint them.
+    - "vendor/**/*"
   NewCops: enable
   TargetRubyVersion: 3.2
 
