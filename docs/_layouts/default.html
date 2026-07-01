@@ -24,7 +24,7 @@
       <td>
       <td>
         <a href="http://rocketjob.io/">
-          <img src="images/rocket/rocket-icon-256.png" alt="Rocket Job" class="header-image">
+          <img src="images/header-rocket-256.png" alt="Rocket Job" class="header-image">
         </a>
       </td>
       <td>
@@ -33,8 +33,8 @@
         {% for item in nav_items %}{% assign pair = item | split: '=' %}
         <a href="{{ pair[0] }}" class="btn{% if pair[0] == current_page %} active{% endif %}">{{ pair[1] }}</a>{% endfor %}
         <a href="https://github.com/reidmorrison/semantic_logger" class="btn">GitHub</a>
-        <h1 class="project-name">Semantic Logger</h1>
-        <h2 class="project-tagline">Semantic Logger is a high-performance, asynchronous structured logging framework
+        <h1 class="project-name"><span class="brand-semantic">Semantic</span> <span class="brand-logger">Logger</span></h1>
+        <h2 class="project-tagline">High-performance, asynchronous structured logging framework
           for Ruby & Rails.</h2>
       </td>
       </tr>

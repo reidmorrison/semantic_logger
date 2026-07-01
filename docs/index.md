@@ -2,6 +2,8 @@
 layout: default
 ---
 
+![Semantic Logger](images/hero.jpg){:.hero-image}
+
 ## What is Semantic Logger?
 {:.no_toc}
 

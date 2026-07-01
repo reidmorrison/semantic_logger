@@ -10,9 +10,10 @@ body {
   color: #606c71; }
 
 a {
-  color: #1e6bb8;
+  color: #1565d8;
   text-decoration: none; }
   a:hover {
+    color: #0d47a1;
     text-decoration: underline; }
 
 .btn {
@@ -29,16 +30,16 @@ a {
     margin-left: 0.2rem; }
 
 .btn:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: #fff;
   text-decoration: none;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3); }
+  background-color: rgba(255, 106, 24, 0.35);
+  border-color: rgba(255, 138, 42, 0.6); }
 
 .btn.active {
   color: #fff;
   font-weight: bold;
-  background-color: rgba(255, 255, 255, 0.28);
-  border-color: rgba(255, 255, 255, 0.55); }
+  background-color: rgba(255, 106, 24, 0.85);
+  border-color: #ff8a2a; }
 
 @media screen and (min-width: 64em) {
   .btn {
@@ -73,8 +74,10 @@ html {
   z-index: 1000;
   color: #fff;
   text-align: center;
-  background-color: #363899;
-  background-image: linear-gradient(90deg, #000000, #99120f); }
+  background-color: #05060f;
+  background-image: linear-gradient(rgba(5, 8, 24, 0.78), rgba(5, 8, 24, 0.86)), url("../images/header-banner.jpg");
+  background-size: cover;
+  background-position: center; }
 
 .header-image {
   align: middle;
@@ -95,7 +98,27 @@ html {
 
 .project-name {
   margin-top: 0;
-  margin-bottom: 0.1rem; }
+  margin-bottom: 0.1rem;
+  font-weight: bold;
+  letter-spacing: 0.01em;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+
+/* Two-tone glossy title echoing the key art: blue "Semantic", orange "Logger".
+   Falls back to solid white where background-clip:text is unsupported. */
+.brand-semantic, .brand-logger {
+  color: #fff;
+  -webkit-text-stroke: 0.4px rgba(255, 255, 255, 0.12); }
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .brand-semantic, .brand-logger {
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent; }
+  .brand-semantic {
+    background-image: linear-gradient(180deg, #9ad4ff 0%, #3a9bff 55%, #0d5ad6 100%); }
+  .brand-logger {
+    background-image: linear-gradient(180deg, #ffd27a 0%, #ff9e3d 55%, #f3700f 100%); } }
 
 @media screen and (min-width: 64em) {
   .project-name {
@@ -130,11 +153,18 @@ html {
   margin-top: 0; }
 .main-content img {
   max-width: 100%; }
+.main-content img.hero-image {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto 2rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 28px rgba(13, 19, 48, 0.45); }
 .main-content h1, .main-content h2, .main-content h3, .main-content h4, .main-content h5, .main-content h6 {
   margin-top: 2rem;
   margin-bottom: 1rem;
   font-weight: normal;
-  color: #159957; }
+  color: #1565d8; }
 .main-content p {
   margin-bottom: 1em; }
 .main-content code {
@@ -149,16 +179,16 @@ html {
   margin-top: 0;
   margin-bottom: 1rem;
   font: 1rem Consolas, "Liberation Mono", Menlo, Courier, monospace;
-  color: #567482;
+  color: #e6e6f0;
   word-wrap: normal;
-  background-color: #f3f6fa;
-  border: solid 1px #dce6f0;
+  background-color: #0d1330;
+  border: solid 1px #232a4d;
   border-radius: 0.3rem; }
   .main-content pre > code {
     padding: 0;
     margin: 0;
     font-size: 0.9rem;
-    color: #567482;
+    color: #e6e6f0;
     word-break: normal;
     white-space: pre;
     background: transparent;
