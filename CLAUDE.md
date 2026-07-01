@@ -8,7 +8,7 @@ Semantic Logger is a Ruby gem: a feature-rich, multi-destination logging framewo
 
 Rails users should use the sister gem `rails_semantic_logger`, not this gem directly.
 
-**Sister gem version lockstep:** `rails_semantic_logger` is locked to the same major version of this gem (its gemspec pins `semantic_logger "~> 4.16"`, i.e. v4). Major-version changes here must be mirrored there. As of this v5 work `rails_semantic_logger` is still on v4 and has **not** yet been upgraded; the internal refactors in v5 (the `QueueProcessor` extraction and the removal of `Appender::AsyncBatch`) will need to be accounted for when upgrading it. It does not reference `AsyncBatch` directly, so the removal itself is not a blocker, but the v5 bump is a coordinated follow-up. The sister gem lives at `/Users/reidmo/src/rails_semantic_logger` (when checked out locally).
+**Sister gem version lockstep:** `rails_semantic_logger` is locked to the same major version of this gem. As of v5 it has been upgraded in lockstep: it is now on v5.0.0 and its gemspec pins `semantic_logger ">= 5.0"`. Major-version changes here must continue to be mirrored there. The v5 internal refactors (the `QueueProcessor` extraction and the removal of `Appender::AsyncBatch`) have been accounted for; the sister gem does not reference `AsyncBatch` directly. The sister gem lives at `/Users/reidmo/src/rails_semantic_logger` (when checked out locally).
 
 ## Public interface
 
