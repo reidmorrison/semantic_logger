@@ -97,7 +97,7 @@ discard cached loggers (for example in tests, or after redefining a class), call
 To prevent log-injection via embedded control characters (newlines, escape sequences, etc.), the
 Syslog formatter now escapes control characters in records by default. If you relied on raw control
 characters reaching syslog, this output now differs. The text formatters (default, color) also gain
-an opt-in `escape_control_characters` option (default `false`) for the same protection. See the
+an opt-in `escape_control_chars` option (default `false`) for the same protection. See the
 [Security](security.html) page for details.
 
 #### `Formatters::Base#cleanse` renamed
