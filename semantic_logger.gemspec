@@ -14,7 +14,7 @@ Gem::Specification.new do |s|
   s.summary               = "High-performance, asynchronous structured logging framework for Ruby & Rails."
   s.description           = "Semantic Logger is a high-performance, asynchronous structured logging framework for Ruby & Rails. " \
                             "It logs to multiple destinations via a background thread, preserving structured (semantic) payloads."
-  s.files                 = Dir["lib/**/*", "LICENSE.txt", "Rakefile", "README.md"]
+  s.files                 = Dir["lib/**/*", "docs/*.md", "LICENSE.txt", "Rakefile", "README.md"]
   s.license               = "Apache-2.0"
   s.required_ruby_version = ">= 3.2"
   s.add_dependency "concurrent-ruby", "~> 1.0"
