@@ -464,9 +464,12 @@ Rails Semantic Logger already replaces the loggers for many gems. When using Sem
 stand-alone, hand them a Semantic Logger instance yourself:
 
 ~~~ruby
-Resque.logger          = SemanticLogger[Resque]  if defined?(Resque) && Resque.respond_to?(:logger)
-Sidekiq::Logging.logger = SemanticLogger[Sidekiq] if defined?(Sidekiq)
-Mongoid.logger         = SemanticLogger[Mongoid] if defined?(Mongoid)
+Resque.logger  = SemanticLogger[Resque]  if defined?(Resque) && Resque.respond_to?(:logger)
+Mongoid.logger = SemanticLogger[Mongoid] if defined?(Mongoid)
+
+Sidekiq.configure_server do |config|
+  config.logger = SemanticLogger[Sidekiq]
+end
 ~~~
 
 ## Next steps

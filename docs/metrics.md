@@ -105,7 +105,8 @@ receives every logged entry that has a `:metric`, asynchronously on the backgrou
 ### Statsd
 
 Send metrics to [Statsd](https://github.com/statsd/statsd) over UDP, which can roll them up and
-forward them to [Graphite](https://graphiteapp.org), MongoDB, and others:
+forward them to [Graphite](https://graphiteapp.org), MongoDB, and others (requires the
+`statsd-ruby` gem):
 
 ~~~ruby
 SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
@@ -115,7 +116,8 @@ Counters are integers (float amounts are rounded). Does not support dimensions.
 
 ### New Relic
 
-Forward metrics to New Relic so they can be displayed on custom dashboards:
+Forward metrics to New Relic so they can be displayed on custom dashboards (requires the
+`newrelic_rpm` gem):
 
 ~~~ruby
 SemanticLogger.add_appender(metric: :new_relic)

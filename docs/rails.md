@@ -88,6 +88,13 @@ appenders block), and then how to fine-tune **what** Rails logs.
 Configuration goes in `config/application.rb` (for all environments) or in an environment file under
 `config/environments/` (for one environment).
 
+Use those two places, not `config/initializers/*`. Rails builds the logger **before** it loads
+initializers, so the appenders block and the `semantic`, `replace_sidekiq_logger`, and
+`replace_solid_queue_logger` options have no effect from an initializer; Rails Semantic Logger
+prints a warning when it detects this. The output-tuning options consumed later in boot (`started`,
+`processing`, `rendered`, `quiet_assets`, `action_message_format`) do still work from an
+initializer, but not once the application has finished booting.
+
 ---
 
 ## Configuring where logs go: the appenders block
@@ -107,12 +114,14 @@ the arguments say _where_ it writes and _how_ it is formatted.**
 | Method | Created when… | Default destination |
 |--------|---------------|---------------------|
 | `add` | Always, during Rails initialization | (you must specify one) |
-| `add_server` | Only when serving requests: `rails server`, a rack server, Sidekiq in server mode | `$stdout` |
+| `add_server` | Only when serving requests: `rails server` (see the note under [Step 3](#step-3-log-to-the-screen-only-while-serving)) and Sidekiq in server mode | `$stdout` |
 | `add_console` | Only inside a `rails console` session | `$stderr` |
 
 The arguments to all three are exactly the arguments to `SemanticLogger.add_appender` (covered in
 detail in [the next section](#appender-options-and-destinations)), so anything Semantic Logger can
-log to, any of these can declare.
+log to, any of these can declare. One default of note: since `add_server` and `add_console` are
+screen appenders, their `formatter:` defaults to `:color` when not specified; `add` uses the
+Semantic Logger default of plain text.
 
 > **Important:** As soon as you declare **any** appender in this block, Rails Semantic Logger stops
 > adding **all** of its automatic appenders: the default `log/<env>.log` file, the standard-out
@@ -146,8 +155,8 @@ You can declare as many appenders as you like; every log entry is sent to all of
 ### Step 3: log to the screen only while serving
 
 `add_server` declares an appender that is created **only** when the application is actually serving
-requests (under `rails server`, a rack server, or Sidekiq in server mode), and never during rake
-tasks, runners, or generators. It defaults to `$stdout`:
+requests (under `rails server` or Sidekiq in server mode), and never during rake tasks, runners, or
+generators. It defaults to `$stdout`:
 
 ~~~ruby
 config.rails_semantic_logger.appenders do |appenders|
@@ -155,6 +164,12 @@ config.rails_semantic_logger.appenders do |appenders|
   appenders.add_server(formatter: :color) # → $stdout, only when serving
 end
 ~~~
+
+> **Note:** Under `rails server`, the appender is created when Rails itself would log to standard
+> out: in development, when not daemonized. To get it in another environment, pass
+> `--log-to-stdout` to `rails server`. App servers started directly (bare `puma`, `rackup`, and so
+> on) need a one-line boot hook; see
+> [Other app servers](#other-app-servers-puma-rackup-passenger-unicorn).
 
 ### Step 4: a dedicated console logger
 
@@ -387,8 +402,9 @@ end
 
 ### Other app servers: puma, rackup, Passenger, Unicorn
 
-`add_server` appenders are created automatically under `rails server` and Sidekiq in server mode,
-because those have a definitive startup hook. App servers started **directly** (bare `puma`,
+`add_server` appenders are created automatically under `rails server` (following Rails' own
+log-to-stdout rule: development and not daemonized, or the `--log-to-stdout` flag) and under Sidekiq
+in server mode, because those have a definitive startup hook. App servers started **directly** (bare `puma`,
 `rackup`, Passenger, Unicorn) have no such first-party hook, and Rails Semantic Logger deliberately
 does **not** guess (a detection that only sometimes works is worse than none).
 
@@ -406,6 +422,17 @@ instead of `add_server`.
 
 Sidekiq in server mode is treated as a serving context, so `add_server` appenders are created
 automatically. No extra configuration is required.
+
+This wiring is part of the Sidekiq logger integration, so setting
+`config.rails_semantic_logger.replace_sidekiq_logger = false` also turns off the automatic creation.
+In that case, call `RailsSemanticLogger.add_server_appenders` yourself from a Sidekiq startup hook:
+
+~~~ruby
+# config/initializers/sidekiq.rb
+Sidekiq.configure_server do |config|
+  config.on(:startup) { RailsSemanticLogger.add_server_appenders }
+end
+~~~
 
 ---
 
@@ -557,6 +584,9 @@ config.rails_semantic_logger.replace_sidekiq_logger     = false
 config.rails_semantic_logger.replace_solid_queue_logger = false
 ~~~
 
+Sidekiq v7 and v8 are supported. Earlier Sidekiq versions were supported up to
+Rails Semantic Logger v5.0.
+
 #### Sidekiq job lifecycle messages
 
 For every Sidekiq job, Rails Semantic Logger emits a `Start #perform` and a `Completed #perform`
@@ -570,6 +600,26 @@ RailsSemanticLogger::Sidekiq::JobLogger.perform_messages = false
 ~~~
 
 This defaults to `true`, so the messages are emitted unless you opt out.
+
+On Sidekiq 8, the standard Sidekiq setting has the same effect and is also honored:
+
+~~~ruby
+Sidekiq.configure_server do |config|
+  config[:skip_default_job_logging] = true
+end
+~~~
+
+#### Sidekiq job logging context
+
+Every log entry emitted while a job runs is tagged with the job's `jid`, class, and queue, plus its
+`bid` (batch id) and `tags` when present. On Sidekiq 8, the standard `logged_job_attributes` setting
+is honored, so additional job attributes can be added to the logging context:
+
+~~~ruby
+Sidekiq.configure_server do |config|
+  config[:logged_job_attributes] = %w[bid tags priority]
+end
+~~~
 
 ### Custom controller base class
 
@@ -648,14 +698,17 @@ than deleting and recreating the file. Example `logrotate` configuration for Lin
 
 After they initialize, Rails Semantic Logger replaces the loggers of these libraries when present:
 
+- Action Cable
 - Bugsnag
-- Mongoid
+- Delayed Job
+- IOStreams
 - Mongo
+- Mongoid
 - Moped
 - Resque
-- Sidekiq
+- Sidekiq (unless `replace_sidekiq_logger = false`)
 - Sidetiq
-- DelayedJob
+- Solid Queue (unless `replace_solid_queue_logger = false`)
 
 ---
 
@@ -733,7 +786,9 @@ used:
 Rails Semantic Logger introduced direct support for Sidekiq v4, v5, v6, and v7. Remove any previous
 custom patches or configurations used to make Sidekiq work with Semantic Logger. To see the complete
 list of patches and to contribute your own, see
-[Sidekiq Patches](https://github.com/reidmorrison/rails_semantic_logger/blob/main/lib/rails_semantic_logger/extensions/sidekiq/sidekiq.rb).
+[Sidekiq Patches](https://github.com/reidmorrison/rails_semantic_logger/blob/v5.0.0/lib/rails_semantic_logger/extensions/sidekiq/sidekiq.rb).
+Support for Sidekiq v4, v5, and v6 ended after Rails Semantic Logger v5.0; Sidekiq v7 and v8 are
+supported and tested.
 
 ### v4.4
 

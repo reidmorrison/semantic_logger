@@ -661,9 +661,12 @@ Rails Semantic Logger already replaces the loggers for many gems. When using Sem
 stand-alone, hand them a Semantic Logger instance yourself:
 
 ~~~ruby
-Resque.logger          = SemanticLogger[Resque]  if defined?(Resque) && Resque.respond_to?(:logger)
-Sidekiq::Logging.logger = SemanticLogger[Sidekiq] if defined?(Sidekiq)
-Mongoid.logger         = SemanticLogger[Mongoid] if defined?(Mongoid)
+Resque.logger  = SemanticLogger[Resque]  if defined?(Resque) && Resque.respond_to?(:logger)
+Mongoid.logger = SemanticLogger[Mongoid] if defined?(Mongoid)
+
+Sidekiq.configure_server do |config|
+  config.logger = SemanticLogger[Sidekiq]
+end
 ~~~
 
 ## Next steps
@@ -1368,7 +1371,7 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [OpenSearch](#opensearch) | `appender: :opensearch` | `opensearch-ruby` |
 | [Graylog](#graylog) | `appender: :graylog` | `gelf` |
 | [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
-| [Splunk over TCP/SDK](#splunk-http) | `appender: :splunk` | `splunk-sdk-ruby` |
+| [Splunk SDK](#splunk-sdk) | `appender: :splunk` | `splunk-sdk-ruby` |
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
 | [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
@@ -1475,7 +1478,7 @@ Note: `:trace` level messages are mapped to `:debug`.
 ## Structured output formats
 
 The file, IO, and HTTP appenders can emit machine-readable output by choosing a structured
-`formatter`. All three formats below produce a single line of JSON per entry.
+`formatter`. Each format below produces a single line per entry.
 
 ### JSON
 
@@ -1607,6 +1610,29 @@ Or set `namespace: nil` to merge the payload directly into ECS `labels` alongsid
 formatter = SemanticLogger::Formatters::Ecs.new(namespace: nil)
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 ~~~
+
+### Logfmt
+
+`formatter: :logfmt` emits each entry as a single line of `key=value` pairs in
+[logfmt](https://brandur.org/logfmt) format, common with Heroku and Grafana Loki tooling:
+
+~~~ruby
+SemanticLogger.add_appender(io: $stdout, formatter: :logfmt)
+~~~
+
+~~~
+timestamp="2024-07-20T08:32:05.375276Z" level="info" name="MyClass" message="Hello World" tag="success"
+~~~
+
+Notes:
+
+* The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
+  forge or split a record.
+* Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
+  conflict the payload wins.
+* Unnamed tags are emitted as keys with a `true` value.
+* `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
+  exception (the exception class, message, and backtrace are then included as fields).
 
 ## Network protocols
 
@@ -1849,6 +1875,27 @@ the interesting columns: `host`, `duration`, `name`, `level`, `message`.
 **Performance:** against a local Splunk instance, the HTTP collector handled only about 30 entries per
 second. For much higher throughput, write to Splunk with the [TCP appender](#tcp-appender-ssl)
 instead, which reached about 1,400 entries per second (1,200 with SSL).
+
+### Splunk SDK
+
+`appender: :splunk` submits entries through the official `splunk-sdk-ruby` gem to the Splunk
+management port (8089 by default). Authenticate with either a username and password, or a
+pre-authenticated `token:`:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :splunk,
+  username: "username",
+  password: "password",
+  host:     "localhost",
+  port:     8089,
+  scheme:   :https,
+  index:    "main"
+)
+~~~
+
+For most deployments the [HTTP Event Collector](#splunk-http) or the [TCP appender](#tcp-appender-ssl)
+is the simpler choice; use the SDK appender when the management API is the only ingress available.
 
 ### Grafana Loki
 
@@ -2422,7 +2469,8 @@ receives every logged entry that has a `:metric`, asynchronously on the backgrou
 ### Statsd
 
 Send metrics to [Statsd](https://github.com/statsd/statsd) over UDP, which can roll them up and
-forward them to [Graphite](https://graphiteapp.org), MongoDB, and others:
+forward them to [Graphite](https://graphiteapp.org), MongoDB, and others (requires the
+`statsd-ruby` gem):
 
 ~~~ruby
 SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
@@ -2432,7 +2480,8 @@ Counters are integers (float amounts are rounded). Does not support dimensions.
 
 ### New Relic
 
-Forward metrics to New Relic so they can be displayed on custom dashboards:
+Forward metrics to New Relic so they can be displayed on custom dashboards (requires the
+`newrelic_rpm` gem):
 
 ~~~ruby
 SemanticLogger.add_appender(metric: :new_relic)
@@ -2567,6 +2616,13 @@ appenders block), and then how to fine-tune **what** Rails logs.
 Configuration goes in `config/application.rb` (for all environments) or in an environment file under
 `config/environments/` (for one environment).
 
+Use those two places, not `config/initializers/*`. Rails builds the logger **before** it loads
+initializers, so the appenders block and the `semantic`, `replace_sidekiq_logger`, and
+`replace_solid_queue_logger` options have no effect from an initializer; Rails Semantic Logger
+prints a warning when it detects this. The output-tuning options consumed later in boot (`started`,
+`processing`, `rendered`, `quiet_assets`, `action_message_format`) do still work from an
+initializer, but not once the application has finished booting.
+
 ---
 
 ## Configuring where logs go: the appenders block
@@ -2586,12 +2642,14 @@ the arguments say _where_ it writes and _how_ it is formatted.**
 | Method | Created when… | Default destination |
 |--------|---------------|---------------------|
 | `add` | Always, during Rails initialization | (you must specify one) |
-| `add_server` | Only when serving requests: `rails server`, a rack server, Sidekiq in server mode | `$stdout` |
+| `add_server` | Only when serving requests: `rails server` (see the note under [Step 3](#step-3-log-to-the-screen-only-while-serving)) and Sidekiq in server mode | `$stdout` |
 | `add_console` | Only inside a `rails console` session | `$stderr` |
 
 The arguments to all three are exactly the arguments to `SemanticLogger.add_appender` (covered in
 detail in [the next section](#appender-options-and-destinations)), so anything Semantic Logger can
-log to, any of these can declare.
+log to, any of these can declare. One default of note: since `add_server` and `add_console` are
+screen appenders, their `formatter:` defaults to `:color` when not specified; `add` uses the
+Semantic Logger default of plain text.
 
 > **Important:** As soon as you declare **any** appender in this block, Rails Semantic Logger stops
 > adding **all** of its automatic appenders: the default `log/<env>.log` file, the standard-out
@@ -2625,8 +2683,8 @@ You can declare as many appenders as you like; every log entry is sent to all of
 ### Step 3: log to the screen only while serving
 
 `add_server` declares an appender that is created **only** when the application is actually serving
-requests (under `rails server`, a rack server, or Sidekiq in server mode), and never during rake
-tasks, runners, or generators. It defaults to `$stdout`:
+requests (under `rails server` or Sidekiq in server mode), and never during rake tasks, runners, or
+generators. It defaults to `$stdout`:
 
 ~~~ruby
 config.rails_semantic_logger.appenders do |appenders|
@@ -2634,6 +2692,12 @@ config.rails_semantic_logger.appenders do |appenders|
   appenders.add_server(formatter: :color) # → $stdout, only when serving
 end
 ~~~
+
+> **Note:** Under `rails server`, the appender is created when Rails itself would log to standard
+> out: in development, when not daemonized. To get it in another environment, pass
+> `--log-to-stdout` to `rails server`. App servers started directly (bare `puma`, `rackup`, and so
+> on) need a one-line boot hook; see
+> [Other app servers](#other-app-servers-puma-rackup-passenger-unicorn).
 
 ### Step 4: a dedicated console logger
 
@@ -2866,8 +2930,9 @@ end
 
 ### Other app servers: puma, rackup, Passenger, Unicorn
 
-`add_server` appenders are created automatically under `rails server` and Sidekiq in server mode,
-because those have a definitive startup hook. App servers started **directly** (bare `puma`,
+`add_server` appenders are created automatically under `rails server` (following Rails' own
+log-to-stdout rule: development and not daemonized, or the `--log-to-stdout` flag) and under Sidekiq
+in server mode, because those have a definitive startup hook. App servers started **directly** (bare `puma`,
 `rackup`, Passenger, Unicorn) have no such first-party hook, and Rails Semantic Logger deliberately
 does **not** guess (a detection that only sometimes works is worse than none).
 
@@ -2885,6 +2950,17 @@ instead of `add_server`.
 
 Sidekiq in server mode is treated as a serving context, so `add_server` appenders are created
 automatically. No extra configuration is required.
+
+This wiring is part of the Sidekiq logger integration, so setting
+`config.rails_semantic_logger.replace_sidekiq_logger = false` also turns off the automatic creation.
+In that case, call `RailsSemanticLogger.add_server_appenders` yourself from a Sidekiq startup hook:
+
+~~~ruby
+# config/initializers/sidekiq.rb
+Sidekiq.configure_server do |config|
+  config.on(:startup) { RailsSemanticLogger.add_server_appenders }
+end
+~~~
 
 ---
 
@@ -3033,6 +3109,9 @@ config.rails_semantic_logger.replace_sidekiq_logger     = false
 config.rails_semantic_logger.replace_solid_queue_logger = false
 ~~~
 
+Sidekiq v7 and v8 are supported. Earlier Sidekiq versions were supported up to
+Rails Semantic Logger v5.0.
+
 #### Sidekiq job lifecycle messages
 
 For every Sidekiq job, Rails Semantic Logger emits a `Start #perform` and a `Completed #perform`
@@ -3046,6 +3125,26 @@ RailsSemanticLogger::Sidekiq::JobLogger.perform_messages = false
 ~~~
 
 This defaults to `true`, so the messages are emitted unless you opt out.
+
+On Sidekiq 8, the standard Sidekiq setting has the same effect and is also honored:
+
+~~~ruby
+Sidekiq.configure_server do |config|
+  config[:skip_default_job_logging] = true
+end
+~~~
+
+#### Sidekiq job logging context
+
+Every log entry emitted while a job runs is tagged with the job's `jid`, class, and queue, plus its
+`bid` (batch id) and `tags` when present. On Sidekiq 8, the standard `logged_job_attributes` setting
+is honored, so additional job attributes can be added to the logging context:
+
+~~~ruby
+Sidekiq.configure_server do |config|
+  config[:logged_job_attributes] = %w[bid tags priority]
+end
+~~~
 
 ### Custom controller base class
 
@@ -3124,14 +3223,17 @@ than deleting and recreating the file. Example `logrotate` configuration for Lin
 
 After they initialize, Rails Semantic Logger replaces the loggers of these libraries when present:
 
+- Action Cable
 - Bugsnag
-- Mongoid
+- Delayed Job
+- IOStreams
 - Mongo
+- Mongoid
 - Moped
 - Resque
-- Sidekiq
+- Sidekiq (unless `replace_sidekiq_logger = false`)
 - Sidetiq
-- DelayedJob
+- Solid Queue (unless `replace_solid_queue_logger = false`)
 
 ---
 
@@ -3209,7 +3311,9 @@ used:
 Rails Semantic Logger introduced direct support for Sidekiq v4, v5, v6, and v7. Remove any previous
 custom patches or configurations used to make Sidekiq work with Semantic Logger. To see the complete
 list of patches and to contribute your own, see
-[Sidekiq Patches](https://github.com/reidmorrison/rails_semantic_logger/blob/main/lib/rails_semantic_logger/extensions/sidekiq/sidekiq.rb).
+[Sidekiq Patches](https://github.com/reidmorrison/rails_semantic_logger/blob/v5.0.0/lib/rails_semantic_logger/extensions/sidekiq/sidekiq.rb).
+Support for Sidekiq v4, v5, and v6 ended after Rails Semantic Logger v5.0; Sidekiq v7 and v8 are
+supported and tested.
 
 ### v4.4
 
@@ -4130,7 +4234,7 @@ discard cached loggers (for example in tests, or after redefining a class), call
 To prevent log-injection via embedded control characters (newlines, escape sequences, etc.), the
 Syslog formatter now escapes control characters in records by default. If you relied on raw control
 characters reaching syslog, this output now differs. The text formatters (default, color) also gain
-an opt-in `escape_control_characters` option (default `false`) for the same protection. See the
+an opt-in `escape_control_chars` option (default `false`) for the same protection. See the
 [Security](security.html) page for details.
 
 #### `Formatters::Base#cleanse` renamed

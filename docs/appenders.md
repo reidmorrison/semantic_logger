@@ -93,7 +93,7 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [OpenSearch](#opensearch) | `appender: :opensearch` | `opensearch-ruby` |
 | [Graylog](#graylog) | `appender: :graylog` | `gelf` |
 | [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
-| [Splunk over TCP/SDK](#splunk-http) | `appender: :splunk` | `splunk-sdk-ruby` |
+| [Splunk SDK](#splunk-sdk) | `appender: :splunk` | `splunk-sdk-ruby` |
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
 | [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
@@ -200,7 +200,7 @@ Note: `:trace` level messages are mapped to `:debug`.
 ## Structured output formats
 
 The file, IO, and HTTP appenders can emit machine-readable output by choosing a structured
-`formatter`. All three formats below produce a single line of JSON per entry.
+`formatter`. Each format below produces a single line per entry.
 
 ### JSON
 
@@ -332,6 +332,29 @@ Or set `namespace: nil` to merge the payload directly into ECS `labels` alongsid
 formatter = SemanticLogger::Formatters::Ecs.new(namespace: nil)
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
 ~~~
+
+### Logfmt
+
+`formatter: :logfmt` emits each entry as a single line of `key=value` pairs in
+[logfmt](https://brandur.org/logfmt) format, common with Heroku and Grafana Loki tooling:
+
+~~~ruby
+SemanticLogger.add_appender(io: $stdout, formatter: :logfmt)
+~~~
+
+~~~
+timestamp="2024-07-20T08:32:05.375276Z" level="info" name="MyClass" message="Hello World" tag="success"
+~~~
+
+Notes:
+
+* The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
+  forge or split a record.
+* Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
+  conflict the payload wins.
+* Unnamed tags are emitted as keys with a `true` value.
+* `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
+  exception (the exception class, message, and backtrace are then included as fields).
 
 ## Network protocols
 
@@ -574,6 +597,27 @@ the interesting columns: `host`, `duration`, `name`, `level`, `message`.
 **Performance:** against a local Splunk instance, the HTTP collector handled only about 30 entries per
 second. For much higher throughput, write to Splunk with the [TCP appender](#tcp-appender-ssl)
 instead, which reached about 1,400 entries per second (1,200 with SSL).
+
+### Splunk SDK
+
+`appender: :splunk` submits entries through the official `splunk-sdk-ruby` gem to the Splunk
+management port (8089 by default). Authenticate with either a username and password, or a
+pre-authenticated `token:`:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :splunk,
+  username: "username",
+  password: "password",
+  host:     "localhost",
+  port:     8089,
+  scheme:   :https,
+  index:    "main"
+)
+~~~
+
+For most deployments the [HTTP Event Collector](#splunk-http) or the [TCP appender](#tcp-appender-ssl)
+is the simpler choice; use the SDK appender when the management API is the only ingress available.
 
 ### Grafana Loki
 
