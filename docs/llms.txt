@@ -1,0 +1,29 @@
+# Semantic Logger
+
+> Semantic Logger is a high-performance, asynchronous structured logging framework for Ruby and Rails. Each log entry carries structured data (a payload hash, exception, duration, metric, and tags) all the way to one or more destinations ("appenders"), and entries are written by a background thread so the application never waits on logging.
+
+Key facts:
+
+- Install with `gem install semantic_logger` or `gem "semantic_logger"` in a Gemfile. Requires Ruby 3.2 or later.
+- Rails applications should use the companion gem [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger), which replaces the Rails default logger automatically. Do not configure this gem directly in Rails.
+- Human-readable documentation lives at https://logger.rocketjob.io. The links below point at the raw markdown sources of the same pages.
+- The complete documentation concatenated into a single file: https://logger.rocketjob.io/llms-full.txt
+- Source code: https://github.com/reidmorrison/semantic_logger
+
+## Documentation
+
+- [Introduction](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/index.md): What Semantic Logger is, how structured and asynchronous logging differ from ordinary loggers, and a quick start.
+- [Programming Guide](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/api.md): The full logging API: obtaining a logger, log levels, payloads, logging exceptions, measuring block durations with `measure_*`, and tags / named tags.
+- [Configuration](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/config.md): One-time application setup: default level, adding appenders, choosing formatters, per-class log levels, and filters.
+- [Appenders](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/appenders.md): Every supported destination (file, screen, Elasticsearch, Graylog, Syslog, MongoDB, Sentry, New Relic, Splunk, Kafka, HTTP, TCP, UDP, CloudWatch Logs, OpenTelemetry, and more), their options, async / batch modes, and writing a custom appender.
+- [Log Event](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/log.md): The structure of the Log event object that flows through the pipeline, its fields, and how formatters render it.
+- [Metrics](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/metrics.md): Emitting named numeric metrics alongside log entries and feeding them to dashboards.
+- [Rails](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/rails.md): Rails integration via the rails_semantic_logger gem: setup, configuration, and what it replaces.
+- [Testing](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/testing.md): Asserting that application code logged the expected message, level, payload, or metric, using `SemanticLogger::Test::CaptureLogEvents` and the bundled Minitest / RSpec helpers.
+- [Operations](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/operations.md): Running in production: process forks, log file rotation, tuning the background pipeline, signals, and flushing on shutdown.
+
+## Optional
+
+- [Security](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/security.md): Keeping sensitive and untrusted data out of logs.
+- [Upgrading](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/docs/upgrading.md): Instructions for upgrading between major versions.
+- [README](https://raw.githubusercontent.com/reidmorrison/semantic_logger/main/README.md): Project overview, supported destinations, and optional dependencies per appender.

@@ -18,6 +18,8 @@ The one wrinkle: once a `Logger` instance has been handed back (via `SemanticLog
 
 When changing internal classes, the bar is: **do not break any existing public-facing interface** (the `SemanticLogger` module methods or a returned `Logger`'s methods).
 
+The Ruby `Logger` compatibility aliases in [lib/semantic_logger/concerns/compatibility.rb](lib/semantic_logger/concerns/compatibility.rb) (`<<`, `add`, `progname`, `sev_threshold`, `silence_logger`, ...) are **not** part of the published public interface. They exist solely so Semantic Logger can stand in for the Ruby/Rails loggers (Rails and libraries like Active Record's session store call them), so they must keep working for that purpose, but do not document, extend, or promote them as public API.
+
 ## Commands
 
 ```bash
@@ -35,7 +37,7 @@ bundle exec ruby -Itest test/logger_test.rb
 bundle exec ruby -Itest test/logger_test.rb -n /pattern/
 ```
 
-Some appender tests need MongoDB. CI runs against Ruby 3.2–4.0 with a MongoDB service on `127.0.0.1:27017` (`MONGO_HOST` env var). Use `docker compose up` (see `docker-compose.yaml` / `Dockerfile`) to run tests with a MongoDB container locally.
+Some appender tests need MongoDB. CI runs against Ruby 3.2–4.0 with a MongoDB service on `127.0.0.1:27017` (`MONGO_HOST` env var). Use `docker compose up` (see `docker-compose.yaml`) to start a local MongoDB container; the tests themselves run on the host.
 
 The minimum supported Ruby is 3.2 (as of v5; see `gemspec` and `.rubocop.yml`'s `TargetRubyVersion`) — do not use syntax newer than that in `lib/`.
 
@@ -85,7 +87,18 @@ To add a new appender or formatter, add the class under the respective directory
 
 ## Docs
 
-User-facing documentation is a Jekyll site under [docs/](docs/) (published to logger.rocketjob.io). When changing public behavior, update the relevant `docs/*.md` page (e.g. `appenders.md`, `metrics.md`, `customize.md`, `testing.md`).
+User-facing documentation is a Jekyll site under [docs/](docs/) (published to logger.rocketjob.io). When changing public behavior, update the relevant `docs/*.md` page (e.g. `appenders.md`, `metrics.md`, `api.md`, `testing.md`).
+
+The site also serves two files for AI assistants: [docs/llms.txt](docs/llms.txt), a hand-maintained index of the docs pages (update it when adding or renaming a page), and `docs/llms-full.txt`, all pages concatenated, regenerated with `bundle exec rake llms_full`. **After editing any `docs/*.md` page, re-run `bundle exec rake llms_full`** and commit the result; never edit `llms-full.txt` by hand. The `docs/*.md` sources also ship inside the gem package (see `s.files` in the gemspec) so coding agents inside applications can read them locally.
+
+## Known tech debt
+
+Standing items, tracked here so sessions know what is intentional versus worth fixing. Removals or contract changes wait for a major version.
+
+- **Legacy service appenders.** [lib/semantic_logger/appender/sentry.rb](lib/semantic_logger/appender/sentry.rb) requires the EOL `sentry-raven` gem and is superseded by [sentry_ruby.rb](lib/semantic_logger/appender/sentry_ruby.rb); [new_relic.rb](lib/semantic_logger/appender/new_relic.rb) (error events via `newrelic_rpm`) overlaps with [new_relic_logs.rb](lib/semantic_logger/appender/new_relic_logs.rb); the Elasticsearch appenders still accept the `_type`/`type` parameter, which has been dead since Elasticsearch 7. Candidates for deprecation warnings now and removal in v6.
+- **rubocop_todo backlog.** `.rubocop_todo.yml` suppresses roughly 30 cop categories. Treat it as a burn-down list: when touching a file, prefer fixing its suppressed offenses over adding new ones; never add to the todo file.
+- **Backtrace folded into message.** `Base#log_internal` ([lib/semantic_logger/base.rb](lib/semantic_logger/base.rb), see the TODO near the thread-dump handling) appends thread backtraces into the message string instead of keeping them structured on the `Log`, which degrades structured formatters (JSON, logfmt). Fix is to carry the backtrace as a first-class `Log` field end to end.
+- **Stale AsyncBatch test name.** [test/appender/async_batch_test.rb](test/appender/async_batch_test.rb) is named after the `Appender::AsyncBatch` class removed in v5; it now tests `Appender::Async` in batch mode. Rename the file and class to match.
 
 ## Writing style
 

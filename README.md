@@ -24,6 +24,12 @@ logger = SemanticLogger["MyApp"]
 
 # A plain message, plus structured data that stays searchable
 logger.info("Queried users table", duration: 54, result: :ok, table: "users")
+
+# Log an exception with its full backtrace, plus context
+logger.error("Failed to process order", exception: exception, order_id: 42)
+
+# Measure and log how long a block takes to run
+logger.measure_info("Reindexing users") { reindex_users }
 ```
 
 When running Rails, use
@@ -36,6 +42,9 @@ Start with the [Introduction](https://logger.rocketjob.io/), then the
 [Programmer's Guide](https://logger.rocketjob.io/api.html).
 
 * Full guide: [https://logger.rocketjob.io/](https://logger.rocketjob.io/)
+* For AI assistants: [llms.txt](https://logger.rocketjob.io/llms.txt) (documentation index) and
+  [llms-full.txt](https://logger.rocketjob.io/llms-full.txt) (complete documentation in one file).
+  The same pages are also included as markdown in the installed gem, under `docs/`.
 
 ## Logging Destinations
 
