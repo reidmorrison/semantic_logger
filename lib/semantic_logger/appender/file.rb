@@ -150,6 +150,11 @@ module SemanticLogger
         @reopen_at      = nil
 
         super(**args, &)
+
+        # Open the file at creation time so that misconfiguration (bad directory,
+        # insufficient permissions, ...) raises immediately in SemanticLogger.add_appender,
+        # instead of surfacing later on the appender thread via the internal logger.
+        reopen
       end
 
       # After forking an active process call #reopen to re-open

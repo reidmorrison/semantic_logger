@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- The file appender opens its log file when it is created, so a misconfigured path or
+  insufficient permissions now raise immediately from `SemanticLogger.add_appender`,
+  instead of surfacing later on the appender thread via the internal logger while log
+  messages are lost. This restores the pre-4.9 behavior and matches the other appenders,
+  which already open their resources eagerly. As a result the log file is created as soon
+  as the appender is added, even if nothing is logged (the same as the standard Ruby and
+  Rails loggers).
+
 ## [5.0.0] 2026-06-29
 
 ### Breaking changes

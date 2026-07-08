@@ -20,6 +20,26 @@ module Appender
         FileUtils.rm_f(file_name)
       end
 
+      describe "#initialize" do
+        it "opens the file on creation" do
+          appender
+
+          assert_path_exists file_name
+        end
+
+        it "raises immediately when the file cannot be opened" do
+          assert_raises Errno::ENOENT do
+            SemanticLogger::Appender::File.new("no_such_directory/test.log")
+          end
+        end
+
+        it "raises immediately when the file name is a directory" do
+          assert_raises ArgumentError do
+            SemanticLogger::Appender::File.new(__dir__)
+          end
+        end
+      end
+
       describe "#log" do
         it "logs output" do
           assert appender.log(log)
@@ -137,8 +157,8 @@ module Appender
       end
 
       describe "#flush" do
-        it "flushes output" do
-          refute appender.flush
+        it "flushes the file opened on creation" do
+          assert appender.flush
         end
 
         it "flushes output after logging" do
@@ -149,8 +169,8 @@ module Appender
       end
 
       describe "#time_to_reopen?" do
-        it "before anything is logged" do
-          assert appender.send(:time_to_reopen?)
+        it "not before anything is logged since the file is opened on creation" do
+          refute appender.send(:time_to_reopen?)
         end
 
         describe "reopen_count" do
@@ -195,15 +215,23 @@ module Appender
         describe "reopen_period" do
           let(:appender) { SemanticLogger::Appender::File.new(file_name, reopen_period: "1m") }
 
+          it "sets the reopen time when the file is opened on creation" do
+            refute_nil appender.reopen_at
+          end
+
           it "opens a new log file at the beginning of the next minute" do
-            assert_nil appender.reopen_at
+            # Construct the appender before stubbing Time.now: nested stubs of the
+            # same method break minitest's stub restore.
+            appender
 
             Time.stub(:now, current_time) do
+              appender.reopen
+
+              assert_equal Time.parse("2015-12-09 17:51:00"), appender.reopen_at
               appender.info("Hello world how are you doing")
 
               refute appender.send(:time_to_reopen?)
             end
-            assert_equal Time.parse("2015-12-09 17:51:00"), appender.reopen_at
             assert appender.send(:time_to_reopen?)
 
             assert_file_reopened(appender) do

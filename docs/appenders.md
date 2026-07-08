@@ -143,6 +143,9 @@ SemanticLogger.add_appender(file_name: "development.log", formatter: :color)
 SemanticLogger.add_appender(file_name: "development.log", formatter: :json)
 ~~~
 
+The file is opened when the appender is added, so a bad path or insufficient permissions raise
+immediately from `add_appender` instead of failing later on the logging thread.
+
 For performance the log file is not re-opened on every call, so rotate it with a copy-truncate
 operation rather than deleting the file. See [Log rotation](operations.html#log-rotation).
 
