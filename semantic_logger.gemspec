@@ -20,7 +20,7 @@ Gem::Specification.new do |s|
   s.add_dependency "concurrent-ruby", "~> 1.0"
   s.metadata = {
     "bug_tracker_uri"       => "https://github.com/reidmorrison/semantic_logger/issues",
-    "changelog_uri"         => "https://github.com/reidmorrison/semantic_logger/releases",
+    "changelog_uri"         => "https://github.com/reidmorrison/semantic_logger/blob/main/CHANGELOG.md",
     "documentation_uri"     => "https://logger.rocketjob.io",
     "source_code_uri"       => "https://github.com/reidmorrison/semantic_logger/tree/v#{SemanticLogger::VERSION}",
     "rubygems_mfa_required" => "true"
