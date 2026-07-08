@@ -32,6 +32,10 @@ class AppendersTest < Minitest::Test
     let(:appenders) { SemanticLogger::Appenders.new(capture_logger) }
     let(:logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
+    after do
+      FileUtils.rm_f("sample.log")
+    end
+
     describe "#add" do
       it "adds file appender" do
         appender = appenders.add(file_name: "sample.log")
