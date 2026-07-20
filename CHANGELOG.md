@@ -5,6 +5,21 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [5.1.0] 2026-07-20
 
+### Deprecated
+
+These are deprecated now and will be removed in v6. Each emits a Ruby deprecation warning
+(`category: :deprecated`), so it is silent by default and shown when deprecation warnings are
+enabled (for example `ruby -W:deprecated`, or Rails development mode).
+
+- The `:sentry` appender (`SemanticLogger::Appender::Sentry`), which depends on the
+  end-of-life `sentry-raven` gem. Use the `:sentry_ruby` appender instead.
+- The `:new_relic` appender (`SemanticLogger::Appender::NewRelic`), which reports errors via
+  `newrelic_rpm`. Use the log-forwarding `:new_relic_logs` appender instead.
+- The `type:` parameter on the Elasticsearch and OpenSearch appenders (`:elasticsearch`,
+  `:elasticsearch_http`, and `:opensearch`). Document `_type` has been unused since
+  Elasticsearch 7, so the parameter is now ignored on all server versions: the bulk
+  appenders no longer send a `_type`, and the HTTP appender now posts to `_doc`.
+
 ### Fixed
 
 - The file appender opens its log file when it is created, so a misconfigured path or

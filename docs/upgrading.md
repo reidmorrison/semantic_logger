@@ -10,6 +10,71 @@ layout: default
 * TOC
 {:toc}
 
+### Upgrading to Semantic Logger v5.1
+
+v5.1 deprecates several legacy appenders and one appender option. They all still work in v5.1, but
+each now emits a Ruby deprecation warning and will be **removed in v6**. The warnings use
+`category: :deprecated`, so they are silent by default and appear when deprecation warnings are
+enabled (for example `ruby -W:deprecated`, or Rails development mode). Switch away now to be ready
+for v6.
+
+#### Replace the `:sentry` appender with `:sentry_ruby`
+
+The `:sentry` appender depends on the end-of-life `sentry-raven` gem. Use the `:sentry_ruby`
+appender, backed by the maintained `sentry-ruby` gem.
+
+In your `Gemfile`:
+
+~~~ruby
+# Remove:
+gem "sentry-raven"
+# Add:
+gem "sentry-ruby"
+~~~
+
+When adding the appender:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: :sentry)
+
+# After:
+SemanticLogger.add_appender(appender: :sentry_ruby)
+~~~
+
+#### Replace the `:new_relic` appender with `:new_relic_logs`
+
+The `:new_relic` appender reports `:error` and `:fatal` entries to New Relic as **error events** via
+`newrelic_rpm`. It is superseded by `:new_relic_logs`, which forwards log entries to New Relic Logs:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: :new_relic)
+
+# After:
+SemanticLogger.add_appender(appender: :new_relic_logs)
+~~~
+
+Note that the behaviour differs. `:new_relic` created New Relic *error events* (and defaulted to the
+`:error` level), whereas `:new_relic_logs` forwards *log messages* to New Relic's log ingestion. Set
+`level:` to match what you want forwarded, and update any New Relic dashboards or alerts that relied
+on the old error events. Both appenders require the `newrelic_rpm` gem.
+
+#### Remove the `type:` option from the Elasticsearch and OpenSearch appenders
+
+Document `_type` has been unused since Elasticsearch 7, so the `type:` option (on `:elasticsearch`,
+`:elasticsearch_http`, and `:opensearch`) is now ignored on all server versions: the bulk appenders
+no longer send a `_type`, and the `:elasticsearch_http` appender posts to the typeless `_doc`
+endpoint. Passing `type:` logs a deprecation warning. Remove it:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200", type: "log")
+
+# After:
+SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200")
+~~~
+
 ### Upgrading to Semantic Logger v5.0
 
 #### Minimum Ruby version is now 3.2

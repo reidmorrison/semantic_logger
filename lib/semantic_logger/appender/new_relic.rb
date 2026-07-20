@@ -33,6 +33,12 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(level: :error, **args, &block)
+        Kernel.warn(
+          "SemanticLogger::Appender::NewRelic (appender: :new_relic) is deprecated and will be removed in v6. " \
+          "It reports errors via newrelic_rpm and is superseded by the log-forwarding appender " \
+          "appender: :new_relic_logs.",
+          category: :deprecated
+        )
         super
       end
 

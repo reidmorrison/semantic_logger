@@ -39,6 +39,11 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       def initialize(level: :error, **args, &block)
+        Kernel.warn(
+          "SemanticLogger::Appender::Sentry (appender: :sentry) is deprecated and will be removed in v6. " \
+          "It depends on the end-of-life sentry-raven gem. Use appender: :sentry_ruby instead.",
+          category: :deprecated
+        )
         # Replace the Sentry Raven logger so that we can identify its log messages and not forward them to Sentry
         Raven.configure { |config| config.logger = SemanticLogger[Raven] }
         super

@@ -9,6 +9,16 @@ module Appender
       let(:appender) { SemanticLogger::Appender::NewRelic.new }
       let(:amessage) { "AppenderNewRelicTest log message" }
 
+      it "warns that the appender is deprecated" do
+        original             = Warning[:deprecated]
+        Warning[:deprecated] = true
+        assert_output(nil, /deprecated.*new_relic_logs/m) do
+          SemanticLogger::Appender::NewRelic.new
+        end
+      ensure
+        Warning[:deprecated] = original
+      end
+
       (SemanticLogger::LEVELS - %i[error fatal]).each do |level|
         it "does not send :#{level} notifications to New Relic" do
           exception = hash = nil

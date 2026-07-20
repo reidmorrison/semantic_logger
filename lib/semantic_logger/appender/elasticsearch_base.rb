@@ -6,14 +6,13 @@ module SemanticLogger
     #
     # Implements the shared bulk-indexing pipeline used by both the
     # {Elasticsearch} and {OpenSearch} appenders. Subclasses only need to
-    # supply the backing client class (and, optionally, whether the server
-    # version still supports document `_type`).
+    # supply the backing client class.
     #
     # This class is internal: applications add an appender via
     # `SemanticLogger.add_appender(appender: :elasticsearch, ...)` or
     # `appender: :opensearch`, never by referencing this class directly.
     class ElasticsearchBase < SemanticLogger::Subscriber
-      attr_accessor :url, :index, :date_pattern, :type, :client, :flush_interval, :timeout_interval, :batch_size,
+      attr_accessor :url, :index, :date_pattern, :client, :flush_interval, :timeout_interval, :batch_size,
                     :client_args
 
       # Create an Elasticsearch-compatible appender over persistent HTTP(S).
@@ -31,9 +30,9 @@ module SemanticLogger
       #     Default: '%Y.%m.%d'
       #
       #   type: [String]
-      #     Document type to associate with logs when they are written.
-      #     Deprecated in Elasticsearch 7.0.0, unused by OpenSearch.
-      #     Default: 'log'
+      #     Deprecated and ignored. Document `_type` has been unused since
+      #     Elasticsearch 7 and is ignored by OpenSearch. Passing it logs a
+      #     deprecation warning; it will be removed in v6.
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
@@ -124,7 +123,7 @@ module SemanticLogger
       def initialize(url: "http://localhost:9200",
                      index: "semantic_logger",
                      date_pattern: "%Y.%m.%d",
-                     type: "log",
+                     type: nil,
                      level: nil,
                      formatter: nil,
                      filter: nil,
@@ -134,10 +133,17 @@ module SemanticLogger
                      data_stream: false,
                      **client_args,
                      &)
+        if type
+          Kernel.warn(
+            "The Elasticsearch/OpenSearch appender `type:` parameter is deprecated and will be removed in v6. " \
+            "Document `_type` has been unused since Elasticsearch 7 and is ignored by OpenSearch.",
+            category: :deprecated
+          )
+        end
+
         @url                  = url
         @index                = index
         @date_pattern         = date_pattern
-        @type                 = type
         @client_args          = client_args.dup
         @client_args[:url]    = url if url && !client_args[:hosts]
         @client_args[:logger] = logger
@@ -193,19 +199,12 @@ module SemanticLogger
         expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
         return {"create" => {}} if @data_stream
 
-        bulk_index = {"index" => {"_index" => expanded_index_name}}
-        bulk_index["index"].merge!({"_type" => type}) if version_supports_type?
-        bulk_index
+        {"index" => {"_index" => expanded_index_name}}
       end
 
       def default_formatter
         time_key = @data_stream ? "@timestamp" : :timestamp
         SemanticLogger::Formatters::Raw.new(time_format: :iso_8601, time_key: time_key)
-      end
-
-      # Modern Elasticsearch (>= 7) and OpenSearch no longer support document `_type`.
-      def version_supports_type?
-        false
       end
     end
   end

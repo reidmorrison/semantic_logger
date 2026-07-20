@@ -21,7 +21,7 @@ module Appender
           appender.info log_message
         end
 
-        assert_equal "/semantic_logger-#{Time.now.strftime('%Y.%m.%d')}/log", index
+        assert_equal "/semantic_logger-#{Time.now.strftime('%Y.%m.%d')}/_doc", index
       end
 
       SemanticLogger::LEVELS.each do |level|
