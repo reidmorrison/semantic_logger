@@ -224,7 +224,8 @@ module SemanticLogger
         if async_max_retries == -1 || retry_count < async_max_retries
           @retry_count += 1
           limit = async_max_retries == -1 ? "unlimited" : async_max_retries
-          safe_log(:warn, "Async: Restarting due to exception, retry #{retry_count} of #{limit}, sleeping #{retry_count}s", e)
+          safe_log(:warn,
+                   "Async: Restarting due to exception, retry #{retry_count} of #{limit}, sleeping #{retry_count}s", e)
           sleep(retry_count)
           retry
         else
@@ -341,7 +342,9 @@ module SemanticLogger
       diff = Time.now - log.time
       return unless diff > lag_threshold_s
 
-      logger.warn "Async: Appender thread has fallen behind by #{diff} seconds with #{queue.size} messages queued up. Consider reducing the log level or changing the appenders"
+      logger.warn "Async: Appender thread has fallen behind by #{diff} seconds with " \
+                  "#{queue.size} messages queued up. Consider reducing the log level or " \
+                  "changing the appenders"
     end
 
     # Submit a command to the worker thread and wait for the reply.

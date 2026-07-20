@@ -243,10 +243,11 @@ class MeasureTest < Minitest::Test
           end
 
           it "log when slower" do
-            assert_equal "result", appender.send(measure_level, message: "hello world", min_duration: 200, payload: payload) {
-              sleep 0.5
-              "result"
-            }
+            assert_equal "result",
+                         appender.send(measure_level, message: "hello world", min_duration: 200, payload: payload) {
+                           sleep 0.5
+                           "result"
+                         }
 
             assert log = appender.events.first
             assert_equal "hello world", log.message

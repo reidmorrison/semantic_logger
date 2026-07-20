@@ -2,7 +2,8 @@ begin
   require "opentelemetry/logs"
 rescue LoadError
   raise LoadError,
-        'Gem opentelemetry-logs-sdk is required for logging to Open Telemetry. Please add the gem "opentelemetry-logs-sdk" to your Gemfile.'
+        "Gem opentelemetry-logs-sdk is required for logging to Open Telemetry. " \
+        'Please add the gem "opentelemetry-logs-sdk" to your Gemfile.'
 end
 
 # Open Telemetry Appender

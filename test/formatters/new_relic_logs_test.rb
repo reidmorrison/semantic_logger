@@ -188,7 +188,8 @@ module SemanticLogger
 
         describe "metadata" do
           it "includes trace.id and span.id if present" do
-            # Simulate recording a log message within a Rails transaction, where trace.id has been set on the current thread
+            # Simulate recording a log message within a Rails transaction, where trace.id
+            # has been set on the current thread
             log.set_context(:new_relic_metadata, {"trace.id" => "trace123", "span.id" => "span456"})
             # ... which is then formatted on the async appender thread
             result = formatted_log

@@ -31,6 +31,10 @@ Layout/EndAlignment:
 Layout/EndOfLine:
   EnforcedStyle: lf
 
+# Standard 120 column limit
+Layout/LineLength:
+  Max: 120
+
 # Use a table layout for hashes
 Layout/HashAlignment:
   EnforcedHashRocketStyle: table
@@ -75,6 +79,12 @@ Metrics/ParameterLists:
 # Initialization Vector abbreviation
 Naming/MethodParameterName:
   AllowedNames: ['iv', '_', 'io', 'ap', 'on']
+
+# Loggable is a mixin: it memoizes into @semantic_logger rather than @logger so
+# that it never clashes with an @logger instance variable in the including class.
+Naming/MemoizedInstanceVariableName:
+  Exclude:
+    - "lib/semantic_logger/loggable.rb"
 
 # Does not allow Symbols to load
 Security/YAMLLoad:

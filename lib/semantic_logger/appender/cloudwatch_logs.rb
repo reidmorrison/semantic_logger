@@ -2,7 +2,8 @@ begin
   require "aws-sdk-cloudwatchlogs"
 rescue LoadError
   raise LoadError,
-        'Gem aws-sdk-cloudwatchlogs is required for logging to CloudWatch Logs. Please add the gem "aws-sdk-cloudwatchlogs" to your Gemfile.'
+        "Gem aws-sdk-cloudwatchlogs is required for logging to CloudWatch Logs. " \
+        'Please add the gem "aws-sdk-cloudwatchlogs" to your Gemfile.'
 end
 
 require "concurrent"
@@ -20,7 +21,8 @@ require "concurrent"
 module SemanticLogger
   module Appender
     class CloudwatchLogs < SemanticLogger::Subscriber
-      attr_reader :client_kwargs, :group, :create_group, :create_stream, :force_flush_interval_seconds, :max_buffered_events,
+      attr_reader :client_kwargs, :group, :create_group, :create_stream,
+                  :force_flush_interval_seconds, :max_buffered_events,
                   :task, :client, :buffered_logs
 
       # Create CloudWatch Logs Appender

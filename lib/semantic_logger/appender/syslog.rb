@@ -151,7 +151,8 @@ module SemanticLogger
             require "syslog_protocol"
           rescue LoadError
             raise LoadError,
-                  "Missing gem: syslog_protocol. This gem is required when logging over TCP or UDP. To fix this error: gem install syslog_protocol"
+                  "Missing gem: syslog_protocol. This gem is required when logging over TCP or UDP. " \
+                  "To fix this error: gem install syslog_protocol"
           end
 
           # The net_tcp_client gem is required when logging over TCP.
@@ -160,7 +161,8 @@ module SemanticLogger
               require "net/tcp_client"
             rescue LoadError
               raise LoadError,
-                    "Missing gem: net_tcp_client. This gem is required when logging over TCP. To fix this error: gem install net_tcp_client"
+                    "Missing gem: net_tcp_client. This gem is required when logging over TCP. " \
+                    "To fix this error: gem install net_tcp_client"
             end
           end
         end
@@ -210,7 +212,8 @@ module SemanticLogger
         @remote_syslog.flush if @remote_syslog.respond_to?(:flush)
       end
 
-      # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender depending on the protocal selected
+      # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender
+      # depending on the protocol selected
       def default_formatter
         if protocol == :syslog
           # Format is text output without the time.

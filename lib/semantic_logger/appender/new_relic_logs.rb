@@ -48,7 +48,8 @@ module SemanticLogger
       def initialize(formatter: SemanticLogger::Formatters::NewRelicLogs.new, **args, &block)
         super
 
-        # Record NewRelic's "trace.id"/"entity.name"/"hostname"/etc, so we can include them later in the formatted output.
+        # Record NewRelic's "trace.id"/"entity.name"/"hostname"/etc, so we can include them
+        # later in the formatted output.
         # These are thread-local, so need to be captured as soon as the log-message is created.
         # https://rubydoc.info/gems/newrelic_rpm/NewRelic/Agent#linking_metadata-instance_method
         SemanticLogger.on_log(CAPTURE_CONTEXT)

@@ -4,10 +4,12 @@ require "rake/testtask"
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
 require "semantic_logger/version"
 
+desc "Build the semantic_logger gem"
 task :gem do
   system "gem build semantic_logger.gemspec"
 end
 
+desc "Tag and push the release, then publish the gem to RubyGems"
 task publish: :gem do
   system "git tag -a v#{SemanticLogger::VERSION} -m 'Tagging #{SemanticLogger::VERSION}'"
   system "git push --tags"

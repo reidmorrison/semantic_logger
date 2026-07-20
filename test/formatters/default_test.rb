@@ -13,7 +13,8 @@ module SemanticLogger
         end
 
         let(:log) do
-          # :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :named_tags
+          # :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index,
+          # :exception, :metric, :backtrace, :metric_amount, :named_tags
           log      = SemanticLogger::Log.new("DefaultTest", level)
           log.time = log_time
           log
@@ -254,9 +255,15 @@ module SemanticLogger
 
             # Ruby 3.4 changed the way hashes are displayed
             str = if RUBY_VERSION < "3.4"
-                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
+                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] " \
+                      "[first] [second] [third] {first: 1, second: 2, third: 3} " \
+                      "(#{duration}ms) DefaultTest -- Hello World -- " \
+                      "{:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
                   else
-                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] [first] [second] [third] {first: 1, second: 2, third: 3} (#{duration}ms) DefaultTest -- Hello World -- {first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"
+                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] " \
+                      "[first] [second] [third] {first: 1, second: 2, third: 3} " \
+                      "(#{duration}ms) DefaultTest -- Hello World -- " \
+                      "{first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"
                   end
 
             assert_equal str, formatter.call(log, nil).lines.first
