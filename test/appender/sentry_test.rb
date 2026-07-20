@@ -7,6 +7,16 @@ module Appender
       let(:appender) { SemanticLogger::Appender::Sentry.new(level: :trace) }
       let(:amessage) { "AppenderRavenTest log message" }
 
+      it "warns that the appender is deprecated" do
+        original                = Warning[:deprecated]
+        Warning[:deprecated]    = true
+        assert_output(nil, /deprecated.*sentry_ruby/m) do
+          SemanticLogger::Appender::Sentry.new(level: :trace)
+        end
+      ensure
+        Warning[:deprecated] = original
+      end
+
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
           error_message = hash = nil

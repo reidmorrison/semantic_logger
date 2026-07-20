@@ -26,10 +26,6 @@ module SemanticLogger
       def client_class
         ::Elasticsearch::Client
       end
-
-      def version_supports_type?
-        Gem::Version.new(::Elasticsearch::VERSION) < Gem::Version.new(7)
-      end
     end
   end
 end

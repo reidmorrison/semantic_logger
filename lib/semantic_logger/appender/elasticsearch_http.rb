@@ -13,7 +13,7 @@ require "date"
 module SemanticLogger
   module Appender
     class ElasticsearchHttp < SemanticLogger::Appender::Http
-      attr_accessor :index, :type
+      attr_accessor :index
 
       # Create Elasticsearch appender over persistent HTTP(S)
       #
@@ -25,9 +25,9 @@ module SemanticLogger
       #     Default: 'semantic_logger'
       #
       #   type: [String]
-      #     Document type to associate with logs when they are written.
-      #     Deprecated in Elasticsearch 7.0.0
-      #     Default: 'log'
+      #     Deprecated and ignored. Document `_type` has been unused since
+      #     Elasticsearch 7. Passing it logs a deprecation warning; it will be
+      #     removed in v6.
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
@@ -52,16 +52,23 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       def initialize(index: "semantic_logger",
-                     type: "log",
+                     type: nil,
                      url: "http://localhost:9200",
                      **http_args,
                      &)
+        if type
+          Kernel.warn(
+            "The Elasticsearch/OpenSearch appender `type:` parameter is deprecated and will be removed in v6. " \
+            "Document `_type` has been unused since Elasticsearch 7 and is ignored by OpenSearch.",
+            category: :deprecated
+          )
+        end
+
         @index = index
-        @type  = type
         super(url: url, **http_args, &)
 
         @request_path = "#{@path.end_with?('/') ? @path : "#{@path}/"}#{@index}-%Y.%m.%d"
-        @logging_path = "#{@request_path}/#{type}"
+        @logging_path = "#{@request_path}/_doc"
       end
 
       # Log to the index for today.

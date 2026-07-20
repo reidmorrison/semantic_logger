@@ -12,6 +12,41 @@ module Appender
         end
       end
 
+      def capture_deprecations
+        original             = Warning[:deprecated]
+        Warning[:deprecated] = true
+        io                   = StringIO.new
+        original_stderr      = $stderr
+        $stderr              = io
+        yield
+        io.string
+      ensure
+        $stderr              = original_stderr
+        Warning[:deprecated] = original
+      end
+
+      it "warns that the type: parameter is deprecated" do
+        stderr =
+          client_class.stub_any_instance(:bulk, true) do
+            capture_deprecations do
+              SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200", type: "log")
+            end
+          end
+
+        assert_match(/`type:`.*deprecated/m, stderr)
+      end
+
+      it "does not warn when type: is omitted" do
+        stderr =
+          client_class.stub_any_instance(:bulk, true) do
+            capture_deprecations do
+              SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
+            end
+          end
+
+        refute_match(/deprecated/, stderr)
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["ELASTICSEARCH"]

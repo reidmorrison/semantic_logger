@@ -791,12 +791,14 @@ SemanticLogger.add_appender(appender: :bugsnag, level: :info)
 
 ### Sentry
 
-Use the `sentry-ruby` gem and the corresponding appender (the older `sentry-raven` gem works but is
-deprecated):
+Use the `sentry-ruby` gem and the corresponding appender:
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :sentry_ruby)
 ~~~
+
+> **Deprecated:** the older `appender: :sentry` (backed by the end-of-life `sentry-raven` gem) still
+> works but is deprecated and will be removed in v6. Switch to `appender: :sentry_ruby`.
 
 Some logging context is forwarded to Sentry:
 
@@ -846,6 +848,9 @@ SemanticLogger.add_appender(appender: :new_relic)
 # To also send warnings:
 SemanticLogger.add_appender(appender: :new_relic, level: :warn)
 ~~~
+
+> **Deprecated:** `appender: :new_relic` (error events via `newrelic_rpm`) is deprecated and will be
+> removed in v6. To forward log entries to New Relic, use `appender: :new_relic_logs` instead.
 
 ### Rollbar
 
