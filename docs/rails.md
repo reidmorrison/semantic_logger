@@ -712,6 +712,39 @@ After they initialize, Rails Semantic Logger replaces the loggers of these libra
 
 ---
 
+## Upgrading to v5.1
+
+v5.1 requires Semantic Logger v5.1 and needs no configuration changes. Two behaviors differ.
+
+### A log file that cannot be opened now fails at boot
+
+Semantic Logger v5.1 opens the file appender's log file when the appender is created, rather than on
+the first write. A missing directory, a bad path, or insufficient permissions therefore raises
+during boot, where Rails Semantic Logger catches it and falls back to logging to standard error at
+the `:warn` level, with a message explaining the problem.
+
+Previously that failure surfaced asynchronously on the appender thread after the application had
+already booted, so the fallback never ran and the app kept running against an appender that silently
+dropped every message. If you have been running with an unwritable log path without noticing, this
+release is when you will find out.
+
+As a side effect, the log file is created as soon as the appender is added, even if nothing has been
+logged yet. This matches the standard Ruby and Rails loggers.
+
+### Sidekiq v4, v5, and v6 are no longer supported
+
+Sidekiq v7 and v8 are supported and tested. The patches for older versions have been removed, along
+with the pre-7.1.6 error handler branches. Sidekiq v7 and v8 both predate this gem's Rails 7.2 and
+Ruby 3.2 minimums, so upgrading Sidekiq is the path forward.
+
+On Sidekiq 8 two of its own settings are now honored: `logged_job_attributes` adds job attributes to
+the logging context, and `skip_default_job_logging` suppresses the `Start #perform` /
+`Completed #perform` messages (an alternative to
+`RailsSemanticLogger::Sidekiq::JobLogger.perform_messages = false`). See
+[Sidekiq](#sidekiq) for the logging configuration.
+
+---
+
 ## Migrating from v4 to v5
 
 ### Ruby and Rails minimums

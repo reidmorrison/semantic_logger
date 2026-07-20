@@ -96,7 +96,7 @@ The site also serves two files for AI assistants: [docs/llms.txt](docs/llms.txt)
 Standing items, tracked here so sessions know what is intentional versus worth fixing. Removals or contract changes wait for a major version.
 
 - **Legacy service appenders — remove in v6.** As of v5.1 each emits a deprecation warning (via `Kernel.warn(category: :deprecated)`) but still works: [sentry.rb](lib/semantic_logger/appender/sentry.rb) (EOL `sentry-raven`, superseded by [sentry_ruby.rb](lib/semantic_logger/appender/sentry_ruby.rb)); [new_relic.rb](lib/semantic_logger/appender/new_relic.rb) (error events via `newrelic_rpm`, superseded by [new_relic_logs.rb](lib/semantic_logger/appender/new_relic_logs.rb)). The Elasticsearch/OpenSearch `type:` option is already inert (ignored on all versions, warns when passed); its keyword can be dropped entirely. Remove all three in v6; see the v5.1 upgrade notes in [docs/upgrading.md](docs/upgrading.md).
-- **rubocop_todo backlog.** `.rubocop_todo.yml` suppresses roughly 30 cop categories. Treat it as a burn-down list: when touching a file, prefer fixing its suppressed offenses over adding new ones; never add to the todo file.
+- **rubocop_todo backlog.** `.rubocop_todo.yml` suppresses 27 cop categories (down from 32; `Layout/LineLength` was restored to the standard `Max: 120` and four cops were cleared in the 5.1 cycle). Treat it as a burn-down list: when touching a file, prefer fixing its suppressed offenses over adding new ones; never add to the todo file. Most of the remainder is complexity metrics (`Metrics/*`) and test-only cops (`Minitest/*`) that need refactoring rather than mechanical fixes.
 
 ## Writing style
 

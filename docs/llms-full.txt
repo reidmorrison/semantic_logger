@@ -3245,6 +3245,39 @@ After they initialize, Rails Semantic Logger replaces the loggers of these libra
 
 ---
 
+## Upgrading to v5.1
+
+v5.1 requires Semantic Logger v5.1 and needs no configuration changes. Two behaviors differ.
+
+### A log file that cannot be opened now fails at boot
+
+Semantic Logger v5.1 opens the file appender's log file when the appender is created, rather than on
+the first write. A missing directory, a bad path, or insufficient permissions therefore raises
+during boot, where Rails Semantic Logger catches it and falls back to logging to standard error at
+the `:warn` level, with a message explaining the problem.
+
+Previously that failure surfaced asynchronously on the appender thread after the application had
+already booted, so the fallback never ran and the app kept running against an appender that silently
+dropped every message. If you have been running with an unwritable log path without noticing, this
+release is when you will find out.
+
+As a side effect, the log file is created as soon as the appender is added, even if nothing has been
+logged yet. This matches the standard Ruby and Rails loggers.
+
+### Sidekiq v4, v5, and v6 are no longer supported
+
+Sidekiq v7 and v8 are supported and tested. The patches for older versions have been removed, along
+with the pre-7.1.6 error handler branches. Sidekiq v7 and v8 both predate this gem's Rails 7.2 and
+Ruby 3.2 minimums, so upgrading Sidekiq is the path forward.
+
+On Sidekiq 8 two of its own settings are now honored: `logged_job_attributes` adds job attributes to
+the logging context, and `skip_default_job_logging` suppresses the `Start #perform` /
+`Completed #perform` messages (an alternative to
+`RailsSemanticLogger::Sidekiq::JobLogger.perform_messages = false`). See
+[Sidekiq](#sidekiq) for the logging configuration.
+
+---
+
 ## Migrating from v4 to v5
 
 ### Ruby and Rails minimums
@@ -4157,11 +4190,13 @@ with `bundle install --frozen`, prevents an unexpected dependency from being pul
 
 ### Upgrading to Semantic Logger v5.1
 
-v5.1 deprecates several legacy appenders and one appender option. They all still work in v5.1, but
-each now emits a Ruby deprecation warning and will be **removed in v6**. The warnings use
-`category: :deprecated`, so they are silent by default and appear when deprecation warnings are
-enabled (for example `ruby -W:deprecated`, or Rails development mode). Switch away now to be ready
-for v6.
+v5.1 deprecates several legacy appenders and one appender option, and changes when the file appender
+opens its log file.
+
+The deprecated appenders and option all still work in v5.1, but each now emits a Ruby deprecation
+warning and will be **removed in v6**. The warnings use `category: :deprecated`, so they are silent
+by default and appear when deprecation warnings are enabled (for example `ruby -W:deprecated`, or
+Rails development mode). Switch away now to be ready for v6.
 
 #### Replace the `:sentry` appender with `:sentry_ruby`
 
@@ -4219,6 +4254,26 @@ SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:920
 # After:
 SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200")
 ~~~
+
+#### The file appender opens its log file when it is created
+
+The file appender now opens its log file at creation rather than on the first write, matching the
+other appenders. A bad path or insufficient permissions therefore raises immediately from
+`SemanticLogger.add_appender`, instead of surfacing later on the appender thread while log messages
+are lost. This restores the pre-4.9 behavior.
+
+As a result the log file is created as soon as the appender is added, even if nothing has been
+logged yet, the same as the standard Ruby and Rails loggers. If you add appenders inside a `rescue`
+or a conditional that assumed creation could never fail, review it: the failure now happens earlier
+and in the calling thread.
+
+#### Rails: log file failures are caught at boot
+
+If you use [rails_semantic_logger](rails.html), the companion gem's v5.1 release pairs with the
+eager open above: a log file that cannot be opened is now caught during boot and the app falls back
+to standard error at the `:warn` level, rather than booting against a silently broken appender. v5.1
+also drops support for Sidekiq v4, v5, and v6. See
+[Upgrading to v5.1](rails.html#upgrading-to-v51) for details.
 
 ### Upgrading to Semantic Logger v5.0
 
