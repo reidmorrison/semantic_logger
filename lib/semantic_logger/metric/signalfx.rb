@@ -66,8 +66,10 @@ module SemanticLogger
       #   logger.info(metric: 'Common/User/authorize', duration: 1.4)
       #
       # Then it is translated into the following 2 log entries under the covers:
-      #   logger.info(metric: 'Application.average', metric_amount: 1.4, dimensions: {class: 'Common::User', action: 'authorize'})
-      #   logger.info(metric: 'Application.counter', metric_amount: 1, dimensions: {class: 'Common::User', action: 'authorize'})
+      #   logger.info(metric: 'Application.average', metric_amount: 1.4,
+      #               dimensions: {class: 'Common::User', action: 'authorize'})
+      #   logger.info(metric: 'Application.counter', metric_amount: 1,
+      #               dimensions: {class: 'Common::User', action: 'authorize'})
       #
       # Similarly with a measure block which automatically supplies the duration:
       #   logger.measure_info(metric: 'Common/User/authorize') do

@@ -172,7 +172,9 @@ module SemanticLogger
         if key
           escape_control_characters(named[key.to_sym] || named[key.to_s])
         else
-          named.map { |name, value| "#{escape_control_characters(name)}: #{escape_control_characters(value)}" }.join(", ")
+          named.map do |name, value|
+            "#{escape_control_characters(name)}: #{escape_control_characters(value)}"
+          end.join(", ")
         end
       end
 

@@ -14,7 +14,8 @@ module SemanticLogger
 
       stream = appender.respond_to?(:console_stream) && appender.console_stream
       if stream && console_streams.include?(stream)
-        logger.warn "Ignoring attempt to add a second #{stream} console appender since it would result in duplicate console output."
+        logger.warn "Ignoring attempt to add a second #{stream} console appender since it " \
+                    "would result in duplicate console output."
         return
       end
 

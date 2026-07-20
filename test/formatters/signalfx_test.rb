@@ -109,8 +109,9 @@ module SemanticLogger
             assert counters = hash["counter"], hash
             assert counter = counters.first, hash
             assert_equal(
-              {"class" => "user", "action" => "login", "environment" => "test", "user_id" => "47", "host" => SemanticLogger.host,
-"application" => SemanticLogger.application}, counter["dimensions"], counter
+              {"class" => "user", "action" => "login", "environment" => "test", "user_id" => "47",
+               "host" => SemanticLogger.host, "application" => SemanticLogger.application},
+              counter["dimensions"], counter
             )
           end
 

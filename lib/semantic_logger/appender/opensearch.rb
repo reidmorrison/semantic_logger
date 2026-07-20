@@ -2,7 +2,8 @@ begin
   require "opensearch-ruby"
 rescue LoadError
   raise LoadError,
-        'Gem opensearch-ruby is required for logging to OpenSearch. Please add the gem "opensearch-ruby" to your Gemfile.'
+        "Gem opensearch-ruby is required for logging to OpenSearch. " \
+        'Please add the gem "opensearch-ruby" to your Gemfile.'
 end
 
 require "semantic_logger/appender/elasticsearch_base"

@@ -45,7 +45,8 @@ module SemanticLogger
         does_not_implement = LEVELS[1..].find { |i| !@logger.respond_to?(i) }
         if does_not_implement
           raise(ArgumentError,
-                "Supplied logger does not implement:#{does_not_implement}. It must implement all of #{LEVELS[1..].inspect}")
+                "Supplied logger does not implement:#{does_not_implement}. " \
+                "It must implement all of #{LEVELS[1..].inspect}")
         end
 
         super(**args, &)

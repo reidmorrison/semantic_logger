@@ -18,12 +18,22 @@ class SubscriberTest < Minitest::Test
     let(:hash_str) { hash_value.inspect.sub("{", '\\{').sub("}", '\\}') }
     let(:file_name_reg_exp) { ' subscriber_test.rb:\d+' }
 
+    # Shared prefix of a formatted log line: "<time> <level> [<pid>:<thread> <file>:<line>] <name>".
+    let :log_prefix do
+      /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber/
+    end
+
+    # Same prefix but without a captured file name (when the backtrace level is not met).
+    let :log_prefix_no_file do
+      /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+\] SubscriberTest::SimpleSubscriber/
+    end
+
     describe "format logs into text form" do
       it "handle no message or payload" do
         appender.debug
 
         assert_match(
-          /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber\n/, appender.message
+          /#{log_prefix}\n/, appender.message
         )
       end
 
@@ -31,7 +41,7 @@ class SubscriberTest < Minitest::Test
         appender.debug "hello world"
 
         assert_match(
-          /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber -- hello world\n/, appender.message
+          /#{log_prefix} -- hello world\n/, appender.message
         )
       end
 
@@ -39,7 +49,7 @@ class SubscriberTest < Minitest::Test
         appender.debug "hello world", hash_value
 
         assert_match(
-          /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber -- hello world -- #{hash_str}\n/, appender.message
+          /#{log_prefix} -- hello world -- #{hash_str}\n/, appender.message
         )
       end
 
@@ -47,7 +57,7 @@ class SubscriberTest < Minitest::Test
         appender.debug "hello world", hash_value, StandardError.new("StandardError")
 
         assert_match(
-          /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber -- hello world -- #{hash_str} -- Exception: StandardError: StandardError\n\n/, appender.message
+          /#{log_prefix} -- hello world -- #{hash_str} -- Exception: StandardError: StandardError\n\n/, appender.message
         )
       end
 
@@ -55,7 +65,7 @@ class SubscriberTest < Minitest::Test
         appender.debug StandardError.new("StandardError")
 
         assert_match(
-          /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber -- Exception: StandardError: StandardError\n\n/, appender.message
+          /#{log_prefix} -- Exception: StandardError: StandardError\n\n/, appender.message
         )
       end
 
@@ -71,7 +81,7 @@ class SubscriberTest < Minitest::Test
         end
 
         assert_match(
-          /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber -- Exception: StandardError: SecondError\n/, appender.message
+          /#{log_prefix} -- Exception: StandardError: SecondError\n/, appender.message
         )
         if Exception.instance_methods.include?(:cause)
           assert_match(/^Cause: StandardError: FirstError\n/,
@@ -85,7 +95,7 @@ class SubscriberTest < Minitest::Test
         appender.debug exc
 
         assert_match(
-          /\d+-\d+-\d+ \d+:\d+:\d+.\d+ D \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber -- Exception: StandardError: StandardError\n\n/, appender.message
+          /#{log_prefix} -- Exception: StandardError: StandardError\n\n/, appender.message
         )
       end
 
@@ -110,7 +120,7 @@ class SubscriberTest < Minitest::Test
             appender.send(level, "hello world", hash_value)
 
             assert_match(
-              /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber -- hello world -- #{hash_str}\n/, appender.message
+              /#{log_prefix} -- hello world -- #{hash_str}\n/, appender.message
             )
           end
         end
@@ -120,7 +130,7 @@ class SubscriberTest < Minitest::Test
             appender.send(level, "hello world", hash_value)
 
             assert_match(
-              /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+\] SubscriberTest::SimpleSubscriber -- hello world -- #{hash_str}\n/, appender.message
+              /#{log_prefix_no_file} -- hello world -- #{hash_str}\n/, appender.message
             )
           end
         end
@@ -135,14 +145,16 @@ class SubscriberTest < Minitest::Test
           message = log.message.to_s
           message << " -- " << log.payload.inspect if log.payload
           if log.exception
-            message << " -- " << "#{log.exception.class}: #{log.exception.message}\n#{(log.exception.backtrace || []).join("\n")}"
+            message << " -- " << "#{log.exception.class}: #{log.exception.message}\n" \
+                                 "#{(log.exception.backtrace || []).join("\n")}"
           end
 
           duration_str = log.duration ? " (#{format('%.1f', log.duration)}ms)" : ""
 
           formatted_time = log.time.strftime(SemanticLogger::Formatters::Base.build_time_format)
 
-          "#{formatted_time} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] #{tags}#{log.name} -- #{message}#{duration_str}"
+          "#{formatted_time} #{log.level.to_s.upcase} [#{$$}:#{log.thread_name}] " \
+            "#{tags}#{log.name} -- #{message}#{duration_str}"
         end
       end
 

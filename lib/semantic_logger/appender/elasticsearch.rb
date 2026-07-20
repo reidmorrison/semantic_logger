@@ -2,7 +2,8 @@ begin
   require "elasticsearch"
 rescue LoadError
   raise LoadError,
-        'Gem elasticsearch is required for logging to Elasticsearch. Please add the gem "elasticsearch" to your Gemfile.'
+        "Gem elasticsearch is required for logging to Elasticsearch. " \
+        'Please add the gem "elasticsearch" to your Gemfile.'
 end
 
 require "semantic_logger/appender/elasticsearch_base"

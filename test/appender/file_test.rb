@@ -359,7 +359,8 @@ module Appender
               end
             end
 
-          assert_equal "log/production-%-myserver-#{$$}-#{Date.today.strftime('%Y%m%d')}-#{time.strftime('%H%M%S')}.log",
+          assert_equal "log/production-%-myserver-#{$$}-" \
+                       "#{Date.today.strftime('%Y%m%d')}-#{time.strftime('%H%M%S')}.log",
                        formatted
         end
 

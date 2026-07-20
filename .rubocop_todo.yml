@@ -41,14 +41,6 @@ Lint/UnderscorePrefixedVariableName:
   Exclude:
     - 'test/concerns/compatibility_test.rb'
 
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: AutoCorrect, AllowUnusedKeywordArguments, IgnoreEmptyMethods, IgnoreNotImplementedMethods, NotImplementedExceptions.
-# NotImplementedExceptions: NotImplementedError
-Lint/UnusedMethodArgument:
-  Exclude:
-    - 'lib/semantic_logger/test/capture_log_events.rb'
-
 # Offense count: 35
 # Configuration parameters: AllowedMethods, AllowedPatterns, CountRepeatedAttributes.
 Metrics/AbcSize:
@@ -121,14 +113,6 @@ Minitest/RefuteFalse:
     - 'test/base_test.rb'
     - 'test/logger_test.rb'
 
-# Offense count: 2
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: EnforcedStyleForLeadingUnderscores.
-# SupportedStylesForLeadingUnderscores: disallowed, required, optional
-Naming/MemoizedInstanceVariableName:
-  Exclude:
-    - 'lib/semantic_logger/loggable.rb'
-
 # Offense count: 1
 # Configuration parameters: EnforcedStyle, AllowedPatterns, ForbiddenIdentifiers, ForbiddenPatterns.
 # SupportedStyles: snake_case, camelCase
@@ -167,12 +151,6 @@ Naming/VariableNumber:
     - 'test/formatters/default_test.rb'
     - 'test/formatters/raw_test.rb'
 
-# Offense count: 2
-# This cop supports safe autocorrection (--autocorrect).
-Rake/Desc:
-  Exclude:
-    - 'Rakefile'
-
 # Offense count: 3
 Style/DocumentDynamicEvalDefinition:
   Exclude:
@@ -185,20 +163,6 @@ Style/DocumentDynamicEvalDefinition:
 Style/IdenticalConditionalBranches:
   Exclude:
     - 'test/formatters/new_relic_logs_test.rb'
-
-# Offense count: 12
-# This cop supports safe autocorrection (--autocorrect).
-Style/IfUnlessModifier:
-  Exclude:
-    - 'lib/semantic_logger/appender/file.rb'
-    - 'lib/semantic_logger/appender/graylog.rb'
-    - 'lib/semantic_logger/appender/http.rb'
-    - 'lib/semantic_logger/appender/io.rb'
-    - 'lib/semantic_logger/base.rb'
-    - 'lib/semantic_logger/formatters/new_relic_logs.rb'
-    - 'lib/semantic_logger/jruby/garbage_collection_logger.rb'
-    - 'lib/semantic_logger/logger.rb'
-    - 'test/subscriber_test.rb'
 
 # Offense count: 4
 Style/ItAssignment:
@@ -235,10 +199,3 @@ Style/SafeNavigation:
 Style/StringConcatenation:
   Exclude:
     - 'test/subscriber_test.rb'
-
-# Offense count: 52
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: AllowHeredoc, AllowURI, AllowQualifiedName, URISchemes, IgnoreCopDirectives, AllowedPatterns, SplitStrings.
-# URISchemes: http, https
-Layout/LineLength:
-  Max: 340

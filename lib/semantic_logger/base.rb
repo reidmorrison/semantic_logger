@@ -155,8 +155,6 @@ module SemanticLogger
           log.named_tags  = (thread[:semantic_logger_named_tags] || {}).clone
           thread.backtrace
         end
-      # TODO: Keep backtrace instead of transforming into a text message at this point
-      # Maybe log_backtrace: true
       if backtrace
         message += "\n"
         message << backtrace.join("\n")

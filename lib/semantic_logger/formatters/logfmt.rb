@@ -8,11 +8,13 @@ module SemanticLogger
     #   :timestamp, :level, :name, :message, :duration, :tags, :named_tags
     #
     # E.g.
-    #   timestamp="2020-07-20T08:32:05.375276Z" level=info name="DefaultTest" base="breakfast" spaces="second breakfast" double_quotes="\"elevensies\"" single_quotes="'lunch'" tag="success"
+    #   timestamp="2020-07-20T08:32:05.375276Z" level=info name="DefaultTest" base="breakfast"
+    #   spaces="second breakfast" double_quotes="\"elevensies\"" single_quotes="'lunch'" tag="success"
     #
     # All timestamps are ISO8601 formatteed
     # All user supplied values are escaped and surrounded by double quotes to avoid ambiguious message delimeters
-    # `tags` are treated as keys with boolean values. Tag names are not formatted or validated, ensure you use valid logfmt format for tag names.
+    # `tags` are treated as keys with boolean values. Tag names are not formatted or validated;
+    # ensure you use valid logfmt format for tag names.
     # `named_tags` are flattened are merged into the top level message field. Any conflicting fields are overridden.
     # `payload` values take precedence over `tags` and `named_tags`. Any conflicting fields are overridden.
     #

@@ -149,7 +149,8 @@ module SemanticLogger
         @client_args[:logger] = logger
         @data_stream          = data_stream
 
-        super(level: level, formatter: formatter, filter: filter, application: application, environment: environment, host: host, metrics: false, &)
+        super(level: level, formatter: formatter, filter: filter, application: application,
+              environment: environment, host: host, metrics: false, &)
         reopen
       end
 

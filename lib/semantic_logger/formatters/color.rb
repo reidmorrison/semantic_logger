@@ -97,7 +97,9 @@ module SemanticLogger
         return if named_tags.nil? || named_tags.empty?
 
         list = []
-        named_tags.each_pair { |name, value| list << "#{color}#{escape_control_characters(name)}: #{escape_control_characters(value)}#{color_map.clear}" }
+        named_tags.each_pair do |name, value|
+          list << "#{color}#{escape_control_characters(name)}: #{escape_control_characters(value)}#{color_map.clear}"
+        end
         "{#{list.join(', ')}}"
       end
 
@@ -126,7 +128,8 @@ module SemanticLogger
       def exception
         return unless log.exception
 
-        "-- Exception: #{color}#{log.exception.class}: #{escape_control_characters(log.exception.message)}#{color_map.clear}\n#{log.backtrace_to_s}"
+        "-- Exception: #{color}#{log.exception.class}: " \
+          "#{escape_control_characters(log.exception.message)}#{color_map.clear}\n#{log.backtrace_to_s}"
       end
 
       def call(log, logger)

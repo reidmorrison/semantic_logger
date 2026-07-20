@@ -16,10 +16,10 @@ module SemanticLogger
     #
     # Log entries similar to the following should show up in the log file:
     #
-    # 2019-02-06 18:58:17.522467 I [84730:70256441962000] Minitest -- START RocketJob::DirmonEntry::with valid entry::#archive_file test_0001_moves file to archive dir
-    # 2019-02-06 18:58:17.527492 I [84730:70256441962000] (4.980ms) Minitest -- PASS RocketJob::DirmonEntry::with valid entry::#archive_file test_0001_moves file to archive dir
-    # 2019-02-06 18:58:17.527835 I [84730:70256441962000] Minitest -- START RocketJob::DirmonEntry::#job_class::with a valid job_class_name test_0001_return job class
-    # 2019-02-06 18:58:17.529761 I [84730:70256441962000] (1.882ms) Minitest -- PASS RocketJob::DirmonEntry::#job_class::with a valid job_class_name test_0001_return job class
+    # 2019-02-06 18:58:17.522467 I [84730:70256] Minitest -- START MyJob test_0001_archives file
+    # 2019-02-06 18:58:17.527492 I [84730:70256] (4.980ms) Minitest -- PASS MyJob test_0001_archives file
+    # 2019-02-06 18:58:17.527835 I [84730:70256] Minitest -- START MyJob test_0002_returns job class
+    # 2019-02-06 18:58:17.529761 I [84730:70256] (1.882ms) Minitest -- PASS MyJob test_0002_returns job class
     class Minitest < ::Minitest::AbstractReporter
       include SemanticLogger::Loggable
 

@@ -14,7 +14,8 @@ module SemanticLogger
         end
 
         let(:log) do
-          # :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index, :exception, :metric, :backtrace, :metric_amount, :named_tags
+          # :level, :thread_name, :name, :message, :payload, :time, :duration, :tags, :level_index,
+          # :exception, :metric, :backtrace, :metric_amount, :named_tags
           log      = SemanticLogger::Log.new("SyslogCeeTest", level)
           log.time = log_time
           log
