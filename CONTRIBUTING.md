@@ -24,7 +24,7 @@ how the project grows, and they are warmly welcomed and appreciated.
 
 Documentation updates are welcome and appreciated by all users of Semantic Logger.
 
-The documentation is a Jekyll site under the `docs` subdirectory, published to [logger.rocketjob.io](https://logger.rocketjob.io).
+The documentation is a Jekyll site under the `docs` subdirectory, published to [logger.reidmorrison.com](https://logger.reidmorrison.com).
 
 #### Small changes
 

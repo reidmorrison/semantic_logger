@@ -87,7 +87,7 @@ To add a new appender or formatter, add the class under the respective directory
 
 ## Docs
 
-User-facing documentation is a Jekyll site under [docs/](docs/) (published to logger.rocketjob.io). When changing public behavior, update the relevant `docs/*.md` page (e.g. `appenders.md`, `metrics.md`, `api.md`, `testing.md`).
+User-facing documentation is a Jekyll site under [docs/](docs/) (published to logger.reidmorrison.com). When changing public behavior, update the relevant `docs/*.md` page (e.g. `appenders.md`, `metrics.md`, `api.md`, `testing.md`).
 
 The site also serves two files for AI assistants: [docs/llms.txt](docs/llms.txt), a hand-maintained index of the docs pages (update it when adding or renaming a page), and `docs/llms-full.txt`, all pages concatenated, regenerated with `bundle exec rake llms_full`. **After editing any `docs/*.md` page, re-run `bundle exec rake llms_full`** and commit the result; never edit `llms-full.txt` by hand. The `docs/*.md` sources also ship inside the gem package (see `s.files` in the gemspec) so coding agents inside applications can read them locally.
 

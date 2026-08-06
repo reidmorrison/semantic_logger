@@ -10,7 +10,7 @@ Gem::Specification.new do |s|
   s.version               = SemanticLogger::VERSION
   s.platform              = Gem::Platform::RUBY
   s.authors               = ["Reid Morrison"]
-  s.homepage              = "https://logger.rocketjob.io"
+  s.homepage              = "https://logger.reidmorrison.com"
   s.summary               = "High-performance, asynchronous structured logging framework for Ruby & Rails."
   s.description           = "Semantic Logger is a high-performance, asynchronous structured " \
                             "logging framework for Ruby & Rails. It logs to multiple destinations " \
@@ -22,7 +22,7 @@ Gem::Specification.new do |s|
   s.metadata = {
     "bug_tracker_uri"       => "https://github.com/reidmorrison/semantic_logger/issues",
     "changelog_uri"         => "https://github.com/reidmorrison/semantic_logger/blob/main/CHANGELOG.md",
-    "documentation_uri"     => "https://logger.rocketjob.io",
+    "documentation_uri"     => "https://logger.reidmorrison.com",
     "source_code_uri"       => "https://github.com/reidmorrison/semantic_logger/tree/v#{SemanticLogger::VERSION}",
     "rubygems_mfa_required" => "true"
   }

@@ -6,8 +6,8 @@ Key facts:
 
 - Install with `gem install semantic_logger` or `gem "semantic_logger"` in a Gemfile. Requires Ruby 3.2 or later.
 - Rails applications should use the companion gem [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger), which replaces the Rails default logger automatically. Do not configure this gem directly in Rails.
-- Human-readable documentation lives at https://logger.rocketjob.io. The links below point at the raw markdown sources of the same pages.
-- The complete documentation concatenated into a single file: https://logger.rocketjob.io/llms-full.txt
+- Human-readable documentation lives at https://logger.reidmorrison.com. The links below point at the raw markdown sources of the same pages.
+- The complete documentation concatenated into a single file: https://logger.reidmorrison.com/llms-full.txt
 - Source code: https://github.com/reidmorrison/semantic_logger
 
 ## Documentation
