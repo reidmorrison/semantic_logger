@@ -25,9 +25,9 @@ task :llms_full do
 
     > Semantic Logger is a high-performance, asynchronous structured logging framework for Ruby and Rails.
 
-    This file concatenates every page of https://logger.rocketjob.io for consumption by AI assistants.
+    This file concatenates every page of https://logger.reidmorrison.com for consumption by AI assistants.
     It is generated from the markdown sources in docs/ by `bundle exec rake llms_full`; do not edit it directly.
-    A per-page index is available at https://logger.rocketjob.io/llms.txt
+    A per-page index is available at https://logger.reidmorrison.com/llms.txt
   HEADER
 
   sections = pages.map do |page|

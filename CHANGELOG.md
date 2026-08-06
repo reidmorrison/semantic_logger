@@ -34,7 +34,7 @@ enabled (for example `ruby -W:deprecated`, or Rails development mode).
 
 ### Breaking changes
 
-See the [v5.0 upgrading guide](https://logger.rocketjob.io/upgrading.html) for migration details.
+See the [v5.0 upgrading guide](https://logger.reidmorrison.com/upgrading.html) for migration details.
 
 - Ruby 3.2 is now the minimum supported runtime. Earlier versions are end-of-life and are no
   longer tested.
@@ -586,13 +586,13 @@ logger.info message: 'Hello', metric: 'user/hello', duration: 25
     - Deprecated non hash style arguments.
     - For Example:
         - `SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)`
-    - See [Appenders](https://logger.rocketjob.io/appenders.html)
+    - See [Appenders](https://logger.reidmorrison.com/appenders.html)
     - Move AnsiColors into its own module: `SemanticLogger::AnsiColors`
 - Appenders now use the same hash style arguments as `SemanticLogger.add_appender`.
 - Appenders use the new common formatters where applicable.
 - Appenders now use custom formatters as the `#call` method for better performance over blocks.
 - Bugsnag appender will now forward `:fatal` errors, since some were being ignored and
-  not being reported in Bugsnag. Changes in [Rails Semantic Logger](https://logger.rocketjob.io/rails.html)
+  not being reported in Bugsnag. Changes in [Rails Semantic Logger](https://logger.reidmorrison.com/rails.html)
   allow Rails messages to be sent correctly to Bugsnag.
 - Use Ruby's built-in JSON library
 

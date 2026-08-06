@@ -38,12 +38,12 @@ replaces the Rails default logger with Semantic Logger automatically.
 
 ## Documentation
 
-Start with the [Introduction](https://logger.rocketjob.io/), then the
-[Programmer's Guide](https://logger.rocketjob.io/api.html).
+Start with the [Introduction](https://logger.reidmorrison.com/), then the
+[Programmer's Guide](https://logger.reidmorrison.com/api.html).
 
-* Full guide: [https://logger.rocketjob.io/](https://logger.rocketjob.io/)
-* For AI assistants: [llms.txt](https://logger.rocketjob.io/llms.txt) (documentation index) and
-  [llms-full.txt](https://logger.rocketjob.io/llms-full.txt) (complete documentation in one file).
+* Full guide: [https://logger.reidmorrison.com/](https://logger.reidmorrison.com/)
+* For AI assistants: [llms.txt](https://logger.reidmorrison.com/llms.txt) (documentation index) and
+  [llms-full.txt](https://logger.reidmorrison.com/llms-full.txt) (complete documentation in one file).
   The same pages are also included as markdown in the installed gem, under `docs/`.
 
 ## Logging Destinations
@@ -82,7 +82,7 @@ instead of Semantic Logger directly since it will automatically replace the Rail
 
 ## Rocket Job
 
-Checkout the sister project [Rocket Job](http://rocketjob.io): Ruby's missing batch system.
+Checkout the sister project [Rocket Job](https://rocketjob.reidmorrison.com): Ruby's missing batch system.
 
 Fully supports Semantic Logger when running jobs in the background. Complete support for job metrics
 sent via Semantic Logger to your favorite dashboards.
@@ -109,7 +109,7 @@ and are therefore not automatically included by this gem:
 
 ## Upgrading
 
-See the [Upgrading Guide](https://logger.rocketjob.io/upgrading.html) for instructions on
+See the [Upgrading Guide](https://logger.reidmorrison.com/upgrading.html) for instructions on
 upgrading between major versions.
 
 ## Install
@@ -128,7 +128,7 @@ SemanticLogger.default_level = :trace
 SemanticLogger.add_appender(file_name: 'development.log', formatter: :color)
 ~~~
 
-If running rails, see: [Semantic Logger Rails](https://logger.rocketjob.io/rails.html)
+If running rails, see: [Semantic Logger Rails](https://logger.reidmorrison.com/rails.html)
 
 ## Contributing
 
