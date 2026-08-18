@@ -847,3 +847,26 @@ and will be **removed in v6**. Each is replaced by the [appenders block](#config
 | `config.rails_semantic_logger.filter` | `filter:` on the appender |
 | `config.rails_semantic_logger.console_logger` | Declare (or omit) an `add_console` appender |
 | `config.rails_semantic_logger.add_file_appender` | Declare appenders in the block (doing so already replaces the default file appender) |
+
+### Silencing the warnings until you migrate
+
+The gem registers its deprecator with the application as
+`Rails.application.deprecators[:rails_semantic_logger]`, so the standard Rails deprecation settings
+govern these warnings:
+
+~~~ruby
+# Hide them until you have migrated
+config.active_support.report_deprecations = false
+
+# Or silence only this gem's warnings, leaving the rest of the application's in place
+Rails.application.deprecators[:rails_semantic_logger].silenced = true
+
+# Or make them fatal, e.g. in config/environments/test.rb, so CI catches them
+config.active_support.deprecation = :raise
+~~~
+
+The warnings are recorded when the option is set and emitted once Rails has applied the settings
+above. Rails reads `config/environments/*.rb` well before it applies deprecation configuration, so
+warning from the option setter itself would land where none of these settings could reach it. Each
+option is reported once per boot, attributed to the place it was set. Options set later, from
+`config/initializers/*` or at runtime, warn immediately instead.
