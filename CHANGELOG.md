@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [unreleased]
+
+### Fixed
+
+- The HTTP appender keeps the query string of the url it is configured with, instead of
+  silently dropping it, so log servers that take their settings as query parameters can be
+  used. For example VictoriaLogs:
+  `url: "http://localhost:9428/insert/jsonline?_msg_field=message&_time_field=timestamp"`.
+
 ## [5.1.0] 2026-07-20
 
 ### Deprecated
