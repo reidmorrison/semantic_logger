@@ -31,7 +31,7 @@ module SemanticLogger
     class Http < SemanticLogger::Subscriber
       attr_accessor :username, :compress, :header,
                     :open_timeout, :read_timeout, :continue_timeout
-      attr_reader :http, :url, :server, :port, :path, :ssl_options, :proxy_url
+      attr_reader :http, :url, :server, :port, :path, :query, :ssl_options, :proxy_url
 
       # Create HTTP(S) log appender
       #
@@ -42,6 +42,9 @@ module SemanticLogger
       #     To enable SSL include https in the URL.
       #       Example: https://example.com/some_path
       #       verify_mode will default: OpenSSL::SSL::VERIFY_PEER
+      #     A query string is kept and sent with every request, for the log servers that
+      #     are configured through it.
+      #       Example: http://example.com/some_path?source=my_app
       #
       #   application: [String]
       #     Name of this application to appear in log messages.
@@ -148,6 +151,11 @@ module SemanticLogger
         @path     = uri.path
         # Path cannot be empty
         @path     = "/" if @path == ""
+        # Query string of the url, applied to every request, see #uri_with_query.
+        # Kept separate from the path, because subclasses build their own request paths
+        # from it. For example Appender::ElasticsearchHttp appends the index name.
+        @query    = uri.query
+        @query    = nil if @query == ""
 
         if uri.scheme == "https"
           @ssl_options[:use_ssl] = true
@@ -233,20 +241,35 @@ module SemanticLogger
 
       # HTTP Post
       def post(body, request_uri = path)
-        request = Net::HTTP::Post.new(request_uri, @header)
+        request = Net::HTTP::Post.new(uri_with_query(request_uri), @header)
         process_request(request, body)
       end
 
       # HTTP Put
       def put(body, request_uri = path)
-        request = Net::HTTP::Put.new(request_uri, @header)
+        request = Net::HTTP::Put.new(uri_with_query(request_uri), @header)
         process_request(request, body)
       end
 
       # HTTP Delete
       def delete(request_uri = path)
-        request = Net::HTTP::Delete.new(request_uri, @header)
+        request = Net::HTTP::Delete.new(uri_with_query(request_uri), @header)
         process_request(request)
+      end
+
+      # Applies the query string of the configured url, if any, to the uri of a request.
+      #
+      # Kept out of `path` on purpose: subclasses build their own request paths from it
+      # (Appender::ElasticsearchHttp appends the index name and `_doc` to it), and the
+      # query has to stay at the end of the request uri regardless.
+      #
+      # @param request_uri [String] path of the request, `path` by default.
+      # @return [String]
+      def uri_with_query(request_uri)
+        return request_uri unless @query
+
+        separator = request_uri.include?("?") ? "&" : "?"
+        "#{request_uri}#{separator}#{@query}"
       end
 
       # Process HTTP Request
