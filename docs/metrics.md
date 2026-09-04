@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Metrics
 ---
 
-## Metrics
-{:.no_toc}
 
 **Contents**
 

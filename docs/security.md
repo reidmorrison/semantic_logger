@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Security
 ---
 
-## Security
-{:.no_toc}
 
 **Contents**
 

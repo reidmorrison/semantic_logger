@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Appenders
 ---
 
-## Appenders
-{:.no_toc}
 
 **Contents**
 

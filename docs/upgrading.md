@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Upgrading
 ---
 
-## Upgrading
-{:.no_toc}
 
 **Contents**
 

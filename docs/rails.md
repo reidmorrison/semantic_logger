@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Rails
 ---
 
-## Rails
-{:.no_toc}
 
 **Contents**
 
