@@ -31,13 +31,24 @@ task :llms_full do
   HEADER
 
   sections = pages.map do |page|
-    text = File.read("docs/#{page}.md").
+    raw = File.read("docs/#{page}.md")
+
+    # The page title lives in front matter, which the shared docs theme renders
+    # as the h1. This file strips front matter, so lift the title back out and
+    # re-emit it as a heading; without this every section here would open with
+    # no indication of which page it is.
+    front_matter = raw[/\A---\n(.*?)\n---\n/m, 1].to_s
+    title        = front_matter[/^(?:title|heading):[ \t]*(.+)$/, 1].to_s.strip.delete_prefix('"').delete_suffix('"')
+
+    text = raw.
            sub(/\A---\n.*?\n---\n/m, ""). # Jekyll front matter
            gsub(/^\{:.*\}\n/, "").        # kramdown attribute lines ({:toc}, {:.no_toc}, ...)
            gsub(/^\* TOC\n/, "").
            gsub(/^\*\*Contents\*\*\n/, "").
            gsub(/^!\[.*\n/, "")           # images (relative paths, useless in plain text)
-    "<!-- source: docs/#{page}.md -->\n\n#{text.strip}\n"
+
+    body = title.empty? ? text.strip : "## #{title}\n\n#{text.strip}"
+    "<!-- source: docs/#{page}.md -->\n\n#{body}\n"
   end
 
   File.write("docs/llms-full.txt", ([header] + sections).join("\n\n---\n\n"))
