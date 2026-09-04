@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Programming Guide
 ---
 
-## Programming Guide
-{:.no_toc}
 
 **Contents**
 

@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Log Event
 ---
 
-## Log Event
-{:.no_toc}
 
 **Contents**
 

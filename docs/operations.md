@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Operations
 ---
 
-## Operations
-{:.no_toc}
 
 **Contents**
 

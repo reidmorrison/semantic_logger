@@ -1,3 +1,73 @@
+# Shared look and feel comes from reidmorrison/rm-docs-theme, which supplies
+# the layout, the sidebar, the stylesheet and the syntax sheet. This repo keeps
+# only its own content: the markdown pages, docs/images, and the project mark at
+# docs/_includes/logo.svg.
+#
+# Pinned to a tag, never a branch, so a push to the theme cannot change this
+# site until the pin is bumped here deliberately.
+#
+# jekyll-remote-theme ships inside the github-pages gem, so this needs no
+# workflow, no Gemfile change and no plugins entry.
+remote_theme: reidmorrison/rm-docs-theme@v1
+
 markdown: kramdown
 kramdown:
   toc_levels: "2..3"
+
+# Read by the theme's masthead, head and footer. The theme ships no defaults:
+# Jekyll exposes only _layouts, _includes, _sass and assets from a theme, so
+# every site declares this block in full.
+project:
+  name: Semantic Logger
+  tagline: Structured logs. Better decisions.
+  github: reidmorrison/semantic_logger
+  gem: semantic_logger
+  license: Apache 2.0 License
+
+  # `seo_title` is the home page's <title>; every other page builds its own
+  # from front matter. The old layout hard-coded ONE title for all eleven
+  # pages, so the whole site shipped a single title and description to search
+  # engines. Adding `title:` and `description:` front matter per page is the
+  # follow-up that finishes the job.
+  seo_title: "Semantic Logger for Ruby or Rails. Supports Graylog, Bugsnag, MongoDB, Splunk, Syslog, NewRelic."
+  description: >-
+    Semantic Logger is a high-performance, asynchronous structured logging
+    framework for Ruby & Rails. Supports Syslog, Graylog, Elasticsearch,
+    Splunk, Loggly, New Relic, Bugsnag, MongoDB, HTTP(S).
+
+# The sidebar. Eleven pages, which is why this is a grouped sidebar and not the
+# row of eleven header buttons it replaces: that row could not hold them on a
+# phone, and gave no sense of position on a desktop either.
+#
+# Order within a group is reading order, not alphabetical.
+nav:
+  - group: Start here
+    items:
+      - { page: index.html,      label: Overview }
+      - { page: api.html,        label: Guide }
+
+  - group: Configuration
+    items:
+      - { page: config.html,     label: Configuration }
+      - { page: appenders.html,  label: Appenders }
+      - { page: metrics.html,    label: Metrics }
+
+  - group: Integration
+    items:
+      - { page: rails.html,      label: Rails }
+      - { page: testing.html,    label: Testing }
+
+  - group: In production
+    items:
+      - { page: operations.html, label: Operations }
+      - { page: security.html,   label: Security }
+
+  - group: Reference
+    items:
+      - { page: log.html,        label: Log Event }
+      - { page: upgrading.html,  label: Upgrading }
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

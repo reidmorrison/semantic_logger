@@ -1,9 +1,8 @@
 ---
 layout: default
+title: Testing
 ---
 
-## Testing
-{:.no_toc}
 
 **Contents**
 

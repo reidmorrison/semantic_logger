@@ -1,11 +1,8 @@
 ---
 layout: default
+heading: What is Semantic Logger?
 ---
 
-![Semantic Logger](images/hero.jpg){:.hero-image}
-
-## What is Semantic Logger?
-{:.no_toc}
 
 **Contents**
 
