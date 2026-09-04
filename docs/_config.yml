@@ -7,8 +7,16 @@
 # site until the pin is bumped here deliberately.
 #
 # jekyll-remote-theme ships inside the github-pages gem, so this needs no
-# workflow, no Gemfile change and no plugins entry.
+# workflow and no Gemfile change.
 remote_theme: reidmorrison/rm-docs-theme@v1
+
+# GitHub Pages enables jekyll-remote-theme on its own, but a local
+# `bundle exec jekyll build` does not: Jekyll only auto-requires gems in the
+# :jekyll_plugins bundler group, so without this line a local build silently
+# skips the theme and reports "Layout 'default' does not exist". Listing it
+# makes local and production identical. It is on the Pages plugin allowlist.
+plugins:
+  - jekyll-remote-theme
 
 markdown: kramdown
 kramdown:
