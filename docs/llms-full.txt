@@ -13,8 +13,6 @@ A per-page index is available at https://logger.reidmorrison.com/llms.txt
 
 ## What is Semantic Logger?
 
-
-
 Semantic Logger is a high-performance, asynchronous structured logging framework
 for Ruby and Rails.
 
@@ -204,8 +202,6 @@ the [Testing file](https://github.com/reidmorrison/semantic_logger/blob/main/.gi
 <!-- source: docs/api.md -->
 
 ## Programming Guide
-
-
 
 This guide covers the logging API: how to get a logger, and everything you can do with it. It builds
 up from the simplest log call to more advanced features further down, so you can read it top to
@@ -682,8 +678,6 @@ end
 <!-- source: docs/config.md -->
 
 ## Configuration
-
-
 
 Semantic Logger is configured once, when your application starts, by setting a few global values
 and adding one or more appenders (destinations). This page walks through that configuration from
@@ -1285,8 +1279,6 @@ available to appenders and formatters as `log.context`.
 <!-- source: docs/appenders.md -->
 
 ## Appenders
-
-
 
 An **appender** is a destination that log entries are written to: a file, the screen, a database, or
 a remote service. Semantic Logger can write to several appenders at the same time, each with its own
@@ -2274,8 +2266,6 @@ Non-deterministic concurrency issues arise when it is used across threads.
 
 ## Log Event
 
-
-
 Every call to a logger (`logger.info`, `logger.measure_error`, and so on) builds a single **Log
 event** object. That object is the unit of work that flows through the whole pipeline: it is
 handed to each [filter](config.html#filtering), then to each appender's [formatter](config.html#custom-formatters), and
@@ -2379,8 +2369,6 @@ SemanticLogger.add_appender(
 <!-- source: docs/metrics.md -->
 
 ## Metrics
-
-
 
 A **metric** is a named number that Semantic Logger emits alongside a log entry, so the same call
 that records *what happened* can also feed your dashboards and alerts.
@@ -2545,8 +2533,6 @@ the log level on a running process.
 <!-- source: docs/rails.md -->
 
 ## Rails
-
-
 
 [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger) is a companion gem
 that wires Semantic Logger into Rails for you. Once installed it:
@@ -3388,8 +3374,6 @@ and will be **removed in v6**. Each is replaced by the [appenders block](#config
 
 ## Testing
 
-
-
 When testing application code, you often want to assert that it logged the right thing: the expected
 message, level, payload, or metric. Semantic Logger logs through a global, asynchronous pipeline, so
 you cannot simply read it back from a normal appender. Instead it ships a test helper that **captures
@@ -3670,8 +3654,6 @@ welcome.
 <!-- source: docs/operations.md -->
 
 ## Operations
-
-
 
 This page covers running Semantic Logger in production: keeping logging alive across process forks,
 rotating log files, tuning the background pipeline, controlling a running process with signals, and
@@ -4069,8 +4051,6 @@ See [Appenders](appenders.html) to configure any of these as a destination.
 
 ## Security
 
-
-
 Logging frameworks sit on a sensitive boundary: they take data from all over an
 application, including data that originated from untrusted users, and write it to
 files, terminals, and centralized logging systems. This page describes the security
@@ -4185,8 +4165,6 @@ with `bundle install --frozen`, prevents an unexpected dependency from being pul
 <!-- source: docs/upgrading.md -->
 
 ## Upgrading
-
-
 
 ### Upgrading to Semantic Logger v5.1
 
