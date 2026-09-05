@@ -107,6 +107,84 @@ module Appender
         end
       end
 
+      describe "query parameters" do
+        it "has no query when the url carries none" do
+          assert_nil appender.query
+        end
+
+        it "leaves the request uri alone when the url carries no query" do
+          request = capture_request(appender) { appender.info(log_message) }
+
+          assert_equal "/path", request.path
+        end
+
+        it "sends the query of the url with every request" do
+          appender = build_appender("http://localhost:8088/path?_msg_field=message&_time_field=timestamp")
+
+          assert_equal "_msg_field=message&_time_field=timestamp", appender.query
+          request = capture_request(appender) { appender.info(log_message) }
+
+          assert_equal "/path?_msg_field=message&_time_field=timestamp", request.path
+        end
+
+        it "sends the query with a batch as well" do
+          appender = build_appender("http://localhost:8088/path?source=my_app")
+          logs = ["message 1", "message 2"].map do |message|
+            SemanticLogger::Log.new("User", :info).tap { |log| log.message = message }
+          end
+          request = capture_request(appender) { appender.batch(logs) }
+
+          assert_equal "/path?source=my_app", request.path
+        end
+
+        # Appender::ElasticsearchHttp builds its request uri from the path, so the query
+        # has to be applied after it, not merged into the path.
+        it "keeps the query at the end of a request uri built by a subclass" do
+          appender = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::ElasticsearchHttp.new(
+              url: "http://localhost:8088/insert/elasticsearch?source=my_app", index: "rs"
+            )
+          end
+          log         = SemanticLogger::Log.new("User", :info)
+          log.message = "message 1"
+          log.time    = Time.new(2026, 9, 3)
+          request     = capture_request(appender) { appender.log(log) }
+
+          assert_equal "/insert/elasticsearch/rs-2026.09.03/_doc?source=my_app", request.path
+        end
+
+        it "joins a request uri that already carries a query" do
+          appender = build_appender("http://localhost:8088/path?source=my_app")
+          request = capture_request(appender) { appender.send(:post, "body", "/path?pretty=true") }
+
+          assert_equal "/path?pretty=true&source=my_app", request.path
+        end
+
+        it "ignores an empty query" do
+          appender = build_appender("http://localhost:8088/path?")
+
+          assert_nil appender.query
+          request = capture_request(appender) { appender.info(log_message) }
+
+          assert_equal "/path", request.path
+        end
+
+        def build_appender(url)
+          Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Http.new(url: url)
+          end
+        end
+
+        def capture_request(appender, &block)
+          request = nil
+          appender.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }, &block)
+          request
+        end
+      end
+
       it "supports http 204 success" do
         http_success = Net::HTTPSuccess.new("1.1", "204", "OK")
         request = nil
