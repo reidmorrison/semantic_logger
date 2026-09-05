@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Security
+description: >-
+  Keeping logs trustworthy: log injection and forging, redacting sensitive
+  data, transport encryption, log file permissions, and the gem's dependency
+  footprint.
 ---
 
 

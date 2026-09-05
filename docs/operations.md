@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Operations
+description: >-
+  Running Semantic Logger in production: process forking, log rotation, tuning
+  the background pipeline, Linux signals, and shipping to a centralized
+  system.
 ---
 
 

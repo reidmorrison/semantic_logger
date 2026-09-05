@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Appenders
+description: >-
+  Every destination Semantic Logger writes to and how to configure it: files
+  and streams, structured formats, network protocols, log aggregators, and
+  error monitors.
 ---
 
 

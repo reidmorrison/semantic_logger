@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Log Event
+description: >-
+  The Log event object that carries every entry through the pipeline: which
+  fields are always present, its attributes and helper methods, and how to
+  inspect one.
 ---
 
 
