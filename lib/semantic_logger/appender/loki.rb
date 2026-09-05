@@ -33,6 +33,8 @@ module SemanticLogger
       #   url: [String]
       #     Define the loki instance URL.
       #     Example: https://logs-prod-999.grafana.net
+      #     A query string is kept and sent with every request.
+      #     Example: https://logs-prod-999.grafana.net?orgid=my_org
       #     Default: nil
       def initialize(url: nil,
                      formatter: SemanticLogger::Formatters::Loki.new,
@@ -40,7 +42,15 @@ module SemanticLogger
                      path: INGESTION_PATH,
                      **args,
                      &)
-        super(url: "#{url}/#{path}", formatter: formatter, header: header, **args, &)
+        super(url: self.class.ingestion_url(url, path), formatter: formatter, header: header, **args, &)
+      end
+
+      # Appends the ingestion path to the supplied url, keeping any query string at the
+      # end of the url where Appender::Http can parse it out.
+      def self.ingestion_url(url, path)
+        uri      = URI.parse(url.to_s)
+        uri.path = "#{uri.path.chomp('/')}/#{path.delete_prefix('/')}"
+        uri.to_s
       end
 
       def log(log)

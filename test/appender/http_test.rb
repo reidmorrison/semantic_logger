@@ -160,6 +160,15 @@ module Appender
           assert_equal "/path?pretty=true&source=my_app", request.path
         end
 
+        # The query configures how the server ingests log data, so it is not applied to a
+        # maintenance request. See Appender::ElasticsearchHttp#delete_all.
+        it "does not send the query with a delete" do
+          appender = build_appender("http://localhost:8088/path?source=my_app")
+          request = capture_request(appender) { appender.send(:delete, "/path/index") }
+
+          assert_equal "/path/index", request.path
+        end
+
         it "ignores an empty query" do
           appender = build_appender("http://localhost:8088/path?")
 

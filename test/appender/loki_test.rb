@@ -27,6 +27,38 @@ module Appender
           assert_equal "/custom/push", custom.path
         end
 
+        it "appends the ingestion path to the path of the url" do
+          nested = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Loki.new(url: "http://localhost:3100/base/")
+          end
+
+          assert_equal "/base/#{SemanticLogger::Appender::Loki::INGESTION_PATH}", nested.path
+        end
+
+        it "keeps a query string of the url out of the ingestion path" do
+          with_query = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Loki.new(url: "http://localhost:3100?orgid=ABC")
+          end
+
+          assert_equal "/#{SemanticLogger::Appender::Loki::INGESTION_PATH}", with_query.path
+          assert_equal "orgid=ABC", with_query.query
+        end
+
+        it "sends the query string of the url with every request" do
+          with_query = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Loki.new(url: "http://localhost:3100?orgid=ABC")
+          end
+          request = nil
+          with_query.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }) do
+            with_query.info(log_message)
+          end
+
+          assert_equal "/#{SemanticLogger::Appender::Loki::INGESTION_PATH}?orgid=ABC", request.path
+        end
+
         it "uses the Loki formatter by default" do
           assert_instance_of SemanticLogger::Formatters::Loki, appender.formatter
         end

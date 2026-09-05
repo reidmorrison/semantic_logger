@@ -1687,6 +1687,31 @@ end
 SemanticLogger.add_appender(appender: :http, url: "https://localhost:8088/path", formatter: formatter)
 ~~~
 
+#### Query parameters
+
+Some log servers are configured through the query string of the ingestion url rather than through
+headers or the body. A query string on `url:` is kept and sent with every request that submits log
+data, for example when pointing at
+[VictoriaLogs](https://docs.victoriametrics.com/victorialogs/data-ingestion/):
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :http,
+  url:      "http://localhost:9428/insert/jsonline?_msg_field=message&_time_field=timestamp"
+)
+~~~
+
+The query is applied after the request path, so it also works for the appenders built on top of the
+HTTP appender (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:signalfx` metrics appender),
+each of which appends its own path to the url:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :elasticsearch_http,
+  url:      "http://localhost:9428/insert/elasticsearch?_msg_field=message&_time_field=timestamp"
+)
+~~~
+
 #### Batching
 
 By default each entry is sent in its own HTTP request. To send multiple entries in one request as a
@@ -1937,7 +1962,8 @@ SemanticLogger.add_appender(
 ~~~
 
 Set the URL, username, and password to match your Loki instance. Set `compress: true` to compress the
-log messages.
+log messages. The ingestion path is appended to the url, so a query string on the url is kept and sent
+with every push.
 
 ### CloudWatch Logs
 
@@ -3395,6 +3421,29 @@ and will be **removed in v6**. Each is replaced by the [appenders block](#config
 | `config.rails_semantic_logger.filter` | `filter:` on the appender |
 | `config.rails_semantic_logger.console_logger` | Declare (or omit) an `add_console` appender |
 | `config.rails_semantic_logger.add_file_appender` | Declare appenders in the block (doing so already replaces the default file appender) |
+
+### Silencing the warnings until you migrate
+
+The gem registers its deprecator with the application as
+`Rails.application.deprecators[:rails_semantic_logger]`, so the standard Rails deprecation settings
+govern these warnings:
+
+~~~ruby
+# Hide them until you have migrated
+config.active_support.report_deprecations = false
+
+# Or silence only this gem's warnings, leaving the rest of the application's in place
+Rails.application.deprecators[:rails_semantic_logger].silenced = true
+
+# Or make them fatal, e.g. in config/environments/test.rb, so CI catches them
+config.active_support.deprecation = :raise
+~~~
+
+The warnings are recorded when the option is set and emitted once Rails has applied the settings
+above. Rails reads `config/environments/*.rb` well before it applies deprecation configuration, so
+warning from the option setter itself would land where none of these settings could reach it. Each
+option is reported once per boot, attributed to the place it was set. Options set later, from
+`config/initializers/*` or at runtime, warn immediately instead.
 
 
 ---

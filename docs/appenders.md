@@ -391,6 +391,31 @@ end
 SemanticLogger.add_appender(appender: :http, url: "https://localhost:8088/path", formatter: formatter)
 ~~~
 
+#### Query parameters
+
+Some log servers are configured through the query string of the ingestion url rather than through
+headers or the body. A query string on `url:` is kept and sent with every request that submits log
+data, for example when pointing at
+[VictoriaLogs](https://docs.victoriametrics.com/victorialogs/data-ingestion/):
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :http,
+  url:      "http://localhost:9428/insert/jsonline?_msg_field=message&_time_field=timestamp"
+)
+~~~
+
+The query is applied after the request path, so it also works for the appenders built on top of the
+HTTP appender (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:signalfx` metrics appender),
+each of which appends its own path to the url:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :elasticsearch_http,
+  url:      "http://localhost:9428/insert/elasticsearch?_msg_field=message&_time_field=timestamp"
+)
+~~~
+
 #### Batching
 
 By default each entry is sent in its own HTTP request. To send multiple entries in one request as a
@@ -641,7 +666,8 @@ SemanticLogger.add_appender(
 ~~~
 
 Set the URL, username, and password to match your Loki instance. Set `compress: true` to compress the
-log messages.
+log messages. The ingestion path is appended to the url, so a query string on the url is kept and sent
+with every push.
 
 ### CloudWatch Logs
 
