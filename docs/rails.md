@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Rails
+description: >-
+  Using Semantic Logger in Rails through the rails_semantic_logger gem:
+  configuring appenders, tuning what Rails logs, common recipes, and
+  upgrading.
 ---
 
 

@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Configuration
+description: >-
+  Configure Semantic Logger once at startup: global settings, per-appender
+  levels and formats, filtering, and writing your own formatters and
+  appenders.
 ---
 
 

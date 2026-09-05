@@ -1,6 +1,9 @@
 ---
 layout: default
 title: Testing
+description: >-
+  Assert that your code logged the expected message, level, payload or metric,
+  using the capture helpers for Minitest, RSpec, and other test frameworks.
 ---
 
 

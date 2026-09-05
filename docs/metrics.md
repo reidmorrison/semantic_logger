@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Metrics
+description: >-
+  Emit named numeric metrics alongside log entries: counters, durations,
+  breaking a metric down with dimensions, and sending them on to a metrics
+  backend.
 ---
 
 

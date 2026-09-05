@@ -1,6 +1,7 @@
 ---
 layout: default
 heading: What is Semantic Logger?
+mermaid: true
 ---
 
 
@@ -174,7 +175,35 @@ Every logger forwards its log events to a single, shared background thread throu
 queue. That thread writes each event to every registered appender (destination) in turn. Because
 the writing happens off to the side, the thread that called `logger.info` returns immediately.
 
-![Log message flow diagram](images/log_event_flow.png "Flow Diagram")
+~~~mermaid
+flowchart LR
+  subgraph callers["Application threads"]
+    direction TB
+    A["OrderProcessor<br/>logger.info"]
+    B["PaymentGateway<br/>logger.measure_info"]
+    C["Rails<br/>logger.error"]
+  end
+
+  Q["In-memory queue<br/>max_queue_size: 10,000"]
+  P(["Processor<br/>one background thread"])
+
+  subgraph appenders["Appenders"]
+    direction TB
+    D["Screen"]
+    E["File"]
+    F["Elasticsearch"]
+    G["Sentry"]
+  end
+
+  A -->|"enqueue, return"| Q
+  B --> Q
+  C --> Q
+  Q --> P
+  P --> D
+  P --> E
+  P --> F
+  P --> G
+~~~
 
 This design is why Semantic Logger is both fast and thread safe: log calls from hundreds of
 concurrent threads simply enqueue events, and each appender writes them out sequentially in the

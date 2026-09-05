@@ -1,6 +1,9 @@
 ---
 layout: default
 title: Upgrading
+description: >-
+  Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
+  v5.1 appender deprecations and the file appender's eager open.
 ---
 
 

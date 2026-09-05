@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Programming Guide
+description: >-
+  How to log with Semantic Logger: getting a logger, log levels, structured
+  payloads, exceptions, the block form, measuring durations, and tagging
+  related entries.
 ---
 
 
