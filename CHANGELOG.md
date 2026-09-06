@@ -11,6 +11,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   silently dropping it, so log servers that take their settings as query parameters can be
   used. For example VictoriaLogs:
   `url: "http://localhost:9428/insert/jsonline?_msg_field=message&_time_field=timestamp"`.
+  The query is applied after the request path, so it also works for the appenders that
+  append their own path to the url: `:elasticsearch_http`, `:splunk_http`, `:loki`, and the
+  `:signalfx` metrics appender.
+- The Grafana Loki appender no longer loses the ingestion path when the url carries a query
+  string. `url: "https://logs-prod-001.grafana.net?orgid=my_org"` now pushes to
+  `/loki/api/v1/push?orgid=my_org`, instead of to `/?orgid=my_org/loki/api/v1/push`.
+- The SignalFx metrics appender no longer sends the query string of its url twice, and in
+  the wrong place. `url: "https://ingest.signalfx.com?orgid=my_org"` now posts to
+  `/v2/datapoint?orgid=my_org`. Its internal `#full_url` reader is now `#full_path`, since
+  it holds the request path rather than an absolute url.
+- `SemanticLogger::Appender::ElasticsearchHttp#delete_all` no longer sends the query string
+  of the url. The query configures how the server ingests log data, and Elasticsearch fails
+  an index delete with a 400 when it carries unrecognized parameters.
 
 ## [5.1.0] 2026-07-20
 

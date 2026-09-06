@@ -59,6 +59,47 @@ module Appender
         end
       end
 
+      describe "request uri" do
+        def build_appender(url)
+          Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Metric::Signalfx.new(token: "TEST", url: url)
+          end
+        end
+
+        def capture_request(appender, &block)
+          request = nil
+          appender.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }, &block)
+          request
+        end
+
+        it "posts to the datapoint endpoint" do
+          appender = build_appender("https://ingest.signalfx.com")
+
+          assert_equal "/#{SemanticLogger::Metric::Signalfx::END_POINT}", appender.full_path
+          request = capture_request(appender) { appender.log(log) }
+
+          assert_equal "/#{SemanticLogger::Metric::Signalfx::END_POINT}", request.path
+        end
+
+        it "appends the datapoint endpoint to the path of the url" do
+          appender = build_appender("https://backfill.signalfx.com/v1/backfill")
+
+          assert_equal "/v1/backfill/#{SemanticLogger::Metric::Signalfx::END_POINT}", appender.full_path
+        end
+
+        it "keeps a query string of the url at the end of the request uri" do
+          appender = build_appender("https://ingest.signalfx.com?orgid=ABC")
+
+          assert_equal "/#{SemanticLogger::Metric::Signalfx::END_POINT}", appender.full_path
+          request = capture_request(appender) { appender.log(log) }
+
+          assert_equal "/#{SemanticLogger::Metric::Signalfx::END_POINT}?orgid=ABC", request.path
+        end
+      end
+
       describe "should_log?" do
         it "logs metric only metric" do
           assert appender.should_log?(log)

@@ -24,6 +24,39 @@ module Appender
         assert_equal "/semantic_logger-#{Time.now.strftime('%Y.%m.%d')}/_doc", index
       end
 
+      describe "query parameters" do
+        let(:appender) do
+          Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::ElasticsearchHttp.new(
+              url: "http://localhost:9200?refresh=true"
+            )
+          end
+        end
+
+        def capture_request(&block)
+          request = nil
+          appender.http.stub(:request, lambda { |r|
+            request = r
+            http_success
+          }, &block)
+          request
+        end
+
+        it "sends the query of the url when logging" do
+          request = capture_request { appender.info(log_message) }
+
+          assert_equal "/semantic_logger-#{Time.now.strftime('%Y.%m.%d')}/_doc?refresh=true", request.path
+        end
+
+        # The query configures how the server ingests log data. Elasticsearch fails an
+        # index delete with a 400 when it carries unrecognized parameters.
+        it "does not send the query when deleting an index" do
+          request = capture_request { appender.delete_all(Date.new(2026, 9, 5)) }
+
+          assert_equal "/semantic_logger-2026.09.05", request.path
+        end
+      end
+
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           request = nil

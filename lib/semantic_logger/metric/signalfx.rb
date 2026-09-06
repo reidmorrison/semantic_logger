@@ -8,7 +8,7 @@
 module SemanticLogger
   module Metric
     class Signalfx < SemanticLogger::Appender::Http
-      attr_reader :full_url
+      attr_reader :full_path
 
       END_POINT = "v2/datapoint".freeze
 
@@ -86,20 +86,22 @@ module SemanticLogger
         super(url: url, formatter: formatter, **args, &)
 
         @header["X-SF-TOKEN"] = token
-        @full_url             = "#{url}/#{END_POINT}"
+        # Built from the parsed path, not the supplied url, so that a query string in the
+        # url stays at the end of the request uri. See Appender::Http#uri_with_query.
+        @full_path            = "#{@path.end_with?('/') ? @path : "#{@path}/"}#{END_POINT}"
       end
 
       def log(log)
         message = formatter.call(log, self)
         logger.trace(message)
-        post(message, full_url)
+        post(message, full_path)
       end
 
       # Logs in batches
       def batch(logs)
         message = formatter.batch(logs, self)
         logger.trace(message)
-        post(message, full_url)
+        post(message, full_path)
       end
 
       # Only forward log entries that contain metrics.

@@ -42,8 +42,8 @@ module SemanticLogger
       #     To enable SSL include https in the URL.
       #       Example: https://example.com/some_path
       #       verify_mode will default: OpenSSL::SSL::VERIFY_PEER
-      #     A query string is kept and sent with every request, for the log servers that
-      #     are configured through it.
+      #     A query string is kept and sent with every request that submits log data,
+      #     for the log servers that are configured through it.
       #       Example: http://example.com/some_path?source=my_app
       #
       #   application: [String]
@@ -252,12 +252,18 @@ module SemanticLogger
       end
 
       # HTTP Delete
+      #
+      # The query string of the configured url is _not_ applied here: it configures how
+      # the server ingests log data, and servers reject it on a maintenance request.
+      # Appender::ElasticsearchHttp#delete_all deletes an index, and Elasticsearch fails
+      # the request with a 400 when it carries unrecognized parameters.
       def delete(request_uri = path)
-        request = Net::HTTP::Delete.new(uri_with_query(request_uri), @header)
+        request = Net::HTTP::Delete.new(request_uri, @header)
         process_request(request)
       end
 
-      # Applies the query string of the configured url, if any, to the uri of a request.
+      # Applies the query string of the configured url, if any, to the uri of a request
+      # that submits log data.
       #
       # Kept out of `path` on purpose: subclasses build their own request paths from it
       # (Appender::ElasticsearchHttp appends the index name and `_doc` to it), and the
