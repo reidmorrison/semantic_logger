@@ -576,6 +576,28 @@ module SemanticLogger
     Logger.processor.lag_threshold_s
   end
 
+  # Returns [true|false] whether log messages are dropped instead of blocking the calling
+  # thread when the main pipeline queue is full.
+  def self.non_blocking?
+    Logger.processor.non_blocking?
+  end
+
+  # Drop log messages instead of blocking the calling thread when the main pipeline queue
+  # is full.
+  #
+  # Every logger in the process hands its messages to this one queue, so when it fills
+  # (for example because an appender cannot keep up) every thread that logs blocks until
+  # there is room. Set to true when availability matters more than complete logs.
+  #
+  # The number of dropped messages is reported to the internal logger periodically.
+  # Only applies to a capped queue, and has no effect in synchronous mode, which has no
+  # queue. Can be changed at any time, including after appenders have been added.
+  #
+  # Default: false
+  def self.non_blocking=(non_blocking)
+    Logger.processor.non_blocking = non_blocking
+  end
+
   def self.default_level_index
     Thread.current[:semantic_logger_silence] || @default_level_index
   end

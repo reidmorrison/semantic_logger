@@ -74,6 +74,14 @@ module SemanticLogger
         end
       end
 
+      describe "#non_blocking=" do
+        it "is accepted, but has no queue to make non-blocking" do
+          processor.non_blocking = true
+
+          refute_predicate processor, :non_blocking?
+        end
+      end
+
       describe "#start" do
         it "is a no-op" do
           assert_nil processor.start

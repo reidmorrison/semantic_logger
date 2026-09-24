@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require "timeout"
 
 module SemanticLogger
   class ProcessorTest < Minitest::Test
@@ -83,6 +84,29 @@ module SemanticLogger
           processor.appenders.add(io: StringIO.new)
 
           assert_equal processor.appenders.size, processor.stats[:appenders].size
+        end
+      end
+
+      describe "#non_blocking=" do
+        it "defaults to blocking" do
+          refute_predicate processor, :non_blocking?
+        end
+
+        it "drops messages on the main queue once it is full" do
+          processor = SemanticLogger::Processor.new(max_queue_size: 1).tap { |p| created << p }
+          thread    = processor.processor.instance_variable_get(:@thread)
+          thread.kill
+          thread.join
+          processor.non_blocking = true
+
+          log = SemanticLogger::Log.new("User", :info)
+
+          assert processor.log(log)
+          # A blocking queue would suspend this thread forever, so bound it.
+          dropped = Timeout.timeout(5) { processor.log(log) }
+
+          refute dropped
+          assert_equal 1, processor.stats[:dropped]
         end
       end
 

@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+### Added
+
+- `SemanticLogger.non_blocking = true` drops log messages instead of blocking the calling thread
+  when the main pipeline queue is full. Previously `non_blocking:` could only be set on an
+  individual async appender's own queue, so `logger.info` could still block on the main queue
+  that every logger shares. It can be set at any time, and has no effect in synchronous mode.
+
 ### Fixed
 
 - The HTTP appender keeps the query string of the url it is configured with, instead of

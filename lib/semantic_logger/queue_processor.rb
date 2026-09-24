@@ -12,8 +12,8 @@ module SemanticLogger
   #                               batch_seconds have elapsed since the previous batch.
   class QueueProcessor
     attr_accessor :lag_check_interval, :lag_threshold_s, :dropped_message_report_seconds,
-                  :batch_size, :batch_seconds
-    attr_reader :appender, :queue, :max_queue_size, :non_blocking, :signal,
+                  :batch_size, :batch_seconds, :non_blocking
+    attr_reader :appender, :queue, :max_queue_size, :signal,
                 :processed_count, :dropped_count, :async_max_retries, :retry_count
 
     # Create a new processor and start its worker thread.
