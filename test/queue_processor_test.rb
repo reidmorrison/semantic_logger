@@ -139,7 +139,7 @@ class QueueProcessorTest < Minitest::Test
       end
 
       it "drops messages when non_blocking is enabled after the processor was created" do
-        processor = build(max_queue_size: 1, dropped_message_report_seconds: 0)
+        processor = build(max_queue_size: 1)
         processor.log(new_log)
         processor.non_blocking = true
 

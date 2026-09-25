@@ -1,5 +1,4 @@
 require_relative "test_helper"
-require "timeout"
 
 module SemanticLogger
   class ProcessorTest < Minitest::Test
@@ -93,20 +92,21 @@ module SemanticLogger
         end
 
         it "drops messages on the main queue once it is full" do
-          processor = SemanticLogger::Processor.new(max_queue_size: 1).tap { |p| created << p }
-          thread    = processor.processor.instance_variable_get(:@thread)
-          thread.kill
-          thread.join
+          processor = SemanticLogger::Processor.new(max_queue_size: 2).tap { |p| created << p }
           processor.non_blocking = true
 
-          log = SemanticLogger::Log.new("User", :info)
+          # Stop the worker thread so the queue is not drained while we fill it.
+          worker = processor.thread
+          worker.kill
+          worker.join
 
-          assert processor.log(log)
-          # A blocking queue would suspend this thread forever, so bound it.
-          dropped = Timeout.timeout(5) { processor.log(log) }
+          log = SemanticLogger::Log.new("Test", :info)
+          4.times { processor.log(log) }
 
-          refute dropped
-          assert_equal 1, processor.stats[:dropped]
+          assert_equal 2, processor.queue.size, "queue must not grow beyond its cap"
+          assert_equal 2, processor.stats[:dropped]
+        ensure
+          processor&.queue&.clear
         end
       end
 

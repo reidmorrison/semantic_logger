@@ -33,15 +33,6 @@ module SemanticLogger
       end
     end
 
-    # In synchronous mode there is no queue, so logging never blocks on one and never drops.
-    def non_blocking?
-      false
-    end
-
-    # Accepted so that SemanticLogger.non_blocking= works the same in synchronous mode.
-    def non_blocking=(_non_blocking)
-    end
-
     def flush
       @monitor.synchronize { @appenders.flush }
     end
