@@ -680,6 +680,21 @@ If you use a forking server (Puma, Unicorn) or fork worker processes, see
 [Process Forking](operations.html#process-forking). With Semantic Logger v5 appenders are reopened automatically after
 a fork, so the manual `after_fork { SemanticLogger.reopen }` hook is usually no longer needed.
 
+### Drop messages instead of blocking
+
+By default, if log messages arrive faster than the appenders can write them, calls to `logger.info`
+wait once the in-memory queue is full, so requests, jobs, and shutdown hooks that log can stall behind
+a slow destination. When staying responsive matters more than keeping every message, have them dropped
+instead, in `config/application.rb` or `config/environments/production.rb`:
+
+~~~ruby
+config.semantic_logger.non_blocking = true
+~~~
+
+This needs Semantic Logger v5.2 or later. See
+[Drop messages instead of blocking](operations.html#drop-messages-instead-of-blocking) for how it
+relates to the per-appender `non_blocking:` option and how dropped messages are reported.
+
 ### Log rotation
 
 Because the log file is held open between writes, rotate it with a **copy-truncate** strategy rather
