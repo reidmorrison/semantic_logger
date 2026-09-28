@@ -21,7 +21,8 @@ module SemanticLogger
       # Methods forwarded to the queue processor that owns the thread and queue.
       # Tuning options (max_queue_size, batch_size, non_blocking, ...) are set once at
       # construction via SemanticLogger.add_appender, so only the values that callers actually
-      # read back are re-exposed here. lag_* backs the public SemanticLogger.lag_* API.
+      # read back are re-exposed here. lag_* and non_blocking= back the public
+      # SemanticLogger.lag_* and SemanticLogger.non_blocking= API on the main Processor.
       def_delegators :@processor,
                      :log, :flush, :close, :thread, :active?, :queue, :max_queue_size,
                      :capped?, :non_blocking?, :non_blocking=, :batch?,

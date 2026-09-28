@@ -114,21 +114,13 @@ By default the queue is capped (`max_queue_size`, default `10,000`). When it fil
 because an appender cannot keep up), `logger.info` **blocks** until there is room, guaranteeing no
 message is lost at the cost of briefly slowing the application.
 
-When availability matters more than complete logs, set `SemanticLogger.non_blocking = true` so that
-messages are **dropped** instead of blocking once the queue is full:
+There are two places a slow appender can hold up the application, and a `non_blocking` setting for
+each.
 
-~~~ruby
-SemanticLogger.non_blocking = true
-~~~
-
-This can be set at any time, before or after appenders are added. Dropped messages are counted and
-reported to the internal logger at most once every 30 seconds so they do not go unnoticed. The
-dropped count is also available from `SemanticLogger.stats[:dropped]`.
-
-An appender that runs on its own thread (`async: true`, or a batching appender) has a second queue of
-its own, between the main queue and that appender. The `non_blocking:` option to `add_appender` applies
-to that queue only; it keeps one slow appender from holding up the others, but does not stop
-`logger.info` from blocking on the main queue:
+**A slow appender that runs on its own thread.** An appender added with `async: true` (or a batching
+appender) has a second queue of its own, between the main queue and that appender. Set
+`non_blocking: true` on it so that, once its own queue is full, messages for that appender are
+**dropped** instead of holding up the main thread:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -138,6 +130,30 @@ SemanticLogger.add_appender(
   dropped_message_report_seconds: 60
 )
 ~~~
+
+The main thread never waits on that appender, so the main queue keeps draining and every other
+appender still receives every message. Prefer this when you know which appender is slow, such as one
+that writes to a remote service. Dropped messages are counted and reported to the internal logger at
+most once every `dropped_message_report_seconds` (default `30`), and appear as `dropped` for that
+appender in `SemanticLogger.stats[:appenders]`.
+
+**Everything else.** The main queue still fills if an appender that is not async slows down (for
+example `io: $stdout` writing to a pipe that is not being read), or if the main thread cannot keep up
+with the volume of messages. Set `SemanticLogger.non_blocking = true` so that messages are
+**dropped** instead of blocking `logger.info` once the main queue is full:
+
+~~~ruby
+SemanticLogger.non_blocking = true
+~~~
+
+This can be set at any time, before or after appenders are added. Dropped messages are reported to
+the internal logger at most once every 30 seconds, and the count is available from
+`SemanticLogger.stats[:dropped]`. It is not supported in synchronous mode (`SemanticLogger.sync!`),
+which has no queue.
+
+Either setting keeps logging calls from blocking; neither makes `SemanticLogger.flush` return sooner.
+A flush, including the one that runs automatically when the process exits, still waits for every
+message already on the queue to be written.
 
 `non_blocking` applies only to a capped queue. An uncapped queue (`max_queue_size: -1`) never blocks
 and never drops, but can grow without bound.
