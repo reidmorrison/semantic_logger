@@ -86,6 +86,30 @@ module SemanticLogger
         end
       end
 
+      describe "#non_blocking=" do
+        it "defaults to blocking" do
+          refute_predicate processor, :non_blocking?
+        end
+
+        it "drops messages on the main queue once it is full" do
+          processor = SemanticLogger::Processor.new(max_queue_size: 2).tap { |p| created << p }
+          processor.non_blocking = true
+
+          # Stop the worker thread so the queue is not drained while we fill it.
+          worker = processor.thread
+          worker.kill
+          worker.join
+
+          log = SemanticLogger::Log.new("Test", :info)
+          4.times { processor.log(log) }
+
+          assert_equal 2, processor.queue.size, "queue must not grow beyond its cap"
+          assert_equal 2, processor.stats[:dropped]
+        ensure
+          processor&.queue&.clear
+        end
+      end
+
       describe "#start" do
         it "returns false when the worker thread is already active" do
           assert_predicate processor, :active?

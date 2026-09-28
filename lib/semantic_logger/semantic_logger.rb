@@ -576,6 +576,18 @@ module SemanticLogger
     Logger.processor.lag_threshold_s
   end
 
+  # Returns [true|false] whether log messages are dropped instead of blocking
+  # when the main pipeline queue is full.
+  def self.non_blocking?
+    Logger.processor.non_blocking?
+  end
+
+  # Drop log messages instead of blocking the calling thread when the main
+  # pipeline queue is full.
+  def self.non_blocking=(non_blocking)
+    Logger.processor.non_blocking = non_blocking
+  end
+
   def self.default_level_index
     Thread.current[:semantic_logger_silence] || @default_level_index
   end

@@ -24,7 +24,7 @@ module SemanticLogger
       # read back are re-exposed here. lag_* backs the public SemanticLogger.lag_* API.
       def_delegators :@processor,
                      :log, :flush, :close, :thread, :active?, :queue, :max_queue_size,
-                     :capped?, :non_blocking?, :batch?,
+                     :capped?, :non_blocking?, :non_blocking=, :batch?,
                      :lag_check_interval, :lag_check_interval=,
                      :lag_threshold_s, :lag_threshold_s=,
                      :processed_count, :dropped_count

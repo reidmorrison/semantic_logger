@@ -3834,19 +3834,21 @@ By default the queue is capped (`max_queue_size`, default `10,000`). When it fil
 because an appender cannot keep up), `logger.info` **blocks** until there is room, guaranteeing no
 message is lost at the cost of briefly slowing the application.
 
-When availability matters more than complete logs, set `non_blocking: true` so that messages are
-**dropped** instead of blocking once the queue is full:
+When availability matters more than complete logs, set `SemanticLogger.non_blocking = true` so that
+messages are **dropped** instead of blocking once the queue is full:
 
 ~~~ruby
-SemanticLogger.add_appender(
-  file_name:    "production.log",
-  async:        true,
-  non_blocking: true
-)
+SemanticLogger.non_blocking = true
 ~~~
 
-Dropped messages are counted and reported at most once every `dropped_message_report_seconds`
-(default `30`) so they do not go unnoticed:
+This can be set at any time, before or after appenders are added. Dropped messages are counted and
+reported to the internal logger at most once every 30 seconds so they do not go unnoticed. The
+dropped count is also available from `SemanticLogger.stats[:dropped]`.
+
+An appender that runs on its own thread (`async: true`, or a batching appender) has a second queue of
+its own, between the main queue and that appender. The `non_blocking:` option to `add_appender` applies
+to that queue only; it keeps one slow appender from holding up the others, but does not stop
+`logger.info` from blocking on the main queue:
 
 ~~~ruby
 SemanticLogger.add_appender(

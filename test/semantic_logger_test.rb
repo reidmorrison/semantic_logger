@@ -458,6 +458,22 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".non_blocking" do
+      it "reads and writes the value via the processor" do
+        processor = Minitest::Mock.new
+        processor.expect(:non_blocking=, nil, [true])
+        processor.expect(:non_blocking?, true)
+
+        SemanticLogger::Logger.stub(:processor, processor) do
+          SemanticLogger.non_blocking = true
+
+          assert_predicate SemanticLogger, :non_blocking?
+        end
+
+        processor.verify
+      end
+    end
+
     describe ".add_signal_handler" do
       # Capture the blocks registered with Signal.trap instead of actually
       # installing handlers, so they can be invoked directly.
