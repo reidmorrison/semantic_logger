@@ -8,6 +8,9 @@ jobs:
   test:
     name: "Test: Ruby ${{ matrix.ruby }}"
     runs-on: ubuntu-latest
+    permissions:
+      # To push the coverage badge to the badges branch.
+      contents: write
     services:
       mongodb:
         image: mongo
@@ -19,6 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         ruby: [3.2, 3.3, 3.4, "4.0"]
+        # Measure coverage on one MRI version only.
+        include:
+          - ruby: 3.4
+            coverage: true
     steps:
       - uses: actions/checkout@v3
       - name: Set up Ruby
@@ -30,7 +37,34 @@ jobs:
       - name: Ruby Version
         run: ruby --version
       - name: Run Tests
+        if: ${{ !matrix.coverage }}
         run: bundle exec rake
+      # A separate step because test_helper.rb enables coverage when COVERAGE is set at all, even to "".
+      - name: Run Tests with Coverage
+        if: ${{ matrix.coverage }}
+        run: bundle exec rake
+        env:
+          COVERAGE: true
+      - name: Publish Coverage Badge
+        if: ${{ matrix.coverage && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Write a shields.io endpoint file from SimpleCov's summary.
+          mkdir "$RUNNER_TEMP/badges"
+          ruby -rjson -e '
+            percent = JSON.parse(File.read("coverage/.last_run.json")).dig("result", "line")
+            color   = {90 => "brightgreen", 80 => "green", 70 => "yellow", 60 => "orange"}.find { |min, _| percent >= min }&.last || "red"
+            badge   = {schemaVersion: 1, label: "coverage", message: format("%.1f%%", percent), color: color}
+            File.write(ARGV[0], JSON.generate(badge))
+          ' "$RUNNER_TEMP/badges/coverage.json"
+          # Replace the badges branch with a single commit so that it never accumulates history.
+          cd "$RUNNER_TEMP/badges"
+          git init -q -b badges
+          git add coverage.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Update coverage badge"
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
   rubocop:
     name: "RuboCop"
