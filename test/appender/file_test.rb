@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require "tmpdir"
 
 module Appender
   class FileTest < Minitest::Test
@@ -120,6 +121,37 @@ module Appender
           appender.log(log)
 
           refute_nil File.stat(file_name).mode
+        end
+
+        it "does not change the permissions of a file reached through a symbolic link" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "id_rsa")
+            File.write(target, "secret\n")
+            File.chmod(0o600, target)
+            link = File.join(dir, "production.log")
+            File.symlink(target, link)
+
+            appender = SemanticLogger::Appender::File.new(link, permissions: 0o644)
+            appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+            appender.reopen
+            appender.log(log)
+
+            assert_equal "100600", format("%o", File.stat(target).mode)
+            assert(appender.logger.events.any? { |event| event.message.include?("Not applying permissions") })
+          end
+        end
+
+        it "still writes through a symbolic link, for example to /dev/stdout" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "target.log")
+            link   = File.join(dir, "production.log")
+            File.write(target, "")
+            File.symlink(target, link)
+
+            SemanticLogger::Appender::File.new(link).log(log)
+
+            assert_includes File.read(target), log_message
+          end
         end
       end
 

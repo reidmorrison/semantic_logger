@@ -134,6 +134,11 @@ an existing log file:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
 
+The permissions are only applied to a regular file owned by the process. A log file that is a
+symbolic link (for example to `/dev/stdout`) is still written to, but the permissions of whatever
+it points at are left alone, so that a link planted in a shared log directory cannot be used to
+loosen the permissions of another file. Keep the log directory writable only by the application.
+
 ### Dependencies and supply chain
 
 Semantic Logger has two runtime dependencies, `concurrent-ruby` and `logger` (part of

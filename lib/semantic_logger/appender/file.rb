@@ -191,7 +191,7 @@ module SemanticLogger
           end
         # File.open only applies the permissions when creating the file, so also
         # enforce them on an already existing log file.
-        @file.chmod(permissions) if permissions
+        apply_permissions if permissions
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @file.sync = true
@@ -231,6 +231,21 @@ module SemanticLogger
       private
 
       attr_writer :log_count, :log_size, :current_file_name, :reopen_at
+
+      # Apply the permissions to the open log file, but only when it is a regular file that this
+      # process owns and that was not reached through a symbolic link.
+      #
+      # Opening follows symbolic links, so that a log file can for example be linked to
+      # /dev/stdout. Changing the permissions of whatever the link points at could however loosen
+      # them on an unrelated file, such as a private key linked into a shared log directory.
+      def apply_permissions
+        stat = @file.stat
+        if stat.file? && stat.uid == ::Process.euid && !::File.symlink?(current_file_name)
+          @file.chmod(permissions)
+        else
+          logger.warn("Not applying permissions to #{current_file_name}: not a regular file owned by this process")
+        end
+      end
 
       def time_to_reopen?
         return true unless @file
