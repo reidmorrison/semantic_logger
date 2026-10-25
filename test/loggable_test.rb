@@ -168,6 +168,48 @@ class AppenderFileTest < Minitest::Test
         assert_equal 8, Measured.new.double(4)
         assert_empty capture.events
       end
+
+      describe "arguments written into the generated method" do
+        let(:klass) do
+          Class.new do
+            include SemanticLogger::Loggable
+
+            def self.name = "MeasuredArguments"
+
+            def run = :ran
+          end
+        end
+
+        it "rejects a min_duration that is not a number, instead of evaluating it" do
+          assert_raises(ArgumentError) do
+            klass.logger_measure_method(:run, min_duration: "(raise('injected code ran'); 0.0)")
+          end
+
+          # Had the code been written into the method, calling it would raise.
+          assert_equal :ran, klass.new.run
+        end
+
+        it "rejects a method name that is not an identifier" do
+          assert_raises(ArgumentError) do
+            klass.logger_measure_method(:"run(*); raise('injected code ran'); def x")
+          end
+        end
+
+        it "rejects an invalid log_exception value" do
+          assert_raises(ArgumentError) { klass.logger_measure_method(:run, log_exception: "full") }
+        end
+
+        it "accepts a numeric String min_duration, a String message, and String levels" do
+          assert klass.logger_measure_method(:run, min_duration: "0", message: "Running", level: "info",
+                                                   on_exception_level: "error")
+          klass.logger = capture
+
+          assert_equal :ran, klass.new.run
+          assert_equal "Running", capture.events.first.message
+        ensure
+          klass.logger = nil
+        end
+      end
     end
   end
 end

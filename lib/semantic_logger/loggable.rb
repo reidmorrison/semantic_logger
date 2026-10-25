@@ -63,6 +63,8 @@ module SemanticLogger
     end
 
     module ClassMethods
+      # A method name that can be written directly into the source of a method definition.
+      METHOD_NAME = /\A[A-Za-z_][A-Za-z0-9_]*[?!=]?\z/
       # Measure and log the performance of an instance method.
       #
       # Parameters:
@@ -88,7 +90,21 @@ module SemanticLogger
         #   return false
         # end
 
-        index = Levels.index(level)
+        # These values are written into the source of the generated method, so only accept values
+        # that are certain to produce valid literals, rather than code.
+        unless method_name.to_s.match?(METHOD_NAME)
+          raise(ArgumentError, "Invalid method name to measure: #{method_name.inspect}")
+        end
+        unless log_exception.nil? || Log::LOG_EXCEPTION_OPTIONS.include?(log_exception)
+          raise(ArgumentError, "Invalid value:#{log_exception.inspect} for argument :log_exception")
+        end
+
+        index              = Levels.index(level)
+        level              = Levels.level(index)
+        on_exception_level = Levels.level(Levels.index(on_exception_level)) if on_exception_level
+        min_duration       = Float(min_duration)
+        message            = message.to_s
+        metric             = metric&.to_s
 
         logger_measure_module.module_eval(<<~MEASURE_METHOD, __FILE__, __LINE__ + 1)
           def #{method_name}(*args, &block)
