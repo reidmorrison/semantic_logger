@@ -41,9 +41,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The JSON based formatters no longer drop a log event whose payload JSON cannot represent.
   `Infinity` and `NaN` (for example `params[:amount].to_f` with `"1e400"`) are serialized as
   strings, and a structure nested too deeply, such as a request body as deep as `JSON.parse`
-  accepts logged inside the request params, is replaced below 32 levels with its `#inspect`
-  text. Previously the whole event failed to serialize, so an attacker could keep their own
-  request out of JSON logs.
+  accepts logged inside the request params, is replaced below 32 levels with a placeholder
+  such as `"#<Hash nested too deeply>"`. Previously the whole event failed to serialize, so an
+  attacker could keep their own request out of JSON logs.
 
 ### Added
 

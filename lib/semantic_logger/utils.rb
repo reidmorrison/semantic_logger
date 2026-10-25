@@ -114,20 +114,24 @@ module SemanticLogger
       json_safe(value).to_json
     end
 
-    # Nesting depth after which .json_safe replaces a Hash or Array with its #inspect
-    # text. Well below the json gem's default max_nesting of 100, leaving room for the
-    # levels that a formatter wraps the payload in.
+    # Nesting depth after which .json_safe replaces a Hash or Array with a placeholder.
+    # Well below the json gem's default max_nesting of 100, leaving room for the levels
+    # that a formatter wraps the payload in.
     MAX_JSON_SAFE_DEPTH = 32
-
-    # Maximum length of the #inspect text that replaces a structure nested too deeply.
-    MAX_JSON_SAFE_INSPECT = 1_024
 
     # Returns a copy of the supplied value that JSON can represent:
     # * Every String is converted to valid UTF-8, as by .encode_utf8.
     # * Infinity and NaN floats become the Strings "Infinity", "-Infinity", and "NaN".
-    # * A Hash or Array nested deeper than MAX_JSON_SAFE_DEPTH is replaced with its
-    #   (truncated) #inspect text. This also ends a self-referencing structure.
+    # * A Hash or Array nested deeper than MAX_JSON_SAFE_DEPTH is replaced with a
+    #   placeholder String naming its class, such as "#<Hash nested too deeply>".
+    #   This also ends a self-referencing structure.
     # Any other value is returned as-is.
+    #
+    # The recursion never goes deeper than MAX_JSON_SAFE_DEPTH, and the placeholder does
+    # not look inside the structure it replaces. Rendering it instead (for example with
+    # #inspect) would recurse without limit through an arbitrarily deep structure,
+    # raising SystemStackError (or crashing Ruby) on the appender's thread, and would
+    # expose the instance variables of any object inside it.
     def self.json_safe(value, depth = 0)
       case value
       when String
@@ -135,7 +139,7 @@ module SemanticLogger
       when Float
         value.finite? ? value : value.to_s
       when Hash, Array
-        return encode_utf8_string(value.inspect[0, MAX_JSON_SAFE_INSPECT]) if depth >= MAX_JSON_SAFE_DEPTH
+        return "#<#{value.class} nested too deeply>" if depth >= MAX_JSON_SAFE_DEPTH
 
         if value.is_a?(Hash)
           value.each_with_object({}) do |(key, val), hash|

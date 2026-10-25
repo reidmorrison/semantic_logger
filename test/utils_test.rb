@@ -171,6 +171,45 @@ module SemanticLogger
 
           assert_kind_of Hash, JSON.parse(SemanticLogger::Utils.to_json(looped))
         end
+
+        it "replaces a structure nested too deeply with a placeholder naming its class" do
+          nested = {"leaf" => 1}
+          99.times { nested = {"a" => nested} }
+
+          parsed = JSON.parse(SemanticLogger::Utils.to_json({payload: [nested]}))
+          parsed = parsed["payload"].first
+          29.times { parsed = parsed["a"] }
+
+          assert_equal "#<Hash nested too deeply>", parsed["a"]
+        end
+
+        [2_000, 100_000].each do |depth|
+          it "serializes a structure #{depth} levels deep without exhausting the stack" do
+            # Built iteratively: a recursive walk of the full depth raises SystemStackError,
+            # an Exception that would stop an async appender's worker thread.
+            nested = 1
+            depth.times { nested = [nested] }
+
+            parsed = JSON.parse(SemanticLogger::Utils.to_json({payload: nested, amount: Float::NAN}))
+
+            assert_equal "NaN", parsed["amount"]
+            assert_includes JSON.generate(parsed["payload"], max_nesting: false), "#<Array nested too deeply>"
+          end
+        end
+
+        it "does not reveal the instance variables of an object nested too deeply" do
+          client = Class.new do
+            def initialize
+              @password = "secret"
+            end
+          end.new
+          nested = [client]
+          40.times { nested = [nested] }
+
+          result = SemanticLogger::Utils.to_json({payload: nested, amount: Float::NAN})
+
+          refute_includes result, "secret"
+        end
       end
 
       describe ".encode_utf8" do

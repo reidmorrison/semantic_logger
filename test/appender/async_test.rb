@@ -88,6 +88,38 @@ module Appender
         end
       end
 
+      describe "with a payload nested too deeply for JSON" do
+        it "writes the event and keeps the worker thread running" do
+          output = StringIO.new
+          proxy  = SemanticLogger::Appender::Async.new(
+            appender: SemanticLogger::Appender::IO.new(output, formatter: :json)
+          )
+          worker = proxy.thread
+
+          nested = 1
+          100_000.times { nested = [nested] }
+          deep         = SemanticLogger::Log.new("Test", :info)
+          deep.message = "deep"
+          deep.payload = {params: nested}
+          proxy.log(deep)
+
+          # Wait without #flush, which would block forever if the worker had stopped.
+          deadline = Time.now + 10
+          sleep(0.01) while output.string.empty? && worker.alive? && Time.now < deadline
+
+          assert_predicate worker, :alive?
+
+          proxy.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "after" })
+          proxy.flush
+
+          messages = output.string.lines.map { |line| JSON.parse(line)["message"] }
+
+          assert_equal %w[deep after], messages
+        ensure
+          proxy&.close
+        end
+      end
+
       describe "non_blocking" do
         # Records warnings logged to the internal logger.
         let :recording_logger do
