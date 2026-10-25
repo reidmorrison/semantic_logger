@@ -67,6 +67,17 @@ module SemanticLogger
             assert_match(/\A<14>/, formatter.call(log, appender.logger))
           end
 
+          it "converts a level_map hash into a LevelMap" do
+            mapped = SyslogCee.new(level_map: {warn: SemanticLogger::Formatters::Syslog::LOG_NOTICE})
+
+            assert_equal SemanticLogger::Formatters::Syslog::LOG_NOTICE, mapped.level_map[:warn]
+            assert_equal SemanticLogger::Formatters::Syslog::LOG_CRIT, mapped.level_map[:fatal]
+          end
+
+          it "rejects an invalid facility set after creation" do
+            assert_raises(ArgumentError) { SyslogCee.new.facility = 1 }
+          end
+
           it "rejects an invalid facility when the formatter is created" do
             assert_raises(ArgumentError) { SemanticLogger::Formatters::SyslogCee.new(facility: 1) }
           end

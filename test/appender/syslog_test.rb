@@ -50,6 +50,52 @@ module Appender
         assert_match(/<14>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
+      it "accepts a level_map hash for local syslog" do
+        severity = nil
+        Syslog.stub(:open, nil) do
+          Syslog.stub(:log, ->(level, _msg) { severity = level }) do
+            syslog_appender = SemanticLogger::Appender::Syslog.new(level_map: {warn: ::Syslog::LOG_ALERT})
+            syslog_appender.info "AppenderSyslogTest log message"
+          end
+        end
+
+        assert_equal ::Syslog::LOG_NOTICE, severity
+      end
+
+      describe "with a remote syslog formatter named by formatter:" do
+        let(:options) do
+          {url: "udp://localhost:88888", facility: ::Syslog::LOG_LOCAL0, level_map: {info: ::Syslog::LOG_ALERT}}
+        end
+
+        it "passes its facility and level map to :syslog" do
+          formatter = SemanticLogger::Appender::Syslog.new(formatter: :syslog, **options).formatter
+
+          assert_equal ::Syslog::LOG_LOCAL0, formatter.facility
+          assert_equal ::Syslog::LOG_ALERT, formatter.level_map[:info]
+        end
+
+        it "passes its facility and level map to :syslog_cee" do
+          formatter = SemanticLogger::Appender::Syslog.new(formatter: {syslog_cee: {}}, **options).formatter
+
+          assert_equal ::Syslog::LOG_LOCAL0, formatter.facility
+          assert_equal ::Syslog::LOG_ALERT, formatter.level_map[:info]
+        end
+
+        it "lets the formatter's own options take precedence" do
+          formatter = SemanticLogger::Appender::Syslog.new(
+            formatter: {syslog: {facility: ::Syslog::LOG_LOCAL1}}, **options
+          ).formatter
+
+          assert_equal ::Syslog::LOG_LOCAL1, formatter.facility
+        end
+
+        it "rejects an invalid facility even with another formatter" do
+          assert_raises(ArgumentError) do
+            SemanticLogger::Appender::Syslog.new(url: "udp://localhost:88888", facility: 1, formatter: :json)
+          end
+        end
+      end
+
       # Should be able to log each level.
       SemanticLogger::LEVELS.each do |level|
         it "log #{level} information" do

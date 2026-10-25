@@ -1890,6 +1890,11 @@ from `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatte
 SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facility: ::Syslog::LOG_LOCAL0)
 ~~~
 
+The `facility:` and `level_map:` options also apply when `formatter:` names the `:syslog` or
+`:syslog_cee` formatter, for example `formatter: :syslog_cee`. Options given to the formatter itself,
+as in `formatter: {syslog: {facility: ::Syslog::LOG_LOCAL1}}`, take precedence. A formatter passed
+as an instance keeps its own settings.
+
 Add a filter to exclude noisy entries such as health checks:
 
 ~~~ruby

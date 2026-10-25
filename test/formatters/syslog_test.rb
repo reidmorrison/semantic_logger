@@ -85,6 +85,20 @@ module SemanticLogger
             assert_same level_map, mapped.level_map
           end
 
+          it "rejects an invalid facility set after creation" do
+            formatter = SemanticLogger::Formatters::Syslog.new
+
+            assert_raises(ArgumentError) { formatter.facility = 1 }
+            assert_equal ::Syslog::LOG_USER, formatter.facility
+          end
+
+          it "sends a facility set after creation" do
+            formatter.facility = ::Syslog::LOG_LOCAL0
+
+            # local0 (16) and severity notice (5): 16 * 8 + 5
+            assert_match(/\A<133>/, formatter.call(log, appender.logger))
+          end
+
           it "escapes control characters by default" do
             assert SemanticLogger::Formatters::Syslog.new.escape_control_chars
           end

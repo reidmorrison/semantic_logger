@@ -1,7 +1,8 @@
 module SemanticLogger
   module Formatters
     class SyslogCee < Raw
-      attr_accessor :level_map, :facility, :max_size
+      attr_accessor :max_size
+      attr_reader :facility, :level_map
 
       # CEE JSON Syslog format
       #   Untested prototype code. Based on documentation only.
@@ -22,12 +23,23 @@ module SemanticLogger
                      max_size: Integer)
         SemanticLogger::Formatters::Syslog.require_syslog_protocol
 
-        # Reject an invalid facility when the formatter is created, rather than when it first logs.
-        SemanticLogger::Formatters::Syslog.facility_number(facility)
-        @facility  = facility
-        @level_map = level_map.is_a?(SemanticLogger::Formatters::Syslog::LevelMap) ? level_map : SemanticLogger::Formatters::Syslog::LevelMap.new(level_map)
-        @max_size = max_size
+        self.facility  = facility
+        self.level_map = level_map
+        @max_size      = max_size
         super()
+      end
+
+      # Set the facility to one of the ::Syslog::LOG_* facility constants.
+      # Raises ArgumentError for any other value, so that a mistake surfaces here rather than on
+      # every log entry.
+      def facility=(facility)
+        @facility_number = SemanticLogger::Formatters::Syslog.facility_number(facility)
+        @facility        = facility
+      end
+
+      # Set the map of log levels to syslog severities, as a LevelMap or a Hash of overrides.
+      def level_map=(level_map)
+        @level_map = SemanticLogger::Formatters::Syslog::LevelMap.build(level_map)
       end
 
       # Time is part of the syslog packet and is not included in the formatted message.
@@ -45,7 +57,7 @@ module SemanticLogger
       def create_syslog_packet(message)
         packet          = SyslogProtocol::Packet.new
         packet.hostname = logger.host
-        packet.facility = SemanticLogger::Formatters::Syslog.facility_number(facility)
+        packet.facility = @facility_number
         packet.tag      = logger.application.delete(" ")
         packet.content  = message
         packet.time     = log.time

@@ -1,7 +1,8 @@
 module SemanticLogger
   module Formatters
     class Syslog < Default
-      attr_accessor :level_map, :facility, :max_size
+      attr_accessor :max_size
+      attr_reader :facility, :level_map
 
       # Syslog severities and facilities, with the same values as the matching `::Syslog` constants.
       # The `syslog` gem is only needed to log to a local syslog daemon, and since Ruby 3.4 it is a
@@ -69,6 +70,12 @@ module SemanticLogger
       class LevelMap
         attr_accessor :trace, :debug, :info, :warn, :error, :fatal
 
+        # Returns [LevelMap] the supplied level map, or a new one with a Hash of overrides applied,
+        # for example `{warn: LOG_NOTICE}`.
+        def self.build(level_map)
+          level_map.is_a?(LevelMap) ? level_map : new(**level_map)
+        end
+
         def initialize(trace: LOG_DEBUG, debug: LOG_INFO, info: LOG_NOTICE,
                        warn: LOG_WARNING, error: LOG_ERR, fatal: LOG_CRIT)
           @trace = trace
@@ -119,15 +126,26 @@ module SemanticLogger
                      escape_control_chars: true, **args)
         self.class.require_syslog_protocol
 
-        # Reject an invalid facility when the formatter is created, rather than when it first logs.
-        Syslog.facility_number(facility)
-        @facility  = facility
-        @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(**level_map)
-        @max_size = max_size
+        self.facility  = facility
+        self.level_map = level_map
+        @max_size      = max_size
         # Syslog frames records with a separator, so embedded newlines or other
         # control characters in untrusted log data can forge or split records.
         # Default to escaping them, overridable for backwards compatibility.
         super(escape_control_chars: escape_control_chars, **args)
+      end
+
+      # Set the facility to one of the ::Syslog::LOG_* facility constants.
+      # Raises ArgumentError for any other value, so that a mistake surfaces here rather than on
+      # every log entry.
+      def facility=(facility)
+        @facility_number = Syslog.facility_number(facility)
+        @facility        = facility
+      end
+
+      # Set the map of log levels to syslog severities, as a LevelMap or a Hash of overrides.
+      def level_map=(level_map)
+        @level_map = LevelMap.build(level_map)
       end
 
       # Time is part of the syslog packet and is not included in the formatted message.
@@ -146,7 +164,7 @@ module SemanticLogger
       def create_syslog_packet(message)
         packet          = SyslogProtocol::Packet.new
         packet.hostname = logger.host
-        packet.facility = Syslog.facility_number(facility)
+        packet.facility = @facility_number
         packet.tag      = logger.application.delete(" ")
         packet.content  = message
         packet.time     = log.time

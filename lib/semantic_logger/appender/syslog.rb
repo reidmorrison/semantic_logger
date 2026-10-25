@@ -133,7 +133,7 @@ module SemanticLogger
         @options            = options
         @facility           = facility
         @max_size           = max_size
-        @level_map          = level_map
+        @level_map          = SemanticLogger::Formatters::Syslog::LevelMap.build(level_map)
         @url                = url
         uri                 = URI(@url)
         @server             = uri.host || "localhost"
@@ -166,6 +166,12 @@ module SemanticLogger
                   "Missing gem: net_tcp_client. This gem is required when logging over TCP. " \
                   "To fix this error: gem install net_tcp_client"
           end
+        end
+
+        if %i[tcp udp].include?(@protocol)
+          # Reject an invalid facility when the appender is created, even with a formatter that ignores it.
+          SemanticLogger::Formatters::Syslog.facility_number(@facility)
+          args[:formatter] = with_packet_options(args[:formatter]) if args.key?(:formatter)
         end
 
         super(**args, &)
@@ -226,6 +232,22 @@ module SemanticLogger
         else
           SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map, max_size: max_size)
         end
+      end
+
+      # The formatters that build remote syslog packets, and so need this appender's facility and level map.
+      PACKET_FORMATTERS = %i[syslog syslog_cee].freeze
+      private_constant :PACKET_FORMATTERS
+
+      private
+
+      # Returns the supplied `formatter:` argument, with this appender's facility and level map added
+      # when it names one of the PACKET_FORMATTERS, so that they are not silently ignored. Options in a
+      # `{syslog: {...}}` Hash take precedence. A formatter instance keeps its own settings.
+      def with_packet_options(formatter)
+        name, options = formatter.is_a?(Hash) ? formatter.first : [formatter, {}]
+        return formatter unless name.respond_to?(:to_sym) && PACKET_FORMATTERS.include?(name.to_sym)
+
+        {name.to_sym => {facility: facility, level_map: level_map}.merge(options || {})}
       end
     end
   end

@@ -34,7 +34,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   facility constants, and other values raise `ArgumentError` when the appender is created, except
   a bare 0, 8, or 16, which are read as `LOG_KERN`, `LOG_USER`, or `LOG_MAIL`. Syslog servers that
   route on facility, and configurations that passed a bare facility number, may need updating; see the
-  [v5.2 upgrade notes](docs/upgrading.md).
+  [v5.2 upgrade notes](docs/upgrading.md). The syslog appender's `facility:` and `level_map:` now
+  also reach a `:syslog` or `:syslog_cee` formatter named by `formatter:`, instead of being silently
+  ignored, and setting `facility=` on a syslog formatter is validated the same way.
+- The syslog appender and the `:syslog_cee` formatter accept `level_map:` as a Hash of overrides, as
+  documented. With local syslog, a Hash sent a `nil` severity for every level it did not name, and
+  `:syslog_cee` raised `ArgumentError`.
 - `#inspect` on the HTTP appender and the appenders built on it (`:elasticsearch_http`,
   `:splunk_http`, `:loki`, and the `:signalfx` metrics appender) no longer shows credentials, for
   example when `SemanticLogger.appenders` is printed in a console. Only the name, level, server,
