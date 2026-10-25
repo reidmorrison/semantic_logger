@@ -4060,6 +4060,12 @@ SemanticLogger.add_appender(
 Set `async_max_retries: -1` to retry indefinitely. The back-off still applies and still resets after
 a successful message.
 
+A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
+be written, a flush or close taken off the queue with it still runs before the thread backs off; a
+close then stops the thread instead of restarting it. If the worker thread ends without answering,
+for example once it gives up, `SemanticLogger.flush` (including the flush at exit) stops waiting on
+that appender.
+
 ### Give a slow appender its own thread
 
 If one destination is slow, such as a remote HTTP service, run just that appender on its own thread

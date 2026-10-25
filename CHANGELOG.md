@@ -59,7 +59,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Previously a few such requests per second could keep the worker asleep until its queue
   filled and every `logger.*` call in the application blocked.
 - Once an async appender's worker thread gives up after `async_max_retries`, new log messages
-  are dropped when its queue is full, instead of blocking the calling thread forever.
+  are dropped when its queue is full, instead of blocking the calling thread forever, and a
+  flush (including the one at exit) waiting on it returns instead of waiting forever. A flush
+  or close taken off the queue with a batch that could not be written is now still run,
+  instead of being lost and leaving its caller waiting forever.
 
 ### Added
 
