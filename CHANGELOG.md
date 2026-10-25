@@ -50,11 +50,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `SystemStackError`.
 - An async or batching appender no longer lets one log message that cannot be written stall
   the others. A message that fails because of its content (a JSON generator, encoding, or
-  `FloatDomainError`, as decided by the appender's `#message_error?`) is discarded and reported,
-  without the worker thread backing off. In a batch sent as a single request (the HTTP, Loki,
-  Splunk HTTP, SignalFx, Elasticsearch, and OpenSearch appenders, or any whose
-  `#batch_all_or_nothing?` is true), only that message is discarded instead of the whole batch;
-  in any other batch the whole batch is discarded, as before, so no message is written twice.
+  `FloatDomainError`, as decided by the appender's `#message_error?`) is discarded, reported, and
+  counted as `failed` in `SemanticLogger.stats[:appenders]`, without the worker thread backing
+  off. In a batch sent as a single request (the HTTP, Loki, Splunk HTTP, SignalFx,
+  Elasticsearch, and OpenSearch appenders, or any whose `#batch_all_or_nothing?` is true), only
+  that message is discarded instead of the whole batch; in any other batch the whole batch is
+  discarded, as before, so no message is written twice.
   Previously a few such requests per second could keep the worker asleep until its queue
   filled and every `logger.*` call in the application blocked.
 - Once an async appender's worker thread gives up after `async_max_retries`, new log messages

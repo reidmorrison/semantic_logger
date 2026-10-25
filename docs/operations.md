@@ -175,7 +175,8 @@ of the batch before failing, the whole batch is discarded, so that no message is
 
 The first discarded message is reported to the internal logger straight away, with its error. After
 that, the number discarded is reported, with the latest error, at most once every
-`dropped_message_report_seconds` (default `30`).
+`dropped_message_report_seconds` (default `30`). The total appears as `failed` for that appender in
+`SemanticLogger.stats[:appenders]`.
 
 A `JSON::ParserError`, such as from a destination that answered with an HTML error page, is a
 problem with the destination, so it is retried like any other error. The appender decides which
@@ -238,12 +239,13 @@ SemanticLogger.stats
 #          capped:         true,
 #          max_queue_size: 10_000,
 #          processed:      1_529,
-#          dropped:        0 }
+#          dropped:        0,
+#          failed:         0 }  # discarded because their content could not be written
 #      ]
 #    }
 ~~~
 
-The `processed` and `dropped` counters are cumulative since process startup. Reading `stats` is
+The `processed`, `dropped`, and `failed` counters are cumulative since process startup. Reading `stats` is
 thread-safe and adds no locking to the logging hot path.
 
 Semantic Logger also warns when an entry has waited on the queue too long. Tune the threshold and how
