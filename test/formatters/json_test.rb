@@ -204,6 +204,16 @@ module SemanticLogger
 
             assert_equal "Completed #create", parsed["message"]
           end
+
+          it "serializes a Struct as an object of its members, not its #inspect" do
+            client = Object.new
+            client.instance_variable_set(:@password, "secret")
+            log.message = "Connected"
+            log.payload = {connection: Struct.new(:host, :client).new("db1", client)}
+
+            assert_equal({"host" => "db1", "client" => client.to_s}, parsed["payload"]["connection"])
+            refute_includes formatter.call(log, appender), "secret"
+          end
         end
       end
     end

@@ -58,6 +58,12 @@ module SemanticLogger
             assert_match(/name="shrek"/, formatter.call(log, nil))
           end
 
+          it "formats a Struct in the payload as a single quoted field" do
+            log.payload = {point: Struct.new(:x, :y).new(1, 2)}
+
+            assert_includes formatter.call(log, nil), %( point="{\\"x\\":1,\\"y\\":2}")
+          end
+
           describe "when no exception found" do
             it "has tag success" do
               assert_match(/tag="success"/, formatter.call(log, nil))

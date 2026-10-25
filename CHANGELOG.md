@@ -43,7 +43,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   strings, and a structure nested too deeply, such as a request body as deep as `JSON.parse`
   accepts logged inside the request params, is replaced below 32 levels with a placeholder
   such as `"#<Hash nested too deeply>"`. Previously the whole event failed to serialize, so an
-  attacker could keep their own request out of JSON logs.
+  attacker could keep their own request out of JSON logs. A `Struct` or `Data` in the payload
+  is now serialized as an object of its members, as ActiveSupport does, instead of as its
+  `#inspect` string, which listed the instance variables of any object held in a member (such
+  as a client's password) and had no depth limit, so a deep enough structure failed with
+  `SystemStackError`.
 
 ### Added
 
