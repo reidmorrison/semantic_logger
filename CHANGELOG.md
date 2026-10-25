@@ -19,7 +19,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   gems to the bundled gems, and the appender required it even when logging to a remote syslogd,
   which does not use it. Now only a local syslog daemon needs `gem "syslog"`, and a clear error
   says so when it is missing. Logging to a local syslog daemon also no longer requires the
-  `syslog_protocol` gem, which only remote syslog uses. The syslog formatters define the
+  `syslog_protocol` gem, which only the remote syslog formatters use; they load it when they are
+  created rather than when their file loads. The syslog formatters define the
   severity and facility values they need as `SemanticLogger::Formatters::Syslog::LOG_*`.
 - Semantic Logger loads on Ruby 4.0 without `logger` in the application's Gemfile. Ruby 4.0
   moved `logger` from the default gems to the bundled gems, so `require "semantic_logger"`

@@ -35,6 +35,27 @@ module SemanticLogger
           end
         end
 
+        describe ".require_syslog_protocol" do
+          it "explains how to add the gem when it is missing" do
+            missing = ->(_name) { raise LoadError, "cannot load such file -- syslog_protocol" }
+            error   = SemanticLogger::Formatters::Syslog.stub(:require, missing) do
+              assert_raises(LoadError) { SemanticLogger::Formatters::Syslog.require_syslog_protocol }
+            end
+
+            assert_includes error.message, 'gem "syslog_protocol"'
+          end
+
+          it "is called by both syslog formatters" do
+            called = 0
+            SemanticLogger::Formatters::Syslog.stub(:require_syslog_protocol, -> { called += 1 }) do
+              SemanticLogger::Formatters::Syslog.new
+              SemanticLogger::Formatters::SyslogCee.new
+            end
+
+            assert_equal 2, called
+          end
+        end
+
         describe "#initialize" do
           it "defaults the facility to LOG_USER" do
             assert_equal ::Syslog::LOG_USER, SemanticLogger::Formatters::Syslog.new.facility

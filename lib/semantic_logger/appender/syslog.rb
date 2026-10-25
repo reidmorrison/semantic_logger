@@ -156,25 +156,15 @@ module SemanticLogger
           @options ||= ::Syslog::LOG_PID | ::Syslog::LOG_CONS
         end
 
-        # The syslog_protocol gem is required when logging over TCP or UDP.
-        if %i[tcp udp].include?(@protocol)
+        # The net_tcp_client gem is required when logging over TCP.
+        # The syslog formatters load the syslog_protocol gem that they use to build remote syslog packets.
+        if @protocol == :tcp
           begin
-            require "syslog_protocol"
+            require "net/tcp_client"
           rescue LoadError
             raise LoadError,
-                  "Missing gem: syslog_protocol. This gem is required when logging over TCP or UDP. " \
-                  "To fix this error: gem install syslog_protocol"
-          end
-
-          # The net_tcp_client gem is required when logging over TCP.
-          if protocol == :tcp
-            begin
-              require "net/tcp_client"
-            rescue LoadError
-              raise LoadError,
-                    "Missing gem: net_tcp_client. This gem is required when logging over TCP. " \
-                    "To fix this error: gem install net_tcp_client"
-            end
+                  "Missing gem: net_tcp_client. This gem is required when logging over TCP. " \
+                  "To fix this error: gem install net_tcp_client"
           end
         end
 

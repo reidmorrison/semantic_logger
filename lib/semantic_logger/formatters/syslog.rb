@@ -44,6 +44,17 @@ module SemanticLogger
         end
       end
 
+      # Load the syslog_protocol gem, which builds the packets for remote syslog.
+      # Called when a syslog formatter is created, so the gem is only needed by applications
+      # that log to a remote syslog server.
+      def self.require_syslog_protocol
+        require "syslog_protocol"
+      rescue LoadError
+        raise LoadError,
+              "Gem syslog_protocol is required for remote logging using the Syslog protocol. " \
+              'Please add the gem "syslog_protocol" to your Gemfile.'
+      end
+
       # Create a Syslog Log Formatter
       #
       # Parameters:
@@ -65,13 +76,7 @@ module SemanticLogger
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
       def initialize(facility: LOG_USER, level_map: LevelMap.new, max_size: Integer,
                      escape_control_chars: true, **args)
-        begin
-          require "syslog_protocol"
-        rescue LoadError
-          raise LoadError,
-                "Gem syslog_protocol is required for remote logging using the Syslog protocol. " \
-                'Please add the gem "syslog_protocol" to your Gemfile.'
-        end
+        self.class.require_syslog_protocol
 
         @facility  = facility
         @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(**level_map)
