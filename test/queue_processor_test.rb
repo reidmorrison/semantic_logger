@@ -29,6 +29,26 @@ class QueueProcessorTest < Minitest::Test
     end
   end
 
+  # Cannot serialize a message containing "poison", as a JSON formatter cannot serialize a value.
+  class PoisonedAppender < SimpleAppender
+    def log(log)
+      raise JSON::GeneratorError, "cannot serialize" if log.message.include?("poison")
+
+      super
+    end
+  end
+
+  # Batch support on top of PoisonedAppender: the whole batch fails if any message is poisoned.
+  class PoisonedBatchAppender < PoisonedAppender
+    attr_reader :batches
+
+    def batch(logs)
+      raise JSON::GeneratorError, "cannot serialize" if logs.any? { |log| log.message.include?("poison") }
+
+      (@batches ||= []) << logs
+    end
+  end
+
   # A non-StandardError exception, used to exercise the fatal (non-retryable) path in #process.
   class FatalError < Exception; end # rubocop:disable Lint/InheritException
 
@@ -259,6 +279,78 @@ class QueueProcessorTest < Minitest::Test
         assert_equal 1, attempts
         assert_equal 0, processor.retry_count
         assert(internal_logger.events.map(&:message).any? { |m| m.include?("fatal exception") })
+      end
+    end
+
+    describe "a message that cannot be written" do
+      describe "streaming" do
+        let(:appender) do
+          a        = PoisonedAppender.new
+          a.logger = internal_logger
+          a
+        end
+
+        it "discards only that message, without backing off" do
+          processor = build
+          processor.queue << new_log(message: "first")
+          processor.queue << new_log(message: "poison")
+          processor.queue << new_log(message: "last")
+          processor.queue << {command: :close}
+
+          processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+            processor.send(:process)
+          end
+
+          assert_equal %w[first last], appender.events.map(&:message)
+          assert_equal 2, processor.processed_count
+          assert_equal 1, processor.failed_count
+          assert_equal 0, processor.retry_count
+          assert(internal_logger.events.any? { |event| event.message.include?("Discarded a log message") })
+        end
+      end
+
+      describe "batching" do
+        let(:appender) do
+          a        = PoisonedBatchAppender.new
+          a.logger = internal_logger
+          a
+        end
+
+        it "discards only that message, instead of the whole batch" do
+          processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+          messages  = Array.new(9) { |i| "message #{i}" }.insert(4, "poison")
+          messages.each { |message| processor.log(new_log(message: message)) }
+          processor.flush
+
+          delivered = appender.batches.flatten.map(&:message)
+
+          assert_equal messages - ["poison"], delivered
+          assert_equal 9, processor.processed_count
+          assert_equal 1, processor.failed_count
+          assert_predicate processor, :active?
+        end
+      end
+    end
+
+    describe "after the worker thread stops" do
+      it "drops messages instead of blocking the calling thread" do
+        processor = build(max_queue_size: 2, async_max_retries: 0)
+        processor.stub(:process_messages, -> { raise "destination unavailable" }) do
+          processor.send(:process)
+        end
+
+        assert_predicate processor, :stopped?
+
+        results = nil
+        thread  = Thread.new { results = Array.new(5) { processor.log(new_log) } }
+
+        assert thread.join(2), "logging blocked after the worker thread stopped"
+        assert_equal [true, true, false, false, false], results
+        assert_equal 3, processor.dropped_count
+      end
+
+      it "is not stopped while the worker thread is running" do
+        refute_predicate start, :stopped?
       end
     end
 

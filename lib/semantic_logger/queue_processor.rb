@@ -14,7 +14,12 @@ module SemanticLogger
     attr_accessor :lag_check_interval, :lag_threshold_s, :dropped_message_report_seconds,
                   :batch_size, :batch_seconds, :non_blocking
     attr_reader :appender, :queue, :max_queue_size, :signal,
-                :processed_count, :dropped_count, :async_max_retries, :retry_count
+                :processed_count, :dropped_count, :failed_count, :async_max_retries, :retry_count
+
+    # Errors raised because of the content of one log message, rather than because the
+    # destination is unavailable. For example a value that cannot be serialized. Retrying cannot
+    # help, so the message is discarded without backing off, and the rest are still written.
+    MESSAGE_ERRORS = [JSON::JSONError, EncodingError, FloatDomainError].freeze
 
     # Create a new processor and start its worker thread.
     def self.start(**args)
@@ -104,6 +109,7 @@ module SemanticLogger
       @dropped_message_mutex          = Mutex.new
       @processed_count                = 0
       @dropped_count                  = 0
+      @failed_count                   = 0
       create_queue
 
       return unless batch? && !appender.respond_to?(:batch)
@@ -146,13 +152,20 @@ module SemanticLogger
       @batch
     end
 
+    # Returns [true|false] whether the worker thread gave up after an error, so that queued
+    # messages are no longer being processed.
+    def stopped? = @stopped == true
+
     # Add a log message to the queue for processing.
     #
     # When non-blocking and the queue is full, the message is dropped instead of blocking the
     # calling thread, and the count of dropped messages is reported periodically.
+    #
+    # Once the worker thread has stopped for good (see async_max_retries), nothing will empty the
+    # queue, so messages are also dropped instead of blocking the calling thread forever.
     def log(log)
       enqueued = true
-      if non_blocking?
+      if non_blocking? || stopped?
         begin
           queue.push(log, true)
         rescue ThreadError
@@ -197,6 +210,7 @@ module SemanticLogger
 
     # Start the worker thread, naming it after the internal logger.
     def spawn_worker
+      @stopped = false
       Thread.new do
         Thread.current.name = logger.name
         process
@@ -229,9 +243,11 @@ module SemanticLogger
           sleep(retry_count)
           retry
         else
-          safe_log(:error, "Async: Stopping after #{retry_count} failed retries", e)
+          @stopped = true
+          safe_log(:error, "Async: Stopping after #{retry_count} failed retries, dropping new messages", e)
         end
       rescue Exception => e
+        @stopped = true
         safe_log(:error, "Async: Stopping due to fatal exception", e)
       ensure
         @thread = nil
@@ -252,8 +268,7 @@ module SemanticLogger
       count = 0
       while (message = queue.pop)
         if message.is_a?(Log)
-          appender.log(message)
-          @processed_count += 1
+          write_message(message)
           @retry_count = 0 unless retry_count.zero?
           count += 1
           # Check every few log messages whether this appender thread is falling behind
@@ -292,8 +307,7 @@ module SemanticLogger
           end
         end
         if logs.size.positive?
-          appender.batch(logs)
-          @processed_count += logs.size
+          write_batch(logs)
           @retry_count = 0 unless retry_count.zero?
         end
         # Stop processing once a command (e.g. :close) signals the thread to terminate.
@@ -301,6 +315,38 @@ module SemanticLogger
 
         signal.reset unless queue.size >= batch_size
       end
+    end
+
+    # Write one log message to the appender.
+    #
+    # A message whose content cannot be written (see MESSAGE_ERRORS) is discarded and reported,
+    # without restarting the thread. Any other error, such as the destination being unavailable,
+    # propagates to #process, which backs off before retrying.
+    def write_message(log)
+      appender.log(log)
+      @processed_count += 1
+    rescue *MESSAGE_ERRORS => e
+      message_failed(log, e)
+    end
+
+    # Write the log messages to the appender as a batch.
+    #
+    # When the content of a message cannot be written (see MESSAGE_ERRORS), the batch is split in
+    # half and each half written separately, so that only the offending message is discarded
+    # rather than every message in the batch.
+    def write_batch(logs)
+      appender.batch(logs)
+      @processed_count += logs.size
+    rescue *MESSAGE_ERRORS => e
+      return message_failed(logs.first, e) if logs.size == 1
+
+      logs.each_slice((logs.size + 1) / 2) { |half| write_batch(half) }
+    end
+
+    # Record and report a log message whose content could not be written.
+    def message_failed(log, exception)
+      @failed_count += 1
+      safe_log(:error, "Async: Discarded a log message from #{log.name} that could not be written", exception)
     end
 
     # Returns false when message processing should be stopped.

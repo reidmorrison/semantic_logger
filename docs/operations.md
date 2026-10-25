@@ -165,8 +165,14 @@ a transient failure (such as a brief network blip to a remote appender) does not
 logging. Each restart sleeps with an increasing back-off (1 second, then 2, ...), reset as soon as a
 message is processed successfully.
 
+A message that fails because of its own content, rather than the destination, is not retried: for
+example a value the formatter cannot serialize (a JSON, encoding, or `FloatDomainError`). That one
+message is discarded and reported to the internal logger, and the thread carries on without backing
+off. In a batch, only that message is discarded; the rest of the batch is still written.
+
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
-rather than spinning forever on a persistent failure:
+rather than spinning forever on a persistent failure. From then on new log messages for that
+appender are dropped once its queue is full, instead of blocking the application:
 
 ~~~ruby
 SemanticLogger.add_appender(
