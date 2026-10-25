@@ -477,6 +477,9 @@ module SemanticLogger
     end
 
     # Measure the supplied block and log the message
+    #
+    # The options can hold untrusted data, so an option with a value that is not valid for it is
+    # ignored (see Log.argument?) and its default is used instead.
     def measure_internal(level, index, message, params)
       exception = nil
       # Single parameter is a hash
@@ -487,9 +490,7 @@ module SemanticLogger
       start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       begin
         if block_given?
-          if (silence_level = params[:silence])
-            # In case someone accidentally sets `silence: true` instead of `silence: :error`
-            silence_level = :error if silence_level == true
+          if (silence_level = measure_silence_level(params))
             silence(silence_level) { yield(params) }
           else
             yield(params)
@@ -500,13 +501,15 @@ module SemanticLogger
       ensure
         # Must use ensure block otherwise a `return` in the yield above will skip the log entry
         log = new_log(level, index)
-        exception ||= params[:exception]
-        message   = params[:message] if params[:message]
-        duration  =
+        # Only an Exception, since it is re-raised below
+        exception ||= params[:exception] if params[:exception].is_a?(Exception)
+        message     = measure_option(params, :message) || message
+        duration    =
           if block_given?
             1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start)
           else
-            params[:duration] || raise("Mandatory block missing when :duration option is not supplied")
+            measure_option(params, :duration) ||
+              raise("Mandatory block missing when :duration option is not supplied")
           end
 
         # Extract options after block completes so that block can modify any of the options
@@ -516,19 +519,35 @@ module SemanticLogger
         should_log = log.assign(
           message:            message,
           payload:            payload,
-          min_duration:       params[:min_duration] || 0.0,
+          min_duration:       measure_option(params, :min_duration) || 0.0,
           exception:          exception,
-          metric:             params[:metric],
-          metric_amount:      params[:metric_amount],
+          metric:             measure_option(params, :metric),
+          metric_amount:      measure_option(params, :metric_amount),
           duration:           duration,
-          log_exception:      params[:log_exception] || :partial,
-          on_exception_level: params[:on_exception_level]
+          log_exception:      measure_option(params, :log_exception) || :partial,
+          on_exception_level: measure_option(params, :on_exception_level)
         )
 
         # Log level may change during assign due to :on_exception_level
         self.log(log) if should_log && should_log?(log)
         raise exception if exception
       end
+    end
+
+    # Returns the value of the measure option that is also a log argument, or nil when it is not
+    # supplied or its value is not valid for that argument.
+    def measure_option(params, key)
+      value = params[key]
+      value if Log.argument?(key, value)
+    end
+
+    # Returns the level to silence other log messages to within a measure block, or nil when none
+    # is supplied or it is not a valid level.
+    def measure_silence_level(params)
+      silence_level = params[:silence]
+      # In case someone accidentally sets `silence: true` instead of `silence: :error`
+      silence_level = :error if silence_level == true
+      silence_level if Levels.valid?(silence_level)
     end
 
     # For measuring methods and logging their duration.

@@ -178,6 +178,11 @@ logger.error(message: "Calling Supplier", duration: 100)
 logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", metric_amount: 21)
 ~~~
 
+In both forms, a key such as `duration` or `exception` is only used as an argument when its value is
+valid for it; otherwise it is logged as part of the payload. Any other keys supplied alongside
+`payload:` are merged into it, without overwriting its own values. When the Hash holds untrusted
+data, see [Logging untrusted hashes](security.html#logging-untrusted-hashes).
+
 ## Step 6: Measure how long something takes
 
 It is good practice to "measure everything" in production, so that when things slow down it is
@@ -255,11 +260,15 @@ The second argument to a measure call is a Hash of options:
 - `:duration` [Float]: the duration in ms, used when no block is supplied (then it is mandatory; with
   a block it is ignored).
 - `:log_exception` [Symbol]: how to report an exception raised in the block. `:full` logs the class,
-  message, and backtrace; `:partial` logs the class and message only; `:off` does not log it.
+  message, and backtrace; `:partial` logs the class and message only; `:none` does not log it.
   Default `:partial`.
 - `:on_exception_level` [Symbol]: if an exception is raised, raise the log level to this level.
 - `:silence` [Symbol]: the level to silence other log messages to within the block (current thread
   only).
+
+An option with a value that is not valid for it, such as a non-numeric `:min_duration` or an unknown
+level, is ignored and its default is used. Other keys in the Hash are not logged; pass the data to
+log as `:payload`.
 
 Putting several together:
 

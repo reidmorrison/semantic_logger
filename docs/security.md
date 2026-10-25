@@ -63,14 +63,24 @@ That is convenient for code you write, but when the hash holds untrusted data, s
 request parameters or a webhook body with Symbol keys, it can set those arguments too. For
 example `{duration: 0, min_duration: 1}` would suppress the entry.
 
-Semantic Logger only uses a value as an argument when it is valid for it, so an untrusted hash
-can never make the logging call raise. To make sure none of its keys are treated as arguments,
-pass it as the explicit `payload:`:
+Semantic Logger only uses such a key as an argument when its value is valid for it: for example
+`duration` must be a finite real number, `backtrace` an Array of Strings, and `on_exception_level` a
+valid level. Any other value stays in the payload as data, and a `nil` value is ignored, so an
+untrusted hash passed to a level method such as `info` can never make the logging call raise.
+
+To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
+keys supplied alongside an explicit `payload:` are merged into it, and the explicit payload's own
+values win over them:
 
 ~~~ruby
 # The hash is logged as-is, and none of its keys are interpreted:
 logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true))
 ~~~
+
+The options of a `measure_*` call are checked the same way: an option with a value that is not valid
+for it is ignored, and its default is used. Keys that are not measure options are not logged at all,
+so pass untrusted data to a measure call as its `payload:` too. A measure call without a block still
+raises unless it is given a valid `:duration`.
 
 ### Redacting sensitive data
 

@@ -66,10 +66,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - A hash passed as the payload of a log call can no longer make the call raise. Previously,
   logging `params.to_unsafe_h` raised `ArgumentError` whenever the request carried a `payload`
   parameter (since `HashWithIndifferentAccess#key?(:payload)` matched it), and a hash with an
-  invalid `log_exception` or `on_exception_level` raised too. A key is now only used as a log
-  argument when its value is valid for it (for example a numeric `duration`); otherwise it stays
-  in the payload. Unknown keys alongside an explicit `payload:` are merged into it, instead of
-  raising. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
+  invalid `log_exception`, `on_exception_level`, `min_duration`, or `backtrace` raised too. A key
+  is now only used as a log argument when its value is valid for it (for example a finite, real
+  `duration`); otherwise it stays in the payload, and a `nil` value is ignored. Unknown keys
+  alongside an explicit `payload:` are merged into it instead of raising, without overwriting its
+  values. The options of `measure_*` calls are checked the same way, an invalid value being
+  ignored. An `on_exception_level` given as a String or Integer is now stored as its Symbol, and a
+  supplied `backtrace` Array is no longer modified. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
 
 ### Added
 
