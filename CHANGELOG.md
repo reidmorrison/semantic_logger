@@ -84,6 +84,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   every call. A method name that is not a valid Ruby method name, a `min_duration` that is not a
   finite number, and an invalid `log_exception` or level now raise `ArgumentError`.
 
+### Deprecated
+
+- The `:splunk` appender is deprecated and will be removed in v6; use `:splunk_http` instead. Its
+  `splunk-sdk-ruby` gem, last released in 2015, does not verify the server's TLS certificate.
+  The appender has also not accepted connection settings since v4.1, so it could not be used.
+  See the [v5.2 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+
 ### Added
 
 - Exceptions are logged with the detail that Ruby's `Exception#detailed_message` adds to the

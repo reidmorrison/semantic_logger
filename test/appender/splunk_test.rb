@@ -23,6 +23,18 @@ module Appender
           SemanticLogger::Appender::Splunk.new
         end
       end
+
+      it "warns that the appender is deprecated" do
+        original             = Warning[:deprecated]
+        Warning[:deprecated] = true
+        assert_output(nil, /deprecated.*splunk_http/m) do
+          ::Splunk.stub(:connect, Module.new { def self.indexes = {"main" => "main"} }) do
+            SemanticLogger::Appender::Splunk.new
+          end
+        end
+      ensure
+        Warning[:deprecated] = original
+      end
       let(:amessage) { "AppenderSplunkTest log message" }
 
       SemanticLogger::LEVELS.each do |level|

@@ -3,7 +3,7 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.2 remote syslog facility fix.
+  v5.2 security fixes, remote syslog facility fix, and deprecation of the Splunk SDK appender.
 ---
 
 
@@ -13,6 +13,29 @@ description: >-
 {:toc}
 
 ### Upgrading to Semantic Logger v5.2
+
+v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, and fixes
+several security issues. None of the security fixes change the public API, but a few change the
+output, which matters if you parse the logs or alert on them.
+
+#### Replace the `:splunk` appender with `:splunk_http`
+
+The `:splunk` appender depends on the `splunk-sdk-ruby` gem, which was last released in 2015 and
+does not verify the server's TLS certificate. It now emits a deprecation warning and will be
+**removed in v6**. Send logs to the Splunk HTTP Event Collector instead:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: :splunk, index: "main")
+
+# After:
+SemanticLogger.add_appender(
+  appender: :splunk_http,
+  url:      "https://splunk.example.com:8088/services/collector/event",
+  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  index:    "main"
+)
+~~~
 
 #### Remote syslog sends the configured facility
 
@@ -47,6 +70,27 @@ SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facil
 This applies to the `:syslog` and `:syslog_cee` formatters. An application that logs only to a remote
 server, and so does not need the `syslog` gem, can use the same constants from
 `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatters::Syslog::LOG_LOCAL0`.
+
+#### Output changes
+
+* `:logfmt`: spaces, control characters, `=`, and `"` in keys are replaced with `_`. A tag such
+  as `second breakfast` is now emitted as `second_breakfast=true`.
+* `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
+  its backtrace are escaped as `\n`.
+* `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the messages of the
+  exceptions that caused the logged exception are escaped too.
+* `:one_line`: carriage returns are stripped as well as newlines, and `escape_control_chars` is
+  honoured.
+* JSON based formatters: `Infinity` and `NaN` payload values are serialized as strings, and
+  structures nested deeper than 32 levels are replaced with their `#inspect` text, instead of the
+  whole entry being dropped.
+* The `:statsd` metrics appender sends a counter as a single `metric:amount|c` packet.
+
+#### Stricter `logger_measure_method` arguments
+
+`logger_measure_method` now raises `ArgumentError` for a method name that is not an identifier, a
+`min_duration` that is not a number, and an invalid `log_exception` or level. Numeric Strings,
+such as `min_duration: "100"`, are still accepted.
 
 ### Upgrading to Semantic Logger v5.1
 

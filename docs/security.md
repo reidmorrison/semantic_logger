@@ -113,14 +113,22 @@ are filtered out of the logs.
 ### Transport encryption
 
 Appenders that send logs over the network support TLS. The appenders built on the
-`:http` appender (`:http`, `:splunk_http`, and `:elasticsearch_http`) default to
+`:http` appender (`:http`, `:splunk_http`, `:elasticsearch_http`, and `:loki`) default to
 verifying the server certificate (`OpenSSL::SSL::VERIFY_PEER`) when an `https` URL is
-used.
+used. The `:tcp` appender, and the `:syslog` appender over TCP, verify both the certificate
+and the host name when `ssl:` is enabled.
+
+The deprecated `:splunk` appender is the exception: its `splunk-sdk-ruby` gem never verifies
+the certificate. Use `:splunk_http` instead.
 
 Do not disable certificate verification in production. Settings such as
 `ssl: {verify_mode: OpenSSL::SSL::VERIFY_NONE}` expose the connection to
 man-in-the-middle attacks and should be limited to local development against
 self-signed certificates.
+
+Credentials can be supplied in the url of the HTTP based appenders, for example
+`https://user:password@host`, or as a query parameter. They are removed from the url
+written to the internal logger when the server rejects a request, and from `#inspect`.
 
 ### Log file permissions
 
