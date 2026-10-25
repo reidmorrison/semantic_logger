@@ -480,8 +480,10 @@ options.
 
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter
-such as `:default` or `:color`, enable `escape_control_chars` so a newline in the data cannot forge or
-split a record:
+such as `:default` or `:color`, enable `escape_control_chars` so a newline in the logged data cannot
+forge a record. Those formatters still write an entry with an exception over several lines (the
+exception, then its backtrace), so a receiver that frames records by newline splits such an entry;
+use the JSON formatter or the `:syslog` formatter when every record must be a single line:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -564,8 +566,10 @@ SemanticLogger.add_appender(
 ~~~
 
 Syslog frames each record, so embedded newlines or other control characters in untrusted data could
-forge or split records. The syslog formatters therefore escape control characters by default. To pass
-them through unchanged:
+forge or split records. The syslog formatters therefore escape control characters by default. The
+`:syslog` formatter also escapes the newlines between an exception and its backtrace lines (written
+as `\n`), so that an entry with an exception is a single line. To pass control characters through
+unchanged, which also restores the multi-line exception layout:
 
 ~~~ruby
 SemanticLogger.add_appender(
