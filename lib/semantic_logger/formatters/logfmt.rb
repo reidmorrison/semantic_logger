@@ -13,13 +13,18 @@ module SemanticLogger
     #
     # All timestamps are ISO8601 formatteed
     # All user supplied values are escaped and surrounded by double quotes to avoid ambiguious message delimeters
-    # `tags` are treated as keys with boolean values. Tag names are not formatted or validated;
-    # ensure you use valid logfmt format for tag names.
+    # `tags` are treated as keys with boolean values.
+    # In every key (tags, named tags, payload), spaces, control characters, `=`, and `"` are
+    # replaced with `_`, so that untrusted data cannot inject fields or lines.
     # `named_tags` are flattened are merged into the top level message field. Any conflicting fields are overridden.
     # `payload` values take precedence over `tags` and `named_tags`. Any conflicting fields are overridden.
     #
     # Futher Reading https://brandur.org/logfmt
     class Logfmt < Raw
+      # Characters that cannot appear in a logfmt key: spaces and other control characters, which
+      # would end the key or the line, and the `=` and `"` delimiters.
+      UNSAFE_KEY_CHARS = /[\x00-\x20="\x7f]/
+
       def initialize(time_format: :iso_8601, time_key: :timestamp, **args)
         super
       end
@@ -63,7 +68,12 @@ module SemanticLogger
       end
 
       def flatten_log
-        flattened = @parsed.map do |key, value|
+        # Keyed by the encoded key, so that keys which only differ by type, such as :level and
+        # "level", produce a single field. Later values take precedence, as with the merges above.
+        fields = {}
+        @parsed.each_pair { |key, value| fields[logfmt_key(key)] = value }
+
+        flattened = fields.map do |key, value|
           case value
           when Hash, Array
             "#{key}=#{Utils.to_json(value.to_s)}"
@@ -73,6 +83,14 @@ module SemanticLogger
         end
 
         flattened.join(" ")
+      end
+
+      # Returns [String] the key with every character that would break the logfmt structure
+      # replaced by an underscore. Keys come from tags, named tags, and payloads, which can hold
+      # untrusted data; unescaped, they could inject fields or forge an entire line.
+      def logfmt_key(key)
+        key = key.to_s.gsub(UNSAFE_KEY_CHARS, "_")
+        key.empty? ? "_" : key
       end
     end
   end

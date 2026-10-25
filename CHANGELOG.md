@@ -32,6 +32,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   message, which it previously ignored, letting carriage returns and ANSI escape sequences
   through. It also strips carriage returns, not only newlines, by default, and does so in the
   name, thread name, tags, named tags and payload as well, so an entry stays on one line.
+- The `:logfmt` formatter replaces spaces, control characters, `=`, and `"` in keys with `_`.
+  Keys come from tags, named tags, and the payload, and were written verbatim, so a tag such as
+  a User-Agent could inject fields (for example `level="fatal"`) or a whole new line. Keys that
+  only differ by type, such as `:level` and `"level"`, are now emitted once.
 
 ### Added
 

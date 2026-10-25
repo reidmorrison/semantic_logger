@@ -121,12 +121,45 @@ module SemanticLogger
               ["second breakfast", '"elevensies"', "'lunch'"]
             end
 
-            it "formats the tag as a 'true' value" do
+            it "replaces the characters that would break the logfmt structure" do
               text = formatter.call(log, nil)
 
-              assert_match(/second breakfast=true/, text)
-              assert_match(/"elevensies"=true/, text)
-              assert_match(/'lunch'=true/, text)
+              assert_match(/ second_breakfast=true/, text)
+              assert_match(/ _elevensies_=true/, text)
+              assert_match(/ 'lunch'=true/, text)
+            end
+          end
+
+          describe "given untrusted keys" do
+            let(:tags) do
+              [%(Mozilla level="fatal" name="Billing"\ninjected_line=true)]
+            end
+
+            it "cannot inject fields or lines through a tag" do
+              text = formatter.call(log, nil)
+
+              assert_equal 1, text.lines.count
+              assert_equal 1, text.scan(/(?:\A| )level=/).count
+              assert_equal 1, text.scan(/(?:\A| )name=/).count
+              assert_includes text, %( Mozilla_level__fatal__name__Billing__injected_line_true=true)
+            end
+
+            it "cannot inject fields through a payload or named tag key" do
+              log.named_tags = {"a b=c" => "1"}
+              log.payload    = {"x\ny" => "2", "" => "3"}
+              text           = formatter.call(log, nil)
+
+              assert_equal 1, text.lines.count
+              assert_includes text, %( a_b_c="1")
+              assert_includes text, %( x_y="2")
+              assert_includes text, %( _="3")
+            end
+
+            it "emits a field once when keys only differ by type" do
+              log.payload = {"level" => "debug"}
+              text        = formatter.call(log, nil)
+
+              assert_equal 1, text.scan(/(?:\A| )level=/).count
             end
           end
 

@@ -359,6 +359,9 @@ Notes:
 
 * The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
   forge or split a record.
+* Keys (from tags, named tags, and the payload) cannot be quoted in logfmt, so spaces, control
+  characters, `=`, and `"` in a key are replaced with `_`. For example the tag `second breakfast`
+  is emitted as `second_breakfast=true`.
 * Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
   conflict the payload wins.
 * Unnamed tags are emitted as keys with a `true` value.
