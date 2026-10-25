@@ -136,7 +136,7 @@ module SemanticLogger
 
       # Backtrace of the logged exception.
       def backtrace
-        log.backtrace_to_s if log.exception
+        exception_backtrace if log.exception
       end
 
       # Human readable duration (without the Default formatter's surrounding parentheses).

@@ -290,6 +290,20 @@ module SemanticLogger
 
             assert_equal "first\\nsecond", escaped("%{exception_message}")
           end
+
+          it "escapes control characters in the message of each cause in the backtrace" do
+            begin
+              begin
+                raise ArgumentError, "inner\nforged"
+              rescue ArgumentError
+                raise "outer"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_includes escaped("%{backtrace}"), "Cause: ArgumentError: inner\\nforged"
+          end
         end
 
         describe "combining directives" do

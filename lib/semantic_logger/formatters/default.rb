@@ -78,7 +78,7 @@ module SemanticLogger
 
         details = exception_details
         "-- Exception: #{log.exception.class}: #{escape_control_characters(log.exception.message)}\n" \
-          "#{"#{details}\n" if details}#{log.backtrace_to_s}"
+          "#{"#{details}\n" if details}#{exception_backtrace}"
       end
 
       # The detail Ruby adds to the exception's message, such as did_you_mean suggestions.

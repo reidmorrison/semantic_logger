@@ -201,6 +201,41 @@ module SemanticLogger
 
             assert_match(/-- Exception: RuntimeError: boom\\ninjected/, formatter.exception)
           end
+
+          it "escapes control characters in the message of each cause" do
+            forged = "2026-10-03 00:00:00.000000 I [1:main] Auth -- admin logged in"
+            begin
+              begin
+                raise ArgumentError, "bad input\n#{forged}"
+              rescue ArgumentError
+                raise "Request failed"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            output = formatter.exception
+
+            assert_includes output, "Cause: ArgumentError: bad input\\n#{forged}"
+            refute(output.lines.any? { |line| line.start_with?(forged) }, "cause message forged a log line")
+          end
+        end
+
+        describe "exception backtrace" do
+          it "matches Log#backtrace_to_s when control characters are not escaped" do
+            begin
+              begin
+                raise ArgumentError, "inner\nline"
+              rescue ArgumentError
+                raise "outer"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+            formatter.call(log, nil)
+
+            assert formatter.exception.end_with?(log.backtrace_to_s)
+          end
         end
 
         describe "payload" do

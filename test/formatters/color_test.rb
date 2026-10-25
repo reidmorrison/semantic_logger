@@ -162,6 +162,22 @@ module SemanticLogger
 
             assert_equal str, formatter.call(log, nil).lines.first
           end
+
+          it "escapes control characters in the message of each cause when enabled" do
+            begin
+              begin
+                raise ArgumentError, "inner\nforged"
+              rescue ArgumentError
+                raise "outer"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+            output = SemanticLogger::Formatters::Color.new(escape_control_chars: true).call(log, nil)
+
+            assert_includes output, "Cause: ArgumentError: inner\\nforged"
+            refute(output.lines.any? { |line| line.start_with?("forged") })
+          end
         end
       end
     end

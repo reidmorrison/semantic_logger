@@ -133,6 +133,23 @@ module SemanticLogger
         log.exception_details(exception, source: log_exception_details == :with_source)
       end
 
+      # Returns [String] the backtrace of the logged exception, followed by each exception
+      # that caused it, in the same layout as Log#backtrace_to_s.
+      #
+      # The message of each cause is passed through #escape_control_characters, the same as
+      # the message of the logged exception: causes are often parser or validation errors
+      # that quote untrusted input.
+      def exception_backtrace
+        trace = +""
+        log.each_exception do |exception, depth|
+          if depth.positive?
+            trace << "\nCause: #{exception.class.name}: #{escape_control_characters(exception.message)}\n"
+          end
+          trace << (exception.backtrace || []).join("\n")
+        end
+        trace
+      end
+
       # Return the Time as a formatted string
       def format_time(time)
         time = time.dup
