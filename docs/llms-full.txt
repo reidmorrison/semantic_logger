@@ -4356,6 +4356,23 @@ The record-framed network appenders are already safe by default:
 If you replace the formatter on any of these appenders with a text formatter, enable
 `escape_control_chars` as shown above.
 
+### Logging untrusted hashes
+
+A hash passed after the message is the payload, but a few of its keys are also log arguments:
+`duration`, `min_duration`, `metric`, `metric_amount`, `exception`, `log_exception`, and so on.
+That is convenient for code you write, but when the hash holds untrusted data, such as parsed
+request parameters or a webhook body with Symbol keys, it can set those arguments too. For
+example `{duration: 0, min_duration: 1}` would suppress the entry.
+
+Semantic Logger only uses a value as an argument when it is valid for it, so an untrusted hash
+can never make the logging call raise. To make sure none of its keys are treated as arguments,
+pass it as the explicit `payload:`:
+
+~~~ruby
+# The hash is logged as-is, and none of its keys are interpreted:
+logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true))
+~~~
+
 ### Redacting sensitive data
 
 Semantic Logger does not automatically redact secrets or personal information; it logs

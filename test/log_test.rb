@@ -195,6 +195,61 @@ module SemanticLogger
           assert_equal({payload: {user: "joe"}}, args)
         end
 
+        describe "untrusted hashes" do
+          # Like ActiveSupport::HashWithIndifferentAccess, which is what params.to_unsafe_h returns.
+          let(:indifferent_hash_class) do
+            Class.new(Hash) do
+              def key?(key) = super(key.to_s)
+            end
+          end
+
+          it "keeps a \"payload\" key of an indifferent access hash in the payload" do
+            params = indifferent_hash_class.new.merge!("user" => "bob", "payload" => "x")
+            args   = log.extract_arguments(params, "Params")
+
+            assert_equal({payload: {"user" => "bob", "payload" => "x"}, message: "Params"}, args)
+            assert log.assign(**args)
+          end
+
+          it "merges unknown keys into an explicit payload instead of passing them on" do
+            args = log.extract_arguments({payload: {a: 1}, user: "bob", duration: 5})
+
+            assert_equal({payload: {a: 1, user: "bob"}, duration: 5}, args)
+            assert log.assign(**args)
+          end
+
+          it "keeps an explicit payload that is not a hash alongside unknown keys" do
+            args = log.extract_arguments({payload: "text", user: "bob"})
+
+            assert_equal({payload: {user: "bob", payload: "text"}}, args)
+          end
+
+          it "keeps values that cannot be used as log arguments in the payload" do
+            untrusted = {
+              log_exception:      "boom",
+              on_exception_level: "nope",
+              duration:           "0",
+              min_duration:       [],
+              backtrace:          "not an array",
+              metric_amount:      Float::INFINITY,
+              dimensions:         "x"
+            }
+            args = log.extract_arguments({exception: 1}.merge(untrusted), "Webhook")
+
+            assert_equal untrusted, args[:payload]
+            assert log.assign(**args), "an untrusted hash must not make the logging call raise"
+          end
+
+          it "uses values of the right type as log arguments" do
+            args = log.extract_arguments(
+              {log_exception: :partial, on_exception_level: "error", duration: 1.5, metric_amount: 3}, "m"
+            )
+
+            assert_equal({log_exception: :partial, on_exception_level: "error", duration: 1.5, metric_amount: 3,
+                          message: "m"}, args)
+          end
+        end
+
         it "lets a supplied message take precedence over a payload message key" do
           args = log.extract_arguments({message: "inner"}, "outer")
 

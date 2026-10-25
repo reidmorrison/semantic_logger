@@ -63,6 +63,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   flush (including the one at exit) waiting on it returns instead of waiting forever. A flush
   or close taken off the queue with a batch that could not be written is now still run,
   instead of being lost and leaving its caller waiting forever.
+- A hash passed as the payload of a log call can no longer make the call raise. Previously,
+  logging `params.to_unsafe_h` raised `ArgumentError` whenever the request carried a `payload`
+  parameter (since `HashWithIndifferentAccess#key?(:payload)` matched it), and a hash with an
+  invalid `log_exception` or `on_exception_level` raised too. A key is now only used as a log
+  argument when its value is valid for it (for example a numeric `duration`); otherwise it stays
+  in the payload. Unknown keys alongside an explicit `payload:` are merged into it, instead of
+  raising. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
 
 ### Added
 

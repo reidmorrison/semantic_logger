@@ -53,6 +53,23 @@ module SemanticLogger
                           log_exception on_exception_level
                           metric metric_amount dimensions].freeze
 
+    # The type a value must have for its key to be extracted from the payload. A value of any
+    # other type stays in the payload, since it cannot be used as the log attribute.
+    NON_PAYLOAD_TYPES = {
+      backtrace:     Array,
+      duration:      Numeric,
+      min_duration:  Numeric,
+      metric_amount: Numeric,
+      dimensions:    Hash
+    }.freeze
+
+    # Values accepted for the :log_exception argument.
+    LOG_EXCEPTION_OPTIONS = %i[full partial none].freeze
+
+    # Hash#key?, which unlike HashWithIndifferentAccess#key? only matches the exact Symbol key.
+    HASH_KEY = Hash.instance_method(:key?)
+    private_constant :HASH_KEY
+
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
                   :tags, :named_tags, :context,
@@ -150,26 +167,32 @@ module SemanticLogger
     end
 
     # Extract the arguments from a Hash Payload
+    #
+    # The hash can hold untrusted data, so this never fails because of its content: keys that are
+    # not log attributes, or that hold a value of the wrong type (see NON_PAYLOAD_TYPES), are kept
+    # in the payload. When the hash supplies an explicit :payload, any such keys are merged into it.
     def extract_arguments(payload, message = nil)
       raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
 
-      message = nil if message == ""
-      if payload.key?(:payload)
-        return message ? payload.merge(message: message) : payload
-      end
-
+      message     = nil if message == ""
+      explicit    = HASH_KEY.bind_call(payload, :payload)
       new_payload = {}
       args        = {}
       payload.each_pair do |key, value|
-        # Supplied message takes precedence
-        if (key == :message) && !message.nil?
+        if explicit && key == :payload
+          args[:payload] = value
+        elsif key == :message && !message.nil?
+          # Supplied message takes precedence
+          new_payload[key] = value unless explicit
+        elsif log_argument?(key, value)
+          args[key] = value
+        else
           new_payload[key] = value
-          next
         end
-
-        NON_PAYLOAD_KEYS.include?(key) ? args[key] = value : new_payload[key] = value
       end
-      args[:payload] = new_payload unless new_payload.empty?
+      unless new_payload.empty?
+        args[:payload] = explicit ? merge_payload(args[:payload], new_payload) : new_payload
+      end
       args[:message] = message if message
       args
     end
@@ -390,6 +413,37 @@ module SemanticLogger
     # Whether error_highlight adds a source snippet to this exception's #detailed_message.
     def error_highlighted?(exception)
       defined?(ErrorHighlight::CoreExt) && exception.is_a?(ErrorHighlight::CoreExt)
+    end
+
+    # Whether the key and value from a payload hash can be used as a log argument, so that an
+    # untrusted hash cannot make #assign raise.
+    def log_argument?(key, value)
+      return false unless NON_PAYLOAD_KEYS.include?(key)
+      return true if value.nil?
+
+      case key
+      when :log_exception
+        LOG_EXCEPTION_OPTIONS.include?(value)
+      when :on_exception_level
+        level_value?(value)
+      else
+        type = NON_PAYLOAD_TYPES[key]
+        type.nil? || (value.is_a?(type) && !(value.is_a?(Float) && !value.finite?))
+      end
+    end
+
+    def level_value?(value)
+      !Levels.index(value).nil?
+    rescue ArgumentError
+      false
+    end
+
+    # Returns the explicit payload with the remaining keys of the hash merged in.
+    def merge_payload(explicit, remaining)
+      return remaining if explicit.nil?
+      return explicit.merge(remaining) if explicit.is_a?(Hash)
+
+      remaining.merge(payload: explicit)
     end
   end
 end
