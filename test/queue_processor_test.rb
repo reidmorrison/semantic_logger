@@ -320,6 +320,35 @@ class QueueProcessorTest < Minitest::Test
           assert(internal_logger.events.any? { |event| event.message.include?("Discarded") })
         end
 
+        it "reports the first discarded message, then at most one count per interval" do
+          processor = build(dropped_message_report_seconds: 30)
+          5.times { |i| processor.queue << new_log(message: "poison #{i}") }
+          processor.queue << {command: :close}
+          processor.send(:process)
+
+          reports = internal_logger.events.select { |event| event.message.include?("Discarded") }
+
+          assert_equal 5, processor.failed_count
+          assert_equal 1, reports.size
+          assert_kind_of JSON::GeneratorError, reports.first.exception
+        end
+
+        it "reports the count of messages discarded since the previous report" do
+          processor = build(dropped_message_report_seconds: 30)
+          3.times { |i| processor.queue << new_log(message: "poison #{i}") }
+          processor.queue << {command: :close}
+          processor.send(:process)
+          processor.dropped_message_report_seconds = 0
+          processor.queue << new_log(message: "poison")
+          processor.queue << {command: :close}
+          processor.send(:process)
+
+          reports = internal_logger.events.map(&:message).grep(/Discarded/)
+
+          assert_equal 2, reports.size
+          assert_match(/Discarded 3 log message\(s\) in the last \d+ seconds/, reports.last)
+        end
+
         it "backs off, instead of discarding, when the destination's response cannot be parsed" do
           processor = build(async_max_retries: 0)
           appender.stub(:log, ->(_) { JSON.parse("<html>502 Bad Gateway</html>") }) do

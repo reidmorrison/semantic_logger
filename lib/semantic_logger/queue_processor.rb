@@ -1,3 +1,5 @@
+require "semantic_logger/queue_processor/throttled_counter"
+
 module SemanticLogger
   # Internal class that processes log messages from a queue on a separate thread.
   #
@@ -14,7 +16,7 @@ module SemanticLogger
     attr_accessor :lag_check_interval, :lag_threshold_s, :dropped_message_report_seconds,
                   :batch_size, :batch_seconds, :non_blocking
     attr_reader :appender, :queue, :max_queue_size, :signal,
-                :processed_count, :dropped_count, :failed_count, :async_max_retries, :retry_count
+                :processed_count, :async_max_retries, :retry_count
 
     # Create a new processor and start its worker thread.
     def self.start(**args)
@@ -63,7 +65,8 @@ module SemanticLogger
     #
     #   dropped_message_report_seconds: [Integer]
     #     When non_blocking is enabled, log the count of dropped messages to the internal logger
-    #     at most once every this number of seconds.
+    #     at most once every this number of seconds. Also limits how often messages discarded
+    #     because their content could not be written are reported, after the first.
     #     Default: 30
     #
     #   async_max_retries: [Integer]
@@ -99,12 +102,9 @@ module SemanticLogger
       @thread                         = nil
       # Only batch mode parks the worker on the signal; streaming mode never touches it.
       @signal                         = Concurrent::Event.new if batch
-      @dropped_message_count          = 0
-      @dropped_message_reported_at    = Time.now
-      @dropped_message_mutex          = Mutex.new
+      @dropped                        = ThrottledCounter.new
+      @failed                         = ThrottledCounter.new(reported_at: nil)
       @processed_count                = 0
-      @dropped_count                  = 0
-      @failed_count                   = 0
       create_queue
 
       return unless batch? && !appender.respond_to?(:batch)
@@ -139,6 +139,13 @@ module SemanticLogger
     def non_blocking?
       @non_blocking && capped?
     end
+
+    # Returns [Integer] the number of log messages dropped because the queue was full.
+    def dropped_count = @dropped.total
+
+    # Returns [Integer] the number of log messages discarded because their content could not be
+    # written (see Subscriber#message_error?).
+    def failed_count = @failed.total
 
     # Returns [true|false] whether messages are processed in batches.
     def batch?
@@ -346,11 +353,15 @@ module SemanticLogger
     # #message_error?) has every error retried with a back-off.
     def message_error?(exception) = appender.respond_to?(:message_error?) && appender.message_error?(exception)
 
-    # Record and report log messages discarded because their content could not be written.
+    # Record log messages discarded because their content could not be written. The first is
+    # reported to the internal logger straight away, with the error. After that the count is
+    # reported, with the latest error, at most once every dropped_message_report_seconds.
     def messages_failed(logs, exception)
-      @failed_count += logs.size
-      safe_log(:error, "Async: Discarded #{logs.size} log message(s) that could not be written, " \
-                       "the first from #{logs.first.name}", exception)
+      @failed.record(logs.size, interval: dropped_message_report_seconds) do |count, seconds|
+        period = seconds ? " in the last #{seconds.round} seconds" : ""
+        safe_log(:error, "Async: Discarded #{count} log message(s)#{period} that could not be written, " \
+                         "most recently from #{logs.first.name}", exception)
+      end
     end
 
     # Returns false when message processing should be stopped.
@@ -372,19 +383,12 @@ module SemanticLogger
     # Record a dropped message, reporting the running count to the internal logger at most
     # once every dropped_message_report_seconds.
     def message_dropped
-      @dropped_message_mutex.synchronize do
-        @dropped_message_count += 1
-        @dropped_count         += 1
-        diff = Time.now - @dropped_message_reported_at
-        return if diff < dropped_message_report_seconds
-
+      @dropped.record(interval: dropped_message_report_seconds) do |count, seconds|
         logger.warn(
-          "Async: Dropped #{@dropped_message_count} log messages in the last #{diff.round} seconds. " \
+          "Async: Dropped #{count} log messages in the last #{seconds.round} seconds. " \
           "The queue is full (max_queue_size: #{max_queue_size}). " \
           "Consider reducing the log level, increasing max_queue_size, or changing the appenders"
         )
-        @dropped_message_count       = 0
-        @dropped_message_reported_at = Time.now
       end
     end
 
