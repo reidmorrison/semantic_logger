@@ -75,6 +75,128 @@ module SemanticLogger
           end
           assert_equal :info, logger.level
         end
+
+        it "logs at the temporary level" do
+          logger.level = :info
+          logger.debug("not logged")
+          logger.with_level(:debug) { logger.debug("logged") }
+          logger.debug("not logged either")
+
+          assert_equal ["logged"], logger.logs.map(&:message)
+        end
+
+        it "returns the result of the block" do
+          assert_equal 42, logger.with_level(:debug) { 42 }
+        end
+
+        it "accepts the same levels as level=" do
+          logger.with_level("warn") { assert_equal :warn, logger.level }
+          logger.with_level(::Logger::ERROR) { assert_equal :error, logger.level }
+        end
+
+        it "raises on an invalid level without changing the level" do
+          logger.level = :info
+          assert_raises(ArgumentError) do
+            logger.with_level(:bogus) { flunk "block must not run" }
+          end
+          assert_equal :info, logger.level
+        end
+
+        it "restores the enclosing level after a nested block" do
+          logger.level = :info
+          logger.with_level(:warn) do
+            logger.with_level(:debug) { assert_equal :debug, logger.level }
+
+            assert_equal :warn, logger.level
+          end
+          assert_equal :info, logger.level
+        end
+
+        it "keeps a level set inside the block after the block" do
+          logger.level = :info
+          logger.with_level(:debug) do
+            logger.level = :error
+
+            assert_equal :debug, logger.level
+          end
+          assert_equal :error, logger.level
+        end
+
+        it "does not change other instances" do
+          other        = CaptureLogger.new("Other")
+          other.level  = :info
+          logger.level = :info
+          logger.with_level(:debug) do
+            assert_equal :info, other.level
+            refute_predicate other, :debug?
+          end
+        end
+
+        it "keeps following the global default level after the block" do
+          logger.with_level(:warn) { logger.info("inside") }
+          SemanticLogger.default_level = :error
+
+          assert_nil logger.instance_variable_get(:@level)
+          assert_equal :error, logger.level
+        end
+
+        it "keeps honoring SemanticLogger.silence after the block" do
+          SemanticLogger.silence(:error) do
+            logger.with_level(:debug) { assert_predicate logger, :debug? }
+
+            refute_predicate logger, :info?
+          end
+        end
+
+        # Runs `logger.with_level(level)` on a new thread and keeps the block open until
+        # the returned release queue is pushed to. Returns [thread, release].
+        def hold_with_level(level)
+          inside  = Queue.new
+          release = Queue.new
+          thread  = Thread.new do
+            logger.with_level(level) do
+              inside << logger.level
+              release.pop
+            end
+          end
+
+          assert_equal level, inside.pop
+          [thread, release]
+        end
+
+        it "applies only to the current thread" do
+          logger.level    = :info
+          thread, release = hold_with_level(:debug)
+
+          assert_equal :info, logger.level
+          refute_predicate logger, :debug?
+        ensure
+          release&.push(true)
+          thread&.join
+        end
+
+        it "restores the level when blocks on different threads overlap" do
+          logger.level            = :info
+          first, release_first    = hold_with_level(:debug)
+          second, release_second  = hold_with_level(:warn)
+
+          # The first block ends while the second is still running, then the second ends.
+          release_first << true
+          first.join
+          release_second << true
+          second.join
+
+          assert_equal :info, logger.level
+        end
+
+        it "applies only to the current fiber" do
+          logger.level = :info
+          logger.with_level(:debug) do
+            other_fiber_level = Fiber.new { logger.level }.resume
+
+            assert_equal :info, other_fiber_level
+          end
+        end
       end
 
       describe "level query methods" do

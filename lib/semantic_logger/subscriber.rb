@@ -7,11 +7,6 @@ module SemanticLogger
     attr_reader :formatter
     attr_writer :application, :environment, :host, :logger, :metrics
 
-    # Returns the current log level if set, otherwise it logs everything it receives.
-    def level
-      @level || :trace
-    end
-
     # A subscriber should implement flush if it can.
     def flush
       # NOOP
@@ -134,11 +129,13 @@ module SemanticLogger
       super(self.class, level, filter)
     end
 
-    # Return the level index for fast comparisons.
-    # Returns the lowest level index if the level has not been explicitly
-    # set for this instance.
-    def level_index
-      @level_index || 0
+    # Without a level of its own, a subscriber logs everything it receives.
+    def fallback_level
+      :trace
+    end
+
+    def fallback_level_index
+      0
     end
 
     # Whether to log metric only entries with this subscriber

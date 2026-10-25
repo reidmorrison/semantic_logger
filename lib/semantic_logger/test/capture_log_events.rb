@@ -42,13 +42,16 @@ module SemanticLogger
         @events.clear
       end
 
-      # Support silencing of log messages
-      def level_index
-        @level_index || SemanticLogger.default_level_index
-      end
-
       def to_h
         events.map(&:to_h)
+      end
+
+      private
+
+      # Without a level of its own, follow the global default level the way a logger does,
+      # so that `SemanticLogger.silence` applies.
+      def fallback_level_index
+        SemanticLogger.default_level_index
       end
     end
   end

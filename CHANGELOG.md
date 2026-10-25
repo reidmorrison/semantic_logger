@@ -32,6 +32,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - `SemanticLogger::Appender::ElasticsearchHttp#delete_all` no longer sends the query string
   of the url. The query configures how the server ingests log data, and Elasticsearch fails
   an index delete with a 400 when it carries unrecognized parameters.
+- `logger.with_level` changes the level for the current fiber only, matching Ruby's
+  `Logger#with_level`. It used to change the logger's level for every thread while the block
+  ran, so with Sidekiq's per-job `log_level` the level leaked into other jobs running at the
+  same time, and jobs that overlapped could leave the logger stuck at the wrong level. It also
+  no longer pins a logger that follows the global default level to a fixed level, which had
+  stopped later `SemanticLogger.default_level=` changes and `SemanticLogger.silence` from
+  applying to that logger.
 
 ## [5.1.0] 2026-07-20
 
