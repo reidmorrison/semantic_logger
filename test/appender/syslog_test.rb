@@ -81,6 +81,12 @@ module Appender
           assert_equal ::Syslog::LOG_ALERT, formatter.level_map[:info]
         end
 
+        it "passes its maximum packet size" do
+          formatter = SemanticLogger::Appender::Syslog.new(formatter: :syslog_cee, max_size: 2048, **options).formatter
+
+          assert_equal 2048, formatter.max_size
+        end
+
         it "lets the formatter's own options take precedence" do
           formatter = SemanticLogger::Appender::Syslog.new(
             formatter: {syslog: {facility: ::Syslog::LOG_LOCAL1}}, **options

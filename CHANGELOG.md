@@ -29,7 +29,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:syslog` and `:syslog_cee` formatters default `max_size:` to 1024 bytes. The default was
   the `Integer` class rather than a size, so a syslog formatter chosen explicitly without a
   `max_size:`, for example `appender: :syslog, formatter: :syslog_cee, url: "udp://..."`, failed
-  on every log entry with `comparison of Integer with Class failed`.
+  on every log entry with `comparison of Integer with Class failed`. The syslog appender's
+  `max_size:` now also reaches a `:syslog` or `:syslog_cee` formatter named by `formatter:`.
 - Remote syslog over TCP or UDP sends the configured facility. The `facility:` option takes a
   `::Syslog::LOG_*` constant, which is the facility number shifted left by 3 bits, but it was sent
   unconverted, so the default `::Syslog::LOG_USER` went out as facility `uucp` (`<69>` for an

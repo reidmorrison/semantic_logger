@@ -234,20 +234,22 @@ module SemanticLogger
         end
       end
 
-      # The formatters that build remote syslog packets, and so need this appender's facility and level map.
+      # The formatters that build remote syslog packets, and so need this appender's facility, level map,
+      # and maximum packet size.
       PACKET_FORMATTERS = %i[syslog syslog_cee].freeze
       private_constant :PACKET_FORMATTERS
 
       private
 
-      # Returns the supplied `formatter:` argument, with this appender's facility and level map added
-      # when it names one of the PACKET_FORMATTERS, so that they are not silently ignored. Options in a
+      # Returns the supplied `formatter:` argument, with this appender's facility, level map, and
+      # maximum packet size added when it names one of the PACKET_FORMATTERS, so that they are not
+      # silently ignored. Options in a
       # `{syslog: {...}}` Hash take precedence. A formatter instance keeps its own settings.
       def with_packet_options(formatter)
         name, options = formatter.is_a?(Hash) ? formatter.first : [formatter, {}]
         return formatter unless name.respond_to?(:to_sym) && PACKET_FORMATTERS.include?(name.to_sym)
 
-        {name.to_sym => {facility: facility, level_map: level_map}.merge(options || {})}
+        {name.to_sym => {facility: facility, level_map: level_map, max_size: max_size}.merge(options || {})}
       end
     end
   end

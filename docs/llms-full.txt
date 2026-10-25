@@ -1876,11 +1876,11 @@ The default packet size is 1024 bytes:
 SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514", max_size: 2048)
 ~~~
 
-When you choose the formatter yourself, pass `max_size` to the formatter instead (it also defaults to
-1024 bytes):
+`max_size` also applies when `formatter:` names the `:syslog` or `:syslog_cee` formatter. A
+formatter passed as an instance uses its own `max_size`, which also defaults to 1024 bytes:
 
 ~~~ruby
-SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", formatter: {syslog_cee: {max_size: 2048}})
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", formatter: :syslog_cee, max_size: 2048)
 ~~~
 
 Or over UDP (the `syslog_protocol` gem is required):
@@ -1897,7 +1897,7 @@ from `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatte
 SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facility: ::Syslog::LOG_LOCAL0)
 ~~~
 
-The `facility:` and `level_map:` options also apply when `formatter:` names the `:syslog` or
+The `facility:`, `level_map:`, and `max_size:` options also apply when `formatter:` names the `:syslog` or
 `:syslog_cee` formatter, for example `formatter: :syslog_cee`. Options given to the formatter itself,
 as in `formatter: {syslog: {facility: ::Syslog::LOG_LOCAL1}}`, take precedence. A formatter passed
 as an instance keeps its own settings.
