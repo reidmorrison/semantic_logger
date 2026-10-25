@@ -134,6 +134,24 @@ module Appender
           assert_includes inspected, '@path="/path"'
         end
 
+        it "includes the object address, like Kernel#inspect" do
+          assert_match(/\A#<SemanticLogger::Appender::Http:0x\h+ @/, appender_with_credentials.inspect)
+        end
+
+        it "omits instance variables a subclass adds" do
+          subclass = Class.new(SemanticLogger::Appender::Http) do
+            def initialize(api_key:, **)
+              @api_key = api_key
+              super(**)
+            end
+          end
+          inspected = Net::HTTP.stub_any_instance(:start, true) do
+            subclass.new(api_key: "subclass-secret", url: "http://localhost:8088/path").inspect
+          end
+
+          refute_includes inspected, "subclass-secret"
+        end
+
         it "omits credentials when wrapped in an async proxy" do
           async = SemanticLogger::Appender::Async.new(appender: appender_with_credentials)
           inspected = async.inspect

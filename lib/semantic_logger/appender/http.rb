@@ -224,18 +224,24 @@ module SemanticLogger
         false
       end
 
-      # Instance variables that can hold credentials: the password, the request headers (for example
-      # an `Authorization` or token header), and the url, proxy url, and query string, which can
-      # carry a user name and password or a token.
-      CREDENTIAL_VARIABLES = %i[@password @header @url @proxy_url @proxy_uri @query].freeze
-      private_constant :CREDENTIAL_VARIABLES
+      # The only instance variables that #inspect shows. None of them can hold a credential, unlike
+      # the password, the request headers, the url, proxy url and query string, or the SSL options.
+      # This is an allowlist so that a credential added later, here or in a subclass, stays hidden
+      # unless it is deliberately listed.
+      INSPECTED_VARIABLES = %i[
+        @name @level @application @environment @host
+        @server @port @path @compress @open_timeout @read_timeout @continue_timeout
+      ].freeze
+      private_constant :INSPECTED_VARIABLES
 
       # Ruby 4.0's Kernel#inspect honours #instance_variables_to_inspect. Earlier Rubies ignore it,
-      # so inspect the same instance variables here.
+      # so build the same output here. None of the inspected values can refer back to this
+      # appender, so no recursion guard is needed.
       unless Kernel.private_method_defined?(:instance_variables_to_inspect)
         def inspect
-          variables = instance_variables_to_inspect.map { |name| " #{name}=#{instance_variable_get(name).inspect}" }
-          "#<#{self.class}#{variables.join(',')}>"
+          variables = instance_variables_to_inspect.map { |name| "#{name}=#{instance_variable_get(name).inspect}" }
+          address   = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
+          variables.empty? ? "#{address}>" : "#{address} #{variables.join(', ')}>"
         end
       end
 
@@ -243,7 +249,7 @@ module SemanticLogger
 
       # Keep credentials out of #inspect, for example when the appenders are listed in a console.
       def instance_variables_to_inspect
-        instance_variables - CREDENTIAL_VARIABLES
+        instance_variables & INSPECTED_VARIABLES
       end
 
       # Use JSON Formatter by default
