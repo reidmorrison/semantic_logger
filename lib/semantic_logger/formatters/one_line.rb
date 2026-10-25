@@ -13,6 +13,13 @@ module SemanticLogger
       def exception
         "-- Exception: #{log.exception.class}: #{log.exception.message.delete("\n")}" if log.exception
       end
+
+      private
+
+      # Exception details span several lines.
+      def default_log_exception_details
+        false
+      end
     end
   end
 end

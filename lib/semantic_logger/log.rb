@@ -197,6 +197,38 @@ module SemanticLogger
       end
     end
 
+    # Ruby's own Exception#detailed_message: the message, decorated with the class name.
+    EXCEPTION_DETAILED_MESSAGE = Exception.instance_method(:detailed_message)
+    private_constant :EXCEPTION_DETAILED_MESSAGE
+
+    # Returns [String] the detail that Ruby's Exception#detailed_message adds to the message of the
+    # supplied exception, without the class name that Ruby also adds. Since Ruby 3.2 this is where
+    # did_you_mean suggestions ("Did you mean?  upcase") and the detail an exception class supplies
+    # by overriding #detailed_message appear, rather than in #message.
+    # Returns nil when there is no detail.
+    #
+    # Parameters
+    #   exception: [Exception]
+    #     This entry's exception, or one of its causes (see #each_exception).
+    #   source: [true|false]
+    #     Whether to include error_highlight's snippet of the failing source line, for example
+    #     "user_name.upcas" with "^^^^^^" under the unknown method. It re-parses that source
+    #     file on every call, so it is about 100 times slower, and it copies source code into
+    #     the log.
+    #     Default: false
+    #
+    # The result is cached on this entry, since every appender's formatter may ask for it.
+    def exception_details(exception, source: false)
+      key   = [exception, source]
+      cache = @exception_details
+      return cache[key] if cache&.key?(key)
+
+      details = extract_exception_details(exception, source)
+      # Replace the cache rather than change it, since appenders on other threads may be reading it.
+      @exception_details = (cache || {}).merge(key => details).freeze
+      details
+    end
+
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
     def backtrace_to_s
       trace = ""
@@ -313,6 +345,27 @@ module SemanticLogger
     # A metric only event has a metric but no message or exception.
     def metric_only?
       metric && message.nil? && exception.nil?
+    end
+
+    private
+
+    def extract_exception_details(exception, source)
+      detailed =
+        begin
+          exception.detailed_message(highlight: false, error_highlight: source)
+        rescue ArgumentError
+          # An override of #detailed_message that does not accept extra keyword arguments.
+          exception.detailed_message(highlight: false)
+        end
+      base = EXCEPTION_DETAILED_MESSAGE.bind_call(exception, highlight: false)
+      # An override that does not build on Ruby's message cannot be separated from it.
+      return unless detailed.is_a?(String) && detailed.start_with?(base)
+
+      details = detailed.delete_prefix(base).sub(/\A\n+/, "").rstrip
+      details unless details.empty?
+    rescue StandardError
+      # Never let an exception's own #detailed_message stop the log entry being written.
+      nil
     end
   end
 end

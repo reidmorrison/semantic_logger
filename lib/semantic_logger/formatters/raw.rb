@@ -96,11 +96,10 @@ module SemanticLogger
         root = hash
         log.each_exception do |exception, i|
           name       = i.zero? ? :exception : :cause
-          root[name] = {
-            name:        exception.class.name,
-            message:     exception.message,
-            stack_trace: exception.backtrace
-          }
+          root[name] = {name: exception.class.name, message: exception.message}
+          details    = exception_details_for(exception)
+          root[name][:details]     = details if details
+          root[name][:stack_trace] = exception.backtrace
           root = root[name]
         end
       end

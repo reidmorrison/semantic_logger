@@ -30,6 +30,8 @@ module SemanticLogger
     #   payload              Payload rendered as a string.
     #   exception_class      Class of the logged exception, e.g. "RuntimeError".
     #   exception_message    Message of the logged exception.
+    #   exception_details    Detail Ruby adds to the exception's message, such as
+    #                        did_you_mean suggestions (see the log_exception_details option).
     #   backtrace            Backtrace of the logged exception.
     #   duration             Human readable duration, e.g. "1.2ms".
     #   duration_ms          Duration in milliseconds (numeric).
@@ -59,6 +61,7 @@ module SemanticLogger
         payload:           false,
         exception_class:   false,
         exception_message: false,
+        exception_details: false,
         backtrace:         false,
         duration:          false,
         duration_ms:       false,

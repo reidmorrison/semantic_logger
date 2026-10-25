@@ -3,7 +3,7 @@ module SemanticLogger
   module Formatters
     class Base
       attr_accessor :log, :logger, :time_format, :log_host, :log_application, :log_environment, :precision,
-                    :escape_control_chars
+                    :escape_control_chars, :log_exception_details
 
       # Printable escapes for the most common control characters. Any other
       # control character is escaped to its hexadecimal `\xHH` form by
@@ -57,18 +57,28 @@ module SemanticLogger
       #     Note: Has no effect on structured formatters such as :json, which
       #     already escape control characters via JSON encoding.
       #     Default: false (preserve newlines and ANSI colors in text output)
+      #   log_exception_details: [true|false|:with_source]
+      #     Whether to log the detail that Ruby's Exception#detailed_message adds to an
+      #     exception's message, such as did_you_mean suggestions ("Did you mean?  upcase") or
+      #     the detail an exception class supplies by overriding #detailed_message.
+      #     :with_source also logs error_highlight's snippet of the failing source line. It is
+      #     about 100 times slower, since it re-parses that source file, and it copies source
+      #     code into the log.
+      #     Default: true for the Default, Color, and Pattern text formatters, false otherwise.
       def initialize(time_format: nil,
                      log_host: true,
                      log_application: true,
                      log_environment: true,
                      precision: PRECISION,
-                     escape_control_chars: false)
+                     escape_control_chars: false,
+                     log_exception_details: default_log_exception_details)
         @time_format          = time_format || self.class.build_time_format(precision)
         @log_host             = log_host
         @log_application      = log_application
         @log_environment      = log_environment
         @precision            = precision
-        @escape_control_chars = escape_control_chars
+        @escape_control_chars  = escape_control_chars
+        @log_exception_details = log_exception_details
       end
 
       # Return default time format string
@@ -105,6 +115,19 @@ module SemanticLogger
         return value unless escape_control_chars && value
 
         value.to_s.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
+      end
+
+      # Whether this formatter logs exception details unless told otherwise. See #initialize.
+      def default_log_exception_details
+        false
+      end
+
+      # Returns [String] the detail Ruby adds to the message of the supplied exception (see
+      # Log#exception_details), or nil when there is none or this formatter does not log it.
+      def exception_details_for(exception)
+        return unless log_exception_details
+
+        log.exception_details(exception, source: log_exception_details == :with_source)
       end
 
       # Return the Time as a formatted string

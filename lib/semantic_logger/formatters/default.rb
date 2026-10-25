@@ -76,8 +76,15 @@ module SemanticLogger
       def exception
         return unless log.exception
 
+        details = exception_details
         "-- Exception: #{log.exception.class}: #{escape_control_characters(log.exception.message)}\n" \
-          "#{log.backtrace_to_s}"
+          "#{"#{details}\n" if details}#{log.backtrace_to_s}"
+      end
+
+      # The detail Ruby adds to the exception's message, such as did_you_mean suggestions.
+      # See Base#initialize for the `log_exception_details` option.
+      def exception_details
+        escape_control_characters(exception_details_for(log.exception)) if log.exception
       end
 
       # Default text log format
@@ -88,6 +95,13 @@ module SemanticLogger
         self.logger = logger
 
         [time, level, process_info, tags, named_tags, duration, name, message, payload, exception].compact.join(" ")
+      end
+
+      private
+
+      # Text output is read by people, who benefit most from exception details.
+      def default_log_exception_details
+        true
       end
     end
   end

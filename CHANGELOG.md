@@ -7,6 +7,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+- Exceptions are logged with the detail that Ruby's `Exception#detailed_message` adds to the
+  message, such as did_you_mean suggestions (`Did you mean?  upcase`) or the detail an exception
+  class supplies by overriding `#detailed_message`. Since Ruby 3.2 that detail is no longer part of
+  `Exception#message`, which is all Semantic Logger logged. The `log_exception_details` formatter
+  option controls it: `true` (the default for the `:default`, `:color`, and `:pattern` text
+  formatters, so their output gains a line after the exception message when there is detail),
+  `:with_source` to also log error_highlight's source snippet (much slower, since it re-parses the
+  source file), or `false` (the default for every other formatter, so JSON and other structured
+  output does not change unless enabled). The `:json` formatter, and the others built on `:raw`,
+  log it as `exception.details`. The pattern formatter adds an `%{exception_details}` directive.
 - `SemanticLogger.non_blocking = true` drops log messages instead of blocking the calling thread
   when the main pipeline queue is full. Previously `non_blocking:` could only be set on an
   individual async appender's own queue, so `logger.info` could still block on the main queue

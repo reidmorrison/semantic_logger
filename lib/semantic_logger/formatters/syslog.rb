@@ -110,6 +110,11 @@ module SemanticLogger
         packet.severity = level_map[log.level]
         packet.assemble(@max_size)
       end
+
+      # Off by default, so that existing syslog records do not change.
+      def default_log_exception_details
+        false
+      end
     end
   end
 end

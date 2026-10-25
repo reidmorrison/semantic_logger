@@ -262,6 +262,9 @@ Notes:
 * The layout above is formatted for readability. The real output is a single line terminated by one
   newline, with no embedded newlines.
 * A field with a `nil` value is excluded from the output.
+* To also log the detail Ruby adds to an exception's message, such as did_you_mean suggestions, as
+  `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
+  See [Exception details](config.html#exception-details).
 
 ### Fluentd
 
