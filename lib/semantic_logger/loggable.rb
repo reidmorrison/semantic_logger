@@ -63,8 +63,6 @@ module SemanticLogger
     end
 
     module ClassMethods
-      # A method name that can be written directly into the source of a method definition.
-      METHOD_NAME = /\A[A-Za-z_][A-Za-z0-9_]*[?!=]?\z/
       # Measure and log the performance of an instance method.
       #
       # Parameters:
@@ -92,29 +90,38 @@ module SemanticLogger
 
         # These values are written into the source of the generated method, so only accept values
         # that are certain to produce valid literals, rather than code.
-        unless method_name.to_s.match?(METHOD_NAME)
+        #
+        # Ruby writes a Symbol that is a valid method name, including operators such as `[]=` and
+        # non-ASCII identifiers, without quotes. Any other Symbol is quoted, as in `:"a; b"`.
+        # Instance, class, and global variable names are unquoted, but are not method names.
+        source_name = method_name.to_s.to_sym.inspect.delete_prefix(":")
+        if source_name.start_with?('"', "@", "$")
           raise(ArgumentError, "Invalid method name to measure: #{method_name.inspect}")
         end
-        unless log_exception.nil? || Log::LOG_EXCEPTION_OPTIONS.include?(log_exception)
+        unless Log.log_exception_option?(log_exception)
           raise(ArgumentError, "Invalid value:#{log_exception.inspect} for argument :log_exception")
+        end
+
+        duration = Float(min_duration, exception: false)
+        unless duration&.finite?
+          raise(ArgumentError, "Invalid value:#{min_duration.inspect} for argument :min_duration")
         end
 
         index              = Levels.index(level)
         level              = Levels.level(index)
         on_exception_level = Levels.level(Levels.index(on_exception_level)) if on_exception_level
-        min_duration       = Float(min_duration)
-        message            = message.to_s
+        message            = message&.to_s
         metric             = metric&.to_s
 
         logger_measure_module.module_eval(<<~MEASURE_METHOD, __FILE__, __LINE__ + 1)
-          def #{method_name}(*args, &block)
+          def #{source_name}(*args, &block)
             if logger.send(:level_index) <= #{index}
               logger.send(
                 :measure_method,
                 index:              #{index},
                 level:              #{level.inspect},
                 message:            #{message.inspect},
-                min_duration:       #{min_duration},
+                min_duration:       #{duration},
                 metric:             #{metric.inspect},
                 log_exception:      #{log_exception.inspect},
                 on_exception_level: #{on_exception_level.inspect}

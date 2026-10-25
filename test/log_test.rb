@@ -86,6 +86,17 @@ module SemanticLogger
             end
           end
 
+          it "accepts the same log_exception values that log_exception_option? accepts" do
+            [:full, :partial, :none, nil].each do |value|
+              assert SemanticLogger::Log.log_exception_option?(value), "value: #{value.inspect}"
+              log.assign(exception: exception, log_exception: value)
+            end
+            [:bogus, "full", 1].each do |value|
+              refute SemanticLogger::Log.log_exception_option?(value), "value: #{value.inspect}"
+              assert_raises(ArgumentError) { log.assign(exception: exception, log_exception: value) }
+            end
+          end
+
           it "coerces a non-exception into an ArgumentError" do
             log.assign(exception: "not an exception")
 

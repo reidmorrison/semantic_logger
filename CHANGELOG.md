@@ -81,8 +81,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - `logger_measure_method` validates its arguments before writing them into the source of the
   method it generates. `min_duration` and the method name were written verbatim, so a value
   read from configuration, such as `min_duration: "(system('...'); 0)"`, would run as code on
-  every call. A method name that is not an identifier, a `min_duration` that is not a number,
-  and an invalid `log_exception` or level now raise `ArgumentError`.
+  every call. A method name that is not a valid Ruby method name, a `min_duration` that is not a
+  finite number, and an invalid `log_exception` or level now raise `ArgumentError`.
 
 ### Added
 

@@ -55,6 +55,7 @@ module SemanticLogger
 
     # Values accepted for the :log_exception argument.
     LOG_EXCEPTION_OPTIONS = %i[full partial none].freeze
+    private_constant :LOG_EXCEPTION_OPTIONS
 
     # A finite real number, which #assign can compare with another one.
     REAL_NUMBER = ->(value) { value.is_a?(Numeric) && value.real? && value.finite? }
@@ -76,6 +77,11 @@ module SemanticLogger
     # Hash#key?, which unlike HashWithIndifferentAccess#key? only matches the exact Symbol key.
     HASH_KEY = Hash.instance_method(:key?)
     private_constant :HASH_KEY
+
+    # Whether the value is accepted for the :log_exception argument of #assign.
+    def self.log_exception_option?(value)
+      value.nil? || LOG_EXCEPTION_OPTIONS.include?(value)
+    end
 
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
