@@ -4538,23 +4538,47 @@ server, and so does not need the `syslog` gem, can use the same constants from
 
 #### Output changes
 
-* `:logfmt`: spaces, control characters, `=`, and `"` in keys are replaced with `_`. A tag such
-  as `second breakfast` is now emitted as `second_breakfast=true`.
+* `:logfmt`: spaces, control characters, `=`, `"`, and Unicode line separators in keys are
+  replaced with `_`, and invalid UTF-8 bytes are dropped. A tag such as `second breakfast` is now
+  emitted as `second_breakfast=true`. Keys that only match once encoded, or that only differ by
+  type (`:level` and `"level"`), are emitted once, keeping the earlier field, so a tag or named
+  tag can no longer add a second `level` or `message` field. A payload that is not a Hash is
+  emitted as a single `payload` field.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
 * `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the messages of the
-  exceptions that caused the logged exception are escaped too.
-* `:one_line`: carriage returns are stripped as well as newlines, and `escape_control_chars` is
-  honoured.
+  exceptions that caused the logged exception, and the backtrace lines, are escaped too. Invalid
+  UTF-8 bytes are dropped instead of the entry failing to format.
+* `:one_line`: line breaks are removed from every field (name, thread name, tags, named tags,
+  payload, message, and exception), carriage returns as well as newlines, and
+  `escape_control_chars` is honoured.
 * JSON based formatters: `Infinity` and `NaN` payload values are serialized as strings, and
-  structures nested deeper than 32 levels are replaced with their `#inspect` text, instead of the
-  whole entry being dropped.
+  structures nested deeper than 32 levels are replaced with a placeholder such as
+  `#<Hash nested too deeply>`, instead of the whole entry being dropped.
+* Hashes logged as the payload, for example `logger.info("Webhook", params)`: a key that is also
+  a log argument (`duration`, `metric_amount`, `backtrace`, `log_exception`, ...) is only used as
+  that argument when its value is valid for it. Otherwise it stays in the payload, where it was
+  previously consumed or made the call raise. A `nil` value is ignored. When an explicit
+  `payload:` is also given, its values win over other keys of the same name.
+* The HTTP appender and the appenders built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
+  `:signalfx`): the url in the error logged for a rejected request, and in `#inspect`, shows only
+  the scheme, host, and port.
 * The `:statsd` metrics appender sends a counter as a single `metric:amount|c` packet.
+
+#### Other behaviour changes
+
+* An async or batching appender discards a log message that it cannot format, instead of
+  retrying it. Discarded messages are reported to the internal logger and counted in the new
+  `failed` key of the appender's stats.
+* The file appender's `permissions:` option is only applied to a regular file owned by the
+  process, with a single hard link, that was not reached through a symbolic link. Otherwise it
+  warns once and leaves the permissions unchanged.
 
 #### Stricter `logger_measure_method` arguments
 
-`logger_measure_method` now raises `ArgumentError` for a method name that is not an identifier, a
-`min_duration` that is not a number, and an invalid `log_exception` or level. Numeric Strings,
+`logger_measure_method` now raises `ArgumentError` for a method name that is not a valid Ruby
+method name, a `min_duration` that is not a finite number, and an invalid `log_exception` or
+level. Numeric Strings,
 such as `min_duration: "100"`, are still accepted.
 
 ### Upgrading to Semantic Logger v5.1
