@@ -13,6 +13,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   port, omitting the user, password, path, and query string (any of which can carry a token or
   api key), and the response body is truncated to 512 bytes. The error raised for an invalid
   url no longer includes the url.
+- The `:statsd` metrics appender sends a counter as a single packet (`metric:amount|c`),
+  instead of one increment packet per unit of `metric_amount`. A large amount, for example
+  one derived from user input, could otherwise flood the network and stall the logging
+  thread. Amounts that are not finite (`Infinity`, `NaN`) are ignored.
 
 ### Added
 

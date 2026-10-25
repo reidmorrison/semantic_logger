@@ -45,12 +45,15 @@ module SemanticLogger
         if (duration = log.duration)
           @statsd.timing(metric, duration)
         else
-          amount = (log.metric_amount || 1).round
-          if amount.negative?
-            amount.abs.times { @statsd.decrement(metric) }
-          else
-            amount.times { @statsd.increment(metric) }
-          end
+          amount = log.metric_amount || 1
+          # Infinity and NaN cannot be counted.
+          return if amount.is_a?(Float) && !amount.finite?
+
+          amount = amount.round
+          # A single counter packet, whatever the size of the amount. Incrementing once per unit
+          # would let a large amount, such as one supplied by a user, flood the network and
+          # stall the logging thread.
+          @statsd.count(metric, amount) unless amount.zero?
         end
       end
 
