@@ -81,23 +81,27 @@ server, and so does not need the `syslog` gem, can use the same constants from
   emitted as a single `payload` field.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
-* `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the messages of the
-  exceptions that caused the logged exception, and the backtrace lines, are escaped too. Invalid
-  UTF-8 bytes are dropped instead of the entry failing to format.
+* `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,
+  thread name, payload, the messages of the exceptions that caused the logged exception, and the
+  backtrace lines are escaped too. Invalid UTF-8 bytes are dropped instead of the entry failing to
+  format. With escaping on, `:color` renders the payload plain and on one line, since Amazing
+  Print's colors and line breaks cannot be told apart from control characters in the data.
 * `:one_line`: line breaks are removed from every field (name, thread name, tags, named tags,
   payload, message, and exception), carriage returns as well as newlines, and
   `escape_control_chars` is honoured.
 * JSON based formatters: `Infinity` and `NaN` payload values are serialized as strings, and
   structures nested deeper than 32 levels are replaced with a placeholder such as
-  `#<Hash nested too deeply>`, instead of the whole entry being dropped.
+  `#<Hash nested too deeply>`, instead of the whole entry being dropped. A `Struct` or `Data`
+  value is written as an object of its members, as Rails already does, instead of its `#inspect`
+  text.
 * Hashes logged as the payload, for example `logger.info("Webhook", params)`: a key that is also
   a log argument (`duration`, `metric_amount`, `backtrace`, `log_exception`, ...) is only used as
   that argument when its value is valid for it. Otherwise it stays in the payload, where it was
   previously consumed or made the call raise. A `nil` value is ignored. When an explicit
   `payload:` is also given, its values win over other keys of the same name.
 * The HTTP appender and the appenders built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
-  `:signalfx`): the url in the error logged for a rejected request, and in `#inspect`, shows only
-  the scheme, host, and port.
+  `:signalfx`): the url in the error logged for a rejected request shows only the scheme, host,
+  and port, and `#inspect` shows only the object address and that url.
 * The `:statsd` metrics appender sends a counter as a single `metric:amount|c` packet.
 
 #### Other behaviour changes
@@ -113,8 +117,7 @@ server, and so does not need the `syslog` gem, can use the same constants from
 
 `logger_measure_method` now raises `ArgumentError` for a method name that is not a valid Ruby
 method name, a `min_duration` that is not a finite number, and an invalid `log_exception` or
-level. Numeric Strings,
-such as `min_duration: "100"`, are still accepted.
+level. Numeric Strings, such as `min_duration: "100"`, are still accepted.
 
 ### Upgrading to Semantic Logger v5.1
 
