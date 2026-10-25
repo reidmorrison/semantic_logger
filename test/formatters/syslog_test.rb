@@ -138,6 +138,30 @@ module SemanticLogger
             assert_includes packet, "Cause: ArgumentError: x\\n#{forged}"
           end
 
+          it "keeps a record whose cause has invalid UTF-8 in its message" do
+            begin
+              begin
+                raise ArgumentError, "bad \xff input"
+              rescue ArgumentError
+                raise "wrapped"
+              end
+            rescue StandardError => e
+              e.set_backtrace(["app.rb:2"])
+              e.cause.set_backtrace(["app.rb:1"])
+              log.exception = e
+            end
+            packet = formatter.call(log, appender.logger)
+
+            assert_includes packet, "Cause: ArgumentError: bad  input"
+          end
+
+          it "keeps a record whose message has invalid UTF-8" do
+            log.message = "bad \xff\ninput"
+            packet      = formatter.call(log, appender.logger)
+
+            assert_includes packet, "bad \\ninput"
+          end
+
           it "preserves embedded newlines when escaping is disabled" do
             appender.formatter = SemanticLogger::Formatters::Syslog.new(escape_control_chars: false)
             formatter          = appender.formatter

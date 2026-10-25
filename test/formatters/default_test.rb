@@ -219,6 +219,36 @@ module SemanticLogger
             assert_includes output, "Cause: ArgumentError: bad input\\n#{forged}"
             refute(output.lines.any? { |line| line.start_with?(forged) }, "cause message forged a log line")
           end
+
+          it "drops invalid UTF-8 from the message of a cause instead of failing" do
+            begin
+              begin
+                raise ArgumentError, "bad \xff\ninput"
+              rescue ArgumentError
+                raise "wrapped"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_includes formatter.exception, "Cause: ArgumentError: bad \\ninput"
+          end
+
+          it "drops invalid UTF-8 from the exception message instead of failing" do
+            begin
+              raise "bad \xff\ninput"
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_match(/\A-- Exception: RuntimeError: bad \\ninput\n/, formatter.exception)
+          end
+
+          it "drops invalid UTF-8 from the message instead of failing" do
+            log.message = "bad \xff\ninput"
+
+            assert_equal "-- bad \\ninput", formatter.message
+          end
         end
 
         describe "exception backtrace" do
