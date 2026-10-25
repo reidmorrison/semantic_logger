@@ -62,7 +62,14 @@ module SemanticLogger
       def handle_payload
         return unless @raw.key? :payload
 
-        @parsed.merge!(@raw[:payload])
+        payload = @raw[:payload]
+        # A payload is normally a Hash, but a log call can supply any value, so emit anything else
+        # as a single field rather than failing to format the whole entry.
+        if payload.is_a?(Hash)
+          @parsed.merge!(payload)
+        else
+          @parsed[:payload] = payload
+        end
       end
 
       def handle_exception

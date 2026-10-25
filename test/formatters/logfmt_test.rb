@@ -144,6 +144,12 @@ module SemanticLogger
               assert_includes text, %( Mozilla_level__fatal__name__Billing__injected_line_true=true)
             end
 
+            it "formats a payload that is not a Hash as a single field" do
+              log.payload = "not a hash"
+
+              assert_match(/ payload="not a hash"/, formatter.call(log, nil))
+            end
+
             it "cannot inject fields through a payload or named tag key" do
               log.named_tags = {"a b=c" => "1"}
               log.payload    = {"x\ny" => "2", "" => "3"}
