@@ -15,6 +15,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- `#inspect` on the HTTP appender and the appenders built on it (`:elasticsearch_http`,
+  `:splunk_http`, `:loki`, and the `:signalfx` metrics appender) no longer shows credentials, for
+  example when `SemanticLogger.appenders` is printed in a console. The password, request
+  headers (such as `Authorization` or a token header), and the url, proxy url, and query string
+  are omitted; the server, port, and path are still shown.
 - The Syslog appender works on Ruby 3.4 and later. Ruby 3.4 moved `syslog` from the default
   gems to the bundled gems, and the appender required it even when logging to a remote syslogd,
   which does not use it. Now only a local syslog daemon needs `gem "syslog"`, and a clear error

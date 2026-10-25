@@ -224,7 +224,27 @@ module SemanticLogger
         false
       end
 
+      # Instance variables that can hold credentials: the password, the request headers (for example
+      # an `Authorization` or token header), and the url, proxy url, and query string, which can
+      # carry a user name and password or a token.
+      CREDENTIAL_VARIABLES = %i[@password @header @url @proxy_url @proxy_uri @query].freeze
+      private_constant :CREDENTIAL_VARIABLES
+
+      # Ruby 4.0's Kernel#inspect honours #instance_variables_to_inspect. Earlier Rubies ignore it,
+      # so inspect the same instance variables here.
+      unless Kernel.private_method_defined?(:instance_variables_to_inspect)
+        def inspect
+          variables = instance_variables_to_inspect.map { |name| " #{name}=#{instance_variable_get(name).inspect}" }
+          "#<#{self.class}#{variables.join(',')}>"
+        end
+      end
+
       private
+
+      # Keep credentials out of #inspect, for example when the appenders are listed in a console.
+      def instance_variables_to_inspect
+        instance_variables - CREDENTIAL_VARIABLES
+      end
 
       # Use JSON Formatter by default
       def default_formatter
