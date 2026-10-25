@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+### Security
+
+- The HTTP appender, and the appenders built on it (`:elasticsearch_http`, `:splunk_http`,
+  `:loki`, and the `:signalfx` metrics appender), no longer write credentials to the internal
+  logger when the server rejects a request. The logged url omits the user, password, and query
+  string (which can carry an api key), and the response body is truncated to 512 bytes.
+
 ### Added
 
 - Exceptions are logged with the detail that Ruby's `Exception#detailed_message` adds to the
@@ -47,10 +54,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `:syslog_cee` raised `ArgumentError`.
 - `#inspect` on the HTTP appender and the appenders built on it (`:elasticsearch_http`,
   `:splunk_http`, `:loki`, and the `:signalfx` metrics appender) no longer shows credentials, for
-  example when `SemanticLogger.appenders` is printed in a console. Only the name, level, server,
-  port, path, compression and timeout settings are shown, so the password, request headers (such
-  as `Authorization` or a token header), the url, proxy url, query string and SSL options are
-  omitted, as is anything a subclass adds. The output has the same form on every Ruby version.
+  example when `SemanticLogger.appenders` is printed in a console. Only the object address and
+  the scheme, host, and port of the url are shown, so the password, request headers (such as
+  `Authorization` or a token header), the user, password, path, and query string of the url, the
+  proxy url, and SSL options are omitted, as is anything a subclass adds.
 - The Syslog appender works on Ruby 3.4 and later. Ruby 3.4 moved `syslog` from the default
   gems to the bundled gems, and the appender required it even when logging to a remote syslogd,
   which does not use it. Now only a local syslog daemon needs `gem "syslog"`, and a clear error
