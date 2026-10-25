@@ -533,6 +533,14 @@ Or over UDP (the `syslog_protocol` gem is required):
 SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514")
 ~~~
 
+Set the facility with one of Ruby's `::Syslog::LOG_*` facility constants (the default is
+`::Syslog::LOG_USER`). For remote syslog without the `syslog` gem, the same constants are available
+from `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatters::Syslog::LOG_LOCAL0`:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facility: ::Syslog::LOG_LOCAL0)
+~~~
+
 Add a filter to exclude noisy entries such as health checks:
 
 ~~~ruby

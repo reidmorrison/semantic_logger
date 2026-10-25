@@ -26,6 +26,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Remote syslog over TCP or UDP sends the configured facility. The `facility:` option takes a
+  `::Syslog::LOG_*` constant, which is the facility number shifted left by 3 bits, but it was sent
+  unconverted, so the default `::Syslog::LOG_USER` went out as facility `uucp` (`<69>` for an
+  `:info` message instead of `<13>`), and most other constants, such as `::Syslog::LOG_LOCAL0`,
+  raised `ArgumentError` while logging. `facility:` now only accepts the `::Syslog::LOG_*`
+  facility constants, and other values raise `ArgumentError` when the appender is created, except
+  a bare 0, 8, or 16, which are read as `LOG_KERN`, `LOG_USER`, or `LOG_MAIL`. Syslog servers that
+  route on facility, and configurations that passed a bare facility number, may need updating; see the
+  [v5.2 upgrade notes](docs/upgrading.md).
 - `#inspect` on the HTTP appender and the appenders built on it (`:elasticsearch_http`,
   `:splunk_http`, `:loki`, and the `:signalfx` metrics appender) no longer shows credentials, for
   example when `SemanticLogger.appenders` is printed in a console. Only the name, level, server,

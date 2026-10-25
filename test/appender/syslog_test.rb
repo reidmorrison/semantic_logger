@@ -36,7 +36,8 @@ module Appender
           end
         end
 
-        assert_match(/<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message)
+        # Facility user (1) and severity info (6): 1 * 8 + 6
+        assert_match(/<14>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message)
       end
 
       it "handle remote syslog over UDP" do
@@ -46,7 +47,7 @@ module Appender
           syslog_appender.debug "AppenderSyslogTest log message"
         end
 
-        assert_match(/<70>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
+        assert_match(/<14>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
       # Should be able to log each level.

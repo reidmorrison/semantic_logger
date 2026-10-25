@@ -29,7 +29,11 @@ module SemanticLogger
         describe "constants" do
           # The formatter defines these itself so that remote syslog works without the syslog gem.
           it "match the values of the ::Syslog constants" do
-            %i[LOG_CRIT LOG_ERR LOG_WARNING LOG_NOTICE LOG_INFO LOG_DEBUG LOG_USER].each do |name|
+            names = %i[LOG_CRIT LOG_ERR LOG_WARNING LOG_NOTICE LOG_INFO LOG_DEBUG
+                       LOG_KERN LOG_USER LOG_MAIL LOG_DAEMON LOG_AUTH LOG_SYSLOG LOG_LPR LOG_NEWS
+                       LOG_UUCP LOG_CRON LOG_AUTHPRIV LOG_FTP] + (0..7).map { |i| :"LOG_LOCAL#{i}" }
+
+            names.each do |name|
               assert_equal ::Syslog.const_get(name), SemanticLogger::Formatters::Syslog.const_get(name), name
             end
           end
@@ -135,7 +139,37 @@ module SemanticLogger
           end
         end
 
+        describe ".facility_number" do
+          it "converts each ::Syslog facility constant to its facility number" do
+            assert_equal 0, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_KERN)
+            assert_equal 1, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_USER)
+            assert_equal 16, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_LOCAL0)
+            assert_equal 23, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_LOCAL7)
+          end
+
+          it "rejects a value that is not a ::Syslog facility constant" do
+            [1, 13, 23 << 4, "user", nil].each do |facility|
+              assert_raises(ArgumentError) { SemanticLogger::Formatters::Syslog.facility_number(facility) }
+            end
+          end
+
+          it "rejects an invalid facility when the formatter is created" do
+            assert_raises(ArgumentError) { SemanticLogger::Formatters::Syslog.new(facility: 1) }
+          end
+        end
+
         describe "#call" do
+          # PRI is facility number * 8 + severity; info maps to LOG_NOTICE (5) by default.
+          it "sends the user facility by default" do
+            assert_match(/\A<13>/, formatter.call(log, appender.logger))
+          end
+
+          it "sends the supplied facility" do
+            local0 = SemanticLogger::Formatters::Syslog.new(facility: ::Syslog::LOG_LOCAL0, max_size: 1024)
+
+            assert_match(/\A<133>/, local0.call(log, appender.logger))
+          end
+
           it "wraps the message in a syslog packet" do
             packet = formatter.call(log, appender.logger)
 

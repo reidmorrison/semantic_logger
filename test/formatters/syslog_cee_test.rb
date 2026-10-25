@@ -62,6 +62,15 @@ module SemanticLogger
         end
 
         describe "call" do
+          # PRI is facility number * 8 + severity: user (1) and debug, which maps to LOG_INFO (6).
+          it "sends the user facility by default" do
+            assert_match(/\A<14>/, formatter.call(log, appender.logger))
+          end
+
+          it "rejects an invalid facility when the formatter is created" do
+            assert_raises(ArgumentError) { SemanticLogger::Formatters::SyslogCee.new(facility: 1) }
+          end
+
           it "uses CEE format" do
             assert_match(/@cee:/, formatter.call(log, appender.logger))
           end

@@ -9,6 +9,7 @@ module SemanticLogger
       #
       # Parameters:
       #   facility: [Integer]
+      #     One of the ::Syslog::LOG_* facility constants, for example ::Syslog::LOG_LOCAL0.
       #     Default: SemanticLogger::Formatters::Syslog::LOG_USER
       #
       #   level_map: [Hash | SemanticLogger::Formatters::Syslog::LevelMap]
@@ -21,6 +22,8 @@ module SemanticLogger
                      max_size: Integer)
         SemanticLogger::Formatters::Syslog.require_syslog_protocol
 
+        # Reject an invalid facility when the formatter is created, rather than when it first logs.
+        SemanticLogger::Formatters::Syslog.facility_number(facility)
         @facility  = facility
         @level_map = level_map.is_a?(SemanticLogger::Formatters::Syslog::LevelMap) ? level_map : SemanticLogger::Formatters::Syslog::LevelMap.new(level_map)
         @max_size = max_size
@@ -42,7 +45,7 @@ module SemanticLogger
       def create_syslog_packet(message)
         packet          = SyslogProtocol::Packet.new
         packet.hostname = logger.host
-        packet.facility = facility
+        packet.facility = SemanticLogger::Formatters::Syslog.facility_number(facility)
         packet.tag      = logger.application.delete(" ")
         packet.content  = message
         packet.time     = log.time

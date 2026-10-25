@@ -3,7 +3,7 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.1 appender deprecations and the file appender's eager open.
+  v5.2 remote syslog facility fix.
 ---
 
 
@@ -11,6 +11,42 @@ description: >-
 
 * TOC
 {:toc}
+
+### Upgrading to Semantic Logger v5.2
+
+#### Remote syslog sends the configured facility
+
+When logging to a remote syslog server over TCP or UDP, earlier versions sent the wrong facility.
+The `facility:` option is documented as one of Ruby's `::Syslog::LOG_*` facility constants, but the
+value was sent as if it were already the syslog protocol's facility number. Those constants are the
+facility number shifted left by 3 bits, so the default `::Syslog::LOG_USER` (8) went out as facility
+8, which is `uucp`, instead of facility 1, `user`. For example a `:info` message, at the default
+`LOG_NOTICE` severity, was sent as `<69>` rather than `<13>`. Logging to a local syslog daemon was
+not affected.
+
+v5.2 sends the facility the constant names. If your syslog server filters or routes on facility,
+for example an rsyslog rule for `uucp.*`, change it to the facility you configured: `user` unless
+you set one.
+
+The `facility:` option now only accepts the `::Syslog::LOG_*` facility constants, and raises
+`ArgumentError` for other values when the appender is created. Previously a constant other than
+`::Syslog::LOG_KERN`, `::Syslog::LOG_USER`, or `::Syslog::LOG_MAIL` raised `ArgumentError` while
+logging. If you passed a bare facility number to get around that, switch to the constant. Check
+this even if nothing raises: a bare 0, 8, or 16 is now read as `::Syslog::LOG_KERN`,
+`::Syslog::LOG_USER`, or `::Syslog::LOG_MAIL`, so `16`, which used to send `local0`, now sends
+`mail`:
+
+~~~ruby
+# Before (16 was sent as facility local0, and is now read as ::Syslog::LOG_MAIL):
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facility: 16)
+
+# After:
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facility: ::Syslog::LOG_LOCAL0)
+~~~
+
+This applies to the `:syslog` and `:syslog_cee` formatters. An application that logs only to a remote
+server, and so does not need the `syslog` gem, can use the same constants from
+`SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatters::Syslog::LOG_LOCAL0`.
 
 ### Upgrading to Semantic Logger v5.1
 
