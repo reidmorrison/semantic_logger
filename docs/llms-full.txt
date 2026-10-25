@@ -1715,8 +1715,12 @@ Notes:
 * The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
   forge or split a record.
 * Keys (from tags, named tags, and the payload) cannot be quoted in logfmt, so spaces, control
-  characters, `=`, and `"` in a key are replaced with `_`. For example the tag `second breakfast`
-  is emitted as `second_breakfast=true`.
+  characters (including the Unicode line and paragraph separators), `=`, and `"` in a key are
+  replaced with `_`, and invalid UTF-8 is dropped. For example the tag `second breakfast` is
+  emitted as `second_breakfast=true`.
+* Keys that only match once encoded, or that only differ by type (such as `:level` and
+  `"level"`), are emitted once, keeping the earlier field. For example the tags `message` and
+  `duration ms` do not replace the `message` and `duration_ms` fields.
 * Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
   conflict the payload wins.
 * Unnamed tags are emitted as keys with a `true` value.

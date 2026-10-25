@@ -155,11 +155,119 @@ module SemanticLogger
               assert_includes text, %( _="3")
             end
 
-            it "emits a field once when keys only differ by type" do
+            it "emits a field once when keys only differ by type, keeping the core field" do
               log.payload = {"level" => "debug"}
               text        = formatter.call(log, nil)
 
               assert_equal 1, text.scan(/(?:\A| )level=/).count
+              assert_includes text, %(level="info")
+            end
+
+            it "replaces the Unicode line and paragraph separators" do
+              log.tags = ["a b c\u0085d"]
+              text     = formatter.call(log, nil)
+
+              assert_includes text, " a_b_c_d=true"
+            end
+
+            it "drops invalid UTF-8 from a tag" do
+              log.tags = ["ab\xFFc"]
+              text     = formatter.call(log, nil)
+
+              assert_includes text, " abc=true"
+            end
+
+            it "drops invalid UTF-8 from a payload key" do
+              log.payload = {"k\xFF" => "v"}
+              text        = formatter.call(log, nil)
+
+              assert_includes text, %( k="v")
+            end
+
+            it "converts a binary key to UTF-8 alongside a non-ASCII value" do
+              log.payload = {"k\xE9".b => "café"}
+              text        = formatter.call(log, nil)
+
+              assert_equal Encoding::UTF_8, text.encoding
+              assert_includes text, %( k="café")
+            end
+          end
+
+          describe "given keys that only collide once encoded" do
+            let(:log) do
+              log = SemanticLogger::Log.new("DefaultTest", :info)
+              log.time       = log_time
+              log.message    = "real message"
+              log.duration   = 12.5
+              log.tags       = tags
+              log.named_tags = named_tags
+              log
+            end
+
+            let(:core_fields) do
+              %(timestamp="2020-07-20T08:32:05.375276Z" level="info" name="DefaultTest" message="real message")
+            end
+
+            describe "tags named like core fields" do
+              let(:tags) do
+                %w[message level name timestamp tag]
+              end
+
+              it "keeps the core fields" do
+                text = formatter.call(log, nil)
+
+                assert_equal core_fields, text[0, core_fields.size]
+                assert_includes text, %( tag="success")
+                refute_includes text, "=true"
+              end
+            end
+
+            describe "named tags named like core fields" do
+              let(:named_tags) do
+                {"message" => "forged", "level" => "fatal", "duration_ms" => "0"}
+              end
+
+              it "keeps the core fields" do
+                text = formatter.call(log, nil)
+
+                assert_equal core_fields, text[0, core_fields.size]
+                assert_includes text, " duration_ms=12.5"
+                refute_includes text, "forged"
+                refute_includes text, "fatal"
+              end
+            end
+
+            describe "keys that collide after sanitizing" do
+              let(:tags) do
+                ["duration ms"]
+              end
+
+              let(:named_tags) do
+                {"a b" => "first"}
+              end
+
+              it "keeps the first field" do
+                log.payload = {"a=b" => "second"}
+                text        = formatter.call(log, nil)
+
+                assert_equal core_fields, text[0, core_fields.size]
+                assert_includes text, " duration_ms=12.5"
+                assert_includes text, %( a_b="first")
+                refute_includes text, "second"
+                refute_includes text, "=true"
+              end
+            end
+
+            describe "a payload with the same keys as the core fields" do
+              it "overrides the core fields, as documented" do
+                log.payload = {name: "shrek", message: "from payload", duration_ms: 1}
+                text        = formatter.call(log, nil)
+
+                assert_includes text, %(level="info" name="shrek" message="from payload")
+                assert_includes text, " duration_ms=1 "
+                assert_equal 1, text.scan(/(?:\A| )name=/).count
+                assert_equal 1, text.scan(/(?:\A| )message=/).count
+              end
             end
           end
 

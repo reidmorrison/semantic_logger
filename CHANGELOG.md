@@ -35,7 +35,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:logfmt` formatter replaces spaces, control characters, `=`, and `"` in keys with `_`.
   Keys come from tags, named tags, and the payload, and were written verbatim, so a tag such as
   a User-Agent could inject fields (for example `level="fatal"`) or a whole new line. Keys that
-  only differ by type, such as `:level` and `"level"`, are now emitted once.
+  only differ by type, such as `:level` and `"level"`, are now emitted once, keeping the earlier
+  field.
 
 ### Added
 
