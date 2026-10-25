@@ -134,10 +134,14 @@ an existing log file:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
 
-The permissions are only applied to a regular file owned by the process. A log file that is a
-symbolic link (for example to `/dev/stdout`) is still written to, but the permissions of whatever
-it points at are left alone, so that a link planted in a shared log directory cannot be used to
-loosen the permissions of another file. Keep the log directory writable only by the application.
+The permissions are only applied when the log file name names a regular file directly, not
+through a symbolic link, and that file is owned by the process and has a single hard link. A log
+file that is a symbolic link (for example to `/dev/stdout`) is still written to, but the
+permissions of whatever it points at are left alone, so that a symbolic or hard link planted in a
+shared log directory cannot be used to loosen the permissions of another file. The file name is
+also checked to still name the file that was opened, so swapping it in between has no effect.
+When the permissions are not applied the appender logs a warning, once, giving the reason. Keep
+the log directory writable only by the application.
 
 ### Dependencies and supply chain
 

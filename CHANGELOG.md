@@ -74,7 +74,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   ignored. An `on_exception_level` given as a String or Integer is now stored as its Symbol, and a
   supplied `backtrace` Array is no longer modified. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
 - The file appender's `permissions:` option is only applied to a regular file owned by the
-  process, and not through a symbolic link. Previously a link planted in a writable log
+  process with a single hard link, and not through a symbolic link or to a file swapped in after
+  opening; otherwise it logs a warning once. Previously a link planted in a writable log
   directory made the appender change the permissions of the file it pointed at, for example
   loosening a `0600` private key to `0644`. Writing through a symbolic link still works.
 

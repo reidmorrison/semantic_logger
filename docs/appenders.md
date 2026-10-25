@@ -161,6 +161,11 @@ file is created and to an existing log file:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
 
+The permissions are only applied to a regular file owned by the process with a single hard link,
+and not through a symbolic link. A log file linked to `/dev/stdout`, for example, is still written
+to, but the appender leaves the permissions alone and logs a warning once. See
+[Log file permissions](security.html#log-file-permissions).
+
 ### IO Streams
 
 Log to any IO stream instance, such as `$stdout` or `$stderr`:

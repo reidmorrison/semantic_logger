@@ -77,7 +77,9 @@ module SemanticLogger
       #     Octal file permissions to apply to the log file.
       #     Log files frequently contain sensitive information, so restrict access
       #     by supplying for example `0o640` (owner read/write, group read).
-      #     Applied both when the file is created and to an existing log file.
+      #     Applied both when the file is created and to an existing log file, but only
+      #     to a regular file owned by the process, with a single hard link, that the
+      #     file_name names directly rather than through a symbolic link.
       #     Default: nil (use the process umask, the standard Ruby behavior)
       #
       #   :retry_count [Integer]
@@ -232,19 +234,42 @@ module SemanticLogger
 
       attr_writer :log_count, :log_size, :current_file_name, :reopen_at
 
-      # Apply the permissions to the open log file, but only when it is a regular file that this
-      # process owns and that was not reached through a symbolic link.
+      # Apply the permissions to the open log file, but only when it is safe to do so. See
+      # #permissions_refusal for the conditions.
       #
       # Opening follows symbolic links, so that a log file can for example be linked to
       # /dev/stdout. Changing the permissions of whatever the link points at could however loosen
       # them on an unrelated file, such as a private key linked into a shared log directory.
+      #
+      # The warning is only logged once per appender, since the file is reopened on every
+      # rotation, fork, and write retry.
       def apply_permissions
-        stat = @file.stat
-        if stat.file? && stat.uid == ::Process.euid && !::File.symlink?(current_file_name)
-          @file.chmod(permissions)
-        else
-          logger.warn("Not applying permissions to #{current_file_name}: not a regular file owned by this process")
-        end
+        reason = permissions_refusal
+        return @file.chmod(permissions) unless reason
+        return if @permissions_warned
+
+        @permissions_warned = true
+        logger.warn("Not applying permissions to #{current_file_name}: #{reason}")
+      end
+
+      # Returns why the permissions must not be applied to the open log file, or nil when they can.
+      #
+      # The path must not be a symbolic link and must still name the file that was opened, so that
+      # swapping the path between opening and checking it cannot redirect the chmod. The open file
+      # must be a regular file owned by this process, with a single hard link, since a hard link
+      # planted in the log directory is otherwise indistinguishable from the file it links to.
+      def permissions_refusal
+        stat      = @file.stat
+        path_stat = ::File.lstat(current_file_name)
+        return "it is a symbolic link" if path_stat.symlink?
+        return "it is not a regular file" unless stat.file?
+        return "it is not owned by this process" unless stat.uid == ::Process.euid
+        return "it has more than one hard link" unless stat.nlink == 1
+        return "it changed after it was opened" unless path_stat.dev == stat.dev && path_stat.ino == stat.ino
+
+        nil
+      rescue SystemCallError => e
+        "it could not be checked (#{e.message})"
       end
 
       def time_to_reopen?
