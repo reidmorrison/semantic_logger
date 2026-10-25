@@ -124,7 +124,7 @@ module SemanticLogger
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
       def initialize(url: "syslog://localhost",
                      facility: SemanticLogger::Formatters::Syslog::LOG_USER,
-                     max_size: 1024,
+                     max_size: SemanticLogger::Formatters::Syslog::DEFAULT_MAX_SIZE,
                      level_map: SemanticLogger::Formatters::Syslog::LevelMap.new,
                      options: nil,
                      tcp_client: {},

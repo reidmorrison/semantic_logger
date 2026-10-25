@@ -527,6 +527,13 @@ The default packet size is 1024 bytes:
 SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514", max_size: 2048)
 ~~~
 
+When you choose the formatter yourself, pass `max_size` to the formatter instead (it also defaults to
+1024 bytes):
+
+~~~ruby
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", formatter: {syslog_cee: {max_size: 2048}})
+~~~
+
 Or over UDP (the `syslog_protocol` gem is required):
 
 ~~~ruby

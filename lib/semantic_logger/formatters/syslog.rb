@@ -36,6 +36,9 @@ module SemanticLogger
       LOG_LOCAL6   = 22 << 3
       LOG_LOCAL7   = 23 << 3
 
+      # Default maximum size of a syslog packet, in bytes, as for the syslog appender.
+      DEFAULT_MAX_SIZE = 1024
+
       # The highest facility the syslog protocol can encode.
       MAX_FACILITY = LOG_LOCAL7
 
@@ -119,10 +122,14 @@ module SemanticLogger
       #     Default: true (unlike other formatters, since syslog frames records
       #     with a separator)
       #
+      #   max_size: [Integer]
+      #     Maximum size of each syslog packet, in bytes.
+      #     Default: DEFAULT_MAX_SIZE (1024)
+      #
       #   Example:
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
-      def initialize(facility: LOG_USER, level_map: LevelMap.new, max_size: Integer,
+      def initialize(facility: LOG_USER, level_map: LevelMap.new, max_size: DEFAULT_MAX_SIZE,
                      escape_control_chars: true, **args)
         self.class.require_syslog_protocol
 

@@ -172,6 +172,25 @@ module SemanticLogger
           end
         end
 
+        describe "max_size" do
+          it "defaults to 1024 bytes" do
+            assert_equal 1024, SemanticLogger::Formatters::Syslog.new.max_size
+          end
+
+          it "formats with the default when none is supplied" do
+            packet = SemanticLogger::Formatters::Syslog.new.call(log, appender.logger)
+
+            assert_includes packet, "hello world"
+          end
+
+          it "truncates a packet to max_size" do
+            log.message = "x" * 2000
+            packet      = SemanticLogger::Formatters::Syslog.new(max_size: 100).call(log, appender.logger)
+
+            assert_equal 100, packet.bytesize
+          end
+        end
+
         describe "#call" do
           # PRI is facility number * 8 + severity; info maps to LOG_NOTICE (5) by default.
           it "sends the user facility by default" do

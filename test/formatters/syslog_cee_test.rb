@@ -82,6 +82,13 @@ module SemanticLogger
             assert_raises(ArgumentError) { SemanticLogger::Formatters::SyslogCee.new(facility: 1) }
           end
 
+          it "formats with the default max_size of 1024 bytes when none is supplied" do
+            formatter = SemanticLogger::Formatters::SyslogCee.new
+
+            assert_equal 1024, formatter.max_size
+            assert_match(/@cee:/, formatter.call(log, appender.logger))
+          end
+
           it "uses CEE format" do
             assert_match(/@cee:/, formatter.call(log, appender.logger))
           end
