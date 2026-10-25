@@ -9,8 +9,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 - The HTTP appender, and the appenders built on it (`:elasticsearch_http`, `:splunk_http`,
   `:loki`, and the `:signalfx` metrics appender), no longer write credentials to the internal
-  logger when the server rejects a request. The logged url omits the user, password, and query
-  string (which can carry an api key), and the response body is truncated to 512 bytes.
+  logger when the server rejects a request. The logged url keeps only the scheme, host, and
+  port, omitting the user, password, path, and query string (any of which can carry a token or
+  api key), and the response body is truncated to 512 bytes. The error raised for an invalid
+  url no longer includes the url.
 
 ### Added
 

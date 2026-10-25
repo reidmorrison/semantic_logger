@@ -127,7 +127,7 @@ module Appender
         end
 
         it "shows only the redacted url" do
-          assert_match(/ url="https:\/\/localhost:8088\/path">\z/, appender_with_credentials.inspect)
+          assert_match(%r{ url="https://localhost:8088">\z}, appender_with_credentials.inspect)
         end
 
         it "includes the object address, like Kernel#inspect" do
@@ -252,8 +252,8 @@ module Appender
           end
         end
 
-        it "redacts the user, password, and query from the url" do
-          assert_equal "https://logs.example.com:9200/path", appender.redacted_url
+        it "redacts the user, password, path, and query from the url" do
+          assert_equal "https://logs.example.com:9200", appender.redacted_url
         end
 
         it "omits the default port from the redacted url" do
@@ -261,7 +261,35 @@ module Appender
             SemanticLogger::Appender::Http.new(url: "https://user:pass@logs.example.com/path")
           end
 
-          assert_equal "https://logs.example.com/path", appender.redacted_url
+          assert_equal "https://logs.example.com", appender.redacted_url
+        end
+
+        it "redacts a token carried in the path" do
+          appender = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Http.new(url: "https://collectors.example.com/receiver/v1/http/SECRETCODE")
+          end
+
+          assert_equal "https://collectors.example.com", appender.redacted_url
+          refute_includes appender.inspect, "SECRETCODE"
+        end
+
+        it "does not include credentials in the error for a url without a host" do
+          error = assert_raises(ArgumentError) do
+            SemanticLogger::Appender::Http.new(url: "https//elastic:S3cr3t@logs.example.com/path")
+          end
+
+          assert_includes error.message, "Invalid format for :url"
+          refute_includes error.message, "S3cr3t"
+        end
+
+        it "does not include credentials in the error for a url that cannot be parsed" do
+          error = assert_raises(URI::InvalidURIError) do
+            SemanticLogger::Appender::Http.new(url: "https://elastic:S3cr 3t@logs.example.com/path")
+          end
+
+          assert_includes error.message, "Invalid :url"
+          refute_includes error.message, "S3cr"
+          assert_nil error.cause
         end
 
         it "does not log credentials when the server rejects a request" do
@@ -276,10 +304,11 @@ module Appender
           end
 
           assert message = capture.events.find { |event| event.level == :error }&.message
-          assert_includes message, "https://logs.example.com:9200/path"
+          assert_includes message, "https://logs.example.com:9200 "
           assert_includes message, "code: 503"
           refute_includes message, "S3cr3t"
           refute_includes message, "0123456789abcdef"
+          refute_includes message, "/path"
           assert_operator message.size, :<, 700, "response body should be truncated"
         end
 

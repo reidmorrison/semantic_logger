@@ -36,6 +36,9 @@ module SemanticLogger
       # Maximum number of bytes of an error response body to write to the internal logger.
       MAX_LOGGED_RESPONSE_BODY = 512
 
+      # Describes a valid url in the error raised for an invalid one.
+      URL_FORMAT_HINT = "Should be similar to: 'http://hostname:port/path'".freeze
+
       # Create HTTP(S) log appender
       #
       # Parameters:
@@ -142,11 +145,10 @@ module SemanticLogger
         }.merge(header)
         @header["Content-Encoding"] = "gzip" if @compress
 
-        uri     = URI.parse(@url)
+        uri     = parse_url(@url)
         @server = uri.host
-        unless @server
-          raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'")
-        end
+        # The url is left out of the message, since it can hold a user and password.
+        raise(ArgumentError, "Invalid format for :url, it has no host. #{URL_FORMAT_HINT}") unless @server
 
         @port     = uri.port
         @username = uri.user if !@username && uri.user
@@ -227,14 +229,17 @@ module SemanticLogger
         false
       end
 
-      # Returns [String] the url without any credentials: the user and password, and the
-      # query string, which some log servers use to carry an api key. Safe to log.
+      # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
+      #
+      # Everything else is left out, since log servers carry credentials in each part of it:
+      # the user and password, the query string (for example a Datadog api key), and the path
+      # (for example the token at the end of a Sumo Logic HTTP source url).
       def redacted_url
         @redacted_url ||=
           begin
             uri  = URI.parse(url)
             port = uri.port == uri.default_port ? nil : uri.port
-            uri.class.build(scheme: uri.scheme, host: uri.host, port: port, path: uri.path).to_s
+            uri.class.build(scheme: uri.scheme, host: uri.host, port: port).to_s
           end
       end
 
@@ -247,6 +252,16 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [URI] the parsed url.
+      #
+      # Raises URI::InvalidURIError without the url in its message, or as its cause, since the
+      # url can hold a user and password.
+      def parse_url(url)
+        URI.parse(url)
+      rescue URI::InvalidURIError
+        raise(URI::InvalidURIError, "Invalid :url, it is not a valid URI. #{URL_FORMAT_HINT}", cause: nil)
+      end
 
       # Use JSON Formatter by default
       def default_formatter
