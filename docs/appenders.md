@@ -369,6 +369,8 @@ Notes:
 * Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
   conflict the payload wins.
 * Unnamed tags are emitted as keys with a `true` value.
+* A nested value, such as a Hash or an Array in the payload, is emitted as its JSON text, quoted:
+  `user="{\"id\":7}"`.
 * `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
   exception (the exception class, message, and backtrace are then included as fields).
 

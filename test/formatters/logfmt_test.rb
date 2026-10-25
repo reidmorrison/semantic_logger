@@ -144,6 +144,16 @@ module SemanticLogger
               assert_includes text, %( Mozilla_level__fatal__name__Billing__injected_line_true=true)
             end
 
+            it "formats nested values as quoted JSON, not #inspect" do
+              client = Object.new
+              client.instance_variable_set(:@password, "secret")
+              log.payload = {user: {id: 7, roles: %w[a b]}, client: [client]}
+              text        = formatter.call(log, nil)
+
+              assert_includes text, %( user="{\\"id\\":7,\\"roles\\":[\\"a\\",\\"b\\"]}")
+              refute_includes text, "secret"
+            end
+
             it "formats a payload that is not a Hash as a single field" do
               log.payload = "not a hash"
 

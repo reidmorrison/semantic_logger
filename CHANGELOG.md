@@ -36,7 +36,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Keys come from tags, named tags, and the payload, and were written verbatim, so a tag such as
   a User-Agent could inject fields (for example `level="fatal"`) or a whole new line. Keys that
   only differ by type, such as `:level` and `"level"`, are now emitted once, keeping the earlier
-  field.
+  field. Nested values (a Hash or an Array, such as the exception backtrace) are emitted as quoted
+  JSON instead of their `#inspect` text, which could print an object's instance variables.
 
 ### Added
 
