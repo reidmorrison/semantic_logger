@@ -19,6 +19,8 @@ Gem::Specification.new do |s|
   s.license               = "Apache-2.0"
   s.required_ruby_version = ">= 3.2"
   s.add_dependency "concurrent-ruby", "~> 1.0"
+  # Ruby 4.0 moved logger from the default gems to the bundled gems, so it must be declared.
+  s.add_dependency "logger", "~> 1.5"
   s.metadata = {
     "bug_tracker_uri"       => "https://github.com/reidmorrison/semantic_logger/issues",
     "changelog_uri"         => "https://github.com/reidmorrison/semantic_logger/blob/main/CHANGELOG.md",

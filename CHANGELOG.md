@@ -15,6 +15,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Semantic Logger loads on Ruby 4.0 without `logger` in the application's Gemfile. Ruby 4.0
+  moved `logger` from the default gems to the bundled gems, so `require "semantic_logger"`
+  raised `LoadError: cannot load such file -- logger` unless another gem happened to depend on
+  it, and Ruby 3.4 warned about it. `logger` is now a declared runtime dependency.
 - The HTTP appender keeps the query string of the url it is configured with, instead of
   silently dropping it, so log servers that take their settings as query parameters can be
   used. For example VictoriaLogs:
