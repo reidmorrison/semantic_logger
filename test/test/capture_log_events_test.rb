@@ -38,6 +38,17 @@ class CaptureLogEventsTest < Minitest::Test
       assert_predicate capture_logger.events.last, :metric_only?
     end
 
+    it "supports with_level when standing in for a logger" do
+      capture_logger.level = :info
+      capture_logger.with_level(:warn) do
+        capture_logger.info("dropped")
+        capture_logger.warn("kept")
+      end
+      capture_logger.info("after")
+
+      assert_equal %w[kept after], capture_logger.events.map(&:message)
+    end
+
     it "clears the events array when clear is called" do
       capture_logger.info "a message"
 

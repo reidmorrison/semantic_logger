@@ -28,23 +28,38 @@ module SemanticLogger
       end
     end
 
-    # Returns the current log level if set, otherwise it returns the global
-    # default log level
+    # Returns the level set by an enclosing `#with_level` block on the current fiber,
+    # otherwise the level set for this instance, otherwise the global default level.
     def level
-      @level || SemanticLogger.default_level
+      index = @with_level_used && with_level_index
+      return Levels.level(index) if index
+
+      @level || fallback_level
     end
 
-    # Set the logging level for this logger during the execution of the given block
+    # Change the log level of this instance while the block runs, on the current fiber only.
     #
-    # Refer to the documentation for `#level=` for more information about the possible log levels.
-    def with_level(new_level)
-      old_level = level
-
-      self.level = new_level
-
-      yield
-    ensure
-      self.level = old_level
+    # Other threads and fibers that share this instance keep logging at its own level.
+    # The level set with `#level=` is left untouched, so an instance that follows the
+    # global default level keeps following it after the block. Blocks can be nested.
+    #
+    # Matches Ruby's `Logger#with_level`, which Sidekiq calls to apply a job's `log_level`.
+    # Accepts the same levels as `#level=`. Returns the result of the block.
+    def with_level(level)
+      index            = Levels.index(level)
+      overrides        = (Thread.current[:semantic_logger_with_level] ||= {}.compare_by_identity)
+      previous         = overrides[self]
+      @with_level_used = true
+      overrides[self]  = index
+      begin
+        yield
+      ensure
+        if previous
+          overrides[self] = previous
+        else
+          overrides.delete(self)
+        end
+      end
     end
 
     # Implement the log level calls
@@ -319,6 +334,10 @@ module SemanticLogger
       # (empty) instance tags allocate no garbage. Child loggers replace them via #tagged_child.
       @instance_tags       = [].freeze
       @instance_named_tags = {}.freeze
+      # Set the first time `#with_level` is called on this instance, so that instances that
+      # never use it skip the fiber-local lookup when checking their level. Only the fiber
+      # that sets an override needs to see the flag, and that fiber set it itself.
+      @with_level_used     = false
       if level.nil?
         # Allow the global default level to determine this loggers log level
         @level_index = nil
@@ -328,11 +347,25 @@ module SemanticLogger
       end
     end
 
-    # Return the level index for fast comparisons
-    # Returns the global default level index if the level has not been explicitly
-    # set for this instance
+    # Return the level index for fast comparisons, resolved in the same order as `#level`.
     def level_index
-      @level_index || SemanticLogger.default_level_index
+      (@with_level_used && with_level_index) || @level_index || fallback_level_index
+    end
+
+    # Level to use when no level has been set for this instance: the global default level.
+    def fallback_level
+      SemanticLogger.default_level
+    end
+
+    # Level index to use when no level has been set for this instance. Unlike
+    # `#fallback_level`, it honors `SemanticLogger.silence`.
+    def fallback_level_index
+      SemanticLogger.default_level_index
+    end
+
+    # Level index set for this instance by an enclosing `#with_level` block on the current fiber.
+    def with_level_index
+      Thread.current[:semantic_logger_with_level]&.[](self)
     end
 
     # Whether to log the supplied message based on the current filter if any

@@ -166,6 +166,27 @@ class SubscriberTest < Minitest::Test
       end
     end
 
+    describe "#level" do
+      it "logs everything when no level is set, ignoring the global default level" do
+        original                     = SemanticLogger.default_level
+        SemanticLogger.default_level = :error
+
+        assert_equal :trace, appender.level
+        assert_predicate appender, :trace?
+      ensure
+        SemanticLogger.default_level = original
+      end
+
+      it "uses the level from an enclosing with_level block" do
+        appender.with_level(:warn) do
+          assert_equal :warn, appender.level
+          refute_predicate appender, :info?
+        end
+
+        assert_equal :trace, appender.level
+      end
+    end
+
     describe "#console_output?" do
       it "is false by default" do
         refute_predicate appender, :console_output?
