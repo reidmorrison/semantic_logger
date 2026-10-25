@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require "bigdecimal"
 
 module Metric
   class StatsdTest < Minitest::Test
@@ -120,6 +121,20 @@ module Metric
           appender.log(metric_log(metric_amount: Float::NAN))
 
           assert_empty fake.counts
+        end
+
+        it "ignores a BigDecimal metric amount that is not finite" do
+          appender.log(metric_log(metric_amount: BigDecimal("Infinity")))
+          appender.log(metric_log(metric_amount: BigDecimal("-Infinity")))
+          appender.log(metric_log(metric_amount: BigDecimal("NaN")))
+
+          assert_empty fake.counts
+        end
+
+        it "counts a finite BigDecimal metric amount" do
+          appender.log(metric_log(metric_amount: BigDecimal("2.5")))
+
+          assert_equal [[metric, 3]], fake.counts
         end
       end
 

@@ -46,8 +46,8 @@ module SemanticLogger
           @statsd.timing(metric, duration)
         else
           amount = log.metric_amount || 1
-          # Infinity and NaN cannot be counted.
-          return if amount.is_a?(Float) && !amount.finite?
+          # Infinity and NaN cannot be counted, whether a Float or a BigDecimal.
+          return if amount.respond_to?(:finite?) && !amount.finite?
 
           amount = amount.round
           # A single counter packet, whatever the size of the amount. Incrementing once per unit
