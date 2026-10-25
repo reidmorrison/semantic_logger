@@ -18,9 +18,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   one derived from user input, could otherwise flood the network and stall the logging
   thread. Amounts that are not finite (`Infinity`, `NaN`) are ignored.
 - `escape_control_chars` now also escapes the message of each exception that caused the
-  logged exception (`Cause: ...` in the backtrace), in the `:default`, `:color`, `:pattern`
-  (`%{backtrace}`), and `:syslog` formatters. Previously a newline in a cause, which often
-  quotes untrusted input, could forge a log entry even with escaping enabled.
+  logged exception (`Cause: ...` in the backtrace), and each backtrace line, in the
+  `:default`, `:color`, `:pattern` (`%{backtrace}`), and `:syslog` formatters. Previously a
+  newline in a cause, which often quotes untrusted input, could forge a log entry even with
+  escaping enabled. Escaping also drops invalid UTF-8 bytes instead of raising, which lost
+  the log entry.
 - The `:syslog` formatter, which escapes control characters by default, now keeps an entry
   with an exception on a single line, escaping the newlines between the exception and its
   backtrace, so that a receiver framing records by newline does not split it.

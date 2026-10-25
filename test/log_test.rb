@@ -241,6 +241,54 @@ module SemanticLogger
         it "returns an empty string without an exception" do
           assert_equal "", log.backtrace_to_s
         end
+
+        describe "with causes" do
+          # An exception whose cause can be assigned directly, to build any chain,
+          # including a cyclic one that `raise` would refuse.
+          let(:chained_error) { Class.new(StandardError) { attr_accessor :cause } }
+
+          def chained(message, backtrace, cause = nil)
+            error = chained_error.new(message)
+            error.set_backtrace(backtrace) if backtrace
+            error.cause = cause
+            error
+          end
+
+          it "lays out every exception in a three deep chain" do
+            root          = chained("root\ncause", %w[r1 r2])
+            middle        = chained("middle", %w[m1], root)
+            log.exception = chained("top", %w[t1 t2], middle)
+            name          = chained_error.name
+
+            expected = "t1\nt2\nCause: #{name}: middle\nm1\nCause: #{name}: root\ncause\nr1\nr2"
+
+            assert_equal expected, log.backtrace_to_s
+          end
+
+          it "lays out a cause without a backtrace" do
+            log.exception = chained("top", %w[t1], chained("cause", nil))
+
+            assert_equal "t1\nCause: #{chained_error.name}: cause\n", log.backtrace_to_s
+          end
+
+          it "stops at a cyclic cause chain" do
+            first         = chained("first", %w[f1])
+            second        = chained("second", %w[s1], first)
+            first.cause   = second
+            log.exception = first
+
+            assert_equal "f1\nCause: #{chained_error.name}: second\ns1", log.backtrace_to_s
+          end
+
+          it "passes each cause message and backtrace line to the block" do
+            log.exception = chained("top\nmsg", %w[t1], chained("cause\nmsg", %w[c1]))
+            name          = chained_error.name
+
+            trace         = log.backtrace_to_s { |text| "<#{text}>" }
+
+            assert_equal "<t1>\nCause: #{name}: <cause\nmsg>\n<c1>", trace
+          end
+        end
       end
 
       describe "#exception_details" do

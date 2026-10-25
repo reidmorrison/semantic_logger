@@ -230,13 +230,23 @@ module SemanticLogger
     end
 
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
-    def backtrace_to_s
+    #
+    # When a block is supplied, each cause's message and each backtrace line is passed
+    # to it, and the value it returns is written in its place. This lets a caller, for
+    # example a formatter, transform that text while this method keeps the layout.
+    #
+    # Example:
+    #   log.backtrace_to_s { |text| text.gsub("\n", "\\n") }
+    def backtrace_to_s(&block)
       trace = ""
       each_exception do |exception, i|
+        lines = exception.backtrace || []
+        lines = lines.map(&block) if block
         if i.zero?
-          trace = (exception.backtrace || []).join("\n")
+          trace = lines.join("\n")
         else
-          trace << "\nCause: #{exception.class.name}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          message = block ? yield(exception.message) : exception.message
+          trace << "\nCause: #{exception.class.name}: #{message}\n#{lines.join("\n")}"
         end
       end
       trace

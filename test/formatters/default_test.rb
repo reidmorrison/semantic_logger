@@ -220,6 +220,25 @@ module SemanticLogger
             refute(output.lines.any? { |line| line.start_with?(forged) }, "cause message forged a log line")
           end
 
+          it "escapes control characters in each backtrace line" do
+            begin
+              begin
+                raise ArgumentError, "inner"
+              rescue ArgumentError
+                raise "outer"
+              end
+            rescue StandardError => e
+              e.set_backtrace(["app.rb:2\nforged outer", "app.rb:3"])
+              e.cause.set_backtrace(["(\e[2J):1"])
+              log.exception = e
+            end
+
+            assert_equal "-- Exception: RuntimeError: outer\n" \
+                         "app.rb:2\\nforged outer\napp.rb:3\n" \
+                         "Cause: ArgumentError: inner\n(\\e[2J):1",
+                         formatter.exception
+          end
+
           it "drops invalid UTF-8 from the message of a cause instead of failing" do
             begin
               begin
@@ -265,6 +284,45 @@ module SemanticLogger
             formatter.call(log, nil)
 
             assert formatter.exception.end_with?(log.backtrace_to_s)
+          end
+
+          describe "for a three deep chain" do
+            before do
+              begin
+                begin
+                  begin
+                    raise ArgumentError, "root\ncause"
+                  rescue ArgumentError => e
+                    e.set_backtrace(%w[r1 r2])
+                    raise
+                  end
+                rescue ArgumentError
+                  raise IOError, "middle"
+                end
+              rescue IOError => e
+                e.set_backtrace(%w[m1])
+                raise "top"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[t1 t2])
+              log.exception = e
+            end
+
+            it "lays out every exception unchanged when control characters are not escaped" do
+              expected = "-- Exception: RuntimeError: top\n" \
+                         "t1\nt2\nCause: IOError: middle\nm1\nCause: ArgumentError: root\ncause\nr1\nr2"
+
+              assert_equal expected, formatter.exception
+            end
+
+            it "keeps the layout and escapes each cause when control characters are escaped" do
+              formatter = SemanticLogger::Formatters::Default.new(escape_control_chars: true)
+              formatter.call(log, nil)
+              expected = "-- Exception: RuntimeError: top\n" \
+                         "t1\nt2\nCause: IOError: middle\nm1\nCause: ArgumentError: root\\ncause\nr1\nr2"
+
+              assert_equal expected, formatter.exception
+            end
           end
         end
 

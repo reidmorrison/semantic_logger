@@ -304,6 +304,17 @@ module SemanticLogger
 
             assert_includes escaped("%{backtrace}"), "Cause: ArgumentError: inner\\nforged"
           end
+
+          it "escapes control characters in each backtrace line when enabled" do
+            begin
+              raise "outer"
+            rescue StandardError => e
+              e.set_backtrace(["app.rb:1\nforged", "app.rb:2"])
+              log.exception = e
+            end
+
+            assert_equal "app.rb:1\\nforged\napp.rb:2", escaped("%{backtrace}")
+          end
         end
 
         describe "combining directives" do

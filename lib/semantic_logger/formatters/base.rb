@@ -50,8 +50,9 @@ module SemanticLogger
       #     Default: PRECISION (6, except on older JRuby, where 3)
       #   escape_control_chars: [Boolean]
       #     Replace control characters (newlines, the ANSI escape, etc.) in
-      #     untrusted log data (message, tags, named tags, and exception
-      #     message) with a printable escaped form, e.g. "\n".
+      #     untrusted log data (message, tags, named tags, and the message and
+      #     backtrace lines of the exception and of each exception that caused
+      #     it) with a printable escaped form, e.g. "\n".
       #     This prevents log forging and terminal escape-sequence injection
       #     when logging data that may contain attacker-controlled content.
       #     Note: Has no effect on structured formatters such as :json, which
@@ -140,20 +141,16 @@ module SemanticLogger
       end
 
       # Returns [String] the backtrace of the logged exception, followed by each exception
-      # that caused it, in the same layout as Log#backtrace_to_s.
+      # that caused it, as laid out by Log#backtrace_to_s.
       #
-      # The message of each cause is passed through #escape_control_characters, the same as
-      # the message of the logged exception: causes are often parser or validation errors
-      # that quote untrusted input.
+      # When `escape_control_chars` is enabled, the message of each cause and each backtrace
+      # line is passed through #escape_control_characters, the same as the message of the
+      # logged exception: causes are often parser or validation errors that quote untrusted
+      # input, and a backtrace can be set from untrusted data.
       def exception_backtrace
-        trace = +""
-        log.each_exception do |exception, depth|
-          if depth.positive?
-            trace << "\nCause: #{exception.class.name}: #{escape_control_characters(exception.message)}\n"
-          end
-          trace << (exception.backtrace || []).join("\n")
-        end
-        trace
+        return log.backtrace_to_s unless escape_control_chars
+
+        log.backtrace_to_s { |text| escape_control_characters(text) }
       end
 
       # Return the Time as a formatted string

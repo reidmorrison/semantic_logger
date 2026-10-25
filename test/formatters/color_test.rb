@@ -178,6 +178,18 @@ module SemanticLogger
             assert_includes output, "Cause: ArgumentError: inner\\nforged"
             refute(output.lines.any? { |line| line.start_with?("forged") })
           end
+
+          it "escapes control characters in each backtrace line when enabled" do
+            begin
+              raise "outer"
+            rescue StandardError => e
+              e.set_backtrace(["(\e[2J):1", "app.rb:2"])
+              log.exception = e
+            end
+            output = SemanticLogger::Formatters::Color.new(escape_control_chars: true).call(log, nil)
+
+            assert_equal "\n(\\e[2J):1\napp.rb:2", output[output.index("\n")..]
+          end
         end
       end
     end
