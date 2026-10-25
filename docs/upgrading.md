@@ -78,7 +78,9 @@ server, and so does not need the `syslog` gem, can use the same constants from
   emitted as `second_breakfast=true`. Keys that only match once encoded, or that only differ by
   type (`:level` and `"level"`), are emitted once, keeping the earlier field, so a tag or named
   tag can no longer add a second `level` or `message` field. A payload that is not a Hash is
-  emitted as a single `payload` field.
+  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, or `Data`, such as
+  the exception backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its
+  `#inspect` text.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
 * `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,
