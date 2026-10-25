@@ -168,8 +168,11 @@ message is processed successfully.
 A message that fails because of its own content, rather than the destination, is not retried: for
 example a value the formatter cannot serialize (a `JSON::GeneratorError`, `JSON::NestingError`,
 encoding error, or `FloatDomainError`). That one message is discarded and reported to the internal
-logger, and the thread carries on without backing off. In a batch, only that message is discarded;
-the rest of the batch is still written. A `JSON::ParserError`, such as from a destination that
+logger, and the thread carries on without backing off. When batching with an appender that sends
+the whole batch in a single request, such as the HTTP, Loki, Splunk HTTP, Elasticsearch, and
+OpenSearch appenders, only that message is discarded and the rest of the batch is still written.
+With an appender that may have written part of the batch before failing, the whole batch is
+discarded, so that no message is written twice. A `JSON::ParserError`, such as from a destination that
 answered with an HTML error page, is a problem with the destination, so it is retried like any other
 error. The appender decides which errors are caused by message content; see
 [Custom appenders](config.html#custom-appenders).

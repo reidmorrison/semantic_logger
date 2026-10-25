@@ -47,6 +47,18 @@ class QueueProcessorTest < Minitest::Test
 
       (@batches ||= []) << logs
     end
+
+    def batch_all_or_nothing?
+      true
+    end
+  end
+
+  # Batch support on top of PoisonedAppender that writes one message at a time, so that a
+  # poisoned message fails the batch after the messages before it were written.
+  class PoisonedItemBatchAppender < PoisonedAppender
+    def batch(logs)
+      logs.each { |log| self.log(log) }
+    end
   end
 
   # A non-StandardError exception, used to exercise the fatal (non-retryable) path in #process.
@@ -358,6 +370,26 @@ class QueueProcessorTest < Minitest::Test
           assert_equal 9, processor.processed_count
           assert_equal 1, processor.failed_count
           assert_predicate processor, :active?
+        end
+
+        describe "when the appender may have written part of the batch" do
+          let(:appender) do
+            a        = PoisonedItemBatchAppender.new
+            a.logger = internal_logger
+            a
+          end
+
+          it "discards the batch instead of writing any message twice" do
+            processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+            messages  = Array.new(7) { |i| "message #{i}" } << "poison"
+            messages.each { |message| processor.log(new_log(message: message)) }
+            processor.flush
+
+            assert_equal messages - ["poison"], appender.events.map(&:message)
+            assert_equal 0, processor.processed_count
+            assert_equal 8, processor.failed_count
+            assert_predicate processor, :active?
+          end
         end
       end
     end

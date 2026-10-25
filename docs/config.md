@@ -613,6 +613,22 @@ def message_error?(exception)
 end
 ~~~
 
+An appender that supports batching implements `#batch(logs)`. When `#batch` raises a message error,
+the whole batch is discarded by default, since it may already have written some of the messages.
+If `#batch` writes nothing unless every message can be written, for example because it formats
+them all into one request before sending it, return `true` from `#batch_all_or_nothing?`. The batch
+is then split up and retried, so that only the offending message is discarded:
+
+~~~ruby
+def batch(logs)
+  client.send_all(logs.map { |log| formatter.call(log, self) })
+end
+
+def batch_all_or_nothing?
+  true
+end
+~~~
+
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby

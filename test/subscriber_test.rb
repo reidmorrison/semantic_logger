@@ -199,6 +199,12 @@ class SubscriberTest < Minitest::Test
       end
     end
 
+    describe "#batch_all_or_nothing?" do
+      it "is false by default, since #batch may have written some messages before raising" do
+        refute_predicate appender, :batch_all_or_nothing?
+      end
+    end
+
     describe "#message_error?" do
       it "is true for errors raised by formatting content that cannot be written" do
         [

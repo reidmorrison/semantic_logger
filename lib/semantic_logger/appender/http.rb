@@ -229,6 +229,11 @@ module SemanticLogger
         false
       end
 
+      # The whole batch is formatted into a single request before anything is sent.
+      def batch_all_or_nothing?
+        true
+      end
+
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
       #
       # Everything else is left out, since log servers carry credentials in each part of it:

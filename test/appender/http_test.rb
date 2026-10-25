@@ -88,6 +88,16 @@ module Appender
           refute_predicate appender, :batch_by_default?
         end
 
+        it "sends nothing from a batch that has a message it cannot format" do
+          assert_predicate appender, :batch_all_or_nothing?
+
+          appender.formatter.stub(:batch, ->(*) { raise JSON::GeneratorError, "cannot serialize" }) do
+            appender.http.stub(:request, ->(_) { flunk "must not send a partial batch" }) do
+              assert_raises(JSON::GeneratorError) { appender.batch([log1, log2]) }
+            end
+          end
+        end
+
         it "posts multiple log messages as a single JSON array" do
           request = nil
           appender.http.stub(:request, lambda { |r|

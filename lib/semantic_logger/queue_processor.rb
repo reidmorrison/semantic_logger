@@ -321,20 +321,22 @@ module SemanticLogger
     rescue StandardError => e
       raise unless message_error?(e)
 
-      message_failed(log, e)
+      messages_failed([log], e)
     end
 
     # Write the log messages to the appender as a batch.
     #
-    # When the content of a message cannot be written (see #message_error?), the batch is split in
-    # half and each half written separately, so that only the offending message is discarded
-    # rather than every message in the batch.
+    # When the content of a message cannot be written (see #message_error?), and the appender's
+    # #batch is all or nothing, the batch is split in half and each half written separately, so
+    # that only the offending message is discarded rather than every message in the batch.
+    # Otherwise the batch is discarded, since writing it again could duplicate the messages that
+    # the appender had already written.
     def write_batch(logs)
       appender.batch(logs)
       @processed_count += logs.size
     rescue StandardError => e
       raise unless message_error?(e)
-      return message_failed(logs.first, e) if logs.size == 1
+      return messages_failed(logs, e) if logs.size == 1 || !appender.batch_all_or_nothing?
 
       logs.each_slice((logs.size + 1) / 2) { |half| write_batch(half) }
     end
@@ -344,10 +346,11 @@ module SemanticLogger
     # #message_error?) has every error retried with a back-off.
     def message_error?(exception) = appender.respond_to?(:message_error?) && appender.message_error?(exception)
 
-    # Record and report a log message whose content could not be written.
-    def message_failed(log, exception)
-      @failed_count += 1
-      safe_log(:error, "Async: Discarded a log message from #{log.name} that could not be written", exception)
+    # Record and report log messages discarded because their content could not be written.
+    def messages_failed(logs, exception)
+      @failed_count += logs.size
+      safe_log(:error, "Async: Discarded #{logs.size} log message(s) that could not be written, " \
+                       "the first from #{logs.first.name}", exception)
     end
 
     # Returns false when message processing should be stopped.

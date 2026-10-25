@@ -175,6 +175,11 @@ module SemanticLogger
         true
       end
 
+      # The whole batch is formatted into a single bulk request before anything is sent.
+      def batch_all_or_nothing?
+        true
+      end
+
       private
 
       # The backing client class, e.g. ::Elasticsearch::Client or ::OpenSearch::Client.

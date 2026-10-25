@@ -103,6 +103,16 @@ module SemanticLogger
       MESSAGE_ERRORS.any? { |error_class| exception.is_a?(error_class) }
     end
 
+    # Whether #batch writes none of the log messages when it raises a message error (see
+    # #message_error?), for example because it formats every message before sending any.
+    #
+    # When true, a batch that fails with a message error is split up and each part retried,
+    # so that only the offending message is discarded. When false, retrying could write some
+    # messages twice, so the whole batch is discarded instead.
+    def batch_all_or_nothing?
+      false
+    end
+
     private
 
     # Initializer for Abstract Class SemanticLogger::Subscriber
