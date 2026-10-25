@@ -21,8 +21,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   logged exception (`Cause: ...` in the backtrace), and each backtrace line, in the
   `:default`, `:color`, `:pattern` (`%{backtrace}`), and `:syslog` formatters. Previously a
   newline in a cause, which often quotes untrusted input, could forge a log entry even with
-  escaping enabled. Escaping also drops invalid UTF-8 bytes instead of raising, which lost
-  the log entry.
+  escaping enabled. It also escapes the logger name, the thread name, and the payload, whose
+  `#inspect` output can carry control characters from untrusted data; the `:color` formatter
+  then renders the payload without Amazing Print colors, on one line. Escaping also drops
+  invalid UTF-8 bytes instead of raising, which lost the log entry.
 - The `:syslog` formatter, which escapes control characters by default, now keeps an entry
   with an exception on a single line, escaping the newlines between the exception and its
   backtrace, so that a receiver framing records by newline does not split it.

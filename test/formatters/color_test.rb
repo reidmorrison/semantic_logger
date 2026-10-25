@@ -190,6 +190,52 @@ module SemanticLogger
 
             assert_equal "\n(\\e[2J):1\napp.rb:2", output[output.index("\n")..]
           end
+
+          describe "with control characters in the logged data" do
+            # An object whose #inspect returns control characters, as a custom payload object can.
+            let(:control_inspect) do
+              object = Object.new
+              object.define_singleton_method(:inspect) { "bob\nforged\e[2J" }
+              object
+            end
+
+            before do
+              log.name        = "Auth\nforged"
+              log.thread_name = "worker\e[2J"
+              log.message     = "Hello\nWorld"
+              log.payload     = {user: control_inspect}
+            end
+
+            it "escapes the data inside the formatter's own color codes when enabled" do
+              output = SemanticLogger::Formatters::Color.new(escape_control_chars: true).call(log, nil)
+
+              assert_equal "#{expected_time} #{color}D#{clear} [#{$$}:worker\\e[2J] " \
+                           "#{color}Auth\\nforged#{clear} -- Hello\\nWorld -- { user: bob\\nforged\\e[2J }",
+                           output
+            end
+
+            it "renders the payload plain and on one line when enabled" do
+              AmazingPrint::Inspector.stub_any_instance(:colorize?, true) do
+                formatter = SemanticLogger::Formatters::Color.new(escape_control_chars: true, ap: {multiline: true})
+                formatter.call(log, nil)
+
+                assert_equal "-- { user: bob\\nforged\\e[2J }", formatter.payload
+              end
+            end
+
+            it "preserves the data and the Amazing Print colors when disabled" do
+              AmazingPrint::Inspector.stub_any_instance(:colorize?, true) do
+                payload = log.payload.ai(multiline: false)
+                output  = SemanticLogger::Formatters::Color.new.call(log, nil)
+
+                assert_includes payload, "bob\nforged\e[2J"
+                assert_includes payload, "\e[", "expected Amazing Print to color the payload"
+                assert_equal "#{expected_time} #{color}D#{clear} [#{$$}:worker\e[2J] " \
+                             "#{color}Auth\nforged#{clear} -- Hello\nWorld -- #{payload}",
+                             output
+              end
+            end
+          end
         end
       end
     end

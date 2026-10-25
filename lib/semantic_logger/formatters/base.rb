@@ -50,9 +50,9 @@ module SemanticLogger
       #     Default: PRECISION (6, except on older JRuby, where 3)
       #   escape_control_chars: [Boolean]
       #     Replace control characters (newlines, the ANSI escape, etc.) in
-      #     untrusted log data (message, tags, named tags, and the message and
-      #     backtrace lines of the exception and of each exception that caused
-      #     it) with a printable escaped form, e.g. "\n".
+      #     untrusted log data (logger name, thread name, message, payload, tags,
+      #     named tags, and the message and backtrace lines of the exception and
+      #     of each exception that caused it) with a printable escaped form, e.g. "\n".
       #     This prevents log forging and terminal escape-sequence injection
       #     when logging data that may contain attacker-controlled content.
       #     Note: Has no effect on structured formatters such as :json, which

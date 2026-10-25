@@ -42,6 +42,13 @@ module SemanticLogger
           ]
         end
 
+        # An object whose #inspect returns control characters, as a custom payload object can.
+        let(:control_inspect) do
+          object = Object.new
+          object.define_singleton_method(:inspect) { "bob\nforged\e[2J" }
+          object
+        end
+
         let(:formatter) do
           formatter = SemanticLogger::Formatters::Default.new
           # Does not use the logger instance for formatting purposes
@@ -267,6 +274,50 @@ module SemanticLogger
             log.message = "bad \xff\ninput"
 
             assert_equal "-- bad \\ninput", formatter.message
+          end
+
+          it "escapes control characters in the logger name" do
+            log.name = "Auth\e[2J\nforged"
+
+            assert_equal "Auth\\e[2J\\nforged", formatter.name
+          end
+
+          it "escapes control characters in the thread name" do
+            log.thread_name = "worker\nforged"
+
+            assert_equal "worker\\nforged", formatter.thread_name
+            assert_equal "[#{$$}:worker\\nforged]", formatter.process_info
+          end
+
+          it "escapes control characters in the payload" do
+            log.payload = {user: control_inspect}
+
+            # Ruby 3.4 changed the way hashes are displayed
+            if RUBY_VERSION < "3.4"
+              assert_equal "-- {:user=>bob\\nforged\\e[2J}", formatter.payload
+            else
+              assert_equal "-- {user: bob\\nforged\\e[2J}", formatter.payload
+            end
+          end
+
+          it "escapes the name, thread name, and payload of the whole entry" do
+            log.name        = "Auth\nforged"
+            log.thread_name = "worker\e[2J"
+            log.message     = "Hello\nWorld"
+            log.payload     = control_inspect
+
+            assert_equal "#{expected_time} D [#{$$}:worker\\e[2J] Auth\\nforged -- Hello\\nWorld -- bob\\nforged\\e[2J",
+                         formatter.call(log, nil)
+          end
+
+          it "preserves control characters in the whole entry when disabled" do
+            log.name        = "Auth\nforged"
+            log.thread_name = "worker\e[2J"
+            log.message     = "Hello\nWorld"
+            log.payload     = control_inspect
+
+            assert_equal "#{expected_time} D [#{$$}:worker\e[2J] Auth\nforged -- Hello\nWorld -- bob\nforged\e[2J",
+                         SemanticLogger::Formatters::Default.new.call(log, nil)
           end
         end
 
