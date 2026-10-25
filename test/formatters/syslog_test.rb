@@ -26,6 +26,15 @@ module SemanticLogger
           formatter
         end
 
+        describe "constants" do
+          # The formatter defines these itself so that remote syslog works without the syslog gem.
+          it "match the values of the ::Syslog constants" do
+            %i[LOG_CRIT LOG_ERR LOG_WARNING LOG_NOTICE LOG_INFO LOG_DEBUG LOG_USER].each do |name|
+              assert_equal ::Syslog.const_get(name), SemanticLogger::Formatters::Syslog.const_get(name), name
+            end
+          end
+        end
+
         describe "#initialize" do
           it "defaults the facility to LOG_USER" do
             assert_equal ::Syslog::LOG_USER, SemanticLogger::Formatters::Syslog.new.facility

@@ -1,5 +1,6 @@
 require_relative "../test_helper"
 require "net/tcp_client"
+require "syslog"
 
 # Unit Test for SemanticLogger::Appender::Syslog
 #

@@ -1,15 +1,18 @@
-begin
-  require "syslog_protocol"
-rescue LoadError
-  raise LoadError,
-        "Gem syslog_protocol is required for remote logging using the Syslog protocol. " \
-        'Please add the gem "syslog_protocol" to your Gemfile.'
-end
-
 module SemanticLogger
   module Formatters
     class Syslog < Default
       attr_accessor :level_map, :facility, :max_size
+
+      # Syslog severities and the default facility, with the same values as the matching
+      # `::Syslog` constants. The `syslog` gem is only needed to log to a local syslog daemon, and
+      # since Ruby 3.4 it is a bundled gem, so remote syslog must not depend on it for these values.
+      LOG_CRIT    = 2
+      LOG_ERR     = 3
+      LOG_WARNING = 4
+      LOG_NOTICE  = 5
+      LOG_INFO    = 6
+      LOG_DEBUG   = 7
+      LOG_USER    = 1 << 3
 
       # Default level map for every log level
       #
@@ -26,8 +29,8 @@ module SemanticLogger
       class LevelMap
         attr_accessor :trace, :debug, :info, :warn, :error, :fatal
 
-        def initialize(trace: ::Syslog::LOG_DEBUG, debug: ::Syslog::LOG_INFO, info: ::Syslog::LOG_NOTICE,
-                       warn: ::Syslog::LOG_WARNING, error: ::Syslog::LOG_ERR, fatal: ::Syslog::LOG_CRIT)
+        def initialize(trace: LOG_DEBUG, debug: LOG_INFO, info: LOG_NOTICE,
+                       warn: LOG_WARNING, error: LOG_ERR, fatal: LOG_CRIT)
           @trace = trace
           @debug = debug
           @info  = info
@@ -45,7 +48,7 @@ module SemanticLogger
       #
       # Parameters:
       #   facility: [Integer]
-      #     Default: ::Syslog::LOG_USER
+      #     Default: LOG_USER
       #
       #   level_map: [Hash | SemanticLogger::Formatters::Syslog::LevelMap]
       #     Supply a custom map of SemanticLogger levels to syslog levels.
@@ -60,8 +63,16 @@ module SemanticLogger
       #   Example:
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
-      def initialize(facility: ::Syslog::LOG_USER, level_map: LevelMap.new, max_size: Integer,
+      def initialize(facility: LOG_USER, level_map: LevelMap.new, max_size: Integer,
                      escape_control_chars: true, **args)
+        begin
+          require "syslog_protocol"
+        rescue LoadError
+          raise LoadError,
+                "Gem syslog_protocol is required for remote logging using the Syslog protocol. " \
+                'Please add the gem "syslog_protocol" to your Gemfile.'
+        end
+
         @facility  = facility
         @level_map = level_map.is_a?(LevelMap) ? level_map : LevelMap.new(**level_map)
         @max_size = max_size

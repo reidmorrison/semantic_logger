@@ -46,7 +46,8 @@ gem "statsd-ruby"
 gem "sentry-raven"
 # [optional] new Sentry appender
 gem "sentry-ruby"
-# [optional] Syslog appender when communicating with a remote syslogd over TCP
+# [optional] Syslog appender: syslog for a local syslog daemon (a bundled gem since Ruby 3.4),
+# syslog_protocol for a remote syslogd over TCP or UDP
 gem "syslog"
 gem "syslog_protocol"
 # [optional] CloudWatch Logs appender

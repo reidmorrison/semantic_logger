@@ -86,7 +86,7 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [HTTP(S)](#https) | `appender: :http` | |
 | [TCP (+SSL)](#tcp-appender-ssl) | `appender: :tcp` | `net_tcp_client` |
 | [UDP](#udp-appender) | `appender: :udp` | |
-| [Syslog](#syslog) | `appender: :syslog` | `syslog_protocol`, `net_tcp_client` (remote) |
+| [Syslog](#syslog) | `appender: :syslog` | `syslog` (local, Ruby 3.4+), `syslog_protocol` (remote), `net_tcp_client` (TCP) |
 
 **Centralized logging and log aggregators**
 
@@ -510,7 +510,8 @@ SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", formatter:
 
 ### Syslog
 
-Log to a local Syslog daemon:
+Log to a local Syslog daemon. Since Ruby 3.4 `syslog` is a bundled gem, so add `gem "syslog"` to the
+Gemfile:
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :syslog)

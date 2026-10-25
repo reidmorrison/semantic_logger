@@ -1,4 +1,3 @@
-require "syslog"
 require "uri"
 require "socket"
 # Send log messages to local syslog, or remote syslog servers over TCP or UDP.
@@ -78,7 +77,7 @@ module SemanticLogger
       #     Default: 1024 bytes
       #
       #   options: [Integer]
-      #     Default: ::Syslog::LOG_PID | ::Syslog::LOG_CONS
+      #     Default: ::Syslog::LOG_PID | ::Syslog::LOG_CONS (when logging to a local syslog daemon)
       #     Any of the following (options can be logically OR'd together)
       #       ::Syslog::LOG_CONS
       #       ::Syslog::LOG_NDELAY
@@ -91,7 +90,7 @@ module SemanticLogger
       #        I.e. When `url: 'syslog://localhost'`
       #
       #   facility: [Integer]
-      #     Default: ::Syslog::LOG_USER
+      #     Default: ::Syslog::LOG_USER (the same value as SemanticLogger::Formatters::Syslog::LOG_USER)
       #     Type of program (can be logically OR'd together)
       #       ::Syslog::LOG_AUTH
       #       ::Syslog::LOG_AUTHPRIV
@@ -124,10 +123,10 @@ module SemanticLogger
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
       def initialize(url: "syslog://localhost",
-                     facility: ::Syslog::LOG_USER,
+                     facility: SemanticLogger::Formatters::Syslog::LOG_USER,
                      max_size: 1024,
                      level_map: SemanticLogger::Formatters::Syslog::LevelMap.new,
-                     options: ::Syslog::LOG_PID | ::Syslog::LOG_CONS,
+                     options: nil,
                      tcp_client: {},
                      **args,
                      &)
@@ -144,6 +143,18 @@ module SemanticLogger
         @tcp_client_options = tcp_client
 
         raise "Unknown protocol #{@protocol}!" unless %i[syslog tcp udp].include?(@protocol)
+
+        # The syslog gem, a bundled gem since Ruby 3.4, is only required when logging to a local syslog daemon.
+        if @protocol == :syslog
+          begin
+            require "syslog"
+          rescue LoadError
+            raise LoadError,
+                  "Missing gem: syslog. This gem is required when logging to a local syslog daemon on Ruby 3.4 " \
+                  'and later. Please add the gem "syslog" to your Gemfile.'
+          end
+          @options ||= ::Syslog::LOG_PID | ::Syslog::LOG_CONS
+        end
 
         # The syslog_protocol gem is required when logging over TCP or UDP.
         if %i[tcp udp].include?(@protocol)
