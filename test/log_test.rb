@@ -99,6 +99,16 @@ module SemanticLogger
             assert_equal :fatal, log.level
             assert_equal SemanticLogger::Levels.index(:fatal), log.level_index
           end
+
+          it "stores an on_exception_level supplied as a String or Integer as its Symbol" do
+            log.assign(exception: exception, on_exception_level: ::Logger::ERROR)
+
+            assert_equal :error, log.level
+
+            log.assign(exception: exception, on_exception_level: "Fatal")
+
+            assert_equal :fatal, log.level
+          end
         end
 
         describe "backtrace" do
@@ -218,6 +228,19 @@ module SemanticLogger
             assert log.assign(**args)
           end
 
+          it "lets the explicit payload win over a stray key with the same name" do
+            args = log.extract_arguments({payload: {user: "real"}, user: "spoof"}, "msg")
+
+            assert_equal({payload: {user: "real"}, message: "msg"}, args)
+          end
+
+          it "ignores a log argument with a nil value, so that its default is used" do
+            args = log.extract_arguments({duration: 1, min_duration: nil, log_exception: nil, user: "bob"}, "m")
+
+            assert_equal({duration: 1, payload: {user: "bob"}, message: "m"}, args)
+            assert log.assign(**args), "a nil min_duration must not make the logging call raise"
+          end
+
           it "keeps an explicit payload that is not a hash alongside unknown keys" do
             args = log.extract_arguments({payload: "text", user: "bob"})
 
@@ -238,6 +261,27 @@ module SemanticLogger
 
             assert_equal untrusted, args[:payload]
             assert log.assign(**args), "an untrusted hash must not make the logging call raise"
+          end
+
+          it "keeps other values that #assign or the formatters cannot use in the payload" do
+            untrusted = {
+              backtrace:          [1, 2],
+              on_exception_level: 2**70,
+              duration:           Complex(1, 1),
+              min_duration:       Float::NAN
+            }
+            args = log.extract_arguments({exception: "x"}.merge(untrusted), "Webhook")
+
+            assert_equal untrusted, args[:payload]
+            assert log.assign(**args), "an untrusted hash must not make the logging call raise"
+          end
+
+          it "does not modify a backtrace supplied in the hash" do
+            backtrace = ["/gems/foo/lib/semantic_logger/logger.rb:10", "/app/models/user.rb:30"]
+            log.assign(**log.extract_arguments({backtrace: backtrace}, "m"))
+
+            assert_equal ["/app/models/user.rb:30"], log.backtrace
+            assert_equal 2, backtrace.size
           end
 
           it "uses values of the right type as log arguments" do

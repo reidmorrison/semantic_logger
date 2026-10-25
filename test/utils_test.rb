@@ -103,6 +103,13 @@ module SemanticLogger
           # Trailing semantic_logger entries are left in place.
           assert_includes result, "/gems/foo/lib/semantic_logger/log.rb:40"
         end
+
+        it "does not modify the supplied stack" do
+          stack = ["/gems/foo/lib/semantic_logger/logger.rb:10", "/app/models/user.rb:30"]
+          SemanticLogger::Utils.extract_backtrace(stack)
+
+          assert_equal ["/gems/foo/lib/semantic_logger/logger.rb:10", "/app/models/user.rb:30"], stack
+        end
       end
 
       describe ".strip_path?" do

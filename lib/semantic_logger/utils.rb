@@ -48,11 +48,9 @@ module SemanticLogger
 
     # Extract the backtrace stripping off the leading semantic logger entries.
     # Leaves all other system and gem path entries in place.
+    # Returns a new Array, leaving the supplied stack unchanged since it can belong to the caller.
     def self.extract_backtrace(stack = caller)
-      while (first = stack.first) && extract_path?(first)
-        stack.shift
-      end
-      stack
+      stack.drop_while { |path| extract_path?(path) }
     end
 
     def self.extract_paths

@@ -50,6 +50,38 @@ class LoggerTest < Minitest::Test
       end
     end
 
+    describe "logging an untrusted hash as the payload" do
+      [
+        {duration: 1, min_duration: nil},
+        {duration: 1, min_duration: "x"},
+        {duration: Complex(1, 1)},
+        {backtrace: [1, 2]},
+        {exception: "x", on_exception_level: 2**70},
+        {log_exception: "full", exception: "x"},
+        {dimensions: [], metric_amount: Float::NAN}
+      ].each do |untrusted|
+        it "does not raise for #{untrusted.inspect}" do
+          logger.info("Webhook", untrusted)
+
+          assert log = logger.events.first
+          assert_equal "Webhook", log.message
+        end
+      end
+
+      it "logs the explicit payload value when a stray key has the same name" do
+        logger.info("Webhook", payload: {user: "real"}, user: "spoof")
+
+        assert_equal({user: "real"}, logger.events.first.payload)
+      end
+
+      it "does not drop a supplied exception for a nil log_exception" do
+        exception = RuntimeError.new("boom")
+        logger.error("Webhook", exception: exception, log_exception: nil)
+
+        assert_equal exception, logger.events.first.exception
+      end
+    end
+
     describe "Compatibility" do
       # Ensure that any log level can be logged
       Logger::Severity.constants.each do |level|

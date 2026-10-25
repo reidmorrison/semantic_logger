@@ -23,9 +23,18 @@ module SemanticLogger
       when String
         LEVELS.index(level.downcase.to_sym)
       when Integer
-        MAPPED_LEVELS[level]
+        # Bounded first, since Array#[] raises RangeError for an Integer too large for a C long.
+        MAPPED_LEVELS[level] if level.abs <= MAPPED_LEVELS.size
       end ||
         raise(ArgumentError, "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}")
+    end
+
+    # Returns [true|false] whether the supplied value is a level that #index accepts.
+    # Never raises, so it can be used to check values that come from untrusted data.
+    def self.valid?(level)
+      !index(level).nil?
+    rescue ArgumentError
+      false
     end
 
     # Returns the symbolic level for the supplied level index
