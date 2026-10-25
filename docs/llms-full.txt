@@ -2940,7 +2940,7 @@ you can write color to the screen and JSON to a file at the same time.
 | `:color` | Plain text with color (uses Amazing Print for the payload when installed). |
 | `:json` | One JSON object per entry. |
 | `:logfmt` | `key=value` logfmt output. |
-| `:one_line` | Each entry reduced to a single line. |
+| `:one_line` | Each entry reduced to a single line: line breaks are removed from every field (or escaped with `escape_control_chars: true`) and an exception shows only its class and message, without the backtrace. |
 | A class instance | Any instance of a class derived from `SemanticLogger::Formatters::Base`. |
 | A `Proc` | Called with the `log` entry; returns the formatted output. |
 

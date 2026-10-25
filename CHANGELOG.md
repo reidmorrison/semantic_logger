@@ -30,7 +30,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   backtrace, so that a receiver framing records by newline does not split it.
 - The `:one_line` formatter honours `escape_control_chars` for the message and the exception
   message, which it previously ignored, letting carriage returns and ANSI escape sequences
-  through. It also strips carriage returns, not only newlines, by default.
+  through. It also strips carriage returns, not only newlines, by default, and does so in the
+  name, thread name, tags, named tags and payload as well, so an entry stays on one line.
 
 ### Added
 
