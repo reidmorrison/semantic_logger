@@ -307,6 +307,17 @@ module SemanticLogger
           assert_equal "  strict detail", log.exception_details(ex)
         end
 
+        it "omits the source snippet when an error_highlight override does not accept extra keyword arguments" do
+          ex = raised.call { raise NameError.new("strict", :user_name) }
+          # Stands in for error_highlight's snippet, which it only adds to an exception raised by a failing call.
+          ex.define_singleton_method(:detailed_message) do |highlight: false|
+            "#{super(highlight: highlight)}\n  user_name.upcas\n           ^^^^^^"
+          end
+
+          assert_nil log.exception_details(ex)
+          assert_includes log.exception_details(ex, source: true), "user_name.upcas"
+        end
+
         it "returns nil when an override raises" do
           raising_error = Class.new(StandardError) do
             def detailed_message(**)

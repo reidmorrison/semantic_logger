@@ -219,7 +219,10 @@ module SemanticLogger
         if protocol == :syslog
           # Format is text output without the time.
           # Escape control characters so untrusted log data cannot forge syslog entries.
-          SemanticLogger::Formatters::Default.new(time_format: :notime, escape_control_chars: true)
+          # Exception details are off, as with the remote syslog formatters, so existing records do not change.
+          SemanticLogger::Formatters::Default.new(
+            time_format: :notime, escape_control_chars: true, log_exception_details: false
+          )
         else
           SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map, max_size: max_size)
         end

@@ -19,6 +19,12 @@ module Appender
         assert_match(/^ D (.*?) SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
+      it "does not add exception details to local syslog records" do
+        formatter = Syslog.stub(:open, nil) { SemanticLogger::Appender::Syslog.new.formatter }
+
+        refute formatter.log_exception_details
+      end
+
       it "handle remote syslog over TCP" do
         message = nil
         Net::TCPClient.stub_any_instance(:closed?, false) do

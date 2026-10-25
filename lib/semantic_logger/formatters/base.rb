@@ -64,6 +64,9 @@ module SemanticLogger
       #     :with_source also logs error_highlight's snippet of the failing source line. It is
       #     about 100 times slower, since it re-parses that source file, and it copies source
       #     code into the log.
+      #     On Ruby 3.2 a NameError or NoMethodError builds its message from receiver.inspect each
+      #     time it is asked, and logging the details asks for it twice more, so turn this off when
+      #     inspecting the receivers of logged exceptions is slow.
       #     Default: true for the Default, Color, and Pattern text formatters, false otherwise.
       def initialize(time_format: nil,
                      log_host: true,

@@ -350,13 +350,9 @@ module SemanticLogger
     private
 
     def extract_exception_details(exception, source)
-      detailed =
-        begin
-          exception.detailed_message(highlight: false, error_highlight: source)
-        rescue ArgumentError
-          # An override of #detailed_message that does not accept extra keyword arguments.
-          exception.detailed_message(highlight: false)
-        end
+      detailed = full_detailed_message(exception, source)
+      return unless detailed
+
       base = EXCEPTION_DETAILED_MESSAGE.bind_call(exception, highlight: false)
       # An override that does not build on Ruby's message cannot be separated from it.
       return unless detailed.is_a?(String) && detailed.start_with?(base)
@@ -366,6 +362,24 @@ module SemanticLogger
     rescue StandardError
       # Never let an exception's own #detailed_message stop the log entry being written.
       nil
+    end
+
+    # Returns [String] the exception's #detailed_message, with or without error_highlight's
+    # source snippet, or nil when the snippet cannot be left out.
+    def full_detailed_message(exception, source)
+      exception.detailed_message(highlight: false, error_highlight: source)
+    rescue ArgumentError
+      # An override of #detailed_message that does not accept extra keyword arguments. Calling it
+      # without `error_highlight: false` lets error_highlight add its source snippet, so only do so
+      # when the snippet was asked for, or error_highlight does not decorate this exception.
+      return if !source && error_highlighted?(exception)
+
+      exception.detailed_message(highlight: false)
+    end
+
+    # Whether error_highlight adds a source snippet to this exception's #detailed_message.
+    def error_highlighted?(exception)
+      defined?(ErrorHighlight::CoreExt) && exception.is_a?(ErrorHighlight::CoreExt)
     end
   end
 end

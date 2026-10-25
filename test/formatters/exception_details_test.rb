@@ -75,8 +75,15 @@ module SemanticLogger
           assert_includes format(Color.new), "Order rejected#{AnsiColors::CLEAR}\n  order_id: 42\n"
         end
 
-        it "OneLine does not log the details" do
+        it "OneLine does not log the details by default" do
           refute_includes format(OneLine.new), "order_id"
+        end
+
+        it "OneLine joins the details onto the same line when enabled" do
+          output = format(OneLine.new(log_exception_details: true))
+
+          assert_includes output, "Order rejected -- order_id: 42"
+          refute_includes output, "\n"
         end
 
         describe "Raw" do

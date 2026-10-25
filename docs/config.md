@@ -517,8 +517,10 @@ The `log_exception_details` formatter option controls it:
 
 It defaults to `true` for the `:default`, `:color`, and `:pattern` formatters, and to `false` for
 every other formatter, including `:one_line` and the syslog formatters, so their output does not
-change. With the `:json` formatter and the others built on `:raw`, it adds an `exception.details`
-field (and `details` within each `cause`):
+change. The syslog appender also turns it off for the formatter it uses with a local syslog daemon.
+When enabled, `:one_line` joins the detail onto the same line, after ` -- `. With the `:json`
+formatter and the others built on `:raw`, it adds an `exception.details` field (and `details`
+within each `cause`):
 
 ```ruby
 # Include the error_highlight source snippet in development:
@@ -529,6 +531,17 @@ SemanticLogger.add_appender(file_name: "production.json", formatter: {json: {log
 ```
 
 The pattern formatter's `%{exception_details}` directive interpolates the detail.
+
+Notes:
+
+* On Ruby 3.2, a `NameError` or `NoMethodError` calls `inspect` on its receiver every time its
+  message is built, and logging the detail builds it twice more. If the receivers of logged
+  exceptions are slow to inspect, set `log_exception_details: false`. Ruby 3.3 and later do not
+  inspect the receiver.
+* An exception class that overrides `#detailed_message` without accepting extra keyword arguments
+  (`def detailed_message(highlight: false)`) cannot be asked to leave out error_highlight's source
+  snippet. When error_highlight decorates that exception (a `NameError`, `TypeError`, or
+  `ArgumentError`), its detail is only logged with `:with_source`.
 
 ---
 
