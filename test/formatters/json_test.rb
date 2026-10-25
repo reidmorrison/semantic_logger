@@ -188,6 +188,23 @@ module SemanticLogger
             assert_equal({"naïve" => "Bad: "}, parsed["payload"])
           end
         end
+
+        describe "payload values that JSON cannot represent" do
+          it "serializes a float that is not finite, instead of dropping the event" do
+            log.message = "Transfer"
+            log.payload = {amount: "1e400".to_f}
+
+            assert_equal "Transfer", parsed["message"]
+            assert_equal({"amount" => "Infinity"}, parsed["payload"])
+          end
+
+          it "serializes request params nested as deeply as JSON.parse accepts" do
+            log.message = "Completed #create"
+            log.payload = {params: JSON.parse("#{'{"a":' * 100}1#{'}' * 100}")}
+
+            assert_equal "Completed #create", parsed["message"]
+          end
+        end
       end
     end
   end

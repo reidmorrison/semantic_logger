@@ -38,6 +38,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   only differ by type, such as `:level` and `"level"`, are now emitted once, keeping the earlier
   field. Nested values (a Hash or an Array, such as the exception backtrace) are emitted as quoted
   JSON instead of their `#inspect` text, which could print an object's instance variables.
+- The JSON based formatters no longer drop a log event whose payload JSON cannot represent.
+  `Infinity` and `NaN` (for example `params[:amount].to_f` with `"1e400"`) are serialized as
+  strings, and a structure nested too deeply, such as a request body as deep as `JSON.parse`
+  accepts logged inside the request params, is replaced below 32 levels with its `#inspect`
+  text. Previously the whole event failed to serialize, so an attacker could keep their own
+  request out of JSON logs.
 
 ### Added
 

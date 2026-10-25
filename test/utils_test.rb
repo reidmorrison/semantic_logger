@@ -137,11 +137,39 @@ module SemanticLogger
         end
 
         it "re-raises errors that cleansing cannot fix" do
-          # NaN is not representable in JSON and is unrelated to encoding, so the
-          # retry after cleansing must still raise rather than swallow it.
+          # An object whose own #to_json raises cannot be repaired, so the retry after
+          # cleansing must still raise rather than swallow it.
+          broken = Object.new
+          def broken.to_json(*) = raise(JSON::GeneratorError, "cannot serialize")
+
           assert_raises(JSON::GeneratorError) do
-            SemanticLogger::Utils.to_json({value: Float::NAN})
+            SemanticLogger::Utils.to_json({value: broken})
           end
+        end
+
+        it "serializes Infinity and NaN as strings" do
+          result = SemanticLogger::Utils.to_json(
+            {amount: "1e400".to_f, loss: -Float::INFINITY, ratio: Float::NAN, ok: 1.5}
+          )
+
+          assert_equal({"amount" => "Infinity", "loss" => "-Infinity", "ratio" => "NaN", "ok" => 1.5},
+                       JSON.parse(result))
+        end
+
+        it "serializes a structure nested as deeply as JSON.parse accepts" do
+          # A request body that JSON.parse accepts, logged inside the payload as
+          # rails_semantic_logger logs request params, is nested past the generator limit.
+          body   = "#{'{"a":' * 99}1#{'}' * 99}"
+          result = SemanticLogger::Utils.to_json({payload: {params: JSON.parse(body)}})
+
+          assert_kind_of Hash, JSON.parse(result)
+        end
+
+        it "serializes a structure that references itself" do
+          looped = {name: "loop"}
+          looped[:self] = looped
+
+          assert_kind_of Hash, JSON.parse(SemanticLogger::Utils.to_json(looped))
         end
       end
 

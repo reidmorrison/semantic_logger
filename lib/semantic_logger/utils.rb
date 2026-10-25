@@ -90,23 +90,63 @@ module SemanticLogger
       strip_paths.any? { |exclude| path.start_with?(exclude) }
     end
 
-    # Serializes the value to JSON, repairing invalid UTF-8 only when necessary.
+    # Serializes the value to JSON, repairing the data only when necessary.
     #
-    # Non UTF-8 data appears in well under 1% of log events, so it is wasteful to
-    # walk and reallocate the entire structure (see .encode_utf8) on every call.
-    # Instead this attempts `.to_json` directly and only falls back to cleansing
-    # when serialization fails because of an encoding problem.
+    # Data that JSON cannot represent appears in well under 1% of log events, so it
+    # is wasteful to walk and reallocate the entire structure (see .json_safe) on
+    # every call. Instead this attempts `.to_json` directly and only falls back to a
+    # repaired copy when serialization fails because of the data:
+    # * Invalid UTF-8. Depending on the json gem version this raises
+    #   Encoding::UndefinedConversionError (an EncodingError) or JSON::GeneratorError.
+    # * Infinity and NaN, which raise JSON::GeneratorError.
+    # * Structures nested deeper than the json gem allows, which raise
+    #   JSON::NestingError (a JSON::ParserError, not a GeneratorError).
     #
-    # The exception raised for non UTF-8 data depends on the json gem version:
-    # older versions raise Encoding::UndefinedConversionError (an EncodingError),
-    # newer versions wrap it as JSON::GeneratorError, so both are rescued. The
-    # retry is attempted only once: if it still fails (for example a
-    # JSON::GeneratorError caused by something other than encoding, such as NaN),
-    # the error propagates unchanged rather than being swallowed.
+    # Log data can come from untrusted input, for example a float parsed from a request
+    # parameter or a deeply nested request body. Without the repair, such a value would
+    # make the whole log event impossible to serialize, and so silently dropped.
+    #
+    # The retry is attempted only once: if it still fails (for example an object whose
+    # own #to_json raises), the error propagates unchanged rather than being swallowed.
     def self.to_json(value)
       value.to_json
-    rescue JSON::GeneratorError, EncodingError
-      encode_utf8(value).to_json
+    rescue JSON::GeneratorError, JSON::NestingError, EncodingError
+      json_safe(value).to_json
+    end
+
+    # Nesting depth after which .json_safe replaces a Hash or Array with its #inspect
+    # text. Well below the json gem's default max_nesting of 100, leaving room for the
+    # levels that a formatter wraps the payload in.
+    MAX_JSON_SAFE_DEPTH = 32
+
+    # Maximum length of the #inspect text that replaces a structure nested too deeply.
+    MAX_JSON_SAFE_INSPECT = 1_024
+
+    # Returns a copy of the supplied value that JSON can represent:
+    # * Every String is converted to valid UTF-8, as by .encode_utf8.
+    # * Infinity and NaN floats become the Strings "Infinity", "-Infinity", and "NaN".
+    # * A Hash or Array nested deeper than MAX_JSON_SAFE_DEPTH is replaced with its
+    #   (truncated) #inspect text. This also ends a self-referencing structure.
+    # Any other value is returned as-is.
+    def self.json_safe(value, depth = 0)
+      case value
+      when String
+        encode_utf8_string(value)
+      when Float
+        value.finite? ? value : value.to_s
+      when Hash, Array
+        return encode_utf8_string(value.inspect[0, MAX_JSON_SAFE_INSPECT]) if depth >= MAX_JSON_SAFE_DEPTH
+
+        if value.is_a?(Hash)
+          value.each_with_object({}) do |(key, val), hash|
+            hash[json_safe(key, depth + 1)] = json_safe(val, depth + 1)
+          end
+        else
+          value.map { |element| json_safe(element, depth + 1) }
+        end
+      else
+        value
+      end
     end
 
     # Returns a copy of the supplied value with every String converted to valid UTF-8.
