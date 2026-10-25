@@ -97,8 +97,9 @@ and are therefore not automatically included by this gem:
 - HoneybadgerInsights Appender: gem 'honeybadger'
 - NewRelic Appender: gem 'newrelic_rpm'
 - NewRelicLogs Appender: gem 'newrelic_rpm'
-- Syslog Appender: gem 'syslog_protocol' 0.9.2 or above
-- Syslog Appender to a remote syslogng server over TCP or UDP: gem 'net_tcp_client'
+- Syslog Appender to a local syslog daemon: gem 'syslog' (a bundled gem since Ruby 3.4)
+- Syslog Appender to a remote syslog server over TCP or UDP: gem 'syslog_protocol' 0.9.2 or above
+- Syslog Appender to a remote syslog server over TCP: gem 'net_tcp_client'
 - Splunk Appender: gem 'splunk-sdk-ruby'
 - Elasticsearch Appender: gem 'elasticsearch'
 - OpenSearch Appender: gem 'opensearch-ruby'

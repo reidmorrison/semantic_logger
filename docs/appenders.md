@@ -86,7 +86,7 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [HTTP(S)](#https) | `appender: :http` | |
 | [TCP (+SSL)](#tcp-appender-ssl) | `appender: :tcp` | `net_tcp_client` |
 | [UDP](#udp-appender) | `appender: :udp` | |
-| [Syslog](#syslog) | `appender: :syslog` | `syslog_protocol`, `net_tcp_client` (remote) |
+| [Syslog](#syslog) | `appender: :syslog` | `syslog` (local, Ruby 3.4+), `syslog_protocol` (remote), `net_tcp_client` (TCP) |
 
 **Centralized logging and log aggregators**
 
@@ -262,6 +262,9 @@ Notes:
 * The layout above is formatted for readability. The real output is a single line terminated by one
   newline, with no embedded newlines.
 * A field with a `nil` value is excluded from the output.
+* To also log the detail Ruby adds to an exception's message, such as did_you_mean suggestions, as
+  `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
+  See [Exception details](config.html#exception-details).
 
 ### Fluentd
 
@@ -510,7 +513,8 @@ SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", formatter:
 
 ### Syslog
 
-Log to a local Syslog daemon:
+Log to a local Syslog daemon. Since Ruby 3.4 `syslog` is a bundled gem, so add `gem "syslog"` to the
+Gemfile:
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :syslog)
@@ -523,11 +527,31 @@ The default packet size is 1024 bytes:
 SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514", max_size: 2048)
 ~~~
 
+`max_size` also applies when `formatter:` names the `:syslog` or `:syslog_cee` formatter. A
+formatter passed as an instance uses its own `max_size`, which also defaults to 1024 bytes:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", formatter: :syslog_cee, max_size: 2048)
+~~~
+
 Or over UDP (the `syslog_protocol` gem is required):
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514")
 ~~~
+
+Set the facility with one of Ruby's `::Syslog::LOG_*` facility constants (the default is
+`::Syslog::LOG_USER`). For remote syslog without the `syslog` gem, the same constants are available
+from `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatters::Syslog::LOG_LOCAL0`:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facility: ::Syslog::LOG_LOCAL0)
+~~~
+
+The `facility:`, `level_map:`, and `max_size:` options also apply when `formatter:` names the `:syslog` or
+`:syslog_cee` formatter, for example `formatter: :syslog_cee`. Options given to the formatter itself,
+as in `formatter: {syslog: {facility: ::Syslog::LOG_LOCAL1}}`, take precedence. A formatter passed
+as an instance keeps its own settings.
 
 Add a filter to exclude noisy entries such as health checks:
 

@@ -91,6 +91,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`cleansed_message`|`String`|The message with Rails/ANSI color escape codes stripped. Used to keep terminal codes out of structured output.|
 |`each_exception`|Enumerator|Iterates the exception and its nested `cause` chain, yielding `(exception, depth)`.|
 |`backtrace_to_s`|`String`|The exception backtrace as a string, including every exception in the `cause` chain.|
+|`exception_details(exception, source: false)`|`String` or `nil`|The detail Ruby's `Exception#detailed_message` adds to the message of `exception` (this event's exception or one of its causes), such as did_you_mean suggestions, without the class name. `source: true` also includes error_highlight's source snippet. `nil` when there is none. Cached on the event.|
 |`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's backtrace or exception. Pass `true` for just the base file name.|
 |`to_h`|`Hash`|The event as a plain Hash (via the Raw formatter), including `host`, `application`, and `environment`. Handy for inspecting an event or building a custom formatter.|
 |`set_context(key, value)`|`Hash`|Lazily initializes `context` and stores a key/value pair on it.|

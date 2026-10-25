@@ -1,4 +1,3 @@
-require "syslog"
 require "uri"
 require "socket"
 # Send log messages to local syslog, or remote syslog servers over TCP or UDP.
@@ -78,7 +77,7 @@ module SemanticLogger
       #     Default: 1024 bytes
       #
       #   options: [Integer]
-      #     Default: ::Syslog::LOG_PID | ::Syslog::LOG_CONS
+      #     Default: ::Syslog::LOG_PID | ::Syslog::LOG_CONS (when logging to a local syslog daemon)
       #     Any of the following (options can be logically OR'd together)
       #       ::Syslog::LOG_CONS
       #       ::Syslog::LOG_NDELAY
@@ -91,7 +90,7 @@ module SemanticLogger
       #        I.e. When `url: 'syslog://localhost'`
       #
       #   facility: [Integer]
-      #     Default: ::Syslog::LOG_USER
+      #     Default: ::Syslog::LOG_USER (the same value as SemanticLogger::Formatters::Syslog::LOG_USER)
       #     Type of program (can be logically OR'd together)
       #       ::Syslog::LOG_AUTH
       #       ::Syslog::LOG_AUTHPRIV
@@ -124,17 +123,17 @@ module SemanticLogger
       #     # Change the warn level to LOG_NOTICE level instead of a the default of LOG_WARNING.
       #     SemanticLogger.add_appender(appender: :syslog, level_map: {warn: ::Syslog::LOG_NOTICE})
       def initialize(url: "syslog://localhost",
-                     facility: ::Syslog::LOG_USER,
-                     max_size: 1024,
+                     facility: SemanticLogger::Formatters::Syslog::LOG_USER,
+                     max_size: SemanticLogger::Formatters::Syslog::DEFAULT_MAX_SIZE,
                      level_map: SemanticLogger::Formatters::Syslog::LevelMap.new,
-                     options: ::Syslog::LOG_PID | ::Syslog::LOG_CONS,
+                     options: nil,
                      tcp_client: {},
                      **args,
                      &)
         @options            = options
         @facility           = facility
         @max_size           = max_size
-        @level_map          = level_map
+        @level_map          = SemanticLogger::Formatters::Syslog::LevelMap.build(level_map)
         @url                = url
         uri                 = URI(@url)
         @server             = uri.host || "localhost"
@@ -145,26 +144,34 @@ module SemanticLogger
 
         raise "Unknown protocol #{@protocol}!" unless %i[syslog tcp udp].include?(@protocol)
 
-        # The syslog_protocol gem is required when logging over TCP or UDP.
-        if %i[tcp udp].include?(@protocol)
+        # The syslog gem, a bundled gem since Ruby 3.4, is only required when logging to a local syslog daemon.
+        if @protocol == :syslog
           begin
-            require "syslog_protocol"
+            require "syslog"
           rescue LoadError
             raise LoadError,
-                  "Missing gem: syslog_protocol. This gem is required when logging over TCP or UDP. " \
-                  "To fix this error: gem install syslog_protocol"
+                  "Missing gem: syslog. This gem is required when logging to a local syslog daemon on Ruby 3.4 " \
+                  'and later. Please add the gem "syslog" to your Gemfile.'
           end
+          @options ||= ::Syslog::LOG_PID | ::Syslog::LOG_CONS
+        end
 
-          # The net_tcp_client gem is required when logging over TCP.
-          if protocol == :tcp
-            begin
-              require "net/tcp_client"
-            rescue LoadError
-              raise LoadError,
-                    "Missing gem: net_tcp_client. This gem is required when logging over TCP. " \
-                    "To fix this error: gem install net_tcp_client"
-            end
+        # The net_tcp_client gem is required when logging over TCP.
+        # The syslog formatters load the syslog_protocol gem that they use to build remote syslog packets.
+        if @protocol == :tcp
+          begin
+            require "net/tcp_client"
+          rescue LoadError
+            raise LoadError,
+                  "Missing gem: net_tcp_client. This gem is required when logging over TCP. " \
+                  "To fix this error: gem install net_tcp_client"
           end
+        end
+
+        if %i[tcp udp].include?(@protocol)
+          # Reject an invalid facility when the appender is created, even with a formatter that ignores it.
+          SemanticLogger::Formatters::Syslog.facility_number(@facility)
+          args[:formatter] = with_packet_options(args[:formatter]) if args.key?(:formatter)
         end
 
         super(**args, &)
@@ -218,10 +225,31 @@ module SemanticLogger
         if protocol == :syslog
           # Format is text output without the time.
           # Escape control characters so untrusted log data cannot forge syslog entries.
-          SemanticLogger::Formatters::Default.new(time_format: :notime, escape_control_chars: true)
+          # Exception details are off, as with the remote syslog formatters, so existing records do not change.
+          SemanticLogger::Formatters::Default.new(
+            time_format: :notime, escape_control_chars: true, log_exception_details: false
+          )
         else
           SemanticLogger::Formatters::Syslog.new(facility: facility, level_map: level_map, max_size: max_size)
         end
+      end
+
+      # The formatters that build remote syslog packets, and so need this appender's facility, level map,
+      # and maximum packet size.
+      PACKET_FORMATTERS = %i[syslog syslog_cee].freeze
+      private_constant :PACKET_FORMATTERS
+
+      private
+
+      # Returns the supplied `formatter:` argument, with this appender's facility, level map, and
+      # maximum packet size added when it names one of the PACKET_FORMATTERS, so that they are not
+      # silently ignored. Options in a
+      # `{syslog: {...}}` Hash take precedence. A formatter instance keeps its own settings.
+      def with_packet_options(formatter)
+        name, options = formatter.is_a?(Hash) ? formatter.first : [formatter, {}]
+        return formatter unless name.respond_to?(:to_sym) && PACKET_FORMATTERS.include?(name.to_sym)
+
+        {name.to_sym => {facility: facility, level_map: level_map, max_size: max_size}.merge(options || {})}
       end
     end
   end

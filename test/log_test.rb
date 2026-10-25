@@ -243,6 +243,118 @@ module SemanticLogger
         end
       end
 
+      describe "#exception_details" do
+        # Supplies its own detail, the same way on every Ruby version.
+        detailed_error = Class.new(StandardError) do
+          def detailed_message(highlight: false, **)
+            "#{super}\n  order_id: 42"
+          end
+        end
+
+        let(:raised) do
+          lambda do |&block|
+            block.call
+          rescue Exception => e
+            e
+          end
+        end
+
+        it "returns the detail an exception class adds, without the message or class name" do
+          ex = raised.call { raise detailed_error, "Order rejected" }
+
+          assert_equal "  order_id: 42", log.exception_details(ex)
+        end
+
+        it "returns did_you_mean suggestions" do
+          user_name = "jack"
+          ex        = raised.call { user_name.upcas }
+
+          assert_match(/\ADid you mean\?  upcase/, log.exception_details(ex))
+        end
+
+        it "omits the source snippet by default" do
+          user_name = "jack"
+          ex        = raised.call { user_name.upcas }
+
+          refute_includes log.exception_details(ex), "user_name.upcas"
+        end
+
+        it "includes the source snippet when requested" do
+          user_name = "jack"
+          ex        = raised.call { user_name.upcas }
+
+          assert_includes log.exception_details(ex, source: true), "user_name.upcas"
+        end
+
+        it "returns nil when there is no detail" do
+          assert_nil log.exception_details(exception)
+        end
+
+        it "returns nil for a multi-line message" do
+          ex = raised.call { raise "line one\nline two" }
+
+          assert_nil log.exception_details(ex)
+        end
+
+        it "supports an override that does not accept extra keyword arguments" do
+          strict_error = Class.new(StandardError) do
+            def detailed_message(highlight: false)
+              "#{super}\n  strict detail"
+            end
+          end
+          ex = raised.call { raise strict_error, "strict" }
+
+          assert_equal "  strict detail", log.exception_details(ex)
+        end
+
+        it "omits the source snippet when an error_highlight override does not accept extra keyword arguments" do
+          ex = raised.call { raise NameError.new("strict", :user_name) }
+          # Stands in for error_highlight's snippet, which it only adds to an exception raised by a failing call.
+          ex.define_singleton_method(:detailed_message) do |highlight: false|
+            "#{super(highlight: highlight)}\n  user_name.upcas\n           ^^^^^^"
+          end
+
+          assert_nil log.exception_details(ex)
+          assert_includes log.exception_details(ex, source: true), "user_name.upcas"
+        end
+
+        it "returns nil when an override raises" do
+          raising_error = Class.new(StandardError) do
+            def detailed_message(**)
+              raise "broken override"
+            end
+          end
+          ex = raised.call { raise raising_error, "raising" }
+
+          assert_nil log.exception_details(ex)
+        end
+
+        it "returns nil when an override replaces the message" do
+          rewriting_error = Class.new(StandardError) do
+            def detailed_message(**)
+              "something else entirely"
+            end
+          end
+          ex = raised.call { raise rewriting_error, "rewrite" }
+
+          assert_nil log.exception_details(ex)
+        end
+
+        it "calls #detailed_message once per exception and option" do
+          ex    = raised.call { raise detailed_error, "Order rejected" }
+          calls = 0
+          ex.define_singleton_method(:detailed_message) do |**opts|
+            calls += 1
+            super(**opts)
+          end
+
+          3.times { log.exception_details(ex) }
+          log.exception_details(ex, source: true)
+
+          assert_equal 2, calls
+        end
+      end
+
       describe "#duration_human and #duration_to_s" do
         it "returns nil without a duration" do
           assert_nil log.duration_human

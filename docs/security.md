@@ -109,7 +109,8 @@ SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 
 ### Dependencies and supply chain
 
-Semantic Logger has a single runtime dependency, `concurrent-ruby`. Appenders for
+Semantic Logger has two runtime dependencies, `concurrent-ruby` and `logger` (part of
+Ruby's standard library until Ruby 4.0 moved it to the bundled gems). Appenders for
 third-party services (Kafka, MongoDB, Sentry, etc.) keep their backing gem optional: it
 is required lazily inside the appender only when that appender is used, and is never
 added to the gemspec. This keeps the dependency surface of an application that only uses

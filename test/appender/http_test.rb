@@ -107,6 +107,60 @@ module Appender
         end
       end
 
+      describe "#inspect" do
+        let(:credentials) { %w[url-password proxy-password header-token query-token] }
+
+        let(:appender_with_credentials) do
+          Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Http.new(
+              url:       "https://user:url-password@localhost:8088/path?token=query-token",
+              proxy_url: "http://proxy-user:proxy-password@localhost:3128",
+              header:    {"Authorization" => "Bearer header-token"}
+            )
+          end
+        end
+
+        it "omits credentials" do
+          inspected = appender_with_credentials.inspect
+
+          credentials.each { |credential| refute_includes inspected, credential }
+        end
+
+        it "shows the server, port, and path" do
+          inspected = appender_with_credentials.inspect
+
+          assert_includes inspected, '@server="localhost"'
+          assert_includes inspected, "@port=8088"
+          assert_includes inspected, '@path="/path"'
+        end
+
+        it "includes the object address, like Kernel#inspect" do
+          assert_match(/\A#<SemanticLogger::Appender::Http:0x\h+ @/, appender_with_credentials.inspect)
+        end
+
+        it "omits instance variables a subclass adds" do
+          subclass = Class.new(SemanticLogger::Appender::Http) do
+            def initialize(api_key:, **)
+              @api_key = api_key
+              super(**)
+            end
+          end
+          inspected = Net::HTTP.stub_any_instance(:start, true) do
+            subclass.new(api_key: "subclass-secret", url: "http://localhost:8088/path").inspect
+          end
+
+          refute_includes inspected, "subclass-secret"
+        end
+
+        it "omits credentials when wrapped in an async proxy" do
+          async = SemanticLogger::Appender::Async.new(appender: appender_with_credentials)
+          inspected = async.inspect
+          async.close
+
+          credentials.each { |credential| refute_includes inspected, credential }
+        end
+      end
+
       describe "query parameters" do
         it "has no query when the url carries none" do
           assert_nil appender.query

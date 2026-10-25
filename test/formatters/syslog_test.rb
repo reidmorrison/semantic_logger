@@ -26,6 +26,40 @@ module SemanticLogger
           formatter
         end
 
+        describe "constants" do
+          # The formatter defines these itself so that remote syslog works without the syslog gem.
+          it "match the values of the ::Syslog constants" do
+            names = %i[LOG_CRIT LOG_ERR LOG_WARNING LOG_NOTICE LOG_INFO LOG_DEBUG
+                       LOG_KERN LOG_USER LOG_MAIL LOG_DAEMON LOG_AUTH LOG_SYSLOG LOG_LPR LOG_NEWS
+                       LOG_UUCP LOG_CRON LOG_AUTHPRIV LOG_FTP] + (0..7).map { |i| :"LOG_LOCAL#{i}" }
+
+            names.each do |name|
+              assert_equal ::Syslog.const_get(name), SemanticLogger::Formatters::Syslog.const_get(name), name
+            end
+          end
+        end
+
+        describe ".require_syslog_protocol" do
+          it "explains how to add the gem when it is missing" do
+            missing = ->(_name) { raise LoadError, "cannot load such file -- syslog_protocol" }
+            error   = SemanticLogger::Formatters::Syslog.stub(:require, missing) do
+              assert_raises(LoadError) { SemanticLogger::Formatters::Syslog.require_syslog_protocol }
+            end
+
+            assert_includes error.message, 'gem "syslog_protocol"'
+          end
+
+          it "is called by both syslog formatters" do
+            called = 0
+            SemanticLogger::Formatters::Syslog.stub(:require_syslog_protocol, -> { called += 1 }) do
+              SemanticLogger::Formatters::Syslog.new
+              SemanticLogger::Formatters::SyslogCee.new
+            end
+
+            assert_equal 2, called
+          end
+        end
+
         describe "#initialize" do
           it "defaults the facility to LOG_USER" do
             assert_equal ::Syslog::LOG_USER, SemanticLogger::Formatters::Syslog.new.facility
@@ -49,6 +83,20 @@ module SemanticLogger
             mapped    = SemanticLogger::Formatters::Syslog.new(level_map: level_map)
 
             assert_same level_map, mapped.level_map
+          end
+
+          it "rejects an invalid facility set after creation" do
+            formatter = SemanticLogger::Formatters::Syslog.new
+
+            assert_raises(ArgumentError) { formatter.facility = 1 }
+            assert_equal ::Syslog::LOG_USER, formatter.facility
+          end
+
+          it "sends a facility set after creation" do
+            formatter.facility = ::Syslog::LOG_LOCAL0
+
+            # local0 (16) and severity notice (5): 16 * 8 + 5
+            assert_match(/\A<133>/, formatter.call(log, appender.logger))
           end
 
           it "escapes control characters by default" do
@@ -105,7 +153,56 @@ module SemanticLogger
           end
         end
 
+        describe ".facility_number" do
+          it "converts each ::Syslog facility constant to its facility number" do
+            assert_equal 0, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_KERN)
+            assert_equal 1, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_USER)
+            assert_equal 16, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_LOCAL0)
+            assert_equal 23, SemanticLogger::Formatters::Syslog.facility_number(::Syslog::LOG_LOCAL7)
+          end
+
+          it "rejects a value that is not a ::Syslog facility constant" do
+            [1, 13, 23 << 4, "user", nil].each do |facility|
+              assert_raises(ArgumentError) { SemanticLogger::Formatters::Syslog.facility_number(facility) }
+            end
+          end
+
+          it "rejects an invalid facility when the formatter is created" do
+            assert_raises(ArgumentError) { SemanticLogger::Formatters::Syslog.new(facility: 1) }
+          end
+        end
+
+        describe "max_size" do
+          it "defaults to 1024 bytes" do
+            assert_equal 1024, SemanticLogger::Formatters::Syslog.new.max_size
+          end
+
+          it "formats with the default when none is supplied" do
+            packet = SemanticLogger::Formatters::Syslog.new.call(log, appender.logger)
+
+            assert_includes packet, "hello world"
+          end
+
+          it "truncates a packet to max_size" do
+            log.message = "x" * 2000
+            packet      = SemanticLogger::Formatters::Syslog.new(max_size: 100).call(log, appender.logger)
+
+            assert_equal 100, packet.bytesize
+          end
+        end
+
         describe "#call" do
+          # PRI is facility number * 8 + severity; info maps to LOG_NOTICE (5) by default.
+          it "sends the user facility by default" do
+            assert_match(/\A<13>/, formatter.call(log, appender.logger))
+          end
+
+          it "sends the supplied facility" do
+            local0 = SemanticLogger::Formatters::Syslog.new(facility: ::Syslog::LOG_LOCAL0, max_size: 1024)
+
+            assert_match(/\A<133>/, local0.call(log, appender.logger))
+          end
+
           it "wraps the message in a syslog packet" do
             packet = formatter.call(log, appender.logger)
 

@@ -66,6 +66,38 @@ jobs:
             commit -q -m "Update coverage badge"
           git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
+  gemspec_only:
+    # The test Gemfile pulls in many gems that depend on standard library gems such as logger,
+    # which hides a missing runtime dependency. Load the gem with only its gemspec dependencies,
+    # and fail on any warning, such as Ruby 3.4 warning that a default gem is becoming bundled.
+    name: "Gemspec dependencies only: Ruby ${{ matrix.ruby }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: [3.2, 3.3, 3.4, "4.0"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+      - name: Load and log with only the gemspec dependencies installed
+        run: |
+          export BUNDLE_GEMFILE="$RUNNER_TEMP/Gemfile"
+          printf 'source "https://rubygems.org"\ngem "semantic_logger", path: "%s"\n' "$GITHUB_WORKSPACE" > "$BUNDLE_GEMFILE"
+          bundle install
+          script='
+            require "semantic_logger"
+            SemanticLogger.sync!
+            SemanticLogger.add_appender(io: $stdout, formatter: :json)
+            SemanticLogger["Check"].info("Loaded with gemspec dependencies only")
+          '
+          if ! bundle exec ruby -e "$script" 2> "$RUNNER_TEMP/stderr.txt" || [ -s "$RUNNER_TEMP/stderr.txt" ]; then
+            cat "$RUNNER_TEMP/stderr.txt"
+            exit 1
+          fi
+
   rubocop:
     name: "RuboCop"
     runs-on: ubuntu-latest

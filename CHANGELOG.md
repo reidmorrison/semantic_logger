@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+- Exceptions are logged with the detail that Ruby's `Exception#detailed_message` adds to the
+  message, such as did_you_mean suggestions (`Did you mean?  upcase`) or the detail an exception
+  class supplies by overriding `#detailed_message`. Since Ruby 3.2 that detail is no longer part of
+  `Exception#message`, which is all Semantic Logger logged. The `log_exception_details` formatter
+  option controls it: `true` (the default for the `:default`, `:color`, and `:pattern` text
+  formatters, so their output gains a line after the exception message when there is detail),
+  `:with_source` to also log error_highlight's source snippet (much slower, since it re-parses the
+  source file), or `false` (the default for every other formatter, so JSON and other structured
+  output does not change unless enabled). Local syslog records do not change either. The `:json`
+  formatter, and the others built on `:raw`, log it as `exception.details`, and `:one_line` joins it
+  onto the same line. The pattern formatter adds an `%{exception_details}` directive.
 - `SemanticLogger.non_blocking = true` drops log messages instead of blocking the calling thread
   when the main pipeline queue is full. Previously `non_blocking:` could only be set on an
   individual async appender's own queue, so `logger.info` could still block on the main queue
@@ -15,6 +26,42 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- The `:syslog` and `:syslog_cee` formatters default `max_size:` to 1024 bytes. The default was
+  the `Integer` class rather than a size, so a syslog formatter chosen explicitly without a
+  `max_size:`, for example `appender: :syslog, formatter: :syslog_cee, url: "udp://..."`, failed
+  on every log entry with `comparison of Integer with Class failed`. The syslog appender's
+  `max_size:` now also reaches a `:syslog` or `:syslog_cee` formatter named by `formatter:`.
+- Remote syslog over TCP or UDP sends the configured facility. The `facility:` option takes a
+  `::Syslog::LOG_*` constant, which is the facility number shifted left by 3 bits, but it was sent
+  unconverted, so the default `::Syslog::LOG_USER` went out as facility `uucp` (`<69>` for an
+  `:info` message instead of `<13>`), and most other constants, such as `::Syslog::LOG_LOCAL0`,
+  raised `ArgumentError` while logging. `facility:` now only accepts the `::Syslog::LOG_*`
+  facility constants, and other values raise `ArgumentError` when the appender is created, except
+  a bare 0, 8, or 16, which are read as `LOG_KERN`, `LOG_USER`, or `LOG_MAIL`. Syslog servers that
+  route on facility, and configurations that passed a bare facility number, may need updating; see the
+  [v5.2 upgrade notes](docs/upgrading.md). The syslog appender's `facility:` and `level_map:` now
+  also reach a `:syslog` or `:syslog_cee` formatter named by `formatter:`, instead of being silently
+  ignored, and setting `facility=` on a syslog formatter is validated the same way.
+- The syslog appender and the `:syslog_cee` formatter accept `level_map:` as a Hash of overrides, as
+  documented. With local syslog, a Hash sent a `nil` severity for every level it did not name, and
+  `:syslog_cee` raised `ArgumentError`.
+- `#inspect` on the HTTP appender and the appenders built on it (`:elasticsearch_http`,
+  `:splunk_http`, `:loki`, and the `:signalfx` metrics appender) no longer shows credentials, for
+  example when `SemanticLogger.appenders` is printed in a console. Only the name, level, server,
+  port, path, compression and timeout settings are shown, so the password, request headers (such
+  as `Authorization` or a token header), the url, proxy url, query string and SSL options are
+  omitted, as is anything a subclass adds. The output has the same form on every Ruby version.
+- The Syslog appender works on Ruby 3.4 and later. Ruby 3.4 moved `syslog` from the default
+  gems to the bundled gems, and the appender required it even when logging to a remote syslogd,
+  which does not use it. Now only a local syslog daemon needs `gem "syslog"`, and a clear error
+  says so when it is missing. Logging to a local syslog daemon also no longer requires the
+  `syslog_protocol` gem, which only the remote syslog formatters use; they load it when they are
+  created rather than when their file loads. The syslog formatters define the
+  severity and facility values they need as `SemanticLogger::Formatters::Syslog::LOG_*`.
+- Semantic Logger loads on Ruby 4.0 without `logger` in the application's Gemfile. Ruby 4.0
+  moved `logger` from the default gems to the bundled gems, so `require "semantic_logger"`
+  raised `LoadError: cannot load such file -- logger` unless another gem happened to depend on
+  it, and Ruby 3.4 warned about it. `logger` is now a declared runtime dependency.
 - The HTTP appender keeps the query string of the url it is configured with, instead of
   silently dropping it, so log servers that take their settings as query parameters can be
   used. For example VictoriaLogs:

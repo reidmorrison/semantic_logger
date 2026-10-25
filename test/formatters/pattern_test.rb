@@ -112,9 +112,25 @@ module SemanticLogger
             assert_includes formatted("%{backtrace}", log_with_exception), "pattern_test.rb"
           end
 
+          it "interpolates the exception details" do
+            user_name = "jack"
+            begin
+              user_name.upcas
+            rescue NoMethodError => e
+              log.exception = e
+            end
+
+            assert_match(/\ADid you mean\?  upcase/, formatted("%{exception_details}"))
+          end
+
+          it "is blank when the exception has no details" do
+            assert_equal "", formatted("%{exception_details}", log_with_exception)
+          end
+
           it "is blank when there is no exception" do
             assert_equal "", formatted("%{exception_class}")
             assert_equal "", formatted("%{exception_message}")
+            assert_equal "", formatted("%{exception_details}")
             assert_equal "", formatted("%{backtrace}")
           end
         end
