@@ -31,7 +31,14 @@ module SemanticLogger
       # that make up nearly every log event.
       UNSAFE_ASCII_KEY_CHARS = /[\x00-\x20="\x7f]/
 
+      # The most Symbol keys to remember as plain, so that untrusted keys cannot grow the cache
+      # without bound.
+      PLAIN_SYMBOL_CACHE_SIZE = 512
+
       def initialize(time_format: :iso_8601, time_key: :timestamp, **args)
+        # Symbol keys known to be plain, mapped to their names. It is replaced rather than
+        # updated, since a formatter can be shared by several threads.
+        @plain_symbols = {}.freeze
         super
       end
 
@@ -83,27 +90,84 @@ module SemanticLogger
       # :duration_ms, are emitted once: the first field wins, so a tag, named tag, or payload
       # key cannot replace a core field this way. Identical keys were already resolved by the
       # merges above, where the payload deliberately takes precedence.
+      #
+      # Nearly every entry only has plain keys that cannot collide, so the emitted keys are only
+      # tracked from the first key that could collide with another.
       def flatten_log
-        seen = {}
         line = +""
+        seen = nil
         @parsed.each_pair do |key, value|
-          key = logfmt_key(key)
-          next if seen.key?(key)
+          name = plain_key(key)
+          if seen || name.nil?
+            seen ||= keys_before(key)
+            name ||= logfmt_key(key)
+            next if seen.key?(name)
 
-          seen[key] = true
+            seen[name] = true
+          end
           line << " " unless line.empty?
-          line << key << "=" << format_value(value)
+          line << name << "=" << format_value(value)
         end
         line
       end
 
+      # Returns [Hash] the encoded keys of the fields before the given key, all of them plain.
+      def keys_before(key)
+        seen = {}
+        @parsed.each_key do |earlier|
+          break if earlier.equal?(key)
+
+          seen[plain_key(earlier)] = true
+        end
+        seen
+      end
+
+      # Integers, true, false, and nil have a single JSON form, so they skip the cost of `to_json`.
+      # Strings, the most common values, are checked first.
       def format_value(value)
+        return Utils.to_json(value) if value.is_a?(String)
+
         case value
+        when Integer, true, false
+          value.to_s
+        when nil
+          "null"
         when Hash, Array
           Utils.to_json(value.to_s)
         else
           Utils.to_json(value)
         end
+      end
+
+      # Returns [String] the key itself when it is already a valid logfmt key that no other key
+      # in this entry can collide with, otherwise nil.
+      #
+      # Such a key is a plain String or Symbol made of ASCII characters that are all safe in a
+      # logfmt key. Two of them can only encode to the same text when one is a Symbol and the
+      # other a String with the same name, since equal Strings, or equal Symbols, are the same
+      # Hash key.
+      def plain_key(key)
+        if key.is_a?(Symbol)
+          name = @plain_symbols[key] || plain_symbol(key)
+          name unless name.nil? || @parsed.key?(name)
+        elsif key.instance_of?(String)
+          key if plain_name?(key)
+        end
+      end
+
+      # Returns [String] the name of the Symbol when it is plain, and remembers it while there
+      # is room.
+      def plain_symbol(symbol)
+        name = symbol.name
+        return unless plain_name?(name)
+
+        plain_symbols  = @plain_symbols
+        @plain_symbols = plain_symbols.merge(symbol => name).freeze if plain_symbols.size < PLAIN_SYMBOL_CACHE_SIZE
+        name
+      end
+
+      def plain_name?(name)
+        !name.empty? && name.ascii_only? && !name.match?(UNSAFE_ASCII_KEY_CHARS)
       end
 
       # Returns [String] the key as valid UTF-8, with every character that would break the logfmt

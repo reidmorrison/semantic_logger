@@ -277,6 +277,91 @@ module SemanticLogger
             end
           end
 
+          describe "given only plain keys" do
+            let(:tags) do
+              %w[web 4f3c2a]
+            end
+
+            let(:named_tags) do
+              {request_id: "abc-123"}
+            end
+
+            let(:expected) do
+              [
+                %(timestamp="2020-07-20T08:32:05.375276Z" level="info" name="DefaultTest" tag="success"),
+                %(web=true 4f3c2a=true request_id="abc-123" count=42 big=1180591620717411303424),
+                %(yes=true no=false none=null ratio=0.5 path="/users/42")
+              ].join(" ")
+            end
+
+            before do
+              log.payload = {count: 42, big: 2**70, yes: true, no: false, none: nil, ratio: 0.5, path: "/users/42"}
+            end
+
+            it "formats every field" do
+              assert_equal expected, formatter.call(log, nil)
+            end
+
+            it "formats the same fields when another key needs encoding" do
+              log.payload = log.payload.merge("a b" => 1)
+
+              assert_equal "#{expected} a_b=1", formatter.call(log, nil)
+            end
+
+            it "formats the same fields on every call" do
+              3.times { assert_equal expected, formatter.call(log, nil) }
+            end
+          end
+
+          describe "given a plain key and a later key that encodes to the same text" do
+            it "keeps the earlier plain key" do
+              log.tags    = ["a_b"]
+              log.payload = {"a b" => "second", "c d" => 1, e: 2}
+              text        = formatter.call(log, nil)
+
+              assert_match(/ a_b=true c_d=1 e=2\z/, text)
+              refute_includes text, "second"
+            end
+          end
+
+          describe "given a Symbol and a String key with the same name" do
+            it "keeps the earlier String key" do
+              log.tags    = ["user"]
+              log.payload = {user: "payload", other: 1}
+              text        = formatter.call(log, nil)
+
+              assert_match(/ user=true other=1\z/, text)
+            end
+
+            it "keeps the earlier Symbol key" do
+              log.named_tags = {user: "named"}
+              log.payload    = {"user" => "payload"}
+              text           = formatter.call(log, nil)
+
+              assert_match(/ user="named"\z/, text)
+            end
+          end
+
+          describe "given many distinct Symbol keys" do
+            it "formats them all while remembering a bounded number" do
+              keys        = Array.new(Logfmt::PLAIN_SYMBOL_CACHE_SIZE + 10) { |i| :"key#{i}" }
+              log.payload = keys.to_h { |key| [key, 1] }
+              text        = formatter.call(log, nil)
+
+              assert_includes text, " key0=1 "
+              assert_match(/ key#{keys.size - 1}=1\z/, text)
+              assert_equal Logfmt::PLAIN_SYMBOL_CACHE_SIZE, formatter.instance_variable_get(:@plain_symbols).size
+            end
+          end
+
+          describe "given a Symbol key that needs encoding" do
+            it "encodes it on every call" do
+              log.payload = {"a b": 1}
+
+              2.times { assert_match(/ a_b=1\z/, formatter.call(log, nil)) }
+            end
+          end
+
           describe "given a set of named tags" do
             let(:named_tags) do
               {
