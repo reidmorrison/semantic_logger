@@ -41,6 +41,20 @@ module SemanticLogger
           it "skips empty message" do
             refute formatter.message
           end
+
+          it "strips carriage returns, which could overwrite the displayed line" do
+            log.message = "user=bob\ruser=admin"
+
+            assert_equal "-- user=bobuser=admin", formatter.message
+          end
+
+          it "escapes control characters when escape_control_chars is enabled" do
+            log.message = "user=bob\r\e[2Kuser=admin\nforged"
+            formatter   = SemanticLogger::Formatters::OneLine.new(escape_control_chars: true)
+            formatter.call(log, nil)
+
+            assert_equal "-- user=bob\\r\\e[2Kuser=admin\\nforged", formatter.message
+          end
         end
 
         describe "exception" do
@@ -52,6 +66,18 @@ module SemanticLogger
 
           it "skips nil exception" do
             refute formatter.exception
+          end
+
+          it "escapes control characters in the exception message when enabled" do
+            begin
+              raise "Oh\e[31m no\nforged"
+            rescue StandardError => e
+              log.exception = e
+            end
+            formatter = SemanticLogger::Formatters::OneLine.new(escape_control_chars: true)
+            formatter.call(log, nil)
+
+            assert_equal "-- Exception: RuntimeError: Oh\\e[31m no\\nforged", formatter.exception
           end
         end
       end

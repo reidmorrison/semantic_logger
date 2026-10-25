@@ -28,6 +28,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:syslog` formatter, which escapes control characters by default, now keeps an entry
   with an exception on a single line, escaping the newlines between the exception and its
   backtrace, so that a receiver framing records by newline does not split it.
+- The `:one_line` formatter honours `escape_control_chars` for the message and the exception
+  message, which it previously ignored, letting carriage returns and ANSI escape sequences
+  through. It also strips carriage returns, not only newlines, by default.
 
 ### Added
 
