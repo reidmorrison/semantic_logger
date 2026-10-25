@@ -198,5 +198,27 @@ class SubscriberTest < Minitest::Test
         assert_nil appender.console_stream
       end
     end
+
+    describe "#message_error?" do
+      it "is true for errors raised by formatting content that cannot be written" do
+        [
+          JSON::GeneratorError.new("cannot serialize"),
+          JSON::NestingError.new("nesting of 101 is too deep"),
+          Encoding::UndefinedConversionError.new("cannot convert"),
+          FloatDomainError.new("NaN")
+        ].each do |exception|
+          assert appender.message_error?(exception), "expected #{exception.class} to be a message error"
+        end
+      end
+
+      it "is false for a response from the destination that cannot be parsed" do
+        refute appender.message_error?(JSON::ParserError.new("unexpected token at '<html>'"))
+      end
+
+      it "is false for other errors, such as the destination being unavailable" do
+        refute appender.message_error?(Errno::ECONNREFUSED.new)
+        refute appender.message_error?(RuntimeError.new("boom"))
+      end
+    end
   end
 end

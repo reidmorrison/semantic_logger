@@ -305,7 +305,37 @@ class QueueProcessorTest < Minitest::Test
           assert_equal 2, processor.processed_count
           assert_equal 1, processor.failed_count
           assert_equal 0, processor.retry_count
-          assert(internal_logger.events.any? { |event| event.message.include?("Discarded a log message") })
+          assert(internal_logger.events.any? { |event| event.message.include?("Discarded") })
+        end
+
+        it "backs off, instead of discarding, when the destination's response cannot be parsed" do
+          processor = build(async_max_retries: 0)
+          appender.stub(:log, ->(_) { JSON.parse("<html>502 Bad Gateway</html>") }) do
+            processor.queue << new_log
+            processor.send(:process)
+          end
+
+          assert_equal 0, processor.failed_count
+          assert_predicate processor, :stopped?
+        end
+
+        it "asks the appender which errors are caused by the content of a message" do
+          processor = build
+          rejected  = Class.new(StandardError)
+          appender.define_singleton_method(:message_error?) { |exception| exception.is_a?(rejected) }
+          processor.queue << new_log(message: "rejected")
+          processor.queue << new_log(message: "last")
+          processor.queue << {command: :close}
+
+          original = appender.method(:log)
+          appender.stub(:log, ->(log) { log.message == "rejected" ? raise(rejected) : original.call(log) }) do
+            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+              processor.send(:process)
+            end
+          end
+
+          assert_equal %w[last], appender.events.map(&:message)
+          assert_equal 1, processor.failed_count
         end
       end
 

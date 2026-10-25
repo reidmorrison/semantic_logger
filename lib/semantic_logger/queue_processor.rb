@@ -16,11 +16,6 @@ module SemanticLogger
     attr_reader :appender, :queue, :max_queue_size, :signal,
                 :processed_count, :dropped_count, :failed_count, :async_max_retries, :retry_count
 
-    # Errors raised because of the content of one log message, rather than because the
-    # destination is unavailable. For example a value that cannot be serialized. Retrying cannot
-    # help, so the message is discarded without backing off, and the rest are still written.
-    MESSAGE_ERRORS = [JSON::JSONError, EncodingError, FloatDomainError].freeze
-
     # Create a new processor and start its worker thread.
     def self.start(**args)
       processor = new(**args)
@@ -118,9 +113,7 @@ module SemanticLogger
     end
 
     # Internal logger used to report problems encountered while processing log messages.
-    def logger
-      appender.logger
-    end
+    def logger = appender.logger
 
     # Returns [Thread] the worker thread.
     #
@@ -319,29 +312,37 @@ module SemanticLogger
 
     # Write one log message to the appender.
     #
-    # A message whose content cannot be written (see MESSAGE_ERRORS) is discarded and reported,
+    # A message whose content cannot be written (see #message_error?) is discarded and reported,
     # without restarting the thread. Any other error, such as the destination being unavailable,
     # propagates to #process, which backs off before retrying.
     def write_message(log)
       appender.log(log)
       @processed_count += 1
-    rescue *MESSAGE_ERRORS => e
+    rescue StandardError => e
+      raise unless message_error?(e)
+
       message_failed(log, e)
     end
 
     # Write the log messages to the appender as a batch.
     #
-    # When the content of a message cannot be written (see MESSAGE_ERRORS), the batch is split in
+    # When the content of a message cannot be written (see #message_error?), the batch is split in
     # half and each half written separately, so that only the offending message is discarded
     # rather than every message in the batch.
     def write_batch(logs)
       appender.batch(logs)
       @processed_count += logs.size
-    rescue *MESSAGE_ERRORS => e
+    rescue StandardError => e
+      raise unless message_error?(e)
       return message_failed(logs.first, e) if logs.size == 1
 
       logs.each_slice((logs.size + 1) / 2) { |half| write_batch(half) }
     end
+
+    # Whether the appender says the exception was caused by the content of a log message, rather
+    # than by the destination. An appender that cannot tell (it does not implement
+    # #message_error?) has every error retried with a back-off.
+    def message_error?(exception) = appender.respond_to?(:message_error?) && appender.message_error?(exception)
 
     # Record and report a log message whose content could not be written.
     def message_failed(log, exception)

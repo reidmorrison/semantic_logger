@@ -166,9 +166,13 @@ logging. Each restart sleeps with an increasing back-off (1 second, then 2, ...)
 message is processed successfully.
 
 A message that fails because of its own content, rather than the destination, is not retried: for
-example a value the formatter cannot serialize (a JSON, encoding, or `FloatDomainError`). That one
-message is discarded and reported to the internal logger, and the thread carries on without backing
-off. In a batch, only that message is discarded; the rest of the batch is still written.
+example a value the formatter cannot serialize (a `JSON::GeneratorError`, `JSON::NestingError`,
+encoding error, or `FloatDomainError`). That one message is discarded and reported to the internal
+logger, and the thread carries on without backing off. In a batch, only that message is discarded;
+the rest of the batch is still written. A `JSON::ParserError`, such as from a destination that
+answered with an HTML error page, is a problem with the destination, so it is retried like any other
+error. The appender decides which errors are caused by message content; see
+[Custom appenders](config.html#custom-appenders).
 
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
 rather than spinning forever on a persistent failure. From then on new log messages for that

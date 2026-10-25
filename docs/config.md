@@ -599,6 +599,20 @@ class SimpleAppender < SemanticLogger::Subscriber
 end
 ~~~
 
+When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
+is retried after a back-off, on the basis that the destination may be briefly unavailable. An
+exception caused by the content of one message cannot succeed on retry, so that message is discarded
+instead. `#message_error?(exception)` decides which is which: by default it recognizes the errors
+raised when formatting a value that cannot be serialized (`JSON::GeneratorError`,
+`JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it to recognize errors your
+appender raises for content it cannot write:
+
+~~~ruby
+def message_error?(exception)
+  exception.is_a?(MyClient::InvalidDocument) || super
+end
+~~~
+
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby

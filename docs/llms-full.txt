@@ -1294,6 +1294,20 @@ class SimpleAppender < SemanticLogger::Subscriber
 end
 ~~~
 
+When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
+is retried after a back-off, on the basis that the destination may be briefly unavailable. An
+exception caused by the content of one message cannot succeed on retry, so that message is discarded
+instead. `#message_error?(exception)` decides which is which: by default it recognizes the errors
+raised when formatting a value that cannot be serialized (`JSON::GeneratorError`,
+`JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it to recognize errors your
+appender raises for content it cannot write:
+
+~~~ruby
+def message_error?(exception)
+  exception.is_a?(MyClient::InvalidDocument) || super
+end
+~~~
+
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby
@@ -3998,9 +4012,13 @@ logging. Each restart sleeps with an increasing back-off (1 second, then 2, ...)
 message is processed successfully.
 
 A message that fails because of its own content, rather than the destination, is not retried: for
-example a value the formatter cannot serialize (a JSON, encoding, or `FloatDomainError`). That one
-message is discarded and reported to the internal logger, and the thread carries on without backing
-off. In a batch, only that message is discarded; the rest of the batch is still written.
+example a value the formatter cannot serialize (a `JSON::GeneratorError`, `JSON::NestingError`,
+encoding error, or `FloatDomainError`). That one message is discarded and reported to the internal
+logger, and the thread carries on without backing off. In a batch, only that message is discarded;
+the rest of the batch is still written. A `JSON::ParserError`, such as from a destination that
+answered with an HTML error page, is a problem with the destination, so it is retried like any other
+error. The appender decides which errors are caused by message content; see
+[Custom appenders](config.html#custom-appenders).
 
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
 rather than spinning forever on a persistent failure. From then on new log messages for that

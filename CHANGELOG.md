@@ -49,9 +49,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   as a client's password) and had no depth limit, so a deep enough structure failed with
   `SystemStackError`.
 - An async or batching appender no longer lets one log message that cannot be written stall
-  the others. A message that fails because of its content (a JSON, encoding, or
-  `FloatDomainError`) is discarded and reported, without the worker thread backing off; in a
-  batch, only that message is discarded instead of the whole batch. Previously a few such
+  the others. A message that fails because of its content (a JSON generator, encoding, or
+  `FloatDomainError`, as decided by the appender's `#message_error?`) is discarded and reported,
+  without the worker thread backing off; in a batch, only that message is discarded instead of
+  the whole batch. Previously a few such
   requests per second could keep the worker asleep until its queue filled and every
   `logger.*` call in the application blocked.
 - Once an async appender's worker thread gives up after `async_max_retries`, new log messages
