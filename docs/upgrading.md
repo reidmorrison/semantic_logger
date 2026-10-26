@@ -171,7 +171,9 @@ server, and so does not need the `syslog` gem, can use the same constants from
   `#inspect_details`.
 * `:cloudwatch_logs` sends the buffered messages in as many requests as the PutLogEvents limits
   need, oldest first, cuts short a message larger than 1 MB, and reports a request that fails to
-  the internal logger.
+  the internal logger. It formats each message when it is logged, writes invalid UTF-8 as valid
+  UTF-8, and discards a message that its formatter cannot write, or writes as something other than
+  a String with content, instead of failing the whole request.
 * `:sentry_ruby` leaves the log entry's payload and named tags unchanged, so every appender after
   it, and your own Hash, keep the keys it reads. A `fingerprint`, user field, or payload of the
   wrong type is sent as data instead of raising.

@@ -33,7 +33,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   for a batch of its own, and reports a request that fails to the internal logger. It sent up to
   4,000 messages in one request, which AWS rejects once over 1 MB, for example when one logged
   value is large, and the error was swallowed by the flush timer, so every message in the batch was
-  lost without a trace.
+  lost without a trace. Each message is now formatted when it is logged, so that one that AWS would
+  reject along with the rest of its request (the formatter fails, or returns something other than a
+  String with content) is discarded on its own, and invalid UTF-8 is repaired. A failure to create a
+  missing log group or stream is reported too, instead of stopping the remaining batches.
 - The `:statsd` metrics appender sends a counter as a single packet (`metric:amount|c`),
   instead of one increment packet per unit of `metric_amount`. A large amount, for example
   one derived from user input, could otherwise flood the network and stall the logging

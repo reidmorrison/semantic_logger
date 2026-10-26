@@ -87,10 +87,14 @@ module SemanticLogger
       end
 
       # Method called to log an event
+      #
+      # Formats the log message now, so that one that cannot be formatted, or that CloudWatch Logs
+      # would reject, raises here for that message alone, and the buffer only holds log events
+      # ready to send.
       def log(log)
-        buffered_logs << log
-
+        buffered_logs << log_event(log)
         put_log_events if buffered_logs.size >= max_buffered_events
+        true
       end
 
       def flush
@@ -125,25 +129,48 @@ module SemanticLogger
 
       private
 
-      # Sends the buffered log messages, in as many requests as the PutLogEvents limits need.
+      # Returns [Hash] the PutLogEvents log event for the log message.
+      def log_event(log)
+        {timestamp: (log.time.to_f * 1000).floor, message: event_message(format_log(log))}
+      end
+
+      # Returns [String] the formatted log message in UTF-8, cut short to the most that a batch can
+      # hold.
+      #
+      # Raises FormatError for a message that CloudWatch Logs would reject, together with every
+      # other message in the same request: one that is not a String, or is empty.
+      def event_message(message)
+        unless message.is_a?(String)
+          raise(FormatError, "Could not format the log message (the formatter returned a #{message.class})")
+        end
+
+        message = Utils.encode_utf8_string(message)
+        raise(FormatError, "Could not format the log message (it is empty)") if message.empty?
+
+        limit = MAX_BATCH_BYTES - EVENT_OVERHEAD_BYTES
+        message.bytesize <= limit ? message : message.byteslice(0, limit).scrub("")
+      end
+
+      # Sends the buffered log events, in as many requests as the PutLogEvents limits need.
       #
       # A request that fails is reported to the internal logger rather than raised: this usually
-      # runs on the timer thread, which discards errors, and the log messages were already taken off
+      # runs on the timer thread, which discards errors, and the log events were already taken off
       # the buffer, so AWS rejecting a batch, for example one over the size limit, lost every
       # message in it without a trace.
       def put_log_events
-        logs = buffered_logs.shift(max_buffered_events)
-        return if logs.none?
+        events = buffered_logs.shift(max_buffered_events)
+        return if events.none?
 
-        log_event_batches(logs).each { |events| put_batch(events) }
+        batches(events).each { |batch| put_batch(batch) }
       end
 
-      # Returns [Array<Array<Hash>>] the log events for the log messages, oldest first, split into
-      # batches that PutLogEvents accepts.
-      def log_event_batches(logs)
+      # Returns [Array<Array<Hash>>] the log events in chronological order, as PutLogEvents requires,
+      # split into batches that it accepts.
+      def batches(events)
         batches = [[]]
         bytes   = 0
-        log_events(logs).each do |event|
+        # Keeps the order of log events with the same timestamp.
+        events.each_with_index.sort_by { |event, index| [event[:timestamp], index] }.each do |event, _index|
           size = event[:message].bytesize + EVENT_OVERHEAD_BYTES
           if batches.last.size >= MAX_BATCH_EVENTS || bytes + size > MAX_BATCH_BYTES
             batches << []
@@ -155,44 +182,48 @@ module SemanticLogger
         batches.reject(&:empty?)
       end
 
-      # Returns [Array<Hash>] the log events for the log messages, in chronological order, as
-      # PutLogEvents requires. A message too large for a batch on its own is cut short, and one that
-      # cannot be formatted is reported and left out, rather than losing the others with it.
-      def log_events(logs)
-        events = logs.filter_map do |log|
-          {timestamp: (log.time.to_f * 1000).floor, message: event_message(format_log(log))}
-        rescue FormatError => e
-          logger.error("Discarded a log message from #{log.name} that could not be formatted", e)
-          nil
-        end
-        # Keeps the order of log messages with the same timestamp.
-        events.each_with_index.sort_by { |event, index| [event[:timestamp], index] }.map(&:first)
-      end
-
-      # Returns [String] the message, cut short to the most that a batch can hold.
-      def event_message(message)
-        limit = MAX_BATCH_BYTES - EVENT_OVERHEAD_BYTES
-        message.bytesize <= limit ? message : message.byteslice(0, limit).scrub("")
-      end
-
+      # Sends one batch, reporting any failure to the internal logger, so that the other batches are
+      # still sent.
       def put_batch(events)
-        client.put_log_events(log_group_name: group, log_stream_name: stream, log_events: events)
-      rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException => e
-        if e.message.include?("log group does not exist.") && create_group
-          client.create_log_group(log_group_name: group)
-          retry
-        elsif e.message.include?("log stream does not exist.") && create_stream
-          client.create_log_stream(log_group_name: group, log_stream_name: stream)
-          retry
-        else
-          report_failed_batch(events, e)
-        end
+        send_batch(events)
       rescue StandardError => e
-        report_failed_batch(events, e)
+        logger.error("Could not send #{events.size} log message(s) to CloudWatch Logs", e)
       end
 
-      def report_failed_batch(events, exception)
-        logger.error("Could not send #{events.size} log message(s) to CloudWatch Logs", exception)
+      # Returns the PutLogEvents response, after creating the log group or stream when it is missing
+      # and this appender may create it.
+      def send_batch(events)
+        created = []
+        begin
+          client.put_log_events(log_group_name: group, log_stream_name: stream, log_events: events)
+        rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException => e
+          resource = missing_resource(e)
+          raise if resource.nil? || created.include?(resource)
+
+          create(resource)
+          created << resource
+          retry
+        end
+      end
+
+      # Returns [:group | :stream | nil] the missing resource that this appender may create.
+      def missing_resource(exception)
+        if exception.message.include?("log group does not exist.") && create_group
+          :group
+        elsif exception.message.include?("log stream does not exist.") && create_stream
+          :stream
+        end
+      end
+
+      def create(resource)
+        if resource == :group
+          client.create_log_group(log_group_name: group)
+        else
+          client.create_log_stream(log_group_name: group, log_stream_name: stream)
+        end
+      rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException
+        # Created meanwhile, for example by another process logging to the same log group.
+        nil
       end
 
       def stream
