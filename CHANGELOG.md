@@ -36,7 +36,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   lost without a trace. Each message is now formatted when it is logged, so that one that AWS would
   reject along with the rest of its request (the formatter fails, or returns something other than a
   String with content) is discarded on its own, and invalid UTF-8 is repaired. A failure to create a
-  missing log group or stream is reported too, instead of stopping the remaining batches.
+  missing log group or stream is reported too, instead of stopping the remaining batches, as are the
+  messages that AWS rejects from a request it accepts, for being too new, too old, or past the log
+  group's retention period.
 - The `:statsd` metrics appender sends a counter as a single packet (`metric:amount|c`),
   instead of one increment packet per unit of `metric_amount`. A large amount, for example
   one derived from user input, could otherwise flood the network and stall the logging

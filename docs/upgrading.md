@@ -170,8 +170,8 @@ server, and so does not need the `syslog` gem, can use the same constants from
   instead of its instance variables. A custom appender can show more by overriding
   `#inspect_details`.
 * `:cloudwatch_logs` sends the buffered messages in as many requests as the PutLogEvents limits
-  need, oldest first, cuts short a message larger than 1 MB, and reports a request that fails to
-  the internal logger. It formats each message when it is logged, writes invalid UTF-8 as valid
+  need, oldest first, cuts short a message larger than 1 MB, and reports to the internal logger a
+  request that fails, and the messages that AWS rejects as too new, too old, or expired. It formats each message when it is logged, writes invalid UTF-8 as valid
   UTF-8, and discards a message that its formatter cannot write, or writes as something other than
   a String with content, instead of failing the whole request.
 * `:sentry_ruby` leaves the log entry's payload and named tags unchanged, so every appender after

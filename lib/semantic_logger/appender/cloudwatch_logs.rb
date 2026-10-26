@@ -185,7 +185,8 @@ module SemanticLogger
       # Sends one batch, reporting any failure to the internal logger, so that the other batches are
       # still sent.
       def put_batch(events)
-        send_batch(events)
+        response = send_batch(events)
+        report_rejected_events(events, response.rejected_log_events_info)
       rescue StandardError => e
         logger.error("Could not send #{events.size} log message(s) to CloudWatch Logs", e)
       end
@@ -224,6 +225,17 @@ module SemanticLogger
       rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException
         # Created meanwhile, for example by another process logging to the same log group.
         nil
+      end
+
+      # PutLogEvents accepts a request in which it rejects some of the log events: those more than 2
+      # hours in the future, older than 14 days, or older than the log group's retention period.
+      def report_rejected_events(events, rejected)
+        return unless rejected
+
+        logger.warn(
+          "CloudWatch Logs rejected some of #{events.size} log message(s) as too new, too old, or expired",
+          rejected.to_h
+        )
       end
 
       def stream

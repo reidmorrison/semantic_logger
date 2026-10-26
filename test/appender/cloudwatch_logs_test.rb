@@ -162,6 +162,25 @@ module Appender
           assert_empty appender.buffered_logs
         end
 
+        it "reports the log messages that AWS rejects in a request it accepts" do
+          original = client.method(:put_log_events)
+          client.define_singleton_method(:put_log_events) do |params|
+            original.call(params)
+            info = Aws::CloudWatchLogs::Types::RejectedLogEventsInfo.new(too_old_log_event_end_index: 1)
+            Aws::CloudWatchLogs::Types::PutLogEventsResponse.new(rejected_log_events_info: info)
+          end
+          buffer("old", Time.now - (15 * 24 * 60 * 60))
+          buffer("new")
+          appender.send(:put_log_events)
+
+          event = internal_logger.events.first
+
+          assert_equal 1, internal_logger.events.size
+          assert_equal :warn, event.level
+          assert_match(/rejected some of 2 log message\(s\) as too new, too old, or expired/, event.message)
+          assert_equal({too_old_log_event_end_index: 1}, event.payload)
+        end
+
         it "reports a failure to create the missing log stream, and still sends the other batches" do
           missing(:stream)
           client.define_singleton_method(:create_log_stream) do |_params|
