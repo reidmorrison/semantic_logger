@@ -81,9 +81,12 @@ logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true)
 
 A hash returned from a logging block, such as
 `logger.debug("Webhook received") { JSON.parse(body, symbolize_names: true) }`, is checked the
-same way: a key is only used as an argument when its value is valid for it, its `message` only
-when the log call supplied none, and its `payload` only when it is a Hash. It never replaces a value
-the log call supplied, and the caller's own payload Hash is left unchanged.
+same way, and never replaces a value the log call supplied. A key is only used as an argument when
+its value is valid for it and the log entry does not have that argument yet: an empty `message`
+counts as none, and a backtrace captured at the `backtrace_level` counts as supplied. Its `payload`
+is only used when it is a Hash. Every other key, including an argument the entry already has, is
+added to the payload without replacing the log call's values, and wins over the block's own
+`payload` values of the same name. The caller's own payload Hash is left unchanged.
 
 The options of a `measure_*` call are checked the same way: an option with a value that is not valid
 for it is ignored, and its default is used. Keys that are not measure options are not logged at all,

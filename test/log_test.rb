@@ -243,6 +243,86 @@ module SemanticLogger
           assert_equal({name: "bob"}, attributes)
           assert_equal({name: "bob", admin: true}, log.payload)
         end
+
+        it "leaves a payload that is not a Hash unchanged when there is nothing to add" do
+          log.payload = "text"
+          log.assign_hash({})
+
+          assert_equal "text", log.payload
+        end
+
+        it "lets the block's own key win over its payload's value, whatever their order" do
+          log.assign_hash(payload: {account_id: 666}, account_id: 42)
+
+          assert_equal({account_id: 42}, log.payload)
+
+          other = SemanticLogger::Log.new("LogTest", :info)
+          other.assign_hash(account_id: 42, payload: {account_id: 666})
+
+          assert_equal({account_id: 42}, other.payload)
+        end
+
+        it "assigns the arguments the log call did not supply" do
+          log.assign_hash(message: "Completed", duration: 1.5, metric: "rails.x", metric_amount: 2,
+                          dimensions: {a: 1}, backtrace: ["app.rb:1"], exception: exception)
+
+          assert_equal "Completed", log.message
+          assert_in_delta(1.5, log.duration)
+          assert_equal "rails.x", log.metric
+          assert_equal 2, log.metric_amount
+          assert_equal({a: 1}, log.dimensions)
+          assert_equal ["app.rb:1"], log.backtrace
+          assert_equal exception, log.exception
+          assert_nil log.payload
+        end
+
+        it "keeps the arguments the log call supplied, adding the block's values to the payload" do
+          supplied = RuntimeError.new("supplied")
+          log.assign(message: "Webhook", duration: 5, metric: "app", metric_amount: 1, dimensions: {a: 1},
+                     backtrace: ["app.rb:1"], exception: supplied)
+          untrusted = {message: "forged", duration: 999, metric: "forged", metric_amount: 9, dimensions: {b: 2},
+                       backtrace: ["forged.rb:1"], exception: exception}
+          backtrace = log.backtrace
+          log.assign_hash(untrusted)
+
+          assert_equal "Webhook", log.message
+          assert_equal 5, log.duration
+          assert_equal "app", log.metric
+          assert_equal 1, log.metric_amount
+          assert_equal({a: 1}, log.dimensions)
+          assert_equal supplied, log.exception
+          assert_equal backtrace, log.backtrace
+          assert_equal untrusted, log.payload
+        end
+
+        it "keeps the backtrace captured at the backtrace level" do
+          with_backtrace_level(:error) do
+            log = SemanticLogger::Log.new("LogTest", :error)
+            log.assign(message: "Webhook")
+            captured = log.backtrace
+            log.assign_hash(backtrace: ["forged.rb:1"])
+
+            refute_nil captured
+            assert_equal captured, log.backtrace
+            assert_equal({backtrace: ["forged.rb:1"]}, log.payload)
+          end
+        end
+
+        it "lets the block's argument the log call supplied win over its payload's value" do
+          log.duration = 5
+          log.assign_hash(payload: {duration: 1}, duration: 2)
+
+          assert_equal 5, log.duration
+          assert_equal({duration: 2}, log.payload)
+        end
+
+        it "uses the message when the log call's message is empty" do
+          log.message = ""
+          log.assign_hash(message: "From block")
+
+          assert_equal "From block", log.message
+          assert_nil log.payload
+        end
       end
 
       describe "#extract_arguments" do

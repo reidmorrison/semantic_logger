@@ -134,8 +134,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   block, as in `logger.info("Webhook") { JSON.parse(body, symbolize_names: true) }`: it assigned
   every key unchecked, so `{"payload": null}` made the call raise, a `duration` or `exception` of
   the wrong type made every formatter drop the entry, its `message` replaced the application's own,
-  and its other keys were written into the caller's payload Hash. A block's `message` is now only
-  used when the log call has none, and it never replaces a value the log call supplied. An
+  and its other keys were written into the caller's payload Hash. A block's log arguments, such as
+  its `message`, `duration`, or `backtrace`, are now only used when the log entry does not have them
+  yet (a backtrace captured at the `backtrace_level` counts), and are otherwise kept in the payload,
+  so the block never replaces a value the log call supplied. An
   `on_exception_level` given as a String or Integer is now stored as its Symbol, and a supplied
   `backtrace` Array is no longer modified. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
 - The file appender's `permissions:` option is only applied to a regular file owned by the

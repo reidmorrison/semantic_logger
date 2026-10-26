@@ -312,6 +312,31 @@ module SemanticLogger
           end
         end
 
+        it "keeps the log call's values over a hash block result" do
+          logger.info("Webhook", duration: 5, account_id: 42) do
+            {payload: {account_id: 666}, duration: 999, account_id: 7}
+          end
+
+          assert_equal "Webhook", last_log.message
+          assert_equal 5, last_log.duration
+          assert_equal({account_id: 42, duration: 999}, last_log.payload)
+        end
+
+        it "uses a hash block result's message when the log call's message is empty" do
+          logger.info("") { {message: "From block"} }
+
+          assert_equal "From block", last_log.message
+        end
+
+        it "assigns the arguments of a hash block result when the log call has none" do
+          logger.info { {message: "Completed", duration: 1.5, metric: "rails.controller.process_action"} }
+
+          assert_equal "Completed", last_log.message
+          assert_in_delta(1.5, last_log.duration)
+          assert_equal "rails.controller.process_action", last_log.metric
+          assert_nil last_log.payload
+        end
+
         it "supports a zero-arity lambda" do
           logger.info(&-> { "From lambda" })
 

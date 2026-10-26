@@ -161,37 +161,25 @@ module SemanticLogger
       true
     end
 
-    # Keys that #assign_hash may assign directly to a log attribute. Every other
-    # key is folded into the payload, preventing a supplied hash from overwriting
-    # sensitive fields such as :level, :name, or :time, and keeping this path
-    # consistent with #extract_arguments.
-    ASSIGNABLE_KEYS = (NON_PAYLOAD_KEYS + %i[payload]).freeze
+    # Log attributes that a Hash returned by a logging block can set (see #assign_hash). Its other
+    # keys go to the payload, so that it cannot set fields such as :level, :name, or :time.
+    ASSIGNABLE_KEYS = %i[message exception backtrace duration metric metric_amount dimensions].freeze
 
-    # Assign the Hash returned by a logging block: known keys to self, all other keys to the payload.
+    # Assign the Hash returned by a logging block, after #assign has applied the log call.
     #
-    # A block can return untrusted data, such as a parsed request body, so the Hash is treated like
-    # one passed after the message (see #extract_arguments): a key is only used as a log argument
-    # when its value is valid for it (an exception must be an Exception), its message only when the
-    # log call supplied none, and its payload only when it is a Hash. Every other key is added to
-    # the payload, without replacing a value that the log call supplied. The payload is copied
-    # first, since it can be the caller's own Hash.
+    # A block can return untrusted data, such as a parsed request body, so its keys are classified
+    # by #extract_arguments, as for a Hash passed after the message. A log argument is only assigned
+    # when this entry does not have it yet (an exception must also be an Exception), and otherwise
+    # goes to the payload like any other key. Whatever the key order, the log call's values win,
+    # then the block's top-level keys, then those of its :payload. No supplied Hash is modified.
     def assign_hash(hash)
-      # A copy of the payload that keys can be added to; a payload that is not a Hash is kept as
-      # its :payload key.
-      merged = merge_payload(payload, {})
-      hash.each_pair do |key, value|
-        # As in #extract_arguments, a nil value means the argument was not supplied.
-        next if value.nil? && ASSIGNABLE_KEYS.include?(key)
-
-        if key == :payload && value.is_a?(Hash)
-          value.each_pair { |name, val| merged[name] = val unless merged.key?(name) }
-        elsif block_argument?(key, value)
-          public_send(:"#{key}=", value)
-        elsif !merged.key?(key)
-          merged[key] = value
-        end
-      end
-      self.payload = merged.empty? ? nil : merged
+      args           = extract_arguments(hash)
+      added          = args.delete(:payload)
+      assigned, kept = args.partition { |key, value| block_attribute?(key, value) }
+      assigned.each { |key, value| public_send(:"#{key}=", value) }
+      # An argument this entry already has wins over the block's :payload, like the block's other keys.
+      added        = merge_payload(kept.to_h, added) unless kept.empty?
+      self.payload = merge_payload(payload, added)
       self
     end
 
@@ -214,7 +202,8 @@ module SemanticLogger
     # not log attributes, or that hold a value that is not valid for it (see .argument?), are kept
     # in the payload. A log attribute key with a nil value counts as not supplied, so #assign uses
     # its default. When the hash supplies an explicit :payload, any other keys are merged into it,
-    # with the explicit payload's values taking precedence.
+    # and win over its values of the same name, since the explicit payload is where untrusted data
+    # goes (see docs/security.md).
     def extract_arguments(payload, message = nil)
       raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
 
@@ -238,7 +227,7 @@ module SemanticLogger
         end
       end
       unless new_payload.empty?
-        args[:payload] = explicit ? merge_payload(args[:payload], new_payload) : new_payload
+        args[:payload] = explicit ? merge_payload(new_payload, args[:payload]) : new_payload
       end
       args[:message] = message if message
       args
@@ -434,23 +423,27 @@ module SemanticLogger
 
     private
 
-    # Returns the explicit payload with the remaining keys of the hash merged in. The remaining
-    # keys win: they are the ones the application passed beside the explicit payload, which is
-    # where docs/security.md says to put untrusted data, so a value in it cannot replace them.
-    def merge_payload(explicit, remaining)
-      return remaining if explicit.nil?
-      return explicit.merge(remaining) if explicit.is_a?(Hash)
+    # Returns the kept payload with the keys of the added one that it does not have, so that a kept
+    # value is never replaced. A payload that is not a Hash is kept as its :payload key, but the kept
+    # payload is returned unchanged when there is nothing to add. Neither payload is modified.
+    def merge_payload(kept, added)
+      added = {payload: added} unless added.nil? || added.is_a?(Hash)
+      return kept if added.nil? || added.empty?
 
-      remaining.merge(payload: explicit)
+      kept = {payload: kept} unless kept.nil? || kept.is_a?(Hash)
+      return added if kept.nil? || kept.empty?
+
+      kept.merge(added) { |_key, kept_value, _added_value| kept_value }
     end
 
-    # Whether a key of the Hash returned by a logging block is assigned to the log attribute of the
-    # same name, rather than added to the payload.
-    def block_argument?(key, value)
-      return message.nil? if key == :message
-      return value.is_a?(Exception) if key == :exception
+    # Whether a log argument from the Hash returned by a logging block, already checked by
+    # .argument?, is assigned to its attribute: only when this entry does not have it yet. As in
+    # #extract_arguments, an empty message counts as none.
+    def block_attribute?(key, value)
+      return message.nil? || message == "" if key == :message
+      return exception.nil? && value.is_a?(Exception) if key == :exception
 
-      ASSIGNABLE_KEYS.include?(key) && respond_to?(:"#{key}=") && Log.argument?(key, value)
+      ASSIGNABLE_KEYS.include?(key) && public_send(key).nil?
     end
   end
 end

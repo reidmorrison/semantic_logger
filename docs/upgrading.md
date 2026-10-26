@@ -121,9 +121,11 @@ server, and so does not need the `syslog` gem, can use the same constants from
   previously consumed or made the call raise. A `nil` value is ignored. When an explicit
   `payload:` is also given, the other keys win over its values of the same name.
 * Hashes returned from a logging block, for example `logger.info("Webhook") { {user: "bob"} }`, are
-  checked the same way. The block's `message` key is only used when the log call supplies no
-  message, and is otherwise kept in the payload, and the block's keys no longer replace values the
-  log call supplied.
+  checked the same way. A log argument from the block, such as `message`, `duration`, `exception`,
+  or `backtrace`, is only used when the log entry does not have it yet, and is otherwise kept in the
+  payload. A backtrace captured because the level is at or above `backtrace_level` counts, so the
+  block's `backtrace` no longer replaces it. The block's keys no longer replace values the log call
+  supplied, and win over the values of the block's own `payload` with the same name.
 * The HTTP appender and the appenders built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
   `:signalfx`): the url in the error logged for a rejected request shows only the scheme, host,
   and port, and `#inspect` shows only the object address and that url.
