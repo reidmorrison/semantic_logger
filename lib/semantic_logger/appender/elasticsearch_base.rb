@@ -154,11 +154,10 @@ module SemanticLogger
         reopen
       end
 
+      # The url is left to the client gem to parse, since it also takes a comma separated list of
+      # urls, an Array of them, or hosts without a scheme.
       def reopen
-        @client = client_class.new(@client_args)
-      rescue URI::InvalidURIError
-        # The client gem puts the url, which can hold a user and password, in its error.
-        raise(URI::InvalidURIError, "Invalid :url or :hosts, it is not a valid URI.", cause: nil)
+        @client = Utils.without_url_in_errors(option: ":url or :hosts") { client_class.new(@client_args) }
       end
 
       # Log to the index for today

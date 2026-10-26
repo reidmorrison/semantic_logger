@@ -25,6 +25,10 @@ module Appender
         refute formatter.log_exception_details
       end
 
+      it "raises for a nil url, rather than logging to the local syslog" do
+        assert_raises(URI::InvalidURIError) { SemanticLogger::Appender::Syslog.new(url: nil) }
+      end
+
       it "handle remote syslog over TCP" do
         message = nil
         Net::TCPClient.stub_any_instance(:closed?, false) do

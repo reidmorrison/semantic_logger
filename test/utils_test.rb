@@ -51,6 +51,36 @@ module SemanticLogger
         end
       end
 
+      describe ".parse_url with nil" do
+        it "raises, rather than parsing an empty url" do
+          error = assert_raises(URI::InvalidURIError) { SemanticLogger::Utils.parse_url(nil) }
+
+          assert_equal "Invalid :url, it is not a valid URI.", error.message
+        end
+      end
+
+      describe ".without_url_in_errors" do
+        it "returns the result of the block" do
+          assert_equal(42, SemanticLogger::Utils.without_url_in_errors { 42 })
+        end
+
+        it "raises an error of the same class, without the url in the message or as the cause" do
+          error_class = Class.new(StandardError)
+          error       = assert_raises(error_class) do
+            SemanticLogger::Utils.without_url_in_errors(option: ":brokers", errors: [error_class]) do
+              raise error_class, "bad broker: user:s3cr3t@host"
+            end
+          end
+
+          assert_equal "Invalid :brokers, it is not a valid URI.", error.message
+          assert_nil error.cause
+        end
+
+        it "leaves other errors alone" do
+          assert_raises(ArgumentError) { SemanticLogger::Utils.without_url_in_errors { raise ArgumentError } }
+        end
+      end
+
       describe ".redacted_url" do
         it "keeps only the scheme, host, and a port that is not the default" do
           assert_equal "https://host:8443", SemanticLogger::Utils.redacted_url("https://user:pw@host:8443/t0ken?api_key=k")

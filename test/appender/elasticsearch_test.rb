@@ -43,6 +43,14 @@ module Appender
         assert_nil error.cause
       end
 
+      it "accepts a comma separated list of urls, which the client gem parses" do
+        appender = client_class.stub_any_instance(:bulk, true) do
+          SemanticLogger::Appender::Elasticsearch.new(url: "http://es1.example.com:9200,http://es2.example.com:9200")
+        end
+
+        assert_instance_of client_class, appender.client
+      end
+
       it "warns that the type: parameter is deprecated" do
         stderr =
           client_class.stub_any_instance(:bulk, true) do

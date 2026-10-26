@@ -28,12 +28,21 @@ module SemanticLogger
 
     # Returns [URI] the parsed url, supplied as the named option.
     #
-    # Raises URI::InvalidURIError without the url in its message, or as its cause, since a url can
-    # hold a user and password, or a token in its path or query string.
+    # Raises URI::InvalidURIError for an invalid url, including nil, as .without_url_in_errors does.
     def self.parse_url(url, option: ":url", hint: nil)
-      URI.parse(url.to_s)
-    rescue URI::InvalidURIError
-      raise(URI::InvalidURIError, ["Invalid #{option}, it is not a valid URI.", hint].compact.join(" "), cause: nil)
+      without_url_in_errors(option: option, hint: hint) { URI.parse(url) }
+    end
+
+    # Returns the result of the block, which uses the url supplied as the named option, for example
+    # to build a client gem's connection.
+    #
+    # Raises any of the errors from the block again, of the same class, without the url in its
+    # message, or as its cause, since a url can hold a user and password, or a token in its path or
+    # query string, and URI and client gems put the url in the error for an invalid one.
+    def self.without_url_in_errors(option: ":url", hint: nil, errors: [URI::InvalidURIError])
+      yield
+    rescue *errors => e
+      raise(e.class, ["Invalid #{option}, it is not a valid URI.", hint].compact.join(" "), cause: nil)
     end
 
     # Returns [String] the scheme, host, and any non-default port of the url, which is safe to log.
