@@ -75,22 +75,26 @@ server, and so does not need the `syslog` gem, can use the same constants from
 
 * `:logfmt`: spaces, control characters, `=`, `"`, and Unicode line separators in keys are
   replaced with `_`, and invalid UTF-8 bytes are dropped. A tag such as `second breakfast` is now
-  emitted as `second_breakfast=true`. Keys that only match once encoded, or that only differ by
-  type (`:level` and `"level"`), are emitted once, keeping the earlier field, so a tag or named
-  tag can no longer add a second `level` or `message` field. A payload that is not a Hash is
-  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, `Data`, `Set`, or
-  any other value whose JSON is an object or an array, such as the exception backtrace) is
-  emitted as quoted JSON, `user="{\"id\":7}"`, instead of its
-  `#inspect` text.
+  emitted as `second_breakfast=true`. A tag, named tag, or payload key named like one of the
+  entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`, `duration_ms`, `tag`, or
+  an exception field) is emitted with its source as a prefix, such as `payload.name="shrek"` or
+  `tags.message=true`, instead of replacing the field. A logged exception is emitted as
+  `exception_name`, `exception_message`, and `exception_details` (followed by `stack_trace` and
+  `cause` as before), instead of replacing the entry's `name` and `message`. Other keys that only
+  match once encoded, or that only differ by type (`:user` and `"user"`), are emitted once, keeping
+  the earlier field. A payload that is not a Hash is emitted as a single `payload` field. A nested
+  value (a Hash, Array, `Struct`, `Data`, `Set`, or any other value whose JSON is an object or an
+  array, such as the exception backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead
+  of its `#inspect` text.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
 * `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,
-  thread name, payload, the messages of the exceptions that caused the logged exception, and the
-  backtrace lines are escaped too. Invalid UTF-8 bytes are dropped instead of the entry failing to
+  thread name, file name, payload, the messages of the exceptions that caused the logged exception,
+  and the backtrace lines are escaped too. Invalid UTF-8 bytes are dropped instead of the entry failing to
   format. With escaping on, `:color` renders the payload plain and on one line, since Amazing
   Print's colors and line breaks cannot be told apart from control characters in the data.
-* `:one_line`: line breaks are removed from every field (name, thread name, tags, named tags,
-  payload, message, and exception), carriage returns as well as newlines, and
+* `:one_line`: line breaks are removed from every field (name, thread name, file name, tags, named
+  tags, payload, message, and exception), carriage returns as well as newlines, and
   `escape_control_chars` is honoured.
 * JSON based formatters: `Infinity` and `NaN` payload values are serialized as strings, and
   structures nested deeper than 32 levels are replaced with a placeholder such as

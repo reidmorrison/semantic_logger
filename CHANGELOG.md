@@ -21,24 +21,32 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   logged exception (`Cause: ...` in the backtrace), and each backtrace line, in the
   `:default`, `:color`, `:pattern` (`%{backtrace}`), and `:syslog` formatters. Previously a
   newline in a cause, which often quotes untrusted input, could forge a log entry even with
-  escaping enabled. It also escapes the logger name, the thread name, and the payload, whose
-  `#inspect` output can carry control characters from untrusted data; the `:color` formatter
-  then renders the payload without Amazing Print colors, on one line. Escaping also drops
-  invalid UTF-8 bytes instead of raising, which lost the log entry.
+  escaping enabled. It also escapes the logger name, the thread name, the payload, whose
+  `#inspect` output can carry control characters from untrusted data, and the file name taken from
+  the first line of the backtrace, which a log call can supply (`backtrace:`) from untrusted data;
+  the `:color` formatter then renders the payload without Amazing Print colors, on one line.
+  Escaping also drops invalid UTF-8 bytes instead of raising, which lost the log entry.
 - The `:syslog` formatter, which escapes control characters by default, now keeps an entry
   with an exception on a single line, escaping the newlines between the exception and its
   backtrace, so that a receiver framing records by newline does not split it.
 - The `:one_line` formatter honours `escape_control_chars` for the message and the exception
   message, which it previously ignored, letting carriage returns and ANSI escape sequences
   through. It also strips carriage returns, not only newlines, by default, and does so in the
-  name, thread name, tags, named tags and payload as well, so an entry stays on one line.
+  name, thread name, file name, tags, named tags and payload as well, so an entry stays on one
+  line.
 - The `:logfmt` formatter replaces spaces, control characters, `=`, and `"` in keys with `_`.
   Keys come from tags, named tags, and the payload, and were written verbatim, so a tag such as
-  a User-Agent could inject fields (for example `level="fatal"`) or a whole new line. Keys that
-  only differ by type, such as `:level` and `"level"`, are now emitted once, keeping the earlier
-  field. Nested values (a Hash, an Array, or any other value whose JSON is an object or an array,
-  such as a `Set` or the exception backtrace) are emitted as quoted JSON instead of their
-  `#inspect` text, which could print an object's instance variables.
+  a User-Agent could inject fields (for example `level="fatal"`) or a whole new line. A key named
+  like one of the entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`,
+  `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, such as
+  `payload.level`: a payload with Symbol keys, including the explicit `payload:` recommended for
+  untrusted hashes, replaced those fields outright, so that `{"level": "fatal", "message": ...}`
+  in a webhook body forged the whole entry. A logged exception is emitted as `exception_name`,
+  `exception_message`, and `exception_details`, which previously replaced the entry's own `name`
+  and `message`. Other keys that only differ by type, such as `:user` and `"user"`, are now
+  emitted once, keeping the earlier field. Nested values (a Hash, an Array, or any other value
+  whose JSON is an object or an array, such as a `Set` or the exception backtrace) are emitted as
+  quoted JSON instead of their `#inspect` text, which could print an object's instance variables.
 - The JSON based formatters no longer drop a log event whose payload JSON cannot represent.
   `Infinity` and `NaN` (for example `params[:amount].to_f` with `"1e400"`) are serialized as
   strings, and a structure nested too deeply, such as a request body as deep as `JSON.parse`

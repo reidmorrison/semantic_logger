@@ -4,7 +4,7 @@ module SemanticLogger
     #
     # Notes:
     # * New lines and carriage returns are stripped from every text field: the name, thread name,
-    #   tags, named tags, message, payload and exception message.
+    #   file name, tags, named tags, message, payload and exception message.
     #   With `escape_control_chars: true` they, and all other control characters, are escaped
     #   instead, like the other text formatters.
     # * Exceptions only include the class and message, the stack trace is not shown.
@@ -30,6 +30,12 @@ module SemanticLogger
 
       def name
         one_line(log.name) if log.name
+      end
+
+      # A log call can supply the backtrace that the file name comes from.
+      def file_name_and_line
+        file, line = log.file_name_and_line(true)
+        "#{one_line(file)}:#{line}" if file
       end
 
       def message

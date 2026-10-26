@@ -368,16 +368,19 @@ Notes:
   characters (including the Unicode line and paragraph separators), `=`, and `"` in a key are
   replaced with `_`, and invalid UTF-8 is dropped. For example the tag `second breakfast` is
   emitted as `second_breakfast=true`.
-* Keys that only match once encoded, or that only differ by type (such as `:level` and
-  `"level"`), are emitted once, keeping the earlier field. For example the tags `message` and
-  `duration ms` do not replace the `message` and `duration_ms` fields.
-* Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
-  conflict the payload wins.
+* Named tags and payload fields are merged into the top-level `key=value` pairs. A key named like
+  one of the entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`,
+  `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, so that
+  logged data cannot replace those fields: `payload.level="fatal"`, `named_tags.message="..."`, or
+  `tags.message=true`. Otherwise, on a name conflict the payload wins over the named tags.
+* Other keys that only match once encoded, or that only differ by type (such as `:user` and
+  `"user"`), are emitted once, keeping the earlier field.
 * Unnamed tags are emitted as keys with a `true` value.
 * A nested value, such as a Hash or an Array in the payload, is emitted as its JSON text, quoted:
   `user="{\"id\":7}"`.
 * `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
-  exception (the exception class, message, and backtrace are then included as fields).
+  exception, which is then included as the fields `exception_name`, `exception_message`,
+  `stack_trace`, and, when the exception has a cause, `cause`.
 
 ## Network protocols
 

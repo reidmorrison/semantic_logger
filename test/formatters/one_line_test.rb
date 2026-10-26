@@ -139,6 +139,23 @@ module SemanticLogger
           end
         end
 
+        describe "file name" do
+          it "strips carriage returns from the file name of a supplied backtrace" do
+            # A newline cannot reach the file name, which is matched on a single line.
+            log.backtrace = ["forged\rx.rb:1"]
+
+            assert_equal "forgedx.rb:1", formatter.file_name_and_line
+          end
+
+          it "escapes the file name when escape_control_chars is enabled" do
+            log.backtrace = ["\e]0;owned\a\rx.rb:1"]
+            formatter     = SemanticLogger::Formatters::OneLine.new(escape_control_chars: true)
+            formatter.call(log, nil)
+
+            assert_equal "\\e]0;owned\\x07\\rx.rb:1", formatter.file_name_and_line
+          end
+        end
+
         describe "invalid UTF-8" do
           ["Search: \e\xFF", "\xFFabc", "Search: \xFF"].each do |text|
             it "writes #{text.inspect} without raising, dropping the invalid bytes" do

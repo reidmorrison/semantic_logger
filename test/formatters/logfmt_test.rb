@@ -52,10 +52,12 @@ module SemanticLogger
             assert_match(/shrek="the ogre" controller="some cotroller"/, formatter.call(log, nil))
           end
 
-          it "changes name to payload information" do
+          it "prefixes a payload key named like a core field, instead of replacing the field" do
             log.payload = {name: "shrek"}
+            text        = formatter.call(log, nil)
 
-            assert_match(/name="shrek"/, formatter.call(log, nil))
+            assert_includes text, %( name="DefaultTest" )
+            assert_includes text, %( payload.name="shrek")
           end
 
           it "formats a Struct in the payload as a single quoted field" do
@@ -80,7 +82,7 @@ module SemanticLogger
             it "flattens exception info" do
               set_exception
 
-              assert_match(/message="Oh no"/, formatter.call(log, nil))
+              assert_includes formatter.call(log, nil), %( exception_message="Oh no")
             end
 
             it "flattens the stacktrace" do
@@ -89,11 +91,15 @@ module SemanticLogger
               assert_match(/stack_trace="\[\\"/, formatter.call(log, nil))
             end
 
-            it "changes name to exception" do
-              log.payload = {name: "shrek"}
+            it "keeps the entry's name and message, emitting the exception's as separate fields" do
+              log.message = "Login failed"
+              log.payload = {name: "shrek", exception_message: "forged"}
               set_exception
+              text = formatter.call(log, nil)
 
-              assert_match(/name="RuntimeError"/, formatter.call(log, nil))
+              assert_includes text, %( name="DefaultTest" message="Login failed" )
+              assert_includes text, %( exception_name="RuntimeError" exception_message="Oh no")
+              assert_includes text, %( payload.name="shrek" payload.exception_message="forged")
             end
           end
 
@@ -177,12 +183,13 @@ module SemanticLogger
               assert_includes text, %( _="3")
             end
 
-            it "emits a field once when keys only differ by type, keeping the core field" do
+            it "prefixes a String key named like a core field, keeping the core field" do
               log.payload = {"level" => "debug"}
               text        = formatter.call(log, nil)
 
               assert_equal 1, text.scan(/(?:\A| )level=/).count
               assert_includes text, %(level="info")
+              assert_includes text, %( payload.level="debug")
             end
 
             it "replaces the Unicode line and paragraph separators" do
@@ -235,12 +242,13 @@ module SemanticLogger
                 %w[message level name timestamp tag]
               end
 
-              it "keeps the core fields" do
+              it "keeps the core fields, prefixing the tags" do
                 text = formatter.call(log, nil)
 
                 assert_equal core_fields, text[0, core_fields.size]
                 assert_includes text, %( tag="success")
-                refute_includes text, "=true"
+                assert_includes text, " tags.message=true tags.level=true tags.name=true"
+                assert_includes text, " tags.timestamp=true tags.tag=true"
               end
             end
 
@@ -249,13 +257,13 @@ module SemanticLogger
                 {"message" => "forged", "level" => "fatal", "duration_ms" => "0"}
               end
 
-              it "keeps the core fields" do
+              it "keeps the core fields, prefixing the named tags" do
                 text = formatter.call(log, nil)
 
                 assert_equal core_fields, text[0, core_fields.size]
                 assert_includes text, " duration_ms=12.5"
-                refute_includes text, "forged"
-                refute_includes text, "fatal"
+                assert_includes text, %( named_tags.message="forged" named_tags.level="fatal")
+                assert_includes text, %( named_tags.duration_ms="0")
               end
             end
 
@@ -274,21 +282,34 @@ module SemanticLogger
 
                 assert_equal core_fields, text[0, core_fields.size]
                 assert_includes text, " duration_ms=12.5"
+                assert_includes text, " tags.duration_ms=true"
                 assert_includes text, %( a_b="first")
                 refute_includes text, "second"
-                refute_includes text, "=true"
               end
             end
 
             describe "a payload with the same keys as the core fields" do
-              it "overrides the core fields, as documented" do
-                log.payload = {name: "shrek", message: "from payload", duration_ms: 1}
+              it "keeps the core fields, prefixing the payload's" do
+                log.payload = {name: "shrek", message: "from payload", duration_ms: 1, timestamp: "2001", tag: "x"}
                 text        = formatter.call(log, nil)
 
-                assert_includes text, %(level="info" name="shrek" message="from payload")
-                assert_includes text, " duration_ms=1 "
+                assert_equal core_fields, text[0, core_fields.size]
+                assert_includes text, " duration_ms=12.5 "
+                assert_includes text, %( payload.name="shrek" payload.message="from payload" payload.duration_ms=1)
+                assert_includes text, %( payload.timestamp="2001" payload.tag="x")
                 assert_equal 1, text.scan(/(?:\A| )name=/).count
                 assert_equal 1, text.scan(/(?:\A| )message=/).count
+              end
+            end
+
+            describe "keys named like the exception's fields" do
+              it "prefixes them, so that they cannot forge an exception" do
+                log.payload = {"stack_trace" => "forged", cause: "forged", exception_name: "Forged"}
+                text        = formatter.call(log, nil)
+
+                assert_includes text, %( tag="success")
+                assert_includes text, %( payload.stack_trace="forged" payload.cause="forged")
+                assert_includes text, %( payload.exception_name="Forged")
               end
             end
           end
@@ -441,6 +462,14 @@ module SemanticLogger
 
               refute_match(/timestamp=/, text)
               assert_match(/ts="2020-07-20T08:32:05.375276Z"/, text)
+            end
+
+            it "keeps the time key, prefixing a payload key of the same name" do
+              log.payload = {ts: "forged"}
+              text        = formatter.call(log, nil)
+
+              assert_match(/\Ats="2020-07-20T08:32:05.375276Z" /, text)
+              assert_includes text, %( payload.ts="forged")
             end
           end
         end
