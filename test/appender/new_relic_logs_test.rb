@@ -118,10 +118,10 @@ module Appender
         assert_equal "deep_value", @hash.dig("payload", "level1", "level2", "level3", "level4")
       end
 
-      it "rescues a JSON serialization error and does not raise" do
+      it "rescues a serialization error and does not raise" do
         unserializable = Object.new
         def unserializable.to_json(*)
-          raise JSON::GeneratorError, "cannot serialize"
+          raise ArgumentError, "bug in #to_json"
         end
         # Set @formatter directly: passing a callable to #stub or #formatter= would be
         # invoked rather than returned, masking the path under test.

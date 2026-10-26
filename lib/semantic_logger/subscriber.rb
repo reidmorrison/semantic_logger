@@ -129,8 +129,12 @@ module SemanticLogger
     #
     # A SystemStackError is raised as it is, so that rescuing StandardError does not swallow it:
     # the thread that overflowed must not keep writing (see Appenders#log).
+    #
+    # The block, when given, turns the formatter's output into what the appender sends, such as
+    # its JSON. An error doing so is also caused by the content of the message.
     def format_log(log)
-      formatter.call(log, self)
+      formatted = formatter.call(log, self)
+      block_given? ? yield(formatted) : formatted
     rescue StandardError => e
       raise FormatError, "Could not format the log message (#{e.class})"
     end

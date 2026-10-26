@@ -39,6 +39,17 @@ module Appender
         assert_equal ["Disk full", "<no-exception-message>"], sent
       end
 
+      it "hands GELF the formatted Hash itself, without copying it, when JSON can write it" do
+        hash = nil
+        SemanticLogger::Utils.stub(:json_safe, ->(*) { flunk "must not copy a Hash that JSON can write" }) do
+          appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+            appender.info("Hello", user: "jack")
+          end
+        end
+
+        assert_equal "Hello", hash[:short_message]
+      end
+
       describe "#message_error?" do
         it "is true for a log message that GELF cannot send" do
           error = ArgumentError.new("Data too big (456404 bytes), would create more than 128 chunks!")

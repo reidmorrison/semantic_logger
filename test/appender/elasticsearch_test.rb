@@ -86,6 +86,16 @@ module Appender
           assert_equal :timestamp, appender.formatter.time_key
         end
 
+        it "raises a FormatError, a message error, for a document that cannot be serialized" do
+          broken = Object.new
+          def broken.to_json(*) = raise(NoMethodError, "undefined method 'name' for nil")
+          log.payload = {broken: broken}
+
+          error = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.log(log) }
+
+          assert appender.message_error?(error)
+        end
+
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil

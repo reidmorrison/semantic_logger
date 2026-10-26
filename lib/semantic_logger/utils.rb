@@ -103,8 +103,8 @@ module SemanticLogger
     #   returned by its #to_s, which for each is #inspect: every member is written with
     #   #inspect, exposing the instance variables of any object it holds, and without a
     #   depth limit, so a deep enough structure raises SystemStackError. The output is
-    #   checked for that rendering (an object's #inspect always contains "#<"), and
-    #   SystemStackError is rescued, so .json_safe can write the members as a JSON object
+    #   checked for that rendering (a JSON String starting with "#<", or "Set[" for a Set on
+    #   Ruby 4.0), and SystemStackError is rescued, so .json_safe can write the members as a JSON object
     #   or array instead. The json gem offers no hook for these short of strict mode,
     #   which also rejects common values such as Time, and finding one up front would mean
     #   walking every payload on the hot path. ActiveSupport already writes them through
@@ -117,27 +117,38 @@ module SemanticLogger
     # The retry is attempted only once: if it still fails (for example an object whose
     # own #to_json raises), the error propagates unchanged rather than being swallowed.
     def self.to_json(value)
-      json =
-        begin
-          value.to_json
-        rescue JSON::GeneratorError, JSON::NestingError, EncodingError, SystemStackError
-          nil
-        end
-      # Almost no JSON holds "#<" or "Set[", so the checks cost a scan each. A String that
-      # merely contains the same text is also repaired; that only costs time, since
-      # .json_safe leaves such a String as it is.
-      return json if json && !json.include?(INSPECTED_OBJECT) && !json.include?(INSPECTED_SET)
-
-      json_safe(value).to_json
+      clean_json(value) || json_safe(value).to_json
     end
 
-    # How #inspect writes an object, such as the Struct, Data, Set, or OpenStruct that the
-    # json gem writes through its #to_s, or an object within one.
-    INSPECTED_OBJECT = "#<".freeze
+    # Returns the value when JSON writes it as it is, otherwise a .json_safe copy, for a writer
+    # that serializes the value itself, such as GELF. The check costs one #to_json; only the
+    # rare value that needs repairing is copied.
+    def self.json_ready(value)
+      clean_json(value) ? value : json_safe(value)
+    end
 
-    # How the json gem writes a Set on Ruby 4.0, where Set#inspect is "Set[...]", which holds no
-    # "#<" unless the Set holds an object.
-    INSPECTED_SET = "\"Set[".freeze
+    # Returns [String] the value's JSON, or nil when .to_json has to repair the data.
+    def self.clean_json(value)
+      json = value.to_json
+      # Almost no JSON holds a "<", and Ruby finds one byte several times faster than a longer
+      # substring, so it is looked for first. A String that merely starts with the same text is
+      # also repaired; that only costs time, since .json_safe leaves such a String as it is.
+      return if json.include?("<") && json.include?(INSPECTED_OBJECT)
+      return if INSPECTED_SET && json.include?(INSPECTED_SET)
+
+      json
+    rescue JSON::GeneratorError, JSON::NestingError, EncodingError, SystemStackError
+      nil
+    end
+    private_class_method :clean_json
+
+    # How the json gem writes an object through its #to_s: a JSON String starting with "#<", as
+    # for a Struct, Data, Set, or OpenStruct, whose #to_s is its #inspect.
+    INSPECTED_OBJECT = "\"#<".freeze
+
+    # How the json gem writes a Set where Set#inspect is "Set[...]" (Ruby 4.0), which holds no
+    # "#<" unless the Set holds an object. Nil where Set#inspect starts with "#<" too.
+    INSPECTED_SET = (::Set.new.inspect.start_with?("#<") ? nil : "\"Set[").freeze
 
     # Nesting depth after which .json_safe replaces a Hash, Array, Struct, or Data with a
     # placeholder. Well below the json gem's default max_nesting of 100, leaving room for
@@ -162,21 +173,30 @@ module SemanticLogger
     # deeper than that itself, and follows the same rules as .json_safe.
     def self.nested_too_deeply?(value, depth = 0)
       case value
+      when String, Symbol, Integer, NilClass
+        # The most common values, ruled out before the slower checks below.
+        false
       when Hash
         depth >= MAX_JSON_SAFE_DEPTH ||
           value.any? { |key, val| nested_too_deeply?(key, depth + 1) || nested_too_deeply?(val, depth + 1) }
       when Array, ::Set
         depth >= MAX_JSON_SAFE_DEPTH || value.any? { |element| nested_too_deeply?(element, depth + 1) }
       when Struct, ::Data
-        return true if depth >= MAX_JSON_SAFE_DEPTH
-
-        # As in .json_safe_members, a #to_h that does not return a Hash is one level deeper.
-        members = value.to_h
-        members.is_a?(Hash) ? nested_too_deeply?(members, depth) : nested_too_deeply?(members, depth + 1)
+        members_nested_too_deeply?(value, depth)
       else
-        open_struct?(value) && nested_too_deeply?(value.to_h, depth)
+        open_struct?(value) && members_nested_too_deeply?(value, depth)
       end
     end
+
+    # Whether the members of a Struct, Data, or OpenStruct are nested too deeply. As in
+    # .json_safe_members, a #to_h that does not return a Hash is one level deeper.
+    def self.members_nested_too_deeply?(value, depth)
+      return true if depth >= MAX_JSON_SAFE_DEPTH
+
+      members = value.to_h
+      members.is_a?(Hash) ? nested_too_deeply?(members, depth) : nested_too_deeply?(members, depth + 1)
+    end
+    private_class_method :members_nested_too_deeply?
 
     # Returns [true|false] whether .json_safe writes the value as a JSON object or array: a Hash,
     # Array, Set, Struct, Data, or OpenStruct. Every one of them would otherwise be written by its
@@ -204,7 +224,11 @@ module SemanticLogger
     # * A Struct, Data, or OpenStruct instance becomes a Hash of its members (from #to_h),
     #   and a Set an Array, as ActiveSupport's #as_json does, so that its members follow
     #   these same rules.
-    # * An Exception becomes its message, as the json gem writes it, converted to valid UTF-8.
+    # * A Hash key that is itself a structure becomes the JSON of its copy, since JSON writes a
+    #   key with #to_s, which for a structure is its #inspect.
+    # * Any other object whose JSON raises because of invalid UTF-8, such as an exception
+    #   message or a Pathname built from an uploaded file name, becomes its #to_s converted to
+    #   valid UTF-8.
     # * A Hash, Array, Set, Struct, or Data nested deeper than MAX_JSON_SAFE_DEPTH is replaced
     #   with a placeholder String naming its class, such as "#<Hash nested too deeply>".
     #   So is one that holds itself, at the point where it would repeat.
@@ -223,24 +247,41 @@ module SemanticLogger
         encode_utf8_string(value)
       when Float
         value.finite? ? value : value.to_s
+      when Symbol, Integer, NilClass, TrueClass, FalseClass
+        value
       when Hash, Array, ::Set, Struct, ::Data
-        ancestors ||= []
-        if depth >= MAX_JSON_SAFE_DEPTH || ancestors.any? { |ancestor| ancestor.equal?(value) }
-          return "#<#{value.class} nested too deeply>"
-        end
-
-        ancestors.push(value)
-        begin
-          json_safe_members(value, depth + 1, ancestors)
-        ensure
-          ancestors.pop
-        end
-      when Exception
-        encode_utf8_string(value.to_s)
+        json_safe_structure(value, depth, ancestors)
       else
-        open_struct?(value) ? json_safe(value.to_h, depth, ancestors) : value
+        open_struct?(value) ? json_safe_structure(value, depth, ancestors) : json_safe_object(value)
       end
     end
+
+    # Returns a copy of a Hash, Array, Set, Struct, Data, or OpenStruct, or the placeholder for
+    # one nested too deeply or that holds itself.
+    def self.json_safe_structure(value, depth, ancestors)
+      ancestors ||= []
+      if depth >= MAX_JSON_SAFE_DEPTH || ancestors.any? { |ancestor| ancestor.equal?(value) }
+        return "#<#{value.class} nested too deeply>"
+      end
+
+      ancestors.push(value)
+      begin
+        json_safe_members(value, depth + 1, ancestors)
+      ensure
+        ancestors.pop
+      end
+    end
+    private_class_method :json_safe_structure
+
+    # Returns any other object as it is, when JSON can write it, otherwise its #to_s converted
+    # to valid UTF-8.
+    def self.json_safe_object(value)
+      value.to_json
+      value
+    rescue JSON::GeneratorError, EncodingError
+      encode_utf8_string(value.to_s)
+    end
+    private_class_method :json_safe_object
 
     # Returns a copy of the elements of a Hash, Array, Set, Struct, or Data, each made safe
     # by .json_safe at the supplied depth.
@@ -248,13 +289,15 @@ module SemanticLogger
       case value
       when Hash
         value.each_with_object({}) do |(key, val), hash|
-          hash[json_safe(key, depth, ancestors)] = json_safe(val, depth, ancestors)
+          key       = json_safe(key, depth, ancestors)
+          key       = key.to_json if key.is_a?(Hash) || key.is_a?(Array)
+          hash[key] = json_safe(val, depth, ancestors)
         end
       when Array, ::Set
         value.map { |element| json_safe(element, depth, ancestors) }
       else
-        # A Struct or Data. A #to_h that does not return a Hash is made safe one level
-        # deeper, so that the recursion still ends.
+        # A Struct, Data, or OpenStruct. A #to_h that does not return a Hash is made safe one
+        # level deeper, so that the recursion still ends.
         members = value.to_h
         members.is_a?(Hash) ? json_safe_members(members, depth, ancestors) : json_safe(members, depth, ancestors)
       end

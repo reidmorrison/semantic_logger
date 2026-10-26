@@ -147,15 +147,19 @@ module SemanticLogger
           assert_equal '"€ café"', SemanticLogger::Utils.to_json("€ café")
         end
 
-        it "re-raises errors that cleansing cannot fix" do
-          # An object whose own #to_json raises cannot be repaired, so the retry after
-          # cleansing must still raise rather than swallow it.
+        it "writes an object whose own #to_json cannot serialize it as its #to_s" do
           broken = Object.new
           def broken.to_json(*) = raise(JSON::GeneratorError, "cannot serialize")
+          def broken.to_s = "broken \xFF".b
 
-          assert_raises(JSON::GeneratorError) do
-            SemanticLogger::Utils.to_json({value: broken})
-          end
+          assert_equal '{"value":"broken "}', SemanticLogger::Utils.to_json({value: broken})
+        end
+
+        it "re-raises other errors from an object's own #to_json, which repairing cannot fix" do
+          broken = Object.new
+          def broken.to_json(*) = raise(ArgumentError, "bug in #to_json")
+
+          assert_raises(ArgumentError) { SemanticLogger::Utils.to_json({value: broken}) }
         end
 
         it "serializes Infinity and NaN as strings" do
@@ -356,10 +360,44 @@ module SemanticLogger
           assert_equal "billing", JSON.parse(result)["config"]["name"]
         end
 
+        it "ends the recursion when an OpenStruct's #to_h does not return a Hash" do
+          require "ostruct"
+          odd = Class.new(OpenStruct) { def to_h = self }.new(a: 1) # rubocop:disable Style/OpenStructUse
+
+          assert_includes(Thread.new { SemanticLogger::Utils.to_json({odd: odd}) }.value, "nested too deeply")
+          assert(Thread.new { SemanticLogger::Utils.nested_too_deeply?(odd) }.value)
+        end
+
+        it "writes a structure used as a Hash key as its JSON, not its #inspect" do
+          result = SemanticLogger::Utils.to_json({Set[client] => 1, Struct.new(:api).new(client) => 2})
+
+          refute_includes result, "hunter2"
+          assert_equal [1, 2], JSON.parse(result).values
+        end
+
+        it "keeps a Struct's own #to_json when other text in the entry holds #<" do
+          point  = Struct.new(:x) { def to_json(*) = '{"custom":true}' }.new(1)
+          result = SemanticLogger::Utils.to_json({message: "undefined method 'x' for #<Foo>", point: point})
+
+          assert_equal({"custom" => true}, JSON.parse(result)["point"])
+        end
+
         it "writes an Exception as its message, repairing invalid UTF-8" do
           error = RuntimeError.new((+"bad \xFF input").force_encoding(Encoding::UTF_8))
 
           assert_equal({"error" => "bad  input"}, JSON.parse(SemanticLogger::Utils.to_json({error: error})))
+        end
+      end
+
+      describe ".json_ready" do
+        it "returns the value itself when JSON can write it" do
+          value = {a: [1, "b"], c: {d: nil}}
+
+          assert_same value, SemanticLogger::Utils.json_ready(value)
+        end
+
+        it "returns a copy that JSON can write otherwise" do
+          assert_equal({amount: "Infinity"}, SemanticLogger::Utils.json_ready({amount: Float::INFINITY}))
         end
       end
 

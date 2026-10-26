@@ -160,15 +160,14 @@ module SemanticLogger
 
       # Log to the index for today
       def log(log)
-        bulk_payload = format_log(log)
-        bulk_write([bulk_index(log), bulk_payload])
+        bulk_write([bulk_index(log), bulk_line(log)])
         true
       end
 
       def batch(logs)
         messages = []
         logs.each do |log|
-          messages << bulk_index(log) << format_log(log)
+          messages << bulk_index(log) << bulk_line(log)
         end
 
         bulk_write(messages)
@@ -187,12 +186,20 @@ module SemanticLogger
         raise NotImplementedError, "#{self.class} must implement #client_class"
       end
 
-      # Each line is serialized here, by Utils.to_json, and handed to the client as a String. The
-      # client gem's serializer writes Infinity and NaN as bare words, which is not JSON, and does
-      # not repair invalid UTF-8, a structure nested too deeply, or a Struct (written through its
-      # #inspect), so such an entry was dropped or its objects' instance variables were written.
+      # Returns [String] the log message formatted as a bulk line, serialized by Utils.to_json
+      # and handed to the client as a String. The client gem's serializer writes Infinity and NaN
+      # as bare words, which is not JSON, and does not repair invalid UTF-8, a structure nested too
+      # deeply, or a Struct (written through its #inspect), so such an entry was dropped or its
+      # objects' instance variables were written. Serializing is part of formatting, so an error
+      # doing so discards the message rather than stalling the appender (see #format_log). A
+      # formatter that returns a String is taken to have serialized the line itself.
+      def bulk_line(log)
+        format_log(log) { |document| document.is_a?(String) ? document : Utils.to_json(document) }
+      end
+
+      # Serializes the action lines; the documents already are (see #bulk_line).
       def bulk_write(messages)
-        body        = messages.map { |message| Utils.to_json(message) }
+        body        = messages.map { |message| message.is_a?(String) ? message : message.to_json }
         bulk_result =
           if @data_stream
             @client.bulk(index: index, body: body)

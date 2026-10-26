@@ -132,12 +132,11 @@ module SemanticLogger
           value.to_s
         when nil
           "null"
-        when Hash, Array, Struct, ::Data
-          # Quote the JSON form rather than #inspect, which can print an object's instance
-          # variables and has no depth limit.
-          Utils.to_json(Utils.to_json(value))
         else
-          Utils.to_json(value)
+          # The JSON form rather than #inspect, which can print an object's instance variables
+          # and has no depth limit. A structure is quoted, since its JSON holds spaces and quotes.
+          json = Utils.to_json(value)
+          json.start_with?("{", "[") ? Utils.to_json(json) : json
         end
       end
 

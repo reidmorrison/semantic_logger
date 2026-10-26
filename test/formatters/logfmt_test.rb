@@ -378,6 +378,25 @@ module SemanticLogger
             end
           end
 
+          describe "given a payload holding a structure that is not a Hash or an Array" do
+            it "quotes its JSON, so that a space or an = in it cannot add a field" do
+              require "ostruct"
+              written = Object.new
+              def written.to_json(*) = '{"a":"b level=error"}'
+              log.payload = {
+                roles: Set["admin user", "x level=error"],
+                cfg:   OpenStruct.new(a: "b c"), # rubocop:disable Style/OpenStructUse
+                obj:   written
+              }
+
+              output = formatter.call(log, nil)
+
+              assert_includes output, %(roles="[\\"admin user\\",\\"x level=error\\"]")
+              assert_includes output, %(cfg="{\\"a\\":\\"b c\\"}")
+              assert_includes output, %(obj="{\\"a\\":\\"b level=error\\"}")
+            end
+          end
+
           describe "given a set of named tags" do
             let(:named_tags) do
               {
