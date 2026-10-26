@@ -115,8 +115,10 @@ server, and so does not need the `syslog` gem, can use the same constants from
   serialize, and a message GELF cannot send. A custom appender can format through
   `format_log(log)` (or `format_batch(logs)`) instead of `formatter.call` to get the same
   treatment, or override `#message_error?` for errors its own client raises.
-* The text formatters write a payload nested more than 32 levels deep cut off, with the
-  placeholder the JSON formatters use, such as `"#<Hash nested too deeply>"`.
+* The text formatters write a payload nested more than 32 levels deep as the JSON formatters
+  write it, cut off with their placeholder, such as `"#<Hash nested too deeply>"`.
+* A log message that overflows the stack while it is written is discarded, and the worker
+  thread carries on in a new thread, instead of the worker stopping for good.
 * The file appender's `permissions:` option is only applied to a regular file owned by the
   process, with a single hard link, that was not reached through a symbolic link. Otherwise it
   warns once and leaves the permissions unchanged.

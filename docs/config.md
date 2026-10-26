@@ -607,15 +607,18 @@ instead. `#message_error?(exception)` decides which is which. Format each messag
 formatter raises is then raised as a `SemanticLogger::Subscriber::FormatError`, which
 `#message_error?` recognizes, since a formatter can only fail because of the content of the message.
 By default it also recognizes the errors raised when serializing a value that cannot be written
-(`JSON::GeneratorError`, `JSON::NestingError`, `EncodingError`, `FloatDomainError`, and
-`SystemStackError`). Override it to recognize errors your appender's client raises for content it
-cannot write:
+(`JSON::GeneratorError`, `JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it
+to recognize errors your appender's client raises for content it cannot write:
 
 ~~~ruby
 def message_error?(exception)
   exception.is_a?(MyClient::InvalidDocument) || super
 end
 ~~~
+
+A `SystemStackError` is handled separately: the message is discarded, and since a thread must not
+overflow its stack twice (on macOS that crashes Ruby), the worker carries on in a new thread. Do not
+rescue it in `#log` or `#batch`.
 
 An appender that supports batching implements `#batch(logs)`. When `#batch` raises a message error,
 the whole batch is discarded by default, since it may already have written some of the messages.
