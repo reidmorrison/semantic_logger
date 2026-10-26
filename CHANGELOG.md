@@ -36,8 +36,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Keys come from tags, named tags, and the payload, and were written verbatim, so a tag such as
   a User-Agent could inject fields (for example `level="fatal"`) or a whole new line. Keys that
   only differ by type, such as `:level` and `"level"`, are now emitted once, keeping the earlier
-  field. Nested values (a Hash or an Array, such as the exception backtrace) are emitted as quoted
-  JSON instead of their `#inspect` text, which could print an object's instance variables.
+  field. Nested values (a Hash, an Array, or any other value whose JSON is an object or an array,
+  such as a `Set` or the exception backtrace) are emitted as quoted JSON instead of their
+  `#inspect` text, which could print an object's instance variables.
 - The JSON based formatters no longer drop a log event whose payload JSON cannot represent.
   `Infinity` and `NaN` (for example `params[:amount].to_f` with `"1e400"`) are serialized as
   strings, and a structure nested too deeply, such as a request body as deep as `JSON.parse`
@@ -48,14 +49,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `#inspect` string, which listed the instance variables of any object held in a member (such
   as a client's password) and had no depth limit, so a deep enough structure failed with
   `SystemStackError`. The same now applies to a `Set` (written as an array) and an `OpenStruct`
-  (an object), and an exception in the payload is written as its message with invalid UTF-8
-  dropped, instead of the entry being dropped. The `:elasticsearch` and `:opensearch` appenders
-  serialize each bulk line this way instead of with their client gem, which wrote `Infinity` as a
-  bare word and dropped an entry holding a binary String such as a User-Agent, and the `:graylog`
-  appender hands GELF a repaired copy. The `:loki` and `:open_telemetry` formatters write a Struct,
+  (an object), a structure used as a Hash key is written as its JSON, and an exception, or any
+  other object whose JSON fails because of invalid UTF-8, is written as its `#to_s` with the invalid
+  bytes dropped, instead of the entry being dropped. The `:elasticsearch` and `:opensearch`
+  appenders serialize each bulk line this way instead of with their client gem, which wrote
+  `Infinity` as a bare word and dropped an entry holding a binary String such as a User-Agent, and
+  discard an entry that still cannot be serialized rather than stalling; the `:graylog` appender
+  hands GELF a repaired copy when it needs one. The `:loki` and `:open_telemetry` formatters write a Struct,
   Set, or other structure in the payload as JSON instead of its `#inspect`.
 - A log message tagged UTF-8 that holds invalid bytes, such as a request parameter that Rack
-  decodes from `?q=%1B%FF`, no longer makes the structured formatters (`:json`, `:raw`, `:fluentd`,
+  decodes from `?q=%1B%FF`, or in another encoding, such as a binary request body, no longer makes the structured formatters (`:json`, `:raw`, `:fluentd`,
   `:ecs`, `:logfmt`, `:loki`, `:open_telemetry`, `:syslog_cee`) or `:one_line` raise; the invalid
   bytes are dropped, as they already were in the payload. Previously the entry was lost, and on an
   async or batching appender (`:elasticsearch` and `:opensearch` batch by default) the whole batch

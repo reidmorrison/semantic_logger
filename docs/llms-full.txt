@@ -4550,8 +4550,9 @@ server, and so does not need the `syslog` gem, can use the same constants from
   emitted as `second_breakfast=true`. Keys that only match once encoded, or that only differ by
   type (`:level` and `"level"`), are emitted once, keeping the earlier field, so a tag or named
   tag can no longer add a second `level` or `message` field. A payload that is not a Hash is
-  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, or `Data`, such as
-  the exception backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its
+  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, `Data`, `Set`, or
+  any other value whose JSON is an object or an array, such as the exception backtrace) is
+  emitted as quoted JSON, `user="{\"id\":7}"`, instead of its
   `#inspect` text.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
@@ -4568,9 +4569,10 @@ server, and so does not need the `syslog` gem, can use the same constants from
   `#<Hash nested too deeply>`, instead of the whole entry being dropped. A `Struct`, `Data`, or
   `OpenStruct` value is written as an object of its members, and a `Set` as an array, as Rails
   already does, instead of its `#inspect` text. An exception in the payload is written as its
-  message. The `:elasticsearch` and `:opensearch` appenders write their bulk lines the same way.
-* JSON based formatters and `:one_line`: invalid UTF-8 bytes in the message are dropped, instead of
-  the entry failing to format.
+  message, and any other object whose JSON fails because of invalid UTF-8 as its `#to_s`, with
+  the invalid bytes dropped. The `:elasticsearch` and `:opensearch` appenders write their bulk lines the same way.
+* JSON based formatters and `:one_line`: invalid UTF-8 bytes in the message are dropped, and a
+  message in another encoding is converted to UTF-8, instead of the entry failing to format.
 * `:loki`: a nested Hash, Array, `Struct`, or `Set` in the payload is written once as JSON, keeping
   the JSON types of its values, so `{number: 1}` is written as `{"number":1}` rather than
   `{"number":"1"}`, and `[1, 2, 3]` as `[1,2,3]`. A payload that is not a Hash is written as a
