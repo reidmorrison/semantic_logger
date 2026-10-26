@@ -72,6 +72,12 @@ module SemanticLogger
 
     attr_reader :appenders
 
+    # Returns the internal logger of the appenders, for reporting a problem while logging, such as
+    # an exception raised by an on_log subscriber. The same logger as the asynchronous Processor's.
+    def logger
+      @appenders.logger
+    end
+
     def initialize(appenders = nil)
       @monitor         = Monitor.new
       @appenders       = appenders || Appenders.new(self.class.logger.dup)

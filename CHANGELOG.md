@@ -298,6 +298,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   no longer pins a logger that follows the global default level to a fixed level, which had
   stopped later `SemanticLogger.default_level=` changes and `SemanticLogger.silence` from
   applying to that logger.
+- In synchronous mode, an exception raised by an `on_log` subscriber is reported to the internal
+  logger and the entry is still logged, as in asynchronous mode. It raised `NoMethodError` from the
+  application's logging call instead, and the entry was lost.
 
 ## [5.1.0] 2026-07-20
 

@@ -40,6 +40,15 @@ module SemanticLogger
         end
       end
 
+      describe "#logger" do
+        it "returns the internal logger of its appenders" do
+          internal  = SemanticLogger::Test::CaptureLogEvents.new
+          appenders = SemanticLogger::Appenders.new(internal)
+
+          assert_same internal, SemanticLogger::SyncProcessor.new(appenders).logger
+        end
+      end
+
       describe "#add" do
         it "adds an appender" do
           added = processor.add(io: $stdout)
