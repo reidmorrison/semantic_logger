@@ -79,7 +79,9 @@ module SemanticLogger
       #     by supplying for example `0o640` (owner read/write, group read).
       #     Applied both when the file is created and to an existing log file, but only
       #     to a regular file owned by the process, with a single hard link, that the
-      #     file_name names directly rather than through a symbolic link.
+      #     file_name names directly rather than through a symbolic link. Nothing is written
+      #     to any other file: the appender raises IOError when it is created, and when the
+      #     file is later reopened, it reports why and writes nothing until the file is fixed.
       #     Default: nil (use the process umask, the standard Ruby behavior)
       #
       #   :retry_count [Integer]
@@ -157,6 +159,8 @@ module SemanticLogger
         # insufficient permissions, ...) raises immediately in SemanticLogger.add_appender,
         # instead of surfacing later on the appender thread via the internal logger.
         reopen
+        # The same for a log file that the permissions cannot be applied to (see #secure_file).
+        raise(IOError, "Not writing to the log file #{current_file_name}: #{@refusal}") if @refusal
       end
 
       # After forking an active process call #reopen to re-open
@@ -187,13 +191,16 @@ module SemanticLogger
         options |= ::File::APPEND if append
         @file =
           if permissions
-            ::File.open(current_file_name, options, permissions)
+            # Non-blocking, so that a FIFO planted at the path fails to open, rather than blocking
+            # until something reads from it. It would be refused below anyway.
+            ::File.open(current_file_name, options | ::File::NONBLOCK, permissions)
           else
             ::File.open(current_file_name, options)
           end
         # File.open only applies the permissions when creating the file, so also
         # enforce them on an already existing log file.
-        apply_permissions if permissions
+        return if permissions && !secure_file
+
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @file.sync = true
@@ -206,6 +213,7 @@ module SemanticLogger
       # it is not necessary to protect access to the file with a semaphore.
       def log(log)
         reopen if time_to_reopen?
+        return refused unless @file
 
         # Formatted once, outside the retry below: reopening the file cannot fix the content.
         message = format_log(log) << "\n"
@@ -218,6 +226,8 @@ module SemanticLogger
           if count < retry_count
             count += 1
             reopen
+            return refused unless @file
+
             retry
           end
           raise(e)
@@ -240,22 +250,43 @@ module SemanticLogger
 
       attr_writer :log_count, :log_size, :current_file_name, :reopen_at
 
-      # Apply the permissions to the open log file, but only when it is safe to do so. See
-      # #permissions_refusal for the conditions.
+      # Applies the permissions to the open log file when it is safe to do so (see
+      # #permissions_refusal), and returns true. Otherwise closes the file and returns false, so
+      # that nothing is written to it.
       #
-      # Opening follows symbolic links, so that a log file can for example be linked to
-      # /dev/stdout. Changing the permissions of whatever the link points at could however loosen
-      # them on an unrelated file, such as a private key linked into a shared log directory.
-      #
-      # The warning is only logged once per appender, since the file is reopened on every
-      # rotation, fork, and write retry.
-      def apply_permissions
-        reason = permissions_refusal
-        return @file.chmod(permissions) unless reason
-        return if @permissions_warned
+      # Opening follows symbolic links. Changing the permissions of whatever a link points at could
+      # loosen them on an unrelated file, such as a private key linked into a shared log directory,
+      # and writing log messages to a file that this process does not own, or that another name
+      # links to, would let whoever controls it read them, despite the permissions asked for. So
+      # with permissions, the appender fails closed: it raises when it is created (see #initialize),
+      # and stops writing, and reports why (see #refused), when the file is later reopened on a
+      # rotation, a fork, or a write retry. It is reopened before every write while refused, so
+      # that logging resumes once the file is fixed.
+      def secure_file
+        @refusal = permissions_refusal
+        unless @refusal
+          @reported_refusal = nil
+          @file.chmod(permissions)
+          return true
+        end
 
-        @permissions_warned = true
-        logger.warn("Not applying permissions to #{current_file_name}: #{reason}")
+        begin
+          @file.close
+        rescue StandardError
+          nil
+        end
+        @file = nil
+        false
+      end
+
+      # Reports why log messages are not being written to the log file, once for each reason, and
+      # returns false.
+      def refused
+        unless @reported_refusal == @refusal
+          @reported_refusal = @refusal
+          logger.error("Not writing to the log file #{current_file_name}: #{@refusal}")
+        end
+        false
       end
 
       # Returns why the permissions must not be applied to the open log file, or nil when they can.

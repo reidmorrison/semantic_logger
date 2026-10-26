@@ -134,7 +134,8 @@ module Appender
           refute_nil File.stat(file_name).mode
         end
 
-        # Opens file_name with the permissions, capturing the appender's own log events.
+        # Opens file_name with the permissions after the appender was created, as a rotation or a
+        # fork reopens it, capturing the appender's own log events.
         def open_with_permissions(file_name, permissions)
           appender             = SemanticLogger::Appender::File.new(file_name)
           appender.logger      = SemanticLogger::Test::CaptureLogEvents.new
@@ -143,11 +144,24 @@ module Appender
           appender
         end
 
-        def permission_warnings(appender)
-          appender.logger.events.select { |event| event.message.start_with?("Not applying permissions") }
+        def refusals(appender)
+          appender.logger.events.map(&:message).grep(/\ANot writing to the log file/)
         end
 
-        it "does not change the permissions of a file reached through a symbolic link" do
+        it "raises when created for a file it cannot apply the permissions to" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "target.log")
+            File.write(target, "")
+            link = File.join(dir, "production.log")
+            File.symlink(target, link)
+
+            error = assert_raises(IOError) { SemanticLogger::Appender::File.new(link, permissions: 0o600) }
+
+            assert_equal "Not writing to the log file #{link}: it is a symbolic link", error.message
+          end
+        end
+
+        it "neither changes the permissions of, nor writes to, a file reached through a symbolic link" do
           Dir.mktmpdir do |dir|
             target = File.join(dir, "id_rsa")
             File.write(target, "secret\n")
@@ -156,15 +170,15 @@ module Appender
             File.symlink(target, link)
 
             appender = open_with_permissions(link, 0o644)
-            appender.log(log)
 
+            refute appender.log(log)
             assert_equal "100600", format("%o", File.stat(target).mode)
-            assert_equal ["Not applying permissions to #{link}: it is a symbolic link"],
-                         permission_warnings(appender).map(&:message)
+            assert_equal "secret\n", File.read(target)
+            assert_equal ["Not writing to the log file #{link}: it is a symbolic link"], refusals(appender)
           end
         end
 
-        it "does not change the permissions of a file reached through a hard link" do
+        it "neither changes the permissions of, nor writes to, a file reached through a hard link" do
           Dir.mktmpdir do |dir|
             target = File.join(dir, "master.key")
             File.write(target, "secret\n")
@@ -174,10 +188,27 @@ module Appender
 
             appender = open_with_permissions(link, 0o644)
 
+            refute appender.log(log)
             assert_equal "100600", format("%o", File.stat(target).mode)
-            assert_equal ["Not applying permissions to #{link}: it has more than one hard link"],
-                         permission_warnings(appender).map(&:message)
+            assert_equal "secret\n", File.read(target)
+            assert_equal ["Not writing to the log file #{link}: it has more than one hard link"], refusals(appender)
           end
+        end
+
+        it "does not write to a file that another user owns, which that user could read" do
+          File.write(file_name, "")
+          appender             = SemanticLogger::Appender::File.new(file_name)
+          appender.logger      = SemanticLogger::Test::CaptureLogEvents.new
+          appender.permissions = 0o600
+          # Every write reopens a refused file, so the file must still be someone else's then.
+          Process.stub(:euid, Process.euid + 1) do
+            appender.reopen
+
+            refute appender.log(log)
+          end
+
+          assert_empty File.read(file_name)
+          assert_equal ["Not writing to the log file #{file_name}: it is not owned by this process"], refusals(appender)
         end
 
         it "does not change the permissions when the path no longer names the opened file" do
@@ -192,25 +223,47 @@ module Appender
             appender.permissions = 0o644
 
             # Simulate the path being swapped for another file between opening and checking it.
-            File.stub(:lstat, File.lstat(replacement)) { appender.reopen }
+            File.stub(:lstat, File.lstat(replacement)) do
+              appender.reopen
+
+              refute appender.log(log)
+            end
 
             assert_equal "100600", format("%o", File.stat(path).mode)
-            assert_equal ["Not applying permissions to #{path}: it changed after it was opened"],
-                         permission_warnings(appender).map(&:message)
+            assert_equal ["Not writing to the log file #{path}: it changed after it was opened"], refusals(appender)
           end
         end
 
-        it "warns only once when the log file is reopened" do
+        it "reports the refusal once, and resumes writing once the file can be secured" do
           Dir.mktmpdir do |dir|
             target = File.join(dir, "target.log")
             link   = File.join(dir, "production.log")
             File.write(target, "")
             File.symlink(target, link)
 
-            appender = open_with_permissions(link, 0o644)
-            2.times { appender.reopen }
+            appender = open_with_permissions(link, 0o600)
 
-            assert_equal 1, permission_warnings(appender).size
+            2.times { refute appender.log(log) }
+
+            assert_equal 1, refusals(appender).size
+
+            File.unlink(link)
+
+            assert appender.log(log)
+            assert_includes File.read(link), log_message
+            assert_equal "100600", format("%o", File.stat(link).mode)
+            assert_empty File.read(target)
+          end
+        end
+
+        it "does not block on a FIFO planted at the path" do
+          Dir.mktmpdir do |dir|
+            fifo = File.join(dir, "production.log")
+            File.mkfifo(fifo)
+
+            Timeout.timeout(5) do
+              assert_raises(SystemCallError) { SemanticLogger::Appender::File.new(fifo, permissions: 0o600) }
+            end
           end
         end
 

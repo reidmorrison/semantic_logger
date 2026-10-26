@@ -157,14 +157,18 @@ an existing log file:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
 
-The permissions are only applied when the log file name names a regular file directly, not
-through a symbolic link, and that file is owned by the process and has a single hard link. A log
-file that is a symbolic link (for example to `/dev/stdout`) is still written to, but the
-permissions of whatever it points at are left alone, so that a symbolic or hard link planted in a
-shared log directory cannot be used to loosen the permissions of another file. The file name is
-also checked to still name the file that was opened, so swapping it in between has no effect.
-When the permissions are not applied the appender logs a warning, once, giving the reason. Keep
-the log directory writable only by the application.
+With `permissions`, the log file name must name a regular file directly, not through a symbolic
+link, and that file must be owned by the process, have a single hard link, and still be the file
+that was opened. Otherwise nothing is written to it: `add_appender` raises `IOError` giving the
+reason, and when a file only fails the check once it is reopened later, on a rotation or after a
+fork, the appender reports the reason once and writes nothing until the file is fixed. A symbolic
+link, hard link, or file planted in a shared log directory, for example under the name of
+tomorrow's log file, can therefore neither loosen the permissions of another file nor receive the
+log messages. A FIFO planted there fails to open instead of blocking the process.
+
+Without `permissions`, the file appender opens the log file the way Ruby's own `Logger` does,
+following symbolic links, so that a log file can for example be linked to `/dev/stdout`. Keep the
+log directory writable only by the application.
 
 ### Dependencies and supply chain
 

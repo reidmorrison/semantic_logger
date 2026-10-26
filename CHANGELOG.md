@@ -175,9 +175,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `backtrace` Array is no longer modified. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
 - The file appender's `permissions:` option is only applied to a regular file owned by the
   process with a single hard link, and not through a symbolic link or to a file swapped in after
-  opening; otherwise it logs a warning once. Previously a link planted in a writable log
-  directory made the appender change the permissions of the file it pointed at, for example
-  loosening a `0600` private key to `0644`. Writing through a symbolic link still works.
+  opening. Previously a link planted in a writable log directory made the appender change the
+  permissions of the file it pointed at, for example loosening a `0600` private key to `0644`.
+  Nothing is written to any other file either, since its owner, or whoever planted the link,
+  could read the log messages despite the permissions asked for: `add_appender` raises `IOError`
+  giving the reason, and when a later rotation or reopen finds such a file, for example one
+  planted under the name of tomorrow's log file, the appender reports the reason once and writes
+  nothing until the file is fixed. With `permissions:`, a FIFO at the path fails to open instead of
+  blocking the process. Without `permissions:`, writing through a symbolic link still works.
 - `logger_measure_method` validates its arguments before writing them into the source of the
   method it generates. `min_duration` and the method name were written verbatim, so a value
   read from configuration, such as `min_duration: "(system('...'); 0)"`, would run as code on
