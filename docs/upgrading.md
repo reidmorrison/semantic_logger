@@ -24,8 +24,9 @@ The `:sentry_ruby` appender takes the Sentry user (`user_id`, `username`, `user_
 and `user`) and `fingerprint` from named tags or the payload. Taking them from the payload is
 deprecated and will be **removed in v6**, since the payload often holds untrusted data, such as a
 request body, which could then set the user an error is reported for. It emits a deprecation warning
-the first time it happens. Set them with named tags instead, which can now also hold the
-`fingerprint`:
+the first time it happens. Until then, the named tags win over the payload, which no longer replaces
+a user field they set, and only a String, Symbol, or Integer is taken from the payload for a user
+field. Set them with named tags instead, which can now also hold the `fingerprint`:
 
 ~~~ruby
 # Before:
@@ -175,8 +176,10 @@ server, and so does not need the `syslog` gem, can use the same constants from
   UTF-8, and discards a message that its formatter cannot write, or writes as something other than
   a String with content, instead of failing the whole request.
 * `:sentry_ruby` leaves the log entry's payload and named tags unchanged, so every appender after
-  it, and your own Hash, keep the keys it reads. A `fingerprint`, user field, or payload of the
-  wrong type is sent as data instead of raising.
+  it, and your own Hash, keep the keys it reads. A user field, or `user` Hash, in the payload no
+  longer replaces one from the named tags. A payload user field that is not a String, Symbol, or
+  Integer, a `fingerprint` that is not an Array of Strings, Symbols, or numbers, and a payload that
+  is not a Hash, are sent as data instead.
 * The file appender's `permissions:` option is only applied to a regular file owned by the
   process, with a single hard link, that was not reached through a symbolic link. Otherwise it
   warns once and leaves the permissions unchanged.

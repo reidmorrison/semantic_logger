@@ -99,6 +99,54 @@ module Appender
           refute scope.tags.key?("fingerprint")
         end
 
+        it "takes each user field from the named tags over the payload" do
+          scope = capture(error_log({user_id: 666, username: "eve"}, {user_id: 7}))
+
+          assert_equal({id: 7, username: "eve"}, scope.user)
+          assert_equal 666, scope.extra[:user_id]
+        end
+
+        it "merges a user Hash from the payload under the named tags" do
+          payload = {user: {id: 666, "username" => "eve", segment: "paid"}}
+          scope   = capture(error_log(payload, {user_id: 7, username: "bob"}))
+
+          assert_equal({id: 7, username: "bob", segment: "paid"}, scope.user)
+          refute scope.extra.key?(:user)
+        end
+
+        it "sends a user Hash from the payload with a value of another type as data" do
+          scope = capture(error_log({user: {geo: {city: "Paris"}}}, {user_id: 7}))
+
+          assert_equal({id: 7}, scope.user)
+          assert_equal({geo: {city: "Paris"}}, scope.extra[:user])
+        end
+
+        it "takes a user field of any type from the named tags, and leaves out a nil one" do
+          user_id = Object.new
+          scope   = capture(error_log({}, {user_id: user_id, username: nil}))
+
+          assert_equal({id: user_id}, scope.user)
+          refute scope.tags.key?("username")
+        end
+
+        it "takes a fingerprint with numbers in it, as Strings" do
+          scope = capture(error_log({fingerprint: ["upstream", 503, :timeout]}))
+
+          assert_equal %w[upstream 503 timeout], scope.fingerprint
+        end
+
+        it "warns that taking a user Hash from the payload is deprecated" do
+          original             = Warning[:deprecated]
+          Warning[:deprecated] = true
+          _out, err            = capture_io do
+            capture(error_log({user: {segment: "paid"}}, {user_id: 7}))
+          end
+
+          assert_includes err, "SentryRuby took the Sentry user or fingerprint from the log payload"
+        ensure
+          Warning[:deprecated] = original
+        end
+
         it "warns once that taking them from the payload is deprecated" do
           original             = Warning[:deprecated]
           Warning[:deprecated] = true

@@ -24,10 +24,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:sentry_ruby` appender no longer deletes the keys it reads from the log entry's payload and
   named tags, which it shares with every other appender and which can be the application's own
   Hash: the user fields and `fingerprint` it took for Sentry were missing from every appender
-  after it, and from the application's Hash. A `fingerprint` that is not an Array of Strings, a
-  user field of another type, or a payload that is not a Hash is sent to Sentry as data instead of
+  after it, and from the application's Hash. A `fingerprint` that is not an Array of Strings,
+  Symbols, or numbers, or a payload that is not a Hash, is sent to Sentry as data instead of
   raising, which lost the error report. Taking the user and fingerprint from the payload, which can
-  hold untrusted data, is deprecated; set them with named tags instead.
+  hold untrusted data, is deprecated; set them with named tags instead. Until then the named tags
+  win: a user field or `user` Hash in the payload no longer replaces one they set, and only a String,
+  Symbol, or Integer is taken from the payload for a user field, so other values are sent as data.
 - The `:cloudwatch_logs` appender splits the buffered log messages into batches that PutLogEvents
   accepts (at most 1 MB and 10,000 events, in chronological order), cuts short a message too large
   for a batch of its own, and reports a request that fails to the internal logger. It sent up to

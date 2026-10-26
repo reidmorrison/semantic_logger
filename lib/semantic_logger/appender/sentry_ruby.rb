@@ -15,8 +15,11 @@ module SemanticLogger
       # Keys of the named tags or payload that set the Sentry user, mapped to its fields.
       USER_KEYS = {user_id: :id, username: :username, user_email: :email, ip_address: :ip_address}.freeze
 
-      # The types of value accepted for a field of the Sentry user.
+      # The types of value taken from the payload for a field of the Sentry user.
       USER_VALUE_TYPES = [String, Symbol, Integer].freeze
+
+      # The types of value accepted in a fingerprint, which Sentry turns into Strings.
+      FINGERPRINT_PART_TYPES = [String, Symbol, Numeric].freeze
 
       # Create Appender
       #
@@ -109,42 +112,65 @@ module SemanticLogger
       # Any additional value nested in a :user key will be added, provided any of
       # the above keys is already present.
       #
-      #
-      # A value of another type than the field takes is left where it is, sent to Sentry as
-      # data rather than as the user. The payload can hold untrusted data, such as a request body,
-      # so taking the user from it is deprecated: set it with named tags instead.
+      # The payload can hold untrusted data, such as a request body, so taking the user from it is
+      # deprecated, and the named tags win: a payload field is only taken when the named tags do not
+      # set it, and its value is a String, Symbol, or Integer. A payload value that is not taken is
+      # left where it is, and sent to Sentry as data.
       def extract_user!(named_tags, payload)
         user = {}
 
-        [named_tags, payload].each do |source|
-          USER_KEYS.each do |source_key, target_key|
-            value = source[source_key]
-            next unless USER_VALUE_TYPES.any? { |type| value.is_a?(type) }
-
-            user[target_key] = source.delete(source_key)
-            payload_context_deprecated if source.equal?(payload)
+        USER_KEYS.each do |source_key, target_key|
+          value = named_tags.delete(source_key)
+          if value
+            user[target_key] = value
+          elsif user_value?(payload[source_key])
+            user[target_key] = payload.delete(source_key)
+            payload_context_deprecated
           end
         end
 
         return if user.empty?
 
-        [named_tags, payload].each do |source|
-          user.merge!(source.delete(:user)) if source[:user].is_a?(Hash)
-        end
-
+        user.merge!(named_tags.delete(:user)) if named_tags[:user].is_a?(Hash)
+        merge_payload_user!(user, payload)
         user
       end
 
-      # Returns the fingerprint taken from the named tags or payload, which Sentry requires to be an
-      # Array of Strings, or nil when there is none, or it is of another type, which is then left
-      # where it is and sent to Sentry as data. As for the user, taking it from the payload is
-      # deprecated.
+      # Adds the fields of a :user Hash in the payload that the user does not have yet, when each of
+      # its keys is a Symbol or String, and each of its values a String, Symbol, or Integer.
+      def merge_payload_user!(user, payload)
+        extras = payload[:user]
+        return unless extras.is_a?(Hash) && extras.all? { |key, value| user_key?(key) && user_value?(value) }
+
+        payload.delete(:user)
+        payload_context_deprecated
+        extras.each do |key, value|
+          user[key.to_sym] = value unless user.key?(key.to_sym) || user.key?(key.to_s)
+        end
+      end
+
+      def user_key?(key)
+        key.is_a?(Symbol) || key.is_a?(String)
+      end
+
+      def user_value?(value)
+        USER_VALUE_TYPES.any? { |type| value.is_a?(type) }
+      end
+
+      # Returns [Array<String>] the fingerprint taken from the named tags or payload, an Array of
+      # Strings, Symbols, or numbers. Returns nil when there is none, or it is of another type, which
+      # is then left where it is and sent to Sentry as data. As for the user, taking it from the
+      # payload is deprecated.
       def extract_fingerprint!(source, from_payload: false)
         fingerprint = source[:fingerprint]
-        return unless fingerprint.is_a?(Array) && fingerprint.all? { |part| part.is_a?(String) || part.is_a?(Symbol) }
+        return unless fingerprint.is_a?(Array) && fingerprint.all? { |part| fingerprint_part?(part) }
 
         payload_context_deprecated if from_payload
         source.delete(:fingerprint).map(&:to_s)
+      end
+
+      def fingerprint_part?(part)
+        FINGERPRINT_PART_TYPES.any? { |type| part.is_a?(type) }
       end
 
       # Returns [Hash] a copy of the payload that keys can be taken out of. A payload that is not a
