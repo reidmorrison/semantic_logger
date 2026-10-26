@@ -167,17 +167,31 @@ module SemanticLogger
     # consistent with #extract_arguments.
     ASSIGNABLE_KEYS = (NON_PAYLOAD_KEYS + %i[payload]).freeze
 
-    # Assign known keys to self, all other keys to the payload.
+    # Assign the Hash returned by a logging block: known keys to self, all other keys to the payload.
+    #
+    # A block can return untrusted data, such as a parsed request body, so the Hash is treated like
+    # one passed after the message (see #extract_arguments): a key is only used as a log argument
+    # when its value is valid for it (an exception must be an Exception), its message only when the
+    # log call supplied none, and its payload only when it is a Hash. Every other key is added to
+    # the payload, without replacing a value that the log call supplied. The payload is copied
+    # first, since it can be the caller's own Hash.
     def assign_hash(hash)
-      self.payload ||= {}
+      # A copy of the payload that keys can be added to; a payload that is not a Hash is kept as
+      # its :payload key.
+      merged = merge_payload(payload, {})
       hash.each_pair do |key, value|
-        if ASSIGNABLE_KEYS.include?(key) && respond_to?(:"#{key}=")
+        # As in #extract_arguments, a nil value means the argument was not supplied.
+        next if value.nil? && ASSIGNABLE_KEYS.include?(key)
+
+        if key == :payload && value.is_a?(Hash)
+          value.each_pair { |name, val| merged[name] = val unless merged.key?(name) }
+        elsif block_argument?(key, value)
           public_send(:"#{key}=", value)
-        else
-          payload[key] = value
+        elsif !merged.key?(key)
+          merged[key] = value
         end
       end
-      self.payload = nil if payload.empty?
+      self.payload = merged.empty? ? nil : merged
       self
     end
 
@@ -420,13 +434,23 @@ module SemanticLogger
 
     private
 
-    # Returns the explicit payload with the remaining keys of the hash merged in. The explicit
-    # payload's values win, so that stray keys cannot overwrite them.
+    # Returns the explicit payload with the remaining keys of the hash merged in. The remaining
+    # keys win: they are the ones the application passed beside the explicit payload, which is
+    # where docs/security.md says to put untrusted data, so a value in it cannot replace them.
     def merge_payload(explicit, remaining)
       return remaining if explicit.nil?
-      return explicit.merge(remaining) { |_key, explicit_value, _value| explicit_value } if explicit.is_a?(Hash)
+      return explicit.merge(remaining) if explicit.is_a?(Hash)
 
       remaining.merge(payload: explicit)
+    end
+
+    # Whether a key of the Hash returned by a logging block is assigned to the log attribute of the
+    # same name, rather than added to the payload.
+    def block_argument?(key, value)
+      return message.nil? if key == :message
+      return value.is_a?(Exception) if key == :exception
+
+      ASSIGNABLE_KEYS.include?(key) && respond_to?(:"#{key}=") && Log.argument?(key, value)
     end
   end
 end

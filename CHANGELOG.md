@@ -127,10 +127,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   invalid `log_exception`, `on_exception_level`, `min_duration`, or `backtrace` raised too. A key
   is now only used as a log argument when its value is valid for it (for example a finite, real
   `duration`); otherwise it stays in the payload, and a `nil` value is ignored. Unknown keys
-  alongside an explicit `payload:` are merged into it instead of raising, without overwriting its
-  values. The options of `measure_*` calls are checked the same way, an invalid value being
-  ignored. An `on_exception_level` given as a String or Integer is now stored as its Symbol, and a
-  supplied `backtrace` Array is no longer modified. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
+  alongside an explicit `payload:` are merged into it instead of raising, and win over its values
+  of the same name, so that untrusted data passed as the payload cannot replace a value such as an
+  `account_id` that the application supplied beside it. The options of `measure_*` calls are
+  checked the same way, an invalid value being ignored, and so is a Hash returned from a logging
+  block, as in `logger.info("Webhook") { JSON.parse(body, symbolize_names: true) }`: it assigned
+  every key unchecked, so `{"payload": null}` made the call raise, a `duration` or `exception` of
+  the wrong type made every formatter drop the entry, its `message` replaced the application's own,
+  and its other keys were written into the caller's payload Hash. A block's `message` is now only
+  used when the log call has none, and it never replaces a value the log call supplied. An
+  `on_exception_level` given as a String or Integer is now stored as its Symbol, and a supplied
+  `backtrace` Array is no longer modified. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
 - The file appender's `permissions:` option is only applied to a regular file owned by the
   process with a single hard link, and not through a symbolic link or to a file swapped in after
   opening; otherwise it logs a warning once. Previously a link planted in a writable log

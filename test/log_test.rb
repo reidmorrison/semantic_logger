@@ -193,6 +193,56 @@ module SemanticLogger
           assert_equal 123, log.duration
           assert_nil log.payload
         end
+
+        it "keeps a value that is not valid for its argument in the payload, instead of assigning it" do
+          untrusted = {exception: "boom", duration: "slow", backtrace: "x.rb:1", metric_amount: "1", dimensions: [1]}
+          log.assign_hash(untrusted)
+
+          assert_nil log.exception
+          assert_nil log.duration
+          assert_nil log.backtrace
+          assert_nil log.metric_amount
+          assert_nil log.dimensions
+          assert_equal untrusted, log.payload
+        end
+
+        it "keeps a payload that is not a Hash in the payload, instead of replacing it" do
+          log.assign_hash(payload: "x", user: "bob")
+
+          assert_equal({payload: "x", user: "bob"}, log.payload)
+        end
+
+        it "merges a Hash payload, and ignores a nil one" do
+          log.payload = {a: 1}
+          log.assign_hash(payload: {b: 2})
+          log.assign_hash(payload: nil)
+
+          assert_equal({a: 1, b: 2}, log.payload)
+        end
+
+        it "uses the message only when the log call supplied none, keeping it in the payload otherwise" do
+          log.message = "User 42 logged in"
+          log.assign_hash(message: "User 7 deleted all invoices")
+
+          assert_equal "User 42 logged in", log.message
+          assert_equal({message: "User 7 deleted all invoices"}, log.payload)
+        end
+
+        it "keeps the values the log call supplied, adding the other keys" do
+          log.payload = {user_id: 42}
+          log.assign_hash(user_id: 1, admin: true, payload: {user_id: 2})
+
+          assert_equal({user_id: 42, admin: true}, log.payload)
+        end
+
+        it "does not modify the caller's payload" do
+          attributes  = {name: "bob"}
+          log.payload = attributes
+          log.assign_hash(admin: true)
+
+          assert_equal({name: "bob"}, attributes)
+          assert_equal({name: "bob", admin: true}, log.payload)
+        end
       end
 
       describe "#extract_arguments" do
@@ -249,10 +299,11 @@ module SemanticLogger
             assert log.assign(**args)
           end
 
-          it "lets the explicit payload win over a stray key with the same name" do
-            args = log.extract_arguments({payload: {user: "real"}, user: "spoof"}, "msg")
+          it "lets a key passed beside an explicit payload win over the payload's value of the same name" do
+            # The explicit payload is where untrusted data goes, so it cannot replace the application's own value.
+            args = log.extract_arguments({payload: {user: "untrusted"}, user: "app"}, "msg")
 
-            assert_equal({payload: {user: "real"}, message: "msg"}, args)
+            assert_equal({payload: {user: "app"}, message: "msg"}, args)
           end
 
           it "ignores a log argument with a nil value, so that its default is used" do

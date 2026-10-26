@@ -69,13 +69,21 @@ valid level. Any other value stays in the payload as data, and a `nil` value is 
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
 
 To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
-keys supplied alongside an explicit `payload:` are merged into it, and the explicit payload's own
-values win over them:
+keys supplied alongside an explicit `payload:` are merged into it, and win over the explicit
+payload's values of the same name, so that the untrusted data cannot replace a value your code
+supplies:
 
 ~~~ruby
-# The hash is logged as-is, and none of its keys are interpreted:
-logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true))
+# The hash is logged as-is, and none of its keys are interpreted. Its own account_id, if any,
+# cannot replace the one supplied here:
+logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true), account_id: account.id)
 ~~~
+
+A hash returned from a logging block, such as
+`logger.debug("Webhook received") { JSON.parse(body, symbolize_names: true) }`, is checked the
+same way: a key is only used as an argument when its value is valid for it, its `message` only
+when the log call supplied none, and its `payload` only when it is a Hash. It never replaces a value
+the log call supplied, and the caller's own payload Hash is left unchanged.
 
 The options of a `measure_*` call are checked the same way: an option with a value that is not valid
 for it is ignored, and its default is used. Keys that are not measure options are not logged at all,

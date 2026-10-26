@@ -295,6 +295,23 @@ module SemanticLogger
           assert_equal({user: "joe"}, last_log.payload)
         end
 
+        [
+          {payload: nil},
+          {payload: "x", user: 1},
+          {exception: "boom"},
+          {duration: "slow"},
+          {backtrace: "x.rb:1"},
+          {message: "forged"}
+        ].each do |untrusted|
+          it "logs a hash block result of untrusted data #{untrusted.inspect} without raising" do
+            logger.info("Webhook received") { JSON.parse(JSON.generate(untrusted), symbolize_names: true) }
+
+            assert_equal "Webhook received", last_log.message
+            assert_nil last_log.exception
+            assert_nil last_log.duration
+          end
+        end
+
         it "supports a zero-arity lambda" do
           logger.info(&-> { "From lambda" })
 

@@ -4388,13 +4388,21 @@ valid level. Any other value stays in the payload as data, and a `nil` value is 
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
 
 To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
-keys supplied alongside an explicit `payload:` are merged into it, and the explicit payload's own
-values win over them:
+keys supplied alongside an explicit `payload:` are merged into it, and win over the explicit
+payload's values of the same name, so that the untrusted data cannot replace a value your code
+supplies:
 
 ~~~ruby
-# The hash is logged as-is, and none of its keys are interpreted:
-logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true))
+# The hash is logged as-is, and none of its keys are interpreted. Its own account_id, if any,
+# cannot replace the one supplied here:
+logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true), account_id: account.id)
 ~~~
+
+A hash returned from a logging block, such as
+`logger.debug("Webhook received") { JSON.parse(body, symbolize_names: true) }`, is checked the
+same way: a key is only used as an argument when its value is valid for it, its `message` only
+when the log call supplied none, and its `payload` only when it is a Hash. It never replaces a value
+the log call supplied, and the caller's own payload Hash is left unchanged.
 
 The options of a `measure_*` call are checked the same way: an option with a value that is not valid
 for it is ignored, and its default is used. Keys that are not measure options are not logged at all,
@@ -4599,7 +4607,11 @@ server, and so does not need the `syslog` gem, can use the same constants from
   a log argument (`duration`, `metric_amount`, `backtrace`, `log_exception`, ...) is only used as
   that argument when its value is valid for it. Otherwise it stays in the payload, where it was
   previously consumed or made the call raise. A `nil` value is ignored. When an explicit
-  `payload:` is also given, its values win over other keys of the same name.
+  `payload:` is also given, the other keys win over its values of the same name.
+* Hashes returned from a logging block, for example `logger.info("Webhook") { {user: "bob"} }`, are
+  checked the same way. The block's `message` key is only used when the log call supplies no
+  message, and is otherwise kept in the payload, and the block's keys no longer replace values the
+  log call supplied.
 * The HTTP appender and the appenders built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
   `:signalfx`): the url in the error logged for a rejected request shows only the scheme, host,
   and port, and `#inspect` shows only the object address and that url.
