@@ -40,6 +40,14 @@ module Appender
             SemanticLogger::Appender::File.new(__dir__)
           end
         end
+
+        it "raises immediately when the file name, once formatted, is a directory" do
+          Dir.mktmpdir do |dir|
+            Dir.mkdir(File.join(dir, "log-#{Process.pid}"))
+
+            assert_raises(ArgumentError) { SemanticLogger::Appender::File.new(File.join(dir, "log-%p")) }
+          end
+        end
       end
 
       describe "#log" do
@@ -359,6 +367,20 @@ module Appender
           end
         end
 
+        it "writes to the file it read, even when another thread reopens the file meanwhile" do
+          appender   = SemanticLogger::Appender::File.new(file_name, permissions: 0o600, retry_count: 0)
+          format_log = appender.method(:format_log)
+          # Stands in for a reopen on another thread refusing the file between reading and writing it.
+          refuse_meanwhile = lambda do |log|
+            appender.instance_variable_set(:@file, nil)
+            format_log.call(log)
+          end
+
+          appender.stub(:format_log, refuse_meanwhile) { assert appender.log(log) }
+
+          assert_includes File.read(file_name), log_message
+        end
+
         it "still writes through a symbolic link, for example to /dev/stdout" do
           Dir.mktmpdir do |dir|
             target = File.join(dir, "target.log")
@@ -391,6 +413,14 @@ module Appender
           assert appender.reopen
           assert appender.log(log)
           assert_equal 1, File.read(file_name).lines.count
+        end
+
+        it "reopens a log file that is removed while it is being reopened" do
+          appender
+          File.unlink(file_name)
+
+          # Simulate the file being removed after it was found to exist.
+          File.stub(:exist?, true) { assert appender.reopen }
         end
 
         it "exclusive_lock" do

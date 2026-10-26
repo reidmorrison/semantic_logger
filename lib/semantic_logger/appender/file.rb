@@ -179,17 +179,14 @@ module SemanticLogger
 
         self.current_file_name = apply_format_directives(file_name)
         # With permissions, a directory is refused when it fails to open, like any other file.
-        if !permissions && ::File.directory?(file_name)
+        if !permissions && ::File.directory?(current_file_name)
           raise(ArgumentError, "The supplied log file_name: #{current_file_name} is already a directory.")
         end
 
         self.log_count = 0
-        if append && reopen_size && ::File.exist?(current_file_name)
-          self.log_size = ::File.size(current_file_name)
-          self.log_size = 0 if log_size >= reopen_size
-        else
-          self.log_size = 0
-        end
+        # File.size? rather than File.size, since the file can be removed at any time.
+        size = ::File.size?(current_file_name) if append && reopen_size
+        self.log_size = size && size < reopen_size ? size : 0
 
         self.reopen_at = reopen_period ? next_reopen_period(reopen_period) : nil
 
@@ -209,21 +206,22 @@ module SemanticLogger
       # Since only one appender thread will be writing to the file at a time
       # it is not necessary to protect access to the file with a semaphore.
       def log(log)
-        reopen if time_to_reopen?
-        return refused unless @file
+        # Read once, since #reopen can be called from another thread meanwhile.
+        file = time_to_reopen? ? reopen : @file
+        return refused unless file
 
         # Formatted once, outside the retry below: reopening the file cannot fix the content.
         message = format_log(log) << "\n"
         count   = 0
         begin
-          @file.write(message)
+          file.write(message)
           @log_count += 1
           @log_size  += message.size
         rescue StandardError => e
           if count < retry_count
             count += 1
-            reopen
-            return refused unless @file
+            file = reopen
+            return refused unless file
 
             retry
           end
