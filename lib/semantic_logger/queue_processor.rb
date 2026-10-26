@@ -340,10 +340,13 @@ module SemanticLogger
     # A message whose content cannot be written (see #message_error?) is discarded and reported,
     # without restarting the thread. Any other error, such as the destination being unavailable,
     # propagates to #process, which backs off before retrying.
+    #
+    # SystemStackError is not a StandardError, but a value nested too deeply raises it, so it is
+    # offered to #message_error? too, rather than stopping the thread for good.
     def write_message(log)
       appender.log(log)
       @processed_count += 1
-    rescue StandardError => e
+    rescue StandardError, SystemStackError => e
       raise unless message_error?(e)
 
       messages_failed([log], e)
@@ -359,7 +362,7 @@ module SemanticLogger
     def write_batch(logs)
       appender.batch(logs)
       @processed_count += logs.size
-    rescue StandardError => e
+    rescue StandardError, SystemStackError => e
       raise unless message_error?(e)
       return messages_failed(logs, e) if logs.size == 1 || !appender.batch_all_or_nothing?
 

@@ -54,7 +54,7 @@ module SemanticLogger
         # Ignore logs coming from Sentry itself
         return false if log.name == "Sentry"
 
-        context = formatter.call(log, self)
+        context = format_log(log)
         payload = context.delete(:payload) || {}
         named_tags = context[:named_tags] || {}
         transaction_name = named_tags.delete(:transaction_name)

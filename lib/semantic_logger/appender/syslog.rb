@@ -202,12 +202,12 @@ module SemanticLogger
         case @protocol
         when :syslog
           # Since the Ruby Syslog API supports sprintf format strings, double up all existing '%'
-          message = formatter.call(log, self).gsub "%", "%%"
+          message = format_log(log).gsub "%", "%%"
           ::Syslog.log @level_map[log.level], message
         when :tcp
-          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{formatter.call(log, self)}\r\n") }
+          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{format_log(log)}\r\n") }
         when :udp
-          @remote_syslog.send(formatter.call(log, self), 0, @server, @port)
+          @remote_syslog.send(format_log(log), 0, @server, @port)
         else
           raise "Unsupported protocol: #{protocol}"
         end

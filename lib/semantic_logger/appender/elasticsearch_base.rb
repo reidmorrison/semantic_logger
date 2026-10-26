@@ -160,7 +160,7 @@ module SemanticLogger
 
       # Log to the index for today
       def log(log)
-        bulk_payload = formatter.call(log, self)
+        bulk_payload = format_log(log)
         bulk_write([bulk_index(log), bulk_payload])
         true
       end
@@ -168,7 +168,7 @@ module SemanticLogger
       def batch(logs)
         messages = []
         logs.each do |log|
-          messages << bulk_index(log) << formatter.call(log, self)
+          messages << bulk_index(log) << format_log(log)
         end
 
         bulk_write(messages)

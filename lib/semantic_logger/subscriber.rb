@@ -86,11 +86,19 @@ module SemanticLogger
       true
     end
 
-    # Errors raised by formatting a log message whose content cannot be written, such as a
+    # Raised by #format_log and #format_batch when the formatter fails, with the formatter's
+    # error as its cause. A formatter has no destination, so it can only fail because of the
+    # content of the log message, whatever it raises.
+    class FormatError < StandardError; end
+
+    # Errors raised by writing a log message whose content cannot be written, such as a
     # value that cannot be serialized. Excludes JSON::ParserError, which comes from parsing a
     # response rather than from the message, except its subclass JSON::NestingError, which
-    # JSON.generate raises for a value nested too deeply.
-    MESSAGE_ERRORS = [JSON::GeneratorError, JSON::NestingError, EncodingError, FloatDomainError].freeze
+    # JSON.generate raises for a value nested too deeply. SystemStackError, for a value nested
+    # too deeply to walk, cannot be written by retrying either.
+    MESSAGE_ERRORS = [
+      FormatError, JSON::GeneratorError, JSON::NestingError, EncodingError, FloatDomainError, SystemStackError
+    ].freeze
 
     # Whether the supplied exception, raised by #log or #batch, was caused by the content of a
     # log message, rather than by the destination, for example being unavailable.
@@ -98,7 +106,8 @@ module SemanticLogger
     # Retrying cannot write such a message, so an asynchronous appender discards it and carries
     # on, instead of backing off and retrying. Any other exception is retried with a back-off.
     #
-    # An appender that raises its own errors for bad content can override this to recognize them.
+    # Every error raised by the formatter is one (see #format_log). An appender whose client
+    # raises its own errors for bad content can override this to recognize them.
     def message_error?(exception)
       MESSAGE_ERRORS.any? { |error_class| exception.is_a?(error_class) }
     end
@@ -114,6 +123,25 @@ module SemanticLogger
     end
 
     private
+
+    # Returns the log message formatted by this appender's formatter.
+    #
+    # Any error the formatter raises, including SystemStackError for a value nested too deeply,
+    # is raised as a FormatError, with the formatter's error as its cause, so that #message_error?
+    # recognizes it: an asynchronous appender then discards the message instead of backing off.
+    # Appenders call this rather than formatter.call.
+    def format_log(log)
+      formatter.call(log, self)
+    rescue StandardError, SystemStackError => e
+      raise FormatError, "Could not format the log message (#{e.class})"
+    end
+
+    # Returns the log messages formatted by the formatter's #batch, as for #format_log.
+    def format_batch(logs)
+      formatter.batch(logs, self)
+    rescue StandardError, SystemStackError => e
+      raise FormatError, "Could not format the batch of log messages (#{e.class})"
+    end
 
     # Initializer for Abstract Class SemanticLogger::Subscriber
     #

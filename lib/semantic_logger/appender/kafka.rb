@@ -177,7 +177,7 @@ module SemanticLogger
 
       # Forward log messages to Kafka producer thread.
       def log(log)
-        json = formatter.call(log, self)
+        json = format_log(log)
         @producer.produce(json, topic: topic, partition: partition, partition_key: partition_key, key: key)
       end
 

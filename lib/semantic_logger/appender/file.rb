@@ -207,9 +207,10 @@ module SemanticLogger
       def log(log)
         reopen if time_to_reopen?
 
-        count = 0
+        # Formatted once, outside the retry below: reopening the file cannot fix the content.
+        message = format_log(log) << "\n"
+        count   = 0
         begin
-          message = formatter.call(log, self) << "\n"
           @file.write(message)
           @log_count += 1
           @log_size  += message.size

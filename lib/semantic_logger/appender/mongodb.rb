@@ -164,8 +164,18 @@ module SemanticLogger
       # Log the message to MongoDB
       def log(log)
         # Insert log entry into Mongo
-        collection.insert_one(formatter.call(log, self))
+        collection.insert_one(format_log(log))
         true
+      end
+
+      # Errors raised for a document that cannot be stored, which retrying cannot insert either.
+      # BSON raises BSON::Error, ArgumentError (a key with a NUL byte), or RangeError (an Integer too
+      # large for 64 bits) while the document is serialized, before anything is sent, and the driver
+      # raises Mongo::Error::MaxBSONSize for a document larger than the server accepts.
+      DOCUMENT_ERRORS = [BSON::Error, ArgumentError, RangeError, Mongo::Error::MaxBSONSize].freeze
+
+      def message_error?(exception)
+        super || DOCUMENT_ERRORS.any? { |error| exception.is_a?(error) }
       end
 
       private

@@ -205,7 +205,7 @@ module SemanticLogger
 
       # Write the log using the specified protocol and server.
       def log(log)
-        message = formatter.call(log, self)
+        message = format_log(log)
         @tcp_client.retry_on_connection_failure do
           @tcp_client.write("#{message}#{separator}")
         end

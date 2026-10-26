@@ -54,7 +54,7 @@ module SemanticLogger
         # Ignore logs coming from Raven itself
         return false if log.name == "Raven"
 
-        context      = formatter.call(log, self)
+        context      = format_log(log)
         user         = context.delete(:user)
         tags         = context.delete(:tags)
         attrs        = {

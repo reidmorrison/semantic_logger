@@ -205,13 +205,45 @@ class SubscriberTest < Minitest::Test
       end
     end
 
+    describe "#format_log and #format_batch" do
+      let(:log) { SemanticLogger::Log.new("SubscriberTest", :info).tap { |l| l.message = "hello" } }
+
+      def formatter_raising(exception)
+        formatter = Object.new
+        formatter.define_singleton_method(:call) { |_log, _logger| raise exception }
+        formatter.define_singleton_method(:batch) { |_logs, _logger| raise exception }
+        formatter
+      end
+
+      it "returns the formatted log message" do
+        assert_match(/ I .* SubscriberTest -- hello\z/, appender.send(:format_log, log))
+      end
+
+      it "raises any error from the formatter as a FormatError, with the error as its cause" do
+        [NoMethodError.new("undefined method 'each' for an instance of String"),
+         ArgumentError.new("invalid byte sequence in UTF-8"),
+         SystemStackError.new("stack level too deep")].each do |error|
+          appender.instance_variable_set(:@formatter, formatter_raising(error))
+
+          [-> { appender.send(:format_log, log) }, -> { appender.send(:format_batch, [log]) }].each do |format|
+            raised = assert_raises(SemanticLogger::Subscriber::FormatError, &format)
+
+            assert_same error, raised.cause
+            assert appender.message_error?(raised), "expected a FormatError to be a message error"
+          end
+        end
+      end
+    end
+
     describe "#message_error?" do
       it "is true for errors raised by formatting content that cannot be written" do
         [
+          SemanticLogger::Subscriber::FormatError.new("Could not format the log message (NoMethodError)"),
           JSON::GeneratorError.new("cannot serialize"),
           JSON::NestingError.new("nesting of 101 is too deep"),
           Encoding::UndefinedConversionError.new("cannot convert"),
-          FloatDomainError.new("NaN")
+          FloatDomainError.new("NaN"),
+          SystemStackError.new("stack level too deep")
         ].each do |exception|
           assert appender.message_error?(exception), "expected #{exception.class} to be a message error"
         end

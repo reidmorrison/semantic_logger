@@ -52,7 +52,7 @@ module SemanticLogger
       end
 
       def log(log)
-        name = formatter.call(log, self)
+        name = format_log(log)
         if (duration = log.duration)
           # Convert duration to seconds
           ::NewRelic::Agent.record_metric(name, duration / 1000.0)

@@ -584,7 +584,7 @@ class SimpleAppender < SemanticLogger::Subscriber
     p log
 
     # Display the formatted output
-    puts formatter.call(log, self)
+    puts format_log(log)
   end
 
   # Optional
@@ -602,10 +602,14 @@ end
 When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
 is retried after a back-off, on the basis that the destination may be briefly unavailable. An
 exception caused by the content of one message cannot succeed on retry, so that message is discarded
-instead. `#message_error?(exception)` decides which is which: by default it recognizes the errors
-raised when formatting a value that cannot be serialized (`JSON::GeneratorError`,
-`JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it to recognize errors your
-appender raises for content it cannot write:
+instead. `#message_error?(exception)` decides which is which. Format each message with
+`format_log(log)` (or a batch with `format_batch(logs)`) rather than `formatter.call`: any error the
+formatter raises is then raised as a `SemanticLogger::Subscriber::FormatError`, which
+`#message_error?` recognizes, since a formatter can only fail because of the content of the message.
+By default it also recognizes the errors raised when serializing a value that cannot be written
+(`JSON::GeneratorError`, `JSON::NestingError`, `EncodingError`, `FloatDomainError`, and
+`SystemStackError`). Override it to recognize errors your appender's client raises for content it
+cannot write:
 
 ~~~ruby
 def message_error?(exception)
@@ -621,7 +625,7 @@ is then split up and retried, so that only the offending message is discarded:
 
 ~~~ruby
 def batch(logs)
-  client.send_all(logs.map { |log| formatter.call(log, self) })
+  client.send_all(logs.map { |log| format_log(log) })
 end
 
 def batch_all_or_nothing?

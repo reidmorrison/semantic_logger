@@ -93,7 +93,10 @@ module Appender
 
           appender.formatter.stub(:batch, ->(*) { raise JSON::GeneratorError, "cannot serialize" }) do
             appender.http.stub(:request, ->(_) { flunk "must not send a partial batch" }) do
-              assert_raises(JSON::GeneratorError) { appender.batch([log1, log2]) }
+              error = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.batch([log1, log2]) }
+
+              assert_kind_of JSON::GeneratorError, error.cause
+              assert appender.message_error?(error)
             end
           end
         end

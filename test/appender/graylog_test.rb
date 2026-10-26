@@ -7,6 +7,27 @@ module Appender
       let(:appender) { SemanticLogger::Appender::Graylog.new(level: :info) }
       let(:amessage) { "AppenderGraylogTest log message" }
 
+      it "sends a placeholder short_message for a message that is empty once cleansed" do
+        hash = nil
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.info("\e[1m\e[0m  ")
+        end
+
+        assert_equal "<no-exception-message>", hash[:short_message]
+      end
+
+      describe "#message_error?" do
+        it "is true for a log message that GELF cannot send" do
+          error = ArgumentError.new("Data too big (456404 bytes), would create more than 128 chunks!")
+
+          assert appender.message_error?(error)
+        end
+
+        it "is false when the server is unavailable" do
+          refute appender.message_error?(Errno::ECONNREFUSED.new)
+        end
+      end
+
       (SemanticLogger::LEVELS - %i[info warn error fatal]).each do |level|
         it "not send :#{level} notifications to Graylog" do
           hash = nil

@@ -121,9 +121,11 @@ module SemanticLogger
         h = default_formatter.call(log, logger)
 
         h[:short_message] = h.delete(:message)
-        if h[:short_message].nil?
+        # GELF rejects an empty short_message, such as a message of only ANSI escape codes.
+        if h[:short_message].to_s.empty?
           h[:short_message] = log.exception.nil? ? "<no-exception-message>" : log.exception.message
         end
+        h[:short_message] = "<no-exception-message>" if h[:short_message].to_s.empty?
         h[:level]        = logger.level_map[log.level]
         h[:level_str]    = log.level.to_s
         h[:duration_str] = h.delete(:duration)
@@ -132,8 +134,15 @@ module SemanticLogger
 
       # Forward log messages
       def log(log)
-        notifier.notify!(formatter.call(log, self))
+        notifier.notify!(format_log(log))
         true
+      end
+
+      # GELF raises ArgumentError for a log message it cannot send, such as one too large to fit in
+      # the maximum number of chunks, which retrying cannot send either. Unavailable servers raise
+      # network errors instead.
+      def message_error?(exception)
+        exception.is_a?(ArgumentError) || super
       end
 
       private

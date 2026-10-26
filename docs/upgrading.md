@@ -110,7 +110,13 @@ server, and so does not need the `syslog` gem, can use the same constants from
 
 * An async or batching appender discards a log message that it cannot format, instead of
   retrying it. Discarded messages are reported to the internal logger and counted in the new
-  `failed` key of the appender's stats.
+  `failed` key of the appender's stats. Every error raised by a built-in appender's formatter
+  counts, as does a message too large for a UDP datagram, a MongoDB document that BSON cannot
+  serialize, and a message GELF cannot send. A custom appender can format through
+  `format_log(log)` (or `format_batch(logs)`) instead of `formatter.call` to get the same
+  treatment, or override `#message_error?` for errors its own client raises.
+* The text formatters write a payload nested more than 32 levels deep cut off, with the
+  placeholder the JSON formatters use, such as `"#<Hash nested too deeply>"`.
 * The file appender's `permissions:` option is only applied to a regular file owned by the
   process, with a single hard link, that was not reached through a symbolic link. Otherwise it
   warns once and leaves the permissions unchanged.

@@ -64,7 +64,7 @@ module SemanticLogger
         # For more documentation on the NewRelic::Agent.notice_error method see:
         # http://rubydoc.info/github/newrelic/rpm/NewRelic/Agent#notice_error-instance_method
         # and https://docs.newrelic.com/docs/ruby/ruby-agent-api
-        ::NewRelic::Agent.notice_error(exception, formatter.call(log, self))
+        ::NewRelic::Agent.notice_error(exception, format_log(log))
         true
       end
     end

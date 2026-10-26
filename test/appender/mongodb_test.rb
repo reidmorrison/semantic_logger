@@ -24,6 +24,20 @@ module Appender
         appender.purge_all
       end
 
+      describe "#message_error?" do
+        it "is true for a document that BSON cannot serialize" do
+          [{"a\u0000b" => 1}, {big: 2**64}, {object: Object.new}].each do |payload|
+            error = assert_raises(StandardError) { appender.info("Webhook received", payload: payload) }
+
+            assert appender.message_error?(error), "expected #{error.class} to be a message error"
+          end
+        end
+
+        it "is false when the server is unavailable" do
+          refute appender.message_error?(Mongo::Error::NoServerAvailable.allocate)
+        end
+      end
+
       describe "format logs into documents" do
         it "handle no arguments" do
           appender.debug

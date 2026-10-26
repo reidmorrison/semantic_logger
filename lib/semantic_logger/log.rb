@@ -124,7 +124,7 @@ module SemanticLogger
 
       if exception
         unless exception.is_a?(Exception)
-          exception = ArgumentError.new("Invalid value for logger exception: #{exception.inspect}")
+          exception = ArgumentError.new("Invalid value for logger exception: #{Utils.safe_inspect(exception)}")
           exception.set_backtrace(Utils.extract_backtrace(caller))
         end
 
@@ -384,8 +384,11 @@ module SemanticLogger
 
     # Return the payload in text form
     # Returns nil if payload is missing or empty
+    #
+    # A payload nested too deeply for #inspect is rendered cut off at Utils::MAX_JSON_SAFE_DEPTH,
+    # rather than raising SystemStackError (see Utils.safe_inspect).
     def payload_to_s
-      payload.inspect if payload?
+      Utils.safe_inspect(payload) if payload?
     end
 
     # Returns [true|false] whether the log entry has a payload

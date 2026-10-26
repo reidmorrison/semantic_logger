@@ -68,6 +68,44 @@ class QueueProcessorTest < Minitest::Test
     end
   end
 
+  # Overflows the stack on a message containing "deep", as #inspect does on a value nested too deeply.
+  class StackOverflowAppender < SimpleAppender
+    def log(log)
+      raise SystemStackError, "stack level too deep" if log.message.include?("deep")
+
+      super
+    end
+
+    def batch(logs)
+      raise SystemStackError, "stack level too deep" if logs.any? { |log| log.message.include?("deep") }
+
+      logs.each { |log| events << log }
+    end
+
+    def batch_all_or_nothing?
+      true
+    end
+  end
+
+  # Formats every message through Subscriber#format_log, with a formatter that fails on a message
+  # containing "poison" with an error that is not one of Subscriber::MESSAGE_ERRORS.
+  class FormattingAppender < SemanticLogger::Subscriber
+    attr_reader :written
+
+    def initialize(**)
+      super(formatter: lambda { |log, _appender|
+        raise NoMethodError, "undefined method 'each' for an instance of String" if log.message.include?("poison")
+
+        log.message
+      }, **)
+      @written = []
+    end
+
+    def log(log)
+      @written << format_log(log)
+    end
+  end
+
   # A non-StandardError exception, used to exercise the fatal (non-retryable) path in #process.
   class FatalError < Exception; end # rubocop:disable Lint/InheritException
 
@@ -369,6 +407,68 @@ class QueueProcessorTest < Minitest::Test
 
           assert_equal 0, processor.failed_count
           assert_predicate processor, :stopped?
+        end
+
+        describe "when writing it overflows the stack" do
+          let(:appender) do
+            a        = StackOverflowAppender.new
+            a.logger = internal_logger
+            a
+          end
+
+          it "discards only that message, instead of stopping the thread" do
+            processor = build
+            processor.queue << new_log(message: "first")
+            processor.queue << new_log(message: "deep")
+            processor.queue << new_log(message: "last")
+            processor.queue << request(:close)
+
+            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+              processor.send(:process)
+            end
+
+            assert_equal %w[first last], appender.events.map(&:message)
+            assert_equal 1, processor.failed_count
+            refute_predicate processor, :stopped?
+          end
+
+          it "discards only that message from a batch" do
+            processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+            %w[first deep last].each { |message| processor.log(new_log(message: message)) }
+            processor.flush
+
+            assert_equal %w[first last], appender.events.map(&:message)
+            assert_equal 1, processor.failed_count
+            assert_predicate processor, :active?
+          end
+        end
+
+        describe "when the formatter fails with any error" do
+          let(:appender) do
+            a        = FormattingAppender.new
+            a.logger = internal_logger
+            a
+          end
+
+          it "discards only that message, without backing off" do
+            processor = build
+            processor.queue << new_log(message: "first")
+            processor.queue << new_log(message: "poison")
+            processor.queue << new_log(message: "last")
+            processor.queue << request(:close)
+
+            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+              processor.send(:process)
+            end
+
+            assert_equal %w[first last], appender.written
+            assert_equal 1, processor.failed_count
+
+            report = internal_logger.events.find { |event| event.message.include?("Discarded") }
+
+            assert_kind_of SemanticLogger::Subscriber::FormatError, report.exception
+            assert_kind_of NoMethodError, report.exception.cause
+          end
         end
 
         it "asks the appender which errors are caused by the content of a message" do

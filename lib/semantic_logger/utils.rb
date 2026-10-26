@@ -149,6 +149,34 @@ module SemanticLogger
     # the levels that a formatter wraps the payload in.
     MAX_JSON_SAFE_DEPTH = 32
 
+    # Returns [String] value#inspect, without overflowing the stack for a value nested too deeply.
+    #
+    # #inspect has no depth limit: a Hash a few hundred levels deep overflows the stack of a
+    # thread. Rescuing the SystemStackError is not enough, since on macOS a second such overflow
+    # on the same thread crashes Ruby instead. A value that holds a structure nested deeper than
+    # MAX_JSON_SAFE_DEPTH is therefore rendered from a .json_safe copy, cut off at that depth with
+    # the same placeholder the JSON formatters write. Only that case pays for the copy.
+    def self.safe_inspect(value)
+      nested_too_deeply?(value) ? json_safe(value).inspect : value.inspect
+    end
+
+    # Returns [true|false] whether the value holds a Hash, Array, Struct, or Data nested deeper
+    # than MAX_JSON_SAFE_DEPTH, which .json_safe would replace with a placeholder. Never recurses
+    # deeper than that itself.
+    def self.nested_too_deeply?(value, depth = 0)
+      case value
+      when Hash
+        depth >= MAX_JSON_SAFE_DEPTH ||
+          value.any? { |key, val| nested_too_deeply?(key, depth + 1) || nested_too_deeply?(val, depth + 1) }
+      when Array
+        depth >= MAX_JSON_SAFE_DEPTH || value.any? { |element| nested_too_deeply?(element, depth + 1) }
+      when Struct, ::Data
+        depth >= MAX_JSON_SAFE_DEPTH || nested_too_deeply?(value.to_h, depth)
+      else
+        false
+      end
+    end
+
     # Returns a copy of the supplied value that JSON can represent:
     # * Every String is converted to valid UTF-8, as by .encode_utf8.
     # * Infinity and NaN floats become the Strings "Infinity", "-Infinity", and "NaN".

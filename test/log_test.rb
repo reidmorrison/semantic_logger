@@ -104,6 +104,16 @@ module SemanticLogger
             assert_match(/Invalid value for logger exception/, log.exception.message)
           end
 
+          it "coerces a non-exception too deep for #inspect without raising, on a thread" do
+            nested = "leaf"
+            5_000.times { nested = {a: nested} }
+
+            Thread.new { log.assign(exception: nested) }.join
+
+            assert_kind_of ArgumentError, log.exception
+            assert_includes log.exception.message, "#<Hash nested too deeply>"
+          end
+
           it "changes the level when on_exception_level is supplied" do
             log.assign(exception: exception, on_exception_level: :fatal)
 
@@ -628,6 +638,16 @@ module SemanticLogger
 
           assert_predicate log, :payload?
           assert_equal log.payload.inspect, log.payload_to_s
+        end
+
+        it "renders a payload too deep for #inspect without raising, on a thread" do
+          nested = "leaf"
+          5_000.times { nested = {a: nested} }
+          log.payload = {body: nested}
+
+          text = Thread.new { log.payload_to_s }.value
+
+          assert_includes text, "#<Hash nested too deeply>"
         end
       end
 

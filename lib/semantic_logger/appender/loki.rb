@@ -54,14 +54,14 @@ module SemanticLogger
       end
 
       def log(log)
-        message = formatter.call(log, self)
+        message = format_log(log)
         logger.trace(message)
         post(message)
       end
 
       # Logs in batches
       def batch(logs)
-        message = formatter.batch(logs, self)
+        message = format_batch(logs)
         logger.trace(message)
         post(message)
       end

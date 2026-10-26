@@ -124,7 +124,7 @@ module SemanticLogger
                                   log_events:      logs.map do |log|
                                                      {
                                                        timestamp: (log.time.to_f * 1000).floor,
-                                                       message:   formatter.call(log, self)
+                                                       message:   format_log(log)
                                                      }
                                                    end
                                 })

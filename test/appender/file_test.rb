@@ -82,6 +82,17 @@ module Appender
             end
           end
 
+          it "does not reopen the file when the formatter fails, since that cannot fix the content" do
+            appender.instance_variable_set(:@formatter, ->(_log, _appender) { raise NoMethodError, "undefined method" })
+            reopened = 0
+
+            appender.stub(:reopen, -> { reopened += 1 }) do
+              assert_raises(SemanticLogger::Subscriber::FormatError) { appender.log(log) }
+            end
+
+            assert_equal 0, reopened
+          end
+
           it "when retry is disabled" do
             appender.retry_count = 0
 

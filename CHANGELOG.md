@@ -49,15 +49,29 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   as a client's password) and had no depth limit, so a deep enough structure failed with
   `SystemStackError`.
 - An async or batching appender no longer lets one log message that cannot be written stall
-  the others. A message that fails because of its content (a JSON generator, encoding, or
-  `FloatDomainError`, as decided by the appender's `#message_error?`) is discarded, reported, and
-  counted as `failed` in `SemanticLogger.stats[:appenders]`, without the worker thread backing
-  off. In a batch sent as a single request (the HTTP, Loki, Splunk HTTP, SignalFx,
-  Elasticsearch, and OpenSearch appenders, or any whose `#batch_all_or_nothing?` is true), only
-  that message is discarded instead of the whole batch; in any other batch the whole batch is
-  discarded, as before, so no message is written twice.
-  Previously a few such requests per second could keep the worker asleep until its queue
-  filled and every `logger.*` call in the application blocked.
+  the others. A message that fails because of its content, as decided by the appender's
+  `#message_error?`, is discarded, reported, and counted as `failed` in
+  `SemanticLogger.stats[:appenders]`, without the worker thread backing off. That is any error
+  raised by the appender's formatter (the built-in appenders format through the new
+  `Subscriber#format_log`, which raises it as a `Subscriber::FormatError`), a JSON generator,
+  encoding, `FloatDomainError`, or `SystemStackError`, a log message too large for a UDP datagram,
+  a MongoDB document that BSON cannot serialize, and a message GELF cannot send. In a batch sent as
+  a single request (the HTTP, Loki, Splunk HTTP, SignalFx, Elasticsearch, and OpenSearch appenders,
+  or any whose `#batch_all_or_nothing?` is true), only that message is discarded instead of the
+  whole batch; in any other batch the whole batch is discarded, as before, so no message is written
+  twice. Previously a few such requests per second could keep the worker asleep until its queue
+  filled and every `logger.*` call in the application blocked, and a `SystemStackError` stopped the
+  worker for good.
+- A payload nested too deeply for `#inspect` (a few hundred levels, for example a body parsed with
+  `JSON.parse(body, max_nesting: false)`) no longer fails to format in the text formatters, or makes
+  a log call raise when given as its `exception`. It is written cut off below 32 levels, with the
+  placeholder the JSON formatters use. Previously the entry was lost and, on an async appender, the
+  `SystemStackError` stopped the worker thread for good; on macOS a second such payload on the
+  processor thread crashed Ruby.
+- The `:new_relic_logs` appender reports a failure to the internal logger. It logged the failure
+  through itself, which recursed until `SystemStackError`.
+- The `:graylog` appender sends a placeholder `short_message` for a message that is empty once
+  escape codes and surrounding whitespace are removed, which Graylog rejected.
 - Once an async appender's worker thread gives up after `async_max_retries`, new log messages
   are dropped when its queue is full, instead of blocking the calling thread forever, and a
   flush (including the one at exit) waiting on it returns instead of waiting forever. A flush

@@ -323,6 +323,69 @@ module SemanticLogger
         end
       end
 
+      describe ".safe_inspect" do
+        it "returns #inspect for a value that can be inspected" do
+          assert_equal({a: [1, "b"]}.inspect, SemanticLogger::Utils.safe_inspect({a: [1, "b"]}))
+        end
+
+        it "renders a structure too deep for #inspect, cut off with a placeholder, on a thread" do
+          nested = "leaf"
+          5_000.times { nested = {a: nested} }
+
+          text = Thread.new { SemanticLogger::Utils.safe_inspect(nested) }.value
+
+          assert_includes text, "#<Hash nested too deeply>"
+          refute_includes text, "leaf"
+        end
+
+        it "renders the same structure repeatedly on one thread, without overflowing the stack" do
+          nested = "leaf"
+          5_000.times { nested = [nested] }
+
+          texts = Thread.new { Array.new(3) { SemanticLogger::Utils.safe_inspect({body: nested}) } }.value
+
+          assert_equal 1, texts.uniq.size
+          assert_includes texts.first, "#<Array nested too deeply>"
+        end
+      end
+
+      describe ".nested_too_deeply?" do
+        def chain(levels, &wrap)
+          levels.times.reduce("leaf") { |inner, _| wrap.call(inner) }
+        end
+
+        it "is false up to the depth that json_safe keeps, and true beyond it" do
+          depth = SemanticLogger::Utils::MAX_JSON_SAFE_DEPTH
+
+          refute SemanticLogger::Utils.nested_too_deeply?(chain(depth) { |inner| {a: inner} })
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth + 1) { |inner| {a: inner} })
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth + 1) { |inner| [inner] })
+        end
+
+        it "looks inside Hash keys, Structs, and Data" do
+          depth  = SemanticLogger::Utils::MAX_JSON_SAFE_DEPTH + 1
+          member = Struct.new(:inner)
+          value  = Data.define(:inner)
+
+          assert SemanticLogger::Utils.nested_too_deeply?({chain(depth) { |inner| [inner] } => 1})
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth) { |inner| member.new(inner) })
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth) { |inner| value.new(inner: inner) })
+        end
+
+        it "is false for values that are not structures" do
+          ["text", 1, nil, Object.new].each do |value|
+            refute SemanticLogger::Utils.nested_too_deeply?(value)
+          end
+        end
+
+        it "ends a structure that references itself" do
+          looped        = {}
+          looped[:self] = looped
+
+          assert SemanticLogger::Utils.nested_too_deeply?(looped)
+        end
+      end
+
       describe ".encode_utf8" do
         # A binary string holding a byte (0xE2) that is not valid UTF-8.
         # This is the exact failure mode reported in issue #180.

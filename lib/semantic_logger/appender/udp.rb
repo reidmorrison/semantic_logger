@@ -80,7 +80,7 @@ module SemanticLogger
 
       # Write the log using the specified protocol and server.
       def log(log)
-        @socket.send(formatter.call(log, self), udp_flags)
+        @socket.send(format_log(log), udp_flags)
         true
       end
 
@@ -92,6 +92,11 @@ module SemanticLogger
       # Close is called during shutdown, or with reopen
       def close
         @socket&.close
+      end
+
+      # A log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.
+      def message_error?(exception)
+        exception.is_a?(Errno::EMSGSIZE) || super
       end
 
       private

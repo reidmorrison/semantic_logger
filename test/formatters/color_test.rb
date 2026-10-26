@@ -117,6 +117,16 @@ module SemanticLogger
             refute formatter.payload
           end
 
+          it "renders a payload too deep for Amazing Print without raising, on a thread" do
+            nested = "leaf"
+            5_000.times { nested = {a: nested} }
+            log.payload = {body: nested}
+
+            text = Thread.new { formatter.payload }.value
+
+            assert_includes text, "#<Hash nested too deeply>"
+          end
+
           it "skips empty payload" do
             log.payload = {}
 

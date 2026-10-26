@@ -107,7 +107,7 @@ module SemanticLogger
       end
 
       def log(log)
-        queue.publish(formatter.call(log, self))
+        queue.publish(format_log(log))
       end
 
       def flush

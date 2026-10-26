@@ -209,7 +209,7 @@ module SemanticLogger
 
       # Forward log messages to HTTP Server
       def log(log)
-        message = formatter.call(log, self)
+        message = format_log(log)
         logger.trace(message)
         post(message)
       end
@@ -217,7 +217,7 @@ module SemanticLogger
       # Forward a batch of log messages to the HTTP Server in a single request.
       # Only used when the appender is created with `batch: true`.
       def batch(logs)
-        message = formatter.batch(logs, self)
+        message = format_batch(logs)
         logger.trace(message)
         post(message)
       end
