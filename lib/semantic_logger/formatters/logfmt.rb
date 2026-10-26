@@ -14,8 +14,8 @@ module SemanticLogger
     # All timestamps are ISO8601 formatteed
     # All user supplied values are escaped and surrounded by double quotes to avoid ambiguious message delimeters
     # `tags` are treated as keys with boolean values.
-    # In every key (tags, named tags, payload), spaces, control characters, `=`, and `"` are
-    # replaced with `_`, so that untrusted data cannot inject fields or lines.
+    # In every key (tags, named tags, payload), spaces, control and format characters, `=`, and `"`
+    # are replaced with `_`, so that untrusted data cannot inject fields or lines, or disguise a key.
     # `tags`, `named_tags`, and `payload` are flattened into the top level fields. A key named like
     # one of the entry's own fields (the time key, `level`, `name`, `message`, `duration`,
     # `duration_ms`, `tag`) or an exception field is prefixed with its source, as in `payload.level`,
@@ -52,10 +52,12 @@ module SemanticLogger
       PAYLOAD_PREFIX    = "payload.".freeze
       SOURCE_PREFIXES   = [TAGS_PREFIX, NAMED_TAGS_PREFIX, PAYLOAD_PREFIX].freeze
 
-      # Characters that cannot appear in a logfmt key: spaces and other control characters, which
-      # would end the key or the line, the `=` and `"` delimiters, and the Unicode line breaks
-      # NEL, LINE SEPARATOR, and PARAGRAPH SEPARATOR, which some readers treat as newlines.
-      UNSAFE_KEY_CHARS = /[\x00-\x20="\x7f\u0085\u2028\u2029]/
+      # Characters that cannot appear in a logfmt key: spaces and control characters (including
+      # NEL), which would end the key or the line, the `=` and `"` delimiters, LINE SEPARATOR and
+      # PARAGRAPH SEPARATOR, which some readers treat as newlines, and the invisible format
+      # characters, such as ZERO WIDTH SPACE and RIGHT-TO-LEFT OVERRIDE, which would let a key pass
+      # for another one, such as "level" followed by a ZERO WIDTH SPACE for "level".
+      UNSAFE_KEY_CHARS = /[\p{Cc}\p{Cf} ="\u2028\u2029]/
 
       # The ASCII subset of UNSAFE_KEY_CHARS, which is much faster to match against the ASCII keys
       # that make up nearly every log event.

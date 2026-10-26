@@ -207,6 +207,14 @@ module SemanticLogger
               assert_includes text, " a_b_c_d=true"
             end
 
+            it "replaces invisible format characters and C1 control characters" do
+              log.payload = {"level\u200B" => "fatal", "a\u202Eb" => 1, "c\u2060d\u00ADe\uFEFF" => 2, "x\u009By" => 3}
+              text        = formatter.call(log, nil)
+
+              assert_equal 1, text.scan(/(?:\A| )level=/).count
+              assert_includes text, %( level_="fatal" a_b=1 c_d_e_=2 x_y=3)
+            end
+
             it "drops invalid UTF-8 from a tag" do
               log.tags = ["ab\xFFc"]
               text     = formatter.call(log, nil)
