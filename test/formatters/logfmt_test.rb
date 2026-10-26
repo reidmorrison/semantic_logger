@@ -172,6 +172,14 @@ module SemanticLogger
               assert_match(/ payload="not a hash"/, formatter.call(log, nil))
             end
 
+            it "lets a payload that is not a Hash replace a tag of the same name" do
+              log.tags    = ["payload"]
+              log.payload = "not a hash"
+              text        = formatter.call(log, nil)
+
+              assert_match(/ tag="success" payload="not a hash"\z/, text)
+            end
+
             it "cannot inject fields through a payload or named tag key" do
               log.named_tags = {"a b=c" => "1"}
               log.payload    = {"x\ny" => "2", "" => "3"}
@@ -276,15 +284,15 @@ module SemanticLogger
                 {"a b" => "first"}
               end
 
-              it "keeps the first field" do
+              it "keeps the field from the later source" do
                 log.payload = {"a=b" => "second"}
                 text        = formatter.call(log, nil)
 
                 assert_equal core_fields, text[0, core_fields.size]
                 assert_includes text, " duration_ms=12.5"
                 assert_includes text, " tags.duration_ms=true"
-                assert_includes text, %( a_b="first")
-                refute_includes text, "second"
+                assert_includes text, %( a_b="second")
+                refute_includes text, "first"
               end
             end
 
@@ -351,31 +359,45 @@ module SemanticLogger
           end
 
           describe "given a plain key and a later key that encodes to the same text" do
-            it "keeps the earlier plain key" do
+            it "keeps the value of the later key" do
               log.tags    = ["a_b"]
               log.payload = {"a b" => "second", "c d" => 1, e: 2}
               text        = formatter.call(log, nil)
 
-              assert_match(/ a_b=true c_d=1 e=2\z/, text)
-              refute_includes text, "second"
+              assert_match(/ a_b="second" c_d=1 e=2\z/, text)
             end
           end
 
           describe "given a Symbol and a String key with the same name" do
-            it "keeps the earlier String key" do
+            it "lets a payload Symbol key replace a tag" do
               log.tags    = ["user"]
-              log.payload = {user: "payload", other: 1}
+              log.payload = {user: "bob", other: 1}
               text        = formatter.call(log, nil)
 
-              assert_match(/ user=true other=1\z/, text)
+              assert_match(/ user="bob" other=1\z/, text)
             end
 
-            it "keeps the earlier Symbol key" do
+            it "lets a payload String key replace a Symbol named tag" do
               log.named_tags = {user: "named"}
               log.payload    = {"user" => "payload"}
               text           = formatter.call(log, nil)
 
+              assert_match(/ user="payload"\z/, text)
+            end
+
+            it "lets a String named tag replace a tag" do
+              log.tags       = ["user"]
+              log.named_tags = {"user" => "named"}
+              text           = formatter.call(log, nil)
+
               assert_match(/ user="named"\z/, text)
+            end
+
+            it "keeps the later key in the payload, whether or not it is reserved" do
+              log.payload = {:user => 1, "user" => 2, :level => 1, "level" => 2}
+              text        = formatter.call(log, nil)
+
+              assert_match(/ user=2 payload.level=2\z/, text)
             end
           end
 

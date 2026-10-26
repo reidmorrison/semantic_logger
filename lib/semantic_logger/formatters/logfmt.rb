@@ -17,25 +17,38 @@ module SemanticLogger
     # In every key (tags, named tags, payload), spaces, control characters, `=`, and `"` are
     # replaced with `_`, so that untrusted data cannot inject fields or lines.
     # `tags`, `named_tags`, and `payload` are flattened into the top level fields. A key named like
-    # a core field (the time key, `level`, `name`, `message`, `duration`, `duration_ms`, `tag`) or an
-    # exception field is prefixed with its source, as in `payload.level`, so that logged data cannot
-    # replace those fields. Of the other keys, `payload` values take precedence over `tags` and
-    # `named_tags`, and keys that only match once encoded, or only differ by type (`:user` and
-    # `"user"`), keep the earlier field.
-    # An exception is emitted as `exception_name`, `exception_message`, `exception_details`,
-    # `stack_trace`, and `cause`.
+    # one of the entry's own fields (the time key, `level`, `name`, `message`, `duration`,
+    # `duration_ms`, `tag`) or an exception field is prefixed with its source, as in `payload.level`,
+    # so that logged data cannot replace those fields. Other keys that are the same once encoded,
+    # such as `:user` and `"user"`, or `"a b"` and `"a=b"`, are written once, with the value from the
+    # later source: `payload` values take precedence over `named_tags`, and `named_tags` over `tags`.
+    # An exception is emitted as `exception_name`, `exception_message`, `stack_trace`, and `cause`,
+    # and with `log_exception_details` also `exception_details`.
     #
     # Futher Reading https://brandur.org/logfmt
     class Logfmt < Raw
-      # Names of the fields that come from the log entry itself rather than from logged data.
-      CORE_FIELDS = %i[level name message duration duration_ms tag].freeze
+      # The entry's own fields in the Raw hash, written in this order after the time key.
+      ENTRY_FIELDS = %i[level name message duration duration_ms].freeze
 
-      # Names of the exception's fields in the Raw formatter, mapped to the logfmt field names, so
-      # that they do not replace the entry's own name and message.
-      EXCEPTION_FIELDS = {name: :exception_name, message: :exception_message, details: :exception_details}.freeze
+      # The field that tells an entry with an exception from one without.
+      TAG_FIELD = "tag".freeze
 
-      # Names of the fields an exception adds to the entry.
-      EXCEPTION_FIELD_NAMES = %w[exception_name exception_message exception_details stack_trace cause].freeze
+      # The exception's fields in the Raw hash, mapped to their logfmt names, so that the exception's
+      # name and message do not replace the entry's own.
+      EXCEPTION_FIELDS = {
+        name:        "exception_name",
+        message:     "exception_message",
+        details:     "exception_details",
+        stack_trace: "stack_trace",
+        cause:       "cause"
+      }.freeze
+
+      # Prefixes that mark a key from logged data with its source, when the key alone would name
+      # one of the entry's own fields.
+      TAGS_PREFIX       = "tags.".freeze
+      NAMED_TAGS_PREFIX = "named_tags.".freeze
+      PAYLOAD_PREFIX    = "payload.".freeze
+
       # Characters that cannot appear in a logfmt key: spaces and other control characters, which
       # would end the key or the line, the `=` and `"` delimiters, and the Unicode line breaks
       # NEL, LINE SEPARATOR, and PARAGRAPH SEPARATOR, which some readers treat as newlines.
@@ -45,19 +58,13 @@ module SemanticLogger
       # that make up nearly every log event.
       UNSAFE_ASCII_KEY_CHARS = /[\x00-\x20="\x7f]/
 
-      # The most Symbol keys to remember as plain, so that untrusted keys cannot grow the cache
+      # The most Symbol keys to remember the names of, so that untrusted keys cannot grow the cache
       # without bound.
       PLAIN_SYMBOL_CACHE_SIZE = 512
 
       def initialize(time_format: :iso_8601, time_key: :timestamp, **args)
-        # Symbol keys known to be plain, mapped to their names. It is replaced rather than
-        # updated, since a formatter can be shared by several threads.
-        @plain_symbols = {}.freeze
         super
-        # The encoded names that logged data cannot use, since they belong to the entry itself.
-        @reserved_names = (CORE_FIELDS + [time_key]).map { |key| logfmt_key(key) }.
-                          concat(EXCEPTION_FIELD_NAMES).
-                          to_h { |name| [name, true] }.freeze
+        name_entry_fields
       end
 
       def call(log, logger)
@@ -68,10 +75,12 @@ module SemanticLogger
 
       private
 
+      # @parsed maps the logfmt name of each field to its value. Logged data is added after the
+      # entry's own fields, and a field with the same name as an earlier one replaces its value, so
+      # the payload takes precedence over named tags, and named tags over tags.
       def raw_to_logfmt
-        # The fields below are added to @parsed in place, since it is a new Hash owned by this call.
-        @parsed       = @raw.slice(time_key, :level, :name, :message, :duration, :duration_ms)
-        @parsed[:tag] = "success"
+        @parsed            = @raw.slice(*@entry_keys).transform_keys(@entry_names)
+        @parsed[TAG_FIELD] = "success"
         handle_tags
         handle_payload
         handle_exception
@@ -80,8 +89,8 @@ module SemanticLogger
       end
 
       def handle_tags
-        @raw[:tags]&.each { |tag| add_field("tags", tag, true) }
-        @raw[:named_tags]&.each_pair { |key, value| add_field("named_tags", key, value) }
+        @raw[:tags]&.each { |tag| add_field(TAGS_PREFIX, tag, true) }
+        @raw[:named_tags]&.each_pair { |key, value| add_field(NAMED_TAGS_PREFIX, key, value) }
       end
 
       def handle_payload
@@ -91,62 +100,51 @@ module SemanticLogger
         # A payload is normally a Hash, but a log call can supply any value, so emit anything else
         # as a single field rather than failing to format the whole entry.
         if payload.is_a?(Hash)
-          payload.each_pair { |key, value| add_field("payload", key, value) }
+          payload.each_pair { |key, value| add_field(PAYLOAD_PREFIX, key, value) }
         else
-          @parsed[:payload] = payload
+          add_field(PAYLOAD_PREFIX, "payload", payload)
         end
       end
 
       def handle_exception
         return unless @raw.key? :exception
 
-        @parsed[:tag] = "exception"
-        @raw[:exception].each_pair { |key, value| @parsed[EXCEPTION_FIELDS.fetch(key, key)] = value }
+        @parsed[TAG_FIELD] = "exception"
+        @raw[:exception].each_pair { |key, value| @parsed[EXCEPTION_FIELDS[key] || logfmt_key(key)] = value }
       end
 
-      # Adds a field from logged data. A key named like one of the entry's own fields once encoded,
-      # such as :level, "level", or "duration ms", is prefixed with the name of its source, as in
-      # "payload.level", so that untrusted data cannot replace or forge that field.
-      def add_field(source, key, value)
-        name        = key.is_a?(Symbol) ? key.name : key.to_s
-        name        = logfmt_key(name) unless plain_name?(name)
-        key         = "#{source}.#{name}" if @reserved_names.key?(name)
-        @parsed[key] = value
+      # Adds a field from logged data, under the name returned by #field_name.
+      def add_field(prefix, key, value)
+        name          = (key.is_a?(Symbol) && @plain_symbols[key]) || field_name(prefix, key)
+        @parsed[name] = value
       end
 
-      # Keys that collide only once encoded, such as :user and "user", or "a b" and "a=b", are
-      # emitted once: the first field wins. Identical keys were already resolved as the fields
-      # were added, where the payload deliberately takes precedence.
-      #
-      # Nearly every entry only has plain keys that cannot collide, so the emitted keys are only
-      # tracked from the first key that could collide with another.
+      # Returns [String] the logfmt name of a key from logged data: the key encoded by #logfmt_key,
+      # prefixed with its source, as in "payload.level", when it names one of the entry's own fields,
+      # so that untrusted data cannot replace or forge that field.
+      def field_name(prefix, key)
+        name = key.is_a?(Symbol) ? key.name : key.to_s
+        name = logfmt_key(name) unless plain_name?(name)
+        return prefix + name if @reserved_names.key?(name)
+
+        remember_symbol(key, name) if key.is_a?(Symbol)
+        name
+      end
+
+      # Remembers the name of a Symbol key that is not reserved, while there is room. The cache is
+      # replaced rather than updated, since a formatter can be shared by several threads.
+      def remember_symbol(symbol, name)
+        plain_symbols  = @plain_symbols
+        @plain_symbols = plain_symbols.merge(symbol => name).freeze if plain_symbols.size < PLAIN_SYMBOL_CACHE_SIZE
+      end
+
       def flatten_log
         line = +""
-        seen = nil
-        @parsed.each_pair do |key, value|
-          name = plain_key(key)
-          if seen || name.nil?
-            seen ||= keys_before(key)
-            name ||= logfmt_key(key)
-            next if seen.key?(name)
-
-            seen[name] = true
-          end
+        @parsed.each_pair do |name, value|
           line << " " unless line.empty?
           line << name << "=" << format_value(value)
         end
         line
-      end
-
-      # Returns [Hash] the encoded keys of the fields before the given key, all of them plain.
-      def keys_before(key)
-        seen = {}
-        @parsed.each_key do |earlier|
-          break if earlier.equal?(key)
-
-          seen[plain_key(earlier)] = true
-        end
-        seen
       end
 
       # Integers, true, false, and nil have a single JSON form, so they skip the cost of `to_json`.
@@ -167,33 +165,18 @@ module SemanticLogger
         end
       end
 
-      # Returns [String] the key itself when it is already a valid logfmt key that no other key
-      # in this entry can collide with, otherwise nil.
-      #
-      # Such a key is a plain String or Symbol made of ASCII characters that are all safe in a
-      # logfmt key. Two of them can only encode to the same text when one is a Symbol and the
-      # other a String with the same name, since equal Strings, or equal Symbols, are the same
-      # Hash key.
-      def plain_key(key)
-        if key.is_a?(Symbol)
-          name = @plain_symbols[key] || plain_symbol(key)
-          name unless name.nil? || @parsed.key?(name)
-        elsif key.instance_of?(String)
-          key if plain_name?(key)
-        end
+      # Names the entry's own fields from the time key, and reserves those names and the
+      # exception's, so that logged data cannot use them.
+      def name_entry_fields
+        @entry_names    = [time_key, *ENTRY_FIELDS].to_h { |key| [key, logfmt_key(key)] }.freeze
+        @entry_keys     = @entry_names.keys.freeze
+        @reserved_names = [*@entry_names.values, TAG_FIELD, *EXCEPTION_FIELDS.values].
+                          to_h { |name| [name, true] }.freeze
+        # Symbol keys from logged data that need no prefix, mapped to their logfmt names.
+        @plain_symbols = {}.freeze
       end
 
-      # Returns [String] the name of the Symbol when it is plain, and remembers it while there
-      # is room.
-      def plain_symbol(symbol)
-        name = symbol.name
-        return unless plain_name?(name)
-
-        plain_symbols  = @plain_symbols
-        @plain_symbols = plain_symbols.merge(symbol => name).freeze if plain_symbols.size < PLAIN_SYMBOL_CACHE_SIZE
-        name
-      end
-
+      # Whether the name is already a valid logfmt key, made of ASCII characters that are all safe.
       def plain_name?(name)
         !name.empty? && name.ascii_only? && !name.match?(UNSAFE_ASCII_KEY_CHARS)
       end

@@ -43,10 +43,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   untrusted hashes, replaced those fields outright, so that `{"level": "fatal", "message": ...}`
   in a webhook body forged the whole entry. A logged exception is emitted as `exception_name`,
   `exception_message`, and `exception_details`, which previously replaced the entry's own `name`
-  and `message`. Other keys that only differ by type, such as `:user` and `"user"`, are now
-  emitted once, keeping the earlier field. Nested values (a Hash, an Array, or any other value
-  whose JSON is an object or an array, such as a `Set` or the exception backtrace) are emitted as
-  quoted JSON instead of their `#inspect` text, which could print an object's instance variables.
+  and `message`. Other keys that are the same once encoded, such as `:user` and `"user"`, are now
+  emitted once, with the value from the later source: the payload over named tags, and named tags
+  over tags. Nested values (a Hash, an Array, or any other value whose JSON is an object or an
+  array, such as a `Set` or the exception backtrace) are emitted as quoted JSON instead of their
+  `#inspect` text, which could print an object's instance variables.
 - The JSON based formatters no longer drop a log event whose payload JSON cannot represent.
   `Infinity` and `NaN` (for example `params[:amount].to_f` with `"1e400"`) are serialized as
   strings, and a structure nested too deeply, such as a request body as deep as `JSON.parse`

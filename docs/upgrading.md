@@ -80,12 +80,12 @@ server, and so does not need the `syslog` gem, can use the same constants from
   an exception field) is emitted with its source as a prefix, such as `payload.name="shrek"` or
   `tags.message=true`, instead of replacing the field. A logged exception is emitted as
   `exception_name`, `exception_message`, and `exception_details` (followed by `stack_trace` and
-  `cause` as before), instead of replacing the entry's `name` and `message`. Other keys that only
-  match once encoded, or that only differ by type (`:user` and `"user"`), are emitted once, keeping
-  the earlier field. A payload that is not a Hash is emitted as a single `payload` field. A nested
-  value (a Hash, Array, `Struct`, `Data`, `Set`, or any other value whose JSON is an object or an
-  array, such as the exception backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead
-  of its `#inspect` text.
+  `cause` as before), instead of replacing the entry's `name` and `message`. Other keys that are the
+  same once encoded, such as `:user` and `"user"`, are emitted once, with the value from the later
+  source: the payload over named tags, and named tags over tags. A payload that is not a Hash is
+  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, `Data`, `Set`, or any other value whose
+  JSON is an object or an array, such as the exception backtrace) is emitted as quoted JSON,
+  `user="{\"id\":7}"`, instead of its `#inspect` text.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
 * `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,

@@ -372,9 +372,10 @@ Notes:
   one of the entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`,
   `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, so that
   logged data cannot replace those fields: `payload.level="fatal"`, `named_tags.message="..."`, or
-  `tags.message=true`. Otherwise, on a name conflict the payload wins over the named tags.
-* Other keys that only match once encoded, or that only differ by type (such as `:user` and
-  `"user"`), are emitted once, keeping the earlier field.
+  `tags.message=true`.
+* Other keys that are the same once encoded, including keys that only differ by type (such as
+  `:user` and `"user"`), are emitted once, with the value from the later source: the payload wins
+  over named tags, and named tags over tags.
 * Unnamed tags are emitted as keys with a `true` value.
 * A nested value, such as a Hash or an Array in the payload, is emitted as its JSON text, quoted:
   `user="{\"id\":7}"`.
