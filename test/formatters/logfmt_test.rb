@@ -493,6 +493,17 @@ module SemanticLogger
               assert_match(/\Ats="2020-07-20T08:32:05.375276Z" /, text)
               assert_includes text, %( payload.ts="forged")
             end
+
+            it "keeps a time key that is set after the formatter is created" do
+              log.payload = {time: "before"}
+              formatter.call(log, nil)
+              formatter.time_key = :time
+              log.payload        = {time: "forged", ts: "not reserved"}
+              text               = formatter.call(log, nil)
+
+              assert_match(/\Atime="2020-07-20T08:32:05.375276Z" /, text)
+              assert_includes text, %( payload.time="forged" ts="not reserved")
+            end
           end
         end
       end

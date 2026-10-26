@@ -67,6 +67,12 @@ module SemanticLogger
         name_entry_fields
       end
 
+      # Also writes and reserves the new time key in place of the old one.
+      def time_key=(time_key)
+        super
+        name_entry_fields
+      end
+
       def call(log, logger)
         @raw = super
 
