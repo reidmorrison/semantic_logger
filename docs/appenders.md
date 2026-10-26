@@ -372,7 +372,8 @@ Notes:
   one of the entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`,
   `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, so that
   logged data cannot replace those fields: `payload.level="fatal"`, `named_tags.message="..."`, or
-  `tags.message=true`.
+  `tags.message=true`. A key that starts with `tags.`, `named_tags.`, or `payload.` is prefixed
+  too, as in `payload.named_tags.level`, so that it cannot pass for another source's field.
 * Other keys that are the same once encoded, including keys that only differ by type (such as
   `:user` and `"user"`), are emitted once, with the value from the later source: the payload wins
   over named tags, and named tags over tags.

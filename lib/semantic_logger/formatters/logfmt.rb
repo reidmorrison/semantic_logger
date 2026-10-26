@@ -19,9 +19,11 @@ module SemanticLogger
     # `tags`, `named_tags`, and `payload` are flattened into the top level fields. A key named like
     # one of the entry's own fields (the time key, `level`, `name`, `message`, `duration`,
     # `duration_ms`, `tag`) or an exception field is prefixed with its source, as in `payload.level`,
-    # so that logged data cannot replace those fields. Other keys that are the same once encoded,
-    # such as `:user` and `"user"`, or `"a b"` and `"a=b"`, are written once, with the value from the
-    # later source: `payload` values take precedence over `named_tags`, and `named_tags` over `tags`.
+    # so that logged data cannot replace those fields. So is a key that starts with `tags.`,
+    # `named_tags.`, or `payload.`, so that it cannot forge another source's field. Other keys that
+    # are the same once encoded, such as `:user` and `"user"`, or `"a b"` and `"a=b"`, are written
+    # once, with the value from the later source: `payload` values take precedence over
+    # `named_tags`, and `named_tags` over `tags`.
     # An exception is emitted as `exception_name`, `exception_message`, `stack_trace`, and `cause`,
     # and with `log_exception_details` also `exception_details`.
     #
@@ -44,10 +46,11 @@ module SemanticLogger
       }.freeze
 
       # Prefixes that mark a key from logged data with its source, when the key alone would name
-      # one of the entry's own fields.
+      # one of the entry's own fields, or look like a key marked this way.
       TAGS_PREFIX       = "tags.".freeze
       NAMED_TAGS_PREFIX = "named_tags.".freeze
       PAYLOAD_PREFIX    = "payload.".freeze
+      SOURCE_PREFIXES   = [TAGS_PREFIX, NAMED_TAGS_PREFIX, PAYLOAD_PREFIX].freeze
 
       # Characters that cannot appear in a logfmt key: spaces and other control characters, which
       # would end the key or the line, the `=` and `"` delimiters, and the Unicode line breaks
@@ -126,12 +129,13 @@ module SemanticLogger
       end
 
       # Returns [String] the logfmt name of a key from logged data: the key encoded by #logfmt_key,
-      # prefixed with its source, as in "payload.level", when it names one of the entry's own fields,
-      # so that untrusted data cannot replace or forge that field.
+      # prefixed with its source, as in "payload.level", when it names one of the entry's own fields
+      # or starts with a source's prefix, so that untrusted data cannot replace or forge that field,
+      # or a field from another source.
       def field_name(prefix, key)
         name = key.is_a?(Symbol) ? key.name : key.to_s
         name = logfmt_key(name) unless plain_name?(name)
-        return prefix + name if @reserved_names.key?(name)
+        return prefix + name if @reserved_names.key?(name) || name.start_with?(*SOURCE_PREFIXES)
 
         remember_symbol(key, name) if key.is_a?(Symbol)
         name

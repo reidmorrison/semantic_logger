@@ -1773,7 +1773,8 @@ Notes:
   one of the entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`,
   `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, so that
   logged data cannot replace those fields: `payload.level="fatal"`, `named_tags.message="..."`, or
-  `tags.message=true`.
+  `tags.message=true`. A key that starts with `tags.`, `named_tags.`, or `payload.` is prefixed
+  too, as in `payload.named_tags.level`, so that it cannot pass for another source's field.
 * Other keys that are the same once encoded, including keys that only differ by type (such as
   `:user` and `"user"`), are emitted once, with the value from the later source: the payload wins
   over named tags, and named tags over tags.
@@ -4554,14 +4555,15 @@ server, and so does not need the `syslog` gem, can use the same constants from
   emitted as `second_breakfast=true`. A tag, named tag, or payload key named like one of the
   entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`, `duration_ms`, `tag`, or
   an exception field) is emitted with its source as a prefix, such as `payload.name="shrek"` or
-  `tags.message=true`, instead of replacing the field. A logged exception is emitted as
-  `exception_name`, `exception_message`, and `exception_details` (followed by `stack_trace` and
-  `cause` as before), instead of replacing the entry's `name` and `message`. Other keys that are the
-  same once encoded, such as `:user` and `"user"`, are emitted once, with the value from the later
-  source: the payload over named tags, and named tags over tags. A payload that is not a Hash is
-  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, `Data`, `Set`, or any other value whose
-  JSON is an object or an array, such as the exception backtrace) is emitted as quoted JSON,
-  `user="{\"id\":7}"`, instead of its `#inspect` text.
+  `tags.message=true`, instead of replacing the field, and so is a key that starts with `tags.`,
+  `named_tags.`, or `payload.`. A logged exception is emitted as `exception_name`,
+  `exception_message`, and `exception_details` (followed by `stack_trace` and `cause` as before),
+  instead of replacing the entry's `name` and `message`. Other keys that are the same once
+  encoded, such as `:user` and `"user"`, are emitted once, with the value from the later source:
+  the payload over named tags, and named tags over tags. A payload that is not a Hash is emitted
+  as a single `payload` field. A nested value (a Hash, Array, `Struct`,
+  `Data`, `Set`, or any other value whose JSON is an object or an array, such as the exception
+  backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its `#inspect` text.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
 * `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,

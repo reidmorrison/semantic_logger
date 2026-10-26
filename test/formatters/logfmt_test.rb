@@ -310,6 +310,18 @@ module SemanticLogger
               end
             end
 
+            describe "keys that start with a source prefix" do
+              it "prefixes them too, so that they cannot replace or forge a prefixed key" do
+                log.tags       = ["payload.level"]
+                log.named_tags = {level: "real"}
+                log.payload    = {"named_tags.level" => "forged", :level => "debug", "tags" => "kept"}
+                text           = formatter.call(log, nil)
+
+                assert_includes text, %( tag="success" tags.payload.level=true named_tags.level="real")
+                assert_includes text, %( payload.named_tags.level="forged" payload.level="debug" tags="kept")
+              end
+            end
+
             describe "keys named like the exception's fields" do
               it "prefixes them, so that they cannot forge an exception" do
                 log.payload = {"stack_trace" => "forged", cause: "forged", exception_name: "Forged"}
