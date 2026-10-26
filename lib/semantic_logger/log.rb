@@ -424,8 +424,10 @@ module SemanticLogger
     private
 
     # Returns the kept payload with the keys of the added one that it does not have, so that a kept
-    # value is never replaced. A payload that is not a Hash is kept as its :payload key, but the kept
-    # payload is returned unchanged when there is nothing to add. Neither payload is modified.
+    # value is never replaced. A String and a Symbol key of the same name, such as "account_id" from
+    # JSON.parse and :account_id, count as the same key, since the formatters write both under that
+    # name. A payload that is not a Hash is kept as its :payload key, but the kept payload is
+    # returned unchanged when there is nothing to add. Neither payload is modified.
     def merge_payload(kept, added)
       added = {payload: added} unless added.nil? || added.is_a?(Hash)
       return kept if added.nil? || added.empty?
@@ -433,7 +435,15 @@ module SemanticLogger
       kept = {payload: kept} unless kept.nil? || kept.is_a?(Hash)
       return added if kept.nil? || kept.empty?
 
-      kept.merge(added) { |_key, kept_value, _added_value| kept_value }
+      merged = kept.merge(added) { |_key, kept_value, _added_value| kept_value }
+      # Only the kept keys, usually a few supplied by the application, are checked one at a time.
+      kept.each_key do |key|
+        next unless key.is_a?(Symbol) || key.is_a?(String)
+
+        other = key.is_a?(Symbol) ? key.name : key.to_sym
+        merged.delete(other) unless kept.key?(other)
+      end
+      merged
     end
 
     # Whether a log argument from the Hash returned by a logging block, already checked by

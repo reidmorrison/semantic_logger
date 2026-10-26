@@ -71,7 +71,8 @@ untrusted hash passed to a level method such as `info` can never make the loggin
 To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
 keys supplied alongside an explicit `payload:` are merged into it, and win over the explicit
 payload's values of the same name, so that the untrusted data cannot replace a value your code
-supplies:
+supplies. A String key, as `JSON.parse` returns without `symbolize_names`, has the same name as the
+Symbol key it spells:
 
 ~~~ruby
 # The hash is logged as-is, and none of its keys are interpreted. Its own account_id, if any,

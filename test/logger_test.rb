@@ -74,6 +74,18 @@ class LoggerTest < Minitest::Test
         assert_equal({account_id: 42, event: "refund"}, logger.events.first.payload)
       end
 
+      it "logs the application's value when the explicit payload has a String key of the same name" do
+        logger.info("Webhook", payload: JSON.parse('{"account_id":1,"event":"refund"}'), account_id: 42)
+
+        assert_equal({account_id: 42, "event" => "refund"}, logger.events.first.payload)
+      end
+
+      it "logs the application's value when a hash block result has a String key of the same name" do
+        logger.info("Webhook", account_id: 42) { JSON.parse('{"account_id":1,"event":"refund"}') }
+
+        assert_equal({account_id: 42, "event" => "refund"}, logger.events.first.payload)
+      end
+
       it "does not drop a supplied exception for a nil log_exception" do
         exception = RuntimeError.new("boom")
         logger.error("Webhook", exception: exception, log_exception: nil)

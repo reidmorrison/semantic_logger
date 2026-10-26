@@ -316,6 +316,13 @@ module SemanticLogger
           assert_equal({duration: 2}, log.payload)
         end
 
+        it "keeps the log call's value over a key of the same name, whether a String or a Symbol" do
+          log.payload = {account_id: 42, "user" => "app"}
+          log.assign_hash(JSON.parse('{"account_id":666,"event":"refund"}').merge(user: "untrusted"))
+
+          assert_equal({account_id: 42, "user" => "app", "event" => "refund"}, log.payload)
+        end
+
         it "uses the message when the log call's message is empty" do
           log.message = ""
           log.assign_hash(message: "From block")
@@ -384,6 +391,12 @@ module SemanticLogger
             args = log.extract_arguments({payload: {user: "untrusted"}, user: "app"}, "msg")
 
             assert_equal({payload: {user: "app"}, message: "msg"}, args)
+          end
+
+          it "lets a key passed beside an explicit payload win over the payload's String key of the same name" do
+            args = log.extract_arguments({payload: {"user" => "untrusted", "id" => 1}, user: "app"}, "msg")
+
+            assert_equal({payload: {user: "app", "id" => 1}, message: "msg"}, args)
           end
 
           it "ignores a log argument with a nil value, so that its default is used" do

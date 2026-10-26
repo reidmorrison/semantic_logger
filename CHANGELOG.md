@@ -128,8 +128,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   is now only used as a log argument when its value is valid for it (for example a finite, real
   `duration`); otherwise it stays in the payload, and a `nil` value is ignored. Unknown keys
   alongside an explicit `payload:` are merged into it instead of raising, and win over its values
-  of the same name, so that untrusted data passed as the payload cannot replace a value such as an
-  `account_id` that the application supplied beside it. The options of `measure_*` calls are
+  of the same name (a String key such as `"account_id"` has the same name as `:account_id`), so
+  that untrusted data passed as the payload cannot replace a value such as an `account_id` that
+  the application supplied beside it. The options of `measure_*` calls are
   checked the same way, an invalid value being ignored, and so is a Hash returned from a logging
   block, as in `logger.info("Webhook") { JSON.parse(body, symbolize_names: true) }`: it assigned
   every key unchecked, so `{"payload": null}` made the call raise, a `duration` or `exception` of
