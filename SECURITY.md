@@ -15,10 +15,11 @@ same way in that repository.
 
 Security fixes are released for the latest minor version of the current major version.
 
-| Version | Supported |
-|---------|-----------|
-| 5.x     | Yes       |
-| < 5.0   | No        |
+| Version            | Supported |
+|--------------------|-----------|
+| 5.x (latest minor) | Yes       |
+| Older 5.x minors   | No        |
+| < 5.0              | No        |
 
 ## Using Semantic Logger securely
 
