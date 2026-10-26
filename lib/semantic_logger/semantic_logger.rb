@@ -549,8 +549,9 @@ module SemanticLogger
   #   processed:      [Integer] Cumulative number of log messages processed since startup.
   #   dropped:        [Integer] Cumulative number of log messages dropped at the main queue.
   #   appenders:      [Array<Hash>] Per-appender statistics. Appenders that run their own
-  #                                 async thread report their queue_size and processed/dropped
-  #                                 counts; appenders that log inline report `async: false`.
+  #                                 async thread report their queue_size and
+  #                                 processed/dropped/failed counts; appenders that log
+  #                                 inline report `async: false`.
   #
   # All counters are cumulative since process startup. They are thread-safe to read and
   # are maintained without adding any locking to the logging hot path.

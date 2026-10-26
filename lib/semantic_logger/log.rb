@@ -53,6 +53,36 @@ module SemanticLogger
                           log_exception on_exception_level
                           metric metric_amount dimensions].freeze
 
+    # Values accepted for the :log_exception argument.
+    LOG_EXCEPTION_OPTIONS = %i[full partial none].freeze
+    private_constant :LOG_EXCEPTION_OPTIONS
+
+    # A finite real number, which #assign can compare with another one.
+    REAL_NUMBER = ->(value) { value.is_a?(Numeric) && value.real? && value.finite? }
+    private_constant :REAL_NUMBER
+
+    # Checks that a value is valid for its argument, for the arguments that do not accept any value.
+    # Any other value would make #assign, or the formatters, raise.
+    ARGUMENT_VALIDATORS = {
+      backtrace:          ->(value) { value.is_a?(Array) && value.all?(String) },
+      duration:           REAL_NUMBER,
+      min_duration:       REAL_NUMBER,
+      metric_amount:      REAL_NUMBER,
+      dimensions:         ->(value) { value.is_a?(Hash) },
+      log_exception:      ->(value) { LOG_EXCEPTION_OPTIONS.include?(value) },
+      on_exception_level: ->(value) { Levels.valid?(value) }
+    }.freeze
+    private_constant :ARGUMENT_VALIDATORS
+
+    # Hash#key?, which unlike HashWithIndifferentAccess#key? only matches the exact Symbol key.
+    HASH_KEY = Hash.instance_method(:key?)
+    private_constant :HASH_KEY
+
+    # Whether the value is accepted for the :log_exception argument of #assign.
+    def self.log_exception_option?(value)
+      value.nil? || LOG_EXCEPTION_OPTIONS.include?(value)
+    end
+
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
                   :tags, :named_tags, :context,
@@ -111,8 +141,10 @@ module SemanticLogger
         end
         # On exception change the log level
         if on_exception_level
-          self.level       = on_exception_level
-          self.level_index = Levels.index(level)
+          # Normalized through the index, so that a level supplied as a String or an Integer is
+          # still stored as its Symbol.
+          self.level_index = Levels.index(on_exception_level)
+          self.level       = Levels.level(level_index)
         end
       end
 
@@ -149,27 +181,51 @@ module SemanticLogger
       self
     end
 
+    # Returns [true|false] whether the value can be used as the log argument named by the key.
+    #
+    # Never raises, so it can check values from untrusted data before they are passed to #assign.
+    # A nil value is never an argument, since it means the argument was not supplied. Arguments
+    # without a validator in ARGUMENT_VALIDATORS (such as :message, :metric, or :exception, which
+    # #assign logs as an ArgumentError when it is not an Exception) accept any other value.
+    def self.argument?(key, value)
+      return false if value.nil? || !NON_PAYLOAD_KEYS.include?(key)
+
+      validator = ARGUMENT_VALIDATORS[key]
+      validator.nil? || validator.call(value)
+    end
+
     # Extract the arguments from a Hash Payload
+    #
+    # The hash can hold untrusted data, so this never fails because of its content: keys that are
+    # not log attributes, or that hold a value that is not valid for it (see .argument?), are kept
+    # in the payload. A log attribute key with a nil value counts as not supplied, so #assign uses
+    # its default. When the hash supplies an explicit :payload, any other keys are merged into it,
+    # with the explicit payload's values taking precedence.
     def extract_arguments(payload, message = nil)
       raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
 
-      message = nil if message == ""
-      if payload.key?(:payload)
-        return message ? payload.merge(message: message) : payload
-      end
-
+      message     = nil if message == ""
+      explicit    = HASH_KEY.bind_call(payload, :payload)
       new_payload = {}
       args        = {}
       payload.each_pair do |key, value|
-        # Supplied message takes precedence
-        if (key == :message) && !message.nil?
-          new_payload[key] = value
+        if explicit && key == :payload
+          args[:payload] = value
+        elsif key == :message && !message.nil?
+          # Supplied message takes precedence
+          new_payload[key] = value unless explicit
+        elsif Log.argument?(key, value)
+          args[key] = value
+        elsif value.nil? && NON_PAYLOAD_KEYS.include?(key)
+          # Not supplied, so #assign uses its default
           next
+        else
+          new_payload[key] = value
         end
-
-        NON_PAYLOAD_KEYS.include?(key) ? args[key] = value : new_payload[key] = value
       end
-      args[:payload] = new_payload unless new_payload.empty?
+      unless new_payload.empty?
+        args[:payload] = explicit ? merge_payload(args[:payload], new_payload) : new_payload
+      end
       args[:message] = message if message
       args
     end
@@ -197,10 +253,6 @@ module SemanticLogger
       end
     end
 
-    # Ruby's own Exception#detailed_message: the message, decorated with the class name.
-    EXCEPTION_DETAILED_MESSAGE = Exception.instance_method(:detailed_message)
-    private_constant :EXCEPTION_DETAILED_MESSAGE
-
     # Returns [String] the detail that Ruby's Exception#detailed_message adds to the message of the
     # supplied exception, without the class name that Ruby also adds. Since Ruby 3.2 this is where
     # did_you_mean suggestions ("Did you mean?  upcase") and the detail an exception class supplies
@@ -223,20 +275,30 @@ module SemanticLogger
       cache = @exception_details
       return cache[key] if cache&.key?(key)
 
-      details = extract_exception_details(exception, source)
+      details = ExceptionDetails.extract(exception, source: source)
       # Replace the cache rather than change it, since appenders on other threads may be reading it.
       @exception_details = (cache || {}).merge(key => details).freeze
       details
     end
 
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
-    def backtrace_to_s
+    #
+    # When a block is supplied, each cause's message and each backtrace line is passed
+    # to it, and the value it returns is written in its place. This lets a caller, for
+    # example a formatter, transform that text while this method keeps the layout.
+    #
+    # Example:
+    #   log.backtrace_to_s { |text| text.gsub("\n", "\\n") }
+    def backtrace_to_s(&block)
       trace = ""
       each_exception do |exception, i|
+        lines = exception.backtrace || []
+        lines = lines.map(&block) if block
         if i.zero?
-          trace = (exception.backtrace || []).join("\n")
+          trace = lines.join("\n")
         else
-          trace << "\nCause: #{exception.class.name}: #{exception.message}\n#{(exception.backtrace || []).join("\n")}"
+          message = block ? yield(exception.message) : exception.message
+          trace << "\nCause: #{exception.class.name}: #{message}\n#{lines.join("\n")}"
         end
       end
       trace
@@ -349,37 +411,13 @@ module SemanticLogger
 
     private
 
-    def extract_exception_details(exception, source)
-      detailed = full_detailed_message(exception, source)
-      return unless detailed
+    # Returns the explicit payload with the remaining keys of the hash merged in. The explicit
+    # payload's values win, so that stray keys cannot overwrite them.
+    def merge_payload(explicit, remaining)
+      return remaining if explicit.nil?
+      return explicit.merge(remaining) { |_key, explicit_value, _value| explicit_value } if explicit.is_a?(Hash)
 
-      base = EXCEPTION_DETAILED_MESSAGE.bind_call(exception, highlight: false)
-      # An override that does not build on Ruby's message cannot be separated from it.
-      return unless detailed.is_a?(String) && detailed.start_with?(base)
-
-      details = detailed.delete_prefix(base).sub(/\A\n+/, "").rstrip
-      details unless details.empty?
-    rescue StandardError
-      # Never let an exception's own #detailed_message stop the log entry being written.
-      nil
-    end
-
-    # Returns [String] the exception's #detailed_message, with or without error_highlight's
-    # source snippet, or nil when the snippet cannot be left out.
-    def full_detailed_message(exception, source)
-      exception.detailed_message(highlight: false, error_highlight: source)
-    rescue ArgumentError
-      # An override of #detailed_message that does not accept extra keyword arguments. Calling it
-      # without `error_highlight: false` lets error_highlight add its source snippet, so only do so
-      # when the snippet was asked for, or error_highlight does not decorate this exception.
-      return if !source && error_highlighted?(exception)
-
-      exception.detailed_message(highlight: false)
-    end
-
-    # Whether error_highlight adds a source snippet to this exception's #detailed_message.
-    def error_highlighted?(exception)
-      defined?(ErrorHighlight::CoreExt) && exception.is_a?(ErrorHighlight::CoreExt)
+      remaining.merge(payload: explicit)
     end
   end
 end

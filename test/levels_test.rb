@@ -45,6 +45,26 @@ module SemanticLogger
             SemanticLogger::Levels.index("bogus")
           end
         end
+
+        it "raises ArgumentError for an Integer too large to be an index" do
+          assert_raises ArgumentError do
+            SemanticLogger::Levels.index(2**70)
+          end
+        end
+      end
+
+      describe ".valid?" do
+        it "accepts every level form that .index maps" do
+          assert SemanticLogger::Levels.valid?(:warn)
+          assert SemanticLogger::Levels.valid?("WARN")
+          assert SemanticLogger::Levels.valid?(::Logger::WARN)
+        end
+
+        it "rejects anything else without raising" do
+          [nil, :bogus, "bogus", 99, 2**70, -(2**70), 1.5, [], {}].each do |value|
+            refute SemanticLogger::Levels.valid?(value), "expected #{value.inspect} to be invalid"
+          end
+        end
       end
 
       describe ".level" do

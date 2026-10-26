@@ -88,6 +88,16 @@ module Appender
           refute_predicate appender, :batch_by_default?
         end
 
+        it "sends nothing from a batch that has a message it cannot format" do
+          assert_predicate appender, :batch_all_or_nothing?
+
+          appender.formatter.stub(:batch, ->(*) { raise JSON::GeneratorError, "cannot serialize" }) do
+            appender.http.stub(:request, ->(_) { flunk "must not send a partial batch" }) do
+              assert_raises(JSON::GeneratorError) { appender.batch([log1, log2]) }
+            end
+          end
+        end
+
         it "posts multiple log messages as a single JSON array" do
           request = nil
           appender.http.stub(:request, lambda { |r|
@@ -126,16 +136,12 @@ module Appender
           credentials.each { |credential| refute_includes inspected, credential }
         end
 
-        it "shows the server, port, and path" do
-          inspected = appender_with_credentials.inspect
-
-          assert_includes inspected, '@server="localhost"'
-          assert_includes inspected, "@port=8088"
-          assert_includes inspected, '@path="/path"'
+        it "shows only the redacted url" do
+          assert_match(%r{ url="https://localhost:8088">\z}, appender_with_credentials.inspect)
         end
 
         it "includes the object address, like Kernel#inspect" do
-          assert_match(/\A#<SemanticLogger::Appender::Http:0x\h+ @/, appender_with_credentials.inspect)
+          assert_match(/\A#<SemanticLogger::Appender::Http:0x\h+ url=/, appender_with_credentials.inspect)
         end
 
         it "omits instance variables a subclass adds" do
@@ -245,6 +251,81 @@ module Appender
             http_success
           }, &block)
           request
+        end
+      end
+
+      describe "credentials" do
+        let(:url) { "https://elastic:S3cr3t@logs.example.com:9200/path?dd-api-key=0123456789abcdef" }
+        let(:appender) do
+          Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Http.new(url: url, header: {"Authorization" => "Bearer BEARER_TOKEN"})
+          end
+        end
+
+        it "redacts the user, password, path, and query from the url" do
+          assert_equal "https://logs.example.com:9200", appender.redacted_url
+        end
+
+        it "omits the default port from the redacted url" do
+          appender = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Http.new(url: "https://user:pass@logs.example.com/path")
+          end
+
+          assert_equal "https://logs.example.com", appender.redacted_url
+        end
+
+        it "redacts a token carried in the path" do
+          appender = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Http.new(url: "https://collectors.example.com/receiver/v1/http/SECRETCODE")
+          end
+
+          assert_equal "https://collectors.example.com", appender.redacted_url
+          refute_includes appender.inspect, "SECRETCODE"
+        end
+
+        it "does not include credentials in the error for a url without a host" do
+          error = assert_raises(ArgumentError) do
+            SemanticLogger::Appender::Http.new(url: "https//elastic:S3cr3t@logs.example.com/path")
+          end
+
+          assert_includes error.message, "Invalid format for :url"
+          refute_includes error.message, "S3cr3t"
+        end
+
+        it "does not include credentials in the error for a url that cannot be parsed" do
+          error = assert_raises(URI::InvalidURIError) do
+            SemanticLogger::Appender::Http.new(url: "https://elastic:S3cr 3t@logs.example.com/path")
+          end
+
+          assert_includes error.message, "Invalid :url"
+          refute_includes error.message, "S3cr"
+          assert_nil error.cause
+        end
+
+        it "does not log credentials when the server rejects a request" do
+          capture         = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = capture
+          http_failure    = Net::HTTPServiceUnavailable.new("1.1", "503", "Service Unavailable")
+          body            = "unavailable #{'x' * 1_000}"
+          http_failure.define_singleton_method(:body) { body }
+
+          appender.http.stub(:request, http_failure) do
+            appender.info(log_message)
+          end
+
+          assert message = capture.events.find { |event| event.level == :error }&.message
+          assert_includes message, "https://logs.example.com:9200 "
+          assert_includes message, "code: 503"
+          refute_includes message, "S3cr3t"
+          refute_includes message, "0123456789abcdef"
+          refute_includes message, "/path"
+          assert_operator message.size, :<, 700, "response body should be truncated"
+        end
+
+        it "does not reveal credentials or headers via inspect" do
+          refute_includes appender.inspect, "S3cr3t"
+          refute_includes appender.inspect, "BEARER_TOKEN"
+          refute_includes appender.inspect, "0123456789abcdef"
         end
       end
 

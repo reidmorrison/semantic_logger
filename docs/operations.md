@@ -165,8 +165,26 @@ a transient failure (such as a brief network blip to a remote appender) does not
 logging. Each restart sleeps with an increasing back-off (1 second, then 2, ...), reset as soon as a
 message is processed successfully.
 
+A message that fails because of its own content, rather than the destination, is not retried: for
+example a value the formatter cannot serialize (a `JSON::GeneratorError`, `JSON::NestingError`,
+encoding error, or `FloatDomainError`). That one message is discarded, and the thread carries on
+without backing off. When batching with an appender that sends the whole batch in a single request,
+such as the HTTP, Loki, Splunk HTTP, Elasticsearch, and OpenSearch appenders, only that message is
+discarded and the rest of the batch is still written. With an appender that may have written part
+of the batch before failing, the whole batch is discarded, so that no message is written twice.
+
+The first discarded message is reported to the internal logger straight away, with its error. After
+that, the number discarded is reported, with the latest error, at most once every
+`dropped_message_report_seconds` (default `30`). The total appears as `failed` for that appender in
+`SemanticLogger.stats[:appenders]`.
+
+A `JSON::ParserError`, such as from a destination that answered with an HTML error page, is a
+problem with the destination, so it is retried like any other error. The appender decides which
+errors are caused by message content; see [Custom appenders](config.html#custom-appenders).
+
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
-rather than spinning forever on a persistent failure:
+rather than spinning forever on a persistent failure. From then on new log messages for that
+appender are dropped once its queue is full, instead of blocking the application:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -179,6 +197,12 @@ SemanticLogger.add_appender(
 
 Set `async_max_retries: -1` to retry indefinitely. The back-off still applies and still resets after
 a successful message.
+
+A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
+be written, a flush or close taken off the queue with it still runs before the thread backs off; a
+close then stops the thread instead of restarting it. If the worker thread ends without answering,
+for example once it gives up, `SemanticLogger.flush` (including the flush at exit) stops waiting on
+that appender.
 
 ### Give a slow appender its own thread
 
@@ -221,12 +245,13 @@ SemanticLogger.stats
 #          capped:         true,
 #          max_queue_size: 10_000,
 #          processed:      1_529,
-#          dropped:        0 }
+#          dropped:        0,
+#          failed:         0 }  # discarded because their content could not be written
 #      ]
 #    }
 ~~~
 
-The `processed` and `dropped` counters are cumulative since process startup. Reading `stats` is
+The `processed`, `dropped`, and `failed` counters are cumulative since process startup. Reading `stats` is
 thread-safe and adds no locking to the logging hot path.
 
 Semantic Logger also warns when an entry has waited on the queue too long. Tune the threshold and how

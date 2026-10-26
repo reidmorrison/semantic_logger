@@ -1,28 +1,24 @@
 require_relative "../test_helper"
+require "bigdecimal"
 
 module Metric
   class StatsdTest < Minitest::Test
     # Records the calls made to the underlying statsd-ruby client.
     class FakeStatsd
-      attr_reader :timings, :increments, :decrements
+      attr_reader :timings, :counts
       attr_accessor :namespace
 
       def initialize
-        @timings    = []
-        @increments = []
-        @decrements = []
+        @timings = []
+        @counts  = []
       end
 
       def timing(metric, duration)
         @timings << [metric, duration]
       end
 
-      def increment(metric)
-        @increments << metric
-      end
-
-      def decrement(metric)
-        @decrements << metric
+      def count(metric, amount)
+        @counts << [metric, amount]
       end
     end
 
@@ -81,32 +77,64 @@ module Metric
           appender.log(metric_log(duration: 200))
 
           assert_equal [[metric, 200]], fake.timings
-          assert_empty fake.increments
+          assert_empty fake.counts
         end
 
-        it "increments once by default" do
+        it "counts once by default" do
           appender.log(metric_log)
 
-          assert_equal [metric], fake.increments
+          assert_equal [[metric, 1]], fake.counts
         end
 
-        it "increments by the metric amount" do
+        it "counts the metric amount in a single packet" do
           appender.log(metric_log(metric_amount: 3))
 
-          assert_equal [metric, metric, metric], fake.increments
+          assert_equal [[metric, 3]], fake.counts
         end
 
-        it "decrements for a negative metric amount" do
+        it "sends a large metric amount as a single packet" do
+          appender.log(metric_log(metric_amount: 3_000_000_000))
+
+          assert_equal [[metric, 3_000_000_000]], fake.counts
+        end
+
+        it "counts a negative metric amount" do
           appender.log(metric_log(metric_amount: -2))
 
-          assert_equal [metric, metric], fake.decrements
-          assert_empty fake.increments
+          assert_equal [[metric, -2]], fake.counts
         end
 
         it "rounds a fractional metric amount" do
           appender.log(metric_log(metric_amount: 2.9))
 
-          assert_equal [metric, metric, metric], fake.increments
+          assert_equal [[metric, 3]], fake.counts
+        end
+
+        it "sends nothing for a zero metric amount" do
+          appender.log(metric_log(metric_amount: 0))
+
+          assert_empty fake.counts
+        end
+
+        it "ignores a metric amount that is not finite" do
+          appender.log(metric_log(metric_amount: Float::INFINITY))
+          appender.log(metric_log(metric_amount: Float::NAN))
+
+          assert_empty fake.counts
+        end
+
+        it "ignores a BigDecimal metric amount that is not finite" do
+          appender.log(metric_log(metric_amount: BigDecimal("Infinity")))
+          appender.log(metric_log(metric_amount: BigDecimal("-Infinity")))
+          appender.log(metric_log(metric_amount: BigDecimal("NaN")))
+
+          assert_empty fake.counts
+        end
+
+        it "counts a finite BigDecimal metric amount" do
+          appender.log(metric_log(metric_amount: BigDecimal("2.5")))
+
+          assert_equal [[metric, 3]], fake.counts
         end
       end
 

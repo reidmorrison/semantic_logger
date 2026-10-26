@@ -55,6 +55,33 @@ The record-framed network appenders are already safe by default:
 If you replace the formatter on any of these appenders with a text formatter, enable
 `escape_control_chars` as shown above.
 
+### Logging untrusted hashes
+
+A hash passed after the message is the payload, but a few of its keys are also log arguments:
+`duration`, `min_duration`, `metric`, `metric_amount`, `exception`, `log_exception`, and so on.
+That is convenient for code you write, but when the hash holds untrusted data, such as parsed
+request parameters or a webhook body with Symbol keys, it can set those arguments too. For
+example `{duration: 0, min_duration: 1}` would suppress the entry.
+
+Semantic Logger only uses such a key as an argument when its value is valid for it: for example
+`duration` must be a finite real number, `backtrace` an Array of Strings, and `on_exception_level` a
+valid level. Any other value stays in the payload as data, and a `nil` value is ignored, so an
+untrusted hash passed to a level method such as `info` can never make the logging call raise.
+
+To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
+keys supplied alongside an explicit `payload:` are merged into it, and the explicit payload's own
+values win over them:
+
+~~~ruby
+# The hash is logged as-is, and none of its keys are interpreted:
+logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true))
+~~~
+
+The options of a `measure_*` call are checked the same way: an option with a value that is not valid
+for it is ignored, and its default is used. Keys that are not measure options are not logged at all,
+so pass untrusted data to a measure call as its `payload:` too. A measure call without a block still
+raises unless it is given a valid `:duration`.
+
 ### Redacting sensitive data
 
 Semantic Logger does not automatically redact secrets or personal information; it logs
@@ -86,14 +113,22 @@ are filtered out of the logs.
 ### Transport encryption
 
 Appenders that send logs over the network support TLS. The appenders built on the
-`:http` appender (`:http`, `:splunk_http`, and `:elasticsearch_http`) default to
+`:http` appender (`:http`, `:splunk_http`, `:elasticsearch_http`, and `:loki`) default to
 verifying the server certificate (`OpenSSL::SSL::VERIFY_PEER`) when an `https` URL is
-used.
+used. The `:tcp` appender, and the `:syslog` appender over TCP, verify both the certificate
+and the host name when `ssl:` is enabled.
+
+The deprecated `:splunk` appender is the exception: its `splunk-sdk-ruby` gem never verifies
+the certificate. Use `:splunk_http` instead.
 
 Do not disable certificate verification in production. Settings such as
 `ssl: {verify_mode: OpenSSL::SSL::VERIFY_NONE}` expose the connection to
 man-in-the-middle attacks and should be limited to local development against
 self-signed certificates.
+
+Credentials can be supplied in the url of the HTTP based appenders, for example
+`https://user:password@host`, or as a query parameter. They are removed from the url
+written to the internal logger when the server rejects a request, and from `#inspect`.
 
 ### Log file permissions
 
@@ -106,6 +141,15 @@ an existing log file:
 # Owner read/write, group read, no access for others:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
+
+The permissions are only applied when the log file name names a regular file directly, not
+through a symbolic link, and that file is owned by the process and has a single hard link. A log
+file that is a symbolic link (for example to `/dev/stdout`) is still written to, but the
+permissions of whatever it points at are left alone, so that a symbolic or hard link planted in a
+shared log directory cannot be used to loosen the permissions of another file. The file name is
+also checked to still name the file that was opened, so swapping it in between has no effect.
+When the permissions are not applied the appender logs a warning, once, giving the reason. Keep
+the log directory writable only by the application.
 
 ### Dependencies and supply chain
 

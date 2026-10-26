@@ -33,6 +33,12 @@ module SemanticLogger
                     :open_timeout, :read_timeout, :continue_timeout
       attr_reader :http, :url, :server, :port, :path, :query, :ssl_options, :proxy_url
 
+      # Maximum number of bytes of an error response body to write to the internal logger.
+      MAX_LOGGED_RESPONSE_BODY = 512
+
+      # Describes a valid url in the error raised for an invalid one.
+      URL_FORMAT_HINT = "Should be similar to: 'http://hostname:port/path'".freeze
+
       # Create HTTP(S) log appender
       #
       # Parameters:
@@ -139,11 +145,10 @@ module SemanticLogger
         }.merge(header)
         @header["Content-Encoding"] = "gzip" if @compress
 
-        uri     = URI.parse(@url)
+        uri     = parse_url(@url)
         @server = uri.host
-        unless @server
-          raise(ArgumentError, "Invalid format for :url: #{@url.inspect}. Should be similar to: 'http://hostname:port/path'")
-        end
+        # The url is left out of the message, since it can hold a user and password.
+        raise(ArgumentError, "Invalid format for :url, it has no host. #{URL_FORMAT_HINT}") unless @server
 
         @port     = uri.port
         @username = uri.user if !@username && uri.user
@@ -224,32 +229,43 @@ module SemanticLogger
         false
       end
 
-      # The only instance variables that #inspect shows. None of them can hold a credential, unlike
-      # the password, the request headers, the url, proxy url and query string, or the SSL options.
-      # This is an allowlist so that a credential added later, here or in a subclass, stays hidden
-      # unless it is deliberately listed.
-      INSPECTED_VARIABLES = %i[
-        @name @level @application @environment @host
-        @server @port @path @compress @open_timeout @read_timeout @continue_timeout
-      ].freeze
-      private_constant :INSPECTED_VARIABLES
+      # The whole batch is formatted into a single request before anything is sent.
+      def batch_all_or_nothing?
+        true
+      end
 
-      # Ruby 4.0's Kernel#inspect honours #instance_variables_to_inspect. Earlier Rubies ignore it,
-      # so build the same output here. None of the inspected values can refer back to this
-      # appender, so no recursion guard is needed.
-      unless Kernel.private_method_defined?(:instance_variables_to_inspect)
-        def inspect
-          variables = instance_variables_to_inspect.map { |name| "#{name}=#{instance_variable_get(name).inspect}" }
-          address   = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
-          variables.empty? ? "#{address}>" : "#{address} #{variables.join(', ')}>"
-        end
+      # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
+      #
+      # Everything else is left out, since log servers carry credentials in each part of it:
+      # the user and password, the query string (for example a Datadog api key), and the path
+      # (for example the token at the end of a Sumo Logic HTTP source url).
+      def redacted_url
+        @redacted_url ||=
+          begin
+            uri  = URI.parse(url)
+            port = uri.port == uri.default_port ? nil : uri.port
+            uri.class.build(scheme: uri.scheme, host: uri.host, port: port).to_s
+          end
+      end
+
+      # Only show the redacted url, since the instance variables hold the password, the
+      # authorization headers, and any credential a subclass adds. Keeps the object address, like
+      # Kernel#inspect, so that two appenders can be told apart.
+      def inspect
+        address = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
+        "#{address} url=#{redacted_url.inspect}>"
       end
 
       private
 
-      # Keep credentials out of #inspect, for example when the appenders are listed in a console.
-      def instance_variables_to_inspect
-        instance_variables & INSPECTED_VARIABLES
+      # Returns [URI] the parsed url.
+      #
+      # Raises URI::InvalidURIError without the url in its message, or as its cause, since the
+      # url can hold a user and password.
+      def parse_url(url)
+        URI.parse(url)
+      rescue URI::InvalidURIError
+        raise(URI::InvalidURIError, "Invalid :url, it is not a valid URI. #{URL_FORMAT_HINT}", cause: nil)
       end
 
       # Use JSON Formatter by default
@@ -315,7 +331,10 @@ module SemanticLogger
           true
         else
           # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
-          logger.error("Bad HTTP response from: #{url} code: #{response.code}, #{response.body}")
+          logger.error(
+            "Bad HTTP response from: #{redacted_url} code: #{response.code}, " \
+            "#{response.body.to_s[0, MAX_LOGGED_RESPONSE_BODY].inspect}"
+          )
           false
         end
       rescue RuntimeError => e

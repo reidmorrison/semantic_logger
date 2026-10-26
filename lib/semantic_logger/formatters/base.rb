@@ -50,8 +50,9 @@ module SemanticLogger
       #     Default: PRECISION (6, except on older JRuby, where 3)
       #   escape_control_chars: [Boolean]
       #     Replace control characters (newlines, the ANSI escape, etc.) in
-      #     untrusted log data (message, tags, named tags, and exception
-      #     message) with a printable escaped form, e.g. "\n".
+      #     untrusted log data (logger name, thread name, message, payload, tags,
+      #     named tags, and the message and backtrace lines of the exception and
+      #     of each exception that caused it) with a printable escaped form, e.g. "\n".
       #     This prevents log forging and terminal escape-sequence injection
       #     when logging data that may contain attacker-controlled content.
       #     Note: Has no effect on structured formatters such as :json, which
@@ -114,10 +115,16 @@ module SemanticLogger
       # Note: This escapes (preserves) control characters, and is opt-in. It is
       # distinct from Log#cleansed_message, which unconditionally *strips* ANSI
       # colorization from the message for structured (JSON/Loki) output.
+      #
+      # A string with invalid byte sequences, for example an exception message that quotes
+      # untrusted binary input, is first converted to valid UTF-8 (dropping the invalid
+      # bytes), since matching against it would raise and the log entry would be lost.
       def escape_control_characters(value)
         return value unless escape_control_chars && value
 
-        value.to_s.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
+        string = value.to_s
+        string = Utils.encode_utf8_string(string) unless string.valid_encoding?
+        string.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
       end
 
       # Whether this formatter logs exception details unless told otherwise. See #initialize.
@@ -131,6 +138,19 @@ module SemanticLogger
         return unless log_exception_details
 
         log.exception_details(exception, source: log_exception_details == :with_source)
+      end
+
+      # Returns [String] the backtrace of the logged exception, followed by each exception
+      # that caused it, as laid out by Log#backtrace_to_s.
+      #
+      # When `escape_control_chars` is enabled, the message of each cause and each backtrace
+      # line is passed through #escape_control_characters, the same as the message of the
+      # logged exception: causes are often parser or validation errors that quote untrusted
+      # input, and a backtrace can be set from untrusted data.
+      def exception_backtrace
+        return log.backtrace_to_s unless escape_control_chars
+
+        log.backtrace_to_s { |text| escape_control_characters(text) }
       end
 
       # Return the Time as a formatted string

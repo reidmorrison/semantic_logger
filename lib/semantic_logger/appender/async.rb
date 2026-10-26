@@ -28,7 +28,7 @@ module SemanticLogger
                      :capped?, :non_blocking?, :non_blocking=, :batch?,
                      :lag_check_interval, :lag_check_interval=,
                      :lag_threshold_s, :lag_threshold_s=,
-                     :processed_count, :dropped_count
+                     :processed_count, :dropped_count, :failed_count
 
       # Appender proxy to allow an existing appender to run asynchronously in a separate thread.
       #
@@ -74,7 +74,8 @@ module SemanticLogger
       #
       #   dropped_message_report_seconds: [Integer]
       #     When non_blocking is enabled, log the count of dropped messages to the internal logger
-      #     at most once every this number of seconds.
+      #     at most once every this number of seconds. Also limits how often messages discarded
+      #     because their content could not be written are reported, after the first.
       #     Default: 30
       #
       #   async_max_retries: [Integer]
@@ -105,6 +106,8 @@ module SemanticLogger
       #   processed:      [Integer] Cumulative number of log messages written since startup.
       #   dropped:        [Integer] Cumulative number of log messages dropped because the queue
       #                             was full (only possible when non_blocking is enabled).
+      #   failed:         [Integer] Cumulative number of log messages discarded because their
+      #                             content could not be written (see Subscriber#message_error?).
       def stats
         {
           name:           name,
@@ -114,7 +117,8 @@ module SemanticLogger
           capped:         capped?,
           max_queue_size: capped? ? max_queue_size : nil,
           processed:      processed_count,
-          dropped:        dropped_count
+          dropped:        dropped_count,
+          failed:         failed_count
         }
       end
     end

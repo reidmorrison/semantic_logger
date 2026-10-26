@@ -96,7 +96,7 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [OpenSearch](#opensearch) | `appender: :opensearch` | `opensearch-ruby` |
 | [Graylog](#graylog) | `appender: :graylog` | `gelf` |
 | [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
-| [Splunk SDK](#splunk-sdk) | `appender: :splunk` | `splunk-sdk-ruby` |
+| [Splunk SDK](#splunk-sdk) (deprecated) | `appender: :splunk` | `splunk-sdk-ruby` |
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
 | [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
@@ -160,6 +160,11 @@ file is created and to an existing log file:
 # Owner read/write, group read, no access for others:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
+
+The permissions are only applied to a regular file owned by the process with a single hard link,
+and not through a symbolic link. A log file linked to `/dev/stdout`, for example, is still written
+to, but the appender leaves the permissions alone and logs a warning once. See
+[Log file permissions](security.html#log-file-permissions).
 
 ### IO Streams
 
@@ -359,9 +364,18 @@ Notes:
 
 * The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
   forge or split a record.
+* Keys (from tags, named tags, and the payload) cannot be quoted in logfmt, so spaces, control
+  characters (including the Unicode line and paragraph separators), `=`, and `"` in a key are
+  replaced with `_`, and invalid UTF-8 is dropped. For example the tag `second breakfast` is
+  emitted as `second_breakfast=true`.
+* Keys that only match once encoded, or that only differ by type (such as `:level` and
+  `"level"`), are emitted once, keeping the earlier field. For example the tags `message` and
+  `duration ms` do not replace the `message` and `duration_ms` fields.
 * Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
   conflict the payload wins.
 * Unnamed tags are emitted as keys with a `true` value.
+* A nested value, such as a Hash or an Array in the payload, is emitted as its JSON text, quoted:
+  `user="{\"id\":7}"`.
 * `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
   exception (the exception class, message, and backtrace are then included as fields).
 
@@ -480,8 +494,10 @@ options.
 
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter
-such as `:default` or `:color`, enable `escape_control_chars` so a newline in the data cannot forge or
-split a record:
+such as `:default` or `:color`, enable `escape_control_chars` so a newline in the logged data cannot
+forge a record. Those formatters still write an entry with an exception over several lines (the
+exception, then its backtrace), so a receiver that frames records by newline splits such an entry;
+use the JSON formatter or the `:syslog` formatter when every record must be a single line:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -564,8 +580,10 @@ SemanticLogger.add_appender(
 ~~~
 
 Syslog frames each record, so embedded newlines or other control characters in untrusted data could
-forge or split records. The syslog formatters therefore escape control characters by default. To pass
-them through unchanged:
+forge or split records. The syslog formatters therefore escape control characters by default. The
+`:syslog` formatter also escapes the newlines between an exception and its backtrace lines (written
+as `\n`), so that an entry with an exception is a single line. To pass control characters through
+unchanged, which also restores the multi-line exception layout:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -655,24 +673,13 @@ instead, which reached about 1,400 entries per second (1,200 with SSL).
 
 ### Splunk SDK
 
-`appender: :splunk` submits entries through the official `splunk-sdk-ruby` gem to the Splunk
-management port (8089 by default). Authenticate with either a username and password, or a
-pre-authenticated `token:`:
+> **Deprecated:** `appender: :splunk` is deprecated and will be removed in v6. Use the
+> [HTTP Event Collector](#splunk-http) (`appender: :splunk_http`) or the
+> [TCP appender](#tcp-appender-ssl) instead.
 
-~~~ruby
-SemanticLogger.add_appender(
-  appender: :splunk,
-  username: "username",
-  password: "password",
-  host:     "localhost",
-  port:     8089,
-  scheme:   :https,
-  index:    "main"
-)
-~~~
-
-For most deployments the [HTTP Event Collector](#splunk-http) or the [TCP appender](#tcp-appender-ssl)
-is the simpler choice; use the SDK appender when the management API is the only ingress available.
+`appender: :splunk` submits entries through the `splunk-sdk-ruby` gem to the Splunk management
+port. That gem was last released in 2015 and does not verify the server's TLS certificate, so the
+connection, including the login credentials, is open to interception.
 
 ### Grafana Loki
 

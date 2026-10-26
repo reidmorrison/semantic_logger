@@ -12,7 +12,7 @@ module SemanticLogger
 
       # Name of the thread that logged the message.
       def thread_name
-        format("%.30s", log.thread_name)
+        escape_control_characters(format("%.30s", log.thread_name))
       end
 
       # Ruby file name and line number that logged the message.
@@ -56,7 +56,7 @@ module SemanticLogger
 
       # Class / app name
       def name
-        log.name
+        escape_control_characters(log.name)
       end
 
       # Log message
@@ -69,7 +69,7 @@ module SemanticLogger
         pl = log.payload_to_s
         return unless pl
 
-        "-- #{pl}"
+        "-- #{escape_control_characters(pl)}"
       end
 
       # Exception
@@ -78,7 +78,7 @@ module SemanticLogger
 
         details = exception_details
         "-- Exception: #{log.exception.class}: #{escape_control_characters(log.exception.message)}\n" \
-          "#{"#{details}\n" if details}#{log.backtrace_to_s}"
+          "#{"#{details}\n" if details}#{exception_backtrace}"
       end
 
       # The detail Ruby adds to the exception's message, such as did_you_mean suggestions.

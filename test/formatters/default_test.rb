@@ -42,6 +42,13 @@ module SemanticLogger
           ]
         end
 
+        # An object whose #inspect returns control characters, as a custom payload object can.
+        let(:control_inspect) do
+          object = Object.new
+          object.define_singleton_method(:inspect) { "bob\nforged\e[2J" }
+          object
+        end
+
         let(:formatter) do
           formatter = SemanticLogger::Formatters::Default.new
           # Does not use the logger instance for formatting purposes
@@ -200,6 +207,173 @@ module SemanticLogger
             end
 
             assert_match(/-- Exception: RuntimeError: boom\\ninjected/, formatter.exception)
+          end
+
+          it "escapes control characters in the message of each cause" do
+            forged = "2026-10-03 00:00:00.000000 I [1:main] Auth -- admin logged in"
+            begin
+              begin
+                raise ArgumentError, "bad input\n#{forged}"
+              rescue ArgumentError
+                raise "Request failed"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            output = formatter.exception
+
+            assert_includes output, "Cause: ArgumentError: bad input\\n#{forged}"
+            refute(output.lines.any? { |line| line.start_with?(forged) }, "cause message forged a log line")
+          end
+
+          it "escapes control characters in each backtrace line" do
+            begin
+              begin
+                raise ArgumentError, "inner"
+              rescue ArgumentError
+                raise "outer"
+              end
+            rescue StandardError => e
+              e.set_backtrace(["app.rb:2\nforged outer", "app.rb:3"])
+              e.cause.set_backtrace(["(\e[2J):1"])
+              log.exception = e
+            end
+
+            assert_equal "-- Exception: RuntimeError: outer\n" \
+                         "app.rb:2\\nforged outer\napp.rb:3\n" \
+                         "Cause: ArgumentError: inner\n(\\e[2J):1",
+                         formatter.exception
+          end
+
+          it "drops invalid UTF-8 from the message of a cause instead of failing" do
+            begin
+              begin
+                raise ArgumentError, "bad \xff\ninput"
+              rescue ArgumentError
+                raise "wrapped"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_includes formatter.exception, "Cause: ArgumentError: bad \\ninput"
+          end
+
+          it "drops invalid UTF-8 from the exception message instead of failing" do
+            begin
+              raise "bad \xff\ninput"
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_match(/\A-- Exception: RuntimeError: bad \\ninput\n/, formatter.exception)
+          end
+
+          it "drops invalid UTF-8 from the message instead of failing" do
+            log.message = "bad \xff\ninput"
+
+            assert_equal "-- bad \\ninput", formatter.message
+          end
+
+          it "escapes control characters in the logger name" do
+            log.name = "Auth\e[2J\nforged"
+
+            assert_equal "Auth\\e[2J\\nforged", formatter.name
+          end
+
+          it "escapes control characters in the thread name" do
+            log.thread_name = "worker\nforged"
+
+            assert_equal "worker\\nforged", formatter.thread_name
+            assert_equal "[#{$$}:worker\\nforged]", formatter.process_info
+          end
+
+          it "escapes control characters in the payload" do
+            log.payload = {user: control_inspect}
+
+            # Ruby 3.4 changed the way hashes are displayed
+            if RUBY_VERSION < "3.4"
+              assert_equal "-- {:user=>bob\\nforged\\e[2J}", formatter.payload
+            else
+              assert_equal "-- {user: bob\\nforged\\e[2J}", formatter.payload
+            end
+          end
+
+          it "escapes the name, thread name, and payload of the whole entry" do
+            log.name        = "Auth\nforged"
+            log.thread_name = "worker\e[2J"
+            log.message     = "Hello\nWorld"
+            log.payload     = control_inspect
+
+            assert_equal "#{expected_time} D [#{$$}:worker\\e[2J] Auth\\nforged -- Hello\\nWorld -- bob\\nforged\\e[2J",
+                         formatter.call(log, nil)
+          end
+
+          it "preserves control characters in the whole entry when disabled" do
+            log.name        = "Auth\nforged"
+            log.thread_name = "worker\e[2J"
+            log.message     = "Hello\nWorld"
+            log.payload     = control_inspect
+
+            assert_equal "#{expected_time} D [#{$$}:worker\e[2J] Auth\nforged -- Hello\nWorld -- bob\nforged\e[2J",
+                         SemanticLogger::Formatters::Default.new.call(log, nil)
+          end
+        end
+
+        describe "exception backtrace" do
+          it "matches Log#backtrace_to_s when control characters are not escaped" do
+            begin
+              begin
+                raise ArgumentError, "inner\nline"
+              rescue ArgumentError
+                raise "outer"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+            formatter.call(log, nil)
+
+            assert formatter.exception.end_with?(log.backtrace_to_s)
+          end
+
+          describe "for a three deep chain" do
+            before do
+              begin
+                begin
+                  begin
+                    raise ArgumentError, "root\ncause"
+                  rescue ArgumentError => e
+                    e.set_backtrace(%w[r1 r2])
+                    raise
+                  end
+                rescue ArgumentError
+                  raise IOError, "middle"
+                end
+              rescue IOError => e
+                e.set_backtrace(%w[m1])
+                raise "top"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[t1 t2])
+              log.exception = e
+            end
+
+            it "lays out every exception unchanged when control characters are not escaped" do
+              expected = "-- Exception: RuntimeError: top\n" \
+                         "t1\nt2\nCause: IOError: middle\nm1\nCause: ArgumentError: root\ncause\nr1\nr2"
+
+              assert_equal expected, formatter.exception
+            end
+
+            it "keeps the layout and escapes each cause when control characters are escaped" do
+              formatter = SemanticLogger::Formatters::Default.new(escape_control_chars: true)
+              formatter.call(log, nil)
+              expected = "-- Exception: RuntimeError: top\n" \
+                         "t1\nt2\nCause: IOError: middle\nm1\nCause: ArgumentError: root\\ncause\nr1\nr2"
+
+              assert_equal expected, formatter.exception
+            end
           end
         end
 

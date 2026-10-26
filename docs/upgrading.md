@@ -3,7 +3,7 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.2 remote syslog facility fix.
+  v5.2 security fixes, remote syslog facility fix, and deprecation of the Splunk SDK appender.
 ---
 
 
@@ -13,6 +13,29 @@ description: >-
 {:toc}
 
 ### Upgrading to Semantic Logger v5.2
+
+v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, and fixes
+several security issues. None of the security fixes change the public API, but a few change the
+output, which matters if you parse the logs or alert on them.
+
+#### Replace the `:splunk` appender with `:splunk_http`
+
+The `:splunk` appender depends on the `splunk-sdk-ruby` gem, which was last released in 2015 and
+does not verify the server's TLS certificate. It now emits a deprecation warning and will be
+**removed in v6**. Send logs to the Splunk HTTP Event Collector instead:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: :splunk, index: "main")
+
+# After:
+SemanticLogger.add_appender(
+  appender: :splunk_http,
+  url:      "https://splunk.example.com:8088/services/collector/event",
+  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  index:    "main"
+)
+~~~
 
 #### Remote syslog sends the configured facility
 
@@ -47,6 +70,56 @@ SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facil
 This applies to the `:syslog` and `:syslog_cee` formatters. An application that logs only to a remote
 server, and so does not need the `syslog` gem, can use the same constants from
 `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatters::Syslog::LOG_LOCAL0`.
+
+#### Output changes
+
+* `:logfmt`: spaces, control characters, `=`, `"`, and Unicode line separators in keys are
+  replaced with `_`, and invalid UTF-8 bytes are dropped. A tag such as `second breakfast` is now
+  emitted as `second_breakfast=true`. Keys that only match once encoded, or that only differ by
+  type (`:level` and `"level"`), are emitted once, keeping the earlier field, so a tag or named
+  tag can no longer add a second `level` or `message` field. A payload that is not a Hash is
+  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, or `Data`, such as
+  the exception backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its
+  `#inspect` text.
+* `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
+  its backtrace are escaped as `\n`.
+* `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,
+  thread name, payload, the messages of the exceptions that caused the logged exception, and the
+  backtrace lines are escaped too. Invalid UTF-8 bytes are dropped instead of the entry failing to
+  format. With escaping on, `:color` renders the payload plain and on one line, since Amazing
+  Print's colors and line breaks cannot be told apart from control characters in the data.
+* `:one_line`: line breaks are removed from every field (name, thread name, tags, named tags,
+  payload, message, and exception), carriage returns as well as newlines, and
+  `escape_control_chars` is honoured.
+* JSON based formatters: `Infinity` and `NaN` payload values are serialized as strings, and
+  structures nested deeper than 32 levels are replaced with a placeholder such as
+  `#<Hash nested too deeply>`, instead of the whole entry being dropped. A `Struct` or `Data`
+  value is written as an object of its members, as Rails already does, instead of its `#inspect`
+  text.
+* Hashes logged as the payload, for example `logger.info("Webhook", params)`: a key that is also
+  a log argument (`duration`, `metric_amount`, `backtrace`, `log_exception`, ...) is only used as
+  that argument when its value is valid for it. Otherwise it stays in the payload, where it was
+  previously consumed or made the call raise. A `nil` value is ignored. When an explicit
+  `payload:` is also given, its values win over other keys of the same name.
+* The HTTP appender and the appenders built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
+  `:signalfx`): the url in the error logged for a rejected request shows only the scheme, host,
+  and port, and `#inspect` shows only the object address and that url.
+* The `:statsd` metrics appender sends a counter as a single `metric:amount|c` packet.
+
+#### Other behaviour changes
+
+* An async or batching appender discards a log message that it cannot format, instead of
+  retrying it. Discarded messages are reported to the internal logger and counted in the new
+  `failed` key of the appender's stats.
+* The file appender's `permissions:` option is only applied to a regular file owned by the
+  process, with a single hard link, that was not reached through a symbolic link. Otherwise it
+  warns once and leaves the permissions unchanged.
+
+#### Stricter `logger_measure_method` arguments
+
+`logger_measure_method` now raises `ArgumentError` for a method name that is not a valid Ruby
+method name, a `min_duration` that is not a finite number, and an invalid `log_exception` or
+level. Numeric Strings, such as `min_duration: "100"`, are still accepted.
 
 ### Upgrading to Semantic Logger v5.1
 

@@ -86,6 +86,17 @@ module SemanticLogger
             end
           end
 
+          it "accepts the same log_exception values that log_exception_option? accepts" do
+            [:full, :partial, :none, nil].each do |value|
+              assert SemanticLogger::Log.log_exception_option?(value), "value: #{value.inspect}"
+              log.assign(exception: exception, log_exception: value)
+            end
+            [:bogus, "full", 1].each do |value|
+              refute SemanticLogger::Log.log_exception_option?(value), "value: #{value.inspect}"
+              assert_raises(ArgumentError) { log.assign(exception: exception, log_exception: value) }
+            end
+          end
+
           it "coerces a non-exception into an ArgumentError" do
             log.assign(exception: "not an exception")
 
@@ -98,6 +109,16 @@ module SemanticLogger
 
             assert_equal :fatal, log.level
             assert_equal SemanticLogger::Levels.index(:fatal), log.level_index
+          end
+
+          it "stores an on_exception_level supplied as a String or Integer as its Symbol" do
+            log.assign(exception: exception, on_exception_level: ::Logger::ERROR)
+
+            assert_equal :error, log.level
+
+            log.assign(exception: exception, on_exception_level: "Fatal")
+
+            assert_equal :fatal, log.level
           end
         end
 
@@ -195,6 +216,95 @@ module SemanticLogger
           assert_equal({payload: {user: "joe"}}, args)
         end
 
+        describe "untrusted hashes" do
+          # Like ActiveSupport::HashWithIndifferentAccess, which is what params.to_unsafe_h returns.
+          let(:indifferent_hash_class) do
+            Class.new(Hash) do
+              def key?(key) = super(key.to_s)
+            end
+          end
+
+          it "keeps a \"payload\" key of an indifferent access hash in the payload" do
+            params = indifferent_hash_class.new.merge!("user" => "bob", "payload" => "x")
+            args   = log.extract_arguments(params, "Params")
+
+            assert_equal({payload: {"user" => "bob", "payload" => "x"}, message: "Params"}, args)
+            assert log.assign(**args)
+          end
+
+          it "merges unknown keys into an explicit payload instead of passing them on" do
+            args = log.extract_arguments({payload: {a: 1}, user: "bob", duration: 5})
+
+            assert_equal({payload: {a: 1, user: "bob"}, duration: 5}, args)
+            assert log.assign(**args)
+          end
+
+          it "lets the explicit payload win over a stray key with the same name" do
+            args = log.extract_arguments({payload: {user: "real"}, user: "spoof"}, "msg")
+
+            assert_equal({payload: {user: "real"}, message: "msg"}, args)
+          end
+
+          it "ignores a log argument with a nil value, so that its default is used" do
+            args = log.extract_arguments({duration: 1, min_duration: nil, log_exception: nil, user: "bob"}, "m")
+
+            assert_equal({duration: 1, payload: {user: "bob"}, message: "m"}, args)
+            assert log.assign(**args), "a nil min_duration must not make the logging call raise"
+          end
+
+          it "keeps an explicit payload that is not a hash alongside unknown keys" do
+            args = log.extract_arguments({payload: "text", user: "bob"})
+
+            assert_equal({payload: {user: "bob", payload: "text"}}, args)
+          end
+
+          it "keeps values that cannot be used as log arguments in the payload" do
+            untrusted = {
+              log_exception:      "boom",
+              on_exception_level: "nope",
+              duration:           "0",
+              min_duration:       [],
+              backtrace:          "not an array",
+              metric_amount:      Float::INFINITY,
+              dimensions:         "x"
+            }
+            args = log.extract_arguments({exception: 1}.merge(untrusted), "Webhook")
+
+            assert_equal untrusted, args[:payload]
+            assert log.assign(**args), "an untrusted hash must not make the logging call raise"
+          end
+
+          it "keeps other values that #assign or the formatters cannot use in the payload" do
+            untrusted = {
+              backtrace:          [1, 2],
+              on_exception_level: 2**70,
+              duration:           Complex(1, 1),
+              min_duration:       Float::NAN
+            }
+            args = log.extract_arguments({exception: "x"}.merge(untrusted), "Webhook")
+
+            assert_equal untrusted, args[:payload]
+            assert log.assign(**args), "an untrusted hash must not make the logging call raise"
+          end
+
+          it "does not modify a backtrace supplied in the hash" do
+            backtrace = ["/gems/foo/lib/semantic_logger/logger.rb:10", "/app/models/user.rb:30"]
+            log.assign(**log.extract_arguments({backtrace: backtrace}, "m"))
+
+            assert_equal ["/app/models/user.rb:30"], log.backtrace
+            assert_equal 2, backtrace.size
+          end
+
+          it "uses values of the right type as log arguments" do
+            args = log.extract_arguments(
+              {log_exception: :partial, on_exception_level: "error", duration: 1.5, metric_amount: 3}, "m"
+            )
+
+            assert_equal({log_exception: :partial, on_exception_level: "error", duration: 1.5, metric_amount: 3,
+                          message: "m"}, args)
+          end
+        end
+
         it "lets a supplied message take precedence over a payload message key" do
           args = log.extract_arguments({message: "inner"}, "outer")
 
@@ -240,6 +350,54 @@ module SemanticLogger
 
         it "returns an empty string without an exception" do
           assert_equal "", log.backtrace_to_s
+        end
+
+        describe "with causes" do
+          # An exception whose cause can be assigned directly, to build any chain,
+          # including a cyclic one that `raise` would refuse.
+          let(:chained_error) { Class.new(StandardError) { attr_accessor :cause } }
+
+          def chained(message, backtrace, cause = nil)
+            error = chained_error.new(message)
+            error.set_backtrace(backtrace) if backtrace
+            error.cause = cause
+            error
+          end
+
+          it "lays out every exception in a three deep chain" do
+            root          = chained("root\ncause", %w[r1 r2])
+            middle        = chained("middle", %w[m1], root)
+            log.exception = chained("top", %w[t1 t2], middle)
+            name          = chained_error.name
+
+            expected = "t1\nt2\nCause: #{name}: middle\nm1\nCause: #{name}: root\ncause\nr1\nr2"
+
+            assert_equal expected, log.backtrace_to_s
+          end
+
+          it "lays out a cause without a backtrace" do
+            log.exception = chained("top", %w[t1], chained("cause", nil))
+
+            assert_equal "t1\nCause: #{chained_error.name}: cause\n", log.backtrace_to_s
+          end
+
+          it "stops at a cyclic cause chain" do
+            first         = chained("first", %w[f1])
+            second        = chained("second", %w[s1], first)
+            first.cause   = second
+            log.exception = first
+
+            assert_equal "f1\nCause: #{chained_error.name}: second\ns1", log.backtrace_to_s
+          end
+
+          it "passes each cause message and backtrace line to the block" do
+            log.exception = chained("top\nmsg", %w[t1], chained("cause\nmsg", %w[c1]))
+            name          = chained_error.name
+
+            trace         = log.backtrace_to_s { |text| "<#{text}>" }
+
+            assert_equal "<t1>\nCause: #{name}: <cause\nmsg>\n<c1>", trace
+          end
         end
       end
 

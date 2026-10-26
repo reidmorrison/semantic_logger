@@ -71,6 +71,8 @@ module SemanticLogger
       #
       #    Note: The option :multiline is set to false if not supplied.
       #    Note: Has no effect if Awesome Print is not installed.
+      #    Note: With `escape_control_chars: true` the payload is always rendered plain
+      #          (without colors) and on a single line, then escaped.
       #
       #  color_map: [Hash | SemanticLogger::Formatters::Color::ColorMap]
       #    ColorMaps each of the log levels to a color
@@ -116,7 +118,7 @@ module SemanticLogger
 
         if log.payload.respond_to?(:ai)
           begin
-            "-- #{log.payload.ai(@ai_options)}"
+            "-- #{escape_control_characters(log.payload.ai(ai_options))}"
           rescue StandardError
             super
           end
@@ -131,12 +133,24 @@ module SemanticLogger
         details = exception_details
         "-- Exception: #{color}#{log.exception.class}: " \
           "#{escape_control_characters(log.exception.message)}#{color_map.clear}\n" \
-          "#{"#{details}\n" if details}#{log.backtrace_to_s}"
+          "#{"#{details}\n" if details}#{exception_backtrace}"
       end
 
       def call(log, logger)
         self.color = color_map[log.level]
         super
+      end
+
+      private
+
+      # Returns [Hash] the Amazing Print options to render the payload with.
+      #
+      # When `escape_control_chars` is enabled the payload is rendered plain, on one line:
+      # the colors and line breaks Amazing Print adds cannot be told apart from control
+      # characters in the data (for example an object whose #inspect returns them), and
+      # escaping them all leaves no colors or line breaks to keep.
+      def ai_options
+        escape_control_chars ? @ai_options.merge(plain: true, multiline: false) : @ai_options
       end
     end
   end

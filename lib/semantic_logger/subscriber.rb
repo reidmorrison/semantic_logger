@@ -86,6 +86,33 @@ module SemanticLogger
       true
     end
 
+    # Errors raised by formatting a log message whose content cannot be written, such as a
+    # value that cannot be serialized. Excludes JSON::ParserError, which comes from parsing a
+    # response rather than from the message, except its subclass JSON::NestingError, which
+    # JSON.generate raises for a value nested too deeply.
+    MESSAGE_ERRORS = [JSON::GeneratorError, JSON::NestingError, EncodingError, FloatDomainError].freeze
+
+    # Whether the supplied exception, raised by #log or #batch, was caused by the content of a
+    # log message, rather than by the destination, for example being unavailable.
+    #
+    # Retrying cannot write such a message, so an asynchronous appender discards it and carries
+    # on, instead of backing off and retrying. Any other exception is retried with a back-off.
+    #
+    # An appender that raises its own errors for bad content can override this to recognize them.
+    def message_error?(exception)
+      MESSAGE_ERRORS.any? { |error_class| exception.is_a?(error_class) }
+    end
+
+    # Whether #batch writes none of the log messages when it raises a message error (see
+    # #message_error?), for example because it formats every message before sending any.
+    #
+    # When true, a batch that fails with a message error is split up and each part retried,
+    # so that only the offending message is discarded. When false, retrying could write some
+    # messages twice, so the whole batch is discarded instead.
+    def batch_all_or_nothing?
+      false
+    end
+
     private
 
     # Initializer for Abstract Class SemanticLogger::Subscriber

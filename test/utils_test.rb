@@ -3,6 +3,9 @@ require "json"
 
 module SemanticLogger
   class UtilsTest < Minitest::Test
+    # A named Struct, so that the placeholder for one nested too deeply names its class.
+    DeepNode = Struct.new(:child)
+
     describe Utils do
       describe ".constantize_symbol" do
         it "resolves a built-in appender symbol" do
@@ -100,6 +103,13 @@ module SemanticLogger
           # Trailing semantic_logger entries are left in place.
           assert_includes result, "/gems/foo/lib/semantic_logger/log.rb:40"
         end
+
+        it "does not modify the supplied stack" do
+          stack = ["/gems/foo/lib/semantic_logger/logger.rb:10", "/app/models/user.rb:30"]
+          SemanticLogger::Utils.extract_backtrace(stack)
+
+          assert_equal ["/gems/foo/lib/semantic_logger/logger.rb:10", "/app/models/user.rb:30"], stack
+        end
       end
 
       describe ".strip_path?" do
@@ -137,10 +147,178 @@ module SemanticLogger
         end
 
         it "re-raises errors that cleansing cannot fix" do
-          # NaN is not representable in JSON and is unrelated to encoding, so the
-          # retry after cleansing must still raise rather than swallow it.
+          # An object whose own #to_json raises cannot be repaired, so the retry after
+          # cleansing must still raise rather than swallow it.
+          broken = Object.new
+          def broken.to_json(*) = raise(JSON::GeneratorError, "cannot serialize")
+
           assert_raises(JSON::GeneratorError) do
-            SemanticLogger::Utils.to_json({value: Float::NAN})
+            SemanticLogger::Utils.to_json({value: broken})
+          end
+        end
+
+        it "serializes Infinity and NaN as strings" do
+          result = SemanticLogger::Utils.to_json(
+            {amount: "1e400".to_f, loss: -Float::INFINITY, ratio: Float::NAN, ok: 1.5}
+          )
+
+          assert_equal({"amount" => "Infinity", "loss" => "-Infinity", "ratio" => "NaN", "ok" => 1.5},
+                       JSON.parse(result))
+        end
+
+        it "serializes a structure nested as deeply as JSON.parse accepts" do
+          # A request body that JSON.parse accepts, logged inside the payload as
+          # rails_semantic_logger logs request params, is nested past the generator limit.
+          body   = "#{'{"a":' * 99}1#{'}' * 99}"
+          result = SemanticLogger::Utils.to_json({payload: {params: JSON.parse(body)}})
+
+          assert_kind_of Hash, JSON.parse(result)
+        end
+
+        it "serializes a structure that references itself" do
+          looped = {name: "loop"}
+          looped[:self] = looped
+
+          assert_kind_of Hash, JSON.parse(SemanticLogger::Utils.to_json(looped))
+        end
+
+        it "replaces a structure nested too deeply with a placeholder naming its class" do
+          nested = {"leaf" => 1}
+          99.times { nested = {"a" => nested} }
+
+          parsed = JSON.parse(SemanticLogger::Utils.to_json({payload: [nested]}))
+          parsed = parsed["payload"].first
+          29.times { parsed = parsed["a"] }
+
+          assert_equal "#<Hash nested too deeply>", parsed["a"]
+        end
+
+        [2_000, 100_000].each do |depth|
+          it "serializes a structure #{depth} levels deep without exhausting the stack" do
+            # Built iteratively: a recursive walk of the full depth raises SystemStackError,
+            # an Exception that would stop an async appender's worker thread.
+            nested = 1
+            depth.times { nested = [nested] }
+
+            parsed = JSON.parse(SemanticLogger::Utils.to_json({payload: nested, amount: Float::NAN}))
+
+            assert_equal "NaN", parsed["amount"]
+            assert_includes JSON.generate(parsed["payload"], max_nesting: false), "#<Array nested too deeply>"
+          end
+        end
+
+        it "does not reveal the instance variables of an object nested too deeply" do
+          client = Class.new do
+            def initialize
+              @password = "secret"
+            end
+          end.new
+          nested = [client]
+          40.times { nested = [nested] }
+
+          result = SemanticLogger::Utils.to_json({payload: nested, amount: Float::NAN})
+
+          refute_includes result, "secret"
+        end
+
+        describe "Struct and Data" do
+          let(:client) do
+            Class.new do
+              def initialize
+                @password = "secret"
+              end
+
+              def to_s
+                "#<Client>"
+              end
+
+              # Like any object without a #to_s of its own, whose #inspect lists its instance variables.
+              def inspect
+                "#<Client @password=\"secret\">"
+              end
+            end.new
+          end
+
+          it "serializes a Struct as an object of its members" do
+            point = Struct.new(:x, :y).new(1, "two")
+
+            assert_equal '{"point":{"x":1,"y":"two"}}', SemanticLogger::Utils.to_json({point: point})
+          end
+
+          it "serializes a Data instance as an object of its members" do
+            point = Data.define(:x, :y).new(x: 1, y: "two")
+
+            assert_equal '{"point":{"x":1,"y":"two"}}', SemanticLogger::Utils.to_json({point: point})
+          end
+
+          it "serializes a Struct passed on its own" do
+            assert_equal '{"x":1}', SemanticLogger::Utils.to_json(Struct.new(:x).new(1))
+          end
+
+          it "writes a member with #to_s like any other value, not #inspect" do
+            account = Data.define(:id, :client).new(id: 7, client: client)
+            result  = SemanticLogger::Utils.to_json({account: account})
+
+            assert_equal '{"account":{"id":7,"client":"#<Client>"}}', result
+            refute_includes result, "secret"
+          end
+
+          it "repairs the members of a Struct" do
+            values = Struct.new(:ratio, :name).new(Float::NAN, "Bad: \xE2".b)
+
+            assert_equal '{"values":{"ratio":"NaN","name":"Bad: "}}', SemanticLogger::Utils.to_json({values: values})
+          end
+
+          it "serializes Structs nested within Structs, Hashes, and Arrays" do
+            node   = Struct.new(:name, :children)
+            tree   = node.new("root", [node.new("leaf", {size: 1})])
+            parsed = JSON.parse(SemanticLogger::Utils.to_json({tree: tree}))
+
+            assert_equal({"name" => "root", "children" => [{"name" => "leaf", "children" => {"size" => 1}}]},
+                         parsed["tree"])
+          end
+
+          it "leaves a String that looks like an inspected Struct unchanged" do
+            message = "#<struct Point x=1>"
+
+            assert_equal %({"message":"#{message}"}), SemanticLogger::Utils.to_json({message: message})
+          end
+
+          it "replaces a Struct nested too deeply with a placeholder naming its class" do
+            nested = DeepNode.new(1)
+            40.times { nested = DeepNode.new(nested) }
+
+            assert_includes SemanticLogger::Utils.to_json({payload: nested}),
+                            '"#<SemanticLogger::UtilsTest::DeepNode nested too deeply>"'
+          end
+
+          it "serializes Structs nested 100,000 levels deep on a thread without exhausting the stack" do
+            # The json gem writes a Struct through Struct#inspect, which has no depth limit
+            # and raises SystemStackError a few hundred levels deep on a thread's smaller
+            # stack. This is the only test that exhausts the stack: Ruby 3.2 can crash
+            # when a process does so a second time.
+            node   = Struct.new(:child)
+            nested = 1
+            100_000.times { nested = node.new(nested) }
+
+            result = Thread.new { SemanticLogger::Utils.to_json({payload: nested}) }.value
+
+            assert_includes result, "nested too deeply"
+          end
+
+          it "replaces a structure nested too deeply within a Struct with a placeholder" do
+            # A request body as deep as JSON.parse accepts, held by a Struct.
+            request = Struct.new(:body).new(JSON.parse("#{'{"a":' * 99}1#{'}' * 99}"))
+
+            assert_includes SemanticLogger::Utils.to_json({payload: request}), '"#<Hash nested too deeply>"'
+          end
+
+          it "ends the recursion when #to_h does not return a Hash" do
+            odd = Struct.new(:x) do
+              def to_h = self
+            end.new(1)
+
+            assert_includes SemanticLogger::Utils.to_json({odd: odd}), "nested too deeply"
           end
         end
       end

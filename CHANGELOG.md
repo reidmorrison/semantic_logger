@@ -5,6 +5,92 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+### Security
+
+- The HTTP appender, and the appenders built on it (`:elasticsearch_http`, `:splunk_http`,
+  `:loki`, and the `:signalfx` metrics appender), no longer write credentials to the internal
+  logger when the server rejects a request. The logged url keeps only the scheme, host, and
+  port, omitting the user, password, path, and query string (any of which can carry a token or
+  api key), and the response body is truncated to 512 bytes. The error raised for an invalid
+  url no longer includes the url.
+- The `:statsd` metrics appender sends a counter as a single packet (`metric:amount|c`),
+  instead of one increment packet per unit of `metric_amount`. A large amount, for example
+  one derived from user input, could otherwise flood the network and stall the logging
+  thread. Amounts that are not finite (`Infinity`, `NaN`) are ignored.
+- `escape_control_chars` now also escapes the message of each exception that caused the
+  logged exception (`Cause: ...` in the backtrace), and each backtrace line, in the
+  `:default`, `:color`, `:pattern` (`%{backtrace}`), and `:syslog` formatters. Previously a
+  newline in a cause, which often quotes untrusted input, could forge a log entry even with
+  escaping enabled. It also escapes the logger name, the thread name, and the payload, whose
+  `#inspect` output can carry control characters from untrusted data; the `:color` formatter
+  then renders the payload without Amazing Print colors, on one line. Escaping also drops
+  invalid UTF-8 bytes instead of raising, which lost the log entry.
+- The `:syslog` formatter, which escapes control characters by default, now keeps an entry
+  with an exception on a single line, escaping the newlines between the exception and its
+  backtrace, so that a receiver framing records by newline does not split it.
+- The `:one_line` formatter honours `escape_control_chars` for the message and the exception
+  message, which it previously ignored, letting carriage returns and ANSI escape sequences
+  through. It also strips carriage returns, not only newlines, by default, and does so in the
+  name, thread name, tags, named tags and payload as well, so an entry stays on one line.
+- The `:logfmt` formatter replaces spaces, control characters, `=`, and `"` in keys with `_`.
+  Keys come from tags, named tags, and the payload, and were written verbatim, so a tag such as
+  a User-Agent could inject fields (for example `level="fatal"`) or a whole new line. Keys that
+  only differ by type, such as `:level` and `"level"`, are now emitted once, keeping the earlier
+  field. Nested values (a Hash or an Array, such as the exception backtrace) are emitted as quoted
+  JSON instead of their `#inspect` text, which could print an object's instance variables.
+- The JSON based formatters no longer drop a log event whose payload JSON cannot represent.
+  `Infinity` and `NaN` (for example `params[:amount].to_f` with `"1e400"`) are serialized as
+  strings, and a structure nested too deeply, such as a request body as deep as `JSON.parse`
+  accepts logged inside the request params, is replaced below 32 levels with a placeholder
+  such as `"#<Hash nested too deeply>"`. Previously the whole event failed to serialize, so an
+  attacker could keep their own request out of JSON logs. A `Struct` or `Data` in the payload
+  is now serialized as an object of its members, as ActiveSupport does, instead of as its
+  `#inspect` string, which listed the instance variables of any object held in a member (such
+  as a client's password) and had no depth limit, so a deep enough structure failed with
+  `SystemStackError`.
+- An async or batching appender no longer lets one log message that cannot be written stall
+  the others. A message that fails because of its content (a JSON generator, encoding, or
+  `FloatDomainError`, as decided by the appender's `#message_error?`) is discarded, reported, and
+  counted as `failed` in `SemanticLogger.stats[:appenders]`, without the worker thread backing
+  off. In a batch sent as a single request (the HTTP, Loki, Splunk HTTP, SignalFx,
+  Elasticsearch, and OpenSearch appenders, or any whose `#batch_all_or_nothing?` is true), only
+  that message is discarded instead of the whole batch; in any other batch the whole batch is
+  discarded, as before, so no message is written twice.
+  Previously a few such requests per second could keep the worker asleep until its queue
+  filled and every `logger.*` call in the application blocked.
+- Once an async appender's worker thread gives up after `async_max_retries`, new log messages
+  are dropped when its queue is full, instead of blocking the calling thread forever, and a
+  flush (including the one at exit) waiting on it returns instead of waiting forever. A flush
+  or close taken off the queue with a batch that could not be written is now still run,
+  instead of being lost and leaving its caller waiting forever.
+- A hash passed as the payload of a log call can no longer make the call raise. Previously,
+  logging `params.to_unsafe_h` raised `ArgumentError` whenever the request carried a `payload`
+  parameter (since `HashWithIndifferentAccess#key?(:payload)` matched it), and a hash with an
+  invalid `log_exception`, `on_exception_level`, `min_duration`, or `backtrace` raised too. A key
+  is now only used as a log argument when its value is valid for it (for example a finite, real
+  `duration`); otherwise it stays in the payload, and a `nil` value is ignored. Unknown keys
+  alongside an explicit `payload:` are merged into it instead of raising, without overwriting its
+  values. The options of `measure_*` calls are checked the same way, an invalid value being
+  ignored. An `on_exception_level` given as a String or Integer is now stored as its Symbol, and a
+  supplied `backtrace` Array is no longer modified. See [Logging untrusted hashes](https://logger.reidmorrison.com/security.html#logging-untrusted-hashes).
+- The file appender's `permissions:` option is only applied to a regular file owned by the
+  process with a single hard link, and not through a symbolic link or to a file swapped in after
+  opening; otherwise it logs a warning once. Previously a link planted in a writable log
+  directory made the appender change the permissions of the file it pointed at, for example
+  loosening a `0600` private key to `0644`. Writing through a symbolic link still works.
+- `logger_measure_method` validates its arguments before writing them into the source of the
+  method it generates. `min_duration` and the method name were written verbatim, so a value
+  read from configuration, such as `min_duration: "(system('...'); 0)"`, would run as code on
+  every call. A method name that is not a valid Ruby method name, a `min_duration` that is not a
+  finite number, and an invalid `log_exception` or level now raise `ArgumentError`.
+
+### Deprecated
+
+- The `:splunk` appender is deprecated and will be removed in v6; use `:splunk_http` instead. Its
+  `splunk-sdk-ruby` gem, last released in 2015, does not verify the server's TLS certificate.
+  The appender has also not accepted connection settings since v4.1, so it could not be used.
+  See the [v5.2 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+
 ### Added
 
 - Exceptions are logged with the detail that Ruby's `Exception#detailed_message` adds to the
@@ -47,10 +133,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `:syslog_cee` raised `ArgumentError`.
 - `#inspect` on the HTTP appender and the appenders built on it (`:elasticsearch_http`,
   `:splunk_http`, `:loki`, and the `:signalfx` metrics appender) no longer shows credentials, for
-  example when `SemanticLogger.appenders` is printed in a console. Only the name, level, server,
-  port, path, compression and timeout settings are shown, so the password, request headers (such
-  as `Authorization` or a token header), the url, proxy url, query string and SSL options are
-  omitted, as is anything a subclass adds. The output has the same form on every Ruby version.
+  example when `SemanticLogger.appenders` is printed in a console. Only the object address and
+  the scheme, host, and port of the url are shown, so the password, request headers (such as
+  `Authorization` or a token header), the user, password, path, and query string of the url, the
+  proxy url, and SSL options are omitted, as is anything a subclass adds.
 - The Syslog appender works on Ruby 3.4 and later. Ruby 3.4 moved `syslog` from the default
   gems to the bundled gems, and the appender required it even when logging to a remote syslogd,
   which does not use it. Now only a local syslog daemon needs `gem "syslog"`, and a clear error

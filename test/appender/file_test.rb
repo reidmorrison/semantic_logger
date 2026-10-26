@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require "tmpdir"
 
 module Appender
   class FileTest < Minitest::Test
@@ -120,6 +121,99 @@ module Appender
           appender.log(log)
 
           refute_nil File.stat(file_name).mode
+        end
+
+        # Opens file_name with the permissions, capturing the appender's own log events.
+        def open_with_permissions(file_name, permissions)
+          appender             = SemanticLogger::Appender::File.new(file_name)
+          appender.logger      = SemanticLogger::Test::CaptureLogEvents.new
+          appender.permissions = permissions
+          appender.reopen
+          appender
+        end
+
+        def permission_warnings(appender)
+          appender.logger.events.select { |event| event.message.start_with?("Not applying permissions") }
+        end
+
+        it "does not change the permissions of a file reached through a symbolic link" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "id_rsa")
+            File.write(target, "secret\n")
+            File.chmod(0o600, target)
+            link = File.join(dir, "production.log")
+            File.symlink(target, link)
+
+            appender = open_with_permissions(link, 0o644)
+            appender.log(log)
+
+            assert_equal "100600", format("%o", File.stat(target).mode)
+            assert_equal ["Not applying permissions to #{link}: it is a symbolic link"],
+                         permission_warnings(appender).map(&:message)
+          end
+        end
+
+        it "does not change the permissions of a file reached through a hard link" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "master.key")
+            File.write(target, "secret\n")
+            File.chmod(0o600, target)
+            link = File.join(dir, "production.log")
+            File.link(target, link)
+
+            appender = open_with_permissions(link, 0o644)
+
+            assert_equal "100600", format("%o", File.stat(target).mode)
+            assert_equal ["Not applying permissions to #{link}: it has more than one hard link"],
+                         permission_warnings(appender).map(&:message)
+          end
+        end
+
+        it "does not change the permissions when the path no longer names the opened file" do
+          Dir.mktmpdir do |dir|
+            path        = File.join(dir, "production.log")
+            replacement = File.join(dir, "replacement.log")
+            File.write(path, "")
+            File.chmod(0o600, path)
+            File.write(replacement, "")
+            appender = SemanticLogger::Appender::File.new(path)
+            appender.logger      = SemanticLogger::Test::CaptureLogEvents.new
+            appender.permissions = 0o644
+
+            # Simulate the path being swapped for another file between opening and checking it.
+            File.stub(:lstat, File.lstat(replacement)) { appender.reopen }
+
+            assert_equal "100600", format("%o", File.stat(path).mode)
+            assert_equal ["Not applying permissions to #{path}: it changed after it was opened"],
+                         permission_warnings(appender).map(&:message)
+          end
+        end
+
+        it "warns only once when the log file is reopened" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "target.log")
+            link   = File.join(dir, "production.log")
+            File.write(target, "")
+            File.symlink(target, link)
+
+            appender = open_with_permissions(link, 0o644)
+            2.times { appender.reopen }
+
+            assert_equal 1, permission_warnings(appender).size
+          end
+        end
+
+        it "still writes through a symbolic link, for example to /dev/stdout" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "target.log")
+            link   = File.join(dir, "production.log")
+            File.write(target, "")
+            File.symlink(target, link)
+
+            SemanticLogger::Appender::File.new(link).log(log)
+
+            assert_includes File.read(target), log_message
+          end
         end
       end
 

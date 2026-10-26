@@ -50,6 +50,7 @@ module Appender
           assert stats[:capped]
           assert_equal 100, stats[:max_queue_size]
           assert_equal 0, stats[:dropped]
+          assert_equal 0, stats[:failed]
           assert_kind_of Integer, stats[:queue_size]
           assert_kind_of Integer, stats[:processed]
         ensure
@@ -85,6 +86,52 @@ module Appender
           assert_equal 2, proxy.stats[:dropped]
         ensure
           proxy&.queue&.clear
+        end
+
+        it "counts messages discarded because their content could not be written" do
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          proxy           = SemanticLogger::Appender::Async.new(appender: appender)
+          appender.stub(:log, ->(_) { raise JSON::GeneratorError, "cannot serialize" }) do
+            2.times { proxy.log(SemanticLogger::Log.new("Test", :info)) }
+            proxy.flush
+          end
+
+          assert_equal 2, proxy.failed_count
+          assert_equal 2, proxy.stats[:failed]
+        ensure
+          proxy&.close
+        end
+      end
+
+      describe "with a payload nested too deeply for JSON" do
+        it "writes the event and keeps the worker thread running" do
+          output = StringIO.new
+          proxy  = SemanticLogger::Appender::Async.new(
+            appender: SemanticLogger::Appender::IO.new(output, formatter: :json)
+          )
+          worker = proxy.thread
+
+          nested = 1
+          100_000.times { nested = [nested] }
+          deep         = SemanticLogger::Log.new("Test", :info)
+          deep.message = "deep"
+          deep.payload = {params: nested}
+          proxy.log(deep)
+
+          # Wait without #flush, which would block forever if the worker had stopped.
+          deadline = Time.now + 10
+          sleep(0.01) while output.string.empty? && worker.alive? && Time.now < deadline
+
+          assert_predicate worker, :alive?
+
+          proxy.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "after" })
+          proxy.flush
+
+          messages = output.string.lines.map { |line| JSON.parse(line)["message"] }
+
+          assert_equal %w[deep after], messages
+        ensure
+          proxy&.close
         end
       end
 

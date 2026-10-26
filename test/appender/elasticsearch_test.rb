@@ -136,6 +136,10 @@ module Appender
         end
 
         describe "async batch" do
+          it "sends every message of a batch in a single request" do
+            assert_predicate appender, :batch_all_or_nothing?
+          end
+
           it "logs message" do
             request = stub_client { appender.batch([log]) }
 

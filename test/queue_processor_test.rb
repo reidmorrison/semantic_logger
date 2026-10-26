@@ -29,6 +29,45 @@ class QueueProcessorTest < Minitest::Test
     end
   end
 
+  # Cannot serialize a message containing "poison", as a JSON formatter cannot serialize a value.
+  class PoisonedAppender < SimpleAppender
+    def log(log)
+      raise JSON::GeneratorError, "cannot serialize" if log.message.include?("poison")
+
+      super
+    end
+  end
+
+  # Batch support on top of PoisonedAppender: the whole batch fails if any message is poisoned.
+  class PoisonedBatchAppender < PoisonedAppender
+    attr_reader :batches
+
+    def batch(logs)
+      raise JSON::GeneratorError, "cannot serialize" if logs.any? { |log| log.message.include?("poison") }
+
+      (@batches ||= []) << logs
+    end
+
+    def batch_all_or_nothing?
+      true
+    end
+  end
+
+  # Batch support on top of PoisonedAppender that writes one message at a time, so that a
+  # poisoned message fails the batch after the messages before it were written.
+  class PoisonedItemBatchAppender < PoisonedAppender
+    def batch(logs)
+      logs.each { |log| self.log(log) }
+    end
+  end
+
+  # Batch support on top of SimpleAppender, for a destination that is unavailable.
+  class UnavailableBatchAppender < SimpleAppender
+    def batch(_logs)
+      raise "destination unavailable"
+    end
+  end
+
   # A non-StandardError exception, used to exercise the fatal (non-retryable) path in #process.
   class FatalError < Exception; end # rubocop:disable Lint/InheritException
 
@@ -60,6 +99,10 @@ class QueueProcessorTest < Minitest::Test
 
     def start(**args)
       SemanticLogger::QueueProcessor.start(appender: appender, **args).tap { |p| started << p }
+    end
+
+    def request(command)
+      SemanticLogger::QueueProcessor::Request.new(command)
     end
 
     def new_log(message: "hello world", level: :info, time: Time.now)
@@ -153,7 +196,7 @@ class QueueProcessorTest < Minitest::Test
         processor = build
         processor.queue << new_log(message: "one")
         processor.queue << new_log(message: "two", level: :warn)
-        processor.queue << {command: :close}
+        processor.queue << request(:close)
         processor.send(:process_messages)
 
         assert_equal 2, appender.events.count
@@ -165,7 +208,7 @@ class QueueProcessorTest < Minitest::Test
       it "tracks the processed count" do
         processor = build
         processor.queue << new_log
-        processor.queue << {command: :close}
+        processor.queue << request(:close)
         processor.send(:process_messages)
 
         assert_equal 1, processor.processed_count
@@ -235,7 +278,7 @@ class QueueProcessorTest < Minitest::Test
         processor = build(async_max_retries: 5)
         processor.instance_variable_set(:@retry_count, 3)
         processor.queue << new_log
-        processor.queue << {command: :close}
+        processor.queue << request(:close)
 
         processor.send(:process_messages)
 
@@ -262,25 +305,247 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    describe "a message that cannot be written" do
+      describe "streaming" do
+        let(:appender) do
+          a        = PoisonedAppender.new
+          a.logger = internal_logger
+          a
+        end
+
+        it "discards only that message, without backing off" do
+          processor = build
+          processor.queue << new_log(message: "first")
+          processor.queue << new_log(message: "poison")
+          processor.queue << new_log(message: "last")
+          processor.queue << request(:close)
+
+          processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+            processor.send(:process)
+          end
+
+          assert_equal %w[first last], appender.events.map(&:message)
+          assert_equal 2, processor.processed_count
+          assert_equal 1, processor.failed_count
+          assert_equal 0, processor.retry_count
+          assert(internal_logger.events.any? { |event| event.message.include?("Discarded") })
+        end
+
+        it "reports the first discarded message, then at most one count per interval" do
+          processor = build(dropped_message_report_seconds: 30)
+          5.times { |i| processor.queue << new_log(message: "poison #{i}") }
+          processor.queue << request(:close)
+          processor.send(:process)
+
+          reports = internal_logger.events.select { |event| event.message.include?("Discarded") }
+
+          assert_equal 5, processor.failed_count
+          assert_equal 1, reports.size
+          assert_kind_of JSON::GeneratorError, reports.first.exception
+        end
+
+        it "reports the count of messages discarded since the previous report" do
+          processor = build(dropped_message_report_seconds: 30)
+          3.times { |i| processor.queue << new_log(message: "poison #{i}") }
+          processor.queue << request(:close)
+          processor.send(:process)
+          processor.dropped_message_report_seconds = 0
+          processor.queue << new_log(message: "poison")
+          processor.queue << request(:close)
+          processor.send(:process)
+
+          reports = internal_logger.events.map(&:message).grep(/Discarded/)
+
+          assert_equal 2, reports.size
+          assert_match(/Discarded 3 log message\(s\) in the last \d+ seconds/, reports.last)
+        end
+
+        it "backs off, instead of discarding, when the destination's response cannot be parsed" do
+          processor = build(async_max_retries: 0)
+          appender.stub(:log, ->(_) { JSON.parse("<html>502 Bad Gateway</html>") }) do
+            processor.queue << new_log
+            processor.send(:process)
+          end
+
+          assert_equal 0, processor.failed_count
+          assert_predicate processor, :stopped?
+        end
+
+        it "asks the appender which errors are caused by the content of a message" do
+          processor = build
+          rejected  = Class.new(StandardError)
+          appender.define_singleton_method(:message_error?) { |exception| exception.is_a?(rejected) }
+          processor.queue << new_log(message: "rejected")
+          processor.queue << new_log(message: "last")
+          processor.queue << request(:close)
+
+          original = appender.method(:log)
+          appender.stub(:log, ->(log) { log.message == "rejected" ? raise(rejected) : original.call(log) }) do
+            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+              processor.send(:process)
+            end
+          end
+
+          assert_equal %w[last], appender.events.map(&:message)
+          assert_equal 1, processor.failed_count
+        end
+      end
+
+      describe "batching" do
+        let(:appender) do
+          a        = PoisonedBatchAppender.new
+          a.logger = internal_logger
+          a
+        end
+
+        it "discards only that message, instead of the whole batch" do
+          processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+          messages  = Array.new(9) { |i| "message #{i}" }.insert(4, "poison")
+          messages.each { |message| processor.log(new_log(message: message)) }
+          processor.flush
+
+          delivered = appender.batches.flatten.map(&:message)
+
+          assert_equal messages - ["poison"], delivered
+          assert_equal 9, processor.processed_count
+          assert_equal 1, processor.failed_count
+          assert_predicate processor, :active?
+        end
+
+        describe "when the appender may have written part of the batch" do
+          let(:appender) do
+            a        = PoisonedItemBatchAppender.new
+            a.logger = internal_logger
+            a
+          end
+
+          it "discards the batch instead of writing any message twice" do
+            processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+            messages  = Array.new(7) { |i| "message #{i}" } << "poison"
+            messages.each { |message| processor.log(new_log(message: message)) }
+            processor.flush
+
+            assert_equal messages - ["poison"], appender.events.map(&:message)
+            assert_equal 0, processor.processed_count
+            assert_equal 8, processor.failed_count
+            assert_predicate processor, :active?
+          end
+        end
+      end
+    end
+
+    describe "a command taken off the queue with a batch that cannot be written" do
+      let(:appender) do
+        a        = UnavailableBatchAppender.new
+        a.logger = internal_logger
+        a
+      end
+
+      def queue_batch_with(processor, command)
+        3.times { processor.queue << new_log }
+        processor.queue << command
+        processor.signal.set
+        command
+      end
+
+      it "flushes and replies before backing off" do
+        processor = build(batch: true, batch_seconds: 60, async_max_retries: 0)
+        flush     = queue_batch_with(processor, request(:flush))
+        processor.send(:process)
+
+        assert flush.wait(nil), "the flush was not answered"
+        assert_predicate appender, :flushed
+        assert_predicate processor, :stopped?
+      end
+
+      it "closes the appender and stops, instead of backing off" do
+        processor = build(batch: true, batch_seconds: 60, async_max_retries: 5)
+        close     = queue_batch_with(processor, request(:close))
+        processor.stub(:sleep, ->(_) { flunk "must not back off after closing" }) do
+          processor.send(:process)
+        end
+
+        assert close.wait(nil), "the close was not answered"
+        assert_predicate appender, :closed
+        refute_predicate processor, :stopped?
+        assert(internal_logger.events.any? { |event| event.message.include?("Closed without writing 3 log messages") })
+      end
+
+      it "returns from #flush" do
+        processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+        3.times { processor.log(new_log) }
+        flusher = Thread.new { processor.flush }
+
+        assert flusher.join(5), "flush blocked after the batch could not be written"
+        assert_predicate appender, :flushed
+      end
+    end
+
+    describe "a command whose appender method raises" do
+      it "is answered before the error propagates" do
+        processor = build(async_max_retries: 0)
+        flush     = request(:flush)
+        processor.queue << flush
+        appender.stub(:flush, -> { raise "destination unavailable" }) do
+          processor.send(:process)
+        end
+
+        refute flush.wait(nil)
+        assert_predicate processor, :stopped?
+      end
+    end
+
+    describe "after the worker thread stops" do
+      it "stops waiting on #flush when the worker thread ends without replying" do
+        processor = build
+        processor.instance_variable_set(:@thread, Thread.new { sleep 0.1 })
+        result  = nil
+        flusher = Thread.new { result = processor.flush }
+
+        assert flusher.join(5), "flush blocked after the worker thread ended"
+        refute result
+      end
+
+      it "drops messages instead of blocking the calling thread" do
+        processor = build(max_queue_size: 2, async_max_retries: 0)
+        processor.stub(:process_messages, -> { raise "destination unavailable" }) do
+          processor.send(:process)
+        end
+
+        assert_predicate processor, :stopped?
+
+        results = nil
+        thread  = Thread.new { results = Array.new(5) { processor.log(new_log) } }
+
+        assert thread.join(2), "logging blocked after the worker thread stopped"
+        assert_equal [true, true, false, false, false], results
+        assert_equal 3, processor.dropped_count
+      end
+
+      it "is not stopped while the worker thread is running" do
+        refute_predicate start, :stopped?
+      end
+    end
+
     describe "#process_command" do
       it "flushes the appender" do
         processor = build
 
-        assert processor.send(:process_message, command: :flush)
+        assert processor.send(:process_message, request(:flush))
         assert_predicate appender, :flushed
       end
 
       it "closes the appender and signals processing to stop" do
         processor = build
 
-        refute processor.send(:process_message, command: :close)
+        refute processor.send(:process_message, request(:close))
         assert_predicate appender, :closed
       end
 
       it "warns and continues on an unknown command" do
         processor = build
 
-        assert processor.send(:process_message, command: :nope)
+        assert processor.send(:process_message, request(:nope))
         assert(internal_logger.events.any? { |e| e.message.include?("Ignoring unknown command: nope") })
       end
     end

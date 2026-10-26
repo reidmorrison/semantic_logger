@@ -121,7 +121,7 @@ module SemanticLogger
 
       # Raw payload rendered as a string.
       def payload
-        log.payload_to_s
+        escape_control_characters(log.payload_to_s)
       end
 
       # Class of the logged exception, e.g. "RuntimeError".
@@ -136,7 +136,7 @@ module SemanticLogger
 
       # Backtrace of the logged exception.
       def backtrace
-        log.backtrace_to_s if log.exception
+        exception_backtrace if log.exception
       end
 
       # Human readable duration (without the Default formatter's surrounding parentheses).

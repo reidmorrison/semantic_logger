@@ -161,7 +161,10 @@ module SemanticLogger
       end
 
       def call(log, logger)
-        message = super
+        # The individual fields are already escaped. Also escape the newlines that the
+        # exception and its backtrace are laid out with, so that a record never spans more
+        # than one line, which a receiver framing records by newline would split.
+        message = escape_control_characters(super)
         create_syslog_packet(message)
       end
 

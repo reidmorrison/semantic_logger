@@ -290,6 +290,40 @@ module SemanticLogger
 
             assert_equal "first\\nsecond", escaped("%{exception_message}")
           end
+
+          it "escapes control characters in the message of each cause in the backtrace" do
+            begin
+              begin
+                raise ArgumentError, "inner\nforged"
+              rescue ArgumentError
+                raise "outer"
+              end
+            rescue StandardError => e
+              log.exception = e
+            end
+
+            assert_includes escaped("%{backtrace}"), "Cause: ArgumentError: inner\\nforged"
+          end
+
+          it "escapes control characters in each backtrace line when enabled" do
+            begin
+              raise "outer"
+            rescue StandardError => e
+              e.set_backtrace(["app.rb:1\nforged", "app.rb:2"])
+              log.exception = e
+            end
+
+            assert_equal "app.rb:1\\nforged\napp.rb:2", escaped("%{backtrace}")
+          end
+
+          it "escapes control characters in the logger name, thread name, and payload when enabled" do
+            log.name        = "Auth\nforged"
+            log.thread_name = "worker\e[2J"
+            log.payload     = Object.new.tap { |object| object.define_singleton_method(:inspect) { "bob\nforged" } }
+
+            assert_equal "Auth\\nforged worker\\e[2J bob\\nforged", escaped("%{name} %{thread_name} %{payload}")
+            assert_equal "Auth\nforged worker\e[2J bob\nforged", formatted("%{name} %{thread_name} %{payload}")
+          end
         end
 
         describe "combining directives" do

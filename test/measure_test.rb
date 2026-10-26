@@ -343,6 +343,52 @@ class MeasureTest < Minitest::Test
       end
     end
 
+    describe "untrusted options" do
+      it "ignores option values that are not valid for them" do
+        untrusted = {
+          min_duration:       "x",
+          metric_amount:      Complex(1, 1),
+          log_exception:      :off,
+          on_exception_level: 2**70,
+          silence:            "bogus",
+          exception:          "not an exception"
+        }
+
+        assert_equal "result", appender.measure_info("hello world", untrusted) { "result" }
+
+        assert log = appender.events.first
+        assert_equal "hello world", log.message
+        assert_equal :info, log.level
+        assert_nil log.metric_amount
+        assert_nil log.exception
+      end
+
+      it "uses the defaults for invalid values when the block raises" do
+        assert_raises RuntimeError do
+          appender.measure_info("hello world", log_exception: "full", on_exception_level: 99) { raise "Test" }
+        end
+
+        assert log = appender.events.first
+        assert_equal "hello world -- Exception: RuntimeError: Test", log.message
+        assert_equal :info, log.level
+      end
+
+      it "stores an on_exception_level supplied as a String as its Symbol" do
+        assert_raises RuntimeError do
+          appender.measure_info("hello world", on_exception_level: "error") { raise "Test" }
+        end
+
+        assert log = appender.events.first
+        assert_equal :error, log.level
+      end
+
+      it "requires a valid duration when no block is supplied" do
+        assert_raises RuntimeError do
+          appender.measure_info("hello world", duration: "12")
+        end
+      end
+    end
+
     # Make sure that measure still logs when a block uses return to return from
     # a function
     def function_with_return(appender)
