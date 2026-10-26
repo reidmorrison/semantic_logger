@@ -213,13 +213,9 @@ module Appender
           appender             = SemanticLogger::Appender::File.new(file_name)
           appender.logger      = SemanticLogger::Test::CaptureLogEvents.new
           appender.permissions = 0o600
-          # Every write reopens a refused file, so the file must still be someone else's then.
-          Process.stub(:euid, Process.euid + 1) do
-            appender.reopen
+          Process.stub(:euid, Process.euid + 1) { appender.reopen }
 
-            refute appender.log(log)
-          end
-
+          refute appender.log(log)
           assert_empty File.read(file_name)
           assert_equal ["Not writing to the log file #{file_name}: it is not owned by this process"], refusals(appender)
         end
@@ -262,7 +258,9 @@ module Appender
 
             File.unlink(link)
 
-            assert appender.log(log)
+            appender.stub(:monotonic_time, Process.clock_gettime(Process::CLOCK_MONOTONIC) + 60) do
+              assert appender.log(log)
+            end
             assert_includes File.read(link), log_message
             assert_equal "100600", format("%o", File.stat(link).mode)
             assert_empty File.read(target)
@@ -303,6 +301,61 @@ module Appender
                            refusals(appender).first)
               FileUtils.rm_rf(path)
             end
+          end
+        end
+
+        it "opens a refused file again only every few seconds, and at the next scheduled reopen" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "target.log")
+            link   = File.join(dir, "production.log")
+            File.write(target, "")
+            File.symlink(target, link)
+            appender = open_with_permissions(link, 0o600)
+            reopen   = appender.method(:reopen)
+            reopens  = 0
+            counting_reopen = lambda do
+              reopens += 1
+              reopen.call
+            end
+
+            appender.stub(:reopen, counting_reopen) do
+              3.times { refute appender.log(log) }
+
+              assert_equal 0, reopens
+
+              appender.stub(:monotonic_time, Process.clock_gettime(Process::CLOCK_MONOTONIC) + 60) do
+                refute appender.log(log)
+              end
+
+              assert_equal 1, reopens
+
+              appender.send(:reopen_at=, Time.now - 1)
+
+              refute appender.log(log)
+
+              assert_equal 2, reopens
+            end
+          end
+        end
+
+        it "reports a refusal again for another file refused for the same reason" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "target.log")
+            File.write(target, "")
+            links = %w[production-1.log production-2.log].map { |name| File.join(dir, name) }
+            links.each { |link| File.symlink(target, link) }
+            appender = open_with_permissions(links.first, 0o600)
+
+            refute appender.log(log)
+
+            # As when a file name with a date is reopened the next day.
+            appender.file_name = links.last
+            appender.reopen
+
+            refute appender.log(log)
+
+            assert_equal(links.map { |link| "Not writing to the log file #{link}: it is a symbolic link" },
+                         refusals(appender))
           end
         end
 

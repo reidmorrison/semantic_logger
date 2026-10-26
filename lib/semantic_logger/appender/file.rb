@@ -15,7 +15,9 @@ module SemanticLogger
       # blocking, so that a planted FIFO fails to open instead of waiting for a reader, and without
       # becoming the controlling terminal.
       SECURE_OPEN_FLAGS = ::File::NOFOLLOW | ::File::NONBLOCK | ::File::NOCTTY
-      private_constant :SECURE_OPEN_FLAGS
+      # Seconds to wait before opening a refused log file again.
+      REFUSED_RETRY_INTERVAL = 5
+      private_constant :SECURE_OPEN_FLAGS, :REFUSED_RETRY_INTERVAL
 
       # Create an appender to log to a named file.
       #
@@ -89,7 +91,7 @@ module SemanticLogger
       #     names directly rather than through a symbolic link. Nothing is written to any
       #     other file, or when the file cannot be opened: the appender raises IOError when it
       #     is created, and when the file is later reopened, it reports why and writes nothing
-      #     until the file is fixed.
+      #     until the file is fixed, trying again every few seconds.
       #     Default: nil (use the process umask, the standard Ruby behavior)
       #
       #   :retry_count [Integer]
@@ -255,8 +257,7 @@ module SemanticLogger
       # controls it read them, despite the permissions asked for. So with permissions, the appender
       # fails closed: it raises when it is created (see #initialize), and when the file is later
       # reopened, on a rotation, a fork, or a write retry, it stops writing and reports why (see
-      # #refused). It is reopened before every write while refused, so that logging resumes once
-      # the file is fixed.
+      # #refused) until the file is fixed (see #refused_retry_due?).
       def open_with_permissions(options)
         file   = ::File.open(current_file_name, options | SECURE_OPEN_FLAGS, permissions)
         reason = permissions_refusal(file)
@@ -275,16 +276,18 @@ module SemanticLogger
 
       # Records why the log file is refused, and returns nil.
       def refuse(reason, cause = nil)
-        @refusal       = reason
-        @refusal_cause = cause
+        @refusal          = reason
+        @refusal_cause    = cause
+        @refused_retry_at = monotonic_time + REFUSED_RETRY_INTERVAL
         nil
       end
 
-      # Reports why log messages are not being written to the log file, once for each reason, and
-      # returns false.
+      # Reports why log messages are not being written to the log file, once for each file and
+      # reason, and returns false.
       def refused
-        unless @reported_refusal == @refusal
-          @reported_refusal = @refusal
+        refusal = [current_file_name, @refusal]
+        unless @reported_refusal == refusal
+          @reported_refusal = refusal
           logger.error(refusal_message)
         end
         false
@@ -327,12 +330,24 @@ module SemanticLogger
         nil
       end
 
+      def monotonic_time
+        ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+      end
+
       def time_to_reopen?
-        return true unless @file
+        return refused_retry_due? unless @file
 
         (reopen_count.positive? && (log_count >= reopen_count)) ||
           (reopen_size.positive? && (log_size >= reopen_size)) ||
           (reopen_at && (Time.now > reopen_at))
+      end
+
+      # A refused log file is opened again every few seconds, and at the next scheduled reopen,
+      # rather than for every message.
+      def refused_retry_due?
+        return true unless @refused_retry_at
+
+        monotonic_time >= @refused_retry_at || (reopen_at && Time.now > reopen_at)
       end
 
       def apply_format_directives(file_name)

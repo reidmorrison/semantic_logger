@@ -183,8 +183,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   points at, and without blocking, so a FIFO fails to open instead of blocking the process.
   `add_appender` raises `IOError` giving the reason, also when the file cannot be opened, with the
   original error as its `cause`. When a later rotation or reopen finds such a file, for example one
-  planted under the name of tomorrow's log file, the appender reports the reason once, and drops
-  the log messages instead of raising until the file is fixed.
+  planted under the name of tomorrow's log file, the appender reports the reason once for each
+  file, drops the log messages instead of raising, and tries the file again every few seconds.
   Without `permissions:`, writing through a symbolic link still works.
 - `logger_measure_method` validates its arguments before writing them into the source of the
   method it generates. `min_duration` and the method name were written verbatim, so a value
