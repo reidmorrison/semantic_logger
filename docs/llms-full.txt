@@ -4672,7 +4672,8 @@ server, and so does not need the `syslog` gem, can use the same constants from
 * `#inspect` on every appender shows only its class, object address, and what it says is safe to
   show, such as `url="https://es.example.com:9200"`, `queue_name="logs"`, or `group="/my/app"`,
   instead of its instance variables. A custom appender can show more by overriding
-  `#inspect_details`.
+  `#inspect_details`. An appender added with `async: true` or `batch: true` shows as
+  `#<SemanticLogger::Appender::Async:0x... batch=true appender=#<...>>`.
 * `:cloudwatch_logs` sends the buffered messages in as many requests as the PutLogEvents limits
   need, oldest first, cuts short a message larger than 1 MB, and reports to the internal logger a
   request that fails, and the messages that AWS rejects as too new, too old, or expired. It formats each message when it is logged, writes invalid UTF-8 as valid

@@ -21,7 +21,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   instead of every instance variable. The `:elasticsearch` and `:opensearch` appenders showed the
   password in their url, `:rabbitmq` its password, `:kafka` its TLS private key and SASL
   passwords, `:cloudwatch_logs` its AWS credentials, and `:tcp` and `:syslog` their TLS options,
-  for example whenever `SemanticLogger.appenders` was printed in a console or an error report.
+  for example whenever `SemanticLogger.appenders` was printed in a console or an error report. The
+  proxy that `async: true` or `batch: true` wraps an appender in does the same: it shows whether it
+  batches and the appender's own `#inspect`, instead of every instance variable of the proxy and of
+  its queue processor.
 - The `:sentry_ruby` appender no longer deletes the keys it reads from the log entry's payload and
   named tags, which it shares with every other appender and which can be the application's own
   Hash: the user fields and `fingerprint` it took for Sentry were missing from every appender

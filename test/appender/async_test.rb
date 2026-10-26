@@ -26,6 +26,22 @@ module Appender
         end
       end
 
+      describe "#inspect" do
+        it "shows the wrapped appender's own #inspect, but not the instance variables" do
+          batch_appender = InMemoryBatchAppender.new
+          batch_appender.instance_variable_set(:@password, "s3cr3t")
+          batch_appender.define_singleton_method(:inspect_details) { %(queue_name="logs") }
+          proxy = SemanticLogger::Appender::Async.new(appender: batch_appender, batch: true, batch_seconds: 60)
+          proxy.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "card 4111" })
+          expected = /\A#<SemanticLogger::Appender::Async:\S+ batch=true appender=#<InMemoryBatchAppender:\S+ (.*)>>\z/
+
+          assert_match expected, proxy.inspect
+          assert_equal %(queue_name="logs"), proxy.inspect[expected, 1]
+        ensure
+          proxy&.close
+        end
+      end
+
       describe "with uncapped queue" do
         let :added_appender do
           SemanticLogger.add_appender(appender: appender, async: true, max_queue_size: -1)
