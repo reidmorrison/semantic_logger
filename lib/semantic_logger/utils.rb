@@ -1,4 +1,5 @@
 require "json"
+require "uri"
 
 module SemanticLogger
   # Internal-use only utility functions for Semantic Logger.
@@ -23,6 +24,29 @@ module SemanticLogger
       end
 
       constant
+    end
+
+    # Returns [URI] the parsed url, supplied as the named option.
+    #
+    # Raises URI::InvalidURIError without the url in its message, or as its cause, since a url can
+    # hold a user and password, or a token in its path or query string.
+    def self.parse_url(url, option: ":url", hint: nil)
+      URI.parse(url.to_s)
+    rescue URI::InvalidURIError
+      raise(URI::InvalidURIError, ["Invalid #{option}, it is not a valid URI.", hint].compact.join(" "), cause: nil)
+    end
+
+    # Returns [String] the scheme, host, and any non-default port of the url, which is safe to log.
+    #
+    # Everything else is left out, since log services carry credentials in each part of a url: the
+    # user and password, the query string (for example a Datadog api key), and the path (for example
+    # the token at the end of a Sumo Logic HTTP source url). An invalid url is not shown at all.
+    def self.redacted_url(url)
+      uri  = URI.parse(url.to_s)
+      port = uri.port == uri.default_port ? nil : uri.port
+      uri.class.build(scheme: uri.scheme, host: uri.host, port: port).to_s
+    rescue URI::Error
+      "(invalid url)"
     end
 
     # Borrow from Rails, when not running Rails

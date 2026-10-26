@@ -135,7 +135,7 @@ module SemanticLogger
         @max_size           = max_size
         @level_map          = SemanticLogger::Formatters::Syslog::LevelMap.build(level_map)
         @url                = url
-        uri                 = URI(@url)
+        uri                 = Utils.parse_url(@url)
         @server             = uri.host || "localhost"
         @protocol           = (uri.scheme || :syslog).to_sym
         @port               = uri.port || 514
@@ -243,6 +243,11 @@ module SemanticLogger
       # and maximum packet size.
       PACKET_FORMATTERS = %i[syslog syslog_cee].freeze
       private_constant :PACKET_FORMATTERS
+
+      # The url without any credentials. See Subscriber#inspect.
+      def inspect_details
+        "url=#{Utils.redacted_url(url).inspect}"
+      end
 
       private
 

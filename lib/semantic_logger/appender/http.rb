@@ -170,7 +170,7 @@ module SemanticLogger
           @port ||= HTTP.http_default_port
         end
 
-        @proxy_uri = URI.parse(@proxy_url) if @proxy_url && @proxy_url != :ENV
+        @proxy_uri = Utils.parse_url(@proxy_url, option: ":proxy_url") if @proxy_url && @proxy_url != :ENV
 
         @http = nil
 
@@ -235,37 +235,22 @@ module SemanticLogger
       end
 
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
-      #
-      # Everything else is left out, since log servers carry credentials in each part of it:
-      # the user and password, the query string (for example a Datadog api key), and the path
-      # (for example the token at the end of a Sumo Logic HTTP source url).
+      # See Utils.redacted_url.
       def redacted_url
-        @redacted_url ||=
-          begin
-            uri  = URI.parse(url)
-            port = uri.port == uri.default_port ? nil : uri.port
-            uri.class.build(scheme: uri.scheme, host: uri.host, port: port).to_s
-          end
+        @redacted_url ||= Utils.redacted_url(url)
       end
 
-      # Only show the redacted url, since the instance variables hold the password, the
-      # authorization headers, and any credential a subclass adds. Keeps the object address, like
-      # Kernel#inspect, so that two appenders can be told apart.
-      def inspect
-        address = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
-        "#{address} url=#{redacted_url.inspect}>"
+      # Only the redacted url, since the instance variables hold the password, the authorization
+      # headers, and any credential a subclass adds. See Subscriber#inspect.
+      def inspect_details
+        "url=#{redacted_url.inspect}"
       end
 
       private
 
-      # Returns [URI] the parsed url.
-      #
-      # Raises URI::InvalidURIError without the url in its message, or as its cause, since the
-      # url can hold a user and password.
+      # Returns [URI] the parsed url, without the url in the error raised for an invalid one.
       def parse_url(url)
-        URI.parse(url)
-      rescue URI::InvalidURIError
-        raise(URI::InvalidURIError, "Invalid :url, it is not a valid URI. #{URL_FORMAT_HINT}", cause: nil)
+        Utils.parse_url(url, hint: URL_FORMAT_HINT)
       end
 
       # Use JSON Formatter by default

@@ -222,6 +222,11 @@ module SemanticLogger
         @tcp_client&.close
       end
 
+      # Only the servers: the other options can hold TLS keys and passwords. See Subscriber#inspect.
+      def inspect_details
+        "server=#{(@tcp_client_args[:server] || @tcp_client_args[:servers]).inspect}"
+      end
+
       private
 
       # Returns [SemanticLogger::Formatters::Default] formatter default for this Appender

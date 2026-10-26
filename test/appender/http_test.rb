@@ -305,6 +305,17 @@ module Appender
           assert_nil error.cause
         end
 
+        it "does not include credentials in the error for a proxy_url that cannot be parsed" do
+          proxy_url = "http://proxyuser:pr0xy pw@proxy:3128"
+          error     = assert_raises(URI::InvalidURIError) do
+            SemanticLogger::Appender::Http.new(url: "http://localhost:8088", proxy_url: proxy_url)
+          end
+
+          assert_includes error.message, "Invalid :proxy_url"
+          refute_includes error.message, "pr0xy"
+          assert_nil error.cause
+        end
+
         it "does not log credentials when the server rejects a request" do
           capture         = SemanticLogger::Test::CaptureLogEvents.new
           appender.logger = capture

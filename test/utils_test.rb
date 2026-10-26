@@ -36,6 +36,33 @@ module SemanticLogger
         end
       end
 
+      describe ".parse_url" do
+        it "returns the parsed url" do
+          assert_equal "host", SemanticLogger::Utils.parse_url("https://user:pw@host:8443/path").host
+        end
+
+        it "raises without the url, which can hold a password, in the message or as the cause" do
+          error = assert_raises(URI::InvalidURIError) do
+            SemanticLogger::Utils.parse_url("https://user:pa ss@host", option: ":proxy_url", hint: "Hint.")
+          end
+
+          assert_equal "Invalid :proxy_url, it is not a valid URI. Hint.", error.message
+          assert_nil error.cause
+        end
+      end
+
+      describe ".redacted_url" do
+        it "keeps only the scheme, host, and a port that is not the default" do
+          assert_equal "https://host:8443", SemanticLogger::Utils.redacted_url("https://user:pw@host:8443/t0ken?api_key=k")
+          assert_equal "https://host", SemanticLogger::Utils.redacted_url("https://host:443/path")
+          assert_equal "udp://host:514", SemanticLogger::Utils.redacted_url("udp://host:514")
+        end
+
+        it "shows nothing of an invalid url" do
+          assert_equal "(invalid url)", SemanticLogger::Utils.redacted_url("https://user:pa ss@host")
+        end
+      end
+
       describe ".camelize" do
         it "camelizes a simple term" do
           assert_equal "FooBar", SemanticLogger::Utils.camelize("foo_bar")

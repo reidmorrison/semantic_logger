@@ -140,7 +140,10 @@ self-signed certificates.
 
 Credentials can be supplied in the url of the HTTP based appenders, for example
 `https://user:password@host`, or as a query parameter. They are removed from the url
-written to the internal logger when the server rejects a request, and from `#inspect`.
+written to the internal logger when the server rejects a request, and from the error raised
+for an invalid url. `#inspect` on any appender, for example when `SemanticLogger.appenders` is
+printed in a console, shows only what that appender says is safe, such as its url without
+credentials, and none of its passwords, tokens, keys, or client options.
 
 ### Log file permissions
 

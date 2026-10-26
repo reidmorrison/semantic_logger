@@ -100,7 +100,7 @@ module SemanticLogger
 
       # Re-open after process fork
       def reopen
-        uri       = URI.parse(@url)
+        uri       = Utils.parse_url(@url)
         @server   = uri.host
         @port     = uri.port
         @protocol = uri.scheme.to_sym
@@ -145,6 +145,11 @@ module SemanticLogger
       # network errors instead.
       def message_error?(exception)
         exception.is_a?(ArgumentError) || super
+      end
+
+      # The url without any credentials. See Subscriber#inspect.
+      def inspect_details
+        "url=#{Utils.redacted_url(url).inspect}"
       end
 
       private

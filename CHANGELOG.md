@@ -12,7 +12,28 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   logger when the server rejects a request. The logged url keeps only the scheme, host, and
   port, omitting the user, password, path, and query string (any of which can carry a token or
   api key), and the response body is truncated to 512 bytes. The error raised for an invalid
-  url no longer includes the url.
+  url no longer includes the url, nor does the one for an invalid `proxy_url:`, or an invalid url
+  given to the `:loki`, `:elasticsearch`, `:opensearch`, `:syslog`, or `:graylog` appenders or the
+  `:statsd` metrics appender, whose client gems put it in their errors.
+- `#inspect` on every appender shows only the class, the object address, and what that appender
+  says is safe to show, such as its url without credentials, its log group, or its queue name,
+  instead of every instance variable. The `:elasticsearch` and `:opensearch` appenders showed the
+  password in their url, `:rabbitmq` its password, `:kafka` its TLS private key and SASL
+  passwords, `:cloudwatch_logs` its AWS credentials, and `:tcp` and `:syslog` their TLS options,
+  for example whenever `SemanticLogger.appenders` was printed in a console or an error report.
+- The `:sentry_ruby` appender no longer deletes the keys it reads from the log entry's payload and
+  named tags, which it shares with every other appender and which can be the application's own
+  Hash: the user fields and `fingerprint` it took for Sentry were missing from every appender
+  after it, and from the application's Hash. A `fingerprint` that is not an Array of Strings, a
+  user field of another type, or a payload that is not a Hash is sent to Sentry as data instead of
+  raising, which lost the error report. Taking the user and fingerprint from the payload, which can
+  hold untrusted data, is deprecated; set them with named tags instead.
+- The `:cloudwatch_logs` appender splits the buffered log messages into batches that PutLogEvents
+  accepts (at most 1 MB and 10,000 events, in chronological order), cuts short a message too large
+  for a batch of its own, and reports a request that fails to the internal logger. It sent up to
+  4,000 messages in one request, which AWS rejects once over 1 MB, for example when one logged
+  value is large, and the error was swallowed by the flush timer, so every message in the batch was
+  lost without a trace.
 - The `:statsd` metrics appender sends a counter as a single packet (`metric:amount|c`),
   instead of one increment packet per unit of `metric_amount`. A large amount, for example
   one derived from user input, could otherwise flood the network and stall the logging
@@ -158,6 +179,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `splunk-sdk-ruby` gem, last released in 2015, does not verify the server's TLS certificate.
   The appender has also not accepted connection settings since v4.1, so it could not be used.
   See the [v5.2 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The `:sentry_ruby` appender taking the Sentry user (`user_id`, `username`, `user_email`,
+  `ip_address`, `user`) and `fingerprint` from the log payload is deprecated and will be removed in
+  v6, since the payload can hold untrusted data. Set them with named tags instead, which can now
+  also hold the `fingerprint`, for example `SemanticLogger.tagged(user_id: user.id)`. A deprecation
+  warning is emitted the first time it happens.
 
 ### Added
 
@@ -205,7 +231,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   example when `SemanticLogger.appenders` is printed in a console. Only the object address and
   the scheme, host, and port of the url are shown, so the password, request headers (such as
   `Authorization` or a token header), the user, password, path, and query string of the url, the
-  proxy url, and SSL options are omitted, as is anything a subclass adds.
+  proxy url, and SSL options are omitted, as is anything a subclass adds. Every other appender
+  now does the same, see Security above.
 - The Syslog appender works on Ruby 3.4 and later. Ruby 3.4 moved `syslog` from the default
   gems to the bundled gems, and the appender required it even when logging to a remote syslogd,
   which does not use it. Now only a local syslog daemon needs `gem "syslog"`, and a clear error

@@ -21,6 +21,13 @@ require "concurrent"
 module SemanticLogger
   module Appender
     class CloudwatchLogs < SemanticLogger::Subscriber
+      # PutLogEvents limits, from the AWS documentation: a batch holds at most MAX_BATCH_EVENTS
+      # events, and at most MAX_BATCH_BYTES counting each event's message in UTF-8 plus
+      # EVENT_OVERHEAD_BYTES, in chronological order.
+      MAX_BATCH_BYTES      = 1_048_576
+      MAX_BATCH_EVENTS     = 10_000
+      EVENT_OVERHEAD_BYTES = 26
+
       attr_reader :client_kwargs, :group, :create_group, :create_stream,
                   :force_flush_interval_seconds, :max_buffered_events,
                   :task, :client, :buffered_logs
@@ -110,38 +117,82 @@ module SemanticLogger
         SemanticLogger::Formatters::Json.new
       end
 
+      # Only the log group and stream: the client options can hold AWS credentials. See
+      # Subscriber#inspect.
+      def inspect_details
+        "group=#{group.inspect} stream=#{stream.inspect}"
+      end
+
       private
 
+      # Sends the buffered log messages, in as many requests as the PutLogEvents limits need.
+      #
+      # A request that fails is reported to the internal logger rather than raised: this usually
+      # runs on the timer thread, which discards errors, and the log messages were already taken off
+      # the buffer, so AWS rejecting a batch, for example one over the size limit, lost every
+      # message in it without a trace.
       def put_log_events
         logs = buffered_logs.shift(max_buffered_events)
-
         return if logs.none?
 
-        begin
-          client.put_log_events({
-                                  log_group_name:  group,
-                                  log_stream_name: stream,
-                                  log_events:      logs.map do |log|
-                                                     {
-                                                       timestamp: (log.time.to_f * 1000).floor,
-                                                       message:   format_log(log)
-                                                     }
-                                                   end
-                                })
-        rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException => e
-          if e.message.include?("log group does not exist.") && create_group
-            client.create_log_group({
-                                      log_group_name: group
-                                    })
-            retry
-          elsif e.message.include?("log stream does not exist.") && create_stream
-            client.create_log_stream({
-                                       log_group_name:  group,
-                                       log_stream_name: stream
-                                     })
-            retry
+        log_event_batches(logs).each { |events| put_batch(events) }
+      end
+
+      # Returns [Array<Array<Hash>>] the log events for the log messages, oldest first, split into
+      # batches that PutLogEvents accepts.
+      def log_event_batches(logs)
+        batches = [[]]
+        bytes   = 0
+        log_events(logs).each do |event|
+          size = event[:message].bytesize + EVENT_OVERHEAD_BYTES
+          if batches.last.size >= MAX_BATCH_EVENTS || bytes + size > MAX_BATCH_BYTES
+            batches << []
+            bytes = 0
           end
+          batches.last << event
+          bytes += size
         end
+        batches.reject(&:empty?)
+      end
+
+      # Returns [Array<Hash>] the log events for the log messages, in chronological order, as
+      # PutLogEvents requires. A message too large for a batch on its own is cut short, and one that
+      # cannot be formatted is reported and left out, rather than losing the others with it.
+      def log_events(logs)
+        events = logs.filter_map do |log|
+          {timestamp: (log.time.to_f * 1000).floor, message: event_message(format_log(log))}
+        rescue FormatError => e
+          logger.error("Discarded a log message from #{log.name} that could not be formatted", e)
+          nil
+        end
+        # Keeps the order of log messages with the same timestamp.
+        events.each_with_index.sort_by { |event, index| [event[:timestamp], index] }.map(&:first)
+      end
+
+      # Returns [String] the message, cut short to the most that a batch can hold.
+      def event_message(message)
+        limit = MAX_BATCH_BYTES - EVENT_OVERHEAD_BYTES
+        message.bytesize <= limit ? message : message.byteslice(0, limit).scrub("")
+      end
+
+      def put_batch(events)
+        client.put_log_events(log_group_name: group, log_stream_name: stream, log_events: events)
+      rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException => e
+        if e.message.include?("log group does not exist.") && create_group
+          client.create_log_group(log_group_name: group)
+          retry
+        elsif e.message.include?("log stream does not exist.") && create_stream
+          client.create_log_stream(log_group_name: group, log_stream_name: stream)
+          retry
+        else
+          report_failed_batch(events, e)
+        end
+      rescue StandardError => e
+        report_failed_batch(events, e)
+      end
+
+      def report_failed_batch(events, exception)
+        logger.error("Could not send #{events.size} log message(s) to CloudWatch Logs", exception)
       end
 
       def stream

@@ -8,6 +8,24 @@ module Appender
         ::OpenSearch::Client
       end
 
+      it "does not show the password in #inspect" do
+        appender = client_class.stub_any_instance(:bulk, true) do
+          SemanticLogger::Appender::Opensearch.new(url: "https://admin:os-s3cr3t@os.example.com:9200")
+        end
+
+        refute_includes appender.inspect, "os-s3cr3t"
+        assert_includes appender.inspect, %( url="https://os.example.com:9200")
+      end
+
+      it "does not include credentials in the error for a url that cannot be parsed" do
+        error = assert_raises(URI::InvalidURIError) do
+          SemanticLogger::Appender::Opensearch.new(url: "https://admin:os s3cr3t@os.example.com:9200")
+        end
+
+        refute_includes error.message, "s3cr3t"
+        assert_nil error.cause
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["OPENSEARCH"]

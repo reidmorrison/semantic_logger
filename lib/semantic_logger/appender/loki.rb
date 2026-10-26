@@ -48,7 +48,7 @@ module SemanticLogger
       # Appends the ingestion path to the supplied url, keeping any query string at the
       # end of the url where Appender::Http can parse it out.
       def self.ingestion_url(url, path)
-        uri      = URI.parse(url.to_s)
+        uri      = Utils.parse_url(url)
         uri.path = "#{uri.path.chomp('/')}/#{path.delete_prefix('/')}"
         uri.to_s
       end

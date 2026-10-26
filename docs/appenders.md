@@ -872,19 +872,24 @@ Some logging context is forwarded to Sentry:
 
 * From named tags, `transaction_name`. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/transaction-name/>.
-* From named tags or payload, `user` is built from the `user_id`, `username`, `user_email`, and
-  `ip_address` keys, plus any `user` key that is itself a hash. See
+* From named tags, `user` is built from the `user_id`, `username`, `user_email`, and
+  `ip_address` keys (a String, Symbol, or Integer), plus any `user` key that is itself a hash. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/identify-user/>.
-* From the payload, `fingerprint` configures grouping granularity. See
+* From named tags, `fingerprint` (an Array of Strings) configures grouping granularity. See
   <https://docs.sentry.io/platforms/ruby/usage/sdk-fingerprinting/>.
 * Named tags are sent as Sentry tags. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/tags/>.
 * Unnamed tags are sent as the `:tag` tag, separated by commas.
-* Everything else from the payload and context is added to `extras`.
+* Everything else from the payload and context is added to `extras`, including a value of the
+  wrong type for one of the keys above.
+
+> **Deprecated:** the `user` and `fingerprint` keys are also still taken from the payload, but that
+> is deprecated and will be removed in v6, since the payload often holds untrusted data, such as a
+> request body, that could set the user an error is reported for. Set them with named tags.
 
 ~~~ruby
-SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
-  logger.error("some message", username: "joe", fingerprint: ["bar"])
+SemanticLogger.tagged(transaction_name: "foo", user_id: 42, username: "joe", fingerprint: ["bar"], baz: "quz") do
+  logger.error("some message")
 end
 ~~~
 

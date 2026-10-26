@@ -79,6 +79,26 @@ module SemanticLogger
       !console_stream.nil?
     end
 
+    # Returns [String] the class and object address of this appender, like Kernel#inspect, followed
+    # by #inspect_details, but none of its instance variables.
+    #
+    # Appenders hold credentials in their instance variables: passwords and urls holding them, api
+    # keys and tokens, request headers, private keys, and the options passed to a client gem.
+    # Printing SemanticLogger.appenders, for example in a console or an error report, must not
+    # show them.
+    def inspect
+      address = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
+      details = inspect_details
+      details ? "#{address} #{details}>" : "#{address}>"
+    end
+
+    # Returns [String] what #inspect shows about this appender, such as its url without its
+    # credentials, or nil for nothing. Only an appender knows which of its settings are safe to
+    # show, so each one overrides this.
+    def inspect_details
+      nil
+    end
+
     # Whether an appender that implements #batch should be wrapped in a batch
     # proxy automatically. Appenders that support batching but should only batch
     # when explicitly requested (via `batch: true`) override this to return false.

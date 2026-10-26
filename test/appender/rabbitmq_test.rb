@@ -8,6 +8,17 @@ module Appender
         @appender&.close
       end
 
+      it "does not show the password in #inspect" do
+        Bunny.stub(:new, ->(*args) { FakeBunny.new(args) }) do
+          @appender = SemanticLogger::Appender::Rabbitmq.new(
+            queue_name: "test_queue", rabbitmq_host: "localhost", username: "the-username", password: "the-password"
+          )
+        end
+
+        refute_includes @appender.inspect, "the-password"
+        assert_includes @appender.inspect, %( queue_name="test_queue">)
+      end
+
       it "sends log messages in JSON format" do
         bunny = nil
         Bunny.stub(:new, ->(*args) { bunny = FakeBunny.new(args) }) do

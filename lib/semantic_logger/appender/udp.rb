@@ -99,6 +99,11 @@ module SemanticLogger
         exception.is_a?(Errno::EMSGSIZE) || super
       end
 
+      # See Subscriber#inspect.
+      def inspect_details
+        "server=#{server.inspect}"
+      end
+
       private
 
       # Returns [SemanticLogger::Formatters::Default] formatter default for this Appender

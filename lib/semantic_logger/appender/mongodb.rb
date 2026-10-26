@@ -182,6 +182,11 @@ module SemanticLogger
         super || DOCUMENT_ERRORS.any? { |error| exception.is_a?(error) }
       end
 
+      # Only the collection name: the uri can hold a user and password. See Subscriber#inspect.
+      def inspect_details
+        "collection=#{@collection_name.inspect}"
+      end
+
       private
 
       def default_formatter

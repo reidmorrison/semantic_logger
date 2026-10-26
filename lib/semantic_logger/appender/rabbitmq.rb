@@ -122,6 +122,11 @@ module SemanticLogger
       def queue
         @queue ||= @channel.queue(@queue_name)
       end
+
+      # Only the queue name: the connection options hold the password. See Subscriber#inspect.
+      def inspect_details
+        "queue_name=#{@queue_name.inspect}"
+      end
     end
   end
 end

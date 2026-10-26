@@ -25,6 +25,24 @@ module Appender
         Warning[:deprecated] = original
       end
 
+      it "does not show the password in #inspect" do
+        appender = client_class.stub_any_instance(:bulk, true) do
+          SemanticLogger::Appender::Elasticsearch.new(url: "https://elastic:es-s3cr3t@es.example.com:9200")
+        end
+
+        refute_includes appender.inspect, "es-s3cr3t"
+        assert_includes appender.inspect, %( url="https://es.example.com:9200" index="semantic_logger">)
+      end
+
+      it "does not include credentials in the error for a url that cannot be parsed" do
+        error = assert_raises(URI::InvalidURIError) do
+          SemanticLogger::Appender::Elasticsearch.new(url: "https://elastic:es s3cr3t@es.example.com:9200")
+        end
+
+        refute_includes error.message, "s3cr3t"
+        assert_nil error.cause
+      end
+
       it "warns that the type: parameter is deprecated" do
         stderr =
           client_class.stub_any_instance(:bulk, true) do

@@ -231,6 +231,11 @@ module SemanticLogger
         @file&.flush
       end
 
+      # See Subscriber#inspect.
+      def inspect_details
+        "file_name=#{file_name.inspect}"
+      end
+
       private
 
       attr_writer :log_count, :log_size, :current_file_name, :reopen_at

@@ -7,6 +7,16 @@ module Appender
       let(:http_success) { Net::HTTPSuccess.new("1.1", "200", "OK") }
       let(:log_message) { "AppenderLokiTest log message" }
 
+      it "does not include credentials in the error for a url that cannot be parsed" do
+        error = assert_raises(URI::InvalidURIError) do
+          SemanticLogger::Appender::Loki.new(url: "https://123456:glc_t0ken pw@logs.example.com")
+        end
+
+        assert_includes error.message, "Invalid :url"
+        refute_includes error.message, "glc_t0ken"
+        assert_nil error.cause
+      end
+
       let(:appender) do
         Net::HTTP.stub_any_instance(:start, true) do
           SemanticLogger::Appender::Loki.new(url: "http://localhost:3100")

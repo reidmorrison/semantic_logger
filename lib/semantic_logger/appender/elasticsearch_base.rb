@@ -156,6 +156,9 @@ module SemanticLogger
 
       def reopen
         @client = client_class.new(@client_args)
+      rescue URI::InvalidURIError
+        # The client gem puts the url, which can hold a user and password, in its error.
+        raise(URI::InvalidURIError, "Invalid :url or :hosts, it is not a valid URI.", cause: nil)
       end
 
       # Log to the index for today
@@ -177,6 +180,12 @@ module SemanticLogger
       # The whole batch is formatted into a single bulk request before anything is sent.
       def batch_all_or_nothing?
         true
+      end
+
+      # The url without its credentials, and the index. See Subscriber#inspect.
+      def inspect_details
+        url_detail = @client_args.key?(:url) ? "url=#{Utils.redacted_url(url).inspect} " : ""
+        "#{url_detail}index=#{index.inspect}"
       end
 
       private

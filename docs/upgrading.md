@@ -18,6 +18,25 @@ v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` ap
 several security issues. None of the security fixes change the public API, but a few change the
 output, which matters if you parse the logs or alert on them.
 
+#### Set the Sentry user and fingerprint with named tags
+
+The `:sentry_ruby` appender takes the Sentry user (`user_id`, `username`, `user_email`, `ip_address`,
+and `user`) and `fingerprint` from named tags or the payload. Taking them from the payload is
+deprecated and will be **removed in v6**, since the payload often holds untrusted data, such as a
+request body, which could then set the user an error is reported for. It emits a deprecation warning
+the first time it happens. Set them with named tags instead, which can now also hold the
+`fingerprint`:
+
+~~~ruby
+# Before:
+logger.error("Payment failed", user_id: user.id, fingerprint: ["payment-failed"])
+
+# After:
+SemanticLogger.tagged(user_id: user.id, fingerprint: ["payment-failed"]) do
+  logger.error("Payment failed")
+end
+~~~
+
 #### Replace the `:splunk` appender with `:splunk_http`
 
 The `:splunk` appender depends on the `splunk-sdk-ruby` gem, which was last released in 2015 and
@@ -146,6 +165,16 @@ server, and so does not need the `syslog` gem, can use the same constants from
   write it, cut off with their placeholder, such as `"#<Hash nested too deeply>"`.
 * A log message that overflows the stack while it is written is discarded, and the worker
   thread carries on in a new thread, instead of the worker stopping for good.
+* `#inspect` on every appender shows only its class, object address, and what it says is safe to
+  show, such as `url="https://es.example.com:9200"`, `queue_name="logs"`, or `group="/my/app"`,
+  instead of its instance variables. A custom appender can show more by overriding
+  `#inspect_details`.
+* `:cloudwatch_logs` sends the buffered messages in as many requests as the PutLogEvents limits
+  need, oldest first, cuts short a message larger than 1 MB, and reports a request that fails to
+  the internal logger.
+* `:sentry_ruby` leaves the log entry's payload and named tags unchanged, so every appender after
+  it, and your own Hash, keep the keys it reads. A `fingerprint`, user field, or payload of the
+  wrong type is sent as data instead of raising.
 * The file appender's `permissions:` option is only applied to a regular file owned by the
   process, with a single hard link, that was not reached through a symbolic link. Otherwise it
   warns once and leaves the permissions unchanged.

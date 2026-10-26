@@ -205,6 +205,20 @@ class SubscriberTest < Minitest::Test
       end
     end
 
+    describe "#inspect" do
+      it "shows the class and object address, but not the instance variables" do
+        appender.instance_variable_set(:@password, "s3cr3t")
+
+        assert_match(/\A#<SubscriberTest::SimpleSubscriber:0x\h+>\z/, appender.inspect)
+      end
+
+      it "adds the details that the appender says are safe to show" do
+        appender.define_singleton_method(:inspect_details) { %(queue_name="logs") }
+
+        assert_match(/\A#<SubscriberTest::SimpleSubscriber:0x\h+ queue_name="logs">\z/, appender.inspect)
+      end
+    end
+
     describe "#format_log and #format_batch" do
       let(:log) { SemanticLogger::Log.new("SubscriberTest", :info).tap { |l| l.message = "hello" } }
 

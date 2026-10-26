@@ -10,6 +10,14 @@ module Appender
         appender&.close
       end
 
+      it "does not show the TLS private key or SASL password in #inspect" do
+        appender.ssl_client_cert_key = "-----BEGIN PRIVATE KEY-----\nkafka-key\n-----END PRIVATE KEY-----"
+        appender.instance_variable_set(:@sasl_plain_password, "kafka-s3cr3t")
+
+        refute_includes appender.inspect, "kafka-key"
+        refute_includes appender.inspect, "kafka-s3cr3t"
+      end
+
       it "sends log messages in JSON format" do
         message = nil
         options = nil

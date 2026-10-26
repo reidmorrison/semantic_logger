@@ -195,6 +195,12 @@ module SemanticLogger
         )
       end
 
+      # Only the topic: the seed brokers can hold credentials, and the options hold the TLS private
+      # key and SASL passwords. See Subscriber#inspect.
+      def inspect_details
+        "topic=#{@topic.inspect}"
+      end
+
       private
 
       attr_reader :producer
