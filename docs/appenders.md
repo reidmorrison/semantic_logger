@@ -948,6 +948,10 @@ SemanticLogger.on_log do |log|
 end
 ~~~
 
+It sends the whole entry, payload included, so register it after any `on_log` subscriber that
+[redacts sensitive data](security.html#redacting-sensitive-data): subscribers run in the order they
+were registered.
+
 ## Databases and message queues
 
 ### MongoDB

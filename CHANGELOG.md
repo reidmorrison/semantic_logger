@@ -194,10 +194,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The example of redacting sensitive data in [Security](https://logger.reidmorrison.com/security.html#redacting-sensitive-data)
   only matched top-level Symbol keys, so it missed the String keys of parsed JSON and Rails params
   and every nested Hash, and it wrote `"[REDACTED]"` into the application's own Hash when that was
-  the logged `payload:`, changing data the application went on to use. It now redacts at any
-  depth, whatever the type and case of the key, into a new Hash. It also no longer suggests
-  redacting in an appender's `filter`, which only protects the appenders added after it. To report
-  a vulnerability, see the new `SECURITY.md`.
+  the logged `payload:`, changing data the application went on to use. It now redacts into a new
+  payload, at any depth, whatever the type, case, and style of the key (`api_key`, `apiKey`, or
+  `X-Api-Key`), including inside a Struct, Data, Set, OpenStruct, or
+  `ActionController::Parameters`. It walks a structure held more than once only once, cuts off one
+  that holds itself, and fails closed: a payload it cannot redact, for example one with a key that
+  is not valid UTF-8, is replaced rather than written as it is. Replace any copy of the earlier
+  example. The docs also no longer suggest redacting in an appender's `filter` or in a formatter,
+  which only protects the appenders that run after it. To report a vulnerability, see the new
+  `SECURITY.md`.
 
 ### Deprecated
 
