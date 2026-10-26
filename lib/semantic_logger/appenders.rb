@@ -49,9 +49,17 @@ module SemanticLogger
       end
     end
 
+    # Write the log message to every appender that should log it. An appender that fails is
+    # reported, and the others still write the message.
+    #
+    # A stack overflow is not a failure of the appender but of the thread, which must not overflow
+    # again: on macOS a second stack overflow on the same thread crashes Ruby. It is raised to the
+    # processor running this thread instead, and the message goes to no further appenders.
     def log(log)
       each do |appender|
         appender.log(log) if appender.should_log?(log)
+      rescue SystemStackError
+        raise
       rescue Exception => e
         logger.error "Failed to log to appender: #{appender.name}", e
       end

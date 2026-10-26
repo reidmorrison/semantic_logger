@@ -221,8 +221,7 @@ class SubscriberTest < Minitest::Test
 
       it "raises any error from the formatter as a FormatError, with the error as its cause" do
         [NoMethodError.new("undefined method 'each' for an instance of String"),
-         ArgumentError.new("invalid byte sequence in UTF-8"),
-         SystemStackError.new("stack level too deep")].each do |error|
+         ArgumentError.new("invalid byte sequence in UTF-8")].each do |error|
           appender.instance_variable_set(:@formatter, formatter_raising(error))
 
           [-> { appender.send(:format_log, log) }, -> { appender.send(:format_batch, [log]) }].each do |format|
@@ -233,6 +232,33 @@ class SubscriberTest < Minitest::Test
           end
         end
       end
+
+      it "raises a stack overflow as it is, so that rescuing StandardError cannot swallow it" do
+        error = SystemStackError.new("stack level too deep")
+        appender.instance_variable_set(:@formatter, formatter_raising(error))
+
+        assert_same error, assert_raises(SystemStackError) { appender.send(:format_log, log) }
+        assert_same error, assert_raises(SystemStackError) { appender.send(:format_batch, [log]) }
+      end
+
+      it "raises ArgumentError, not a FormatError, for a formatter that cannot format a batch" do
+        appender.instance_variable_set(:@formatter, ->(log, _logger) { log.message })
+
+        error = assert_raises(ArgumentError) { appender.send(:format_batch, [log]) }
+
+        refute appender.message_error?(error)
+      end
+
+      it "raises ArgumentError for an appender that is its own formatter, whose #batch is its own" do
+        own = Class.new(SemanticLogger::Subscriber) do
+          def call(log, _logger) = log.message
+
+          def batch(logs) = logs
+        end.new
+
+        assert_same own, own.formatter
+        assert_raises(ArgumentError) { own.send(:format_batch, [log]) }
+      end
     end
 
     describe "#message_error?" do
@@ -242,11 +268,14 @@ class SubscriberTest < Minitest::Test
           JSON::GeneratorError.new("cannot serialize"),
           JSON::NestingError.new("nesting of 101 is too deep"),
           Encoding::UndefinedConversionError.new("cannot convert"),
-          FloatDomainError.new("NaN"),
-          SystemStackError.new("stack level too deep")
+          FloatDomainError.new("NaN")
         ].each do |exception|
           assert appender.message_error?(exception), "expected #{exception.class} to be a message error"
         end
+      end
+
+      it "is false for a stack overflow, which the queue processor handles itself" do
+        refute appender.message_error?(SystemStackError.new("stack level too deep"))
       end
 
       it "is false for a response from the destination that cannot be parsed" do

@@ -203,7 +203,8 @@ module SemanticLogger
 
     # Start the worker thread, naming it after the internal logger.
     def spawn_worker
-      @stopped = false
+      @stopped        = false
+      @stack_overflow = nil
       Thread.new do
         Thread.current.name = logger.name
         process
@@ -226,7 +227,7 @@ module SemanticLogger
       # or the appender is closed.
       logger.trace "Async: Appender thread active"
       begin
-        batch? ? process_messages_in_batches : process_messages
+        carry_on = batch? ? process_messages_in_batches : process_messages
       rescue StandardError => e
         if async_max_retries == -1 || retry_count < async_max_retries
           @retry_count += 1
@@ -243,8 +244,9 @@ module SemanticLogger
         @stopped = true
         safe_log(:error, "Async: Stopping due to fatal exception", e)
       ensure
-        @thread = nil
-        safe_log(:trace, "Async: Thread has stopped")
+        # A thread that overflowed its stack hands the queue over to a new one (see #stack_overflowed).
+        @thread = carry_on ? spawn_worker : nil
+        safe_log(:trace, "Async: Thread has stopped") unless carry_on
       end
     end
 
@@ -257,11 +259,15 @@ module SemanticLogger
     end
 
     # Streaming: write each log message to the appender as it is dequeued.
+    #
+    # Returns true when processing must carry on in a new thread (see #stack_overflowed).
     def process_messages
       count = 0
       while (message = queue.pop)
         if message.is_a?(Log)
           write_message(message)
+          return true if @stack_overflow
+
           @retry_count = 0 unless retry_count.zero?
           count += 1
           # Check every few log messages whether this appender thread is falling behind
@@ -270,13 +276,16 @@ module SemanticLogger
             count = 0
           end
         else
-          break unless process_message(message)
+          break unless message.run(appender)
         end
       end
       logger.trace "Async: Queue Closed"
+      false
     end
 
     # Batching: group up log messages before writing them via the appender's #batch method.
+    #
+    # Returns true when processing must carry on in a new thread (see #stack_overflowed).
     def process_messages_in_batches
       loop do
         # Wait for batch interval or number of messages to be exceeded.
@@ -300,7 +309,8 @@ module SemanticLogger
           end
         end
         # Stop processing once a command (e.g. :close) signals the thread to terminate.
-        break unless write_batch_then_run(logs, commands)
+        return false unless write_batch_then_run(logs, commands)
+        return true if @stack_overflow
 
         signal.reset unless queue.size >= batch_size
       end
@@ -318,7 +328,7 @@ module SemanticLogger
         write_batch(logs)
         @retry_count = 0 unless retry_count.zero?
       end
-      commands.all? { |command| process_message(command) }
+      commands.all? { |command| command.run(appender) }
     rescue StandardError => e
       raise e if commands.all? { |command| process_message_after_failure(command) }
 
@@ -329,7 +339,7 @@ module SemanticLogger
     # Run a command after a batch could not be written. Returns false once a command (:close)
     # stops processing, even when the command itself fails.
     def process_message_after_failure(command)
-      process_message(command)
+      command.run(appender)
     rescue StandardError => e
       safe_log(:warn, "Async: Failed to #{command.command} the appender", e)
       command.command != :close
@@ -339,14 +349,14 @@ module SemanticLogger
     #
     # A message whose content cannot be written (see #message_error?) is discarded and reported,
     # without restarting the thread. Any other error, such as the destination being unavailable,
-    # propagates to #process, which backs off before retrying.
-    #
-    # SystemStackError is not a StandardError, but a value nested too deeply raises it, so it is
-    # offered to #message_error? too, rather than stopping the thread for good.
+    # propagates to #process, which backs off before retrying. A stack overflow discards the
+    # message too (see #stack_overflowed).
     def write_message(log)
       appender.log(log)
       @processed_count += 1
-    rescue StandardError, SystemStackError => e
+    rescue SystemStackError => e
+      stack_overflowed([log], e)
+    rescue StandardError => e
       raise unless message_error?(e)
 
       messages_failed([log], e)
@@ -358,15 +368,32 @@ module SemanticLogger
     # #batch is all or nothing, the batch is split in half and each half written separately, so
     # that only the offending message is discarded rather than every message in the batch.
     # Otherwise the batch is discarded, since writing it again could duplicate the messages that
-    # the appender had already written.
+    # the appender had already written. A stack overflow discards the batch, and the rest of the
+    # batch being split, without splitting it further (see #stack_overflowed).
     def write_batch(logs)
+      return messages_failed(logs, @stack_overflow) if @stack_overflow
+
       appender.batch(logs)
       @processed_count += logs.size
-    rescue StandardError, SystemStackError => e
+    rescue SystemStackError => e
+      stack_overflowed(logs, e)
+    rescue StandardError => e
       raise unless message_error?(e)
       return messages_failed(logs, e) if logs.size == 1 || !appender.batch_all_or_nothing?
 
       logs.each_slice((logs.size + 1) / 2) { |half| write_batch(half) }
+    end
+
+    # Discard log messages whose writing overflowed the stack, for example a value nested too
+    # deeply for a custom formatter. Retrying cannot write them, as for #message_error?.
+    #
+    # This thread must not overflow its stack again: on macOS a second stack overflow on the same
+    # thread crashes Ruby. So nothing else is written on it, including the rest of a batch, which
+    # is discarded rather than split up further to find the message at fault. Once any commands
+    # taken off the queue with the messages have run, a new thread carries on (see #process).
+    def stack_overflowed(logs, exception)
+      @stack_overflow = exception
+      messages_failed(logs, exception)
     end
 
     # Whether the appender says the exception was caused by the content of a log message, rather
@@ -383,20 +410,6 @@ module SemanticLogger
         safe_log(:error, "Async: Discarded #{count} log message(s)#{period} that could not be written, " \
                          "most recently from #{logs.first.name}", exception)
       end
-    end
-
-    # Run a command taken off the queue. Returns false when message processing should be stopped.
-    def process_message(request)
-      case request.command
-      when :flush
-        request.reply { appender.flush }
-      when :close
-        request.reply { appender.close }
-        return false
-      else
-        request.reply { logger.warn "Async: Appender thread: Ignoring unknown command: #{request.command}" }
-      end
-      true
     end
 
     # Record a dropped message, reporting the running count to the internal logger at most
@@ -437,10 +450,12 @@ module SemanticLogger
       # Wake up the processing thread to process this command immediately.
       signal.set if batch?
 
-      worker  = @thread
-      request = Request.new(command)
-      queue << request
-      request.wait(worker)
+      submitted_to = queue
+      request      = Request.new(command)
+      submitted_to << request
+      # A reply can come while the request is on the current queue, which #reopen replaces, and a
+      # worker thread is running it, which may be a new one after a stack overflow.
+      request.wait { queue.equal?(submitted_to) && active? }
     end
   end
 end

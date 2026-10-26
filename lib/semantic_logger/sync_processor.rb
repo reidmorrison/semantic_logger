@@ -8,11 +8,16 @@ module SemanticLogger
       @monitor.synchronize { @appenders.add(...) }
     end
 
+    # Logs on the calling thread, which belongs to the application, so a stack overflow while
+    # writing (see Appenders#log) is reported rather than raised from the log call.
     def log(...)
       @monitor.synchronize do
         @processed_count += 1
         @appenders.log(...)
       end
+    rescue SystemStackError => e
+      @appenders.logger.error("Failed to log a message: the stack overflowed", e)
+      false
     end
 
     # Returns [Hash] operational statistics for the logging pipeline.

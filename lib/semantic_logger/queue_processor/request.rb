@@ -23,15 +23,31 @@ module SemanticLogger
         @replies.push(done)
       end
 
+      # Called by the worker thread: run this command on the appender, then reply. Returns false
+      # once message processing must stop (:close).
+      def run(appender)
+        case command
+        when :flush
+          reply { appender.flush }
+        when :close
+          reply { appender.close }
+          return false
+        else
+          reply { appender.logger.warn "Async: Appender thread: Ignoring unknown command: #{command}" }
+        end
+        true
+      end
+
       # Called by the submitting thread: wait for the reply from the worker thread.
       #
-      # Returns the reply, or false when the worker thread ended without replying, for example
-      # once it gave up after async_max_retries, or was replaced after a fork.
-      def wait(worker)
+      # The block returns whether a worker thread that can still reply is running. Returns the
+      # reply, or false once none is, for example once the worker gave up after
+      # async_max_retries, or was replaced after a fork.
+      def wait
         loop do
           reply = @replies.pop(timeout: 1)
           return reply unless reply.nil?
-          return @replies.pop(timeout: 0) || false unless worker&.alive?
+          return @replies.pop(timeout: 0) || false unless yield
         end
       end
     end

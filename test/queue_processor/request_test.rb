@@ -12,12 +12,12 @@ class RequestTest < Minitest::Test
     it "replies true once the block has run" do
       request.reply { nil }
 
-      assert request.wait(finished_thread)
+      assert(request.wait { finished_thread.alive? })
     end
 
     it "replies false when the block raises, and lets the error propagate" do
       assert_raises(RuntimeError) { request.reply { raise "boom" } }
-      refute request.wait(finished_thread)
+      refute(request.wait { finished_thread.alive? })
     end
 
     it "waits for a reply while the worker thread is running" do
@@ -26,11 +26,24 @@ class RequestTest < Minitest::Test
         request.reply { nil }
       end
 
-      assert request.wait(worker)
+      assert(request.wait { worker.alive? })
     end
 
     it "returns false once the worker thread ends without replying" do
-      refute request.wait(finished_thread)
+      refute(request.wait { finished_thread.alive? })
+    end
+
+    it "keeps waiting while the block says a worker can still reply" do
+      replacement = nil
+      first       = Thread.new do
+        replacement = Thread.new do
+          sleep 0.1
+          request.reply { nil }
+        end
+      end
+      first.join
+
+      assert(request.wait { (replacement || first).alive? })
     end
   end
 end

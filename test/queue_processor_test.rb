@@ -69,14 +69,21 @@ class QueueProcessorTest < Minitest::Test
   end
 
   # Overflows the stack on a message containing "deep", as #inspect does on a value nested too deeply.
+  # Records the threads it was called on.
   class StackOverflowAppender < SimpleAppender
+    def threads
+      @threads ||= []
+    end
+
     def log(log)
+      threads << Thread.current
       raise SystemStackError, "stack level too deep" if log.message.include?("deep")
 
       super
     end
 
     def batch(logs)
+      threads << Thread.current
       raise SystemStackError, "stack level too deep" if logs.any? { |log| log.message.include?("deep") }
 
       logs.each { |log| events << log }
@@ -416,30 +423,68 @@ class QueueProcessorTest < Minitest::Test
             a
           end
 
-          it "discards only that message, instead of stopping the thread" do
-            processor = build
-            processor.queue << new_log(message: "first")
-            processor.queue << new_log(message: "deep")
-            processor.queue << new_log(message: "last")
-            processor.queue << request(:close)
+          # On macOS a second stack overflow on the same thread crashes Ruby, so nothing more may be
+          # written on a thread once it has overflowed.
+          it "discards only that message, and carries on in a new thread" do
+            processor = start
+            %w[first deep last].each { |message| processor.log(new_log(message: message)) }
 
-            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
-              processor.send(:process)
-            end
-
+            assert processor.flush, "the flush must be answered by the new thread"
             assert_equal %w[first last], appender.events.map(&:message)
             assert_equal 1, processor.failed_count
+            assert_equal 0, processor.retry_count
+            refute_predicate processor, :stopped?
+            assert_predicate processor, :active?
+
+            overflowed = appender.threads[1]
+
+            refute_same overflowed, appender.threads[2]
+            refute_predicate overflowed, :alive?
+          end
+
+          it "discards a batch that overflows, without splitting it on the same thread, then carries on" do
+            processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+            %w[first deep last].each { |message| processor.log(new_log(message: message)) }
+
+            assert processor.flush, "the flush must be answered by the new thread"
+            assert_equal 1, appender.threads.size, "the batch must not be split up on the thread that overflowed"
+            assert_equal 3, processor.failed_count
+
+            processor.log(new_log(message: "after"))
+
+            assert processor.flush
+            assert_equal %w[after], appender.events.map(&:message)
+            refute_same appender.threads.first, appender.threads.last
             refute_predicate processor, :stopped?
           end
 
-          it "discards only that message from a batch" do
+          it "discards the rest of a batch being split once one part overflows" do
             processor = start(batch: true, batch_size: 100, batch_seconds: 60)
-            %w[first deep last].each { |message| processor.log(new_log(message: message)) }
-            processor.flush
+            calls     = 0
+            appender.define_singleton_method(:batch) do |logs|
+              calls += 1
+              raise JSON::GeneratorError, "cannot serialize" if calls == 1
+              raise SystemStackError, "stack level too deep" if logs.any? { |log| log.message.include?("deep") }
 
+              logs.each { |log| events << log }
+            end
+            %w[deep second third fourth].each { |message| processor.log(new_log(message: message)) }
+
+            assert processor.flush
+            assert_equal 2, calls, "nothing more may be written on the thread that overflowed"
+            assert_equal 4, processor.failed_count
+            assert_empty appender.events
+          end
+
+          it "carries on in a new thread when an appender in the collection overflows" do
+            collection = SemanticLogger::Appenders.new(internal_logger)
+            collection << appender
+            processor  = SemanticLogger::QueueProcessor.start(appender: collection).tap { |p| started << p }
+            %w[first deep last].each { |message| processor.log(new_log(message: message)) }
+
+            assert processor.flush
             assert_equal %w[first last], appender.events.map(&:message)
             assert_equal 1, processor.failed_count
-            assert_predicate processor, :active?
           end
         end
 
@@ -553,7 +598,7 @@ class QueueProcessorTest < Minitest::Test
         flush     = queue_batch_with(processor, request(:flush))
         processor.send(:process)
 
-        assert flush.wait(nil), "the flush was not answered"
+        assert flush.wait { false }, "the flush was not answered"
         assert_predicate appender, :flushed
         assert_predicate processor, :stopped?
       end
@@ -565,7 +610,7 @@ class QueueProcessorTest < Minitest::Test
           processor.send(:process)
         end
 
-        assert close.wait(nil), "the close was not answered"
+        assert close.wait { false }, "the close was not answered"
         assert_predicate appender, :closed
         refute_predicate processor, :stopped?
         assert(internal_logger.events.any? { |event| event.message.include?("Closed without writing 3 log messages") })
@@ -590,7 +635,7 @@ class QueueProcessorTest < Minitest::Test
           processor.send(:process)
         end
 
-        refute flush.wait(nil)
+        refute(flush.wait { false })
         assert_predicate processor, :stopped?
       end
     end
@@ -627,25 +672,19 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
-    describe "#process_command" do
+    describe "a command run by the worker (Request#run)" do
       it "flushes the appender" do
-        processor = build
-
-        assert processor.send(:process_message, request(:flush))
+        assert request(:flush).run(appender)
         assert_predicate appender, :flushed
       end
 
       it "closes the appender and signals processing to stop" do
-        processor = build
-
-        refute processor.send(:process_message, request(:close))
+        refute request(:close).run(appender)
         assert_predicate appender, :closed
       end
 
       it "warns and continues on an unknown command" do
-        processor = build
-
-        assert processor.send(:process_message, request(:nope))
+        assert request(:nope).run(appender)
         assert(internal_logger.events.any? { |e| e.message.include?("Ignoring unknown command: nope") })
       end
     end
