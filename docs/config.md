@@ -273,8 +273,11 @@ filter: ->(log) { log.message !~ /\Aheartbeat/ }
 ### Example: rewriting a message inside a filter
 
 A filter can also **modify** the log event before it is written, as long as it still returns `true`
-so the (now edited) entry is kept. This is handy for redacting sensitive data. Resque, for example,
-logs the entire job payload, which may contain private information:
+so the (now edited) entry is kept. This is handy for redacting sensitive data in a logger's filter,
+as below, or in `on_log` (see [Redacting sensitive data](security.html#redacting-sensitive-data)).
+Do not redact in an appender's filter: every appender writes the same log event, so the appenders
+added before it have already written the data. Resque, for example, logs the entire job payload,
+which may contain private information:
 
 ```ruby
 Resque.logger.filter = ->(log) do

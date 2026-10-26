@@ -480,11 +480,12 @@ SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088")
 # TCP with SSL:
 SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088", ssl: true)
 
-# With self-signed certificates, or to disable server certificate verification:
+# With a self-signed certificate, or one from a private certificate authority, trust that
+# certificate instead of disabling verification:
 SemanticLogger.add_appender(
   appender: :tcp,
   server:   "localhost:8088",
-  ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE}
+  ssl:      {ca_file: "/path/to/ca.pem"}
 )
 ~~~
 

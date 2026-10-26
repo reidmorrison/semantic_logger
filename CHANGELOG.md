@@ -191,6 +191,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   read from configuration, such as `min_duration: "(system('...'); 0)"`, would run as code on
   every call. A method name that is not a valid Ruby method name, a `min_duration` that is not a
   finite number, and an invalid `log_exception` or level now raise `ArgumentError`.
+- The example of redacting sensitive data in [Security](https://logger.reidmorrison.com/security.html#redacting-sensitive-data)
+  only matched top-level Symbol keys, so it missed the String keys of parsed JSON and Rails params
+  and every nested Hash, and it wrote `"[REDACTED]"` into the application's own Hash when that was
+  the logged `payload:`, changing data the application went on to use. It now redacts at any
+  depth, whatever the type and case of the key, into a new Hash. It also no longer suggests
+  redacting in an appender's `filter`, which only protects the appenders added after it. To report
+  a vulnerability, see the new `SECURITY.md`.
 
 ### Deprecated
 

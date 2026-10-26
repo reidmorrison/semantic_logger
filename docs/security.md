@@ -102,20 +102,41 @@ numbers, and similar values in the first place.
 
 When sensitive values can reach the logs indirectly, redact them. A global `on_log`
 subscriber runs inline, once per log event, before the event is handed to any appender,
-so it can scrub the message or payload for every destination:
+so it can scrub the payload for every destination. Match keys whether they are Strings, as in
+parsed JSON and Rails params, or Symbols, in any case, at any depth, and build a new payload rather
+than changing the logged one, which can be the application's own Hash:
 
 ~~~ruby
-SECRET_KEYS = %i[password token authorization secret].freeze
+module LogRedaction
+  # Partial, case-insensitive matches, like the default filter_parameters of Rails.
+  SENSITIVE_KEY = /passw|secret|token|_key|crypt|salt|certificate|otp|ssn|cvv|cvc|authorization|cookie/i
+
+  # Returns a copy of the value with the values of sensitive keys replaced, at any depth.
+  def self.redact(value, depth = 0)
+    return "[REDACTED: nested too deeply]" if depth > 32
+
+    case value
+    when Hash
+      value.to_h { |key, val| [key, key.to_s.match?(SENSITIVE_KEY) ? "[REDACTED]" : redact(val, depth + 1)] }
+    when Array
+      value.map { |val| redact(val, depth + 1) }
+    else
+      value
+    end
+  end
+end
 
 SemanticLogger.on_log do |log|
-  log.payload&.each_key do |key|
-    log.payload[key] = "[REDACTED]" if SECRET_KEYS.include?(key)
-  end
+  # A new Hash: the payload can be the application's own Hash, which must not change.
+  log.payload = LogRedaction.redact(log.payload) if log.payload.is_a?(Hash)
 end
 ~~~
 
-Redaction can also be applied to a single logger or appender with a `filter` that
-mutates the log and returns `true`. See [Filtering](config.html#filtering) for examples.
+This only covers the payload, so keep secrets out of log messages. A `filter` on a logger
+instance can redact the same way for that logger's entries; see [Filtering](config.html#filtering).
+Do not redact in an appender's `filter`: every appender writes the same log entry, so that only
+protects the appenders added after it, while the ones added before it have already written the
+secret.
 
 Rails applications should use the sister gem
 [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger), which
