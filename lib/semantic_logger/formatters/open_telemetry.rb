@@ -20,21 +20,29 @@ module SemanticLogger
         hash[:level_index] = severity_number(log.level)
       end
 
-      # Payload is submitted directly as attributes
+      # Payload is submitted directly as attributes, which must be a Hash. A log call can supply
+      # any value as the payload, such as a String parsed from a request body, so any other value
+      # is submitted as a single "payload" attribute.
       def payload
-        return unless log.payload.respond_to?(:empty?) && !log.payload.empty?
+        return unless log.payload?
 
-        hash[:payload] = coerce_map(log.payload)
+        hash[:payload] = coerce_map(log.payload.is_a?(Hash) ? log.payload : {payload: log.payload})
       end
 
       private
 
+      # An attribute value: a primitive, or an Array of them.
       def coerce_value(v)
+        v.is_a?(Array) ? v.map { |e| coerce_element(e) }.compact : coerce_element(v)
+      end
+
+      # A primitive as-is, and anything else as a String: a structure (such as a Hash, Struct, or
+      # Set) as JSON, depth-limited and repaired by Utils.to_json, rather than its #to_s, which is
+      # its #inspect and would expose the instance variables of any object it holds.
+      def coerce_element(v)
         case v
-        when *PRIMS then v
-        when Array  then v.map { |e| coerce_value(e) }.compact   # arrays of scalars only.
-        when NilClass then nil                                   # drop nils by caller.
-        else v.to_s                                              # stringify objects / hashes.
+        when *PRIMS, NilClass then v
+        else Utils.structure?(v) ? Utils.to_json(v) : v.to_s
         end
       end
 
@@ -42,16 +50,7 @@ module SemanticLogger
         h.each_with_object({}) do |(k, v), out|
           next if v.nil?
 
-          out[k.to_s] =
-            if v.is_a?(Hash)
-              # Stringify whole hash. Cleanse here too: this runs while building the
-              # hash, before the top-level call cleanse, so it must not raise on its own.
-              Utils.to_json(
-                v.transform_values { |vv| coerce_value(vv) }.transform_keys!(&:to_s)
-              )
-            else
-              coerce_value(v)
-            end
+          out[k.to_s] = coerce_value(v)
         end
       end
 

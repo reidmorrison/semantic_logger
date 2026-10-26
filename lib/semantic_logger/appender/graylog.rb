@@ -131,8 +131,12 @@ module SemanticLogger
       end
 
       # Forward log messages
+      #
+      # GELF serializes the Hash with #to_json, which raises for Infinity, NaN, invalid UTF-8, or a
+      # structure nested too deeply, and writes a Struct through its #inspect, so it is handed a
+      # copy that JSON can represent (see Utils.json_safe).
       def log(log)
-        notifier.notify!(format_log(log))
+        notifier.notify!(Utils.json_safe(format_log(log)))
         true
       end
 

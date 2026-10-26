@@ -93,9 +93,19 @@ server, and so does not need the `syslog` gem, can use the same constants from
   `escape_control_chars` is honoured.
 * JSON based formatters: `Infinity` and `NaN` payload values are serialized as strings, and
   structures nested deeper than 32 levels are replaced with a placeholder such as
-  `#<Hash nested too deeply>`, instead of the whole entry being dropped. A `Struct` or `Data`
-  value is written as an object of its members, as Rails already does, instead of its `#inspect`
-  text.
+  `#<Hash nested too deeply>`, instead of the whole entry being dropped. A `Struct`, `Data`, or
+  `OpenStruct` value is written as an object of its members, and a `Set` as an array, as Rails
+  already does, instead of its `#inspect` text. An exception in the payload is written as its
+  message. The `:elasticsearch` and `:opensearch` appenders write their bulk lines the same way.
+* JSON based formatters and `:one_line`: invalid UTF-8 bytes in the message are dropped, instead of
+  the entry failing to format.
+* `:loki`: a nested Hash, Array, `Struct`, or `Set` in the payload is written once as JSON, keeping
+  the JSON types of its values, so `{number: 1}` is written as `{"number":1}` rather than
+  `{"number":"1"}`, and `[1, 2, 3]` as `[1,2,3]`. A payload that is not a Hash is written as a
+  single `payload` field.
+* `:open_telemetry`: a `Struct`, `Set`, or other structure in the payload, or in an Array in it, is
+  written as JSON instead of its `#inspect`. A payload that is not a Hash is submitted as a single
+  `payload` attribute.
 * Hashes logged as the payload, for example `logger.info("Webhook", params)`: a key that is also
   a log argument (`duration`, `metric_amount`, `backtrace`, `log_exception`, ...) is only used as
   that argument when its value is valid for it. Otherwise it stays in the payload, where it was

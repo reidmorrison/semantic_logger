@@ -47,7 +47,26 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   is now serialized as an object of its members, as ActiveSupport does, instead of as its
   `#inspect` string, which listed the instance variables of any object held in a member (such
   as a client's password) and had no depth limit, so a deep enough structure failed with
-  `SystemStackError`.
+  `SystemStackError`. The same now applies to a `Set` (written as an array) and an `OpenStruct`
+  (an object), and an exception in the payload is written as its message with invalid UTF-8
+  dropped, instead of the entry being dropped. The `:elasticsearch` and `:opensearch` appenders
+  serialize each bulk line this way instead of with their client gem, which wrote `Infinity` as a
+  bare word and dropped an entry holding a binary String such as a User-Agent, and the `:graylog`
+  appender hands GELF a repaired copy. The `:loki` and `:open_telemetry` formatters write a Struct,
+  Set, or other structure in the payload as JSON instead of its `#inspect`.
+- A log message tagged UTF-8 that holds invalid bytes, such as a request parameter that Rack
+  decodes from `?q=%1B%FF`, no longer makes the structured formatters (`:json`, `:raw`, `:fluentd`,
+  `:ecs`, `:logfmt`, `:loki`, `:open_telemetry`, `:syslog_cee`) or `:one_line` raise; the invalid
+  bytes are dropped, as they already were in the payload. Previously the entry was lost, and on an
+  async or batching appender (`:elasticsearch` and `:opensearch` batch by default) the whole batch
+  was lost and the worker backed off, so one such request every few seconds kept the appender from
+  writing anything until it stopped for good.
+- The `:loki` formatter writes a nested value in the payload once, as JSON. It encoded each level
+  into a String that the next level encoded again, doubling the escaping at every level, so a
+  request parameter nested 30 levels deep, as Rack accepts and rails_semantic_logger logs with
+  every request, made a single log entry of gigabytes and could exhaust the process's memory. A
+  payload that is not a Hash is written as a single `payload` field instead of raising, as it is by
+  the `:open_telemetry` formatter, which submits it as a single attribute.
 - An async or batching appender no longer lets one log message that cannot be written stall
   the others. A message that fails because of its content, as decided by the appender's
   `#message_error?`, is discarded, reported, and counted as `failed` in

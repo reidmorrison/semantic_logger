@@ -110,6 +110,21 @@ module SemanticLogger
 
             assert_equal({"a" => 1, "b" => "two"}.to_json, formatted[:payload]["nested"])
           end
+
+          it "submits a payload that is not a Hash as a single attribute" do
+            log.payload = "just a string"
+
+            assert_equal({"payload" => "just a string"}, formatted[:payload])
+          end
+
+          it "writes a Struct or Set as JSON of its members, not its #inspect" do
+            client      = Class.new { def initialize = (@password = "hunter2") }.new
+            log.payload = {client: Struct.new(:name, :api).new("billing", client), set: Set[client], list: [Set[1]]}
+
+            refute_includes formatted[:payload].to_s, "hunter2"
+            assert_equal "billing", JSON.parse(formatted[:payload]["client"])["name"]
+            assert_equal ["[1]"], formatted[:payload]["list"]
+          end
         end
 
         describe "body" do

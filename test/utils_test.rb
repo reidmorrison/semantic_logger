@@ -324,6 +324,53 @@ module SemanticLogger
         end
       end
 
+      describe ".to_json with a Set, OpenStruct, or Exception" do
+        let(:client) do
+          Class.new do
+            def initialize
+              @password = "hunter2"
+            end
+          end.new
+        end
+
+        it "writes a Set as an array, not its #inspect" do
+          result = SemanticLogger::Utils.to_json({clients: Set[client, 1]})
+
+          refute_includes result, "hunter2"
+          assert_equal 1, JSON.parse(result)["clients"].last
+        end
+
+        it "writes an OpenStruct as an object, not its #inspect" do
+          require "ostruct"
+          # An application's OpenStruct, as logged in a payload.
+          config = OpenStruct.new(name: "billing", api: client) # rubocop:disable Style/OpenStructUse
+          result = SemanticLogger::Utils.to_json({config: config})
+
+          refute_includes result, "hunter2"
+          assert_equal "billing", JSON.parse(result)["config"]["name"]
+        end
+
+        it "writes an Exception as its message, repairing invalid UTF-8" do
+          error = RuntimeError.new((+"bad \xFF input").force_encoding(Encoding::UTF_8))
+
+          assert_equal({"error" => "bad  input"}, JSON.parse(SemanticLogger::Utils.to_json({error: error})))
+        end
+      end
+
+      describe ".structure?" do
+        it "is true for the values json_safe writes as an object or array" do
+          [{}, [], Set[], Struct.new(:a).new(1), Data.define(:a).new(a: 1)].each do |value|
+            assert SemanticLogger::Utils.structure?(value), "for #{value.inspect}"
+          end
+        end
+
+        it "is false for other values" do
+          ["text", 1, :sym, nil, Object.new].each do |value|
+            refute SemanticLogger::Utils.structure?(value), "for #{value.inspect}"
+          end
+        end
+      end
+
       describe ".safe_inspect" do
         it "returns #inspect for a value that can be inspected" do
           assert_equal({a: [1, "b"]}.inspect, SemanticLogger::Utils.safe_inspect({a: [1, "b"]}))

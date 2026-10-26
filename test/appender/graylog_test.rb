@@ -7,6 +7,19 @@ module Appender
       let(:appender) { SemanticLogger::Appender::Graylog.new(level: :info) }
       let(:amessage) { "AppenderGraylogTest log message" }
 
+      it "repairs a payload that GELF cannot serialize, instead of dropping or leaking it" do
+        client  = Class.new { def initialize = (@password = "hunter2") }.new
+        payload = {amount: Float::NAN, agent: (+"Mozilla \xFF").b, client: Struct.new(:api).new(client)}
+        hash    = nil
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.info("Webhook received", payload)
+        end
+
+        assert_equal "NaN", hash[:payload][:amount]
+        assert_equal "Mozilla ", hash[:payload][:agent]
+        refute_includes hash.to_json, "hunter2"
+      end
+
       it "sends a placeholder short_message for a message that is empty once cleansed" do
         hash = nil
         appender.notifier.stub(:notify!, ->(h) { hash = h }) do

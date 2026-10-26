@@ -139,6 +139,26 @@ module SemanticLogger
           end
         end
 
+        describe "invalid UTF-8" do
+          ["Search: \e\xFF", "\xFFabc", "Search: \xFF"].each do |text|
+            it "writes #{text.inspect} without raising, dropping the invalid bytes" do
+              text            = (+text).force_encoding(Encoding::UTF_8)
+              log.message     = text
+              log.name        = text
+              log.tags        = [text]
+              log.named_tags  = {user: text}
+              log.payload     = {query: text}
+              log.exception   = RuntimeError.new(text)
+              log.thread_name = text
+
+              output = formatter.call(log, nil)
+
+              assert_predicate output, :valid_encoding?
+              refute_includes output, "\n"
+            end
+          end
+        end
+
         describe "call" do
           it "keeps the whole entry on one line" do
             log.message    = "msg\nforged"

@@ -618,6 +618,18 @@ module SemanticLogger
             assert_equal expected, log.cleansed_message
           end
         end
+
+        {
+          "Search: \e\xFF" => "Search:",
+          "\xFFabc"        => "abc",
+          "Search: \xFF"   => "Search:"
+        }.each_pair do |message, expected|
+          it "drops the invalid bytes of #{message.inspect} tagged UTF-8, instead of raising" do
+            log.message = (+message).force_encoding(Encoding::UTF_8)
+
+            assert_equal expected, log.cleansed_message
+          end
+        end
       end
 
       describe "#payload? and #payload_to_s" do

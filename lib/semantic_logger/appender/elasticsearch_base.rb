@@ -187,12 +187,17 @@ module SemanticLogger
         raise NotImplementedError, "#{self.class} must implement #client_class"
       end
 
+      # Each line is serialized here, by Utils.to_json, and handed to the client as a String. The
+      # client gem's serializer writes Infinity and NaN as bare words, which is not JSON, and does
+      # not repair invalid UTF-8, a structure nested too deeply, or a Struct (written through its
+      # #inspect), so such an entry was dropped or its objects' instance variables were written.
       def bulk_write(messages)
+        body        = messages.map { |message| Utils.to_json(message) }
         bulk_result =
           if @data_stream
-            @client.bulk(index: index, body: messages)
+            @client.bulk(index: index, body: body)
           else
-            @client.bulk(body: messages)
+            @client.bulk(body: body)
           end
 
         return unless bulk_result["errors"]

@@ -81,13 +81,7 @@ module SemanticLogger
         return unless log.context && !log.context.empty?
 
         log.context.each do |key, value|
-          serialized_value = if value.is_a?(Hash)
-                               Utils.to_json(value)
-                             else
-                               value.to_s
-                             end
-
-          stream[:stream].merge!(key.to_s => serialized_value)
+          stream[:stream].merge!(key.to_s => loki_value(value))
         end
       end
 
@@ -104,11 +98,14 @@ module SemanticLogger
       end
 
       def payload
-        self.payload_value = if log.payload.respond_to?(:empty?) && !log.payload.empty?
-                               # Loki only accepts strings as key and values
+        self.payload_value = if !log.payload?
+                               {}
+                             elsif log.payload.is_a?(Hash)
                                stringify_hash(log.payload)
                              else
-                               {}
+                               # A log call can supply any value as the payload, such as a String
+                               # parsed from a request body.
+                               {"payload" => loki_value(log.payload)}
                              end
       end
 
@@ -136,21 +133,28 @@ module SemanticLogger
         )
       end
 
+      # Loki only accepts Strings as keys and values.
       def stringify_hash(hash)
-        result = {}
-
-        hash.each do |key, value|
-          string_key = key.to_s
-
-          result[string_key] = case value
-                               when Hash
-                                 Utils.to_json(stringify_hash(value))
-                               else
-                                 value.to_s
-                               end
+        hash.each_with_object({}) do |(key, value), result|
+          result[key.to_s] = loki_value(value)
         end
+      end
 
-        result
+      # Returns [String] the value as Loki accepts it.
+      #
+      # A structure is written once, as JSON, depth-limited and repaired by Utils.to_json.
+      # Encoding each nested level into a String that the next level encodes again doubled the
+      # escaping at every level, so a request parameter 30 levels deep produced gigabytes. A
+      # structure's #to_s is its #inspect, which would also expose the instance variables of any
+      # object it holds.
+      def loki_value(value)
+        if value.is_a?(String)
+          value
+        elsif Utils.structure?(value)
+          Utils.to_json(value)
+        else
+          value.to_s
+        end
       end
     end
   end

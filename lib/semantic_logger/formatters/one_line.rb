@@ -51,7 +51,10 @@ module SemanticLogger
       # The exception details, with each line trimmed and joined by a space.
       def exception_details
         details = exception_details_for(log.exception) if log.exception
-        one_line(details.split(/\s*\n\s*/).reject(&:empty?).join(" ").strip) if details
+        return unless details
+
+        details = Utils.encode_utf8_string(details) unless details.valid_encoding?
+        one_line(details.split(/\s*\n\s*/).reject(&:empty?).join(" ").strip)
       end
 
       private
@@ -62,8 +65,13 @@ module SemanticLogger
       end
 
       # Returns [String] the value without line breaks, so that the entry stays on one line.
+      #
+      # A String with invalid bytes, such as a request parameter decoded from "%FF", is converted
+      # to valid UTF-8 first, since deleting from it would raise and lose the entry.
       def one_line(value)
-        escape_control_characters(value.to_s).delete("\r\n")
+        string = escape_control_characters(value.to_s)
+        string = Utils.encode_utf8_string(string) unless string.valid_encoding?
+        string.delete("\r\n")
       end
     end
   end

@@ -375,8 +375,13 @@ module SemanticLogger
     # terminal escape codes out of structured (JSON/Loki) output. It is distinct
     # from Formatters::Base#escape_control_characters, which instead *escapes*
     # (preserves) control characters and is opt-in for the text formatters.
+    #
+    # A message tagged UTF-8 can hold invalid bytes, for example a request parameter that Rack
+    # decoded from "%FF". Stripping or matching such a String raises ArgumentError, so it is
+    # converted to valid UTF-8 first, dropping the invalid bytes, as the JSON formatters do.
     def cleansed_message
       msg = message.to_s
+      msg = Utils.encode_utf8_string(msg) unless msg.valid_encoding?
       return msg.strip unless msg.include?("\e")
 
       msg.gsub(/\e\[[\d;]*[mz]?|\e/, "").strip
