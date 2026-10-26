@@ -25,23 +25,27 @@ You meet the Log event whenever you customize Semantic Logger:
 * A **formatter** receives it and turns it into the final output (text, JSON, ...). See [Custom formatters](config.html#custom-formatters).
 * A custom **appender**'s `#log(log)` method receives it and writes it to a destination.
 
-In every one of those places you are reading (and may modify) the same object documented here.
+In every one of those places you are reading the same object documented here.
 
 ### The event is mutable
 
 The Log event is a plain mutable Ruby object: every attribute below has both a reader and a
-writer. Filters and formatters are allowed to change it before it is written, for example to
-redact a message or enrich the payload:
+writer. All appenders share one event instance per log call, so change it only before it is handed
+to them: in an [`on_log`](config.html#capturing-context-with-on_log) subscriber, which runs for
+every entry, or in the `filter` of a logger instance, which runs for that logger's entries. For
+example, to add context to every entry:
 
 ```ruby
-filter: ->(log) do
-  log.message = log.message.gsub(/\d{16}/, "[REDACTED]")
-  true # keep the (now edited) entry
+SemanticLogger.on_log do |log|
+  log.set_context(:request_id, Thread.current[:request_id])
 end
 ```
 
-Because all appenders share one event instance per log call, keep any mutation deliberate: a
-change made in a filter is visible to every appender that runs afterwards.
+To redact sensitive data, see [Redacting sensitive data](security.html#redacting-sensitive-data).
+
+Do not change the event in an appender's `filter` or in a formatter: the appenders that ran before
+it have already written the event, and one that runs asynchronously may be reading it on its own
+thread at the same time.
 
 ### Which fields are always present
 
