@@ -5,3 +5,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Only propose a release once it is at least two weeks old, so that a compromised release is
+    # more likely to be found and withdrawn before it is proposed.
+    cooldown:
+      default-days: 14
