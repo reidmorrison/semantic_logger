@@ -385,10 +385,11 @@ module SemanticLogger
     # Return the payload in text form
     # Returns nil if payload is missing or empty
     #
-    # A payload nested too deeply for #inspect is rendered cut off at Utils::MAX_JSON_SAFE_DEPTH,
-    # rather than raising SystemStackError (see Utils.safe_inspect).
-    def payload_to_s
-      Utils.safe_inspect(payload) if payload?
+    # Rendered with #inspect, or with the block when given (for example Amazing Print). A payload
+    # nested too deeply for either is first cut off at Utils::MAX_JSON_SAFE_DEPTH, rather than
+    # raising SystemStackError (see Utils.safe_inspect).
+    def payload_to_s(&)
+      Utils.safe_inspect(payload, &) if payload?
     end
 
     # Returns [true|false] whether the log entry has a payload

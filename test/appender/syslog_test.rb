@@ -50,6 +50,23 @@ module Appender
         assert_match(/<14>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
+      describe "#message_error?" do
+        it "is true over UDP for a log message too large to send as a datagram" do
+          appender = SemanticLogger::Appender::Syslog.new(url: "udp://localhost:88888")
+
+          assert appender.message_error?(Errno::EMSGSIZE.new)
+          refute appender.message_error?(Errno::ECONNREFUSED.new)
+        end
+
+        it "is false over TCP, where the message is not sent as one datagram" do
+          Net::TCPClient.stub_any_instance(:connect, nil) do
+            appender = SemanticLogger::Appender::Syslog.new(url: "tcp://localhost:88888")
+
+            refute appender.message_error?(Errno::EMSGSIZE.new)
+          end
+        end
+      end
+
       it "accepts a level_map hash for local syslog" do
         severity = nil
         Syslog.stub(:open, nil) do

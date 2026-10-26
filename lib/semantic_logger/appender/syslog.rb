@@ -219,6 +219,11 @@ module SemanticLogger
         @remote_syslog.flush if @remote_syslog.respond_to?(:flush)
       end
 
+      # Over UDP, a log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.
+      def message_error?(exception)
+        (@protocol == :udp && exception.is_a?(Errno::EMSGSIZE)) || super
+      end
+
       # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender
       # depending on the protocol selected
       def default_formatter

@@ -149,20 +149,22 @@ module SemanticLogger
     # the levels that a formatter wraps the payload in.
     MAX_JSON_SAFE_DEPTH = 32
 
-    # Returns [String] value#inspect, without overflowing the stack for a value nested too deeply.
+    # Returns [String] value#inspect, or what the block renders the value as (for example with
+    # Amazing Print), without overflowing the stack for a value nested too deeply.
     #
     # #inspect has no depth limit: a Hash a few hundred levels deep overflows the stack of a
     # thread. Rescuing the SystemStackError is not enough, since on macOS a second such overflow
     # on the same thread crashes Ruby instead. A value that holds a structure nested deeper than
-    # MAX_JSON_SAFE_DEPTH is therefore rendered from a .json_safe copy, cut off at that depth with
-    # the same placeholder the JSON formatters write. Only that case pays for the copy.
+    # MAX_JSON_SAFE_DEPTH is therefore rendered from a .json_safe copy, as the JSON formatters
+    # write it, cut off at that depth with their placeholder. Only that case pays for the copy.
     def self.safe_inspect(value)
-      nested_too_deeply?(value) ? json_safe(value).inspect : value.inspect
+      value = json_safe(value) if nested_too_deeply?(value)
+      block_given? ? yield(value) : value.inspect
     end
 
     # Returns [true|false] whether the value holds a Hash, Array, Struct, or Data nested deeper
     # than MAX_JSON_SAFE_DEPTH, which .json_safe would replace with a placeholder. Never recurses
-    # deeper than that itself.
+    # deeper than that itself, and follows the same rules as .json_safe.
     def self.nested_too_deeply?(value, depth = 0)
       case value
       when Hash
@@ -171,7 +173,11 @@ module SemanticLogger
       when Array
         depth >= MAX_JSON_SAFE_DEPTH || value.any? { |element| nested_too_deeply?(element, depth + 1) }
       when Struct, ::Data
-        depth >= MAX_JSON_SAFE_DEPTH || nested_too_deeply?(value.to_h, depth)
+        return true if depth >= MAX_JSON_SAFE_DEPTH
+
+        # As in .json_safe_members, a #to_h that does not return a Hash is one level deeper.
+        members = value.to_h
+        members.is_a?(Hash) ? nested_too_deeply?(members, depth) : nested_too_deeply?(members, depth + 1)
       else
         false
       end
@@ -184,24 +190,34 @@ module SemanticLogger
     #   ActiveSupport's #as_json does, so that its members follow these same rules.
     # * A Hash, Array, Struct, or Data nested deeper than MAX_JSON_SAFE_DEPTH is replaced
     #   with a placeholder String naming its class, such as "#<Hash nested too deeply>".
-    #   This also ends a self-referencing structure.
+    #   So is one that holds itself, at the point where it would repeat.
     # Any other value is returned as-is.
     #
     # The recursion never goes deeper than MAX_JSON_SAFE_DEPTH, and the placeholder does
     # not look inside the structure it replaces. Rendering it instead (for example with
     # #inspect) would recurse without limit through an arbitrarily deep structure,
     # raising SystemStackError (or crashing Ruby) on the appender's thread, and would
-    # expose the instance variables of any object inside it.
-    def self.json_safe(value, depth = 0)
+    # expose the instance variables of any object inside it. Ending a self-referencing
+    # structure where it repeats, rather than at that depth, keeps one that holds itself
+    # more than once from being copied an exponential number of times.
+    def self.json_safe(value, depth = 0, ancestors = nil)
       case value
       when String
         encode_utf8_string(value)
       when Float
         value.finite? ? value : value.to_s
       when Hash, Array, Struct, ::Data
-        return "#<#{value.class} nested too deeply>" if depth >= MAX_JSON_SAFE_DEPTH
+        ancestors ||= []
+        if depth >= MAX_JSON_SAFE_DEPTH || ancestors.any? { |ancestor| ancestor.equal?(value) }
+          return "#<#{value.class} nested too deeply>"
+        end
 
-        json_safe_members(value, depth + 1)
+        ancestors.push(value)
+        begin
+          json_safe_members(value, depth + 1, ancestors)
+        ensure
+          ancestors.pop
+        end
       else
         value
       end
@@ -209,19 +225,19 @@ module SemanticLogger
 
     # Returns a copy of the elements of a Hash, Array, Struct, or Data, each made safe
     # by .json_safe at the supplied depth.
-    def self.json_safe_members(value, depth)
+    def self.json_safe_members(value, depth, ancestors)
       case value
       when Hash
         value.each_with_object({}) do |(key, val), hash|
-          hash[json_safe(key, depth)] = json_safe(val, depth)
+          hash[json_safe(key, depth, ancestors)] = json_safe(val, depth, ancestors)
         end
       when Array
-        value.map { |element| json_safe(element, depth) }
+        value.map { |element| json_safe(element, depth, ancestors) }
       else
         # A Struct or Data. A #to_h that does not return a Hash is made safe one level
         # deeper, so that the recursion still ends.
         members = value.to_h
-        members.is_a?(Hash) ? json_safe_members(members, depth) : json_safe(members, depth)
+        members.is_a?(Hash) ? json_safe_members(members, depth, ancestors) : json_safe(members, depth, ancestors)
       end
     end
     private_class_method :json_safe_members

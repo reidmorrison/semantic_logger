@@ -1,5 +1,6 @@
 require_relative "test_helper"
 require "json"
+require "timeout"
 
 module SemanticLogger
   class UtilsTest < Minitest::Test
@@ -338,6 +339,25 @@ module SemanticLogger
           refute_includes text, "leaf"
         end
 
+        it "renders with the block instead of #inspect, from the cut-off copy when too deep" do
+          nested = "leaf"
+          5_000.times { nested = {a: nested} }
+
+          assert_equal "1 entries", SemanticLogger::Utils.safe_inspect({a: 1}) { |value| "#{value.size} entries" }
+          assert_includes(Thread.new { SemanticLogger::Utils.safe_inspect(nested, &:to_s) }.value,
+                          "#<Hash nested too deeply>")
+        end
+
+        it "renders a structure that holds itself more than once, without copying it exponentially" do
+          looped     = {}
+          looped[:a] = looped
+          looped[:b] = looped
+
+          text = Timeout.timeout(5) { SemanticLogger::Utils.safe_inspect(looped) }
+
+          assert_equal({a: "#<Hash nested too deeply>", b: "#<Hash nested too deeply>"}.inspect, text)
+        end
+
         it "renders the same structure repeatedly on one thread, without overflowing the stack" do
           nested = "leaf"
           5_000.times { nested = [nested] }
@@ -383,6 +403,13 @@ module SemanticLogger
           looped[:self] = looped
 
           assert SemanticLogger::Utils.nested_too_deeply?(looped)
+        end
+
+        it "ends the recursion when #to_h does not return a Hash, as json_safe does" do
+          odd = Struct.new(:x) { def to_h = self }.new(1)
+
+          assert(Thread.new { SemanticLogger::Utils.nested_too_deeply?({odd: odd}) }.value)
+          assert_includes(Thread.new { SemanticLogger::Utils.safe_inspect({odd: odd}) }.value, "nested too deeply")
         end
       end
 

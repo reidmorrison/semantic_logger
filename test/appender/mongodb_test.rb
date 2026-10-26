@@ -39,6 +39,10 @@ module Appender
         it "is false when the server is unavailable" do
           refute appender.message_error?(Mongo::Error::NoServerAvailable.allocate)
         end
+
+        it "is false for a reply from the server that cannot be decoded" do
+          refute appender.message_error?(BSON::Error::BSONDecodeError.new("invalid reply"))
+        end
       end
 
       describe "format logs into documents" do

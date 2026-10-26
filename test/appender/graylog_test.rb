@@ -16,6 +16,16 @@ module Appender
         assert_equal "<no-exception-message>", hash[:short_message]
       end
 
+      it "sends the exception message as short_message for an empty message, or the placeholder when blank" do
+        sent = []
+        appender.notifier.stub(:notify!, ->(h) { sent << h[:short_message] }) do
+          appender.error("", RuntimeError.new("Disk full"))
+          appender.error("", RuntimeError.new("  "))
+        end
+
+        assert_equal ["Disk full", "<no-exception-message>"], sent
+      end
+
       describe "#message_error?" do
         it "is true for a log message that GELF cannot send" do
           error = ArgumentError.new("Data too big (456404 bytes), would create more than 128 chunks!")

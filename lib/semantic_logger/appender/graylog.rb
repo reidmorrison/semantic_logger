@@ -120,12 +120,10 @@ module SemanticLogger
       def call(log, logger)
         h = default_formatter.call(log, logger)
 
-        h[:short_message] = h.delete(:message)
         # GELF rejects an empty short_message, such as a message of only ANSI escape codes.
-        if h[:short_message].to_s.empty?
-          h[:short_message] = log.exception.nil? ? "<no-exception-message>" : log.exception.message
-        end
-        h[:short_message] = "<no-exception-message>" if h[:short_message].to_s.empty?
+        h[:short_message] = h.delete(:message).to_s
+        h[:short_message] = log.exception.message.to_s.strip if h[:short_message].empty? && log.exception
+        h[:short_message] = "<no-exception-message>" if h[:short_message].empty?
         h[:level]        = logger.level_map[log.level]
         h[:level_str]    = log.level.to_s
         h[:duration_str] = h.delete(:duration)

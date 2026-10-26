@@ -116,11 +116,9 @@ module SemanticLogger
       def payload
         return unless log.payload?
 
-        # Amazing Print has no depth limit either, so a payload nested too deeply is rendered by
-        # Log#payload_to_s, which has one.
-        if log.payload.respond_to?(:ai) && !Utils.nested_too_deeply?(log.payload)
+        if log.payload.respond_to?(:ai)
           begin
-            "-- #{escape_control_characters(log.payload.ai(ai_options))}"
+            "-- #{escape_control_characters(log.payload_to_s { |payload| payload.ai(ai_options) })}"
           rescue StandardError
             super
           end
