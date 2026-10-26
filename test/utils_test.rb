@@ -340,6 +340,12 @@ module SemanticLogger
           assert_equal 1, JSON.parse(result)["clients"].last
         end
 
+        it "writes a Set of plain values as an array, on Ruby 4.0 too, where its #inspect has no #<" do
+          result = SemanticLogger::Utils.to_json({ids: Set[1, 2], nested: [Set[3]]})
+
+          assert_equal({"ids" => [1, 2], "nested" => [[3]]}, JSON.parse(result))
+        end
+
         it "writes an OpenStruct as an object, not its #inspect" do
           require "ostruct"
           # An application's OpenStruct, as logged in a payload.

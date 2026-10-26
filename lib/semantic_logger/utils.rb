@@ -123,10 +123,10 @@ module SemanticLogger
         rescue JSON::GeneratorError, JSON::NestingError, EncodingError, SystemStackError
           nil
         end
-      # Almost no JSON holds "#<", so the check costs a single scan. A String that merely
-      # contains the same text is also repaired; that only costs time, since .json_safe
-      # leaves such a String as it is.
-      return json if json && !json.include?(INSPECTED_OBJECT)
+      # Almost no JSON holds "#<" or "Set[", so the checks cost a scan each. A String that
+      # merely contains the same text is also repaired; that only costs time, since
+      # .json_safe leaves such a String as it is.
+      return json if json && !json.include?(INSPECTED_OBJECT) && !json.include?(INSPECTED_SET)
 
       json_safe(value).to_json
     end
@@ -134,6 +134,10 @@ module SemanticLogger
     # How #inspect writes an object, such as the Struct, Data, Set, or OpenStruct that the
     # json gem writes through its #to_s, or an object within one.
     INSPECTED_OBJECT = "#<".freeze
+
+    # How the json gem writes a Set on Ruby 4.0, where Set#inspect is "Set[...]", which holds no
+    # "#<" unless the Set holds an object.
+    INSPECTED_SET = "\"Set[".freeze
 
     # Nesting depth after which .json_safe replaces a Hash, Array, Struct, or Data with a
     # placeholder. Well below the json gem's default max_nesting of 100, leaving room for
