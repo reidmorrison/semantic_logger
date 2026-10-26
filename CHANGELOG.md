@@ -14,7 +14,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   api key), and the response body is truncated to 512 bytes. The error raised for an invalid
   url no longer includes the url, nor does the one for an invalid `proxy_url:`, or an invalid url
   given to the `:loki`, `:elasticsearch`, `:opensearch`, `:syslog`, or `:graylog` appenders or the
-  `:statsd` metrics appender, whose client gems put it in their errors.
+  `:statsd` metrics appender, or an invalid seed broker given to the `:kafka` appender, whose client
+  gems put it in their errors.
 - `#inspect` on every appender shows only the class, the object address, and what that appender
   says is safe to show, such as its url without credentials, its log group, or its queue name,
   instead of every instance variable. The `:elasticsearch` and `:opensearch` appenders showed the

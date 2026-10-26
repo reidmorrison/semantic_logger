@@ -18,6 +18,18 @@ module Appender
         refute_includes appender.inspect, "kafka-s3cr3t"
       end
 
+      it "does not include credentials in the error for a seed broker that cannot be parsed" do
+        ["kafka://user:s3cr3t@kafka host:9092", "https://user:s3cr3t@kafka1:9092"].each do |seed_broker|
+          error = assert_raises(URI::InvalidURIError, ::Kafka::Error) do
+            SemanticLogger::Appender::Kafka.new(seed_brokers: [seed_broker])
+          end
+
+          refute_includes error.message, "s3cr3t"
+          assert_includes error.message, "Invalid :seed_brokers"
+          assert_nil error.cause
+        end
+      end
+
       it "sends log messages in JSON format" do
         message = nil
         options = nil
