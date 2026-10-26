@@ -4566,10 +4566,11 @@ and the host name when `ssl:` is enabled.
 The deprecated `:splunk` appender is the exception: its `splunk-sdk-ruby` gem never verifies
 the certificate. Use `:splunk_http` instead.
 
-Do not disable certificate verification in production. Settings such as
+Do not disable certificate verification. Settings such as
 `ssl: {verify_mode: OpenSSL::SSL::VERIFY_NONE}` expose the connection to
-man-in-the-middle attacks and should be limited to local development against
-self-signed certificates.
+man-in-the-middle attacks. To connect to a server with a self-signed certificate, or one issued
+by a private certificate authority, trust that certificate instead, for example with
+`ssl: {ca_file: "/path/to/ca.pem"}`.
 
 Credentials can be supplied in the url of the HTTP based appenders, for example
 `https://user:password@host`, or as a query parameter. They are removed from the url
