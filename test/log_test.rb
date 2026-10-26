@@ -602,6 +602,14 @@ module SemanticLogger
         end
       end
 
+      describe "#cleansed_message in another encoding" do
+        it "converts a message in another encoding to UTF-8 before stripping escape codes" do
+          log.message = "hi \e[1m".encode(Encoding::UTF_16LE)
+
+          assert_equal "hi", log.cleansed_message
+        end
+      end
+
       describe "#cleansed_message" do
         {
           "\e[32m[SUCCESS] User profile updated successfully!\e[0m" => "[SUCCESS] User profile updated successfully!",

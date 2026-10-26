@@ -159,6 +159,18 @@ module SemanticLogger
           end
         end
 
+        describe "a message in another encoding" do
+          it "writes a binary message beside non-ASCII text without raising" do
+            log.message = "caf\xC3\xA9 \xFF".b
+            log.name    = "Café"
+
+            output = formatter.call(log, nil)
+
+            assert_predicate output, :valid_encoding?
+            assert_includes output, "Café"
+          end
+        end
+
         describe "call" do
           it "keeps the whole entry on one line" do
             log.message    = "msg\nforged"

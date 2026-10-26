@@ -341,7 +341,7 @@ module SemanticLogger
             log.named_tags = {"name\xE2".b => "val\xE2".b}
             log.payload    = {"key\xE2".b => "value\xE2".b}
 
-            assert_equal "Bad: ", values_data[1]
+            assert_equal "Bad:", values_data[1]
             assert_equal ["Tag: "], stream_data["tags"]
             assert_equal "val", stream_data["name"]
             assert_equal "value", values_data[2]["key"]

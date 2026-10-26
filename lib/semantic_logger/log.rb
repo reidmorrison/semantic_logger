@@ -377,11 +377,11 @@ module SemanticLogger
     # (preserves) control characters and is opt-in for the text formatters.
     #
     # A message tagged UTF-8 can hold invalid bytes, for example a request parameter that Rack
-    # decoded from "%FF". Stripping or matching such a String raises ArgumentError, so it is
-    # converted to valid UTF-8 first, dropping the invalid bytes, as the JSON formatters do.
+    # decoded from "%FF", or be in another encoding, such as a binary request body. Stripping or
+    # matching such a String raises, so it is converted to valid UTF-8 first, dropping the
+    # invalid bytes, as the JSON formatters do.
     def cleansed_message
-      msg = message.to_s
-      msg = Utils.encode_utf8_string(msg) unless msg.valid_encoding?
+      msg = Utils.encode_utf8_string(message.to_s)
       return msg.strip unless msg.include?("\e")
 
       msg.gsub(/\e\[[\d;]*[mz]?|\e/, "").strip

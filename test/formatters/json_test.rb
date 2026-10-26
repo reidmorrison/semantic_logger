@@ -116,10 +116,10 @@ module SemanticLogger
             assert_equal "Bad: ", parsed["thread"]
           end
 
-          it "serializes the message" do
+          it "serializes the message, stripped as any message is" do
             log.message = bad
 
-            assert_equal "Bad: ", parsed["message"]
+            assert_equal "Bad:", parsed["message"]
           end
 
           it "serializes the metric name" do

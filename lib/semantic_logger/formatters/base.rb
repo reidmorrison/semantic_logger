@@ -117,13 +117,13 @@ module SemanticLogger
       # colorization from the message for structured (JSON/Loki) output.
       #
       # A string with invalid byte sequences, for example an exception message that quotes
-      # untrusted binary input, is first converted to valid UTF-8 (dropping the invalid
-      # bytes), since matching against it would raise and the log entry would be lost.
+      # untrusted binary input, or in another encoding, is first converted to valid UTF-8
+      # (dropping the invalid bytes), since matching against it would raise and the log entry
+      # would be lost.
       def escape_control_characters(value)
         return value unless escape_control_chars && value
 
-        string = value.to_s
-        string = Utils.encode_utf8_string(string) unless string.valid_encoding?
+        string = Utils.encode_utf8_string(value.to_s)
         string.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
       end
 
