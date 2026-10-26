@@ -97,8 +97,9 @@ module SemanticLogger
         true
       end
 
+      # Sends the buffered log messages on the calling thread, rather than waiting for the timer.
       def flush
-        task.execute while buffered_logs.size.positive?
+        put_log_events while buffered_logs.size.positive?
       end
 
       def close

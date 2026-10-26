@@ -255,11 +255,23 @@ module Appender
       end
 
       describe "#flush" do
-        it "executes task and clears the buffer" do
-          mock_client.expect :put_log_events, nil, [Hash]
+        it "sends the buffered log messages on the calling thread, and clears the buffer" do
+          request = thread = nil
+          mock_client.expect(:put_log_events, Aws::CloudWatchLogs::Types::PutLogEventsResponse.new) do |**params|
+            thread  = Thread.current
+            request = params
+          end
+          internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal_logger
           appender.log(log_event)
           appender.flush
 
+          assert_mock mock_client
+          assert_equal Thread.current, thread
+          assert_equal log_group, request[:log_group_name]
+          assert_equal log_stream, request[:log_stream_name]
+          assert_equal "Test", JSON.parse(request[:log_events].first[:message])["name"]
+          assert_empty internal_logger.events
           assert_empty appender.buffered_logs
         end
       end

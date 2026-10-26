@@ -212,6 +212,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- `flush` on the `:cloudwatch_logs` appender sends the buffered log messages itself. It waited, at
+  full CPU, for the flush timer (every 5 seconds by default) to take them off the buffer, then
+  returned before they were sent, so the messages logged just before the process exited could be
+  lost.
 - The `:syslog` and `:syslog_cee` formatters default `max_size:` to 1024 bytes. The default was
   the `Integer` class rather than a size, so a syslog formatter chosen explicitly without a
   `max_size:`, for example `appender: :syslog, formatter: :syslog_cee, url: "udp://..."`, failed
