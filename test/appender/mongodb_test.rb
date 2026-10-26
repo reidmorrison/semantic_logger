@@ -14,7 +14,10 @@ module Appender
           collection_size: 10 * (1024**2),
           host:            "test",
           application:     "test_application",
-          level:           :trace
+          level:           :trace,
+          # Acknowledged writes, so that a test can read back what it just logged. The default of
+          # 0 does not wait for the server, which made the tests fail now and then.
+          write_concern:   1
         )
       end
 

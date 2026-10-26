@@ -133,11 +133,15 @@ module SemanticLogger
         end
 
         it "keeps following the global default level after the block" do
+          original = SemanticLogger.default_level
           logger.with_level(:warn) { logger.info("inside") }
           SemanticLogger.default_level = :error
 
           assert_nil logger.instance_variable_get(:@level)
           assert_equal :error, logger.level
+        ensure
+          # Tests in other files, such as the Compatibility tests, log at the default level.
+          SemanticLogger.default_level = original
         end
 
         it "keeps honoring SemanticLogger.silence after the block" do
