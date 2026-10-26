@@ -526,7 +526,7 @@ every other formatter, including `:one_line` and the syslog formatters, so their
 change. The syslog appender also turns it off for the formatter it uses with a local syslog daemon.
 When enabled, `:one_line` joins the detail onto the same line, after ` -- `. With the `:json`
 formatter and the others built on `:raw`, it adds an `exception.details` field (and `details`
-within each `cause`):
+within each `cause`), which `:logfmt` writes as `exception_details`:
 
 ```ruby
 # Include the error_highlight source snippet in development:

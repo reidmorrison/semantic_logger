@@ -1230,7 +1230,7 @@ every other formatter, including `:one_line` and the syslog formatters, so their
 change. The syslog appender also turns it off for the formatter it uses with a local syslog daemon.
 When enabled, `:one_line` joins the detail onto the same line, after ` -- `. With the `:json`
 formatter and the others built on `:raw`, it adds an `exception.details` field (and `details`
-within each `cause`):
+within each `cause`), which `:logfmt` writes as `exception_details`:
 
 ```ruby
 # Include the error_highlight source snippet in development:
@@ -1763,14 +1763,15 @@ timestamp="2024-07-20T08:32:05.375276Z" level="info" name="MyClass" message="Hel
 
 Notes:
 
-* The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
-  forge or split a record.
+* The timestamp is ISO 8601, under the key `timestamp` unless the formatter's `time_key` is set
+  (`formatter: {logfmt: {time_key: :ts}}`). All values are quoted and escaped, so a newline in the
+  data cannot forge or split a record.
 * Keys (from tags, named tags, and the payload) cannot be quoted in logfmt, so spaces, control
   characters (including the Unicode line and paragraph separators), invisible format characters
   (such as a zero width space), `=`, and `"` in a key are replaced with `_`, and invalid UTF-8 is
   dropped. For example the tag `second breakfast` is emitted as `second_breakfast=true`.
 * Named tags and payload fields are merged into the top-level `key=value` pairs. A key named like
-  one of the entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`,
+  one of the entry's own fields (the time key, `level`, `name`, `message`, `duration`,
   `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, so that
   logged data cannot replace those fields: `payload.level="fatal"`, `named_tags.message="..."`, or
   `tags.message=true`. A key that starts with `tags.`, `named_tags.`, or `payload.` is prefixed
@@ -1783,7 +1784,9 @@ Notes:
   `user="{\"id\":7}"`.
 * `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
   exception, which is then included as the fields `exception_name`, `exception_message`,
-  `stack_trace`, and, when the exception has a cause, `cause`.
+  `stack_trace`, and, when the exception has a cause, `cause`. With `log_exception_details: true`
+  (off by default), the detail Ruby adds to the exception's message is included as
+  `exception_details`; see [Exception details](config.html#exception-details).
 
 ## Network protocols
 
@@ -4550,21 +4553,22 @@ server, and so does not need the `syslog` gem, can use the same constants from
 
 #### Output changes
 
-* `:logfmt`: spaces, control characters, invisible format characters (such as a zero width
-  space), `=`, `"`, and Unicode line separators in keys are replaced with `_`, and invalid UTF-8
-  bytes are dropped. A tag such as `second breakfast` is now emitted as `second_breakfast=true`. A
-  tag, named tag, or payload key named like one of the entry's own fields (`timestamp`, `level`,
-  `name`, `message`, `duration`, `duration_ms`, `tag`, or an exception field) is emitted with its
-  source as a prefix, such as `payload.name="shrek"` or `tags.message=true`, instead of replacing
-  the field, and so is a key that starts with `tags.`, `named_tags.`, or `payload.`. A logged
-  exception is emitted as `exception_name`, `exception_message`, and `exception_details` (followed
-  by `stack_trace` and `cause` as before), instead of replacing the entry's `name` and `message`.
-  Other keys that are the same once encoded, such as `:user` and `"user"`, are emitted once, with
-  the value from the later source: the payload over named tags, and named tags over tags. A
-  payload that is not a Hash is emitted as a single `payload` field. A nested value (a Hash,
-  Array, `Struct`, `Data`, `Set`, or any other value whose JSON is an object or an array, such as
-  the exception backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its
-  `#inspect` text.
+* `:logfmt`: spaces, control characters, invisible format characters (such as a zero width space),
+  `=`, `"`, and Unicode line separators in keys are replaced with `_`, and invalid UTF-8 bytes are
+  dropped. A tag such as `second breakfast` is now emitted as `second_breakfast=true`. A tag,
+  named tag, or payload key named like one of the entry's own fields, which are the time key
+  (`timestamp` by default), `level`, `name`, `message`, `duration`, `duration_ms`, `tag`, and the
+  exception fields, is emitted with its source as a prefix, such as `payload.name="shrek"` or
+  `tags.message=true`, instead of replacing the field, and so is a key that starts with `tags.`,
+  `named_tags.`, or `payload.`. A logged exception's class and message are emitted as
+  `exception_name` and `exception_message` (followed by `stack_trace` and `cause` as before),
+  instead of replacing the entry's `name` and `message`, and the detail that
+  `log_exception_details: true` adds as `exception_details`. Other keys that are the same once
+  encoded, such as `:user` and `"user"`, are emitted once, with the value from the later source:
+  the payload over named tags, and named tags over tags. A payload that is not a Hash is emitted
+  as a single `payload` field. A nested value (a Hash, Array, `Struct`,
+  `Data`, `Set`, or any other value whose JSON is an object or an array, such as the exception
+  backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its `#inspect` text.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
 * `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,

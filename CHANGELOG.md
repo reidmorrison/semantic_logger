@@ -38,17 +38,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   as a zero width space or a right-to-left override, which could make a key pass for `level`),
   `=`, and `"` in keys with `_`. Keys come from tags, named tags, and the payload, and were
   written verbatim, so a tag such as a User-Agent could inject fields (for example
-  `level="fatal"`) or a whole new line. A key named like one of the entry's own fields
-  (`timestamp`, `level`, `name`, `message`, `duration`, `duration_ms`, `tag`, or an exception
-  field) is emitted with its source as a prefix, such as `payload.level`: a payload with Symbol
-  keys, including the explicit `payload:` recommended for untrusted hashes, replaced those fields
-  outright, so that `{"level": "fatal", "message": ...}` in a webhook body forged the whole entry.
-  A key that starts with `tags.`, `named_tags.`, or `payload.` is prefixed too, as in
-  `payload.named_tags.level`, so that it cannot pass for another source's field. A logged
-  exception is emitted as `exception_name`, `exception_message`, and `exception_details`, which
-  previously replaced the entry's own `name` and `message`. Other keys that are the same once
-  encoded, such as `:user` and `"user"`, are now emitted once, with the value from the later
-  source: the payload over named tags, and named tags over tags. Nested values (a Hash, an
+  `level="fatal"`) or a whole new line. A key named like one of the entry's own fields, which are
+  the time key (`timestamp` by default), `level`, `name`, `message`, `duration`, `duration_ms`,
+  `tag`, and the exception fields, is emitted with its source as a prefix, such as
+  `payload.level`: a payload with Symbol keys, including the explicit `payload:` recommended for
+  untrusted hashes, replaced those fields outright, so that `{"level": "fatal", "message": ...}`
+  in a webhook body forged the whole entry. A key that starts with `tags.`, `named_tags.`, or
+  `payload.` is prefixed too, as in `payload.named_tags.level`, so that it cannot pass for another
+  source's field. A logged exception's class and message are emitted as `exception_name` and
+  `exception_message`, which previously replaced the entry's own `name` and `message`, and the
+  detail that `log_exception_details: true` adds as `exception_details`. Other keys that are the
+  same once encoded, such as `:user` and `"user"`, are now emitted once, with the value from the
+  later source: the payload over named tags, and named tags over tags. Nested values (a Hash, an
   Array, or any other value whose JSON is an object or an array, such as a `Set` or the exception
   backtrace) are emitted as quoted JSON instead of their `#inspect` text, which could print an
   object's instance variables.
@@ -159,8 +160,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `:with_source` to also log error_highlight's source snippet (much slower, since it re-parses the
   source file), or `false` (the default for every other formatter, so JSON and other structured
   output does not change unless enabled). Local syslog records do not change either. The `:json`
-  formatter, and the others built on `:raw`, log it as `exception.details`, and `:one_line` joins it
-  onto the same line. The pattern formatter adds an `%{exception_details}` directive.
+  formatter, and the others built on `:raw`, log it as `exception.details` (`:logfmt` as
+  `exception_details`), and `:one_line` joins it onto the same line. The pattern formatter adds an
+  `%{exception_details}` directive.
 - `SemanticLogger.non_blocking = true` drops log messages instead of blocking the calling thread
   when the main pipeline queue is full. Previously `non_blocking:` could only be set on an
   individual async appender's own queue, so `logger.info` could still block on the main queue

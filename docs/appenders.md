@@ -362,14 +362,15 @@ timestamp="2024-07-20T08:32:05.375276Z" level="info" name="MyClass" message="Hel
 
 Notes:
 
-* The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
-  forge or split a record.
+* The timestamp is ISO 8601, under the key `timestamp` unless the formatter's `time_key` is set
+  (`formatter: {logfmt: {time_key: :ts}}`). All values are quoted and escaped, so a newline in the
+  data cannot forge or split a record.
 * Keys (from tags, named tags, and the payload) cannot be quoted in logfmt, so spaces, control
   characters (including the Unicode line and paragraph separators), invisible format characters
   (such as a zero width space), `=`, and `"` in a key are replaced with `_`, and invalid UTF-8 is
   dropped. For example the tag `second breakfast` is emitted as `second_breakfast=true`.
 * Named tags and payload fields are merged into the top-level `key=value` pairs. A key named like
-  one of the entry's own fields (`timestamp`, `level`, `name`, `message`, `duration`,
+  one of the entry's own fields (the time key, `level`, `name`, `message`, `duration`,
   `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, so that
   logged data cannot replace those fields: `payload.level="fatal"`, `named_tags.message="..."`, or
   `tags.message=true`. A key that starts with `tags.`, `named_tags.`, or `payload.` is prefixed
@@ -382,7 +383,9 @@ Notes:
   `user="{\"id\":7}"`.
 * `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
   exception, which is then included as the fields `exception_name`, `exception_message`,
-  `stack_trace`, and, when the exception has a cause, `cause`.
+  `stack_trace`, and, when the exception has a cause, `cause`. With `log_exception_details: true`
+  (off by default), the detail Ruby adds to the exception's message is included as
+  `exception_details`; see [Exception details](config.html#exception-details).
 
 ## Network protocols
 
