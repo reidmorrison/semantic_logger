@@ -16,7 +16,8 @@ description: >-
 
 v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, and fixes
 several security issues. None of the security fixes change the public API, but a few change the
-output, which matters if you parse the logs or alert on them.
+output, which matters if you parse the logs or alert on them, and the file appender's
+`permissions:` option can now make `add_appender` raise for a log file that worked in v5.1.
 
 #### Set the Sentry user and fingerprint with named tags
 
@@ -90,6 +91,30 @@ SemanticLogger.add_appender(appender: :syslog, url: "udp://myloghost:514", facil
 This applies to the `:syslog` and `:syslog_cee` formatters. An application that logs only to a remote
 server, and so does not need the `syslog` gem, can use the same constants from
 `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatters::Syslog::LOG_LOCAL0`.
+
+#### The file appender's `permissions:` refuses a log file it cannot secure
+
+With `permissions:`, the file appender only writes to a regular file owned by the process, with a
+single hard link, that the file name names directly rather than through a symbolic link.
+`SemanticLogger.add_appender` now raises `IOError`, giving the reason, for any other log file,
+which v5.1 wrote to, changing the permissions of whatever a link pointed at. So a configuration
+that worked in v5.1 can now fail at boot, for example `permissions:` on a log file that is a
+symbolic link to `/dev/stdout`, or on a log file that another user created. With `permissions:`,
+a log file that cannot be opened also raises `IOError`, instead of the operating system's error,
+such as `Errno::ENOENT`, which is its `cause`. A log file that fails the check, or to open, when it
+is reopened later, on a rotation or after a fork, is reported to the internal logger and not
+written to until it is fixed, instead of raising from the logging thread.
+
+If you set `permissions:` on such a log file, either fix the file or remove `permissions:`. To log
+to standard output, use `io: $stdout`:
+
+~~~ruby
+# Before, with log/production.log a symbolic link to /dev/stdout:
+SemanticLogger.add_appender(file_name: "log/production.log", permissions: 0o640)
+
+# After:
+SemanticLogger.add_appender(io: $stdout)
+~~~
 
 #### Output changes
 
@@ -181,13 +206,6 @@ server, and so does not need the `syslog` gem, can use the same constants from
   longer replaces one from the named tags. A payload user field that is not a String, Symbol, or
   Integer, a `fingerprint` that is not an Array of Strings, Symbols, or numbers, and a payload that
   is not a Hash, are sent as data instead.
-* The file appender's `permissions:` option is only applied to a regular file owned by the
-  process, with a single hard link, that was not reached through a symbolic link, and nothing is
-  written to any other file: `add_appender` raises `IOError`, and a file that fails the check when
-  it is reopened later is reported once and not written to until it is fixed. If you set
-  `permissions:` on a log file that is a symbolic link, for example to `/dev/stdout`, or that
-  another user created, either remove `permissions:` or fix the file. To log to standard output,
-  use `io: $stdout`.
 
 #### Stricter `logger_measure_method` arguments
 

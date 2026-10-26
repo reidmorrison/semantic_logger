@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require "timeout"
 require "tmpdir"
 
 module Appender
@@ -161,6 +162,18 @@ module Appender
           end
         end
 
+        it "does not create the file that a dangling symbolic link points at" do
+          Dir.mktmpdir do |dir|
+            target = File.join(dir, "target.log")
+            link   = File.join(dir, "production.log")
+            File.symlink(target, link)
+
+            assert_raises(IOError) { SemanticLogger::Appender::File.new(link, permissions: 0o600) }
+
+            refute_path_exists target
+          end
+        end
+
         it "neither changes the permissions of, nor writes to, a file reached through a symbolic link" do
           Dir.mktmpdir do |dir|
             target = File.join(dir, "id_rsa")
@@ -256,13 +269,39 @@ module Appender
           end
         end
 
-        it "does not block on a FIFO planted at the path" do
+        it "raises IOError, without blocking, for a FIFO planted at the path" do
           Dir.mktmpdir do |dir|
             fifo = File.join(dir, "production.log")
             File.mkfifo(fifo)
 
-            Timeout.timeout(5) do
-              assert_raises(SystemCallError) { SemanticLogger::Appender::File.new(fifo, permissions: 0o600) }
+            error = Timeout.timeout(5) do
+              assert_raises(IOError) { SemanticLogger::Appender::File.new(fifo, permissions: 0o600) }
+            end
+
+            assert_match(/\ANot writing to the log file #{Regexp.escape(fifo)}: it could not be opened \(/,
+                         error.message)
+            assert_kind_of Errno::ENXIO, error.cause
+          end
+        end
+
+        # Raising from #log would make an async appender back off, and could block the application.
+        it "does not raise when a later reopen cannot open the file" do
+          Dir.mktmpdir do |dir|
+            path = File.join(dir, "production.log")
+            [-> { File.mkfifo(path) }, -> { Dir.mkdir(path) }].each do |plant|
+              appender        = SemanticLogger::Appender::File.new(path, permissions: 0o600)
+              appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+              File.unlink(path)
+              plant.call
+
+              Timeout.timeout(5) { appender.reopen }
+
+              2.times { refute appender.log(log) }
+
+              assert_equal 1, refusals(appender).size
+              assert_match(/\ANot writing to the log file #{Regexp.escape(path)}: it could not be opened \(/,
+                           refusals(appender).first)
+              FileUtils.rm_rf(path)
             end
           end
         end
