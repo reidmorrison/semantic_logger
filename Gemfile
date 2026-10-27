@@ -8,6 +8,8 @@ gem "minitest-mock"
 gem "minitest-reporters"
 gem "minitest-shared_description"
 gem "minitest-stub_any_instance"
+# OpenStruct, for the tests of how it is logged: a bundled gem since Ruby 4.0.
+gem "ostruct"
 gem "rake"
 gem "rspec"
 gem "simplecov", require: false

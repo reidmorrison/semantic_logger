@@ -93,7 +93,10 @@ module Appender
 
           appender.formatter.stub(:batch, ->(*) { raise JSON::GeneratorError, "cannot serialize" }) do
             appender.http.stub(:request, ->(_) { flunk "must not send a partial batch" }) do
-              assert_raises(JSON::GeneratorError) { appender.batch([log1, log2]) }
+              error = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.batch([log1, log2]) }
+
+              assert_kind_of JSON::GeneratorError, error.cause
+              assert appender.message_error?(error)
             end
           end
         end
@@ -299,6 +302,17 @@ module Appender
 
           assert_includes error.message, "Invalid :url"
           refute_includes error.message, "S3cr"
+          assert_nil error.cause
+        end
+
+        it "does not include credentials in the error for a proxy_url that cannot be parsed" do
+          proxy_url = "http://proxyuser:pr0xy pw@proxy:3128"
+          error     = assert_raises(URI::InvalidURIError) do
+            SemanticLogger::Appender::Http.new(url: "http://localhost:8088", proxy_url: proxy_url)
+          end
+
+          assert_includes error.message, "Invalid :proxy_url"
+          refute_includes error.message, "pr0xy"
           assert_nil error.cause
         end
 

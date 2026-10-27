@@ -7,6 +7,12 @@ class AppendersTest < Minitest::Test
     end
   end
 
+  class OverflowingLogAppender < SemanticLogger::Test::CaptureLogEvents
+    def log(_log)
+      raise SystemStackError, "stack level too deep"
+    end
+  end
+
   class RaisingFlushAppender < SemanticLogger::Test::CaptureLogEvents
     def flush
       raise "flush boom"
@@ -179,6 +185,18 @@ class AppendersTest < Minitest::Test
 
         assert_includes recording.events, log
         assert(capture_logger.events.any? { |it| it.message.include?("Failed to log to appender") })
+      end
+
+      it "raises a stack overflow to the processor, without writing to the remaining appenders" do
+        recording = SemanticLogger::Test::CaptureLogEvents.new
+        appenders << OverflowingLogAppender.new
+        appenders << recording
+
+        log         = SemanticLogger::Log.new("Test", :info)
+        log.message = "hello"
+
+        assert_raises(SystemStackError) { appenders.log(log) }
+        assert_empty recording.events
       end
     end
 

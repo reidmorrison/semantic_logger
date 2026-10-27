@@ -107,7 +107,7 @@ module SemanticLogger
       end
 
       def log(log)
-        queue.publish(formatter.call(log, self))
+        queue.publish(format_log(log))
       end
 
       def flush
@@ -121,6 +121,11 @@ module SemanticLogger
 
       def queue
         @queue ||= @channel.queue(@queue_name)
+      end
+
+      # Only the queue name: the connection options hold the password. See Subscriber#inspect.
+      def inspect_details
+        "queue_name=#{@queue_name.inspect}"
       end
     end
   end

@@ -104,6 +104,16 @@ module SemanticLogger
             assert_match(/Invalid value for logger exception/, log.exception.message)
           end
 
+          it "coerces a non-exception too deep for #inspect without raising, on a thread" do
+            nested = "leaf"
+            5_000.times { nested = {a: nested} }
+
+            Thread.new { log.assign(exception: nested) }.join
+
+            assert_kind_of ArgumentError, log.exception
+            assert_includes log.exception.message, "#<Hash nested too deeply>"
+          end
+
           it "changes the level when on_exception_level is supplied" do
             log.assign(exception: exception, on_exception_level: :fatal)
 
@@ -183,6 +193,143 @@ module SemanticLogger
           assert_equal 123, log.duration
           assert_nil log.payload
         end
+
+        it "keeps a value that is not valid for its argument in the payload, instead of assigning it" do
+          untrusted = {exception: "boom", duration: "slow", backtrace: "x.rb:1", metric_amount: "1", dimensions: [1]}
+          log.assign_hash(untrusted)
+
+          assert_nil log.exception
+          assert_nil log.duration
+          assert_nil log.backtrace
+          assert_nil log.metric_amount
+          assert_nil log.dimensions
+          assert_equal untrusted, log.payload
+        end
+
+        it "keeps a payload that is not a Hash in the payload, instead of replacing it" do
+          log.assign_hash(payload: "x", user: "bob")
+
+          assert_equal({payload: "x", user: "bob"}, log.payload)
+        end
+
+        it "merges a Hash payload, and ignores a nil one" do
+          log.payload = {a: 1}
+          log.assign_hash(payload: {b: 2})
+          log.assign_hash(payload: nil)
+
+          assert_equal({a: 1, b: 2}, log.payload)
+        end
+
+        it "uses the message only when the log call supplied none, keeping it in the payload otherwise" do
+          log.message = "User 42 logged in"
+          log.assign_hash(message: "User 7 deleted all invoices")
+
+          assert_equal "User 42 logged in", log.message
+          assert_equal({message: "User 7 deleted all invoices"}, log.payload)
+        end
+
+        it "keeps the values the log call supplied, adding the other keys" do
+          log.payload = {user_id: 42}
+          log.assign_hash(user_id: 1, admin: true, payload: {user_id: 2})
+
+          assert_equal({user_id: 42, admin: true}, log.payload)
+        end
+
+        it "does not modify the caller's payload" do
+          attributes  = {name: "bob"}
+          log.payload = attributes
+          log.assign_hash(admin: true)
+
+          assert_equal({name: "bob"}, attributes)
+          assert_equal({name: "bob", admin: true}, log.payload)
+        end
+
+        it "leaves a payload that is not a Hash unchanged when there is nothing to add" do
+          log.payload = "text"
+          log.assign_hash({})
+
+          assert_equal "text", log.payload
+        end
+
+        it "lets the block's own key win over its payload's value, whatever their order" do
+          log.assign_hash(payload: {account_id: 666}, account_id: 42)
+
+          assert_equal({account_id: 42}, log.payload)
+
+          other = SemanticLogger::Log.new("LogTest", :info)
+          other.assign_hash(account_id: 42, payload: {account_id: 666})
+
+          assert_equal({account_id: 42}, other.payload)
+        end
+
+        it "assigns the arguments the log call did not supply" do
+          log.assign_hash(message: "Completed", duration: 1.5, metric: "rails.x", metric_amount: 2,
+                          dimensions: {a: 1}, backtrace: ["app.rb:1"], exception: exception)
+
+          assert_equal "Completed", log.message
+          assert_in_delta(1.5, log.duration)
+          assert_equal "rails.x", log.metric
+          assert_equal 2, log.metric_amount
+          assert_equal({a: 1}, log.dimensions)
+          assert_equal ["app.rb:1"], log.backtrace
+          assert_equal exception, log.exception
+          assert_nil log.payload
+        end
+
+        it "keeps the arguments the log call supplied, adding the block's values to the payload" do
+          supplied = RuntimeError.new("supplied")
+          log.assign(message: "Webhook", duration: 5, metric: "app", metric_amount: 1, dimensions: {a: 1},
+                     backtrace: ["app.rb:1"], exception: supplied)
+          untrusted = {message: "forged", duration: 999, metric: "forged", metric_amount: 9, dimensions: {b: 2},
+                       backtrace: ["forged.rb:1"], exception: exception}
+          backtrace = log.backtrace
+          log.assign_hash(untrusted)
+
+          assert_equal "Webhook", log.message
+          assert_equal 5, log.duration
+          assert_equal "app", log.metric
+          assert_equal 1, log.metric_amount
+          assert_equal({a: 1}, log.dimensions)
+          assert_equal supplied, log.exception
+          assert_equal backtrace, log.backtrace
+          assert_equal untrusted, log.payload
+        end
+
+        it "keeps the backtrace captured at the backtrace level" do
+          with_backtrace_level(:error) do
+            log = SemanticLogger::Log.new("LogTest", :error)
+            log.assign(message: "Webhook")
+            captured = log.backtrace
+            log.assign_hash(backtrace: ["forged.rb:1"])
+
+            refute_nil captured
+            assert_equal captured, log.backtrace
+            assert_equal({backtrace: ["forged.rb:1"]}, log.payload)
+          end
+        end
+
+        it "lets the block's argument the log call supplied win over its payload's value" do
+          log.duration = 5
+          log.assign_hash(payload: {duration: 1}, duration: 2)
+
+          assert_equal 5, log.duration
+          assert_equal({duration: 2}, log.payload)
+        end
+
+        it "keeps the log call's value over a key of the same name, whether a String or a Symbol" do
+          log.payload = {account_id: 42, "user" => "app"}
+          log.assign_hash(JSON.parse('{"account_id":666,"event":"refund"}').merge(user: "untrusted"))
+
+          assert_equal({account_id: 42, "user" => "app", "event" => "refund"}, log.payload)
+        end
+
+        it "uses the message when the log call's message is empty" do
+          log.message = ""
+          log.assign_hash(message: "From block")
+
+          assert_equal "From block", log.message
+          assert_nil log.payload
+        end
       end
 
       describe "#extract_arguments" do
@@ -239,10 +386,17 @@ module SemanticLogger
             assert log.assign(**args)
           end
 
-          it "lets the explicit payload win over a stray key with the same name" do
-            args = log.extract_arguments({payload: {user: "real"}, user: "spoof"}, "msg")
+          it "lets a key passed beside an explicit payload win over the payload's value of the same name" do
+            # The explicit payload is where untrusted data goes, so it cannot replace the application's own value.
+            args = log.extract_arguments({payload: {user: "untrusted"}, user: "app"}, "msg")
 
-            assert_equal({payload: {user: "real"}, message: "msg"}, args)
+            assert_equal({payload: {user: "app"}, message: "msg"}, args)
+          end
+
+          it "lets a key passed beside an explicit payload win over the payload's String key of the same name" do
+            args = log.extract_arguments({payload: {"user" => "untrusted", "id" => 1}, user: "app"}, "msg")
+
+            assert_equal({payload: {user: "app", "id" => 1}, message: "msg"}, args)
           end
 
           it "ignores a log argument with a nil value, so that its default is used" do
@@ -592,6 +746,14 @@ module SemanticLogger
         end
       end
 
+      describe "#cleansed_message in another encoding" do
+        it "converts a message in another encoding to UTF-8 before stripping escape codes" do
+          log.message = "hi \e[1m".encode(Encoding::UTF_16LE)
+
+          assert_equal "hi", log.cleansed_message
+        end
+      end
+
       describe "#cleansed_message" do
         {
           "\e[32m[SUCCESS] User profile updated successfully!\e[0m" => "[SUCCESS] User profile updated successfully!",
@@ -604,6 +766,18 @@ module SemanticLogger
         }.each_pair do |message, expected|
           it "cleanses #{message.inspect}" do
             log.message = message
+
+            assert_equal expected, log.cleansed_message
+          end
+        end
+
+        {
+          "Search: \e\xFF" => "Search:",
+          "\xFFabc"        => "abc",
+          "Search: \xFF"   => "Search:"
+        }.each_pair do |message, expected|
+          it "drops the invalid bytes of #{message.inspect} tagged UTF-8, instead of raising" do
+            log.message = (+message).force_encoding(Encoding::UTF_8)
 
             assert_equal expected, log.cleansed_message
           end
@@ -628,6 +802,16 @@ module SemanticLogger
 
           assert_predicate log, :payload?
           assert_equal log.payload.inspect, log.payload_to_s
+        end
+
+        it "renders a payload too deep for #inspect without raising, on a thread" do
+          nested = "leaf"
+          5_000.times { nested = {a: nested} }
+          log.payload = {body: nested}
+
+          text = Thread.new { log.payload_to_s }.value
+
+          assert_includes text, "#<Hash nested too deeply>"
         end
       end
 

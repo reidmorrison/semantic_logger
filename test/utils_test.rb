@@ -1,5 +1,6 @@
 require_relative "test_helper"
 require "json"
+require "timeout"
 
 module SemanticLogger
   class UtilsTest < Minitest::Test
@@ -32,6 +33,63 @@ module SemanticLogger
           assert_match(/is not a class/, error.message)
         ensure
           SemanticLogger::Utils.send(:remove_const, :NotAClass)
+        end
+      end
+
+      describe ".parse_url" do
+        it "returns the parsed url" do
+          assert_equal "host", SemanticLogger::Utils.parse_url("https://user:pw@host:8443/path").host
+        end
+
+        it "raises without the url, which can hold a password, in the message or as the cause" do
+          error = assert_raises(URI::InvalidURIError) do
+            SemanticLogger::Utils.parse_url("https://user:pa ss@host", option: ":proxy_url", hint: "Hint.")
+          end
+
+          assert_equal "Invalid :proxy_url, it is not a valid URI. Hint.", error.message
+          assert_nil error.cause
+        end
+      end
+
+      describe ".parse_url with nil" do
+        it "raises, rather than parsing an empty url" do
+          error = assert_raises(URI::InvalidURIError) { SemanticLogger::Utils.parse_url(nil) }
+
+          assert_equal "Invalid :url, it is not a valid URI.", error.message
+        end
+      end
+
+      describe ".without_url_in_errors" do
+        it "returns the result of the block" do
+          assert_equal(42, SemanticLogger::Utils.without_url_in_errors { 42 })
+        end
+
+        it "raises an error of the same class, without the url in the message or as the cause" do
+          error_class = Class.new(StandardError)
+          error       = assert_raises(error_class) do
+            SemanticLogger::Utils.without_url_in_errors(option: ":brokers", errors: [error_class]) do
+              raise error_class, "bad broker: user:s3cr3t@host"
+            end
+          end
+
+          assert_equal "Invalid :brokers, it is not a valid URI.", error.message
+          assert_nil error.cause
+        end
+
+        it "leaves other errors alone" do
+          assert_raises(ArgumentError) { SemanticLogger::Utils.without_url_in_errors { raise ArgumentError } }
+        end
+      end
+
+      describe ".redacted_url" do
+        it "keeps only the scheme, host, and a port that is not the default" do
+          assert_equal "https://host:8443", SemanticLogger::Utils.redacted_url("https://user:pw@host:8443/t0ken?api_key=k")
+          assert_equal "https://host", SemanticLogger::Utils.redacted_url("https://host:443/path")
+          assert_equal "udp://host:514", SemanticLogger::Utils.redacted_url("udp://host:514")
+        end
+
+        it "shows nothing of an invalid url" do
+          assert_equal "(invalid url)", SemanticLogger::Utils.redacted_url("https://user:pa ss@host")
         end
       end
 
@@ -146,15 +204,19 @@ module SemanticLogger
           assert_equal '"€ café"', SemanticLogger::Utils.to_json("€ café")
         end
 
-        it "re-raises errors that cleansing cannot fix" do
-          # An object whose own #to_json raises cannot be repaired, so the retry after
-          # cleansing must still raise rather than swallow it.
+        it "writes an object whose own #to_json cannot serialize it as its #to_s" do
           broken = Object.new
           def broken.to_json(*) = raise(JSON::GeneratorError, "cannot serialize")
+          def broken.to_s = "broken \xFF".b
 
-          assert_raises(JSON::GeneratorError) do
-            SemanticLogger::Utils.to_json({value: broken})
-          end
+          assert_equal '{"value":"broken "}', SemanticLogger::Utils.to_json({value: broken})
+        end
+
+        it "re-raises other errors from an object's own #to_json, which repairing cannot fix" do
+          broken = Object.new
+          def broken.to_json(*) = raise(ArgumentError, "bug in #to_json")
+
+          assert_raises(ArgumentError) { SemanticLogger::Utils.to_json({value: broken}) }
         end
 
         it "serializes Infinity and NaN as strings" do
@@ -320,6 +382,182 @@ module SemanticLogger
 
             assert_includes SemanticLogger::Utils.to_json({odd: odd}), "nested too deeply"
           end
+        end
+      end
+
+      describe ".to_json with a Set, OpenStruct, or Exception" do
+        let(:client) do
+          Class.new do
+            def initialize
+              @password = "hunter2"
+            end
+          end.new
+        end
+
+        it "writes a Set as an array, not its #inspect" do
+          result = SemanticLogger::Utils.to_json({clients: Set[client, 1]})
+
+          refute_includes result, "hunter2"
+          assert_equal 1, JSON.parse(result)["clients"].last
+        end
+
+        it "writes a Set of plain values as an array, on Ruby 4.0 too, where its #inspect has no #<" do
+          result = SemanticLogger::Utils.to_json({ids: Set[1, 2], nested: [Set[3]]})
+
+          assert_equal({"ids" => [1, 2], "nested" => [[3]]}, JSON.parse(result))
+        end
+
+        it "writes an OpenStruct as an object, not its #inspect" do
+          require "ostruct"
+          # An application's OpenStruct, as logged in a payload.
+          config = OpenStruct.new(name: "billing", api: client) # rubocop:disable Style/OpenStructUse
+          result = SemanticLogger::Utils.to_json({config: config})
+
+          refute_includes result, "hunter2"
+          assert_equal "billing", JSON.parse(result)["config"]["name"]
+        end
+
+        it "ends the recursion when an OpenStruct's #to_h does not return a Hash" do
+          require "ostruct"
+          odd = Class.new(OpenStruct) { def to_h = self }.new(a: 1) # rubocop:disable Style/OpenStructUse
+
+          assert_includes(Thread.new { SemanticLogger::Utils.to_json({odd: odd}) }.value, "nested too deeply")
+          assert(Thread.new { SemanticLogger::Utils.nested_too_deeply?(odd) }.value)
+        end
+
+        it "writes a structure used as a Hash key as its JSON, not its #inspect" do
+          result = SemanticLogger::Utils.to_json({Set[client] => 1, Struct.new(:api).new(client) => 2})
+
+          refute_includes result, "hunter2"
+          assert_equal [1, 2], JSON.parse(result).values
+        end
+
+        it "keeps a Struct's own #to_json when other text in the entry holds #<" do
+          point  = Struct.new(:x) { def to_json(*) = '{"custom":true}' }.new(1)
+          result = SemanticLogger::Utils.to_json({message: "undefined method 'x' for #<Foo>", point: point})
+
+          assert_equal({"custom" => true}, JSON.parse(result)["point"])
+        end
+
+        it "writes an Exception as its message, repairing invalid UTF-8" do
+          error = RuntimeError.new((+"bad \xFF input").force_encoding(Encoding::UTF_8))
+
+          assert_equal({"error" => "bad  input"}, JSON.parse(SemanticLogger::Utils.to_json({error: error})))
+        end
+      end
+
+      describe ".json_ready" do
+        it "returns the value itself when JSON can write it" do
+          value = {a: [1, "b"], c: {d: nil}}
+
+          assert_same value, SemanticLogger::Utils.json_ready(value)
+        end
+
+        it "returns a copy that JSON can write otherwise" do
+          assert_equal({amount: "Infinity"}, SemanticLogger::Utils.json_ready({amount: Float::INFINITY}))
+        end
+      end
+
+      describe ".structure?" do
+        it "is true for the values json_safe writes as an object or array" do
+          [{}, [], Set[], Struct.new(:a).new(1), Data.define(:a).new(a: 1)].each do |value|
+            assert SemanticLogger::Utils.structure?(value), "for #{value.inspect}"
+          end
+        end
+
+        it "is false for other values" do
+          ["text", 1, :sym, nil, Object.new].each do |value|
+            refute SemanticLogger::Utils.structure?(value), "for #{value.inspect}"
+          end
+        end
+      end
+
+      describe ".safe_inspect" do
+        it "returns #inspect for a value that can be inspected" do
+          assert_equal({a: [1, "b"]}.inspect, SemanticLogger::Utils.safe_inspect({a: [1, "b"]}))
+        end
+
+        it "renders a structure too deep for #inspect, cut off with a placeholder, on a thread" do
+          nested = "leaf"
+          5_000.times { nested = {a: nested} }
+
+          text = Thread.new { SemanticLogger::Utils.safe_inspect(nested) }.value
+
+          assert_includes text, "#<Hash nested too deeply>"
+          refute_includes text, "leaf"
+        end
+
+        it "renders with the block instead of #inspect, from the cut-off copy when too deep" do
+          nested = "leaf"
+          5_000.times { nested = {a: nested} }
+
+          assert_equal "1 entries", SemanticLogger::Utils.safe_inspect({a: 1}) { |value| "#{value.size} entries" }
+          assert_includes(Thread.new { SemanticLogger::Utils.safe_inspect(nested, &:to_s) }.value,
+                          "#<Hash nested too deeply>")
+        end
+
+        it "renders a structure that holds itself more than once, without copying it exponentially" do
+          looped     = {}
+          looped[:a] = looped
+          looped[:b] = looped
+
+          text = Timeout.timeout(5) { SemanticLogger::Utils.safe_inspect(looped) }
+
+          assert_equal({a: "#<Hash nested too deeply>", b: "#<Hash nested too deeply>"}.inspect, text)
+        end
+
+        it "renders the same structure repeatedly on one thread, without overflowing the stack" do
+          nested = "leaf"
+          5_000.times { nested = [nested] }
+
+          texts = Thread.new { Array.new(3) { SemanticLogger::Utils.safe_inspect({body: nested}) } }.value
+
+          assert_equal 1, texts.uniq.size
+          assert_includes texts.first, "#<Array nested too deeply>"
+        end
+      end
+
+      describe ".nested_too_deeply?" do
+        def chain(levels, &wrap)
+          levels.times.reduce("leaf") { |inner, _| wrap.call(inner) }
+        end
+
+        it "is false up to the depth that json_safe keeps, and true beyond it" do
+          depth = SemanticLogger::Utils::MAX_JSON_SAFE_DEPTH
+
+          refute SemanticLogger::Utils.nested_too_deeply?(chain(depth) { |inner| {a: inner} })
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth + 1) { |inner| {a: inner} })
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth + 1) { |inner| [inner] })
+        end
+
+        it "looks inside Hash keys, Structs, and Data" do
+          depth  = SemanticLogger::Utils::MAX_JSON_SAFE_DEPTH + 1
+          member = Struct.new(:inner)
+          value  = Data.define(:inner)
+
+          assert SemanticLogger::Utils.nested_too_deeply?({chain(depth) { |inner| [inner] } => 1})
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth) { |inner| member.new(inner) })
+          assert SemanticLogger::Utils.nested_too_deeply?(chain(depth) { |inner| value.new(inner: inner) })
+        end
+
+        it "is false for values that are not structures" do
+          ["text", 1, nil, Object.new].each do |value|
+            refute SemanticLogger::Utils.nested_too_deeply?(value)
+          end
+        end
+
+        it "ends a structure that references itself" do
+          looped        = {}
+          looped[:self] = looped
+
+          assert SemanticLogger::Utils.nested_too_deeply?(looped)
+        end
+
+        it "ends the recursion when #to_h does not return a Hash, as json_safe does" do
+          odd = Struct.new(:x) { def to_h = self }.new(1)
+
+          assert(Thread.new { SemanticLogger::Utils.nested_too_deeply?({odd: odd}) }.value)
+          assert_includes(Thread.new { SemanticLogger::Utils.safe_inspect({odd: odd}) }.value, "nested too deeply")
         end
       end
 

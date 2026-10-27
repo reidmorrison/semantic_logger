@@ -28,5 +28,24 @@ class FormattersTest < Minitest::Test
         assert_equal "Test", formatter.call(log, appender)
       end
     end
+
+    describe "a message tagged UTF-8 with invalid bytes, as Rack decodes ?q=%1B%FF" do
+      let(:appender) { SemanticLogger::Appender::IO.new($stdout) }
+
+      %i[json raw fluentd ecs logfmt loki syslog_cee one_line].each do |name|
+        it "is formatted by :#{name} without raising" do
+          formatter = SemanticLogger::Formatters.factory(name)
+
+          ["Search: \e\xFF", "\xFFabc", "Search: \xFF"].each do |text|
+            log = SemanticLogger::Log.new("Search", :info)
+            log.assign(message: (+text).force_encoding(Encoding::UTF_8))
+
+            output = formatter.call(log, appender)
+
+            assert_includes output.to_s, "Search" if text.start_with?("Search")
+          end
+        end
+      end
+    end
   end
 end

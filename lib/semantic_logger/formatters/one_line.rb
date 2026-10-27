@@ -4,7 +4,7 @@ module SemanticLogger
     #
     # Notes:
     # * New lines and carriage returns are stripped from every text field: the name, thread name,
-    #   tags, named tags, message, payload and exception message.
+    #   file name, tags, named tags, message, payload and exception message.
     #   With `escape_control_chars: true` they, and all other control characters, are escaped
     #   instead, like the other text formatters.
     # * Exceptions only include the class and message, the stack trace is not shown.
@@ -32,6 +32,12 @@ module SemanticLogger
         one_line(log.name) if log.name
       end
 
+      # A log call can supply the backtrace that the file name comes from.
+      def file_name_and_line
+        file, line = log.file_name_and_line(true)
+        "#{one_line(file)}:#{line}" if file
+      end
+
       def message
         "-- #{one_line(log.message)}" if log.message
       end
@@ -51,7 +57,9 @@ module SemanticLogger
       # The exception details, with each line trimmed and joined by a space.
       def exception_details
         details = exception_details_for(log.exception) if log.exception
-        one_line(details.split(/\s*\n\s*/).reject(&:empty?).join(" ").strip) if details
+        return unless details
+
+        one_line(Utils.encode_utf8_string(details).split(/\s*\n\s*/).reject(&:empty?).join(" ").strip)
       end
 
       private
@@ -62,8 +70,12 @@ module SemanticLogger
       end
 
       # Returns [String] the value without line breaks, so that the entry stays on one line.
+      #
+      # A String with invalid bytes, such as a request parameter decoded from "%FF", or in another
+      # encoding, such as a binary request body, is converted to valid UTF-8 first, since deleting
+      # from it, or joining it with UTF-8 text, would raise and lose the entry.
       def one_line(value)
-        escape_control_characters(value.to_s).delete("\r\n")
+        Utils.encode_utf8_string(escape_control_characters(value.to_s)).delete("\r\n")
       end
     end
   end

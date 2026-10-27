@@ -161,9 +161,12 @@ file is created and to an existing log file:
 SemanticLogger.add_appender(file_name: "production.log", permissions: 0o640)
 ~~~
 
-The permissions are only applied to a regular file owned by the process with a single hard link,
-and not through a symbolic link. A log file linked to `/dev/stdout`, for example, is still written
-to, but the appender leaves the permissions alone and logs a warning once. See
+With `permissions:`, the log file must be a regular file owned by the process, with a single hard
+link, that the file name names directly rather than through a symbolic link. Nothing is written to
+any other file, such as a log file linked to `/dev/stdout`, nor when the file cannot be opened:
+`add_appender` raises `IOError` giving the reason, and a file that fails the check when it is
+reopened later, for example on a rotation, is reported and not written to until it is fixed. To log
+to standard output, use `io: $stdout` instead. See
 [Log file permissions](security.html#log-file-permissions).
 
 ### IO Streams
@@ -362,22 +365,30 @@ timestamp="2024-07-20T08:32:05.375276Z" level="info" name="MyClass" message="Hel
 
 Notes:
 
-* The timestamp is ISO 8601. All values are quoted and escaped, so a newline in the data cannot
-  forge or split a record.
+* The timestamp is ISO 8601, under the key `timestamp` unless the formatter's `time_key` is set
+  (`formatter: {logfmt: {time_key: :ts}}`). All values are quoted and escaped, so a newline in the
+  data cannot forge or split a record.
 * Keys (from tags, named tags, and the payload) cannot be quoted in logfmt, so spaces, control
-  characters (including the Unicode line and paragraph separators), `=`, and `"` in a key are
-  replaced with `_`, and invalid UTF-8 is dropped. For example the tag `second breakfast` is
-  emitted as `second_breakfast=true`.
-* Keys that only match once encoded, or that only differ by type (such as `:level` and
-  `"level"`), are emitted once, keeping the earlier field. For example the tags `message` and
-  `duration ms` do not replace the `message` and `duration_ms` fields.
-* Named tags and payload fields are merged into the top-level `key=value` pairs. On a name
-  conflict the payload wins.
+  characters (including the Unicode line and paragraph separators), invisible format characters
+  (such as a zero width space), `=`, and `"` in a key are replaced with `_`, and invalid UTF-8 is
+  dropped. For example the tag `second breakfast` is emitted as `second_breakfast=true`.
+* Named tags and payload fields are merged into the top-level `key=value` pairs. A key named like
+  one of the entry's own fields (the time key, `level`, `name`, `message`, `duration`,
+  `duration_ms`, `tag`, or an exception field) is emitted with its source as a prefix, so that
+  logged data cannot replace those fields: `payload.level="fatal"`, `named_tags.message="..."`, or
+  `tags.message=true`. A key that starts with `tags.`, `named_tags.`, or `payload.` is prefixed
+  too, as in `payload.named_tags.level`, so that it cannot pass for another source's field.
+* Other keys that are the same once encoded, including keys that only differ by type (such as
+  `:user` and `"user"`), are emitted once, with the value from the later source: the payload wins
+  over named tags, and named tags over tags.
 * Unnamed tags are emitted as keys with a `true` value.
 * A nested value, such as a Hash or an Array in the payload, is emitted as its JSON text, quoted:
   `user="{\"id\":7}"`.
 * `tag="success"` is emitted on every entry, becoming `tag="exception"` when the entry carries an
-  exception (the exception class, message, and backtrace are then included as fields).
+  exception, which is then included as the fields `exception_name`, `exception_message`,
+  `stack_trace`, and, when the exception has a cause, `cause`. With `log_exception_details: true`
+  (off by default), the detail Ruby adds to the exception's message is included as
+  `exception_details`; see [Exception details](config.html#exception-details).
 
 ## Network protocols
 
@@ -469,11 +480,12 @@ SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088")
 # TCP with SSL:
 SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088", ssl: true)
 
-# With self-signed certificates, or to disable server certificate verification:
+# With a self-signed certificate, or one from a private certificate authority, trust that
+# certificate instead of disabling verification:
 SemanticLogger.add_appender(
   appender: :tcp,
   server:   "localhost:8088",
-  ssl:      {verify_mode: OpenSSL::SSL::VERIFY_NONE}
+  ssl:      {ca_file: "/path/to/ca.pem"}
 )
 ~~~
 
@@ -864,19 +876,27 @@ Some logging context is forwarded to Sentry:
 
 * From named tags, `transaction_name`. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/transaction-name/>.
-* From named tags or payload, `user` is built from the `user_id`, `username`, `user_email`, and
+* From named tags, `user` is built from the `user_id`, `username`, `user_email`, and
   `ip_address` keys, plus any `user` key that is itself a hash. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/identify-user/>.
-* From the payload, `fingerprint` configures grouping granularity. See
+* From named tags, `fingerprint` (an Array of Strings, Symbols, or numbers) configures grouping
+  granularity. See
   <https://docs.sentry.io/platforms/ruby/usage/sdk-fingerprinting/>.
 * Named tags are sent as Sentry tags. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/tags/>.
 * Unnamed tags are sent as the `:tag` tag, separated by commas.
-* Everything else from the payload and context is added to `extras`.
+* Everything else from the payload and context is added to `extras`, including a value of the
+  wrong type for one of the keys above.
+
+> **Deprecated:** the `user` and `fingerprint` keys are also still taken from the payload, but that
+> is deprecated and will be removed in v6, since the payload often holds untrusted data, such as a
+> request body, that could set the user an error is reported for. Set them with named tags. The
+> named tags win over the payload, and a user field is only taken from the payload when it is a
+> String, Symbol, or Integer.
 
 ~~~ruby
-SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
-  logger.error("some message", username: "joe", fingerprint: ["bar"])
+SemanticLogger.tagged(transaction_name: "foo", user_id: 42, username: "joe", fingerprint: ["bar"], baz: "quz") do
+  logger.error("some message")
 end
 ~~~
 
@@ -927,6 +947,10 @@ SemanticLogger.on_log do |log|
   Rollbar.error(err, :log_extra => log.to_h)
 end
 ~~~
+
+It sends the whole entry, payload included, so register it after any `on_log` subscriber that
+[redacts sensitive data](security.html#redacting-sensitive-data): subscribers run in the order they
+were registered.
 
 ## Databases and message queues
 

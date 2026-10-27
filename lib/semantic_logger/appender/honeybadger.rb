@@ -43,7 +43,7 @@ module SemanticLogger
 
       # Send an error notification to honeybadger
       def log(log)
-        context = formatter.call(log, self)
+        context = format_log(log)
         if log.exception
           context.delete(:exception)
           ::Honeybadger.notify(log.exception, context)

@@ -86,7 +86,7 @@ module SemanticLogger
             log.payload = {data: "sample", number: 123, array: [1, 2, 3]}
 
             assert_equal(
-              {"data" => "sample", "number" => "123", "array" => "[1, 2, 3]"},
+              {"data" => "sample", "number" => "123", "array" => "[1,2,3]"},
               values_data[2]
             )
           end
@@ -94,7 +94,39 @@ module SemanticLogger
           it "serializes nested hashes in the payload as JSON" do
             log.payload = {nested: {number: 1}}
 
-            assert_equal({"nested" => "{\"number\":\"1\"}"}, values_data[2])
+            assert_equal({"nested" => "{\"number\":1}"}, values_data[2])
+          end
+
+          it "serializes a nested value once, so that the output grows with the depth, not doubles" do
+            nested = "leaf"
+            30.times { nested = {"a" => nested} }
+            log.payload = {params: nested}
+
+            output = formatter.call(log, logger)
+            params = JSON.parse(JSON.parse(output)["streams"][0]["values"][0][2]["params"])
+
+            assert_operator output.bytesize, :<, 2_000
+            assert_equal "leaf", params.dig(*["a"] * 30)
+          end
+
+          it "writes a payload that is not a Hash as a single field" do
+            log.payload = "just a string"
+
+            assert_equal({"payload" => "just a string"}, values_data[2])
+          end
+
+          it "writes a Struct as JSON of its members, not its #inspect" do
+            client      = Class.new { def initialize = (@password = "hunter2") }.new
+            log.payload = {client: Struct.new(:name, :api).new("billing", client), list: [client]}
+
+            refute_includes formatter.call(log, logger), "hunter2"
+            assert_equal "billing", JSON.parse(values_data[2]["client"])["name"]
+          end
+
+          it "does not raise for a message with invalid UTF-8" do
+            log.message = (+"Search: \e\xFF").force_encoding(Encoding::UTF_8)
+
+            assert_equal "Search:", values_data[1]
           end
 
           describe "when log application is true" do
@@ -309,7 +341,7 @@ module SemanticLogger
             log.named_tags = {"name\xE2".b => "val\xE2".b}
             log.payload    = {"key\xE2".b => "value\xE2".b}
 
-            assert_equal "Bad: ", values_data[1]
+            assert_equal "Bad:", values_data[1]
             assert_equal ["Tag: "], stream_data["tags"]
             assert_equal "val", stream_data["name"]
             assert_equal "value", values_data[2]["key"]

@@ -118,7 +118,7 @@ module SemanticLogger
 
       # Log the message to Splunk
       def log(log)
-        event = formatter.call(log, self)
+        event = format_log(log)
         service_index.submit(event.delete(:message), event)
         true
       end

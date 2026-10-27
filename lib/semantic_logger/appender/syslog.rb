@@ -135,7 +135,7 @@ module SemanticLogger
         @max_size           = max_size
         @level_map          = SemanticLogger::Formatters::Syslog::LevelMap.build(level_map)
         @url                = url
-        uri                 = URI(@url)
+        uri                 = Utils.parse_url(@url)
         @server             = uri.host || "localhost"
         @protocol           = (uri.scheme || :syslog).to_sym
         @port               = uri.port || 514
@@ -202,12 +202,12 @@ module SemanticLogger
         case @protocol
         when :syslog
           # Since the Ruby Syslog API supports sprintf format strings, double up all existing '%'
-          message = formatter.call(log, self).gsub "%", "%%"
+          message = format_log(log).gsub "%", "%%"
           ::Syslog.log @level_map[log.level], message
         when :tcp
-          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{formatter.call(log, self)}\r\n") }
+          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{format_log(log)}\r\n") }
         when :udp
-          @remote_syslog.send(formatter.call(log, self), 0, @server, @port)
+          @remote_syslog.send(format_log(log), 0, @server, @port)
         else
           raise "Unsupported protocol: #{protocol}"
         end
@@ -217,6 +217,11 @@ module SemanticLogger
       # Flush is called by the semantic_logger during shutdown.
       def flush
         @remote_syslog.flush if @remote_syslog.respond_to?(:flush)
+      end
+
+      # Over UDP, a log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.
+      def message_error?(exception)
+        (@protocol == :udp && exception.is_a?(Errno::EMSGSIZE)) || super
       end
 
       # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender
@@ -238,6 +243,11 @@ module SemanticLogger
       # and maximum packet size.
       PACKET_FORMATTERS = %i[syslog syslog_cee].freeze
       private_constant :PACKET_FORMATTERS
+
+      # The url without any credentials. See Subscriber#inspect.
+      def inspect_details
+        "url=#{Utils.redacted_url(url).inspect}"
+      end
 
       private
 

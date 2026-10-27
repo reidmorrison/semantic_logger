@@ -89,6 +89,14 @@ module SemanticLogger
         @processor = QueueProcessor.start(appender: appender, **args)
       end
 
+      # Returns [String] the class and object address of this proxy, whether it batches, and the
+      # wrapped appender's own #inspect, which shows only what that appender says is safe, but none of
+      # the instance variables of this proxy or its queue processor. See Subscriber#inspect.
+      def inspect
+        address = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
+        "#{address} batch=#{batch?} appender=#{appender.inspect}>"
+      end
+
       # Re-open appender after a fork.
       def reopen
         appender.reopen if appender.respond_to?(:reopen)

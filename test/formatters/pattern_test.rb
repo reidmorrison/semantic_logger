@@ -179,6 +179,13 @@ module SemanticLogger
           it "is blank without a backtrace" do
             assert_equal "", formatted("%{file_name}")
           end
+
+          it "escapes the file name of a supplied backtrace when escape_control_chars is enabled" do
+            log.backtrace = ["\e]0;owned\a\e[2J\rFAKE x.rb:1"]
+            output        = Pattern.new(pattern: "%{file_name}:%{line}", escape_control_chars: true).call(log, nil)
+
+            assert_equal "\\e]0;owned\\x07\\e[2J\\rFAKE x.rb:1", output
+          end
         end
 
         describe "line" do

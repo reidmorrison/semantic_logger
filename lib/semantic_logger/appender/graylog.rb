@@ -100,7 +100,7 @@ module SemanticLogger
 
       # Re-open after process fork
       def reopen
-        uri       = URI.parse(@url)
+        uri       = Utils.parse_url(@url)
         @server   = uri.host
         @port     = uri.port
         @protocol = uri.scheme.to_sym
@@ -120,10 +120,10 @@ module SemanticLogger
       def call(log, logger)
         h = default_formatter.call(log, logger)
 
-        h[:short_message] = h.delete(:message)
-        if h[:short_message].nil?
-          h[:short_message] = log.exception.nil? ? "<no-exception-message>" : log.exception.message
-        end
+        # GELF rejects an empty short_message, such as a message of only ANSI escape codes.
+        h[:short_message] = h.delete(:message).to_s
+        h[:short_message] = log.exception.message.to_s.strip if h[:short_message].empty? && log.exception
+        h[:short_message] = "<no-exception-message>" if h[:short_message].empty?
         h[:level]        = logger.level_map[log.level]
         h[:level_str]    = log.level.to_s
         h[:duration_str] = h.delete(:duration)
@@ -131,9 +131,25 @@ module SemanticLogger
       end
 
       # Forward log messages
+      #
+      # GELF serializes the Hash with #to_json, which raises for Infinity, NaN, invalid UTF-8, or a
+      # structure nested too deeply, and writes a Struct through its #inspect, so such a Hash is
+      # handed over as a copy that JSON can represent (see Utils.json_ready).
       def log(log)
-        notifier.notify!(formatter.call(log, self))
+        notifier.notify!(format_log(log) { |hash| Utils.json_ready(hash) })
         true
+      end
+
+      # GELF raises ArgumentError for a log message it cannot send, such as one too large to fit in
+      # the maximum number of chunks, which retrying cannot send either. Unavailable servers raise
+      # network errors instead.
+      def message_error?(exception)
+        exception.is_a?(ArgumentError) || super
+      end
+
+      # The url without any credentials. See Subscriber#inspect.
+      def inspect_details
+        "url=#{Utils.redacted_url(url).inspect}"
       end
 
       private

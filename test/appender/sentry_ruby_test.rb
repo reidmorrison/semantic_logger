@@ -48,6 +48,118 @@ module Appender
         end
       end
 
+      describe "with the Sentry user or fingerprint in the payload" do
+        # Logs the entry directly, and returns the Sentry scope it was captured with.
+        def capture(log)
+          scope = nil
+          ::Sentry.stub(:capture_message, ->(*) { scope = ::Sentry.get_current_scope }) do
+            appender.log(log)
+          end
+          scope
+        end
+
+        def error_log(payload, named_tags = {})
+          log = SemanticLogger::Log.new("Webhook", :error)
+          log.assign(message: "Webhook rejected", payload: payload)
+          log.named_tags = named_tags
+          log
+        end
+
+        it "leaves the log entry and the application's payload unchanged" do
+          attributes = {user_id: 7, fingerprint: ["a"], amount: 10}
+          log        = error_log(attributes, {transaction_name: "checkout", username: "bob"})
+          scope      = capture(log)
+
+          assert_equal({id: 7, username: "bob"}, scope.user)
+          assert_equal ["a"], scope.fingerprint
+          assert_equal({user_id: 7, fingerprint: ["a"], amount: 10}, attributes)
+          assert_equal({user_id: 7, fingerprint: ["a"], amount: 10}, log.payload)
+          assert_equal({transaction_name: "checkout", username: "bob"}, log.named_tags)
+        end
+
+        it "sends a value of the wrong type as data, instead of raising" do
+          scope = capture(error_log({fingerprint: "not an array", user_id: {id: 1}, user: "not a hash"}))
+
+          assert_empty scope.fingerprint
+          assert_empty scope.user
+          assert_equal "not an array", scope.extra[:fingerprint]
+          assert_equal({id: 1}, scope.extra[:user_id])
+        end
+
+        it "sends a payload that is not a Hash as data, instead of raising" do
+          scope = capture(error_log([1, 2]))
+
+          assert_equal [1, 2], scope.extra[:payload]
+        end
+
+        it "takes the fingerprint from the named tags, without sending it as a tag" do
+          scope = capture(error_log({}, {fingerprint: ["grouped"]}))
+
+          assert_equal ["grouped"], scope.fingerprint
+          refute scope.tags.key?("fingerprint")
+        end
+
+        it "takes each user field from the named tags over the payload" do
+          scope = capture(error_log({user_id: 666, username: "eve"}, {user_id: 7}))
+
+          assert_equal({id: 7, username: "eve"}, scope.user)
+          assert_equal 666, scope.extra[:user_id]
+        end
+
+        it "merges a user Hash from the payload under the named tags" do
+          payload = {user: {id: 666, "username" => "eve", segment: "paid"}}
+          scope   = capture(error_log(payload, {user_id: 7, username: "bob"}))
+
+          assert_equal({id: 7, username: "bob", segment: "paid"}, scope.user)
+          refute scope.extra.key?(:user)
+        end
+
+        it "sends a user Hash from the payload with a value of another type as data" do
+          scope = capture(error_log({user: {geo: {city: "Paris"}}}, {user_id: 7}))
+
+          assert_equal({id: 7}, scope.user)
+          assert_equal({geo: {city: "Paris"}}, scope.extra[:user])
+        end
+
+        it "takes a user field of any type from the named tags, and leaves out a nil one" do
+          user_id = Object.new
+          scope   = capture(error_log({}, {user_id: user_id, username: nil}))
+
+          assert_equal({id: user_id}, scope.user)
+          refute scope.tags.key?("username")
+        end
+
+        it "takes a fingerprint with numbers in it, as Strings" do
+          scope = capture(error_log({fingerprint: ["upstream", 503, :timeout]}))
+
+          assert_equal %w[upstream 503 timeout], scope.fingerprint
+        end
+
+        it "warns that taking a user Hash from the payload is deprecated" do
+          original             = Warning[:deprecated]
+          Warning[:deprecated] = true
+          _out, err            = capture_io do
+            capture(error_log({user: {segment: "paid"}}, {user_id: 7}))
+          end
+
+          assert_includes err, "SentryRuby took the Sentry user or fingerprint from the log payload"
+        ensure
+          Warning[:deprecated] = original
+        end
+
+        it "warns once that taking them from the payload is deprecated" do
+          original             = Warning[:deprecated]
+          Warning[:deprecated] = true
+          _out, err            = capture_io do
+            2.times { capture(error_log({user_id: 7})) }
+          end
+
+          assert_equal 1, err.scan("SentryRuby took the Sentry user or fingerprint from the log payload").size
+        ensure
+          Warning[:deprecated] = original
+        end
+      end
+
       describe "when enriching events" do
         let(:capture) do
           lambda { |msg, payload = {}|

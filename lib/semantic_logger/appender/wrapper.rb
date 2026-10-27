@@ -57,7 +57,7 @@ module SemanticLogger
       #  Ruby or Rails Loggers
       def log(log)
         level = log.level == :trace ? :debug : log.level
-        @logger.send(level, formatter.call(log, self))
+        @logger.send(level, format_log(log))
         true
       end
 

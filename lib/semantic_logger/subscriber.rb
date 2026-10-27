@@ -79,6 +79,26 @@ module SemanticLogger
       !console_stream.nil?
     end
 
+    # Returns [String] the class and object address of this appender, like Kernel#inspect, followed
+    # by #inspect_details, but none of its instance variables.
+    #
+    # Appenders hold credentials in their instance variables: passwords and urls holding them, api
+    # keys and tokens, request headers, private keys, and the options passed to a client gem.
+    # Printing SemanticLogger.appenders, for example in a console or an error report, must not
+    # show them.
+    def inspect
+      address = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
+      details = inspect_details
+      details ? "#{address} #{details}>" : "#{address}>"
+    end
+
+    # Returns [String] what #inspect shows about this appender, such as its url without its
+    # credentials, or nil for nothing. Only an appender knows which of its settings are safe to
+    # show, so each one overrides this.
+    def inspect_details
+      nil
+    end
+
     # Whether an appender that implements #batch should be wrapped in a batch
     # proxy automatically. Appenders that support batching but should only batch
     # when explicitly requested (via `batch: true`) override this to return false.
@@ -86,11 +106,16 @@ module SemanticLogger
       true
     end
 
-    # Errors raised by formatting a log message whose content cannot be written, such as a
+    # Raised by #format_log and #format_batch when the formatter fails, with the formatter's
+    # error as its cause. A formatter has no destination, so it can only fail because of the
+    # content of the log message, whatever it raises.
+    class FormatError < StandardError; end
+
+    # Errors raised by writing a log message whose content cannot be written, such as a
     # value that cannot be serialized. Excludes JSON::ParserError, which comes from parsing a
     # response rather than from the message, except its subclass JSON::NestingError, which
     # JSON.generate raises for a value nested too deeply.
-    MESSAGE_ERRORS = [JSON::GeneratorError, JSON::NestingError, EncodingError, FloatDomainError].freeze
+    MESSAGE_ERRORS = [FormatError, JSON::GeneratorError, JSON::NestingError, EncodingError, FloatDomainError].freeze
 
     # Whether the supplied exception, raised by #log or #batch, was caused by the content of a
     # log message, rather than by the destination, for example being unavailable.
@@ -98,7 +123,8 @@ module SemanticLogger
     # Retrying cannot write such a message, so an asynchronous appender discards it and carries
     # on, instead of backing off and retrying. Any other exception is retried with a back-off.
     #
-    # An appender that raises its own errors for bad content can override this to recognize them.
+    # Every error raised by the formatter is one (see #format_log). An appender whose client
+    # raises its own errors for bad content can override this to recognize them.
     def message_error?(exception)
       MESSAGE_ERRORS.any? { |error_class| exception.is_a?(error_class) }
     end
@@ -114,6 +140,42 @@ module SemanticLogger
     end
 
     private
+
+    # Returns the log message formatted by this appender's formatter.
+    #
+    # Any StandardError the formatter raises is raised as a FormatError, with the formatter's
+    # error as its cause, so that #message_error? recognizes it: an asynchronous appender then
+    # discards the message instead of backing off. Appenders call this rather than formatter.call.
+    #
+    # A SystemStackError is raised as it is, so that rescuing StandardError does not swallow it:
+    # the thread that overflowed must not keep writing (see Appenders#log).
+    #
+    # The block, when given, turns the formatter's output into what the appender sends, such as
+    # its JSON. An error doing so is also caused by the content of the message.
+    def format_log(log)
+      formatted = formatter.call(log, self)
+      block_given? ? yield(formatted) : formatted
+    rescue StandardError => e
+      raise FormatError, "Could not format the log message (#{e.class})"
+    end
+
+    # Returns the log messages formatted by the formatter's #batch, as for #format_log.
+    #
+    # A formatter that cannot format a batch is a configuration error rather than bad content, so
+    # it raises ArgumentError instead, which is retried with a back-off and reported like any
+    # other. That includes an appender that is its own formatter (it implements #call), whose
+    # #batch is the appender's own.
+    def format_batch(logs)
+      unless formatter.respond_to?(:batch) && !formatter.equal?(self)
+        raise(ArgumentError, "#{formatter.class.name} cannot format a batch. It must implement #batch(logs, logger)")
+      end
+
+      begin
+        formatter.batch(logs, self)
+      rescue StandardError => e
+        raise FormatError, "Could not format the batch of log messages (#{e.class})"
+      end
+    end
 
     # Initializer for Abstract Class SemanticLogger::Subscriber
     #

@@ -356,6 +356,21 @@ class SemanticLoggerTest < Minitest::Test
           context: {custom_info: "test"}
         )
       end
+
+      it "reports an exception raised by a listener in sync mode, and still logs the entry" do
+        internal  = InMemoryAppender.new
+        appender  = InMemoryAppender.new
+        processor = SemanticLogger::SyncProcessor.new(SemanticLogger::Appenders.new(internal).tap { |a| a << appender })
+        SemanticLogger.on_log { |_log| raise(ArgumentError, "listener failed") }
+
+        SemanticLogger::Logger.stub(:processor, processor) do
+          logger.info("hello world")
+        end
+
+        assert_equal "hello world", appender.message.message
+        assert_equal "Exception calling :on_log subscriber", internal.message.message
+        assert_kind_of ArgumentError, internal.message.exception
+      end
     end
 
     describe ".host=" do

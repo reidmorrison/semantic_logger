@@ -117,6 +117,16 @@ module SemanticLogger
             refute formatter.payload
           end
 
+          it "renders a payload too deep for Amazing Print without raising, on a thread" do
+            nested = "leaf"
+            5_000.times { nested = {a: nested} }
+            log.payload = {body: nested}
+
+            text = Thread.new { formatter.payload }.value
+
+            assert_includes text, "#<Hash nested too deeply>"
+          end
+
           it "skips empty payload" do
             log.payload = {}
 
@@ -189,6 +199,14 @@ module SemanticLogger
             output = SemanticLogger::Formatters::Color.new(escape_control_chars: true).call(log, nil)
 
             assert_equal "\n(\\e[2J):1\napp.rb:2", output[output.index("\n")..]
+          end
+
+          it "escapes the file name of a supplied backtrace when enabled" do
+            log.backtrace = ["\e]0;owned\a\e[2J\rFAKE x.rb:1"]
+            output        = SemanticLogger::Formatters::Color.new(escape_control_chars: true).call(log, nil)
+
+            assert_includes output, " \\e]0;owned\\x07\\e[2J\\rFAKE x.rb:1]"
+            refute_includes output, "\e]0;"
           end
 
           describe "with control characters in the logged data" do

@@ -154,21 +154,22 @@ module SemanticLogger
         reopen
       end
 
+      # The url is left to the client gem to parse, since it also takes a comma separated list of
+      # urls, an Array of them, or hosts without a scheme.
       def reopen
-        @client = client_class.new(@client_args)
+        @client = Utils.without_url_in_errors(option: ":url or :hosts") { client_class.new(@client_args) }
       end
 
       # Log to the index for today
       def log(log)
-        bulk_payload = formatter.call(log, self)
-        bulk_write([bulk_index(log), bulk_payload])
+        bulk_write([bulk_index(log), bulk_line(log)])
         true
       end
 
       def batch(logs)
         messages = []
         logs.each do |log|
-          messages << bulk_index(log) << formatter.call(log, self)
+          messages << bulk_index(log) << bulk_line(log)
         end
 
         bulk_write(messages)
@@ -180,6 +181,12 @@ module SemanticLogger
         true
       end
 
+      # The url without its credentials, and the index. See Subscriber#inspect.
+      def inspect_details
+        url_detail = @client_args.key?(:url) ? "url=#{Utils.redacted_url(url).inspect} " : ""
+        "#{url_detail}index=#{index.inspect}"
+      end
+
       private
 
       # The backing client class, e.g. ::Elasticsearch::Client or ::OpenSearch::Client.
@@ -187,12 +194,25 @@ module SemanticLogger
         raise NotImplementedError, "#{self.class} must implement #client_class"
       end
 
+      # Returns [String] the log message formatted as a bulk line, serialized by Utils.to_json
+      # and handed to the client as a String. The client gem's serializer writes Infinity and NaN
+      # as bare words, which is not JSON, and does not repair invalid UTF-8, a structure nested too
+      # deeply, or a Struct (written through its #inspect), so such an entry was dropped or its
+      # objects' instance variables were written. Serializing is part of formatting, so an error
+      # doing so discards the message rather than stalling the appender (see #format_log). A
+      # formatter that returns a String is taken to have serialized the line itself.
+      def bulk_line(log)
+        format_log(log) { |document| document.is_a?(String) ? document : Utils.to_json(document) }
+      end
+
+      # Serializes the action lines; the documents already are (see #bulk_line).
       def bulk_write(messages)
+        body        = messages.map { |message| message.is_a?(String) ? message : message.to_json }
         bulk_result =
           if @data_stream
-            @client.bulk(index: index, body: messages)
+            @client.bulk(index: index, body: body)
           else
-            @client.bulk(body: messages)
+            @client.bulk(body: body)
           end
 
         return unless bulk_result["errors"]

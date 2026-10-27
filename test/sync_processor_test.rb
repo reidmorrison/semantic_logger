@@ -40,6 +40,15 @@ module SemanticLogger
         end
       end
 
+      describe "#logger" do
+        it "returns the internal logger of its appenders" do
+          internal  = SemanticLogger::Test::CaptureLogEvents.new
+          appenders = SemanticLogger::Appenders.new(internal)
+
+          assert_same internal, SemanticLogger::SyncProcessor.new(appenders).logger
+        end
+      end
+
       describe "#add" do
         it "adds an appender" do
           added = processor.add(io: $stdout)
@@ -55,6 +64,20 @@ module SemanticLogger
           processor.log(log)
 
           assert_includes appender.events, log
+        end
+
+        it "reports a stack overflow instead of raising it from the log call" do
+          internal    = SemanticLogger::Test::CaptureLogEvents.new
+          appenders   = SemanticLogger::Appenders.new(internal)
+          overflowing = SemanticLogger::Test::CaptureLogEvents.new
+          overflowing.define_singleton_method(:log) { |_log| raise SystemStackError, "stack level too deep" }
+          appenders << overflowing
+          log         = SemanticLogger::Log.new("Test", :info)
+          log.message = "hello"
+
+          SemanticLogger::SyncProcessor.new(appenders).log(log)
+
+          assert_kind_of SystemStackError, internal.events.last.exception
         end
       end
 

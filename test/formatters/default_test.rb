@@ -180,6 +180,13 @@ module SemanticLogger
             assert_equal "-- Hello\\nInjected line\\e[31m", formatter.message
           end
 
+          it "escapes the file name of a supplied backtrace" do
+            log.backtrace = ["\e]0;owned\a\e[2J\rFAKE x.rb:1"]
+
+            assert_equal "\\e]0;owned\\x07\\e[2J\\rFAKE x.rb:1", formatter.file_name_and_line
+            assert_includes formatter.process_info, "\\e]0;owned\\x07\\e[2J\\rFAKE x.rb:1"
+          end
+
           it "escapes carriage returns, tabs, and other control characters" do
             log.message = "a\rb\tc\x00d"
 

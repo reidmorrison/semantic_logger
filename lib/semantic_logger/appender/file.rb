@@ -10,6 +10,15 @@ module SemanticLogger
                     :reopen_period, :reopen_count, :reopen_size, :permissions
       attr_reader :log_count, :log_size, :current_file_name, :reopen_at
 
+      # With permissions, the log file is opened without following a symbolic link, so that a link
+      # planted in the log directory can neither create nor open the file it points at, without
+      # blocking, so that a planted FIFO fails to open instead of waiting for a reader, and without
+      # becoming the controlling terminal.
+      SECURE_OPEN_FLAGS = ::File::NOFOLLOW | ::File::NONBLOCK | ::File::NOCTTY
+      # Seconds to wait before opening a refused log file again.
+      REFUSED_RETRY_INTERVAL = 5
+      private_constant :SECURE_OPEN_FLAGS, :REFUSED_RETRY_INTERVAL
+
       # Create an appender to log to a named file.
       #
       # Parameters
@@ -77,9 +86,12 @@ module SemanticLogger
       #     Octal file permissions to apply to the log file.
       #     Log files frequently contain sensitive information, so restrict access
       #     by supplying for example `0o640` (owner read/write, group read).
-      #     Applied both when the file is created and to an existing log file, but only
-      #     to a regular file owned by the process, with a single hard link, that the
-      #     file_name names directly rather than through a symbolic link.
+      #     Applied both when the file is created and to an existing log file, which must be
+      #     a regular file owned by the process, with a single hard link, that the file_name
+      #     names directly rather than through a symbolic link. Nothing is written to any
+      #     other file, or when the file cannot be opened: the appender raises IOError when it
+      #     is created, and when the file is later reopened, it reports why and writes nothing
+      #     until the file is fixed, trying again every few seconds.
       #     Default: nil (use the process umask, the standard Ruby behavior)
       #
       #   :retry_count [Integer]
@@ -155,45 +167,34 @@ module SemanticLogger
 
         # Open the file at creation time so that misconfiguration (bad directory,
         # insufficient permissions, ...) raises immediately in SemanticLogger.add_appender,
-        # instead of surfacing later on the appender thread via the internal logger.
-        reopen
+        # instead of surfacing later on the appender thread via the internal logger. With
+        # permissions, a refused log file raises IOError (see #open_with_permissions).
+        raise(IOError, refusal_message, cause: @refusal_cause) unless reopen
       end
 
       # After forking an active process call #reopen to re-open
       # open the file handles etc to resources.
       def reopen
-        begin
-          @file&.close
-        rescue StandardError
-          nil
-        end
+        close_quietly(@file)
 
         self.current_file_name = apply_format_directives(file_name)
-        if ::File.directory?(file_name)
+        # With permissions, a directory is refused when it fails to open, like any other file.
+        if !permissions && ::File.directory?(current_file_name)
           raise(ArgumentError, "The supplied log file_name: #{current_file_name} is already a directory.")
         end
 
         self.log_count = 0
-        if append && reopen_size && ::File.exist?(current_file_name)
-          self.log_size = ::File.size(current_file_name)
-          self.log_size = 0 if log_size >= reopen_size
-        else
-          self.log_size = 0
-        end
+        # File.size? rather than File.size, since the file can be removed at any time.
+        size = ::File.size?(current_file_name) if append && reopen_size
+        self.log_size = size && size < reopen_size ? size : 0
 
         self.reopen_at = reopen_period ? next_reopen_period(reopen_period) : nil
 
         options = ::File::WRONLY | ::File::CREAT
         options |= ::File::APPEND if append
-        @file =
-          if permissions
-            ::File.open(current_file_name, options, permissions)
-          else
-            ::File.open(current_file_name, options)
-          end
-        # File.open only applies the permissions when creating the file, so also
-        # enforce them on an already existing log file.
-        apply_permissions if permissions
+        @file = permissions ? open_with_permissions(options) : ::File.open(current_file_name, options)
+        return unless @file
+
         # Force all log entries to write immediately without buffering
         # Allows multiple processes to write to the same log file simultaneously
         @file.sync = true
@@ -205,18 +206,23 @@ module SemanticLogger
       # Since only one appender thread will be writing to the file at a time
       # it is not necessary to protect access to the file with a semaphore.
       def log(log)
-        reopen if time_to_reopen?
+        # Read once, since #reopen can be called from another thread meanwhile.
+        file = time_to_reopen? ? reopen : @file
+        return refused unless file
 
-        count = 0
+        # Formatted once, outside the retry below: reopening the file cannot fix the content.
+        message = format_log(log) << "\n"
+        count   = 0
         begin
-          message = formatter.call(log, self) << "\n"
-          @file.write(message)
+          file.write(message)
           @log_count += 1
           @log_size  += message.size
         rescue StandardError => e
           if count < retry_count
             count += 1
-            reopen
+            file = reopen
+            return refused unless file
+
             retry
           end
           raise(e)
@@ -230,38 +236,82 @@ module SemanticLogger
         @file&.flush
       end
 
+      # See Subscriber#inspect.
+      def inspect_details
+        "file_name=#{file_name.inspect}"
+      end
+
       private
 
       attr_writer :log_count, :log_size, :current_file_name, :reopen_at
 
-      # Apply the permissions to the open log file, but only when it is safe to do so. See
-      # #permissions_refusal for the conditions.
+      # Opens the log file and applies the permissions to it, when it is safe to do so (see
+      # #permissions_refusal). Returns the open file, or nil after closing it and recording why it is
+      # refused, so that nothing is written to it.
       #
-      # Opening follows symbolic links, so that a log file can for example be linked to
-      # /dev/stdout. Changing the permissions of whatever the link points at could however loosen
-      # them on an unrelated file, such as a private key linked into a shared log directory.
-      #
-      # The warning is only logged once per appender, since the file is reopened on every
-      # rotation, fork, and write retry.
-      def apply_permissions
-        reason = permissions_refusal
-        return @file.chmod(permissions) unless reason
-        return if @permissions_warned
+      # Changing the permissions of a file that another name links to could loosen them on an
+      # unrelated file, such as a private key linked into a shared log directory. Writing log messages
+      # to a file that this process does not own, or that another name links to, would let whoever
+      # controls it read them, despite the permissions asked for. So with permissions, the appender
+      # fails closed: it raises when it is created (see #initialize), and when the file is later
+      # reopened, on a rotation, a fork, or a write retry, it stops writing and reports why (see
+      # #refused) until the file is fixed (see #refused_retry_due?).
+      def open_with_permissions(options)
+        file   = ::File.open(current_file_name, options | SECURE_OPEN_FLAGS, permissions)
+        reason = permissions_refusal(file)
+        if reason
+          close_quietly(file)
+          return refuse(reason)
+        end
 
-        @permissions_warned = true
-        logger.warn("Not applying permissions to #{current_file_name}: #{reason}")
+        file.chmod(permissions)
+        @refusal = @refusal_cause = @reported_refusal = nil
+        file
+      rescue SystemCallError => e
+        close_quietly(file)
+        refuse(open_refusal(e), e)
       end
 
-      # Returns why the permissions must not be applied to the open log file, or nil when they can.
+      # Records why the log file is refused, and returns nil.
+      def refuse(reason, cause = nil)
+        @refusal          = reason
+        @refusal_cause    = cause
+        @refused_retry_at = monotonic_time + REFUSED_RETRY_INTERVAL
+        nil
+      end
+
+      # Reports why log messages are not being written to the log file, once for each file and
+      # reason, and returns false.
+      def refused
+        refusal = [current_file_name, @refusal]
+        unless @reported_refusal == refusal
+          @reported_refusal = refusal
+          logger.error(refusal_message)
+        end
+        false
+      end
+
+      def refusal_message
+        "Not writing to the log file #{current_file_name}: #{@refusal}"
+      end
+
+      # Returns why the log file could not be opened with permissions.
+      def open_refusal(error)
+        return "it is a symbolic link" if error.is_a?(Errno::ELOOP) && ::File.symlink?(current_file_name)
+
+        "it could not be opened (#{error.message})"
+      end
+
+      # Returns why the permissions must not be applied to the open log file, nor log messages
+      # written to it, or nil when they can.
       #
-      # The path must not be a symbolic link and must still name the file that was opened, so that
-      # swapping the path between opening and checking it cannot redirect the chmod. The open file
-      # must be a regular file owned by this process, with a single hard link, since a hard link
-      # planted in the log directory is otherwise indistinguishable from the file it links to.
-      def permissions_refusal
-        stat      = @file.stat
+      # It must be a regular file owned by this process, with a single hard link, since a hard link
+      # planted in the log directory is otherwise indistinguishable from the file it links to. The
+      # path must also still name it, so that swapping the path after opening cannot redirect the
+      # log messages.
+      def permissions_refusal(file)
+        stat      = file.stat
         path_stat = ::File.lstat(current_file_name)
-        return "it is a symbolic link" if path_stat.symlink?
         return "it is not a regular file" unless stat.file?
         return "it is not owned by this process" unless stat.uid == ::Process.euid
         return "it has more than one hard link" unless stat.nlink == 1
@@ -272,12 +322,30 @@ module SemanticLogger
         "it could not be checked (#{e.message})"
       end
 
+      def close_quietly(file)
+        file&.close
+      rescue StandardError
+        nil
+      end
+
+      def monotonic_time
+        ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+      end
+
       def time_to_reopen?
-        return true unless @file
+        return refused_retry_due? unless @file
 
         (reopen_count.positive? && (log_count >= reopen_count)) ||
           (reopen_size.positive? && (log_size >= reopen_size)) ||
           (reopen_at && (Time.now > reopen_at))
+      end
+
+      # A refused log file is opened again every few seconds, and at the next scheduled reopen,
+      # rather than for every message.
+      def refused_retry_due?
+        return true unless @refused_retry_at
+
+        monotonic_time >= @refused_retry_at || (reopen_at && Time.now > reopen_at)
       end
 
       def apply_format_directives(file_name)

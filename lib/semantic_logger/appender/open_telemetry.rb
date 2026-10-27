@@ -48,7 +48,7 @@ module SemanticLogger
       def log(log)
         # return log_metric(log) if metrics && log.metric_only?
 
-        body        = formatter.call(log, self)
+        body        = format_log(log)
         level       = body.delete(:level)
         level_index = body.delete(:level_index)
         time        = body.delete(:time)
@@ -89,7 +89,7 @@ module SemanticLogger
       # For logging metrics only log events.
       # def log_metric(log)
       #   puts "**** TODO: Metric Only Event ****"
-      #   ap formatter.call(log, self)
+      #   ap format_log(log)
       #   ap log.payload
       #   true
       # end

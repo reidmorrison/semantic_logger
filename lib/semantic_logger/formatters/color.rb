@@ -118,7 +118,7 @@ module SemanticLogger
 
         if log.payload.respond_to?(:ai)
           begin
-            "-- #{escape_control_characters(log.payload.ai(ai_options))}"
+            "-- #{escape_control_characters(log.payload_to_s { |payload| payload.ai(ai_options) })}"
           rescue StandardError
             super
           end

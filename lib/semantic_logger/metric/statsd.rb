@@ -32,7 +32,7 @@ module SemanticLogger
       end
 
       def reopen
-        uri = URI.parse(@url)
+        uri = Utils.parse_url(@url)
         raise('Statsd only supports udp. Example: "udp://localhost:8125"') if uri.scheme != "udp"
 
         @statsd           = ::Statsd.new(uri.host, uri.port)
@@ -61,6 +61,11 @@ module SemanticLogger
       def should_log?(log)
         # Does not support metrics with dimensions.
         log.metric && !log.dimensions && meets_log_level?(log) && !filtered?(log)
+      end
+
+      # The url without any credentials. See Subscriber#inspect.
+      def inspect_details
+        "url=#{Utils.redacted_url(url).inspect}"
       end
     end
   end

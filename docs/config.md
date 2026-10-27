@@ -273,8 +273,11 @@ filter: ->(log) { log.message !~ /\Aheartbeat/ }
 ### Example: rewriting a message inside a filter
 
 A filter can also **modify** the log event before it is written, as long as it still returns `true`
-so the (now edited) entry is kept. This is handy for redacting sensitive data. Resque, for example,
-logs the entire job payload, which may contain private information:
+so the (now edited) entry is kept. This is handy for redacting sensitive data in a logger's filter,
+as below, or in `on_log` (see [Redacting sensitive data](security.html#redacting-sensitive-data)).
+Do not redact in an appender's filter: every appender writes the same log event, so the appenders
+added before it have already written the data. Resque, for example, logs the entire job payload,
+which may contain private information:
 
 ```ruby
 Resque.logger.filter = ->(log) do
@@ -526,7 +529,7 @@ every other formatter, including `:one_line` and the syslog formatters, so their
 change. The syslog appender also turns it off for the formatter it uses with a local syslog daemon.
 When enabled, `:one_line` joins the detail onto the same line, after ` -- `. With the `:json`
 formatter and the others built on `:raw`, it adds an `exception.details` field (and `details`
-within each `cause`):
+within each `cause`), which `:logfmt` writes as `exception_details`:
 
 ```ruby
 # Include the error_highlight source snippet in development:
@@ -584,7 +587,7 @@ class SimpleAppender < SemanticLogger::Subscriber
     p log
 
     # Display the formatted output
-    puts formatter.call(log, self)
+    puts format_log(log)
   end
 
   # Optional
@@ -602,16 +605,23 @@ end
 When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
 is retried after a back-off, on the basis that the destination may be briefly unavailable. An
 exception caused by the content of one message cannot succeed on retry, so that message is discarded
-instead. `#message_error?(exception)` decides which is which: by default it recognizes the errors
-raised when formatting a value that cannot be serialized (`JSON::GeneratorError`,
-`JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it to recognize errors your
-appender raises for content it cannot write:
+instead. `#message_error?(exception)` decides which is which. Format each message with
+`format_log(log)` (or a batch with `format_batch(logs)`) rather than `formatter.call`: any error the
+formatter raises is then raised as a `SemanticLogger::Subscriber::FormatError`, which
+`#message_error?` recognizes, since a formatter can only fail because of the content of the message.
+By default it also recognizes the errors raised when serializing a value that cannot be written
+(`JSON::GeneratorError`, `JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it
+to recognize errors your appender's client raises for content it cannot write:
 
 ~~~ruby
 def message_error?(exception)
   exception.is_a?(MyClient::InvalidDocument) || super
 end
 ~~~
+
+A `SystemStackError` is handled separately: the message is discarded, and since a thread must not
+overflow its stack twice (on macOS that crashes Ruby), the worker carries on in a new thread. Do not
+rescue it in `#log` or `#batch`.
 
 An appender that supports batching implements `#batch(logs)`. When `#batch` raises a message error,
 the whole batch is discarded by default, since it may already have written some of the messages.
@@ -621,7 +631,7 @@ is then split up and retried, so that only the offending message is discarded:
 
 ~~~ruby
 def batch(logs)
-  client.send_all(logs.map { |log| formatter.call(log, self) })
+  client.send_all(logs.map { |log| format_log(log) })
 end
 
 def batch_all_or_nothing?

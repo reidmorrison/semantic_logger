@@ -14,7 +14,10 @@ module Appender
           collection_size: 10 * (1024**2),
           host:            "test",
           application:     "test_application",
-          level:           :trace
+          level:           :trace,
+          # Acknowledged writes, so that a test can read back what it just logged. The default of
+          # 0 does not wait for the server, which made the tests fail now and then.
+          write_concern:   1
         )
       end
 
@@ -22,6 +25,24 @@ module Appender
 
       after do
         appender.purge_all
+      end
+
+      describe "#message_error?" do
+        it "is true for a document that BSON cannot serialize" do
+          [{"a\u0000b" => 1}, {big: 2**64}, {object: Object.new}].each do |payload|
+            error = assert_raises(StandardError) { appender.info("Webhook received", payload: payload) }
+
+            assert appender.message_error?(error), "expected #{error.class} to be a message error"
+          end
+        end
+
+        it "is false when the server is unavailable" do
+          refute appender.message_error?(Mongo::Error::NoServerAvailable.allocate)
+        end
+
+        it "is false for a reply from the server that cannot be decoded" do
+          refute appender.message_error?(BSON::Error::BSONDecodeError.new("invalid reply"))
+        end
       end
 
       describe "format logs into documents" do

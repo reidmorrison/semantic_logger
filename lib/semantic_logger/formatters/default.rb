@@ -16,9 +16,12 @@ module SemanticLogger
       end
 
       # Ruby file name and line number that logged the message.
+      #
+      # The file name is escaped like the other fields, since it comes from the first line of the
+      # backtrace, which a log call can supply from untrusted data.
       def file_name_and_line
         file, line = log.file_name_and_line(true)
-        "#{file}:#{line}" if file
+        "#{escape_control_characters(file)}:#{line}" if file
       end
 
       # Returns [String] the available process info

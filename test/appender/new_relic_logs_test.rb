@@ -118,13 +118,10 @@ module Appender
         assert_equal "deep_value", @hash.dig("payload", "level1", "level2", "level3", "level4")
       end
 
-      it "rescues a JSON serialization error and does not raise" do
-        # Raise the appender level so its own warn calls do not recurse back into #log.
-        @appender.level = :fatal
-
+      it "rescues a serialization error and does not raise" do
         unserializable = Object.new
         def unserializable.to_json(*)
-          raise JSON::GeneratorError, "cannot serialize"
+          raise ArgumentError, "bug in #to_json"
         end
         # Set @formatter directly: passing a callable to #stub or #formatter= would be
         # invoked rather than returned, masking the path under test.
@@ -140,9 +137,6 @@ module Appender
       end
 
       it "rescues an unexpected error and does not raise" do
-        # Raise the appender level so its own warn calls do not recurse back into #log.
-        @appender.level = :fatal
-
         @appender.instance_variable_set(:@formatter, ->(_log, _appender) { raise "boom" })
         log = SemanticLogger::Log.new("TestLogger", :info)
 
@@ -151,6 +145,26 @@ module Appender
         end
 
         assert_nil @logged_message
+      end
+
+      it "reports an error to the internal logger, instead of logging it through itself" do
+        internal         = SemanticLogger::Test::CaptureLogEvents.new
+        @appender.logger = internal
+        calls            = 0
+        failing          = lambda do |_message, _level|
+          calls += 1
+          raise NoMethodError, "undefined method 'log_event_aggregator' for nil"
+        end
+        log              = SemanticLogger::Log.new("TestLogger", :info)
+        log.message      = "hello"
+
+        NewRelic::Agent.agent.log_event_aggregator.stub(:record, failing) do
+          assert_equal true, @appender.log(log)
+        end
+
+        assert_equal 1, calls
+        assert_equal ["Could not log to New Relic"], internal.events.map(&:message)
+        assert_kind_of NoMethodError, internal.events.first.exception
       end
     end
   end

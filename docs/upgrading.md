@@ -16,7 +16,28 @@ description: >-
 
 v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, and fixes
 several security issues. None of the security fixes change the public API, but a few change the
-output, which matters if you parse the logs or alert on them.
+output, which matters if you parse the logs or alert on them, and the file appender's
+`permissions:` option can now make `add_appender` raise for a log file that worked in v5.1.
+
+#### Set the Sentry user and fingerprint with named tags
+
+The `:sentry_ruby` appender takes the Sentry user (`user_id`, `username`, `user_email`, `ip_address`,
+and `user`) and `fingerprint` from named tags or the payload. Taking them from the payload is
+deprecated and will be **removed in v6**, since the payload often holds untrusted data, such as a
+request body, which could then set the user an error is reported for. It emits a deprecation warning
+the first time it happens. Until then, the named tags win over the payload, which no longer replaces
+a user field they set, and only a String, Symbol, or Integer is taken from the payload for a user
+field. Set them with named tags instead, which can now also hold the `fingerprint`:
+
+~~~ruby
+# Before:
+logger.error("Payment failed", user_id: user.id, fingerprint: ["payment-failed"])
+
+# After:
+SemanticLogger.tagged(user_id: user.id, fingerprint: ["payment-failed"]) do
+  logger.error("Payment failed")
+end
+~~~
 
 #### Replace the `:splunk` appender with `:splunk_http`
 
@@ -71,36 +92,87 @@ This applies to the `:syslog` and `:syslog_cee` formatters. An application that 
 server, and so does not need the `syslog` gem, can use the same constants from
 `SemanticLogger::Formatters::Syslog`, for example `SemanticLogger::Formatters::Syslog::LOG_LOCAL0`.
 
+#### The file appender's `permissions:` refuses a log file it cannot secure
+
+With `permissions:`, the file appender only writes to a regular file owned by the process, with a
+single hard link, that the file name names directly rather than through a symbolic link.
+`SemanticLogger.add_appender` now raises `IOError`, giving the reason, for any other log file,
+which v5.1 wrote to, changing the permissions of whatever a link pointed at. So a configuration
+that worked in v5.1 can now fail at boot, for example `permissions:` on a log file that is a
+symbolic link to `/dev/stdout`, or on a log file that another user created. With `permissions:`,
+a log file that cannot be opened also raises `IOError`, instead of the operating system's error,
+such as `Errno::ENOENT`, which is its `cause`. A log file that fails the check, or to open, when it
+is reopened later, on a rotation or after a fork, is reported to the internal logger and not
+written to until it is fixed, instead of raising from the logging thread.
+
+If you set `permissions:` on such a log file, either fix the file or remove `permissions:`. To log
+to standard output, use `io: $stdout`:
+
+~~~ruby
+# Before, with log/production.log a symbolic link to /dev/stdout:
+SemanticLogger.add_appender(file_name: "log/production.log", permissions: 0o640)
+
+# After:
+SemanticLogger.add_appender(io: $stdout)
+~~~
+
 #### Output changes
 
-* `:logfmt`: spaces, control characters, `=`, `"`, and Unicode line separators in keys are
-  replaced with `_`, and invalid UTF-8 bytes are dropped. A tag such as `second breakfast` is now
-  emitted as `second_breakfast=true`. Keys that only match once encoded, or that only differ by
-  type (`:level` and `"level"`), are emitted once, keeping the earlier field, so a tag or named
-  tag can no longer add a second `level` or `message` field. A payload that is not a Hash is
-  emitted as a single `payload` field. A nested value (a Hash, Array, `Struct`, or `Data`, such as
-  the exception backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its
-  `#inspect` text.
+* `:logfmt`: spaces, control characters, invisible format characters (such as a zero width space),
+  `=`, `"`, and Unicode line separators in keys are replaced with `_`, and invalid UTF-8 bytes are
+  dropped. A tag such as `second breakfast` is now emitted as `second_breakfast=true`. A tag,
+  named tag, or payload key named like one of the entry's own fields, which are the time key
+  (`timestamp` by default), `level`, `name`, `message`, `duration`, `duration_ms`, `tag`, and the
+  exception fields, is emitted with its source as a prefix, such as `payload.name="shrek"` or
+  `tags.message=true`, instead of replacing the field, and so is a key that starts with `tags.`,
+  `named_tags.`, or `payload.`. A logged exception's class and message are emitted as
+  `exception_name` and `exception_message` (followed by `stack_trace` and `cause` as before),
+  instead of replacing the entry's `name` and `message`, and the detail that
+  `log_exception_details: true` adds as `exception_details`. Other keys that are the same once
+  encoded, such as `:user` and `"user"`, are emitted once, with the value from the later source:
+  the payload over named tags, and named tags over tags. A payload that is not a Hash is emitted
+  as a single `payload` field. A nested value (a Hash, Array, `Struct`,
+  `Data`, `Set`, or any other value whose JSON is an object or an array, such as the exception
+  backtrace) is emitted as quoted JSON, `user="{\"id\":7}"`, instead of its `#inspect` text.
 * `:syslog`: an entry with an exception stays on one line; the newlines between the exception and
   its backtrace are escaped as `\n`.
 * `:default`, `:color`, `:pattern`, and `:syslog`: with `escape_control_chars`, the logger name,
-  thread name, payload, the messages of the exceptions that caused the logged exception, and the
-  backtrace lines are escaped too. Invalid UTF-8 bytes are dropped instead of the entry failing to
+  thread name, file name, payload, the messages of the exceptions that caused the logged exception,
+  and the backtrace lines are escaped too. Invalid UTF-8 bytes are dropped instead of the entry failing to
   format. With escaping on, `:color` renders the payload plain and on one line, since Amazing
   Print's colors and line breaks cannot be told apart from control characters in the data.
-* `:one_line`: line breaks are removed from every field (name, thread name, tags, named tags,
-  payload, message, and exception), carriage returns as well as newlines, and
+* `:one_line`: line breaks are removed from every field (name, thread name, file name, tags, named
+  tags, payload, message, and exception), carriage returns as well as newlines, and
   `escape_control_chars` is honoured.
 * JSON based formatters: `Infinity` and `NaN` payload values are serialized as strings, and
   structures nested deeper than 32 levels are replaced with a placeholder such as
-  `#<Hash nested too deeply>`, instead of the whole entry being dropped. A `Struct` or `Data`
-  value is written as an object of its members, as Rails already does, instead of its `#inspect`
-  text.
+  `#<Hash nested too deeply>`, instead of the whole entry being dropped. A `Struct`, `Data`, or
+  `OpenStruct` value is written as an object of its members, and a `Set` as an array, as Rails
+  already does, instead of its `#inspect` text. An exception in the payload is written as its
+  message, and any other object whose JSON fails because of invalid UTF-8 as its `#to_s`, with
+  the invalid bytes dropped. The `:elasticsearch` and `:opensearch` appenders write their bulk lines the same way.
+* JSON based formatters and `:one_line`: invalid UTF-8 bytes in the message are dropped, and a
+  message in another encoding is converted to UTF-8, instead of the entry failing to format.
+* `:loki`: a nested Hash, Array, `Struct`, or `Set` in the payload is written once as JSON, keeping
+  the JSON types of its values, so `{number: 1}` is written as `{"number":1}` rather than
+  `{"number":"1"}`, and `[1, 2, 3]` as `[1,2,3]`. A payload that is not a Hash is written as a
+  single `payload` field.
+* `:open_telemetry`: a `Struct`, `Set`, or other structure in the payload, or in an Array in it, is
+  written as JSON instead of its `#inspect`. A payload that is not a Hash is submitted as a single
+  `payload` attribute.
 * Hashes logged as the payload, for example `logger.info("Webhook", params)`: a key that is also
   a log argument (`duration`, `metric_amount`, `backtrace`, `log_exception`, ...) is only used as
   that argument when its value is valid for it. Otherwise it stays in the payload, where it was
   previously consumed or made the call raise. A `nil` value is ignored. When an explicit
-  `payload:` is also given, its values win over other keys of the same name.
+  `payload:` is also given, the other keys win over its values of the same name, a String key such
+  as `"account_id"` having the same name as `:account_id`.
+* Hashes returned from a logging block, for example `logger.info("Webhook") { {user: "bob"} }`, are
+  checked the same way. A log argument from the block, such as `message`, `duration`, `exception`,
+  or `backtrace`, is only used when the log entry does not have it yet, and is otherwise kept in the
+  payload. A backtrace captured because the level is at or above `backtrace_level` counts, so the
+  block's `backtrace` no longer replaces it. The block's keys no longer replace values the log call
+  supplied under the same name, whether as a String or a Symbol, and win over the values of the
+  block's own `payload` with the same name.
 * The HTTP appender and the appenders built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
   `:signalfx`): the url in the error logged for a rejected request shows only the scheme, host,
   and port, and `#inspect` shows only the object address and that url.
@@ -110,10 +182,30 @@ server, and so does not need the `syslog` gem, can use the same constants from
 
 * An async or batching appender discards a log message that it cannot format, instead of
   retrying it. Discarded messages are reported to the internal logger and counted in the new
-  `failed` key of the appender's stats.
-* The file appender's `permissions:` option is only applied to a regular file owned by the
-  process, with a single hard link, that was not reached through a symbolic link. Otherwise it
-  warns once and leaves the permissions unchanged.
+  `failed` key of the appender's stats. Every error raised by a built-in appender's formatter
+  counts, as does a message too large for a UDP datagram, a MongoDB document that BSON cannot
+  serialize, and a message GELF cannot send. A custom appender can format through
+  `format_log(log)` (or `format_batch(logs)`) instead of `formatter.call` to get the same
+  treatment, or override `#message_error?` for errors its own client raises.
+* The text formatters write a payload nested more than 32 levels deep as the JSON formatters
+  write it, cut off with their placeholder, such as `"#<Hash nested too deeply>"`.
+* A log message that overflows the stack while it is written is discarded, and the worker
+  thread carries on in a new thread, instead of the worker stopping for good.
+* `#inspect` on every appender shows only its class, object address, and what it says is safe to
+  show, such as `url="https://es.example.com:9200"`, `queue_name="logs"`, or `group="/my/app"`,
+  instead of its instance variables. A custom appender can show more by overriding
+  `#inspect_details`. An appender added with `async: true` or `batch: true` shows as
+  `#<SemanticLogger::Appender::Async:0x... batch=true appender=#<...>>`.
+* `:cloudwatch_logs` sends the buffered messages in as many requests as the PutLogEvents limits
+  need, oldest first, cuts short a message larger than 1 MB, and reports to the internal logger a
+  request that fails, and the messages that AWS rejects as too new, too old, or expired. It formats each message when it is logged, writes invalid UTF-8 as valid
+  UTF-8, and discards a message that its formatter cannot write, or writes as something other than
+  a String with content, instead of failing the whole request.
+* `:sentry_ruby` leaves the log entry's payload and named tags unchanged, so every appender after
+  it, and your own Hash, keep the keys it reads. A user field, or `user` Hash, in the payload no
+  longer replaces one from the named tags. A payload user field that is not a String, Symbol, or
+  Integer, a `fingerprint` that is not an Array of Strings, Symbols, or numbers, and a payload that
+  is not a Hash, are sent as data instead.
 
 #### Stricter `logger_measure_method` arguments
 

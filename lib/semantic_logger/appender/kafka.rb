@@ -23,6 +23,9 @@ require "date"
 module SemanticLogger
   module Appender
     class Kafka < SemanticLogger::Subscriber
+      SEED_BROKERS_HINT = "Each should be similar to: 'hostname:port' or 'kafka://hostname:port'".freeze
+      private_constant :SEED_BROKERS_HINT
+
       attr_accessor :seed_brokers, :client_id, :connect_timeout, :socket_timeout,
                     :ssl_ca_cert, :ssl_client_cert, :ssl_client_cert_key, :ssl_ca_certs_from_system,
                     :delivery_threshold, :delivery_interval, :required_acks,
@@ -149,17 +152,22 @@ module SemanticLogger
       end
 
       def reopen
-        @kafka = ::Kafka.new(
-          seed_brokers:             seed_brokers,
-          client_id:                client_id,
-          connect_timeout:          connect_timeout,
-          socket_timeout:           socket_timeout,
-          ssl_ca_cert:              ssl_ca_cert,
-          ssl_client_cert:          ssl_client_cert,
-          ssl_client_cert_key:      ssl_client_cert_key,
-          ssl_ca_certs_from_system: ssl_ca_certs_from_system,
-          logger:                   logger
-        )
+        # ruby-kafka puts the seed broker, which can hold credentials, in the error it raises for an
+        # invalid one: URI::InvalidURIError, or Kafka::Error for an unknown scheme.
+        errors = [URI::InvalidURIError, ::Kafka::Error]
+        @kafka = Utils.without_url_in_errors(option: ":seed_brokers", hint: SEED_BROKERS_HINT, errors: errors) do
+          ::Kafka.new(
+            seed_brokers:             seed_brokers,
+            client_id:                client_id,
+            connect_timeout:          connect_timeout,
+            socket_timeout:           socket_timeout,
+            ssl_ca_cert:              ssl_ca_cert,
+            ssl_client_cert:          ssl_client_cert,
+            ssl_client_cert_key:      ssl_client_cert_key,
+            ssl_ca_certs_from_system: ssl_ca_certs_from_system,
+            logger:                   logger
+          )
+        end
 
         @producer = @kafka.async_producer(
           delivery_threshold: delivery_threshold,
@@ -177,7 +185,7 @@ module SemanticLogger
 
       # Forward log messages to Kafka producer thread.
       def log(log)
-        json = formatter.call(log, self)
+        json = format_log(log)
         @producer.produce(json, topic: topic, partition: partition, partition_key: partition_key, key: key)
       end
 
@@ -193,6 +201,12 @@ module SemanticLogger
           delivery_threshold: delivery_threshold,
           delivery_interval:  delivery_interval
         )
+      end
+
+      # Only the topic: the seed brokers can hold credentials, and the options hold the TLS private
+      # key and SASL passwords. See Subscriber#inspect.
+      def inspect_details
+        "topic=#{@topic.inspect}"
       end
 
       private

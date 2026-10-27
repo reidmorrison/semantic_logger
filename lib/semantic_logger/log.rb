@@ -124,7 +124,7 @@ module SemanticLogger
 
       if exception
         unless exception.is_a?(Exception)
-          exception = ArgumentError.new("Invalid value for logger exception: #{exception.inspect}")
+          exception = ArgumentError.new("Invalid value for logger exception: #{Utils.safe_inspect(exception)}")
           exception.set_backtrace(Utils.extract_backtrace(caller))
         end
 
@@ -161,23 +161,25 @@ module SemanticLogger
       true
     end
 
-    # Keys that #assign_hash may assign directly to a log attribute. Every other
-    # key is folded into the payload, preventing a supplied hash from overwriting
-    # sensitive fields such as :level, :name, or :time, and keeping this path
-    # consistent with #extract_arguments.
-    ASSIGNABLE_KEYS = (NON_PAYLOAD_KEYS + %i[payload]).freeze
+    # Log attributes that a Hash returned by a logging block can set (see #assign_hash). Its other
+    # keys go to the payload, so that it cannot set fields such as :level, :name, or :time.
+    ASSIGNABLE_KEYS = %i[message exception backtrace duration metric metric_amount dimensions].freeze
 
-    # Assign known keys to self, all other keys to the payload.
+    # Assign the Hash returned by a logging block, after #assign has applied the log call.
+    #
+    # A block can return untrusted data, such as a parsed request body, so its keys are classified
+    # by #extract_arguments, as for a Hash passed after the message. A log argument is only assigned
+    # when this entry does not have it yet (an exception must also be an Exception), and otherwise
+    # goes to the payload like any other key. Whatever the key order, the log call's values win,
+    # then the block's top-level keys, then those of its :payload. No supplied Hash is modified.
     def assign_hash(hash)
-      self.payload ||= {}
-      hash.each_pair do |key, value|
-        if ASSIGNABLE_KEYS.include?(key) && respond_to?(:"#{key}=")
-          public_send(:"#{key}=", value)
-        else
-          payload[key] = value
-        end
-      end
-      self.payload = nil if payload.empty?
+      args           = extract_arguments(hash)
+      added          = args.delete(:payload)
+      assigned, kept = args.partition { |key, value| block_attribute?(key, value) }
+      assigned.each { |key, value| public_send(:"#{key}=", value) }
+      # An argument this entry already has wins over the block's :payload, like the block's other keys.
+      added        = merge_payload(kept.to_h, added) unless kept.empty?
+      self.payload = merge_payload(payload, added)
       self
     end
 
@@ -200,7 +202,8 @@ module SemanticLogger
     # not log attributes, or that hold a value that is not valid for it (see .argument?), are kept
     # in the payload. A log attribute key with a nil value counts as not supplied, so #assign uses
     # its default. When the hash supplies an explicit :payload, any other keys are merged into it,
-    # with the explicit payload's values taking precedence.
+    # and win over its values of the same name, since the explicit payload is where untrusted data
+    # goes (see docs/security.md).
     def extract_arguments(payload, message = nil)
       raise(ArgumentError, "payload must be a Hash") unless payload.is_a?(Hash)
 
@@ -224,7 +227,7 @@ module SemanticLogger
         end
       end
       unless new_payload.empty?
-        args[:payload] = explicit ? merge_payload(args[:payload], new_payload) : new_payload
+        args[:payload] = explicit ? merge_payload(new_payload, args[:payload]) : new_payload
       end
       args[:message] = message if message
       args
@@ -375,8 +378,13 @@ module SemanticLogger
     # terminal escape codes out of structured (JSON/Loki) output. It is distinct
     # from Formatters::Base#escape_control_characters, which instead *escapes*
     # (preserves) control characters and is opt-in for the text formatters.
+    #
+    # A message tagged UTF-8 can hold invalid bytes, for example a request parameter that Rack
+    # decoded from "%FF", or be in another encoding, such as a binary request body. Stripping or
+    # matching such a String raises, so it is converted to valid UTF-8 first, dropping the
+    # invalid bytes, as the JSON formatters do.
     def cleansed_message
-      msg = message.to_s
+      msg = Utils.encode_utf8_string(message.to_s)
       return msg.strip unless msg.include?("\e")
 
       msg.gsub(/\e\[[\d;]*[mz]?|\e/, "").strip
@@ -384,8 +392,12 @@ module SemanticLogger
 
     # Return the payload in text form
     # Returns nil if payload is missing or empty
-    def payload_to_s
-      payload.inspect if payload?
+    #
+    # Rendered with #inspect, or with the block when given (for example Amazing Print). A payload
+    # nested too deeply for either is first cut off at Utils::MAX_JSON_SAFE_DEPTH, rather than
+    # raising SystemStackError (see Utils.safe_inspect).
+    def payload_to_s(&)
+      Utils.safe_inspect(payload, &) if payload?
     end
 
     # Returns [true|false] whether the log entry has a payload
@@ -411,13 +423,37 @@ module SemanticLogger
 
     private
 
-    # Returns the explicit payload with the remaining keys of the hash merged in. The explicit
-    # payload's values win, so that stray keys cannot overwrite them.
-    def merge_payload(explicit, remaining)
-      return remaining if explicit.nil?
-      return explicit.merge(remaining) { |_key, explicit_value, _value| explicit_value } if explicit.is_a?(Hash)
+    # Returns the kept payload with the keys of the added one that it does not have, so that a kept
+    # value is never replaced. A String and a Symbol key of the same name, such as "account_id" from
+    # JSON.parse and :account_id, count as the same key, since the formatters write both under that
+    # name. A payload that is not a Hash is kept as its :payload key, but the kept payload is
+    # returned unchanged when there is nothing to add. Neither payload is modified.
+    def merge_payload(kept, added)
+      added = {payload: added} unless added.nil? || added.is_a?(Hash)
+      return kept if added.nil? || added.empty?
 
-      remaining.merge(payload: explicit)
+      kept = {payload: kept} unless kept.nil? || kept.is_a?(Hash)
+      return added if kept.nil? || kept.empty?
+
+      merged = kept.merge(added) { |_key, kept_value, _added_value| kept_value }
+      # Only the kept keys, usually a few supplied by the application, are checked one at a time.
+      kept.each_key do |key|
+        next unless key.is_a?(Symbol) || key.is_a?(String)
+
+        other = key.is_a?(Symbol) ? key.name : key.to_sym
+        merged.delete(other) unless kept.key?(other)
+      end
+      merged
+    end
+
+    # Whether a log argument from the Hash returned by a logging block, already checked by
+    # .argument?, is assigned to its attribute: only when this entry does not have it yet. As in
+    # #extract_arguments, an empty message counts as none.
+    def block_attribute?(key, value)
+      return message.nil? || message == "" if key == :message
+      return exception.nil? && value.is_a?(Exception) if key == :exception
+
+      ASSIGNABLE_KEYS.include?(key) && public_send(key).nil?
     end
   end
 end

@@ -149,9 +149,10 @@ module SemanticLogger
         log.duration
       end
 
-      # Name of the Ruby file that logged the message, e.g. "app.rb".
+      # Name of the Ruby file that logged the message, e.g. "app.rb". Escaped like the other
+      # fields, since a log call can supply the backtrace it comes from.
       def file_name
-        log.file_name_and_line(true)&.first
+        escape_control_characters(log.file_name_and_line(true)&.first)
       end
 
       # Line number within the Ruby file that logged the message.

@@ -133,11 +133,15 @@ module SemanticLogger
         end
 
         it "keeps following the global default level after the block" do
+          original = SemanticLogger.default_level
           logger.with_level(:warn) { logger.info("inside") }
           SemanticLogger.default_level = :error
 
           assert_nil logger.instance_variable_get(:@level)
           assert_equal :error, logger.level
+        ensure
+          # Tests in other files, such as the Compatibility tests, log at the default level.
+          SemanticLogger.default_level = original
         end
 
         it "keeps honoring SemanticLogger.silence after the block" do
@@ -289,6 +293,48 @@ module SemanticLogger
 
           assert_equal "Hello", last_log.message
           assert_equal({user: "joe"}, last_log.payload)
+        end
+
+        [
+          {payload: nil},
+          {payload: "x", user: 1},
+          {exception: "boom"},
+          {duration: "slow"},
+          {backtrace: "x.rb:1"},
+          {message: "forged"}
+        ].each do |untrusted|
+          it "logs a hash block result of untrusted data #{untrusted.inspect} without raising" do
+            logger.info("Webhook received") { JSON.parse(JSON.generate(untrusted), symbolize_names: true) }
+
+            assert_equal "Webhook received", last_log.message
+            assert_nil last_log.exception
+            assert_nil last_log.duration
+          end
+        end
+
+        it "keeps the log call's values over a hash block result" do
+          logger.info("Webhook", duration: 5, account_id: 42) do
+            {payload: {account_id: 666}, duration: 999, account_id: 7}
+          end
+
+          assert_equal "Webhook", last_log.message
+          assert_equal 5, last_log.duration
+          assert_equal({account_id: 42, duration: 999}, last_log.payload)
+        end
+
+        it "uses a hash block result's message when the log call's message is empty" do
+          logger.info("") { {message: "From block"} }
+
+          assert_equal "From block", last_log.message
+        end
+
+        it "assigns the arguments of a hash block result when the log call has none" do
+          logger.info { {message: "Completed", duration: 1.5, metric: "rails.controller.process_action"} }
+
+          assert_equal "Completed", last_log.message
+          assert_in_delta(1.5, last_log.duration)
+          assert_equal "rails.controller.process_action", last_log.metric
+          assert_nil last_log.payload
         end
 
         it "supports a zero-arity lambda" do

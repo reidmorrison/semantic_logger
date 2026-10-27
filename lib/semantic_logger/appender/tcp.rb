@@ -205,7 +205,7 @@ module SemanticLogger
 
       # Write the log using the specified protocol and server.
       def log(log)
-        message = formatter.call(log, self)
+        message = format_log(log)
         @tcp_client.retry_on_connection_failure do
           @tcp_client.write("#{message}#{separator}")
         end
@@ -220,6 +220,11 @@ module SemanticLogger
       # Close is called during shutdown, or with reopen
       def close
         @tcp_client&.close
+      end
+
+      # Only the servers: the other options can hold TLS keys and passwords. See Subscriber#inspect.
+      def inspect_details
+        "server=#{(@tcp_client_args[:server] || @tcp_client_args[:servers]).inspect}"
       end
 
       private

@@ -139,6 +139,55 @@ module SemanticLogger
           end
         end
 
+        describe "file name" do
+          it "strips carriage returns from the file name of a supplied backtrace" do
+            # A newline cannot reach the file name, which is matched on a single line.
+            log.backtrace = ["forged\rx.rb:1"]
+
+            assert_equal "forgedx.rb:1", formatter.file_name_and_line
+          end
+
+          it "escapes the file name when escape_control_chars is enabled" do
+            log.backtrace = ["\e]0;owned\a\rx.rb:1"]
+            formatter     = SemanticLogger::Formatters::OneLine.new(escape_control_chars: true)
+            formatter.call(log, nil)
+
+            assert_equal "\\e]0;owned\\x07\\rx.rb:1", formatter.file_name_and_line
+          end
+        end
+
+        describe "invalid UTF-8" do
+          ["Search: \e\xFF", "\xFFabc", "Search: \xFF"].each do |text|
+            it "writes #{text.inspect} without raising, dropping the invalid bytes" do
+              text            = (+text).force_encoding(Encoding::UTF_8)
+              log.message     = text
+              log.name        = text
+              log.tags        = [text]
+              log.named_tags  = {user: text}
+              log.payload     = {query: text}
+              log.exception   = RuntimeError.new(text)
+              log.thread_name = text
+
+              output = formatter.call(log, nil)
+
+              assert_predicate output, :valid_encoding?
+              refute_includes output, "\n"
+            end
+          end
+        end
+
+        describe "a message in another encoding" do
+          it "writes a binary message beside non-ASCII text without raising" do
+            log.message = "caf\xC3\xA9 \xFF".b
+            log.name    = "Café"
+
+            output = formatter.call(log, nil)
+
+            assert_predicate output, :valid_encoding?
+            assert_includes output, "Café"
+          end
+        end
+
         describe "call" do
           it "keeps the whole entry on one line" do
             log.message    = "msg\nforged"

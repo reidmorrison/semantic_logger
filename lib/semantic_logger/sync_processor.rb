@@ -8,11 +8,16 @@ module SemanticLogger
       @monitor.synchronize { @appenders.add(...) }
     end
 
+    # Logs on the calling thread, which belongs to the application, so a stack overflow while
+    # writing (see Appenders#log) is reported rather than raised from the log call.
     def log(...)
       @monitor.synchronize do
         @processed_count += 1
         @appenders.log(...)
       end
+    rescue SystemStackError => e
+      @appenders.logger.error("Failed to log a message: the stack overflowed", e)
+      false
     end
 
     # Returns [Hash] operational statistics for the logging pipeline.
@@ -66,6 +71,12 @@ module SemanticLogger
     end
 
     attr_reader :appenders
+
+    # Returns the internal logger of the appenders, for reporting a problem while logging, such as
+    # an exception raised by an on_log subscriber. The same logger as the asynchronous Processor's.
+    def logger
+      @appenders.logger
+    end
 
     def initialize(appenders = nil)
       @monitor         = Monitor.new

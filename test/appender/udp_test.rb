@@ -7,6 +7,16 @@ module Appender
       let(:appender) { SemanticLogger::Appender::Udp.new(server: "localhost:8088") }
       let(:amessage) { "AppenderUdpTest log message" }
 
+      describe "#message_error?" do
+        it "is true for a log message too large to send as a datagram" do
+          assert appender.message_error?(Errno::EMSGSIZE.new)
+        end
+
+        it "is false when the server is unavailable" do
+          refute appender.message_error?(Errno::ECONNREFUSED.new)
+        end
+      end
+
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           data = nil

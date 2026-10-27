@@ -8,6 +8,24 @@ module Appender
         ::OpenSearch::Client
       end
 
+      it "does not show the password in #inspect" do
+        appender = client_class.stub_any_instance(:bulk, true) do
+          SemanticLogger::Appender::Opensearch.new(url: "https://admin:os-s3cr3t@os.example.com:9200")
+        end
+
+        refute_includes appender.inspect, "os-s3cr3t"
+        assert_includes appender.inspect, %( url="https://os.example.com:9200")
+      end
+
+      it "does not include credentials in the error for a url that cannot be parsed" do
+        error = assert_raises(URI::InvalidURIError) do
+          SemanticLogger::Appender::Opensearch.new(url: "https://admin:os s3cr3t@os.example.com:9200")
+        end
+
+        refute_includes error.message, "s3cr3t"
+        assert_nil error.cause
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["OPENSEARCH"]
@@ -78,7 +96,7 @@ module Appender
             request = stub_client { appender.log(log) }
 
             assert hash = request[:body][1]
-            assert_equal :info, hash[:level]
+            assert_equal "info", hash[:level]
           end
 
           it "logs exception" do
@@ -90,6 +108,18 @@ module Appender
             assert_equal "NameError", exception[:name]
             assert_match "undefined local variable or method", exception[:message]
             assert_includes exception[:stack_trace].first, __FILE__, exception
+          end
+
+          it "repairs a payload that the client gem cannot serialize, instead of dropping or leaking it" do
+            client      = Class.new { def initialize = (@password = "hunter2") }.new
+            log.payload = {amount: Float::INFINITY, agent: (+"Mozilla \xFF").b, client: Struct.new(:api).new(client)}
+            request     = stub_client { appender.log(log) }
+
+            payload = request[:body][1][:payload]
+
+            assert_equal "Infinity", payload[:amount]
+            assert_equal "Mozilla ", payload[:agent]
+            refute_includes payload.to_s, "hunter2"
           end
 
           it "logs payload" do
@@ -109,7 +139,7 @@ module Appender
 
             assert hash = request[:body][1]
             assert_equal log_message, hash[:message]
-            assert_equal :info, hash[:level]
+            assert_equal "info", hash[:level]
           end
 
           let :logs do
@@ -128,22 +158,23 @@ module Appender
 
             index = "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}"
 
-            assert_equal index, body[0]["index"]["_index"]
+            assert_equal index, body[0][:index][:_index]
             assert_equal "hello world1", body[1][:message]
-            assert_equal index, body[2]["index"]["_index"]
+            assert_equal index, body[2][:index][:_index]
             assert_equal "hello world2", body[3][:message]
-            assert_equal index, body[4]["index"]["_index"]
+            assert_equal index, body[4][:index][:_index]
             assert_equal "hello world3", body[5][:message]
           end
         end
 
+        # The appender sends each line of a bulk request as JSON: returns the request with them parsed.
         def stub_client(&block)
           request = nil
           appender.client.stub(:bulk, lambda { |r|
             request = r
             {"status" => 201}
           }, &block)
-          request
+          request.merge(body: request[:body].map { |line| JSON.parse(line, symbolize_names: true) })
         end
       end
 
@@ -179,18 +210,19 @@ module Appender
           request = stub_client { appender.log(log) }
 
           assert_equal "semantic_logger", request[:index]
-          assert_equal({}, request[:body][0]["create"])
+          assert_equal({}, request[:body][0][:create])
           assert hash = request[:body][1]
           assert_equal log_message, hash[:message]
         end
 
+        # The appender sends each line of a bulk request as JSON: returns the request with them parsed.
         def stub_client(&block)
           request = nil
           appender.client.stub(:bulk, lambda { |r|
             request = r
             {"status" => 201}
           }, &block)
-          request
+          request.merge(body: request[:body].map { |line| JSON.parse(line, symbolize_names: true) })
         end
       end
     end

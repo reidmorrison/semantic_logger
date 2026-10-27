@@ -57,17 +57,15 @@ module SemanticLogger
 
       # Send an error notification to New Relic
       def log(log)
-        begin
-          message = formatter.call(log, self) # Generate the structured log
-          json_message = Utils.to_json(message) # Convert the log to JSON, repairing any non UTF-8 data
-          level = log.level.to_s.upcase # Determine the log level
-          self.class.log_newrelic(json_message, level)
-        rescue JSON::GeneratorError => e
-          warn("Failed to serialize log message to JSON: #{e.message}")
-          warn("Problematic data: #{message.inspect}")
-        rescue StandardError => e
-          warn("Unexpected error while logging to New Relic: #{e.message}")
-        end
+        message      = format_log(log) # Generate the structured log
+        json_message = Utils.to_json(message) # Convert the log to JSON, repairing any non UTF-8 data
+        level        = log.level.to_s.upcase # Determine the log level
+        self.class.log_newrelic(json_message, level)
+        true
+      rescue StandardError => e
+        # Reported to the internal logger: this appender's own #warn would log the error through
+        # this method again, recursing until SystemStackError.
+        logger.warn("Could not log to New Relic", e)
         true
       end
 

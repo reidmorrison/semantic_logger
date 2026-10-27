@@ -56,7 +56,7 @@ module SemanticLogger
 
         # Send error messages as Runtime exceptions
         exception = extract_exception(log)
-        hash      = formatter.call(log, self)
+        hash      = format_log(log)
         bugsnag_notify(exception, hash, log_level(log.level))
         true
       end

@@ -25,6 +25,32 @@ module Appender
         Warning[:deprecated] = original
       end
 
+      it "does not show the password in #inspect" do
+        appender = client_class.stub_any_instance(:bulk, true) do
+          SemanticLogger::Appender::Elasticsearch.new(url: "https://elastic:es-s3cr3t@es.example.com:9200")
+        end
+
+        refute_includes appender.inspect, "es-s3cr3t"
+        assert_includes appender.inspect, %( url="https://es.example.com:9200" index="semantic_logger">)
+      end
+
+      it "does not include credentials in the error for a url that cannot be parsed" do
+        error = assert_raises(URI::InvalidURIError) do
+          SemanticLogger::Appender::Elasticsearch.new(url: "https://elastic:es s3cr3t@es.example.com:9200")
+        end
+
+        refute_includes error.message, "s3cr3t"
+        assert_nil error.cause
+      end
+
+      it "accepts a comma separated list of urls, which the client gem parses" do
+        appender = client_class.stub_any_instance(:bulk, true) do
+          SemanticLogger::Appender::Elasticsearch.new(url: "http://es1.example.com:9200,http://es2.example.com:9200")
+        end
+
+        assert_instance_of client_class, appender.client
+      end
+
       it "warns that the type: parameter is deprecated" do
         stderr =
           client_class.stub_any_instance(:bulk, true) do
@@ -86,6 +112,16 @@ module Appender
           assert_equal :timestamp, appender.formatter.time_key
         end
 
+        it "raises a FormatError, a message error, for a document that cannot be serialized" do
+          broken = Object.new
+          def broken.to_json(*) = raise(NoMethodError, "undefined method 'name' for nil")
+          log.payload = {broken: broken}
+
+          error = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.log(log) }
+
+          assert appender.message_error?(error)
+        end
+
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil
@@ -108,7 +144,7 @@ module Appender
             request = stub_client { appender.log(log) }
 
             assert hash = request[:body][1]
-            assert_equal :info, hash[:level]
+            assert_equal "info", hash[:level]
           end
 
           it "logs exception" do
@@ -120,6 +156,18 @@ module Appender
             assert_equal "NameError", exception[:name]
             assert_match "undefined local variable or method", exception[:message]
             assert_includes exception[:stack_trace].first, __FILE__, exception
+          end
+
+          it "repairs a payload that the client gem cannot serialize, instead of dropping or leaking it" do
+            client      = Class.new { def initialize = (@password = "hunter2") }.new
+            log.payload = {amount: Float::INFINITY, agent: (+"Mozilla \xFF").b, client: Struct.new(:api).new(client)}
+            request     = stub_client { appender.log(log) }
+
+            payload = request[:body][1][:payload]
+
+            assert_equal "Infinity", payload[:amount]
+            assert_equal "Mozilla ", payload[:agent]
+            refute_includes payload.to_s, "hunter2"
           end
 
           it "logs payload" do
@@ -145,7 +193,7 @@ module Appender
 
             assert hash = request[:body][1]
             assert_equal log_message, hash[:message]
-            assert_equal :info, hash[:level]
+            assert_equal "info", hash[:level]
           end
 
           let :logs do
@@ -164,22 +212,23 @@ module Appender
 
             index = "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}"
 
-            assert_equal index, body[0]["index"]["_index"]
+            assert_equal index, body[0][:index][:_index]
             assert_equal "hello world1", body[1][:message]
-            assert_equal index, body[2]["index"]["_index"]
+            assert_equal index, body[2][:index][:_index]
             assert_equal "hello world2", body[3][:message]
-            assert_equal index, body[4]["index"]["_index"]
+            assert_equal index, body[4][:index][:_index]
             assert_equal "hello world3", body[5][:message]
           end
         end
 
+        # The appender sends each line of a bulk request as JSON: returns the request with them parsed.
         def stub_client(&block)
           request = nil
           appender.client.stub(:bulk, lambda { |r|
             request = r
             {"status" => 201}
           }, &block)
-          request
+          request.merge(body: request[:body].map { |line| JSON.parse(line, symbolize_names: true) })
         end
       end
 
@@ -234,10 +283,10 @@ module Appender
 
             assert body = request[:body]
 
-            assert_equal({}, body[0]["create"])
+            assert_equal({}, body[0][:create])
             assert hash = body[1]
             assert_equal log_message, hash[:message]
-            assert_equal :info, hash[:level]
+            assert_equal "info", hash[:level]
           end
 
           let :logs do
@@ -255,22 +304,23 @@ module Appender
             assert body = request[:body]
             assert_equal 6, body.size, body
 
-            assert_equal({}, body[0]["create"])
+            assert_equal({}, body[0][:create])
             assert_equal "hello world1", body[1][:message]
-            assert_equal({}, body[2]["create"])
+            assert_equal({}, body[2][:create])
             assert_equal "hello world2", body[3][:message]
-            assert_equal({}, body[4]["create"])
+            assert_equal({}, body[4][:create])
             assert_equal "hello world3", body[5][:message]
           end
         end
 
+        # The appender sends each line of a bulk request as JSON: returns the request with them parsed.
         def stub_client(&block)
           request = nil
           appender.client.stub(:bulk, lambda { |r|
             request = r
             {"status" => 201}
           }, &block)
-          request
+          request.merge(body: request[:body].map { |line| JSON.parse(line, symbolize_names: true) })
         end
       end
 
@@ -329,7 +379,7 @@ module Appender
             request = stub_client { appender.log(log) }
 
             assert hash = request[:body][1]
-            assert_equal :info, hash[:level]
+            assert_equal "info", hash[:level]
           end
 
           it "logs exception" do
@@ -360,7 +410,7 @@ module Appender
 
             assert hash = request[:body][1]
             assert_equal log_message, hash[:message]
-            assert_equal :info, hash[:level]
+            assert_equal "info", hash[:level]
           end
 
           let :logs do
@@ -379,22 +429,23 @@ module Appender
 
             index = "semantic_logger-#{Time.now.strftime('%Y.%m.%d')}"
 
-            assert_equal index, body[0]["index"]["_index"]
+            assert_equal index, body[0][:index][:_index]
             assert_equal "hello world1", body[1][:message]
-            assert_equal index, body[2]["index"]["_index"]
+            assert_equal index, body[2][:index][:_index]
             assert_equal "hello world2", body[3][:message]
-            assert_equal index, body[4]["index"]["_index"]
+            assert_equal index, body[4][:index][:_index]
             assert_equal "hello world3", body[5][:message]
           end
         end
 
+        # The appender sends each line of a bulk request as JSON: returns the request with them parsed.
         def stub_client(&block)
           request = nil
           appender.client.stub(:bulk, lambda { |r|
             request = r
             {"status" => 201}
           }, &block)
-          request
+          request.merge(body: request[:body].map { |line| JSON.parse(line, symbolize_names: true) })
         end
       end
     end

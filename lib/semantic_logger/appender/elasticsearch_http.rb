@@ -73,7 +73,7 @@ module SemanticLogger
 
       # Log to the index for today.
       def log(log)
-        post(formatter.call(log, self), log.time.strftime(@logging_path))
+        post(format_log(log), log.time.strftime(@logging_path))
       end
 
       # Deletes all log data captured for a day.
