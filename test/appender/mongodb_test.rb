@@ -22,6 +22,7 @@ module Appender
       end
 
       let(:ahash) { {tracking_number: 12_345, session_id: "HSSKLEU@JDK767"} }
+      let(:thread_name) { SemanticLogger::Log.thread_name_for(Thread.current) }
 
       after do
         appender.purge_all
@@ -52,7 +53,7 @@ module Appender
 
           assert_equal :debug, document["level"]
           assert_nil document["message"]
-          assert_equal Thread.current.name, document["thread"]
+          assert_equal thread_name, document["thread"]
           assert_kind_of Time, document["time"]
           assert_nil document["payload"]
           assert_equal $$, document["pid"]
@@ -67,7 +68,7 @@ module Appender
 
           assert_equal :debug, document["level"]
           assert_nil document["message"]
-          assert_equal Thread.current.name, document["thread"]
+          assert_equal thread_name, document["thread"]
           assert_kind_of Time, document["time"]
           assert payload = document["payload"]
           assert_equal 12_345, payload["tracking_number"], payload
@@ -84,7 +85,7 @@ module Appender
 
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
-          assert_equal Thread.current.name, document["thread"]
+          assert_equal thread_name, document["thread"]
           assert_kind_of Time, document["time"]
           assert payload = document["payload"]
           assert_equal 12_345, payload["tracking_number"], payload
@@ -101,7 +102,7 @@ module Appender
 
           assert_equal :debug, document["level"]
           assert_equal "hello world", document["message"]
-          assert_equal Thread.current.name, document["thread"]
+          assert_equal thread_name, document["thread"]
           assert_kind_of Time, document["time"]
           assert_equal $$, document["pid"]
           assert_equal "test", document["host"]
@@ -118,7 +119,7 @@ module Appender
 
             assert_equal level, document["level"]
             assert_equal "hello world -- Calculations", document["message"]
-            assert_equal Thread.current.name, document["thread"]
+            assert_equal thread_name, document["thread"]
             assert_kind_of Time, document["time"]
             assert payload = document["payload"]
             assert_equal 12_345, payload["tracking_number"], payload

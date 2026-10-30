@@ -8,7 +8,8 @@ module SemanticLogger
   #   :trace, :debug, :info, :warn, :error, :fatal
   #
   # thread_name
-  #   Name of the thread in which the logging call was called
+  #   Name of the thread in which the logging call was called,
+  #   or its object id when the thread has no name
   #
   # name
   #   Class name supplied to the logging instance
@@ -83,6 +84,10 @@ module SemanticLogger
       value.nil? || LOG_EXCEPTION_OPTIONS.include?(value)
     end
 
+    # Returns [String] the name that identifies the thread in a log entry: the thread's own name,
+    # or its object id when it has none, which Ruby never reuses within a process.
+    def self.thread_name_for(thread) = thread.name || thread.object_id.to_s
+
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
                   :tags, :named_tags, :context,
@@ -90,7 +95,7 @@ module SemanticLogger
 
     def initialize(name, level, index = nil)
       @level       = level
-      @thread_name = Thread.current.name
+      @thread_name = Log.thread_name_for(Thread.current)
       @name        = name
       @time        = Time.now
       @tags        = SemanticLogger.tags

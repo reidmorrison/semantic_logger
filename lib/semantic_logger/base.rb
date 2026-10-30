@@ -165,7 +165,7 @@ module SemanticLogger
         if thread == Thread.current
           Utils.extract_backtrace(caller)
         else
-          log.thread_name = thread.name
+          log.thread_name = Log.thread_name_for(thread)
           log.tags        = (thread[:semantic_logger_tags] || []).clone
           log.named_tags  = (thread[:semantic_logger_named_tags] || {}).clone
           thread.backtrace

@@ -29,9 +29,44 @@ module SemanticLogger
           assert_equal 99, log.level_index
         end
 
-        it "captures the current thread name and time" do
-          assert_equal Thread.current.name, log.thread_name
+        it "captures the time" do
           assert_kind_of Time, log.time
+        end
+
+        it "captures the current thread's name" do
+          thread_name = Thread.new do
+            Thread.current.name = "Worker 001"
+            SemanticLogger::Log.new("LogTest", :info).thread_name
+          end.value
+
+          assert_equal "Worker 001", thread_name
+        end
+
+        it "captures the current thread's object id when the thread has no name" do
+          thread_name, object_id = Thread.new do
+            [SemanticLogger::Log.new("LogTest", :info).thread_name, Thread.current.object_id]
+          end.value
+
+          assert_equal object_id.to_s, thread_name
+        end
+      end
+
+      describe ".thread_name_for" do
+        it "returns the thread's name" do
+          thread      = Thread.new { sleep }
+          thread.name = "Worker 001"
+
+          assert_equal "Worker 001", SemanticLogger::Log.thread_name_for(thread)
+        ensure
+          thread&.kill
+        end
+
+        it "returns the thread's object id when the thread has no name" do
+          thread = Thread.new { sleep }
+
+          assert_equal thread.object_id.to_s, SemanticLogger::Log.thread_name_for(thread)
+        ensure
+          thread&.kill
         end
       end
 

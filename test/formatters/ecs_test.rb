@@ -55,7 +55,7 @@ module SemanticLogger
         describe "process, host, service" do
           it "maps pid and thread name under process" do
             assert_kind_of Integer, result.dig(:process, :pid)
-            assert_equal Thread.current.name.to_s, result.dig(:process, :thread, :name) if Thread.current.name
+            assert_equal log.thread_name, result.dig(:process, :thread, :name)
           end
 
           it "maps host to host.hostname" do

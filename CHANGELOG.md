@@ -236,6 +236,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   that every logger shares, for example when an appender that is not async slowed down. It can be
   set at any time, including after appenders are added.
 
+### Changed
+
+- Semantic Logger no longer replaces Ruby's `Thread#name` and `Thread#name=` with its own versions,
+  which it added in 2013, before Ruby had them. Ruby's own versions give the name to the operating
+  system, to profilers, and to `Thread#inspect`; Datadog's profiler, for example, turned itself off
+  when it found the replacement. A thread that has no name is still logged with its object id (on
+  JRuby, instead of its JVM thread name). Code that calls `Thread#name` now gets Ruby's behaviour:
+  `nil` for a thread that has no name, and a `TypeError` from `Thread#name=` for a value that is
+  not a String or `nil`. See the [v5.2 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+  Resolves #424.
+
 ### Fixed
 
 - `flush` on the `:cloudwatch_logs` appender sends the buffered log messages itself. It waited, at

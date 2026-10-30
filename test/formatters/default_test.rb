@@ -101,14 +101,14 @@ module SemanticLogger
 
         describe "process_info" do
           it "logs pid and thread name" do
-            assert_equal "[#{$$}:#{Thread.current.name}]", formatter.process_info
+            assert_equal "[#{$$}:#{log.thread_name}]", formatter.process_info
           end
 
           it "logs pid, thread name, and file name" do
             set_exception
             log.backtrace = backtrace
 
-            assert_equal "[#{$$}:#{Thread.current.name} default_test.rb:99]", formatter.process_info
+            assert_equal "[#{$$}:#{log.thread_name} default_test.rb:99]", formatter.process_info
           end
         end
 
@@ -421,7 +421,7 @@ module SemanticLogger
 
         describe "call" do
           it "returns minimal elements" do
-            assert_equal "#{expected_time} D [#{$$}:#{Thread.current.name}] DefaultTest", formatter.call(log, nil)
+            assert_equal "#{expected_time} D [#{$$}:#{log.thread_name}] DefaultTest", formatter.call(log, nil)
           end
 
           it "retuns all elements" do
@@ -436,12 +436,12 @@ module SemanticLogger
 
             # Ruby 3.4 changed the way hashes are displayed
             str = if RUBY_VERSION < "3.4"
-                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] " \
+                    "#{expected_time} D [#{$$}:#{log.thread_name} default_test.rb:99] " \
                       "[first] [second] [third] {first: 1, second: 2, third: 3} " \
                       "(#{duration}ms) DefaultTest -- Hello World -- " \
                       "{:first=>1, :second=>2, :third=>3} -- Exception: RuntimeError: Oh no\n"
                   else
-                    "#{expected_time} D [#{$$}:#{Thread.current.name} default_test.rb:99] " \
+                    "#{expected_time} D [#{$$}:#{log.thread_name} default_test.rb:99] " \
                       "[first] [second] [third] {first: 1, second: 2, third: 3} " \
                       "(#{duration}ms) DefaultTest -- Hello World -- " \
                       "{first: 1, second: 2, third: 3} -- Exception: RuntimeError: Oh no\n"

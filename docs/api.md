@@ -359,8 +359,8 @@ The features above cover everyday logging. The rest of this guide covers less co
 
 ### Name your threads
 
-Semantic Logger includes the thread name (or id) in every entry. On Ruby MRI the name defaults to the
-thread's object id:
+Semantic Logger includes the thread name in every entry. A thread that has no name is identified by
+its object id instead:
 
 ~~~
 2013-11-07 16:25:14.279 I [35841:70184354571980] (0.0ms) ExternalSupplier -- Calling external interface
@@ -383,8 +383,12 @@ one way to guarantee that:
 Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
 ~~~
 
-On JRuby this also sets the underlying JVM thread name, which is useful when monitoring the JVM over
-JMX with tools such as jconsole.
+This is Ruby's own `Thread#name=`, so the name must be a String. Ruby also gives the name to the
+operating system, so it shows up in tools that list threads, such as `top -H`, debuggers, and
+profilers (Linux keeps only its first 15 characters). On JRuby it also names the underlying JVM
+thread, which shows up when monitoring the JVM with tools such as jconsole or jstack. JRuby names the
+main thread `main`, and a thread created by Java code, such as a servlet container's request thread,
+is logged with its JVM thread name.
 
 ### Change one class's level at runtime
 
