@@ -14,10 +14,6 @@ InMemoryAppenderHelper = shared_description do
     InMemoryAppender.new
   end
 
-  let :thread_name do
-    Thread.current.name
-  end
-
   let :payload do
     {session_id: "HSSKLEU@JDK767", tracking_number: 12_345, message: "Message from payload"}
   end

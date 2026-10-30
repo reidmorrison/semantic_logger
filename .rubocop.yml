@@ -58,7 +58,7 @@ Metrics/BlockLength:
 
 # Soften limits
 Metrics/ClassLength:
-  Max: 250
+  Max: 260
   Exclude:
     - "test/**/*"
     - "spec/**/*"

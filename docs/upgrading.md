@@ -14,10 +14,11 @@ description: >-
 
 ### Upgrading to Semantic Logger v5.2
 
-v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, and fixes
-several security issues. None of the security fixes change the public API, but a few change the
-output, which matters if you parse the logs or alert on them, and the file appender's
-`permissions:` option can now make `add_appender` raise for a log file that worked in v5.1.
+v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, stops
+replacing Ruby's `Thread#name`, and fixes several security issues. None of the security fixes change
+the public API, but a few change the output, which matters if you parse the logs or alert on them,
+and the file appender's `permissions:` option can now make `add_appender` raise for a log file that
+worked in v5.1.
 
 #### Set the Sentry user and fingerprint with named tags
 
@@ -115,6 +116,68 @@ SemanticLogger.add_appender(file_name: "log/production.log", permissions: 0o640)
 # After:
 SemanticLogger.add_appender(io: $stdout)
 ~~~
+
+#### Ruby's own `Thread#name` is no longer replaced
+
+Earlier versions replaced `Thread#name` and `Thread#name=` with Semantic Logger's own versions,
+which were written before Ruby had them and kept the name away from Ruby itself. v5.2 leaves Ruby's
+own in place, so the name now also reaches the operating system, profilers, and `Thread#inspect`.
+On MRI, log entries do not change: a thread that has no name is still logged with its object id.
+
+Code anywhere in the application that calls `Thread#name` or `Thread#name=` now gets Ruby's
+behaviour:
+
+* `Thread#name` returns `nil` for a thread that has no name, where it returned the thread's object
+  id as a String (on JRuby, its JVM thread name). The main thread has no name on MRI; JRuby names it
+  `main`.
+* `Thread#name=` is Ruby's built-in implementation again, with Ruby's standard behaviour, instead of
+  Semantic Logger's version, which accepted any value and converted it with `to_s`. Ruby's version
+  raises `TypeError` for a value that is not a String or `nil`, such as a Symbol or an Integer. It
+  raises `ArgumentError` for a String that contains a NUL byte (`"\0"`), or whose encoding is not
+  ASCII-compatible, such as UTF-16. Setting `nil` leaves the thread with no name, where it set the
+  name to `""`.
+
+~~~ruby
+# Before:
+Thread.current.name = worker_number
+Thread.current.name.start_with?("worker")
+
+# After:
+Thread.current.name = "worker-#{worker_number}"
+Thread.current.name&.start_with?("worker")
+~~~
+
+Tests that expect `thread_name: Thread.current.name` from the
+[test helpers](testing.html) no longer work on a thread that has no name, such as the main thread
+on MRI: `Thread.current.name` is now `nil`, while the log entry still holds the thread's object id.
+The RSpec matchers `be_a_semantic_logger_event` and `log_semantic_logger_event` then fail. Worse,
+`assert_semantic_logger_event` in Minitest takes `nil` to mean "do not check", so the test still
+passes but no longer checks the thread name. Expect the object id when the thread has no name:
+
+~~~ruby
+# Before:
+assert_semantic_logger_event(event, thread_name: Thread.current.name)
+
+# After:
+assert_semantic_logger_event(event, thread_name: Thread.current.name || Thread.current.object_id.to_s)
+~~~
+
+Semantic Logger's own threads are now named after their appender, such as `SL File`, with
+`SL Appenders` for the main one, instead of `SemanticLogger::Appender::File` and
+`SemanticLogger::Appenders`. Linux keeps only the first 15 bytes of a thread name, so the longer
+names all looked the same in tools that list threads, such as `top -H`. The new names also appear
+in the thread column of the messages Semantic Logger logs about its own problems, such as an
+appender that cannot write.
+
+On JRuby:
+
+* A Ruby thread that has no name is logged with its object id, instead of its JVM thread name, such
+  as `Ruby-0-Thread-1: app/worker.rb:12`. Name the thread to give it a readable name in the logs. A
+  thread created by Java code, such as a servlet container's request thread, is still logged with
+  its JVM thread name, which now also stays current when Java code renames the thread.
+* Naming a Ruby thread sets its JVM thread name in JRuby's own format, such as
+  `Ruby-0-Thread-2@My Worker: app/worker.rb:12`, instead of exactly `My Worker`. Update any JVM
+  monitoring that matches thread names exactly.
 
 #### Output changes
 

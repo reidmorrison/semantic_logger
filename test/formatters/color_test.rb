@@ -149,7 +149,7 @@ module SemanticLogger
 
         describe "call" do
           it "returns minimal elements" do
-            assert_equal "#{expected_time} #{color}D#{clear} [#{$$}:#{Thread.current.name}] #{color}ColorTest#{clear}",
+            assert_equal "#{expected_time} #{color}D#{clear} [#{$$}:#{log.thread_name}] #{color}ColorTest#{clear}",
                          formatter.call(log, nil)
           end
 
@@ -163,7 +163,7 @@ module SemanticLogger
             set_exception
             duration = SemanticLogger::Formatters::Base::PRECISION == 3 ? "1" : "1.346"
             str      = "#{expected_time} #{color}D#{clear} " \
-                       "[#{$$}:#{Thread.current.name} default_test.rb:35] " \
+                       "[#{$$}:#{log.thread_name} default_test.rb:35] " \
                        "[#{color}first#{clear}] [#{color}second#{clear}] [#{color}third#{clear}] " \
                        "{#{color}first: 1#{clear}, #{color}second: 2#{clear}, #{color}third: 3#{clear}} " \
                        "(#{bold}#{duration}ms#{clear}) #{color}ColorTest#{clear} -- Hello World -- " \

@@ -108,7 +108,7 @@ test. The available checks are:
 | `time` | When the entry was created. |
 | `duration` | Duration of a measure call, in milliseconds. |
 | `backtrace` | The captured backtrace, if any. |
-| `thread_name` | Name of the thread that logged the entry. |
+| `thread_name` | Name of the thread that logged the entry, or its object id when the thread has no name. |
 
 ### Match part of a message or payload
 

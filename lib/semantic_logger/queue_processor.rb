@@ -201,14 +201,24 @@ module SemanticLogger
 
     private
 
-    # Start the worker thread, naming it after the internal logger.
+    # Start the worker thread.
     def spawn_worker
       @stopped        = false
       @stack_overflow = nil
       Thread.new do
-        Thread.current.name = logger.name
+        name_worker
         process
       end
+    end
+
+    # Name the worker thread after its appender, such as "SL File", short enough for tools that
+    # list threads, such as `top -H`, to tell the workers apart: Linux keeps only the first 15 bytes.
+    # The name is only a label, so when Ruby rejects it, for example for a class given a temporary
+    # name with a NUL byte, the thread carries on without one.
+    def name_worker
+      Thread.current.name = ["SL", appender.class.name&.split("::")&.last].compact.join(" ")
+    rescue StandardError
+      nil
     end
 
     def create_queue

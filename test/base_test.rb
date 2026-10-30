@@ -402,6 +402,25 @@ module SemanticLogger
           assert_equal :error, last_log.level
           assert_match(/\ATrace:/, last_log.message)
         end
+
+        it "names the other thread whose backtrace it logs" do
+          thread      = Thread.new { sleep }
+          thread.name = "Worker 001"
+          logger.backtrace(thread: thread)
+
+          assert_equal "Worker 001", last_log.thread_name
+        ensure
+          thread&.kill
+        end
+
+        it "identifies another thread that has no name by its object id" do
+          thread = Thread.new { sleep }
+          logger.backtrace(thread: thread)
+
+          assert_equal thread.object_id.to_s, last_log.thread_name
+        ensure
+          thread&.kill
+        end
       end
 
       describe "#should_log?" do

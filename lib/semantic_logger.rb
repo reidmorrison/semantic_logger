@@ -1,5 +1,4 @@
 require "concurrent"
-require "semantic_logger/core_ext/thread"
 require "semantic_logger/version"
 require "semantic_logger/utils"
 require "semantic_logger/ansi_colors"
