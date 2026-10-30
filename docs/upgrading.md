@@ -130,9 +130,12 @@ behaviour:
 * `Thread#name` returns `nil` for a thread that has no name, where it returned the thread's object
   id as a String (on JRuby, its JVM thread name). The main thread has no name on MRI; JRuby names it
   `main`.
-* `Thread#name=` raises `TypeError` for a value that is not a String or `nil`, such as a Symbol or
-  an Integer, which were converted with `to_s`. Setting `nil` leaves the thread with no name, where
-  it set the name to `""`.
+* `Thread#name=` is Ruby's built-in implementation again, with Ruby's standard behaviour, instead of
+  Semantic Logger's version, which accepted any value and converted it with `to_s`. Ruby's version
+  raises `TypeError` for a value that is not a String or `nil`, such as a Symbol or an Integer. It
+  raises `ArgumentError` for a String that contains a NUL byte (`"\0"`), or whose encoding is not
+  ASCII-compatible, such as UTF-16. Setting `nil` leaves the thread with no name, where it set the
+  name to `""`.
 
 ~~~ruby
 # Before:
@@ -143,6 +146,28 @@ Thread.current.name.start_with?("worker")
 Thread.current.name = "worker-#{worker_number}"
 Thread.current.name&.start_with?("worker")
 ~~~
+
+Tests that expect `thread_name: Thread.current.name` from the
+[test helpers](testing.html) no longer work on a thread that has no name, such as the main thread
+on MRI: `Thread.current.name` is now `nil`, while the log entry still holds the thread's object id.
+The RSpec matchers `be_a_semantic_logger_event` and `log_semantic_logger_event` then fail. Worse,
+`assert_semantic_logger_event` in Minitest takes `nil` to mean "do not check", so the test still
+passes but no longer checks the thread name. Expect the object id when the thread has no name:
+
+~~~ruby
+# Before:
+assert_semantic_logger_event(event, thread_name: Thread.current.name)
+
+# After:
+assert_semantic_logger_event(event, thread_name: Thread.current.name || Thread.current.object_id.to_s)
+~~~
+
+Semantic Logger's own threads are now named after their appender, such as `SL File`, with
+`SL Appenders` for the main one, instead of `SemanticLogger::Appender::File` and
+`SemanticLogger::Appenders`. Linux keeps only the first 15 bytes of a thread name, so the longer
+names all looked the same in tools that list threads, such as `top -H`. The new names also appear
+in the thread column of the messages Semantic Logger logs about its own problems, such as an
+appender that cannot write.
 
 On JRuby:
 

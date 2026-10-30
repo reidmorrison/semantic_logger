@@ -164,6 +164,48 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    describe "the worker thread" do
+      it "is named after its appender, briefly enough for Linux to tell the workers apart" do
+        processor = start
+        processor.flush
+
+        assert_equal "SL SimpleAppender", processor.thread.name
+      end
+
+      it "processes messages when the appender's internal logger is not named with a String" do
+        internal_logger.name = :MyInternal
+        processor            = start
+        processor.log(new_log)
+
+        assert processor.flush, "the worker thread did not reply to #flush"
+        assert_equal 1, appender.events.count
+      end
+
+      it "is named SL when the appender's class has no name" do
+        anonymous        = Class.new(SimpleAppender).new
+        anonymous.logger = internal_logger
+        processor        = SemanticLogger::QueueProcessor.start(appender: anonymous).tap { |p| started << p }
+        processor.flush
+
+        assert_equal "SL", processor.thread.name
+      end
+
+      it "processes messages, without a name, when Ruby rejects the name" do
+        skip "Module#set_temporary_name needs Ruby 3.3" unless Module.method_defined?(:set_temporary_name)
+
+        ["Bad\0Name", "Wide".encode("UTF-16LE")].each do |class_name|
+          rejected        = Class.new(SimpleAppender) { set_temporary_name(class_name) }.new
+          rejected.logger = internal_logger
+          processor       = SemanticLogger::QueueProcessor.start(appender: rejected).tap { |p| started << p }
+          processor.log(new_log)
+
+          assert processor.flush, "the worker thread did not reply to #flush for #{class_name.inspect}"
+          assert_equal 1, rejected.events.count
+          assert_nil processor.thread.name
+        end
+      end
+    end
+
     describe "#initialize" do
       it "creates a capped queue by default" do
         processor = build(max_queue_size: 100)

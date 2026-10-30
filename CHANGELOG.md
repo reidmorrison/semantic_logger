@@ -243,8 +243,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   system, to profilers, and to `Thread#inspect`; Datadog's profiler, for example, turned itself off
   when it found the replacement. A thread that has no name is still logged with its object id (on
   JRuby, instead of its JVM thread name). Code that calls `Thread#name` now gets Ruby's behaviour:
-  `nil` for a thread that has no name, and a `TypeError` from `Thread#name=` for a value that is
-  not a String or `nil`. See the [v5.2 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+  `nil` for a thread that has no name, a `TypeError` from `Thread#name=` for a value that is not a
+  String or `nil`, and an `ArgumentError` for a String that contains a NUL byte or is not in an
+  ASCII-compatible encoding. Semantic Logger's own threads are now named after their appender,
+  such as `SL File`, so that they can be told apart on Linux, which keeps only the first 15 bytes
+  of a thread name. See the [v5.2 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
   Resolves #424.
 
 ### Fixed

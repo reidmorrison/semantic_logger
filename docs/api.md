@@ -363,7 +363,7 @@ Semantic Logger includes the thread name in every entry. A thread that has no na
 its object id instead:
 
 ~~~
-2013-11-07 16:25:14.279 I [35841:70184354571980] (0.0ms) ExternalSupplier -- Calling external interface
+2013-11-07 16:25:14.279 I [35841:16] (0.0ms) ExternalSupplier -- Calling external interface
 ~~~
 
 Give a thread a readable name so it stands out in the logs:
@@ -376,19 +376,29 @@ Thread.current.name = "User calculation thread 32"
 2013-11-07 16:26:02.744 I [35841:User calculation thread 32] (0.0ms) ExternalSupplier -- Calling external interface
 ~~~
 
-Keep the name unique, otherwise concurrent threads are hard to tell apart. Including the object id is
-one way to guarantee that:
+Keep the name unique, otherwise concurrent threads are hard to tell apart. For example, number the
+threads in a pool:
 
 ~~~ruby
-Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
+workers = Array.new(5) do |i|
+  Thread.new do
+    Thread.current.name = "calc #{i + 1}"
+    # ...
+  end
+end
 ~~~
 
-This is Ruby's own `Thread#name=`, so the name must be a String. Ruby also gives the name to the
+This is Ruby's own `Thread#name=`, so the name must be a String, and Ruby raises for one that
+contains a NUL byte or is not in an ASCII-compatible encoding. Ruby also gives the name to the
 operating system, so it shows up in tools that list threads, such as `top -H`, debuggers, and
-profilers (Linux keeps only its first 15 characters). On JRuby it also names the underlying JVM
-thread, which shows up when monitoring the JVM with tools such as jconsole or jstack. JRuby names the
-main thread `main`, and a thread created by Java code, such as a servlet container's request thread,
-is logged with its JVM thread name.
+profilers. Log entries show the whole name, but Linux keeps only its first 15 bytes, so keep the
+name short, or put the part that tells threads apart first. Semantic Logger keeps its own thread
+names short for the same reason, naming each after its appender, such as `SL Appenders` and
+`SL File`.
+
+On JRuby, naming a thread also names the underlying JVM thread, which shows up when monitoring the
+JVM with tools such as jconsole or jstack. JRuby names the main thread `main`, and a thread created
+by Java code, such as a servlet container's request thread, is logged with its JVM thread name.
 
 ### Change one class's level at runtime
 

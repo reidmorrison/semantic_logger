@@ -582,7 +582,7 @@ Semantic Logger includes the thread name in every entry. A thread that has no na
 its object id instead:
 
 ~~~
-2013-11-07 16:25:14.279 I [35841:70184354571980] (0.0ms) ExternalSupplier -- Calling external interface
+2013-11-07 16:25:14.279 I [35841:16] (0.0ms) ExternalSupplier -- Calling external interface
 ~~~
 
 Give a thread a readable name so it stands out in the logs:
@@ -595,19 +595,29 @@ Thread.current.name = "User calculation thread 32"
 2013-11-07 16:26:02.744 I [35841:User calculation thread 32] (0.0ms) ExternalSupplier -- Calling external interface
 ~~~
 
-Keep the name unique, otherwise concurrent threads are hard to tell apart. Including the object id is
-one way to guarantee that:
+Keep the name unique, otherwise concurrent threads are hard to tell apart. For example, number the
+threads in a pool:
 
 ~~~ruby
-Thread.current.name = "Worker Thread:#{Thread.current.object_id}"
+workers = Array.new(5) do |i|
+  Thread.new do
+    Thread.current.name = "calc #{i + 1}"
+    # ...
+  end
+end
 ~~~
 
-This is Ruby's own `Thread#name=`, so the name must be a String. Ruby also gives the name to the
+This is Ruby's own `Thread#name=`, so the name must be a String, and Ruby raises for one that
+contains a NUL byte or is not in an ASCII-compatible encoding. Ruby also gives the name to the
 operating system, so it shows up in tools that list threads, such as `top -H`, debuggers, and
-profilers (Linux keeps only its first 15 characters). On JRuby it also names the underlying JVM
-thread, which shows up when monitoring the JVM with tools such as jconsole or jstack. JRuby names the
-main thread `main`, and a thread created by Java code, such as a servlet container's request thread,
-is logged with its JVM thread name.
+profilers. Log entries show the whole name, but Linux keeps only its first 15 bytes, so keep the
+name short, or put the part that tells threads apart first. Semantic Logger keeps its own thread
+names short for the same reason, naming each after its appender, such as `SL Appenders` and
+`SL File`.
+
+On JRuby, naming a thread also names the underlying JVM thread, which shows up when monitoring the
+JVM with tools such as jconsole or jstack. JRuby names the main thread `main`, and a thread created
+by Java code, such as a servlet container's request thread, is logged with its JVM thread name.
 
 ### Change one class's level at runtime
 
@@ -3735,7 +3745,7 @@ test. The available checks are:
 | `time` | When the entry was created. |
 | `duration` | Duration of a measure call, in milliseconds. |
 | `backtrace` | The captured backtrace, if any. |
-| `thread_name` | Name of the thread that logged the entry. |
+| `thread_name` | Name of the thread that logged the entry, or its object id when the thread has no name. |
 
 ### Match part of a message or payload
 
@@ -4756,9 +4766,12 @@ behaviour:
 * `Thread#name` returns `nil` for a thread that has no name, where it returned the thread's object
   id as a String (on JRuby, its JVM thread name). The main thread has no name on MRI; JRuby names it
   `main`.
-* `Thread#name=` raises `TypeError` for a value that is not a String or `nil`, such as a Symbol or
-  an Integer, which were converted with `to_s`. Setting `nil` leaves the thread with no name, where
-  it set the name to `""`.
+* `Thread#name=` is Ruby's built-in implementation again, with Ruby's standard behaviour, instead of
+  Semantic Logger's version, which accepted any value and converted it with `to_s`. Ruby's version
+  raises `TypeError` for a value that is not a String or `nil`, such as a Symbol or an Integer. It
+  raises `ArgumentError` for a String that contains a NUL byte (`"\0"`), or whose encoding is not
+  ASCII-compatible, such as UTF-16. Setting `nil` leaves the thread with no name, where it set the
+  name to `""`.
 
 ~~~ruby
 # Before:
@@ -4769,6 +4782,28 @@ Thread.current.name.start_with?("worker")
 Thread.current.name = "worker-#{worker_number}"
 Thread.current.name&.start_with?("worker")
 ~~~
+
+Tests that expect `thread_name: Thread.current.name` from the
+[test helpers](testing.html) no longer work on a thread that has no name, such as the main thread
+on MRI: `Thread.current.name` is now `nil`, while the log entry still holds the thread's object id.
+The RSpec matchers `be_a_semantic_logger_event` and `log_semantic_logger_event` then fail. Worse,
+`assert_semantic_logger_event` in Minitest takes `nil` to mean "do not check", so the test still
+passes but no longer checks the thread name. Expect the object id when the thread has no name:
+
+~~~ruby
+# Before:
+assert_semantic_logger_event(event, thread_name: Thread.current.name)
+
+# After:
+assert_semantic_logger_event(event, thread_name: Thread.current.name || Thread.current.object_id.to_s)
+~~~
+
+Semantic Logger's own threads are now named after their appender, such as `SL File`, with
+`SL Appenders` for the main one, instead of `SemanticLogger::Appender::File` and
+`SemanticLogger::Appenders`. Linux keeps only the first 15 bytes of a thread name, so the longer
+names all looked the same in tools that list threads, such as `top -H`. The new names also appear
+in the thread column of the messages Semantic Logger logs about its own problems, such as an
+appender that cannot write.
 
 On JRuby:
 

@@ -4,7 +4,9 @@ require_relative "test_helper"
 class SemanticLoggerLoggingTest < Minitest::Test
   describe SemanticLogger do
     let(:logger) { SemanticLogger["TestLogger"] }
-    let(:thread_name) { SemanticLogger::Log.thread_name_for(Thread.current) }
+    # Worked out independently of Log.thread_name_for, so that these assertions catch a
+    # regression in it. Never nil: the Minitest helper skips a nil expectation.
+    let(:thread_name) { Thread.current.name || Thread.current.object_id.to_s }
 
     SemanticLogger::LEVELS.each_with_index do |level, level_index|
       describe "##{level}" do

@@ -22,7 +22,9 @@ module Appender
       end
 
       let(:ahash) { {tracking_number: 12_345, session_id: "HSSKLEU@JDK767"} }
-      let(:thread_name) { SemanticLogger::Log.thread_name_for(Thread.current) }
+      # Worked out independently of Log.thread_name_for, so that these assertions catch a
+      # regression in it.
+      let(:thread_name) { Thread.current.name || Thread.current.object_id.to_s }
 
       after do
         appender.purge_all
