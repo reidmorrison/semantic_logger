@@ -138,6 +138,34 @@ module SemanticLogger
             assert_equal 99, attributes["code.line.number"]
           end
 
+          # The location of a logged exception is in its stacktrace, so it is not reported as the
+          # location of the entry when the entry did not capture a backtrace of its own.
+          it "does not take the file and line from the logged exception" do
+            exception = RuntimeError.new("Oh no")
+            exception.set_backtrace(["lib/raised_here.rb:7:in `call'"])
+            log.exception = exception
+
+            refute attributes.key?("code.file.path")
+            refute attributes.key?("code.line.number")
+          end
+
+          # Regression: the SDK reports any other value as an error, which, logged back to this
+          # appender in the same named tags, repeated until the stack overflowed.
+          it "are all values the OpenTelemetry SDK accepts" do
+            log.named_tags = {
+              mixed:  [1, :two, 3.5, nil, {a: 1}],
+              flags:  [true, "false"],
+              buffer: Class.new(String).new("safe"),
+              list:   [Class.new(String).new("safe")]
+            }
+            log.payload    = {mixed: [1, "two"], time: Time.now, numbers: [1, 2.5]}
+            log.tags       = ["tag", Class.new(String).new("other")]
+
+            attributes.each do |key, value|
+              assert ::OpenTelemetry::SDK::Internal.valid_value?(value), "#{key} => #{value.inspect}"
+            end
+          end
+
           it "includes the tags" do
             log.tags = %w[first second]
 
@@ -169,7 +197,7 @@ module SemanticLogger
 
               assert_equal "admin", attributes["role"]
               assert_equal Time.utc(2026, 1, 1).to_s, attributes["since"]
-              assert_equal [1, "two"], attributes["ids"]
+              assert_equal %w[1 two], attributes["ids"]
             end
 
             it "give way to a payload key of the same name" do
@@ -215,9 +243,28 @@ module SemanticLogger
             end
 
             it "compacts arrays of scalars" do
-              log.payload = {list: [1, nil, "two", :three]}
+              log.payload = {list: [1, nil, 2.5]}
 
-              assert_equal [1, "two", "three"], attributes["list"]
+              assert_equal [1, 2.5], attributes["list"]
+            end
+
+            it "writes every element of an array that mixes types as a String" do
+              log.payload = {list: [1, nil, "two", :three, true]}
+
+              assert_equal %w[1 two three true], attributes["list"]
+            end
+
+            it "keeps an array of booleans" do
+              log.payload = {list: [true, false]}
+
+              assert_equal [true, false], attributes["list"]
+            end
+
+            it "copies a subclass of String to a String" do
+              log.payload = {html: Class.new(String).new("<b>safe</b>")}
+
+              assert_instance_of String, attributes["html"]
+              assert_equal "<b>safe</b>", attributes["html"]
             end
 
             it "serializes nested hashes to JSON strings" do
@@ -297,6 +344,26 @@ module SemanticLogger
 
             it "leaves the message as the body" do
               assert_equal "Hello World", formatted[:body]
+            end
+
+            describe "details" do
+              let(:exception) do
+                "abc".upcasee
+              rescue NoMethodError => e
+                e
+              end
+
+              it "follow the message when enabled" do
+                record  = OpenTelemetry.new(log_exception_details: true).call(log, appender)
+                message = record[:attributes]["exception.message"]
+
+                assert message.start_with?("#{exception.message}\n"), message
+                assert_includes message, "Did you mean?"
+              end
+
+              it "are omitted by default" do
+                assert_equal exception.message, attributes["exception.message"]
+              end
             end
 
             it "omits the stacktrace of an exception that was never raised" do

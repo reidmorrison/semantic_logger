@@ -24,6 +24,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:open_telemetry` appender no longer sends a named tag whose value is a Symbol, Time, or other
   object that is not an OpenTelemetry attribute value as an empty value. It is sent as its `#to_s`,
   or as JSON for a structure, as payload values already were.
+- The `:open_telemetry` appender sends every element of a payload or named tag Array that mixes
+  types, such as `[1, "two"]`, as a String, and a subclass of String, such as
+  `ActiveSupport::SafeBuffer`, as a String. The OpenTelemetry SDK reported either value as an error,
+  for every log entry; with `OpenTelemetry.logger` set to a Semantic Logger logger in sync mode, that
+  error was logged back to the appender with the same named tags until the stack overflowed.
 
 ## [5.2.0] 2026-10-30
 

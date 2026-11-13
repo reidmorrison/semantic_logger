@@ -2200,7 +2200,7 @@ body. Semantic Logger adds these attributes when the entry has the value:
 |-----------|-------|
 | `exception.type`, `exception.message` | The class and message of the logged exception. |
 | `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
-| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a backtrace (see `backtrace_level`). |
+| `code.file.path`, `code.line.number` | Where the entry was logged, when it captured a backtrace (see `backtrace_level`). |
 | `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
 | `process.pid` | The id of the process that logged the entry. |
 | `semantic_logger.name` | The logger's name, usually the class name. |
@@ -2213,9 +2213,10 @@ The first five rows use the names from the
 payload key named like one of these attributes is prefixed with its source, as in
 `payload.exception.type`, so that logged data cannot replace or forge them.
 
-OpenTelemetry attribute values are Strings, Integers, Floats, booleans, or arrays of them, so a nested
-Hash, Array, `Struct`, or `Set` is sent as JSON, any other value, such as a Symbol or a Time, as its
-`#to_s`, and a `nil` value is left out.
+OpenTelemetry attribute values are Strings, Integers, Floats, booleans, or arrays of one of those
+types, so a nested Hash, Array, `Struct`, or `Set` is sent as JSON, any other value, such as a Symbol
+or a Time, as its `#to_s`, every element of an array that mixes types, such as `[1, "two"]`, as a
+String, and a `nil` value is left out.
 
 The host name, application, and environment are not attributes: OpenTelemetry reports them once per
 export, in its resource, rather than on every record. Set them with the standard environment
@@ -4723,7 +4724,8 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
              "thread.name" => "puma srv tp 001", "process.pid" => 12345}
 ~~~
 
-* The payload attributes are unchanged.
+* The payload attributes keep their names. An Array that mixes types, such as `[1, "two"]`, is now
+  sent as Strings, `["1", "two"]`, since OpenTelemetry does not accept it otherwise.
 * Each named tag is an attribute of its own, such as `request_id`, instead of `body.named_tags`. A
   payload key takes precedence over a named tag of the same name.
 * The other fields of the entry are attributes too. A logged exception uses the OpenTelemetry
@@ -4739,6 +4741,9 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
 * An entry without a message, such as `logger.error(exception)`, has no body.
 * A named tag whose value is a Symbol, Time, or other object was sent as an empty value. It is now
   sent as its `#to_s`, or as JSON for a Hash, Array, `Struct`, or `Set`.
+* `code.file.path` and `code.line.number` are where the entry was logged, and are left out when the
+  entry did not capture a backtrace. The old body's `file` and `line` fell back to where a logged
+  exception was raised, which is now in `exception.stacktrace`.
 
 A custom formatter given to this appender with `formatter:` must now return the keyword arguments for
 the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `timestamp:`, `body:`, and

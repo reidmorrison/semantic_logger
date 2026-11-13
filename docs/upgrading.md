@@ -33,7 +33,8 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
              "thread.name" => "puma srv tp 001", "process.pid" => 12345}
 ~~~
 
-* The payload attributes are unchanged.
+* The payload attributes keep their names. An Array that mixes types, such as `[1, "two"]`, is now
+  sent as Strings, `["1", "two"]`, since OpenTelemetry does not accept it otherwise.
 * Each named tag is an attribute of its own, such as `request_id`, instead of `body.named_tags`. A
   payload key takes precedence over a named tag of the same name.
 * The other fields of the entry are attributes too. A logged exception uses the OpenTelemetry
@@ -49,6 +50,9 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
 * An entry without a message, such as `logger.error(exception)`, has no body.
 * A named tag whose value is a Symbol, Time, or other object was sent as an empty value. It is now
   sent as its `#to_s`, or as JSON for a Hash, Array, `Struct`, or `Set`.
+* `code.file.path` and `code.line.number` are where the entry was logged, and are left out when the
+  entry did not capture a backtrace. The old body's `file` and `line` fell back to where a logged
+  exception was raised, which is now in `exception.stacktrace`.
 
 A custom formatter given to this appender with `formatter:` must now return the keyword arguments for
 the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `timestamp:`, `body:`, and

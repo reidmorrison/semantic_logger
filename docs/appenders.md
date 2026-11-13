@@ -782,7 +782,7 @@ body. Semantic Logger adds these attributes when the entry has the value:
 |-----------|-------|
 | `exception.type`, `exception.message` | The class and message of the logged exception. |
 | `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
-| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a backtrace (see `backtrace_level`). |
+| `code.file.path`, `code.line.number` | Where the entry was logged, when it captured a backtrace (see `backtrace_level`). |
 | `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
 | `process.pid` | The id of the process that logged the entry. |
 | `semantic_logger.name` | The logger's name, usually the class name. |
@@ -795,9 +795,10 @@ The first five rows use the names from the
 payload key named like one of these attributes is prefixed with its source, as in
 `payload.exception.type`, so that logged data cannot replace or forge them.
 
-OpenTelemetry attribute values are Strings, Integers, Floats, booleans, or arrays of them, so a nested
-Hash, Array, `Struct`, or `Set` is sent as JSON, any other value, such as a Symbol or a Time, as its
-`#to_s`, and a `nil` value is left out.
+OpenTelemetry attribute values are Strings, Integers, Floats, booleans, or arrays of one of those
+types, so a nested Hash, Array, `Struct`, or `Set` is sent as JSON, any other value, such as a Symbol
+or a Time, as its `#to_s`, every element of an array that mixes types, such as `[1, "two"]`, as a
+String, and a `nil` value is left out.
 
 The host name, application, and environment are not attributes: OpenTelemetry reports them once per
 export, in its resource, rather than on every record. Set them with the standard environment

@@ -15,7 +15,7 @@ module SemanticLogger
     # OpenTelemetry semantic conventions where there is one, and are otherwise prefixed with
     # "semantic_logger.", so that they do not collide with the application's keys:
     #   exception.type, exception.message, exception.stacktrace (with each exception that caused it)
-    #   code.file.path, code.line.number (when the entry has a backtrace)
+    #   code.file.path, code.line.number (where the entry was logged, when it captured a backtrace)
     #   thread.name, process.pid
     #   semantic_logger.name, semantic_logger.tags, semantic_logger.duration_ms,
     #   semantic_logger.metric, semantic_logger.metric_amount
@@ -25,10 +25,12 @@ module SemanticLogger
     # The host, application, and environment are not attributes: they describe the process, which
     # OpenTelemetry reports in the resource of every export. The process id is, since the resource
     # holds the id of the process that configured OpenTelemetry, not of a forked child.
+    #
+    # An attribute value is a String, Integer, Float, true, or false, or an Array of them of one
+    # type, since the OpenTelemetry SDK reports any other value as an error, which, when that error
+    # is logged to this appender with the same named tags, repeats until the stack overflows. See
+    # #coerce_value.
     class OpenTelemetry < Base
-      # Primitives allowed by OTLP logs in Ruby: String, Integer, Float, TrueClass, FalseClass.
-      PRIMS = [String, Integer, Float, TrueClass, FalseClass].freeze
-
       # The entry's own attributes.
       EXCEPTION_TYPE       = "exception.type".freeze
       EXCEPTION_MESSAGE    = "exception.message".freeze
@@ -110,7 +112,9 @@ module SemanticLogger
         add(attributes, THREAD_NAME, log.thread_name)
         add(attributes, PROCESS_PID, pid)
 
-        file, line = log.file_name_and_line
+        # Only the backtrace captured where the entry was logged, not the logged exception's, whose
+        # location is in its stacktrace.
+        file, line = log.extract_file_and_line(log.backtrace)
         if file
           add(attributes, CODE_FILE_PATH, file)
           add(attributes, CODE_LINE_NUMBER, line)
@@ -123,12 +127,16 @@ module SemanticLogger
       end
 
       # The logged exception, with the backtrace of each exception that caused it in its stacktrace.
+      # With `log_exception_details`, the message is followed by the detail Ruby adds to it, on a
+      # line of its own, as in Exception#detailed_message.
       def add_exception(attributes)
         exception = log.exception
         return unless exception
 
         add(attributes, EXCEPTION_TYPE, exception.class.name)
-        add(attributes, EXCEPTION_MESSAGE, exception.message)
+        message = exception.message
+        details = exception_details_for(exception)
+        add(attributes, EXCEPTION_MESSAGE, details ? "#{message}\n#{details}" : message)
         stacktrace = exception_backtrace
         add(attributes, EXCEPTION_STACKTRACE, stacktrace) unless stacktrace.empty?
       end
@@ -138,19 +146,44 @@ module SemanticLogger
         attributes[name] = coerce_value(value) unless value.nil?
       end
 
-      # An attribute value: a primitive, or an Array of them.
+      # An attribute value: a primitive, or an Array of primitives of one type. The elements of an
+      # Array that mixes types, such as [1, "two"], are all written as Strings.
       def coerce_value(v)
-        v.is_a?(Array) ? v.map { |e| coerce_element(e) }.compact : coerce_element(v)
+        return coerce_element(v) unless v.is_a?(Array)
+
+        values = v.map { |e| coerce_element(e) }.compact
+        one_type?(values) ? values : values.map(&:to_s)
+      end
+
+      # Whether the coerced values are all Strings, all booleans, or all numbers.
+      def one_type?(values)
+        case values.first
+        when String
+          values.all?(String)
+        when true, false
+          values.all? { |e| [true, false].include?(e) }
+        else
+          values.all?(Numeric)
+        end
       end
 
       # A primitive as-is, and anything else as a String: a structure (such as a Hash, Struct, or
       # Set) as JSON, depth-limited and repaired by Utils.to_json, rather than its #to_s, which is
-      # its #inspect and would expose the instance variables of any object it holds.
+      # its #inspect and would expose the instance variables of any object it holds. A subclass of
+      # String, such as ActiveSupport::SafeBuffer, is copied to a String, which is all the SDK accepts.
       def coerce_element(v)
         case v
-        when *PRIMS, NilClass then v
-        else Utils.structure?(v) ? Utils.to_json(v) : v.to_s
+        when Integer, Float, true, false, nil
+          v
+        when String
+          plain_string(v)
+        else
+          plain_string(Utils.structure?(v) ? Utils.to_json(v) : v.to_s)
         end
+      end
+
+      def plain_string(string)
+        string.instance_of?(String) ? string : String.new(string)
       end
 
       def severity_number(severity)
