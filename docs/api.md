@@ -176,12 +176,20 @@ logger.error(message: "Calling Supplier", duration: 100)
 
 # Attach a metric (see Step 6)
 logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", metric_amount: 21)
+
+# Attach a backtrace of your own, an Array of Strings, instead of the logger's call stack
+logger.warn(message: "Open redirect detected", backtrace: redirect_stack)
 ~~~
 
 In both forms, a key such as `duration` or `exception` is only used as an argument when its value is
 valid for it; otherwise it is logged as part of the payload. Any other keys supplied alongside
 `payload:` are merged into it, without overwriting its own values. When the Hash holds untrusted
 data, see [Logging untrusted hashes](security.html#logging-untrusted-hashes).
+
+A block can return the same Hash, but it never replaces an argument the entry already has. That
+includes the backtrace that an entry captures when its level is at or above
+`SemanticLogger.backtrace_level`, so to attach a backtrace of your own, pass `backtrace:` with the
+call rather than returning it from the block.
 
 ## Step 6: Measure how long something takes
 
