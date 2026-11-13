@@ -72,8 +72,7 @@ module Appender
         it "places the message in the record body" do
           record = emit { info("Hello World") }.first
 
-          assert_equal "Hello World", record.body["message"]
-          assert_kind_of String, record.body.keys.first
+          assert_equal "Hello World", record.body
         end
 
         it "passes the payload through as attributes" do
@@ -81,6 +80,56 @@ module Appender
 
           assert_equal 1, record.attributes["key1"]
           assert_equal "a", record.attributes["key2"]
+        end
+
+        it "passes the named tags through as attributes" do
+          record = SemanticLogger.named_tagged(request_id: "abc") { emit { info("Tagged") } }.first
+
+          assert_equal "abc", record.attributes["request_id"]
+        end
+
+        it "describes the exception with the semantic convention attributes" do
+          record = emit do
+            raise ArgumentError, "Oh no"
+          rescue ArgumentError => e
+            error("Failed", e)
+          end.first
+
+          assert_equal "Failed", record.body
+          assert_equal "ArgumentError", record.attributes["exception.type"]
+          assert_equal "Oh no", record.attributes["exception.message"]
+          assert_includes record.attributes["exception.stacktrace"], "open_telemetry_test.rb"
+        end
+
+        it "correlates the record with the active span" do
+          tracer = ::OpenTelemetry::SDK::Trace::TracerProvider.new.tracer("test")
+          span   = nil
+          record = tracer.in_span("request") do |current|
+            span = current
+            emit { info("In a span") }
+          end.first
+
+          assert_equal span.context.trace_id, record.trace_id
+          assert_equal span.context.span_id, record.span_id
+        end
+
+        # The appender usually runs on a worker thread, after the span has ended.
+        it "correlates the record with the span that was active when the entry was logged" do
+          tracer = ::OpenTelemetry::SDK::Trace::TracerProvider.new.tracer("test")
+          span   = nil
+          log    = SemanticLogger::Log.new("OpenTelemetryTest", :info)
+          log.message = "Captured"
+          tracer.in_span("request") do |current|
+            span = current
+            SemanticLogger::Appender::OpenTelemetry::CAPTURE_CONTEXT.call(log)
+          end
+
+          appender.log(log)
+          provider.force_flush
+          record = exporter.emitted_log_records.first
+
+          assert_equal span.context.trace_id, record.trace_id
+          assert_equal span.context.span_id, record.span_id
         end
 
         it "sets the record timestamp from the log time" do
