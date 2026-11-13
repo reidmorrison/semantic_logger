@@ -753,9 +753,63 @@ SemanticLogger.add_appender(appender: :open_telemetry)
 ~~~
 
 Each entry is emitted with its level mapped to the matching OpenTelemetry severity number, the message
-as the record body, and the payload as record attributes. The appender registers a
+as the record body, and the named tags and payload as record attributes. The appender registers a
 `SemanticLogger.on_log` subscriber that captures the current OpenTelemetry context as each entry is
 logged, so log records are correlated with the active trace and span.
+
+For example, inside a span:
+
+~~~ruby
+SemanticLogger.named_tagged(request_id: "abc") do
+  logger.info("Created user", user_id: 42)
+end
+~~~
+
+is emitted as a record with the severity text `info` and number `9`, the trace and span ids of that
+span, and:
+
+~~~
+body:       "Created user"
+attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "UserService",
+             "thread.name" => "puma srv tp 001", "process.pid" => 12345}
+~~~
+
+Each named tag and payload key is an attribute of its own; a payload key takes precedence over a
+named tag of the same name. An entry without a message, such as `logger.error(exception)`, has no
+body. Semantic Logger adds these attributes when the entry has the value:
+
+| Attribute | Value |
+|-----------|-------|
+| `exception.type`, `exception.message` | The class and message of the logged exception. |
+| `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
+| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a backtrace (see `backtrace_level`). |
+| `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
+| `process.pid` | The id of the process that logged the entry. |
+| `semantic_logger.name` | The logger's name, usually the class name. |
+| `semantic_logger.tags` | The tags, as an array. |
+| `semantic_logger.duration_ms` | The duration in milliseconds, from the `measure_*` methods. |
+| `semantic_logger.metric`, `semantic_logger.metric_amount` | The metric name and amount. |
+
+The first five rows use the names from the
+[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/). A named tag or
+payload key named like one of these attributes is prefixed with its source, as in
+`payload.exception.type`, so that logged data cannot replace or forge them.
+
+OpenTelemetry attribute values are Strings, Integers, Floats, booleans, or arrays of them, so a nested
+Hash, Array, `Struct`, or `Set` is sent as JSON, any other value, such as a Symbol or a Time, as its
+`#to_s`, and a `nil` value is left out.
+
+The host name, application, and environment are not attributes: OpenTelemetry reports them once per
+export, in its resource, rather than on every record. Set them with the standard environment
+variables:
+
+~~~
+OTEL_SERVICE_NAME=my_app
+OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,host.name=web-1
+~~~
+
+The process id is an attribute because the resource holds the id of the process that configured
+OpenTelemetry, which is wrong for a worker forked from it, for example by Puma or Unicorn.
 
 | Option | Description |
 |--------|-------------|

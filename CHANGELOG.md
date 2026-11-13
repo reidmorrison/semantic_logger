@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- The `:open_telemetry` appender sends the message as the body of each log record, as documented,
+  instead of a map of the whole log entry. The named tags become attributes of their own alongside
+  the payload, and the entry's own fields become attributes: the exception as `exception.type`,
+  `exception.message`, and `exception.stacktrace`, the file and line as `code.file.path` and
+  `code.line.number`, plus `thread.name`, `process.pid`, `semantic_logger.name`,
+  `semantic_logger.tags`, `semantic_logger.duration_ms`, `semantic_logger.metric`, and
+  `semantic_logger.metric_amount`. The host, application, and environment are no longer sent, since
+  OpenTelemetry reports them in its resource (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`).
+  The formatter now returns the keyword arguments for the OpenTelemetry `Logger#on_emit`, so a
+  custom formatter for this appender must do the same. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html). Resolves #428.
+
+### Fixed
+
+- The `:open_telemetry` appender no longer sends a named tag whose value is a Symbol, Time, or other
+  object that is not an OpenTelemetry attribute value as an empty value. It is sent as its `#to_s`,
+  or as JSON for a structure, as payload values already were.
+
 ## [5.2.0] 2026-10-30
 
 ### Security

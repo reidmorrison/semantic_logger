@@ -19,6 +19,9 @@ module SemanticLogger
 
       # Create a Open Telemetry Logger appender instance.
       #
+      # The formatter maps each log entry to an Open Telemetry log record, returning the keyword
+      # arguments for `Logger#on_emit` other than `context:`. See SemanticLogger::Formatters::OpenTelemetry.
+      #
       # Metric only log events are sent to the Open Telemetry Metrics API instead of the Logs API.
       #   I.e. A metric without a message or an exception.
       #   To disable this default behavior set `metrics: false`
@@ -45,23 +48,13 @@ module SemanticLogger
         SemanticLogger.on_log(CAPTURE_CONTEXT)
       end
 
+      # Emits the log record the formatter returns, in the Open Telemetry context captured when the
+      # entry was logged, so that the record is correlated with the trace and span active then.
       def log(log)
         # return log_metric(log) if metrics && log.metric_only?
 
-        body        = format_log(log)
-        level       = body.delete(:level)
-        level_index = body.delete(:level_index)
-        time        = body.delete(:time)
-        payload     = body.delete(:payload)
-
-        @logger.on_emit(
-          severity_text:   level,
-          severity_number: level_index,
-          timestamp:       time,
-          body:            body.transform_keys!(&:to_s),
-          attributes:      payload,
-          context:         (log.context && log.context[:open_telemetry]) || ::OpenTelemetry::Context.current
-        )
+        context = (log.context && log.context[:open_telemetry]) || ::OpenTelemetry::Context.current
+        @logger.on_emit(**format_log(log), context: context)
         true
       end
 

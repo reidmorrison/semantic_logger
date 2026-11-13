@@ -3,7 +3,7 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.2 security fixes, remote syslog facility fix, and deprecation of the Splunk SDK appender.
+  v5.3 OpenTelemetry log record changes.
 ---
 
 
@@ -11,6 +11,49 @@ description: >-
 
 * TOC
 {:toc}
+
+### Upgrading to Semantic Logger v5.3
+
+#### OpenTelemetry log records
+
+The `:open_telemetry` appender now sends the message as the body of each log record, as its
+documentation described, instead of a map of the whole log entry. This matters if you query, alert
+on, or build dashboards from the body of these records.
+
+~~~
+# Before:
+body:       {"host" => "web-1", "application" => "my_app", "environment" => "production",
+             "pid" => 12345, "thread" => "puma srv tp 001", "named_tags" => {request_id: "abc"},
+             "name" => "UserService", "message" => "Created user"}
+attributes: {"user_id" => 42}
+
+# After:
+body:       "Created user"
+attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "UserService",
+             "thread.name" => "puma srv tp 001", "process.pid" => 12345}
+~~~
+
+* The payload attributes are unchanged.
+* Each named tag is an attribute of its own, such as `request_id`, instead of `body.named_tags`. A
+  payload key takes precedence over a named tag of the same name.
+* The other fields of the entry are attributes too. A logged exception uses the OpenTelemetry
+  semantic conventions, `exception.type`, `exception.message`, and `exception.stacktrace`, so that
+  backends recognize it, and so do `code.file.path`, `code.line.number`, `thread.name`, and
+  `process.pid`. The logger name, tags, duration, and metric are `semantic_logger.name`,
+  `semantic_logger.tags`, `semantic_logger.duration_ms`, `semantic_logger.metric`, and
+  `semantic_logger.metric_amount`. A named tag or payload key with one of these names is prefixed with
+  its source, as in `payload.exception.type`.
+* The host, application, and environment are no longer sent. Set them in the OpenTelemetry resource
+  instead, which is sent once per export, with `OTEL_SERVICE_NAME=my_app` and
+  `OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,host.name=web-1`.
+* An entry without a message, such as `logger.error(exception)`, has no body.
+* A named tag whose value is a Symbol, Time, or other object was sent as an empty value. It is now
+  sent as its `#to_s`, or as JSON for a Hash, Array, `Struct`, or `Set`.
+
+A custom formatter given to this appender with `formatter:` must now return the keyword arguments for
+the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `timestamp:`, `body:`, and
+`attributes:`), as `SemanticLogger::Formatters::OpenTelemetry` does, instead of a Hash shaped like the
+`:raw` formatter's.
 
 ### Upgrading to Semantic Logger v5.2
 
