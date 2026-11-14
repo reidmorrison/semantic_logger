@@ -21,6 +21,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- `logger.backtrace` on a child logger, one returned by `logger.tagged` without a block, logs the
+  child logger's own tags, as its other entries do. They were left out.
 - A thread dump (`logger.backtrace(thread:)`, and the `TTIN` signal handler) logs the named tags of
   another thread as a Hash. They were logged as the list of Hashes pushed by each `tagged` block,
   which the text formatters could not format, so the thread's entry was discarded.
