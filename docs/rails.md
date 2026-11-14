@@ -627,8 +627,11 @@ end
 #### Testing Sidekiq jobs and middleware
 
 Use the [test helpers](testing.html) (`capture_semantic_logger_events` in RSpec,
-`semantic_logger_events` in Minitest) to capture the log events from jobs and server middleware. Two
-things differ from a running Sidekiq server:
+`semantic_logger_events` in Minitest) to capture the log events from jobs and server middleware. This
+relies on `replace_sidekiq_logger` being on (the default): with it off, jobs and middleware log
+through a plain `Sidekiq::Logger`, which the helpers do not capture.
+
+Two things differ from a running Sidekiq server:
 
 - Sidekiq's testing modes (`inline!`, and `fake!` with `drain` or `perform_one`) run only the
   middleware added to `Sidekiq::Testing.server_middleware`, not the chain from
@@ -640,7 +643,14 @@ Capture every event rather than one class's. Middleware that includes `Sidekiq::
 logs through Sidekiq's configured logger, which a capture scoped to a class, such as
 `capture_semantic_logger_events(Sidekiq)`, does not reach.
 
+The example below turns on Sidekiq's testing modes with `Sidekiq.testing!(:fake)`, available from
+Sidekiq 8.1.1. On earlier versions use `require "sidekiq/testing"` instead.
+
 ~~~ruby
+# spec/rails_helper.rb
+Sidekiq.testing!(:fake)
+
+# app/sidekiq/tenant_logging_middleware.rb
 class TenantLoggingMiddleware
   include Sidekiq::ServerMiddleware
 
@@ -649,20 +659,33 @@ class TenantLoggingMiddleware
   end
 end
 
+# app/sidekiq/report_job.rb
+class ReportJob
+  include Sidekiq::Job
+
+  def perform
+    logger.info("Building report")
+  end
+end
+
+# spec/sidekiq/tenant_logging_middleware_spec.rb
 RSpec.describe TenantLoggingMiddleware do
   around { |example| Sidekiq::Testing.inline! { example.run } }
   before { Sidekiq::Testing.server_middleware { |chain| chain.add TenantLoggingMiddleware } }
-  after  { Sidekiq::Testing.server_middleware.clear }
+  after  { Sidekiq::Testing.server_middleware { |chain| chain.remove TenantLoggingMiddleware } }
 
   it "tags the job's log entries with the tenant" do
     events = capture_semantic_logger_events { ReportJob.set(tenant: "acme").perform_async }
+    event  = events.find { |e| e.name == "ReportJob" }
 
-    expect(events).to include(
-      a_semantic_logger_event(name: "ReportJob", named_tags: {tenant: "acme"})
-    )
+    expect(event).to be_a_semantic_logger_event(message: "Building report")
+    expect(event.named_tags).to include(tenant: "acme")
   end
 end
 ~~~
+
+The last line checks only the `tenant` tag, so the test still passes when other named tags are
+active.
 
 ### Custom controller base class
 
