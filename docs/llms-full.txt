@@ -286,6 +286,30 @@ Every entry is identified as coming from `Supplier`:
 2012-08-30 15:37:29.474 I [48308:main] Supplier -- Accessible from instance methods
 ~~~
 
+A module can include `SemanticLogger::Loggable` too. The module gets a `logger` of its own, and its
+instance methods get a `logger` in any class that includes the module, whether or not that class
+includes `SemanticLogger::Loggable`:
+
+~~~ruby
+module Pricing
+  include SemanticLogger::Loggable
+
+  def price(amount)
+    logger.info("Pricing", amount: amount)
+  end
+end
+
+class Order
+  include Pricing
+end
+
+Order.new.price(10)
+~~~
+
+The entry is identified as coming from `Order`, the class that called `price`. When that class includes
+`SemanticLogger::Loggable`, the module's methods use its logger; when it defines a `logger` method of
+its own, they use that.
+
 By default `SemanticLogger[...]` returns a brand new logger on each call. To share a single logger
 per class instead, enable [logger caching](config.html#caching-loggers).
 

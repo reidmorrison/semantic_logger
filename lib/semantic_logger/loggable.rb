@@ -56,16 +56,36 @@ module SemanticLogger
           end
         end
 
-        # Returns [SemanticLogger::Logger] instance level logger
-        def logger
-          @semantic_logger ||= self.class.logger
-        end
-
         # Replace instance level logger
         def logger=(logger)
           @semantic_logger = logger
         end
       end
+
+      if base.is_a?(Class)
+        base.class_eval do
+          # Returns [SemanticLogger::Logger] instance level logger
+          def logger
+            @semantic_logger ||= self.class.logger
+          end
+        end
+      else
+        base.class_eval do
+          # Returns [SemanticLogger::Logger] instance level logger
+          #
+          # The instance belongs to a class that included this module, which need not include
+          # Loggable itself. Use that class's logger when it has one, otherwise one named after it.
+          def logger
+            @semantic_logger ||= Loggable.class_logger(self.class)
+          end
+        end
+      end
+    end
+
+    # Returns [SemanticLogger::Logger] the logger for instances of the supplied class, which included
+    # a module that includes Loggable.
+    def self.class_logger(klass)
+      klass.singleton_class.include?(ClassMethods) ? klass.logger : SemanticLogger[klass]
     end
 
     # Returns [Hash] the class level loggers of the current Ractor, when it is not the main one.
