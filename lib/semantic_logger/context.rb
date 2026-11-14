@@ -40,8 +40,14 @@ module SemanticLogger
       super(
         tags:       tags.frozen? ? tags : tags.dup.freeze,
         named_tags: named_tags.frozen? ? named_tags : named_tags.dup.freeze,
-        silence:    silence && Levels.level(Levels.index(silence))
+        silence:    silence.nil? ? nil : Levels.level(Levels.index(silence))
       )
+    end
+
+    # Returns [Context] a copy with the supplied members changed, checked and frozen as by .new,
+    # which Data#with does not call on Ruby 3.2.
+    def with(**changes)
+      changes.empty? ? self : self.class.new(**to_h, **changes)
     end
 
     # A context with no tags, named tags, or silence level.
@@ -54,9 +60,9 @@ module SemanticLogger
         tags  = Thread.current[TAGS_KEY]
         named = Thread.current[NAMED_TAGS_KEY]
         index = Thread.current[SILENCE_KEY]
-        return NONE if tags.nil? && named.nil? && index.nil?
+        return NONE if (tags.nil? || tags.empty?) && (named.nil? || named.empty?) && index.nil?
 
-        new(tags: tags || EMPTY, named_tags: named_tags.freeze, silence: index && Levels.level(index))
+        new(tags: tags || EMPTY, named_tags: merge(named).freeze, silence: index && Levels.level(index))
       end
 
       # Runs the block with the supplied context as the current fiber's context, in place of the
@@ -65,12 +71,14 @@ module SemanticLogger
         raise(ArgumentError, "Expected a SemanticLogger::Context, got #{context.class}") unless context.is_a?(Context)
 
         previous = [Thread.current[TAGS_KEY], Thread.current[NAMED_TAGS_KEY], Thread.current[SILENCE_KEY]]
-        Thread.current[TAGS_KEY]       = context.tags.empty? ? nil : context.tags
-        Thread.current[NAMED_TAGS_KEY] = context.named_tags.empty? ? nil : [context.named_tags].freeze
-        Thread.current[SILENCE_KEY]    = context.silence && Levels.index(context.silence)
-        yield
-      ensure
-        Thread.current[TAGS_KEY], Thread.current[NAMED_TAGS_KEY], Thread.current[SILENCE_KEY] = previous if previous
+        begin
+          Thread.current[TAGS_KEY]       = context.tags.empty? ? nil : context.tags
+          Thread.current[NAMED_TAGS_KEY] = context.named_tags.empty? ? nil : [context.named_tags].freeze
+          Thread.current[SILENCE_KEY]    = context.silence && Levels.index(context.silence)
+          yield
+        ensure
+          Thread.current[TAGS_KEY], Thread.current[NAMED_TAGS_KEY], Thread.current[SILENCE_KEY] = previous
+        end
       end
 
       # Returns [Array] a new Array of the tags of the thread's current fiber.
@@ -83,10 +91,7 @@ module SemanticLogger
       #
       # Each named tags block pushes its Hash onto a list; a later Hash wins on a key that is in both.
       def named_tags(thread = Thread.current)
-        list = thread[NAMED_TAGS_KEY]
-        return {} if list.nil? || list.empty?
-
-        list.size == 1 ? list.first.dup : list.reduce({}) { |sum, hash| sum.merge(hash) }
+        merge(thread[NAMED_TAGS_KEY])
       end
 
       # Runs the block with the tag added to the current fiber's tags.
@@ -187,6 +192,13 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Hash] a new Hash of the list of named tags Hashes merged, a later one winning.
+      def merge(list)
+        return {} if list.nil? || list.empty?
+
+        list.size == 1 ? list.first.dup : list.reduce({}) { |sum, hash| sum.merge(hash) }
+      end
 
       def current_tags
         Thread.current[TAGS_KEY] || EMPTY

@@ -207,6 +207,22 @@ module SemanticLogger
           end
         end
 
+        it "is the same empty context after tags were pushed and popped" do
+          empty = SemanticLogger.context
+          SemanticLogger.push_tags("a")
+          SemanticLogger.pop_tags
+
+          assert_same empty, SemanticLogger.context
+        end
+
+        it "is the same empty context after named tags were pushed and popped" do
+          empty = SemanticLogger.context
+          SemanticLogger.push_named_tags(a: 1)
+          SemanticLogger.pop_named_tags
+
+          assert_same empty, SemanticLogger.context
+        end
+
         it "is empty without tags" do
           context = SemanticLogger.context
 
@@ -319,6 +335,17 @@ module SemanticLogger
 
         it "rejects an invalid silence level" do
           assert_raises(ArgumentError) { Context.new(silence: :loud) }
+          assert_raises(ArgumentError) { Context.new(silence: false) }
+        end
+
+        it "checks and freezes the members changed with #with" do
+          tags    = ["a"]
+          context = Context.new.with(tags: tags, silence: "warn")
+          tags << "b"
+
+          assert_equal ["a"], context.tags
+          assert_equal :warn, context.silence
+          assert_raises(ArgumentError) { Context.new.with(tags: "a") }
         end
       end
 
