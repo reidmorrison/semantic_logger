@@ -56,7 +56,9 @@ module SemanticLogger
       #     This prevents log forging and terminal escape-sequence injection
       #     when logging data that may contain attacker-controlled content.
       #     Note: Has no effect on structured formatters such as :json, which
-      #     already escape control characters via JSON encoding.
+      #     already escape control characters via JSON encoding, except that
+      #     :loki and :open_telemetry, which write the exception's stack trace
+      #     as text, escape its backtrace lines and the messages of its causes.
       #     Default: false (preserve newlines and ANSI colors in text output)
       #   log_exception_details: [true|false|:with_source]
       #     Whether to log the detail that Ruby's Exception#detailed_message adds to an

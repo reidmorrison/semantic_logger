@@ -4758,6 +4758,23 @@ the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `times
 `attributes:`), as `SemanticLogger::Formatters::OpenTelemetry` does, instead of a Hash shaped like the
 `:raw` formatter's.
 
+#### Loki stack traces
+
+The `:loki` formatter now writes the `stack_trace` of a logged exception one frame per line, followed
+by the backtrace of each exception that caused it, as the text formatters do. It wrote an inspected
+Ruby Array and left out the causes. Update any query or alert that matches the old form:
+
+~~~
+# Before:
+["app/models/order.rb:12:in 'Order#ship'", "app/controllers/orders_controller.rb:7:in 'OrdersController#create'"]
+
+# After:
+app/models/order.rb:12:in 'Order#ship'
+app/controllers/orders_controller.rb:7:in 'OrdersController#create'
+Cause: ArgumentError: invalid quantity
+app/models/line_item.rb:3:in 'LineItem#save'
+~~~
+
 ### Upgrading to Semantic Logger v5.2
 
 v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, stops
