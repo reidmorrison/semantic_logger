@@ -21,6 +21,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- A thread dump (`logger.backtrace(thread:)`, and the `TTIN` signal handler) logs the named tags of
+  another thread as a Hash. They were logged as the list of Hashes pushed by each `tagged` block,
+  which the text formatters could not format, so the thread's entry was discarded.
 - The `:open_telemetry` appender no longer sends a named tag whose value is a Symbol, Time, or other
   object that is not an OpenTelemetry attribute value as an empty value. It is sent as its `#to_s`,
   or as JSON for a structure, as payload values already were.
