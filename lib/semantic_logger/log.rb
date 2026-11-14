@@ -285,14 +285,7 @@ module SemanticLogger
     #
     # The result is cached on this entry, since every appender's formatter may ask for it.
     def exception_details(exception, source: false)
-      key   = [exception, source]
-      cache = @exception_details
-      return cache[key] if cache&.key?(key)
-
-      details = ExceptionDetails.extract(exception, source: source)
-      # Replace the cache rather than change it, since appenders on other threads may be reading it.
-      @exception_details = (cache || {}).merge(key => details).freeze
-      details
+      cached([:exception_details, exception.__id__, source]) { ExceptionDetails.extract(exception, source: source) }
     end
 
     # Returns [Array<String>] the backtrace of the supplied exception, or nil when it has none.
@@ -303,22 +296,18 @@ module SemanticLogger
     #   cleaner: [Object|nil]
     #     A backtrace cleaner, such as `Rails.backtrace_cleaner`, that responds to `#clean` or
     #     `#call`. The backtrace is returned as it cleans it (see BacktraceCleaning.clean), and the
-    #     exception's own backtrace is left unchanged.
+    #     exception's own backtrace is left unchanged. Any other value, such as the `true` of the
+    #     formatter option, is reported to the internal logger as a broken cleaner, and the full
+    #     backtrace is returned.
     #     Default: nil (the exception's own backtrace)
     #
-    # A cleaned backtrace is cached on this entry, since every appender's formatter may ask for it.
+    # A cleaned backtrace is frozen, as are its lines, and cached on this entry, since every
+    # appender's formatter may ask for it. Nothing is cached while the exception has no backtrace:
+    # one that was never raised can be given one later, as the Bugsnag appender does.
     def backtrace_of(exception, cleaner: nil)
-      backtrace = exception.backtrace
-      return backtrace unless cleaner
+      return exception.backtrace unless cleaner && exception.backtrace
 
-      key   = [exception, cleaner]
-      cache = @cleaned_backtraces
-      return cache[key] if cache&.key?(key)
-
-      cleaned = BacktraceCleaning.clean(backtrace, cleaner)
-      # Replace the cache rather than change it, since appenders on other threads may be reading it.
-      @cleaned_backtraces = (cache || {}).merge(key => cleaned).freeze
-      cleaned
+      cached([:backtrace, exception.__id__, cleaner.__id__]) { BacktraceCleaning.clean(exception.backtrace, cleaner) }
     end
 
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
@@ -470,8 +459,8 @@ module SemanticLogger
       %i[message payload tags named_tags context metric dimensions].each do |field|
         public_send(:"#{field}=", RactorCopy.copyable(public_send(field)))
       end
-      self.exception     = RactorCopy.copyable_exception(exception) if exception
-      @exception_details = nil
+      self.exception = RactorCopy.copyable_exception(exception) if exception
+      @cache = nil
       self
     end
 
@@ -498,6 +487,26 @@ module SemanticLogger
         merged.delete(other) unless kept.key?(other)
       end
       merged
+    end
+
+    # Returns the value cached on this entry for the key, after caching the value the block returns
+    # when there is none yet. Used for values derived from the entry that every appender's formatter
+    # may ask for.
+    #
+    # Keys hold objects by their #__id__, so that no exception's or cleaner's own #eql? or #hash is
+    # called: an exception class can define them by value, which would cache two of its exceptions
+    # together, and a cleaner, such as a test double, need not define them.
+    #
+    # The cache is replaced rather than changed, since appenders on other threads may be reading it.
+    # Appenders that ask at the same moment can each compute the value, so the block must not rely
+    # on being called only once.
+    # Once the entry is handed to the appenders the cache only grows, so the entry found by #key? is
+    # still there when it is read.
+    def cached(key)
+      return @cache[key] if @cache&.key?(key)
+
+      # Merged into the cache as it is now: another appender may have added to it meanwhile.
+      yield.tap { |value| @cache = (@cache || {}).merge(key => value).freeze }
     end
 
     # Whether a log argument from the Hash returned by a logging block, already checked by

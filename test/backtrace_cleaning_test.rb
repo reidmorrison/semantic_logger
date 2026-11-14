@@ -1,16 +1,7 @@
 require_relative "test_helper"
 
 class BacktraceCleaningTest < Minitest::Test
-  # Has the interface of ActiveSupport::BacktraceCleaner: keeps the application's own frames,
-  # relative to its root.
-  class AppCleaner
-    def clean(backtrace)
-      backtrace.select { |line| line.start_with?("/app/") }.map { |line| line.delete_prefix("/app/") }
-    end
-  end
-
-  APP_FRAME = "/app/models/order.rb:12:in 'Order#ship'".freeze
-  GEM_FRAME = "/gems/rack-3.1.0/lib/rack/runtime.rb:24:in 'Rack::Runtime#call'".freeze
+  include BacktraceCleanerFixtures
 
   describe SemanticLogger::BacktraceCleaning do
     let(:backtrace) { [GEM_FRAME, APP_FRAME, GEM_FRAME] }
@@ -31,10 +22,25 @@ class BacktraceCleaningTest < Minitest::Test
       end
     end
 
+    describe ".validate!" do
+      it "returns a cleaner" do
+        cleaner = AppCleaner.new
+
+        assert_same cleaner, SemanticLogger::BacktraceCleaning.validate!(cleaner)
+      end
+
+      it "rejects other values" do
+        [nil, true, "app", :clean].each do |value|
+          error = assert_raises(ArgumentError) { SemanticLogger::BacktraceCleaning.validate!(value) }
+
+          assert_includes error.message, "Expected a backtrace cleaner that responds to #clean or #call"
+        end
+      end
+    end
+
     describe ".clean" do
       it "returns the lines from #clean" do
-        assert_equal ["models/order.rb:12:in 'Order#ship'"],
-                     SemanticLogger::BacktraceCleaning.clean(backtrace, AppCleaner.new)
+        assert_equal [CLEANED_FRAME], SemanticLogger::BacktraceCleaning.clean(backtrace, AppCleaner.new)
       end
 
       it "returns the lines from #call" do
@@ -45,11 +51,30 @@ class BacktraceCleaningTest < Minitest::Test
         cleaner = AppCleaner.new
         def cleaner.call(_lines) = ["from call"]
 
-        assert_equal ["models/order.rb:12:in 'Order#ship'"], SemanticLogger::BacktraceCleaning.clean(backtrace, cleaner)
+        assert_equal [CLEANED_FRAME], SemanticLogger::BacktraceCleaning.clean(backtrace, cleaner)
       end
 
-      it "returns frozen lines" do
-        assert_predicate SemanticLogger::BacktraceCleaning.clean(backtrace, AppCleaner.new), :frozen?
+      it "returns a frozen Array of frozen lines" do
+        cleaned = SemanticLogger::BacktraceCleaning.clean(backtrace, AppCleaner.new)
+
+        assert_predicate cleaned, :frozen?
+        assert cleaned.all?(&:frozen?)
+      end
+
+      it "does not freeze the lines the cleaner returns" do
+        line = +"app/a.rb:1"
+        SemanticLogger::BacktraceCleaning.clean(backtrace, ->(_lines) { [line] })
+
+        refute_predicate line, :frozen?
+      end
+
+      it "does not freeze the supplied lines, even of a String subclass" do
+        line_class = Class.new(String)
+        lines      = [line_class.new(APP_FRAME), line_class.new(GEM_FRAME)]
+        SemanticLogger::BacktraceCleaning.clean(lines, ->(cleaned) { cleaned })
+        SemanticLogger::BacktraceCleaning.clean(lines, ->(_lines) {})
+
+        refute lines.any?(&:frozen?)
       end
 
       it "writes a Thread::Backtrace::Location as a String" do
@@ -68,19 +93,85 @@ class BacktraceCleaningTest < Minitest::Test
         assert_equal original, backtrace
       end
 
-      it "returns the supplied backtrace when the cleaner leaves out every line" do
-        gems_only = [GEM_FRAME, GEM_FRAME]
+      it "returns a frozen copy of the supplied backtrace when the cleaner leaves out every line" do
+        gems_only = [+GEM_FRAME, +GEM_FRAME]
+        cleaned   = SemanticLogger::BacktraceCleaning.clean(gems_only, AppCleaner.new)
 
-        assert_same gems_only, SemanticLogger::BacktraceCleaning.clean(gems_only, AppCleaner.new)
+        assert_equal gems_only, cleaned
+        assert_predicate cleaned, :frozen?
+        assert cleaned.all?(&:frozen?)
+        refute_predicate gems_only, :frozen?
+        refute gems_only.any?(&:frozen?)
       end
 
       it "returns the supplied backtrace when the cleaner does not return an Array" do
-        assert_same backtrace, SemanticLogger::BacktraceCleaning.clean(backtrace, ->(_lines) { "app" })
-        assert_same backtrace, SemanticLogger::BacktraceCleaning.clean(backtrace, ->(_lines) {})
+        assert_equal backtrace, SemanticLogger::BacktraceCleaning.clean(backtrace, ->(_lines) { "app" })
+        assert_equal backtrace, SemanticLogger::BacktraceCleaning.clean(backtrace, ->(_lines) {})
       end
 
-      it "returns the supplied backtrace when the cleaner raises" do
-        assert_same backtrace, SemanticLogger::BacktraceCleaning.clean(backtrace, ->(_lines) { raise "broken" })
+      describe "when the cleaner raises" do
+        let(:io) { StringIO.new }
+        let(:cleaner) { ->(_lines) { raise "broken" } }
+        let(:clean_from) { cleaner }
+
+        # The internal logger writes text, as by default, so that it would ask the cleaner to clean
+        # the backtrace of any exception it is given.
+        def internal_processor
+          SemanticLogger::SyncProcessor.new(SemanticLogger::Appenders.new(SemanticLogger::Appender::IO.new(io)))
+        end
+
+        def clean_reporting_to_io(backtrace)
+          SemanticLogger::Logger.stub(:processor, internal_processor) do
+            SemanticLogger::BacktraceCleaning.clean(backtrace, clean_from)
+          end
+        end
+
+        before { SemanticLogger.backtrace_cleaner = cleaner }
+        after { SemanticLogger.backtrace_cleaner = nil }
+
+        it "returns the supplied backtrace" do
+          assert_equal backtrace, clean_reporting_to_io(backtrace)
+        end
+
+        it "reports the error, and where it was raised, to the internal logger" do
+          clean_reporting_to_io(backtrace)
+
+          assert_match(/W .*Backtrace cleaner raised RuntimeError: broken \(.*backtrace_cleaning_test\.rb:\d+/,
+                       io.string)
+          assert_includes io.string, "so the full backtrace is logged"
+        end
+
+        it "names an error class without a name" do
+          error_class = Class.new(StandardError)
+          cleaner     = ->(_lines) { raise error_class, "broken" }
+          SemanticLogger::Logger.stub(:processor, internal_processor) do
+            SemanticLogger::BacktraceCleaning.clean(backtrace, cleaner)
+          end
+
+          assert_includes io.string, "raised #{error_class.inspect}: broken"
+        end
+
+        describe "for a line that cannot be written as text" do
+          let(:clean_from) do
+            line = Object.new
+            def line.to_s = raise("no text")
+            ->(_lines) { [line] }
+          end
+
+          it "returns the supplied backtrace, and reports the error" do
+            assert_equal backtrace, clean_reporting_to_io(backtrace)
+            assert_includes io.string, "Backtrace cleaner raised RuntimeError: no text"
+          end
+        end
+
+        describe "for an object that is not a cleaner, such as the formatter option true" do
+          let(:clean_from) { true }
+
+          it "returns the supplied backtrace, and reports the error" do
+            assert_equal backtrace, clean_reporting_to_io(backtrace)
+            assert_includes io.string, "Backtrace cleaner raised NoMethodError"
+          end
+        end
       end
 
       it "does not call the cleaner without a backtrace" do

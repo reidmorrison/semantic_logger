@@ -107,10 +107,11 @@ module SemanticLogger
       # Sets the `backtrace_cleaner` option. See #initialize.
       # Raises ArgumentError for any other value, so that a mistake surfaces here rather than on
       # every log entry.
+      #
+      # Compared by identity, since a cleaner, such as a test double, need not define #== or #nil?.
       def backtrace_cleaner=(cleaner)
-        unless cleaner == true || cleaner == false || cleaner.nil? || BacktraceCleaning.cleaner?(cleaner)
-          raise(ArgumentError,
-                "backtrace_cleaner must be true, false, or respond to #clean or #call: #{cleaner.inspect}")
+        unless true.equal?(cleaner) || false.equal?(cleaner) || nil.equal?(cleaner)
+          BacktraceCleaning.validate!(cleaner, expected: "true, false, or a backtrace cleaner")
         end
 
         @backtrace_cleaner = cleaner
@@ -176,7 +177,7 @@ module SemanticLogger
       # built, so that it can be set after the appenders are added.
       def active_backtrace_cleaner
         cleaner = backtrace_cleaner
-        return SemanticLogger.backtrace_cleaner if cleaner == true
+        return SemanticLogger.backtrace_cleaner if true.equal?(cleaner)
 
         cleaner || nil
       end

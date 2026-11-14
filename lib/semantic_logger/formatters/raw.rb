@@ -101,7 +101,7 @@ module SemanticLogger
           root[name] = {name: exception.class.name, message: exception.message}
           details    = exception_details_for(exception)
           root[name][:details]     = details if details
-          root[name][:stack_trace] = log.backtrace_of(exception, cleaner: cleaner)
+          root[name][:stack_trace] = stack_trace_of(exception, cleaner)
           root = root[name]
         end
       end
@@ -136,6 +136,18 @@ module SemanticLogger
         metric
 
         hash
+      end
+
+      private
+
+      # Returns [Array<String>] the backtrace to write for the exception.
+      #
+      # A cleaned backtrace is frozen and shared with the other appenders (see Log#backtrace_of),
+      # so the Hash gets a copy that a subclass can change, as it could change the exception's own
+      # backtrace before cleaning.
+      def stack_trace_of(exception, cleaner)
+        backtrace = log.backtrace_of(exception, cleaner: cleaner)
+        cleaner && backtrace ? backtrace.map(&:dup) : backtrace
       end
     end
   end

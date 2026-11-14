@@ -88,22 +88,22 @@ module SemanticLogger
   #   cleaner: [Object|nil]
   #     An object that responds to `#clean`, as ActiveSupport::BacktraceCleaner does, or to `#call`,
   #     such as a Proc. It is given each exception's backtrace as an Array of Strings, and returns
-  #     the lines to log. When it leaves out every line, or raises, the full backtrace is logged.
+  #     the lines to log. When it leaves out every line, or raises, the full backtrace is logged,
+  #     and an error it raises is reported to the internal logger.
   #     It is called on the appender threads, so it must be thread safe.
   #     nil: Do not clean backtraces.
   #     Default: nil
   #
-  # The `:default`, `:color`, `:pattern`, `:one_line`, `:syslog`, `:json`, and `:fluentd`
-  # formatters use it unless given `backtrace_cleaner: false`. Other formatters only use it when
-  # given `backtrace_cleaner: true`. Appenders that send the exception itself, such as error
-  # services, are not affected.
+  # The `:default`, `:color`, `:pattern`, `:syslog`, `:json`, and `:fluentd` formatters use it
+  # unless given `backtrace_cleaner: false`. Other formatters only use it when given
+  # `backtrace_cleaner: true`. Appenders that send the exception itself, such as error services,
+  # are not affected.
   #
   # Example:
   #   SemanticLogger.backtrace_cleaner = Rails.backtrace_cleaner
   def self.backtrace_cleaner=(cleaner)
-    unless cleaner.nil? || BacktraceCleaning.cleaner?(cleaner)
-      raise(ArgumentError, "Backtrace cleaner must respond to #clean or #call: #{cleaner.inspect}")
-    end
+    # Compared by identity, since a cleaner, such as a test double, need not define #nil?.
+    BacktraceCleaning.validate!(cleaner, expected: "nil or a backtrace cleaner") unless nil.equal?(cleaner)
 
     @backtrace_cleaner = cleaner
   end

@@ -432,6 +432,13 @@ class SemanticLoggerTest < Minitest::Test
         assert_same cleaner, SemanticLogger.backtrace_cleaner
       end
 
+      it "accepts a cleaner that does not define #nil?, such as a mock" do
+        cleaner = Minitest::Mock.new.expect(:clean, [], [Array])
+        SemanticLogger.backtrace_cleaner = cleaner
+
+        assert_equal cleaner.__id__, SemanticLogger.backtrace_cleaner.__id__
+      end
+
       it "accepts nil to stop cleaning backtraces" do
         SemanticLogger.backtrace_cleaner = ->(lines) { lines }
         SemanticLogger.backtrace_cleaner = nil

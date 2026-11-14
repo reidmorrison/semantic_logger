@@ -9,19 +9,9 @@ require "semantic_logger/formatters/open_telemetry"
 module SemanticLogger
   module Formatters
     class BacktraceCleanerTest < Minitest::Test
-      # Has the interface of ActiveSupport::BacktraceCleaner: keeps the application's own frames,
-      # relative to its root.
-      class AppCleaner
-        def clean(backtrace)
-          backtrace.select { |line| line.start_with?("/app/") }.map { |line| line.delete_prefix("/app/") }
-        end
-      end
+      include BacktraceCleanerFixtures
 
       MOCK_LOGGER = Struct.new(:host, :application, :environment, :name)
-
-      APP_FRAME     = "/app/models/order.rb:12:in 'Order#ship'".freeze
-      CLEANED_FRAME = "models/order.rb:12:in 'Order#ship'".freeze
-      GEM_FRAME     = "/gems/rack-3.1.0/lib/rack/runtime.rb:24:in 'Rack::Runtime#call'".freeze
 
       # Only in a backtrace line: the file name and line number fields, taken from the exception's
       # first frame when the entry has no backtrace of its own, do not include the method.
@@ -147,8 +137,25 @@ module SemanticLogger
           end
         end
 
+        it "accepts a cleaner that does not define #== or #nil?, such as a mock" do
+          cleaner = Minitest::Mock.new.expect(:clean, [CLEANED_FRAME], [Array])
+
+          assert_includes output(Default.new(backtrace_cleaner: cleaner)), CLEANED_FRAME
+          cleaner.verify
+        end
+
+        it "gives each formatter a copy of the cleaned backtrace that it can change" do
+          stack_trace = Raw.new(backtrace_cleaner: true).call(log, logger)[:exception][:stack_trace]
+          stack_trace.first << " edited"
+          stack_trace << "added"
+
+          assert_equal [CLEANED_FRAME], Raw.new(backtrace_cleaner: true).call(log, logger)[:exception][:stack_trace]
+        end
+
         it "rejects a value that cannot clean a backtrace" do
-          assert_raises(ArgumentError) { Default.new(backtrace_cleaner: "rails") }
+          error = assert_raises(ArgumentError) { Default.new(backtrace_cleaner: "false") }
+
+          assert_includes error.message, "Expected true, false, or a backtrace cleaner"
           assert_raises(ArgumentError) { Json.new.backtrace_cleaner = :clean }
         end
 

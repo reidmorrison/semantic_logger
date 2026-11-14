@@ -76,6 +76,25 @@ Cause: ArgumentError: invalid quantity
 app/models/line_item.rb:3:in 'LineItem#save'
 ~~~
 
+#### Custom formatters with a `backtrace_cleaner` of their own
+
+Formatters now accept a `backtrace_cleaner` option (see
+[Cleaning backtraces](config.html#cleaning-backtraces)), which the constructor of
+`SemanticLogger::Formatters::Base` sets. A formatter of your own that keeps its own cleaner in
+`@backtrace_cleaner`, and assigns it before calling `super`, has it replaced, by `true` in a
+formatter built on the text or JSON formatters.
+
+If your formatter cleans backtraces itself, rename its variable. Otherwise pass the cleaner to
+`super` as the option, and the formatter it is built on cleans the backtraces it writes with it:
+
+~~~ruby
+class MyJson < SemanticLogger::Formatters::Json
+  def initialize(**args)
+    super(backtrace_cleaner: Rails.backtrace_cleaner, **args)
+  end
+end
+~~~
+
 #### Other behaviour changes
 
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
