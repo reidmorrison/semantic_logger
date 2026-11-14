@@ -123,13 +123,15 @@ module SemanticLogger
         payload_value[:duration_human] = log.duration_human
       end
 
+      # The stack trace is one line per frame, followed by each exception that caused it, as the
+      # text formatters write it.
       def exception
         return unless log.exception
 
         payload_value.merge!(
           exception_name:    log.exception.class.name,
           exception_message: log.exception.message,
-          stack_trace:       log.exception.backtrace.to_s
+          stack_trace:       exception_backtrace
         )
       end
 
