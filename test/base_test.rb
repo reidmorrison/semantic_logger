@@ -413,6 +413,53 @@ module SemanticLogger
           thread&.kill
         end
 
+        it "logs the tags and named tags of the other thread" do
+          ready  = Queue.new
+          thread = Thread.new do
+            SemanticLogger.tagged("job") do
+              SemanticLogger.tagged(user: "jack") do
+                SemanticLogger.tagged(user: "jill", id: 3) do
+                  ready << true
+                  sleep
+                end
+              end
+            end
+          end
+          ready.pop
+          logger.backtrace(thread: thread)
+
+          assert_equal ["job"], last_log.tags
+          assert_equal({user: "jill", id: 3}, last_log.named_tags)
+        ensure
+          thread&.kill
+        end
+
+        it "carries the tags of a child logger" do
+          SemanticLogger.tagged("request") { logger.tagged("cart", cart_id: 7).backtrace }
+
+          assert_equal %w[request cart], last_log.tags
+          assert_equal({cart_id: 7}, last_log.named_tags)
+        end
+
+        it "carries the tags of a child logger, after those of the other thread" do
+          ready  = Queue.new
+          thread = Thread.new do
+            SemanticLogger.tagged("job") do
+              SemanticLogger.tagged(user: "jack") do
+                ready << true
+                sleep
+              end
+            end
+          end
+          ready.pop
+          logger.tagged("cart", cart_id: 7).backtrace(thread: thread)
+
+          assert_equal %w[job cart], last_log.tags
+          assert_equal({user: "jack", cart_id: 7}, last_log.named_tags)
+        ensure
+          thread&.kill
+        end
+
         it "identifies another thread that has no name by its object id" do
           thread = Thread.new { sleep }
           logger.backtrace(thread: thread)

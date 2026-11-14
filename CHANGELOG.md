@@ -5,7 +5,23 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Experimental: on Ruby 4.0 and later, code running in a Ractor other than the main one can log, and
+  the main Ractor writes its entries to the appenders. Before, any log call from such a Ractor raised
+  `Ractor::IsolationError`. See
+  [Log from Ractors](https://logger.reidmorrison.com/api.html#log-from-ractors-experimental).
+- `SemanticLogger.context` returns a frozen snapshot of the current tags, named tags, and silence
+  level, and `SemanticLogger.with_context(context) { ... }` applies it in another thread or fiber,
+  such as a thread pool's worker or an Async task. Tags belong to the fiber that set them, so these
+  hand them over explicitly. See
+  [Hand tags to another thread or fiber](https://logger.reidmorrison.com/api.html#hand-tags-to-another-thread-or-fiber).
+
 ### Changed
+
+- `SemanticLogger.host=`, `application=`, and `environment=` store a frozen copy of the value
+  supplied, so that code in a Ractor can read it, and the default host name is frozen too.
+  The value supplied is left as it is.
 
 - The `:open_telemetry` appender sends the message as the body of each log record, as documented,
   instead of a map of the whole log entry. The named tags become attributes of their own alongside
@@ -27,6 +43,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   details, a backtrace, or a cause follow it. The `%{backtrace}` pattern directive and the
   `exception.stacktrace` attribute of the `:open_telemetry` appender no longer start or end with a
   line break in those cases either.
+- Tags, named tags, and `logger.with_level` levels are no longer shared between threads that copy
+  fiber-local variables, as Rails' `ActionController::Live` does for its streaming thread. Semantic
+  Logger changed their lists in place, so when the request left its `tagged` block, the streaming
+  thread lost the request's tags, and a tag pushed in either thread appeared in the other. Each
+  change now stores a new frozen list, and a `tagged` block restores the previous one when it exits.
+  As a result, tags pushed with `push_tags` or `push_named_tags` inside a `tagged` block, and not
+  popped, are removed when the block exits. Before, the block popped them in place of its own tags,
+  which then stayed on the thread. Likewise, tags pushed before a block and popped inside it come back
+  when the block exits. See the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- `logger.backtrace` on a child logger, one returned by `logger.tagged` without a block, logs the
+  child logger's own tags, as its other entries do. They were left out.
+- A thread dump (`logger.backtrace(thread:)`, and the `TTIN` signal handler) logs the named tags of
+  another thread as a Hash. They were logged as the list of Hashes pushed by each `tagged` block,
+  which the text formatters could not format, so the thread's entry was discarded.
 - The `:open_telemetry` appender no longer sends a named tag whose value is a Symbol, Time, or other
   object that is not an OpenTelemetry attribute value as an empty value. It is sent as its `#to_s`,
   or as JSON for a structure, as payload values already were.

@@ -59,24 +59,26 @@ module SemanticLogger
     private_constant :LOG_EXCEPTION_OPTIONS
 
     # A finite real number, which #assign can compare with another one.
-    REAL_NUMBER = ->(value) { value.is_a?(Numeric) && value.real? && value.finite? }
+    REAL_NUMBER = Utils.make_shareable(->(value) { value.is_a?(Numeric) && value.real? && value.finite? })
     private_constant :REAL_NUMBER
 
     # Checks that a value is valid for its argument, for the arguments that do not accept any value.
     # Any other value would make #assign, or the formatters, raise.
-    ARGUMENT_VALIDATORS = {
-      backtrace:          ->(value) { value.is_a?(Array) && value.all?(String) },
-      duration:           REAL_NUMBER,
-      min_duration:       REAL_NUMBER,
-      metric_amount:      REAL_NUMBER,
-      dimensions:         ->(value) { value.is_a?(Hash) },
-      log_exception:      ->(value) { LOG_EXCEPTION_OPTIONS.include?(value) },
-      on_exception_level: ->(value) { Levels.valid?(value) }
-    }.freeze
+    ARGUMENT_VALIDATORS = Utils.make_shareable(
+      {
+        backtrace:          ->(value) { value.is_a?(Array) && value.all?(String) },
+        duration:           REAL_NUMBER,
+        min_duration:       REAL_NUMBER,
+        metric_amount:      REAL_NUMBER,
+        dimensions:         ->(value) { value.is_a?(Hash) },
+        log_exception:      ->(value) { LOG_EXCEPTION_OPTIONS.include?(value) },
+        on_exception_level: ->(value) { Levels.valid?(value) }
+      }.freeze
+    )
     private_constant :ARGUMENT_VALIDATORS
 
     # Hash#key?, which unlike HashWithIndifferentAccess#key? only matches the exact Symbol key.
-    HASH_KEY = Hash.instance_method(:key?)
+    HASH_KEY = Utils.make_shareable(Hash.instance_method(:key?))
     private_constant :HASH_KEY
 
     # Whether the value is accepted for the :log_exception argument of #assign.
@@ -93,13 +95,17 @@ module SemanticLogger
                   :tags, :named_tags, :context,
                   :metric, :metric_amount, :dimensions
 
-    def initialize(name, level, index = nil)
+    # Parameters
+    #   thread: [Thread]
+    #     The thread whose name, tags, and named tags the entry has.
+    #     Default: Thread.current
+    def initialize(name, level, index = nil, thread = Thread.current)
       @level       = level
-      @thread_name = Log.thread_name_for(Thread.current)
+      @thread_name = Log.thread_name_for(thread)
       @name        = name
       @time        = Time.now
-      @tags        = SemanticLogger.tags
-      @named_tags  = SemanticLogger.named_tags
+      @tags        = Context.tags(thread)
+      @named_tags  = Context.named_tags(thread)
       @level_index = index.nil? ? Levels.index(level) : index
     end
 
@@ -427,6 +433,17 @@ module SemanticLogger
     # A metric only event has a metric but no message or exception.
     def metric_only?
       metric && message.nil? && exception.nil?
+    end
+
+    # Replaces the values of this entry that cannot be copied to another Ractor, such as a Proc in its
+    # payload (see RactorCopy). Returns self. Experimental, Ruby 4.0 and later only.
+    def make_copyable
+      %i[message payload tags named_tags context metric dimensions].each do |field|
+        public_send(:"#{field}=", RactorCopy.copyable(public_send(field)))
+      end
+      self.exception     = RactorCopy.copyable_exception(exception) if exception
+      @exception_details = nil
+      self
     end
 
     private

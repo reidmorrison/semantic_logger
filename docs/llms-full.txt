@@ -490,7 +490,7 @@ The second argument to a measure call is a Hash of options:
   message, and backtrace; `:partial` logs the class and message only; `:none` does not log it.
   Default `:partial`.
 - `:on_exception_level` [Symbol]: if an exception is raised, raise the log level to this level.
-- `:silence` [Symbol]: the level to silence other log messages to within the block (current thread
+- `:silence` [Symbol]: the level to silence other log messages to within the block (current fiber
   only).
 
 An option with a value that is not valid for it, such as a non-numeric `:min_duration` or an unknown
@@ -530,13 +530,60 @@ SemanticLogger.tagged(user: "Jack", zip_code: 12345) do
 end
 ~~~
 
-Tags are scoped to the current thread, so a new thread started inside the block does not inherit them.
-[Parallel Minion](https://github.com/reidmorrison/parallel_minion) creates threads that copy the tags
-across automatically.
+Tags belong to the current fiber: each thread has its own, and so does each fiber of a fiber
+scheduler such as [Async](https://github.com/socketry/async), which runs every request of a
+[Falcon](https://github.com/socketry/falcon) server in its own fiber. So concurrent requests never
+see each other's tags, and a thread, fiber, or Async task started inside the block does not have
+them either. Hand them over explicitly, as shown next.
+
+### Hand tags to another thread or fiber
+
+`SemanticLogger.context` returns a frozen snapshot of the current tags, named tags, and
+[silence](#silence-noisy-code) level. `SemanticLogger.with_context` applies it in another thread or
+fiber for the duration of a block:
+
+~~~ruby
+SemanticLogger.tagged(request_id: request.uuid) do
+  context = SemanticLogger.context
+
+  Thread.new do
+    SemanticLogger.with_context(context) do
+      logger.info("Generating report") # carries request_id
+    end
+  end
+end
+~~~
+
+The same works for an Async task or a thread pool:
+
+~~~ruby
+context = SemanticLogger.context
+barrier = Async::Barrier.new
+urls.each do |url|
+  barrier.async do
+    SemanticLogger.with_context(context) { fetch(url) }
+  end
+end
+barrier.wait
+
+context = SemanticLogger.context
+pool.post do
+  SemanticLogger.with_context(context) { process(item) }
+end
+~~~
+
+Within the block, the thread or fiber has exactly the tags, named tags, and silence level of the
+snapshot, in place of its own, which come back when the block exits. Add more tags inside the block
+as usual. The snapshot does not carry levels set with a logger's `with_level`, which, like Ruby's own
+`Logger#with_level`, apply only to the fiber that set them.
+
+Tags are not handed over automatically because a long-lived thread, such as a thread pool's worker,
+would otherwise keep the tags of whichever request happened to start it, and log them for every
+later request it serves.
 
 ### Bind tags to one logger (child loggers)
 
-The block form above scopes tags to the thread. Sometimes it is more convenient to bind tags to a
+The block form above scopes tags to the fiber. Sometimes it is more convenient to bind tags to a
 single logger instance, for example when the logger belongs to an object with its own identity (an
 ActiveRecord model or a background job).
 
@@ -627,6 +674,52 @@ On JRuby, naming a thread also names the underlying JVM thread, which shows up w
 JVM with tools such as jconsole or jstack. JRuby names the main thread `main`, and a thread created
 by Java code, such as a servlet container's request thread, is logged with its JVM thread name.
 
+### Log from Ractors (experimental)
+
+On Ruby 4.0 and later, code running in a [Ractor](https://docs.ruby-lang.org/en/4.0/Ractor.html)
+logs as usual, and the entries are written by the appenders added in the main Ractor. Like Ruby's
+own Ractor API, this is experimental, and may change in a minor release.
+
+~~~ruby
+SemanticLogger.add_appender(io: $stdout, formatter: :color)
+
+context = SemanticLogger.tagged(job_id: 42) { SemanticLogger.context }
+worker  = Ractor.new(context, name: "worker") do |job_context|
+  SemanticLogger.with_context(job_context) do
+    logger = SemanticLogger["Importer"]
+    logger.info("Importing", rows: 1_000) # carries job_id: 42
+  end
+end
+worker.join
+~~~
+
+Each entry is sent to the main Ractor, where a thread hands it to the appenders, so a Ractor never
+waits on an appender. The thread name of an entry starts with the Ractor's name, or its number, as in
+`worker/12345` or `ractor-3/12345`.
+
+Things to know:
+
+- A new Ractor does not have the tags of the code that created it. Hand them over with
+  [`SemanticLogger.context`](#hand-tags-to-another-thread-or-fiber), as shown above.
+- Add appenders, and change any setting, such as `SemanticLogger.default_level`, in the main Ractor.
+  Doing so in another Ractor raises `Ractor::IsolationError`.
+- Each Ractor has its own loggers: a `Loggable` class has a logger of its own in each Ractor, and so
+  does a class with `SemanticLogger.cache_loggers` enabled. Setting a level on the main Ractor's logger
+  therefore does not change the level of a Ractor's logger; the global default level applies to both.
+- `on_log` subscribers run for an entry logged in a Ractor only when they are shareable, such as a
+  module with a `call` method, or a block made with `Ractor.shareable_proc`.
+- An entry is copied to the main Ractor. A value that Ruby cannot copy, such as a Proc in the payload,
+  is written as its `inspect`, and so is such a value held by a logged exception. The extra detail
+  that Ruby adds to some exceptions' messages, such as did_you_mean's "Did you mean?" suggestions, is
+  not written for an exception logged in a Ractor.
+- `SemanticLogger.flush` in a Ractor waits until the main Ractor has written that Ractor's entries.
+- The main Ractor accepts entries from other Ractors as fast as they are logged, so logging never
+  slows a Ractor down, however busy the appenders are. `max_queue_size` and `non_blocking` then apply
+  to the entries as usual, once the receiving thread hands them to the processor. In sync mode, too,
+  the receiving thread writes them.
+- On Ruby 3.4 and earlier, logging from a Ractor other than the main one raises
+  `Ractor::IsolationError`, as it always has.
+
 ### Change one class's level at runtime
 
 Because each class has its own logger, you can change one class's level on the fly, for example to
@@ -648,7 +741,7 @@ To change the global default level for every logger that has not been set explic
 
 ### Silence noisy code
 
-`silence` raises the level within a block, on the current thread only, to quiet a noisy section:
+`silence` raises the level within a block, on the current fiber only, to quiet a noisy section:
 
 ~~~ruby
 # Within this block, log only :error and above
@@ -668,7 +761,8 @@ end
 ~~~
 
 `silence` has no effect on loggers whose level was set explicitly (those that do not follow the global
-default), and does not affect threads spawned inside the block.
+default), and does not affect threads or fibers started inside the block, unless they are handed the
+block's [context](#hand-tags-to-another-thread-or-fiber).
 
 ### Map a noisy gem's debug logs to trace
 
@@ -3440,6 +3534,69 @@ Sidekiq.configure_server do |config|
 end
 ~~~
 
+#### Testing Sidekiq jobs and middleware
+
+Use the [test helpers](testing.html) (`capture_semantic_logger_events` in RSpec,
+`semantic_logger_events` in Minitest) to capture the log events from jobs and server middleware. This
+relies on `replace_sidekiq_logger` being on (the default): with it off, jobs and middleware log
+through a plain `Sidekiq::Logger`, which the helpers do not capture.
+
+Two things differ from a running Sidekiq server:
+
+- Sidekiq's testing modes (`inline!`, and `fake!` with `drain` or `perform_one`) run only the
+  middleware added to `Sidekiq::Testing.server_middleware`, not the chain from
+  `Sidekiq.configure_server`. Add the middleware under test there.
+- The job logger does not run, so there are no `Start #perform` or `Completed #perform` entries, and
+  no `jid`, class, or queue named tags. Named tags added by your own middleware are still present.
+
+Capture every event rather than one class's. Middleware that includes `Sidekiq::ServerMiddleware`
+logs through Sidekiq's configured logger, which a capture scoped to a class, such as
+`capture_semantic_logger_events(Sidekiq)`, does not reach.
+
+The example below turns on Sidekiq's testing modes with `Sidekiq.testing!(:fake)`, available from
+Sidekiq 8.1.1. On earlier versions use `require "sidekiq/testing"` instead.
+
+~~~ruby
+# spec/rails_helper.rb
+Sidekiq.testing!(:fake)
+
+# app/sidekiq/tenant_logging_middleware.rb
+class TenantLoggingMiddleware
+  include Sidekiq::ServerMiddleware
+
+  def call(_job_instance, job, _queue, &block)
+    SemanticLogger.tagged(tenant: job["tenant"], &block)
+  end
+end
+
+# app/sidekiq/report_job.rb
+class ReportJob
+  include Sidekiq::Job
+
+  def perform
+    logger.info("Building report")
+  end
+end
+
+# spec/sidekiq/tenant_logging_middleware_spec.rb
+RSpec.describe TenantLoggingMiddleware do
+  around { |example| Sidekiq::Testing.inline! { example.run } }
+  before { Sidekiq::Testing.server_middleware { |chain| chain.add TenantLoggingMiddleware } }
+  after  { Sidekiq::Testing.server_middleware { |chain| chain.remove TenantLoggingMiddleware } }
+
+  it "tags the job's log entries with the tenant" do
+    events = capture_semantic_logger_events { ReportJob.set(tenant: "acme").perform_async }
+    event  = events.find { |e| e.name == "ReportJob" }
+
+    expect(event).to be_a_semantic_logger_event(message: "Building report")
+    expect(event.named_tags).to include(tenant: "acme")
+  end
+end
+~~~
+
+The last line checks only the `tenant` tag, so the test still passes when other named tags are
+active.
+
 ### Custom controller base class
 
 If your application uses a controller base class other than `ActionController::Base` or
@@ -3752,6 +3909,16 @@ messages = semantic_logger_events(ApiClient) do
 end
 ~~~
 
+Passing a class replaces that class's `logger` while the block runs, so it captures only the log calls
+made through that logger. Capture without a class instead when:
+
+- the code under test logs through a logger it got some other way, such as `SemanticLogger["Name"]`
+  or a logger handed to it by a framework;
+- an instance of the class called `logger` before the block, since each instance keeps the first
+  logger it is given; or
+- you need to assert on `name`: events captured through a class are named
+  `SemanticLogger::Test::CaptureLogEvents`, not after the class.
+
 ### Step 3: assert on the events
 
 Check how many events were produced, then assert on each one with `assert_semantic_logger_event`:
@@ -3884,6 +4051,18 @@ events = capture_semantic_logger_events(ApiClient) do
   # Only ApiClient log events created during this block are captured.
 end
 ~~~
+
+Passing a class replaces that class's `logger` until the end of the example, not just the block, so
+it captures only the log calls made through that logger. Log calls made after the block are added to
+the same returned array, so check the event count before running more code that logs. Capture without
+a class instead when:
+
+- the code under test logs through a logger it got some other way, such as `SemanticLogger["Name"]`
+  or a logger handed to it by a framework;
+- an instance of the class called `logger` before the block, since each instance keeps the first
+  logger it is given; or
+- you need to assert on `name`: events captured through a class are named
+  `SemanticLogger::Test::CaptureLogEvents`, not after the class.
 
 ### Step 3: assert on the events
 
@@ -4757,6 +4936,18 @@ A custom formatter given to this appender with `formatter:` must now return the 
 the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `timestamp:`, `body:`, and
 `attributes:`), as `SemanticLogger::Formatters::OpenTelemetry` does, instead of a Hash shaped like the
 `:raw` formatter's.
+
+#### Other behaviour changes
+
+* A `tagged` block now restores the tags and named tags that it found when it exits, instead of
+  popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
+  that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and
+  `pop_named_tags`, across the edge of a block:
+  * Tags pushed inside a block, and not popped, are removed when the block exits. Before, the block
+    popped them in place of its own tags, which then stayed on the thread.
+  * Tags pushed before a block, and popped inside it, come back when the block exits.
+
+  Push and pop tags in matching pairs, or use the block form.
 
 ### Upgrading to Semantic Logger v5.2
 

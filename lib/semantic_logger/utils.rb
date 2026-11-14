@@ -58,6 +58,36 @@ module SemanticLogger
       "(invalid url)"
     end
 
+    # Returns the value, deep frozen so that code in any Ractor can read the constant or setting
+    # that holds it.
+    #
+    # copy: false freezes the value itself, so only use it for a value that Semantic Logger owns, such
+    # as one of its constants. A value this Ruby cannot share, such as an UnboundMethod before Ruby 4.0,
+    # is returned unshareable, and may be left partly frozen. On a Ruby without Ractors (JRuby) the
+    # value is returned as it is.
+    #
+    # copy: true leaves the supplied value as it is, and returns a deep frozen copy of it, for a value
+    # that belongs to someone else, such as a setting. Without Ractors, or for a value Ruby cannot
+    # copy, the copy is a shallow frozen dup.
+    def self.make_shareable(value, copy: false)
+      return copy ? frozen_dup(value) : value unless defined?(::Ractor)
+
+      begin
+        ::Ractor.make_shareable(value, copy: copy)
+      rescue ::Ractor::Error, TypeError
+        copy ? frozen_dup(value) : value
+      end
+    end
+
+    # Returns a frozen shallow copy of the value, the value when it is already frozen, or the value
+    # itself when it cannot be copied, such as a Thread.
+    def self.frozen_dup(value)
+      value.frozen? ? value : value.dup.freeze
+    rescue TypeError
+      value
+    end
+    private_class_method :frozen_dup
+
     # Borrow from Rails, when not running Rails
     def self.camelize(term)
       string = term.to_s
@@ -86,8 +116,11 @@ module SemanticLogger
       stack.drop_while { |path| extract_path?(path) }
     end
 
+    # Paths whose entries are stripped from the top of a captured backtrace.
+    EXTRACT_PATHS = make_shareable(%w[lib/semantic_logger lib/rails_semantic_logger].freeze)
+
     def self.extract_paths
-      @extract_paths ||= %w[lib/semantic_logger lib/rails_semantic_logger]
+      EXTRACT_PATHS
     end
 
     # Whether this path should be excluded from any cleansed backtrace
@@ -108,12 +141,8 @@ module SemanticLogger
     # Paths to exclude in the stripped backtrace
     # Includes Gems and built-in Ruby code paths
     def self.strip_paths
-      @strip_paths ||=
-        begin
-          paths = Gem.path | [Gem.default_dir]
-          paths << RbConfig::CONFIG["rubylibdir"]
-          paths
-        end
+      # A copy, since the paths are RubyGems' and RbConfig's own Strings.
+      @strip_paths ||= make_shareable(Gem.path | [Gem.default_dir, RbConfig::CONFIG["rubylibdir"]], copy: true)
     end
 
     # Whether this path should be excluded from any cleansed backtrace

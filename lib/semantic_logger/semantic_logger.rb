@@ -20,7 +20,7 @@ module SemanticLogger
   def self.[](klass)
     return Logger.new(klass) if !@cache_loggers || klass.is_a?(String) || klass.name.nil?
 
-    logger_cache.compute_if_absent(klass) { Logger.new(klass) }
+    cached_logger(klass)
   end
 
   # Whether `SemanticLogger[Class]` returns a shared, cached Logger instance per
@@ -84,12 +84,16 @@ module SemanticLogger
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
-    @host ||= Socket.gethostname.force_encoding("UTF-8")
+    @host
   end
 
-  # Override the default host name
+  # Override the default host name, which is this machine's host name. Set it to nil to go back to
+  # the default.
+  #
+  # The host, application, and environment are stored as frozen copies, so that code in any Ractor
+  # can read them. The value supplied is left as it is.
   def self.host=(host)
-    @host = host
+    @host = Utils.make_shareable(host || Socket.gethostname.force_encoding("UTF-8"), copy: true)
   end
 
   # Returns [String] name of this application for logging purposes
@@ -100,7 +104,7 @@ module SemanticLogger
 
   # Override the default application
   def self.application=(application)
-    @application = application
+    @application = Utils.make_shareable(application, copy: true)
   end
 
   # Returns [String] name of this environment for logging purposes
@@ -111,11 +115,12 @@ module SemanticLogger
 
   # Override the default environment
   def self.environment=(environment)
-    @environment = environment
+    @environment = Utils.make_shareable(environment, copy: true)
   end
 
-  @application = ENV["SEMANTIC_LOGGER_APP"] || "Semantic Logger"
-  @environment = ENV["SEMANTIC_LOGGER_ENV"] || ENV["RAILS_ENV"] || ENV.fetch("RACK_ENV", nil)
+  self.host        = nil
+  self.application = ENV["SEMANTIC_LOGGER_APP"] || "Semantic Logger"
+  self.environment = ENV["SEMANTIC_LOGGER_ENV"] || ENV["RAILS_ENV"] || ENV.fetch("RACK_ENV", nil)
 
   # Add a new logging appender as a new destination for all log messages
   # emitted from Semantic Logger
@@ -199,6 +204,8 @@ module SemanticLogger
     appender = appenders.add(**args, &)
     # Start appender thread if it is not already running
     Logger.processor.start
+    # And the thread that receives the entries logged in other Ractors (Ruby 4.0 and later).
+    RactorReceiver.start if RactorSupport.enabled?
     appender
   end
 
@@ -226,8 +233,14 @@ module SemanticLogger
 
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
+  #
+  #  On Ruby 4.0 and later, in the main Ractor, the entries already sent from other Ractors are
+  #  written first. In another Ractor, it waits until the main Ractor has written that Ractor's
+  #  entries and flushed the appenders.
   def self.flush
-    Logger.processor.flush
+    return Logger.processor.flush if !RactorSupport.enabled? || RactorSupport.other_ractor?
+
+    RactorReceiver.flush
   end
 
   # Close all appenders and flush any outstanding messages.
@@ -253,6 +266,7 @@ module SemanticLogger
     return if !force && @reopened_pid == ::Process.pid
 
     Logger.processor.reopen
+    RactorReceiver.reopen if RactorSupport.enabled?
     @reopened_pid = ::Process.pid
   end
 
@@ -372,19 +386,13 @@ module SemanticLogger
 
   # If the tag being supplied is definitely a string then this fast
   # tag api can be used for short lived tags
-  def self.fast_tag(tag)
+  def self.fast_tag(tag, &)
     return yield if tag.nil? || tag == ""
 
-    t = Thread.current[:semantic_logger_tags] ||= []
-    begin
-      t << tag
-      yield
-    ensure
-      t.pop
-    end
+    Context.fast_tag(tag, &)
   end
 
-  # Add the tags or named tags to the list of tags to log for this thread whilst the supplied block is active.
+  # Add the tags or named tags to the list of tags to log for this fiber whilst the supplied block is active.
   #
   # Returns result of block.
   #
@@ -413,20 +421,14 @@ module SemanticLogger
       return tag.is_a?(Hash) ? named_tagged(tag, &) : fast_tag(tag, &)
     end
 
-    begin
-      push_tags(*tags)
-      yield
-    ensure
-      pop_tags(tags.size)
-    end
+    # The rest Array is this call's own, so Context may keep it.
+    Context.tagged(tags, &)
   end
 
-  # Returns a copy of the [Array] of [String] tags currently active for this thread
-  # Returns nil if no tags are set
+  # Returns a copy of the [Array] of [String] tags currently active for this fiber.
+  # Returns an empty Array if no tags are set.
   def self.tags
-    # Since tags are stored on a per thread basis this list is thread-safe
-    t = Thread.current[:semantic_logger_tags]
-    t.nil? ? [] : t.clone
+    Context.tags
   end
 
   # Add tags to the current scope
@@ -437,57 +439,71 @@ module SemanticLogger
   # - To get the flattening behavior use the slower api:
   #     `logger.push_tags`
   def self.push_tags(*tags)
-    (Thread.current[:semantic_logger_tags] ||= []).concat(tags)
+    Context.push_tags(tags)
     tags
   end
 
   # Remove specified number of tags from the current tag list
   def self.pop_tags(quantity = 1)
-    t = Thread.current[:semantic_logger_tags]
-    t&.pop(quantity)
+    Context.pop_tags(quantity)
+  end
+
+  # Returns [SemanticLogger::Context] a frozen snapshot of the logging context of the current fiber:
+  # its tags, named tags, and silence level (see .silence).
+  #
+  # The context belongs to the current fiber, so a thread or fiber started inside a `tagged` block
+  # does not have its tags. Hand the context over with .with_context:
+  #
+  #   context = SemanticLogger.context
+  #   Thread.new do
+  #     SemanticLogger.with_context(context) do
+  #       logger.info("Logged with the same tags")
+  #     end
+  #   end
+  #
+  # The context does not include the levels set by a logger's #with_level, which, like Ruby's
+  # Logger#with_level, apply only to the fiber that set them.
+  def self.context
+    Context.current
+  end
+
+  # Runs the block with the supplied context, from .context, as the logging context of the current
+  # fiber. Within the block the fiber has exactly the tags, named tags, and silence level of that
+  # context, in place of its own, which are restored when the block exits.
+  #
+  # Returns the result of the block.
+  def self.with_context(context, &)
+    Context.use(context, &)
   end
 
   # :nodoc
-  def self.named_tagged(hash)
+  def self.named_tagged(hash, &)
     return yield if hash.nil? || hash.empty?
     raise(ArgumentError, "#named_tagged only accepts named parameters (Hash)") unless hash.is_a?(Hash)
 
-    begin
-      push_named_tags(hash)
-      yield
-    ensure
-      pop_named_tags
-    end
+    Context.named_tagged(hash, &)
   end
 
-  # Returns [Hash] a copy of the named tags currently active for this thread.
+  # Returns [Hash] a copy of the named tags currently active for this fiber.
   def self.named_tags
-    if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
-      if list.size > 1
-        list.reduce({}) { |sum, h| sum.merge(h) }
-      else
-        list.first.clone
-      end
-    else
-      {}
-    end
+    Context.named_tags
   end
 
   def self.push_named_tags(hash)
-    (Thread.current[:semantic_logger_named_tags] ||= []) << hash
+    Context.push_named_tags(hash)
     hash
   end
 
   def self.pop_named_tags(quantity = 1)
-    t = Thread.current[:semantic_logger_named_tags]
-    t&.pop(quantity)
+    Context.pop_named_tags(quantity)
   end
 
   # Silence noisy log levels by changing the default_level within the block
   #
-  # This setting is thread-safe and only applies to the current thread
+  # This setting only applies to the current fiber: every thread, and every fiber of a fiber
+  # scheduler such as Async, has its own.
   #
-  # Any threads spawned within the block will not be affected by this setting
+  # Threads and fibers started within the block are not affected by this setting
   #
   # #silence can be used to both raise and lower the log level within
   # the supplied block.
@@ -519,12 +535,8 @@ module SemanticLogger
   # Note:
   #   #silence does not affect any loggers which have had their log level set
   #   explicitly. I.e. That do not rely on the global default level
-  def self.silence(new_level = :error)
-    current_index                            = Thread.current[:semantic_logger_silence]
-    Thread.current[:semantic_logger_silence] = Levels.index(new_level)
-    yield
-  ensure
-    Thread.current[:semantic_logger_silence] = current_index
+  def self.silence(new_level = :error, &)
+    Context.silence(Levels.index(new_level), &)
   end
 
   # Returns [Integer] the number of log entries waiting to be written to the appenders.
@@ -590,7 +602,7 @@ module SemanticLogger
   end
 
   def self.default_level_index
-    Thread.current[:semantic_logger_silence] || @default_level_index
+    Context.silence_index || @default_level_index
   end
 
   # Run Semantic Logger in Synchronous mode.
@@ -620,6 +632,20 @@ module SemanticLogger
     @logger_cache ||= Concurrent::Map.new
   end
   private_class_method :logger_cache
+
+  # Returns the cached Logger for the Class or Module.
+  #
+  # A Ractor other than the main one cannot use the main Ractor's cache, or its loggers, so it has a
+  # cache of its own (experimental, Ruby 4.0 and later).
+  def self.cached_logger(klass)
+    if RactorSupport.other_ractor?
+      cache = ::Ractor.store_if_absent(:semantic_logger_logger_cache) { {} }
+      return cache[klass] ||= Logger.new(klass)
+    end
+
+    logger_cache.compute_if_absent(klass) { Logger.new(klass) }
+  end
+  private_class_method :cached_logger
 
   # @formatter:off
   module Metric
