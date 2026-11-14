@@ -171,6 +171,8 @@ module SemanticLogger
           log.named_tags  = (thread[:semantic_logger_named_tags] || []).reduce({}) { |sum, h| sum.merge(h) }
           thread.backtrace
         end
+      # Like any entry from this logger, it carries the logger's own tags (see #tagged).
+      apply_instance_tags(log)
       if backtrace
         message += "\n"
         message << backtrace.join("\n")
