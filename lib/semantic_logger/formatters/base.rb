@@ -8,12 +8,14 @@ module SemanticLogger
       # Printable escapes for the most common control characters. Any other
       # control character is escaped to its hexadecimal `\xHH` form by
       # #escape_control_characters.
-      CONTROL_CHAR_ESCAPES = {
-        "\n" => "\\n",
-        "\r" => "\\r",
-        "\t" => "\\t",
-        "\e" => "\\e"
-      }.freeze
+      CONTROL_CHAR_ESCAPES = Utils.make_shareable(
+        {
+          "\n" => "\\n",
+          "\r" => "\\r",
+          "\t" => "\\t",
+          "\e" => "\\e"
+        }.freeze
+      )
 
       # Matches C0 control characters (including newlines and the ANSI escape) and DEL.
       CONTROL_CHARS = /[\x00-\x1f\x7f]/

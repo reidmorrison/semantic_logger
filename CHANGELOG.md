@@ -15,6 +15,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- `SemanticLogger.host=`, `application=`, and `environment=` store a frozen copy of the value
+  supplied, so that code in a Ractor can read it, and the default host name is frozen too.
+  The value supplied is left as it is.
+
 - The `:open_telemetry` appender sends the message as the body of each log record, as documented,
   instead of a map of the whole log entry. The named tags become attributes of their own alongside
   the payload, and the entry's own fields become attributes: the exception as `exception.type`,

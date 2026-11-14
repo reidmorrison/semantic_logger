@@ -58,6 +58,20 @@ module SemanticLogger
       "(invalid url)"
     end
 
+    # Returns the value, deep frozen so that code in any Ractor can read the constant or setting
+    # that holds it. Returns the value itself, unchanged, on a Ruby without Ractors (JRuby), and for a
+    # value this Ruby cannot share, such as an UnboundMethod before Ruby 4.0.
+    #
+    # copy: true leaves the supplied value as it is and returns a shareable copy of it, for a value
+    # that belongs to the caller, such as a setting.
+    def self.make_shareable(value, copy: false)
+      return value unless defined?(::Ractor)
+
+      ::Ractor.make_shareable(value, copy: copy)
+    rescue ::Ractor::Error, ArgumentError, TypeError
+      value
+    end
+
     # Borrow from Rails, when not running Rails
     def self.camelize(term)
       string = term.to_s
@@ -86,8 +100,11 @@ module SemanticLogger
       stack.drop_while { |path| extract_path?(path) }
     end
 
+    # Paths whose entries are stripped from the top of a captured backtrace.
+    EXTRACT_PATHS = make_shareable(%w[lib/semantic_logger lib/rails_semantic_logger].freeze)
+
     def self.extract_paths
-      @extract_paths ||= %w[lib/semantic_logger lib/rails_semantic_logger]
+      EXTRACT_PATHS
     end
 
     # Whether this path should be excluded from any cleansed backtrace
@@ -108,12 +125,7 @@ module SemanticLogger
     # Paths to exclude in the stripped backtrace
     # Includes Gems and built-in Ruby code paths
     def self.strip_paths
-      @strip_paths ||=
-        begin
-          paths = Gem.path | [Gem.default_dir]
-          paths << RbConfig::CONFIG["rubylibdir"]
-          paths
-        end
+      @strip_paths ||= make_shareable(Gem.path | [Gem.default_dir, RbConfig::CONFIG["rubylibdir"]])
     end
 
     # Whether this path should be excluded from any cleansed backtrace

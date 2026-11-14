@@ -37,13 +37,15 @@ module SemanticLogger
 
       # The exception's fields in the Raw hash, mapped to their logfmt names, so that the exception's
       # name and message do not replace the entry's own.
-      EXCEPTION_FIELDS = {
-        name:        "exception_name",
-        message:     "exception_message",
-        details:     "exception_details",
-        stack_trace: "stack_trace",
-        cause:       "cause"
-      }.freeze
+      EXCEPTION_FIELDS = Utils.make_shareable(
+        {
+          name:        "exception_name",
+          message:     "exception_message",
+          details:     "exception_details",
+          stack_trace: "stack_trace",
+          cause:       "cause"
+        }.freeze
+      )
 
       # Prefixes that mark a key from logged data with its source, when the key alone would name
       # one of the entry's own fields, or look like a key marked this way.
