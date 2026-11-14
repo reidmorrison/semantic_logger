@@ -5,6 +5,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `SemanticLogger.context` returns a frozen snapshot of the current tags, named tags, and silence
+  level, and `SemanticLogger.with_context(context) { ... }` applies it in another thread or fiber,
+  such as a thread pool's worker or an Async task. Tags belong to the fiber that set them, so these
+  hand them over explicitly. See
+  [Hand tags to another thread or fiber](https://logger.reidmorrison.com/api.html#hand-tags-to-another-thread-or-fiber).
+
 ### Changed
 
 - The `:open_telemetry` appender sends the message as the body of each log record, as documented,

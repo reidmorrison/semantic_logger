@@ -271,7 +271,7 @@ The second argument to a measure call is a Hash of options:
   message, and backtrace; `:partial` logs the class and message only; `:none` does not log it.
   Default `:partial`.
 - `:on_exception_level` [Symbol]: if an exception is raised, raise the log level to this level.
-- `:silence` [Symbol]: the level to silence other log messages to within the block (current thread
+- `:silence` [Symbol]: the level to silence other log messages to within the block (current fiber
   only).
 
 An option with a value that is not valid for it, such as a non-numeric `:min_duration` or an unknown
@@ -311,13 +311,60 @@ SemanticLogger.tagged(user: "Jack", zip_code: 12345) do
 end
 ~~~
 
-Tags are scoped to the current thread, so a new thread started inside the block does not inherit them.
-[Parallel Minion](https://github.com/reidmorrison/parallel_minion) creates threads that copy the tags
-across automatically.
+Tags belong to the current fiber: each thread has its own, and so does each fiber of a fiber
+scheduler such as [Async](https://github.com/socketry/async), which runs every request of a
+[Falcon](https://github.com/socketry/falcon) server in its own fiber. So concurrent requests never
+see each other's tags, and a thread, fiber, or Async task started inside the block does not have
+them either. Hand them over explicitly, as shown next.
+
+### Hand tags to another thread or fiber
+
+`SemanticLogger.context` returns a frozen snapshot of the current tags, named tags, and
+[silence](#silence-noisy-code) level. `SemanticLogger.with_context` applies it in another thread or
+fiber for the duration of a block:
+
+~~~ruby
+SemanticLogger.tagged(request_id: request.uuid) do
+  context = SemanticLogger.context
+
+  Thread.new do
+    SemanticLogger.with_context(context) do
+      logger.info("Generating report") # carries request_id
+    end
+  end
+end
+~~~
+
+The same works for an Async task or a thread pool:
+
+~~~ruby
+context = SemanticLogger.context
+barrier = Async::Barrier.new
+urls.each do |url|
+  barrier.async do
+    SemanticLogger.with_context(context) { fetch(url) }
+  end
+end
+barrier.wait
+
+context = SemanticLogger.context
+pool.post do
+  SemanticLogger.with_context(context) { process(item) }
+end
+~~~
+
+Within the block, the thread or fiber has exactly the tags, named tags, and silence level of the
+snapshot, in place of its own, which come back when the block exits. Add more tags inside the block
+as usual. The snapshot does not carry levels set with a logger's `with_level`, which, like Ruby's own
+`Logger#with_level`, apply only to the fiber that set them.
+
+Tags are not handed over automatically because a long-lived thread, such as a thread pool's worker,
+would otherwise keep the tags of whichever request happened to start it, and log them for every
+later request it serves.
 
 ### Bind tags to one logger (child loggers)
 
-The block form above scopes tags to the thread. Sometimes it is more convenient to bind tags to a
+The block form above scopes tags to the fiber. Sometimes it is more convenient to bind tags to a
 single logger instance, for example when the logger belongs to an object with its own identity (an
 ActiveRecord model or a background job).
 
@@ -429,7 +476,7 @@ To change the global default level for every logger that has not been set explic
 
 ### Silence noisy code
 
-`silence` raises the level within a block, on the current thread only, to quiet a noisy section:
+`silence` raises the level within a block, on the current fiber only, to quiet a noisy section:
 
 ~~~ruby
 # Within this block, log only :error and above
@@ -449,7 +496,8 @@ end
 ~~~
 
 `silence` has no effect on loggers whose level was set explicitly (those that do not follow the global
-default), and does not affect threads spawned inside the block.
+default), and does not affect threads or fibers started inside the block, unless they are handed the
+block's [context](#hand-tags-to-another-thread-or-fiber).
 
 ### Map a noisy gem's debug logs to trace
 

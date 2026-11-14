@@ -181,6 +181,147 @@ module SemanticLogger
         end
       end
 
+      describe "SemanticLogger.context" do
+        it "is a frozen snapshot of the tags, named tags, and silence level" do
+          context = nil
+          SemanticLogger.tagged("a", "b") do
+            SemanticLogger.tagged(user: "jack") do
+              SemanticLogger.tagged(id: 1) { SemanticLogger.silence(:warn) { context = SemanticLogger.context } }
+            end
+          end
+
+          assert_predicate context, :frozen?
+          assert_equal %w[a b], context.tags
+          assert_predicate context.tags, :frozen?
+          assert_equal({user: "jack", id: 1}, context.named_tags)
+          assert_predicate context.named_tags, :frozen?
+          assert_equal :warn, context.silence
+        end
+
+        it "does not change when the tags change afterwards" do
+          SemanticLogger.tagged("a") do
+            context = SemanticLogger.context
+            SemanticLogger.push_tags("b")
+
+            assert_equal ["a"], context.tags
+          end
+        end
+
+        it "is empty without tags" do
+          context = SemanticLogger.context
+
+          assert_empty context.tags
+          assert_empty context.named_tags
+          assert_nil context.silence
+        end
+
+        it "does not include with_level overrides" do
+          logger.level = :info
+          context      = logger.with_level(:trace) { SemanticLogger.context }
+
+          assert_equal :info, Thread.new { SemanticLogger.with_context(context) { logger.level } }.value
+        end
+      end
+
+      describe "SemanticLogger.with_context" do
+        let(:context) do
+          SemanticLogger.tagged("request") do
+            SemanticLogger.tagged(request_id: 42) { SemanticLogger.silence(:error) { SemanticLogger.context } }
+          end
+        end
+
+        it "applies the context in another thread" do
+          tags, named_tags, level_index = Thread.new do
+            SemanticLogger.with_context(context) do
+              [SemanticLogger.tags, SemanticLogger.named_tags, SemanticLogger.default_level_index]
+            end
+          end.value
+
+          assert_equal ["request"], tags
+          assert_equal({request_id: 42}, named_tags)
+          assert_equal Levels.index(:error), level_index
+        end
+
+        it "applies the context to log entries" do
+          log = Fiber.new { SemanticLogger.with_context(context) { Log.new("Test", :info) } }.resume
+
+          assert_equal ["request"], log.tags
+          assert_equal({request_id: 42}, log.named_tags)
+        end
+
+        it "applies the context within an Enumerator's fiber" do
+          snapshot   = context
+          enumerator = Enumerator.new do |yielder|
+            SemanticLogger.with_context(snapshot) { yielder << SemanticLogger.tags }
+          end
+
+          assert_equal ["request"], enumerator.next
+        end
+
+        it "replaces the fiber's own context, and restores it afterwards" do
+          snapshot = context
+          SemanticLogger.tagged("own") do
+            SemanticLogger.tagged(own: true) do
+              SemanticLogger.with_context(snapshot) do
+                assert_equal ["request"], SemanticLogger.tags
+                assert_equal({request_id: 42}, SemanticLogger.named_tags)
+              end
+
+              assert_equal ["own"], SemanticLogger.tags
+              assert_equal({own: true}, SemanticLogger.named_tags)
+              assert_nil Context.silence_index
+            end
+          end
+        end
+
+        it "restores the fiber's own context when the block raises" do
+          assert_raises(ArgumentError) { SemanticLogger.with_context(context) { raise ArgumentError } }
+          assert_empty SemanticLogger.tags
+          assert_empty SemanticLogger.named_tags
+          assert_nil Context.silence_index
+        end
+
+        it "lets tags be added within the block" do
+          SemanticLogger.with_context(context) do
+            SemanticLogger.tagged("job") { assert_equal %w[request job], SemanticLogger.tags }
+          end
+        end
+
+        it "returns the result of the block" do
+          assert_equal 42, SemanticLogger.with_context(context) { 42 }
+        end
+
+        it "rejects anything other than a context" do
+          error = assert_raises(ArgumentError) { SemanticLogger.with_context(tags: ["a"]) { 1 } }
+
+          assert_match(/SemanticLogger::Context/, error.message)
+        end
+      end
+
+      describe ".new" do
+        it "copies and freezes the supplied tags" do
+          tags    = ["a"]
+          context = Context.new(tags: tags, named_tags: {id: 1}, silence: "warn")
+          tags << "b"
+
+          assert_equal ["a"], context.tags
+          assert_predicate context.named_tags, :frozen?
+          assert_equal :warn, context.silence
+        end
+
+        it "rejects tags that are not an Array" do
+          assert_raises(ArgumentError) { Context.new(tags: "a") }
+        end
+
+        it "rejects named tags that are not a Hash" do
+          assert_raises(ArgumentError) { Context.new(named_tags: ["a"]) }
+        end
+
+        it "rejects an invalid silence level" do
+          assert_raises(ArgumentError) { Context.new(silence: :loud) }
+        end
+      end
+
       describe "fibers" do
         it "each have their own tags" do
           SemanticLogger.tagged("outer") do
