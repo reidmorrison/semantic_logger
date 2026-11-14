@@ -320,6 +320,35 @@ module SemanticLogger
             assert_kind_of String, payload_obj["stack_trace"]
           end
 
+          it "writes one line per frame, not an inspected Array" do
+            set_exception
+            log.exception.set_backtrace(["app/a.rb:1:in 'A#a'", "app/b.rb:2:in 'B#b'"])
+
+            assert_equal "app/a.rb:1:in 'A#a'\napp/b.rb:2:in 'B#b'", values_data[2]["stack_trace"]
+          end
+
+          it "includes the backtrace of each exception that caused it" do
+            begin
+              begin
+                raise ArgumentError, "inner"
+              rescue ArgumentError => e
+                e.set_backtrace(%w[i1 i2])
+                raise "outer"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[o1])
+              log.exception = e
+            end
+
+            assert_equal "o1\nCause: ArgumentError: inner\ni1\ni2", values_data[2]["stack_trace"]
+          end
+
+          it "writes an empty stack trace for an exception that was never raised" do
+            log.exception = RuntimeError.new("Not raised")
+
+            assert_equal "", values_data[2]["stack_trace"]
+          end
+
           it "merges exception with existing payload and metric" do
             log.payload = {data: "sample"}
             log.metric = "my_metric"

@@ -29,6 +29,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `ActiveSupport::SafeBuffer`, as a String. The OpenTelemetry SDK reported either value as an error,
   for every log entry; with `OpenTelemetry.logger` set to a Semantic Logger logger in sync mode, that
   error was logged back to the appender with the same named tags until the stack overflowed.
+- The `:loki` formatter writes the `stack_trace` of an exception one frame per line, followed by the
+  backtrace of each exception that caused it, as the text formatters do. It wrote the backtrace as
+  an inspected Ruby Array, such as `["app/a.rb:1:in 'A#a'", ...]`, and left out the causes.
 
 ## [5.2.0] 2026-10-30
 
