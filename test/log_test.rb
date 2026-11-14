@@ -593,6 +593,114 @@ module SemanticLogger
 
             assert_equal "<t1>\nCause: #{name}: <cause\nmsg>\n<c1>", trace
           end
+
+          it "cleans the backtrace of every exception with the cleaner" do
+            log.exception = chained("top", %w[gem t1], chained("cause", %w[c1 gem]))
+            cleaner       = ->(lines) { lines - ["gem"] }
+
+            assert_equal "t1\nCause: #{chained_error.name}: cause\nc1", log.backtrace_to_s(cleaner: cleaner)
+          end
+
+          it "passes each cleaned line to the block" do
+            log.exception = chained("top", %w[gem t1])
+
+            assert_equal "<t1>", log.backtrace_to_s(cleaner: ->(lines) { lines - ["gem"] }) { |text| "<#{text}>" }
+          end
+        end
+      end
+
+      describe "#backtrace_of" do
+        let(:cleaner) do
+          Class.new do
+            attr_reader :calls
+
+            def clean(lines)
+              @calls = (@calls || 0) + 1
+              lines - ["gem"]
+            end
+          end.new
+        end
+
+        before do
+          exception.set_backtrace(%w[gem app])
+          log.exception = exception
+        end
+
+        it "returns the exception's own backtrace without a cleaner" do
+          assert_same exception.backtrace, log.backtrace_of(exception)
+        end
+
+        it "returns nil for an exception without a backtrace" do
+          assert_nil log.backtrace_of(RuntimeError.new("Not raised"), cleaner: cleaner)
+        end
+
+        it "cleans the backtrace given to an exception after it was asked for without one" do
+          never_raised = RuntimeError.new("Not raised")
+
+          assert_nil log.backtrace_of(never_raised, cleaner: cleaner)
+          never_raised.set_backtrace(%w[gem app])
+
+          assert_equal %w[app], log.backtrace_of(never_raised, cleaner: cleaner)
+        end
+
+        it "returns the full backtrace for a value that cannot clean one, such as the formatter option true" do
+          internal  = InMemoryAppender.new
+          processor = SemanticLogger::SyncProcessor.new(SemanticLogger::Appenders.new(internal))
+          SemanticLogger::Logger.stub(:processor, processor) do
+            assert_equal %w[gem app], log.backtrace_of(exception, cleaner: true)
+            assert_equal "gem\napp", log.backtrace_to_s(cleaner: true)
+          end
+
+          assert_match(/\ABacktrace cleaner raised NoMethodError/, internal.message.message)
+        end
+
+        it "keeps apart the backtraces of exceptions that are #eql?" do
+          value_error = Class.new(StandardError) do
+            def eql?(other) = other.instance_of?(self.class) && other.message == message
+            def hash = [self.class, message].hash
+          end
+          first  = value_error.new("same").tap { |e| e.set_backtrace(%w[gem first]) }
+          second = value_error.new("same").tap { |e| e.set_backtrace(%w[gem second]) }
+
+          assert_equal %w[first], log.backtrace_of(first, cleaner: cleaner)
+          assert_equal %w[second], log.backtrace_of(second, cleaner: cleaner)
+        end
+
+        it "keeps what was cached on the entry while the cleaner ran" do
+          calls   = 0
+          extract = lambda do |*, **|
+            calls += 1
+            "details"
+          end
+          SemanticLogger::ExceptionDetails.stub(:extract, extract) do
+            log.backtrace_of(exception, cleaner: ->(lines) { lines.tap { log.exception_details(exception) } })
+            log.exception_details(exception)
+          end
+
+          assert_equal 1, calls
+        end
+
+        it "returns the backtrace as the cleaner cleans it, leaving the exception's unchanged" do
+          assert_equal %w[app], log.backtrace_of(exception, cleaner: cleaner)
+          assert_equal %w[gem app], exception.backtrace
+        end
+
+        it "asks the cleaner once, for every formatter that asks" do
+          2.times { log.backtrace_of(exception, cleaner: cleaner) }
+
+          assert_equal 1, cleaner.calls
+        end
+
+        it "keeps the result of each cleaner apart" do
+          log.backtrace_of(exception, cleaner: cleaner)
+
+          assert_equal %w[gem], log.backtrace_of(exception, cleaner: ->(lines) { lines - ["app"] })
+        end
+
+        it "keeps cleaned backtraces apart from the cached exception details" do
+          assert_nil log.exception_details(exception)
+          assert_equal %w[app], log.backtrace_of(exception, cleaner: cleaner)
+          assert_nil log.exception_details(exception)
         end
       end
 
