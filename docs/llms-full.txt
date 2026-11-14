@@ -3440,6 +3440,46 @@ Sidekiq.configure_server do |config|
 end
 ~~~
 
+#### Testing Sidekiq jobs and middleware
+
+Use the [test helpers](testing.html) (`capture_semantic_logger_events` in RSpec,
+`semantic_logger_events` in Minitest) to capture the log events from jobs and server middleware. Two
+things differ from a running Sidekiq server:
+
+- Sidekiq's testing modes (`inline!`, and `fake!` with `drain` or `perform_one`) run only the
+  middleware added to `Sidekiq::Testing.server_middleware`, not the chain from
+  `Sidekiq.configure_server`. Add the middleware under test there.
+- The job logger does not run, so there are no `Start #perform` or `Completed #perform` entries, and
+  no `jid`, class, or queue named tags. Named tags added by your own middleware are still present.
+
+Capture every event rather than one class's. Middleware that includes `Sidekiq::ServerMiddleware`
+logs through Sidekiq's configured logger, which a capture scoped to a class, such as
+`capture_semantic_logger_events(Sidekiq)`, does not reach.
+
+~~~ruby
+class TenantLoggingMiddleware
+  include Sidekiq::ServerMiddleware
+
+  def call(_job_instance, job, _queue, &block)
+    SemanticLogger.tagged(tenant: job["tenant"], &block)
+  end
+end
+
+RSpec.describe TenantLoggingMiddleware do
+  around { |example| Sidekiq::Testing.inline! { example.run } }
+  before { Sidekiq::Testing.server_middleware { |chain| chain.add TenantLoggingMiddleware } }
+  after  { Sidekiq::Testing.server_middleware.clear }
+
+  it "tags the job's log entries with the tenant" do
+    events = capture_semantic_logger_events { ReportJob.set(tenant: "acme").perform_async }
+
+    expect(events).to include(
+      a_semantic_logger_event(name: "ReportJob", named_tags: {tenant: "acme"})
+    )
+  end
+end
+~~~
+
 ### Custom controller base class
 
 If your application uses a controller base class other than `ActionController::Base` or
@@ -3752,6 +3792,10 @@ messages = semantic_logger_events(ApiClient) do
 end
 ~~~
 
+Passing a class captures only the log calls made through that class's `logger` during the block. If
+the code under test logs through a logger it got some other way, such as `SemanticLogger["Name"]` or
+a logger handed to it by a framework, capture without a class instead.
+
 ### Step 3: assert on the events
 
 Check how many events were produced, then assert on each one with `assert_semantic_logger_event`:
@@ -3884,6 +3928,10 @@ events = capture_semantic_logger_events(ApiClient) do
   # Only ApiClient log events created during this block are captured.
 end
 ~~~
+
+Passing a class captures only the log calls made through that class's `logger` during the block. If
+the code under test logs through a logger it got some other way, such as `SemanticLogger["Name"]` or
+a logger handed to it by a framework, capture without a class instead.
 
 ### Step 3: assert on the events
 
