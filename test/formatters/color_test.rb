@@ -142,6 +142,14 @@ module SemanticLogger
             assert_equal str, formatter.exception.lines.first
           end
 
+          it "does not end with a blank line for an exception without a backtrace" do
+            log.exception = RuntimeError.new("No route matches [GET] \"/missing\"")
+
+            assert_equal "-- Exception: #{color}RuntimeError: No route matches [GET] \"/missing\"#{clear}",
+                         formatter.exception
+            assert formatter.call(log, nil).end_with?(clear), "Expected no trailing newline"
+          end
+
           it "skips nil exception" do
             refute formatter.exception
           end

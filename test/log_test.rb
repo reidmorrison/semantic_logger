@@ -567,7 +567,13 @@ module SemanticLogger
           it "lays out a cause without a backtrace" do
             log.exception = chained("top", %w[t1], chained("cause", nil))
 
-            assert_equal "t1\nCause: #{chained_error.name}: cause\n", log.backtrace_to_s
+            assert_equal "t1\nCause: #{chained_error.name}: cause", log.backtrace_to_s
+          end
+
+          it "lays out a cause of an exception without a backtrace" do
+            log.exception = chained("top", nil, chained("cause", %w[c1]))
+
+            assert_equal "Cause: #{chained_error.name}: cause\nc1", log.backtrace_to_s
           end
 
           it "stops at a cyclic cause chain" do

@@ -298,24 +298,27 @@ module SemanticLogger
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
     #
     # When a block is supplied, each cause's message and each backtrace line is passed
-    # to it, and the value it returns is written in its place. This lets a caller, for
-    # example a formatter, transform that text while this method keeps the layout.
+    # to it, in the order they are written, and the value it returns is written in its
+    # place. This lets a caller, for example a formatter, transform that text while this
+    # method keeps the layout.
+    #
+    # Lines are separated by a line break, with none added before the first or after the
+    # last, even when an exception in the chain has no backtrace, so that a caller can put
+    # the text on the line after its own.
     #
     # Example:
     #   log.backtrace_to_s { |text| text.gsub("\n", "\\n") }
     def backtrace_to_s(&block)
-      trace = ""
+      lines = []
       each_exception do |exception, i|
-        lines = exception.backtrace || []
-        lines = lines.map(&block) if block
-        if i.zero?
-          trace = lines.join("\n")
-        else
+        unless i.zero?
           message = block ? yield(exception.message) : exception.message
-          trace << "\nCause: #{exception.class.name}: #{message}\n#{lines.join("\n")}"
+          lines << "Cause: #{exception.class.name}: #{message}"
         end
+        backtrace = exception.backtrace || []
+        lines.concat(block ? backtrace.map(&block) : backtrace)
       end
-      trace
+      lines.join("\n")
     end
 
     # Returns [String] duration of the log entry as a string

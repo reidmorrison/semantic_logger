@@ -414,6 +414,28 @@ module SemanticLogger
             assert_match(/-- Exception: RuntimeError: Oh no/, formatter.exception)
           end
 
+          it "does not end with a blank line for an exception without a backtrace" do
+            log.exception = RuntimeError.new("No route matches [GET] \"/missing\"")
+
+            assert_equal "-- Exception: RuntimeError: No route matches [GET] \"/missing\"", formatter.exception
+            assert formatter.call(log, nil).end_with?("\"/missing\""), "Expected no trailing newline"
+          end
+
+          it "puts the cause on the next line for an exception without a backtrace" do
+            begin
+              begin
+                raise ArgumentError, "inner"
+              rescue ArgumentError
+                raise RuntimeError, "outer", []
+              end
+            rescue RuntimeError => e
+              e.cause.set_backtrace(%w[c1])
+              log.exception = e
+            end
+
+            assert_equal "-- Exception: RuntimeError: outer\nCause: ArgumentError: inner\nc1", formatter.exception
+          end
+
           it "skips nil exception" do
             refute formatter.exception
           end

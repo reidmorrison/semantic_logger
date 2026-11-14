@@ -57,7 +57,7 @@ class SubscriberTest < Minitest::Test
         appender.debug "hello world", hash_value, StandardError.new("StandardError")
 
         assert_match(
-          /#{log_prefix} -- hello world -- #{hash_str} -- Exception: StandardError: StandardError\n\n/, appender.message
+          /#{log_prefix} -- hello world -- #{hash_str} -- Exception: StandardError: StandardError\n\z/, appender.message
         )
       end
 
@@ -65,7 +65,7 @@ class SubscriberTest < Minitest::Test
         appender.debug StandardError.new("StandardError")
 
         assert_match(
-          /#{log_prefix} -- Exception: StandardError: StandardError\n\n/, appender.message
+          /#{log_prefix} -- Exception: StandardError: StandardError\n\z/, appender.message
         )
       end
 
@@ -95,7 +95,7 @@ class SubscriberTest < Minitest::Test
         appender.debug exc
 
         assert_match(
-          /#{log_prefix} -- Exception: StandardError: StandardError\n\n/, appender.message
+          /#{log_prefix} -- Exception: StandardError: StandardError\n\z/, appender.message
         )
       end
 

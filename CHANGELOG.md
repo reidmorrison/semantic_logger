@@ -37,6 +37,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- The default, color, and syslog text formatters no longer write a blank line after an exception that
+  has no backtrace, such as a Rails routing error or an exception that was never raised, or after a
+  cause that has no backtrace. The line break after the exception is now written only when exception
+  details, a backtrace, or a cause follow it. The `%{backtrace}` pattern directive and the
+  `exception.stacktrace` attribute of the `:open_telemetry` appender no longer start or end with a
+  line break in those cases either.
 - Tags, named tags, and `logger.with_level` levels are no longer shared between threads that copy
   fiber-local variables, as Rails' `ActionController::Live` does for its streaming thread. Semantic
   Logger changed their lists in place, so when the request left its `tagged` block, the streaming
