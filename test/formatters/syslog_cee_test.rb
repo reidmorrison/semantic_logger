@@ -93,6 +93,22 @@ module SemanticLogger
             assert_match(/@cee:/, formatter.call(log, appender.logger))
           end
 
+          it "accepts the options of the raw formatter" do
+            formatter = SemanticLogger::Formatters::SyslogCee.new(log_host: false, log_application: false)
+            output    = formatter.call(log, appender.logger)
+
+            refute_match(/"host":/, output)
+            refute_match(/"application":/, output)
+          end
+
+          it "accepts the options of the raw formatter given to the syslog appender" do
+            appender = SemanticLogger::Appender::Syslog.new(url: "udp://127.0.0.1:514", max_size: 2048,
+                                                            formatter: {syslog_cee: {log_host: false}})
+
+            assert_equal 2048, appender.formatter.max_size
+            refute_match(/"host":/, appender.formatter.call(log, appender.logger))
+          end
+
           it "process log with payload" do
             log.payload = {is_test: true}
 
