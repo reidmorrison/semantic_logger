@@ -434,6 +434,34 @@ module SemanticLogger
     Context.pop_tags(quantity)
   end
 
+  # Returns [SemanticLogger::Context] a frozen snapshot of the logging context of the current fiber:
+  # its tags, named tags, and silence level (see .silence).
+  #
+  # The context belongs to the current fiber, so a thread or fiber started inside a `tagged` block
+  # does not have its tags. Hand the context over with .with_context:
+  #
+  #   context = SemanticLogger.context
+  #   Thread.new do
+  #     SemanticLogger.with_context(context) do
+  #       logger.info("Logged with the same tags")
+  #     end
+  #   end
+  #
+  # The context does not include the levels set by a logger's #with_level, which, like Ruby's
+  # Logger#with_level, apply only to the fiber that set them.
+  def self.context
+    Context.current
+  end
+
+  # Runs the block with the supplied context, from .context, as the logging context of the current
+  # fiber. Within the block the fiber has exactly the tags, named tags, and silence level of that
+  # context, in place of its own, which are restored when the block exits.
+  #
+  # Returns the result of the block.
+  def self.with_context(context, &)
+    Context.use(context, &)
+  end
+
   # :nodoc
   def self.named_tagged(hash, &)
     return yield if hash.nil? || hash.empty?
