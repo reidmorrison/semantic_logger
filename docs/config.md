@@ -132,12 +132,16 @@ end
 
 Only the text and JSON output changes: the `:default`, `:color`, `:pattern`, `:one_line`
 (which does not write backtraces), `:syslog`, `:json`, and `:fluentd` formatters clean the backtrace
-of the logged exception and of each exception that caused it. The exception itself is never
-changed, so appenders that send the exception to an error service, such as Sentry, Bugsnag, or
-Honeybadger, still send its full backtrace. The other formatters, including `:raw` (which the
-Elasticsearch, OpenSearch, MongoDB, Graylog, and Splunk appenders use) and the formatters written for
-a particular service, such as `:ecs`, `:loki`, `:new_relic_logs`, and `:open_telemetry`, write
-the full backtrace.
+of the logged exception and of each exception that caused it. So do the appenders that use `:json`
+unless given another formatter: `:http`, `:elasticsearch_http`, `:tcp`, `:udp`, `:kafka`,
+`:rabbitmq`, and `:cloudwatch_logs`. To send full backtraces to a log service through one of them,
+give it `formatter: {json: {backtrace_cleaner: false}}`.
+
+The exception itself is never changed, so appenders that send the exception to an error service,
+such as Sentry, Bugsnag, or Honeybadger, still send its full backtrace. The other formatters,
+including `:raw` (which the `:elasticsearch`, `:opensearch`, `:mongodb`, `:graylog`, `:splunk_http`,
+and `:honeybadger_insights` appenders use) and the formatters written for a particular service, such
+as `:ecs`, `:loki`, `:new_relic_logs`, and `:open_telemetry`, write the full backtrace.
 
 The `backtrace_cleaner` formatter option chooses for one appender:
 
@@ -164,7 +168,9 @@ Notes:
   the full backtrace is logged, so the only clue to where it came from is never lost. The full
   backtrace is also logged when the cleaner raises an exception or does not return an Array.
 * The cleaner is called on the appenders' threads, not the thread that logged the entry, so it must be
-  thread safe. It is called once for each exception in an entry, however many appenders write it.
+  thread safe. Its result is kept with the entry, so it is normally called once for each exception,
+  however many appenders write it. Appenders that write the same entry at the same moment can each
+  call it.
 * The application's cleaner is looked up as each entry is written, so it can be set before or after
   the appenders are added.
 * The file name and line number of an entry are not cleaned. They are where the entry was logged when

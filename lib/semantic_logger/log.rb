@@ -279,14 +279,7 @@ module SemanticLogger
     #
     # The result is cached on this entry, since every appender's formatter may ask for it.
     def exception_details(exception, source: false)
-      key   = [exception, source]
-      cache = @exception_details
-      return cache[key] if cache&.key?(key)
-
-      details = ExceptionDetails.extract(exception, source: source)
-      # Replace the cache rather than change it, since appenders on other threads may be reading it.
-      @exception_details = (cache || {}).merge(key => details).freeze
-      details
+      cached([:exception_details, exception, source]) { ExceptionDetails.extract(exception, source: source) }
     end
 
     # Returns [Array<String>] the backtrace of the supplied exception, or nil when it has none.
@@ -302,17 +295,9 @@ module SemanticLogger
     #
     # A cleaned backtrace is cached on this entry, since every appender's formatter may ask for it.
     def backtrace_of(exception, cleaner: nil)
-      backtrace = exception.backtrace
-      return backtrace unless cleaner
+      return exception.backtrace unless cleaner
 
-      key   = [exception, cleaner]
-      cache = @cleaned_backtraces
-      return cache[key] if cache&.key?(key)
-
-      cleaned = BacktraceCleaning.clean(backtrace, cleaner)
-      # Replace the cache rather than change it, since appenders on other threads may be reading it.
-      @cleaned_backtraces = (cache || {}).merge(key => cleaned).freeze
-      cleaned
+      cached([:backtrace_of, exception, cleaner]) { BacktraceCleaning.clean(exception.backtrace, cleaner) }
     end
 
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
@@ -478,6 +463,22 @@ module SemanticLogger
         merged.delete(other) unless kept.key?(other)
       end
       merged
+    end
+
+    # Returns the value cached on this entry for the key, after caching the value the block returns
+    # when there is none yet. Used for values derived from the entry that every appender's formatter
+    # may ask for.
+    #
+    # The cache is replaced rather than changed, since appenders on other threads may be reading it.
+    # Appenders that ask at the same moment can each compute the value, so the block must not rely
+    # on being called only once.
+    def cached(key)
+      cache = @cache
+      return cache[key] if cache&.key?(key)
+
+      value  = yield
+      @cache = (cache || {}).merge(key => value).freeze
+      value
     end
 
     # Whether a log argument from the Hash returned by a logging block, already checked by

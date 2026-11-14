@@ -644,6 +644,12 @@ module SemanticLogger
 
           assert_equal %w[gem], log.backtrace_of(exception, cleaner: ->(lines) { lines - ["app"] })
         end
+
+        it "keeps cleaned backtraces apart from the cached exception details" do
+          assert_nil log.exception_details(exception)
+          assert_equal %w[app], log.backtrace_of(exception, cleaner: cleaner)
+          assert_nil log.exception_details(exception)
+        end
       end
 
       describe "#exception_details" do

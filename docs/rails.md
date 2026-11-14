@@ -565,8 +565,8 @@ The silencers and filters added in `config/initializers/backtrace_silencers.rb` 
 change the same cleaner. Set the `BACKTRACE` environment variable to log full backtraces again, as
 with the rest of Rails.
 
-The text and JSON formatters use it. Error services, such as Sentry, still receive the full
-backtrace. When an exception's backtrace has no application frames, such as a routing error raised
+The text and JSON formatters use it, including the JSON sent by the HTTP, TCP, UDP, Kafka, RabbitMQ,
+and CloudWatch Logs appenders. Error services, such as Sentry, still receive the full backtrace. When an exception's backtrace has no application frames, such as a routing error raised
 in middleware, the full backtrace is logged. See
 [Cleaning backtraces](config.html#cleaning-backtraces) for which formatters use it, and how to choose
 for one appender.
