@@ -167,7 +167,8 @@ module SemanticLogger
         else
           log.thread_name = Log.thread_name_for(thread)
           log.tags        = (thread[:semantic_logger_tags] || []).clone
-          log.named_tags  = (thread[:semantic_logger_named_tags] || {}).clone
+          # Named tags are held as a list of the Hashes pushed, merged as by SemanticLogger.named_tags.
+          log.named_tags  = (thread[:semantic_logger_named_tags] || []).reduce({}) { |sum, h| sum.merge(h) }
           thread.backtrace
         end
       if backtrace
