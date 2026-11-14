@@ -56,14 +56,40 @@ module SemanticLogger
           end
         end
 
-        it "shares the host name found by default" do
+        it "goes back to this machine's host name when the host is set to nil, and shares it" do
           original = SemanticLogger.host
           SemanticLogger.host = nil
 
+          assert_equal Socket.gethostname, SemanticLogger.host
           assert Ractor.shareable?(SemanticLogger.host)
         ensure
           SemanticLogger.host = original
         end
+      end
+
+      it "returns a value that cannot be copied as it is" do
+        assert_same Thread.current, Utils.make_shareable(Thread.current, copy: true)
+      end
+
+      it "shares the paths stripped from backtraces, without freezing RubyGems' own Strings" do
+        Utils.instance_variable_set(:@strip_paths, nil)
+
+        assert Ractor.shareable?(Utils.strip_paths)
+        refute_predicate RbConfig::CONFIG["rubylibdir"], :frozen?
+      end
+
+      it "reads the default host name in a Ractor" do
+        skip "Logging from a Ractor requires Ruby 4.0" unless ruby4?
+
+        original = SemanticLogger.host
+        begin
+          SemanticLogger.host = nil
+          found               = in_ractor { SemanticLogger.host }
+        ensure
+          SemanticLogger.host = original
+        end
+
+        assert_equal original, found
       end
 
       it "builds a log entry inside a Ractor" do

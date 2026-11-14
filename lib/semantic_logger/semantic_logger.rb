@@ -84,15 +84,16 @@ module SemanticLogger
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
-    @host ||= Socket.gethostname.force_encoding("UTF-8").freeze
+    @host
   end
 
-  # Override the default host name
+  # Override the default host name, which is this machine's host name. Set it to nil to go back to
+  # the default.
   #
   # The host, application, and environment are stored as frozen copies, so that code in any Ractor
   # can read them. The value supplied is left as it is.
   def self.host=(host)
-    @host = Utils.make_shareable(host, copy: true)
+    @host = Utils.make_shareable(host || Socket.gethostname.force_encoding("UTF-8"), copy: true)
   end
 
   # Returns [String] name of this application for logging purposes
@@ -117,6 +118,7 @@ module SemanticLogger
     @environment = Utils.make_shareable(environment, copy: true)
   end
 
+  self.host        = nil
   self.application = ENV["SEMANTIC_LOGGER_APP"] || "Semantic Logger"
   self.environment = ENV["SEMANTIC_LOGGER_ENV"] || ENV["RAILS_ENV"] || ENV.fetch("RACK_ENV", nil)
 
