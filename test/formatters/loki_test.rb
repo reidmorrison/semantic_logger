@@ -343,6 +343,24 @@ module SemanticLogger
             assert_equal "o1\nCause: ArgumentError: inner\ni1\ni2", values_data[2]["stack_trace"]
           end
 
+          it "escapes the stack trace when control characters are escaped" do
+            begin
+              begin
+                raise ArgumentError, "in\nner"
+              rescue ArgumentError => e
+                e.set_backtrace(["i1\e[2J"])
+                raise "outer"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[o1])
+              log.exception = e
+            end
+            formatter = SemanticLogger::Formatters::Loki.new(escape_control_chars: true)
+            values    = JSON.parse(formatter.call(log, logger))["streams"].first["values"].first
+
+            assert_equal "o1\nCause: ArgumentError: in\\nner\ni1\\e[2J", values[2]["stack_trace"]
+          end
+
           it "writes an empty stack trace for an exception that was never raised" do
             log.exception = RuntimeError.new("Not raised")
 
