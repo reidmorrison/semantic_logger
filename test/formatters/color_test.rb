@@ -3,13 +3,6 @@ require_relative "../test_helper"
 module SemanticLogger
   module Formatters
     class ColorTest < Minitest::Test
-      # Supplies its own detail, the same way on every Ruby version.
-      class DetailedError < StandardError
-        def detailed_message(highlight: false, **)
-          "#{super}\n  order_id: 42"
-        end
-      end
-
       describe Color do
         let(:log_time) do
           Time.utc(2017, 1, 14, 8, 32, 5.375276)
@@ -154,13 +147,7 @@ module SemanticLogger
 
             assert_equal "-- Exception: #{color}RuntimeError: No route matches [GET] \"/missing\"#{clear}",
                          formatter.exception
-          end
-
-          it "ends with the details for an exception without a backtrace" do
-            log.exception = DetailedError.new("Order rejected")
-
-            assert_equal "-- Exception: #{color}#{DetailedError}: Order rejected#{clear}\n  order_id: 42",
-                         formatter.exception
+            assert formatter.call(log, nil).end_with?(clear), "Expected no trailing newline"
           end
 
           it "skips nil exception" do

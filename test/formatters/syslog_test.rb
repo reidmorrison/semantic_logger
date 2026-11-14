@@ -138,6 +138,29 @@ module SemanticLogger
             assert_includes packet, "Cause: ArgumentError: x\\n#{forged}"
           end
 
+          it "ends the record at an exception without a backtrace" do
+            log.exception = RuntimeError.new("Not found")
+            packet        = formatter.call(log, appender.logger)
+
+            assert_match(/-- Exception: RuntimeError: Not found\z/, packet)
+          end
+
+          it "puts the cause right after an exception without a backtrace" do
+            begin
+              begin
+                raise ArgumentError, "inner"
+              rescue ArgumentError
+                raise RuntimeError, "outer", []
+              end
+            rescue StandardError => e
+              e.cause.set_backtrace(["app.rb:1"])
+              log.exception = e
+            end
+            packet = formatter.call(log, appender.logger)
+
+            assert_match(/-- Exception: RuntimeError: outer\\nCause: ArgumentError: inner\\napp\.rb:1\z/, packet)
+          end
+
           it "keeps a record whose cause has invalid UTF-8 in its message" do
             begin
               begin

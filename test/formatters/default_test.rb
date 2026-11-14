@@ -3,13 +3,6 @@ require_relative "../test_helper"
 module SemanticLogger
   module Formatters
     class DefaultTest < Minitest::Test
-      # Supplies its own detail, the same way on every Ruby version.
-      class DetailedError < StandardError
-        def detailed_message(highlight: false, **)
-          "#{super}\n  order_id: 42"
-        end
-      end
-
       describe Default do
         let(:log_time) do
           Time.utc(2017, 1, 14, 8, 32, 5.375276)
@@ -428,10 +421,19 @@ module SemanticLogger
             assert formatter.call(log, nil).end_with?("\"/missing\""), "Expected no trailing newline"
           end
 
-          it "ends with the details for an exception without a backtrace" do
-            log.exception = DetailedError.new("Order rejected")
+          it "puts the cause on the next line for an exception without a backtrace" do
+            begin
+              begin
+                raise ArgumentError, "inner"
+              rescue ArgumentError
+                raise RuntimeError, "outer", []
+              end
+            rescue RuntimeError => e
+              e.cause.set_backtrace(%w[c1])
+              log.exception = e
+            end
 
-            assert_equal "-- Exception: #{DetailedError}: Order rejected\n  order_id: 42", formatter.exception
+            assert_equal "-- Exception: RuntimeError: outer\nCause: ArgumentError: inner\nc1", formatter.exception
           end
 
           it "skips nil exception" do

@@ -35,6 +35,12 @@ module SemanticLogger
             assert_includes output, "-- Exception: #{DetailedError}: Order rejected\n  order_id: 42\n"
           end
 
+          it "ends with the details for an exception without a backtrace" do
+            log.exception = DetailedError.new("Order rejected")
+
+            assert format(Default.new).end_with?("-- Exception: #{DetailedError}: Order rejected\n  order_id: 42")
+          end
+
           it "omits the details when disabled" do
             output = format(Default.new(log_exception_details: false))
 
@@ -73,6 +79,12 @@ module SemanticLogger
 
         it "Color logs the details" do
           assert_includes format(Color.new), "Order rejected#{AnsiColors::CLEAR}\n  order_id: 42\n"
+        end
+
+        it "Color ends with the details for an exception without a backtrace" do
+          log.exception = DetailedError.new("Order rejected")
+
+          assert format(Color.new).end_with?("Order rejected#{AnsiColors::CLEAR}\n  order_id: 42")
         end
 
         it "OneLine does not log the details by default" do

@@ -21,9 +21,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
-- The default and color text formatters no longer write a blank line after an exception that has no
-  backtrace, such as a Rails routing error or an exception that was never raised. The line break
-  after the exception is now written only when exception details or a backtrace follow it.
+- The default, color, and syslog text formatters no longer write a blank line after an exception that
+  has no backtrace, such as a Rails routing error or an exception that was never raised, or after a
+  cause that has no backtrace. The line break after the exception is now written only when exception
+  details, a backtrace, or a cause follow it. The `%{backtrace}` pattern directive and the
+  `exception.stacktrace` attribute of the `:open_telemetry` appender no longer start or end with a
+  line break in those cases either.
 - The `:open_telemetry` appender no longer sends a named tag whose value is a Symbol, Time, or other
   object that is not an OpenTelemetry attribute value as an empty value. It is sent as its `#to_s`,
   or as JSON for a structure, as payload values already were.
