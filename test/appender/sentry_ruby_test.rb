@@ -262,6 +262,35 @@ module Appender
           assert_equal "r1", scope.tags[:request]
         end
 
+        it "replaces a field of that thread's user keyed by a String" do
+          log   = log_on_thread(named_tags: {user_id: 9}) { |s| s.set_user("id" => 7, "segment" => "paid") }
+          scope = capture(log)
+
+          assert_equal({id: 9, segment: "paid"}, scope.user)
+        end
+
+        it "runs the event processors of that thread's scope" do
+          processor = ->(event, _hint) { event }
+          scope     = capture(log_on_thread { |s| s.add_event_processor(&processor) })
+
+          assert_includes scope.event_processors, processor
+        end
+
+        it "leaves the Rack env, with the request body, on that thread" do
+          log = log_on_thread { |s| s.set_rack_env("REQUEST_METHOD" => "POST", "rack.input" => StringIO.new("a=1")) }
+
+          assert_empty log.captured(:sentry_scope).rack_env
+          assert_empty capture(log).rack_env
+        end
+
+        it "does not run the appender's filter on that thread" do
+          calls = 0
+          appender.filter = ->(_log) { calls += 1 }
+          log_on_thread
+
+          assert_equal 0, calls
+        end
+
         it "leaves the scope held by the log entry unchanged" do
           log = log_on_thread(named_tags: {region: "eu"}) { |s| request_scope(s) }
           capture(log)
