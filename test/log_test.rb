@@ -992,6 +992,24 @@ module SemanticLogger
         end
       end
 
+      describe "#capture and #captured" do
+        it "keeps the captured value apart from the context" do
+          scope = Object.new
+          log.capture(:scope, scope)
+
+          assert_same scope, log.captured(:scope)
+          assert_nil log.context
+          assert_nil log.to_h[:captures]
+        end
+
+        it "returns nil when nothing was captured with the key" do
+          assert_nil log.captured(:scope)
+          log.capture(:other, 1)
+
+          assert_nil log.captured(:scope)
+        end
+      end
+
       describe "#metric_only?" do
         it "is true when only a metric is present" do
           log.metric = "user/login"

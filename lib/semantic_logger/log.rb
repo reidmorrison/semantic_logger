@@ -47,6 +47,10 @@ module SemanticLogger
   #
   # context [Hash]
   #   Named contexts that were captured when the log entry was created.
+  #
+  # captures [Hash]
+  #   Objects that an appender captured on the logging thread for its own use when the log entry
+  #   was created, such as the OpenTelemetry context. Formatters do not write them.
   class Log
     # Keys passed in without a payload that will be extracted and the remainder passed into the payload.
     NON_PAYLOAD_KEYS = %i[message exception backtrace exception
@@ -92,7 +96,7 @@ module SemanticLogger
 
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
                   :payload, :exception, :thread_name, :backtrace,
-                  :tags, :named_tags, :context,
+                  :tags, :named_tags, :context, :captures,
                   :metric, :metric_amount, :dimensions
 
     # Parameters
@@ -444,9 +448,14 @@ module SemanticLogger
     end
 
     # Lazy initializes the context hash and assigns a key value pair.
-    def set_context(key, value)
-      (self.context ||= {})[key] = value
-    end
+    def set_context(key, value) = (self.context ||= {}).store(key, value)
+
+    # Keeps the value, captured on the logging thread, for the appender that uses it. Unlike the
+    # context, no formatter writes it.
+    def capture(key, value) = (self.captures ||= {}).store(key, value)
+
+    # Returns the value captured with the key, or nil when there is none.
+    def captured(key) = captures&.[](key)
 
     # A metric only event has a metric but no message or exception.
     def metric_only?
@@ -456,7 +465,7 @@ module SemanticLogger
     # Replaces the values of this entry that cannot be copied to another Ractor, such as a Proc in its
     # payload (see RactorCopy). Returns self. Experimental, Ruby 4.0 and later only.
     def make_copyable
-      %i[message payload tags named_tags context metric dimensions].each do |field|
+      %i[message payload tags named_tags context captures metric dimensions].each do |field|
         public_send(:"#{field}=", RactorCopy.copyable(public_send(field)))
       end
       self.exception = RactorCopy.copyable_exception(exception) if exception

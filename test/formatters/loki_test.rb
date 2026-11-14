@@ -230,6 +230,16 @@ module SemanticLogger
               assert_equal "string", stream_data["test"]
               assert_equal "{\"value\":\"1\"}", stream_data["hash"]
             end
+
+            it "leaves out what an appender captured for its own use" do
+              log.context = {request_id: "abc"}
+              log.capture(:open_telemetry, Object.new)
+              log.capture(:new_relic_metadata, {"trace.id" => "trace123"})
+
+              assert_equal "abc", stream_data["request_id"]
+              refute stream_data.key?("open_telemetry")
+              refute stream_data.key?("new_relic_metadata")
+            end
           end
 
           describe "when context is empty" do

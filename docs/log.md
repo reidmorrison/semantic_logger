@@ -73,6 +73,7 @@ situational field.
 |`tags`|`Array<String>`|Tags active on the thread when the call was made.|
 |`named_tags`|`Hash<String, Object>`|Named tags active on the thread when the call was made.|
 |`context`|`Hash`|Named contexts captured in-line at the point the event was created. `nil` when none.|
+|`captures`|`Hash`|Objects an appender captured in-line for its own use, such as the OpenTelemetry context. Unlike `context`, formatters do not write them. `nil` when none.|
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
@@ -100,6 +101,8 @@ These read-only helpers derive convenient values from the attributes above:
 |`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's backtrace or exception. Pass `true` for just the base file name.|
 |`to_h`|`Hash`|The event as a plain Hash (via the Raw formatter), including `host`, `application`, and `environment`. Handy for inspecting an event or building a custom formatter.|
 |`set_context(key, value)`|`Hash`|Lazily initializes `context` and stores a key/value pair on it.|
+|`capture(key, value)`|`Object`|Lazily initializes `captures` and stores a key/value pair on it, for an appender that needs state of the logging thread, such as the current trace, that is not log data.|
+|`captured(key)`|`Object` or `nil`|The value captured with `key`, or `nil` when there is none.|
 
 ### Inspecting an event
 
