@@ -20,17 +20,20 @@ module SemanticLogger
       #     Maximum size of each syslog packet, in bytes.
       #     Default: SemanticLogger::Formatters::Syslog::DEFAULT_MAX_SIZE (1024)
       #
+      #   Any other options are those of SemanticLogger::Formatters::Raw, such as `log_host` or
+      #   `log_exception_details`.
+      #
       # Example:
       #   # Log via udp to a remote syslog server on host: `server1` and port `8514`, using the CEE format.
       #   SemanticLogger.add_appender(appender: :syslog, formatter: :syslog_cee, url: 'udp://server1:8514')
       def initialize(facility: SemanticLogger::Formatters::Syslog::LOG_USER, level_map: SemanticLogger::Formatters::Syslog::LevelMap.new,
-                     max_size: SemanticLogger::Formatters::Syslog::DEFAULT_MAX_SIZE)
+                     max_size: SemanticLogger::Formatters::Syslog::DEFAULT_MAX_SIZE, **args)
         SemanticLogger::Formatters::Syslog.require_syslog_protocol
 
         self.facility  = facility
         self.level_map = level_map
         @max_size      = max_size
-        super()
+        super(**args)
       end
 
       # Set the facility to one of the ::Syslog::LOG_* facility constants.
