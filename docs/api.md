@@ -455,6 +455,52 @@ On JRuby, naming a thread also names the underlying JVM thread, which shows up w
 JVM with tools such as jconsole or jstack. JRuby names the main thread `main`, and a thread created
 by Java code, such as a servlet container's request thread, is logged with its JVM thread name.
 
+### Log from Ractors (experimental)
+
+On Ruby 4.0 and later, code running in a [Ractor](https://docs.ruby-lang.org/en/4.0/Ractor.html)
+logs as usual, and the entries are written by the appenders added in the main Ractor. Like Ruby's
+own Ractor API, this is experimental, and may change in a minor release.
+
+~~~ruby
+SemanticLogger.add_appender(io: $stdout, formatter: :color)
+
+context = SemanticLogger.tagged(job_id: 42) { SemanticLogger.context }
+worker  = Ractor.new(context, name: "worker") do |job_context|
+  SemanticLogger.with_context(job_context) do
+    logger = SemanticLogger["Importer"]
+    logger.info("Importing", rows: 1_000) # carries job_id: 42
+  end
+end
+worker.join
+~~~
+
+Each entry is sent to the main Ractor, where a thread hands it to the appenders, so a Ractor never
+waits on an appender. The thread name of an entry starts with the Ractor's name, or its number, as in
+`worker/12345` or `ractor-3/12345`.
+
+Things to know:
+
+- A new Ractor does not have the tags of the code that created it. Hand them over with
+  [`SemanticLogger.context`](#hand-tags-to-another-thread-or-fiber), as shown above.
+- Add appenders, and change any setting, such as `SemanticLogger.default_level`, in the main Ractor.
+  Doing so in another Ractor raises `Ractor::IsolationError`.
+- Each Ractor has its own loggers: a `Loggable` class has a logger of its own in each Ractor, and so
+  does a class with `SemanticLogger.cache_loggers` enabled. Setting a level on the main Ractor's logger
+  therefore does not change the level of a Ractor's logger; the global default level applies to both.
+- `on_log` subscribers run for an entry logged in a Ractor only when they are shareable, such as a
+  module with a `call` method, or a block made with `Ractor.shareable_proc`.
+- An entry is copied to the main Ractor. A value that Ruby cannot copy, such as a Proc in the payload,
+  is written as its `inspect`, and so is such a value held by a logged exception. The extra detail
+  that Ruby adds to some exceptions' messages, such as did_you_mean's "Did you mean?" suggestions, is
+  not written for an exception logged in a Ractor.
+- `SemanticLogger.flush` in a Ractor waits until the main Ractor has written that Ractor's entries.
+- The main Ractor accepts entries from other Ractors as fast as they are logged, so logging never
+  slows a Ractor down, however busy the appenders are. `max_queue_size` and `non_blocking` then apply
+  to the entries as usual, once the receiving thread hands them to the processor. In sync mode, too,
+  the receiving thread writes them.
+- On Ruby 3.4 and earlier, logging from a Ractor other than the main one raises
+  `Ractor::IsolationError`, as it always has.
+
 ### Change one class's level at runtime
 
 Because each class has its own logger, you can change one class's level on the fly, for example to

@@ -12,14 +12,31 @@ module SemanticLogger
       end
 
       subscribers = (@subscribers ||= Concurrent::Array.new)
-      subscribers << subscriber unless subscribers.include?(subscriber)
+      return if subscribers.include?(subscriber)
+
+      subscribers << subscriber
+      # A Ractor other than the main one can only call a shareable subscriber.
+      if RactorSupport.enabled? && ::Ractor.shareable?(subscriber)
+        @ractor_subscribers = [*@ractor_subscribers, subscriber].freeze
+      end
+      subscribers
     end
 
     class << self
       attr_reader :subscribers
     end
 
+    # Removes every on_log subscriber.
+    def self.clear_subscribers
+      @subscribers&.clear
+      @ractor_subscribers = nil
+    end
+
+    # Returns the processor that writes log entries to the appenders, or in a Ractor other than the
+    # main one, the RactorProcessor that sends them to the main Ractor.
     def self.processor
+      return RactorProcessor.current if RactorSupport.other_ractor?
+
       @processor ||= Processor.new
     end
 
@@ -74,13 +91,16 @@ module SemanticLogger
       Logger.processor.log(log)
     end
 
-    @processor   = nil
-    @subscribers = nil
+    @processor          = nil
+    @subscribers        = nil
+    @ractor_subscribers = nil
 
+    # Calls the on_log subscribers, or in a Ractor other than the main one, the shareable ones.
     def self.call_subscribers(log)
-      return unless @subscribers
+      subscribers = RactorSupport.other_ractor? ? @ractor_subscribers : @subscribers
+      return unless subscribers
 
-      @subscribers.each do |subscriber|
+      subscribers.each do |subscriber|
         subscriber.call(log)
       rescue Exception => e
         processor.logger.error("Exception calling :on_log subscriber", e)

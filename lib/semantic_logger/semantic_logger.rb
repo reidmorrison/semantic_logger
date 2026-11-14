@@ -20,7 +20,7 @@ module SemanticLogger
   def self.[](klass)
     return Logger.new(klass) if !@cache_loggers || klass.is_a?(String) || klass.name.nil?
 
-    logger_cache.compute_if_absent(klass) { Logger.new(klass) }
+    cached_logger(klass)
   end
 
   # Whether `SemanticLogger[Class]` returns a shared, cached Logger instance per
@@ -204,6 +204,8 @@ module SemanticLogger
     appender = appenders.add(**args, &)
     # Start appender thread if it is not already running
     Logger.processor.start
+    # And the thread that receives the entries logged in other Ractors (Ruby 4.0 and later).
+    RactorReceiver.start if RactorSupport.enabled?
     appender
   end
 
@@ -231,8 +233,14 @@ module SemanticLogger
 
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
+  #
+  #  On Ruby 4.0 and later, in the main Ractor, the entries already sent from other Ractors are
+  #  written first. In another Ractor, it waits until the main Ractor has written that Ractor's
+  #  entries and flushed the appenders.
   def self.flush
-    Logger.processor.flush
+    return Logger.processor.flush if !RactorSupport.enabled? || RactorSupport.other_ractor?
+
+    RactorReceiver.flush
   end
 
   # Close all appenders and flush any outstanding messages.
@@ -258,6 +266,7 @@ module SemanticLogger
     return if !force && @reopened_pid == ::Process.pid
 
     Logger.processor.reopen
+    RactorReceiver.reopen if RactorSupport.enabled?
     @reopened_pid = ::Process.pid
   end
 
@@ -623,6 +632,20 @@ module SemanticLogger
     @logger_cache ||= Concurrent::Map.new
   end
   private_class_method :logger_cache
+
+  # Returns the cached Logger for the Class or Module.
+  #
+  # A Ractor other than the main one cannot use the main Ractor's cache, or its loggers, so it has a
+  # cache of its own (experimental, Ruby 4.0 and later).
+  def self.cached_logger(klass)
+    if RactorSupport.other_ractor?
+      cache = ::Ractor.store_if_absent(:semantic_logger_logger_cache) { {} }
+      return cache[klass] ||= Logger.new(klass)
+    end
+
+    logger_cache.compute_if_absent(klass) { Logger.new(klass) }
+  end
+  private_class_method :cached_logger
 
   # @formatter:off
   module Metric
