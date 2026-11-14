@@ -5,7 +5,7 @@ module SemanticLogger
   # Internal: Log caches the result for each of its exceptions; see Log#exception_details.
   module ExceptionDetails
     # Ruby's own Exception#detailed_message: the message, decorated with the class name.
-    DETAILED_MESSAGE = Exception.instance_method(:detailed_message)
+    DETAILED_MESSAGE = Utils.make_shareable(Exception.instance_method(:detailed_message))
     private_constant :DETAILED_MESSAGE
 
     # Returns [String] the detail that #detailed_message adds to the exception's message, without

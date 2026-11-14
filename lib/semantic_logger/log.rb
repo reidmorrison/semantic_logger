@@ -59,24 +59,26 @@ module SemanticLogger
     private_constant :LOG_EXCEPTION_OPTIONS
 
     # A finite real number, which #assign can compare with another one.
-    REAL_NUMBER = ->(value) { value.is_a?(Numeric) && value.real? && value.finite? }
+    REAL_NUMBER = Utils.make_shareable(->(value) { value.is_a?(Numeric) && value.real? && value.finite? })
     private_constant :REAL_NUMBER
 
     # Checks that a value is valid for its argument, for the arguments that do not accept any value.
     # Any other value would make #assign, or the formatters, raise.
-    ARGUMENT_VALIDATORS = {
-      backtrace:          ->(value) { value.is_a?(Array) && value.all?(String) },
-      duration:           REAL_NUMBER,
-      min_duration:       REAL_NUMBER,
-      metric_amount:      REAL_NUMBER,
-      dimensions:         ->(value) { value.is_a?(Hash) },
-      log_exception:      ->(value) { LOG_EXCEPTION_OPTIONS.include?(value) },
-      on_exception_level: ->(value) { Levels.valid?(value) }
-    }.freeze
+    ARGUMENT_VALIDATORS = Utils.make_shareable(
+      {
+        backtrace:          ->(value) { value.is_a?(Array) && value.all?(String) },
+        duration:           REAL_NUMBER,
+        min_duration:       REAL_NUMBER,
+        metric_amount:      REAL_NUMBER,
+        dimensions:         ->(value) { value.is_a?(Hash) },
+        log_exception:      ->(value) { LOG_EXCEPTION_OPTIONS.include?(value) },
+        on_exception_level: ->(value) { Levels.valid?(value) }
+      }.freeze
+    )
     private_constant :ARGUMENT_VALIDATORS
 
     # Hash#key?, which unlike HashWithIndifferentAccess#key? only matches the exact Symbol key.
-    HASH_KEY = Hash.instance_method(:key?)
+    HASH_KEY = Utils.make_shareable(Hash.instance_method(:key?))
     private_constant :HASH_KEY
 
     # Whether the value is accepted for the :log_exception argument of #assign.
