@@ -16,6 +16,15 @@ module SemanticLogger
       def batch(logs, logger)
         "[#{logs.map { |log| call(log, logger) }.join(',')}]"
       end
+
+      private
+
+      # Cleans backtraces with the application's cleaner, as the text formatters do. Error services
+      # receive the exception itself rather than this output, and the formatters written for a
+      # particular service, such as Ecs, are not built on this one.
+      def default_backtrace_cleaner
+        true
+      end
     end
   end
 end

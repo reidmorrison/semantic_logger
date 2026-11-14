@@ -552,6 +552,25 @@ config.semantic_logger.backtrace_level = :info
 to `nil` (disabled) or to a high level such as `:error`. By default backtraces are only captured for
 `:error` and `:fatal`. This feature is best used in development.
 
+### Cleaning exception backtraces
+
+To log only your application's frames of an exception's backtrace, relative to `Rails.root`, as
+Rails' own log does, use the Rails backtrace cleaner:
+
+~~~ruby
+config.semantic_logger.backtrace_cleaner = Rails.backtrace_cleaner
+~~~
+
+The silencers and filters added in `config/initializers/backtrace_silencers.rb` apply, since they
+change the same cleaner. Set the `BACKTRACE` environment variable to log full backtraces again, as
+with the rest of Rails.
+
+The text and JSON formatters use it, including the JSON sent by the HTTP, TCP, UDP, Kafka, RabbitMQ,
+and CloudWatch Logs appenders. Error services, such as Sentry, still receive the full backtrace. When an exception's backtrace has no application frames, such as a routing error raised
+in middleware, the full backtrace is logged. See
+[Cleaning backtraces](config.html#cleaning-backtraces) for which formatters use it, and how to choose
+for one appender.
+
 ### Add custom data to the Completed message
 
 Add an `append_info_to_payload` method to a controller to include extra fields in its Completed

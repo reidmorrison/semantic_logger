@@ -106,6 +106,11 @@ module SemanticLogger
       def default_log_exception_details
         true
       end
+
+      # Text output is read by people, who are best served by the frames of their own code.
+      def default_backtrace_cleaner
+        true
+      end
     end
   end
 end

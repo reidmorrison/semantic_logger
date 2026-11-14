@@ -71,13 +71,24 @@ module SemanticLogger
       #     time it is asked, and logging the details asks for it twice more, so turn this off when
       #     inspecting the receivers of logged exceptions is slow.
       #     Default: true for the Default, Color, and Pattern text formatters, false otherwise.
+      #   backtrace_cleaner: [true|false|Object]
+      #     Cleans the backtrace of the logged exception, and of each exception that caused it,
+      #     before it is written, leaving out or shortening lines. Only this formatter's output
+      #     changes: the exceptions are not.
+      #     true:  Use the application's cleaner, SemanticLogger.backtrace_cleaner, when one is set.
+      #     false: Write the full backtrace.
+      #     Or a cleaner of this formatter's own, which responds to `#clean` or `#call` (see
+      #     SemanticLogger.backtrace_cleaner=).
+      #     Default: true for the text formatters (Default and those built on it) and the Json
+      #     formatters, false otherwise.
       def initialize(time_format: nil,
                      log_host: true,
                      log_application: true,
                      log_environment: true,
                      precision: PRECISION,
                      escape_control_chars: false,
-                     log_exception_details: default_log_exception_details)
+                     log_exception_details: default_log_exception_details,
+                     backtrace_cleaner: default_backtrace_cleaner)
         @time_format          = time_format || self.class.build_time_format(precision)
         @log_host             = log_host
         @log_application      = log_application
@@ -85,6 +96,22 @@ module SemanticLogger
         @precision            = precision
         @escape_control_chars  = escape_control_chars
         @log_exception_details = log_exception_details
+        self.backtrace_cleaner = backtrace_cleaner
+      end
+
+      # Returns [true|false|Object] the `backtrace_cleaner` option. See #initialize.
+      attr_reader :backtrace_cleaner
+
+      # Sets the `backtrace_cleaner` option. See #initialize.
+      # Raises ArgumentError for any other value, so that a mistake surfaces here rather than on
+      # every log entry.
+      def backtrace_cleaner=(cleaner)
+        unless cleaner == true || cleaner == false || cleaner.nil? || BacktraceCleaning.cleaner?(cleaner)
+          raise(ArgumentError,
+                "backtrace_cleaner must be true, false, or respond to #clean or #call: #{cleaner.inspect}")
+        end
+
+        @backtrace_cleaner = cleaner
       end
 
       # Return default time format string
@@ -134,6 +161,24 @@ module SemanticLogger
         false
       end
 
+      # Whether this formatter uses the application's backtrace cleaner unless told otherwise.
+      # See #initialize.
+      def default_backtrace_cleaner
+        false
+      end
+
+      # Returns the backtrace cleaner to use for this log entry, or nil when backtraces are written
+      # in full.
+      #
+      # The application's cleaner is looked up for each entry, rather than when this formatter is
+      # built, so that it can be set after the appenders are added.
+      def active_backtrace_cleaner
+        cleaner = backtrace_cleaner
+        return SemanticLogger.backtrace_cleaner if cleaner == true
+
+        cleaner || nil
+      end
+
       # Returns [String] the detail Ruby adds to the message of the supplied exception (see
       # Log#exception_details), or nil when there is none or this formatter does not log it.
       def exception_details_for(exception)
@@ -143,16 +188,18 @@ module SemanticLogger
       end
 
       # Returns [String] the backtrace of the logged exception, followed by each exception
-      # that caused it, as laid out by Log#backtrace_to_s.
+      # that caused it, as laid out by Log#backtrace_to_s, and cleaned by the backtrace cleaner
+      # (see #initialize).
       #
       # When `escape_control_chars` is enabled, the message of each cause and each backtrace
       # line is passed through #escape_control_characters, the same as the message of the
       # logged exception: causes are often parser or validation errors that quote untrusted
       # input, and a backtrace can be set from untrusted data.
       def exception_backtrace
-        return log.backtrace_to_s unless escape_control_chars
+        cleaner = active_backtrace_cleaner
+        return log.backtrace_to_s(cleaner: cleaner) unless escape_control_chars
 
-        log.backtrace_to_s { |text| escape_control_characters(text) }
+        log.backtrace_to_s(cleaner: cleaner) { |text| escape_control_characters(text) }
       end
 
       # Return the Time as a formatted string
