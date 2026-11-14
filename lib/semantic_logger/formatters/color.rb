@@ -130,10 +130,8 @@ module SemanticLogger
       def exception
         return unless log.exception
 
-        details = exception_details
         "-- Exception: #{color}#{log.exception.class}: " \
-          "#{escape_control_characters(log.exception.message)}#{color_map.clear}\n" \
-          "#{"#{details}\n" if details}#{exception_backtrace}"
+          "#{escape_control_characters(log.exception.message)}#{color_map.clear}#{exception_detail_lines}"
       end
 
       def call(log, logger)

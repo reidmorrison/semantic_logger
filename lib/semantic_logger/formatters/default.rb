@@ -79,9 +79,8 @@ module SemanticLogger
       def exception
         return unless log.exception
 
-        details = exception_details
-        "-- Exception: #{log.exception.class}: #{escape_control_characters(log.exception.message)}\n" \
-          "#{"#{details}\n" if details}#{exception_backtrace}"
+        "-- Exception: #{log.exception.class}: #{escape_control_characters(log.exception.message)}" \
+          "#{exception_detail_lines}"
       end
 
       # The detail Ruby adds to the exception's message, such as did_you_mean suggestions.
@@ -101,6 +100,13 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [String] the exception details and backtrace that follow the exception line, each
+      # starting on a new line. Empty when there are neither, such as for an exception that was
+      # never raised, so that no blank line follows the exception.
+      def exception_detail_lines
+        [exception_details, exception_backtrace].filter_map { |text| "\n#{text}" unless text.nil? || text.empty? }.join
+      end
 
       # Text output is read by people, who benefit most from exception details.
       def default_log_exception_details
