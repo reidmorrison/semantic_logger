@@ -769,14 +769,26 @@ console.level     = :debug
 console.formatter = :json
 ~~~
 
+An appender that formats its messages as one batch, such as `:http` or `:loki` with `batch: true`,
+needs a formatter that implements `#batch(logs, logger)`, such as `:json`.
+
 Messages are formatted as they are written. When the appender runs asynchronously, messages still
-on its queue are written with the new formatter; call `SemanticLogger.flush` before changing it if
-they must keep the old one.
+on its queue are written with the new formatter. Call `SemanticLogger.flush` just before changing it
+so that messages logged before the flush keep the old one.
 
 Only one appender may write to each of `$stdout` and `$stderr`, since a second one would duplicate
 every line, so `add_appender` ignores (and warns about) a second appender for the same console
-stream. To change how the console output looks, change the existing appender's formatter as above,
-or remove it with `SemanticLogger.remove_appender` and then add the new one.
+stream, and returns `nil`. To change how the console output looks, find the existing appender and
+change its formatter as above:
+
+~~~ruby
+console = SemanticLogger.appenders.find { |appender| appender.console_stream == :stdout }
+console&.formatter = :json
+~~~
+
+`find` returns `nil` when no appender writes to that stream.
+
+Or remove it with `SemanticLogger.remove_appender(console)` and then add the new one.
 
 ### Flushing
 

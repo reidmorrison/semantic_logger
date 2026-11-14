@@ -46,6 +46,38 @@ module Appender
           assert_match(/ I .* TestLogger -- before$/, before)
           assert_equal "after", JSON.parse(after)["message"]
         end
+
+        it "restores the wrapped appender's default formatter when set to nil" do
+          added_appender.formatter = :json
+          added_appender.formatter = nil
+
+          assert_instance_of SemanticLogger::Formatters::Default, appender.formatter
+        end
+
+        describe "in batch mode" do
+          let(:appender) do
+            Class.new(SemanticLogger::Subscriber) do
+              attr_reader :formatted
+
+              def batch(logs)
+                @formatted = format_batch(logs)
+              end
+            end.new
+          end
+          let(:added_appender) { SemanticLogger.add_appender(appender: appender, batch: true) }
+
+          it "formats the batch with the new formatter on the worker thread" do
+            added_appender.formatter = :json
+
+            assert_predicate added_appender, :batch?
+            logger.info("hello")
+            SemanticLogger.flush
+
+            entries = JSON.parse(appender.formatted)
+
+            assert_equal(["hello"], entries.map { |entry| entry["message"] })
+          end
+        end
       end
 
       describe "#inspect" do
