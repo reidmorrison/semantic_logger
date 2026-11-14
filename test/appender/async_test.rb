@@ -26,6 +26,28 @@ module Appender
         end
       end
 
+      describe "#formatter=" do
+        let(:io) { StringIO.new }
+        let(:appender) { SemanticLogger::Appender::IO.new(io) }
+        let(:added_appender) { SemanticLogger.add_appender(appender: appender, async: true) }
+
+        it "changes the wrapped appender's formatter while it is running" do
+          logger.info("before")
+          SemanticLogger.flush
+          added_appender.formatter = :json
+
+          assert_instance_of SemanticLogger::Formatters::Json, appender.formatter
+          assert_same appender.formatter, added_appender.formatter
+
+          logger.info("after")
+          SemanticLogger.flush
+          before, after = io.string.lines
+
+          assert_match(/ I .* TestLogger -- before$/, before)
+          assert_equal "after", JSON.parse(after)["message"]
+        end
+      end
+
       describe "#inspect" do
         it "shows the wrapped appender's own #inspect, but not the instance variables" do
           batch_appender = InMemoryBatchAppender.new

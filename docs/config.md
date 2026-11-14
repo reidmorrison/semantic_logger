@@ -93,6 +93,10 @@ When not set explicitly, these default to:
 Each value can also be overridden for a single appender by passing `application:`, `environment:`,
 or `host:` to `add_appender` (see [Per-appender settings](#per-appender-settings)).
 
+The default and `:color` text formatters do not print these values. To see them in text output, use
+the `:pattern` formatter with `%{application}`, `%{environment}`, or `%{host}`, or a structured
+formatter such as `:json`.
+
 ### Capturing backtraces
 
 Semantic Logger can capture the file name and line number where each log entry was created, include
@@ -751,6 +755,28 @@ SemanticLogger.clear_appenders!
 # Flush all appenders, then close them ( called automatically at process exit )
 SemanticLogger.close
 ~~~
+
+### Changing an appender while running
+
+Keep the appender returned by `add_appender` to change its level or formatter later, without
+restarting the application. The formatter accepts the same values as the `formatter:` option:
+
+~~~ruby
+console = SemanticLogger.add_appender(io: $stdout, formatter: :color)
+
+# ... later
+console.level     = :debug
+console.formatter = :json
+~~~
+
+Messages are formatted as they are written. When the appender runs asynchronously, messages still
+on its queue are written with the new formatter; call `SemanticLogger.flush` before changing it if
+they must keep the old one.
+
+Only one appender may write to each of `$stdout` and `$stderr`, since a second one would duplicate
+every line, so `add_appender` ignores (and warns about) a second appender for the same console
+stream. To change how the console output looks, change the existing appender's formatter as above,
+or remove it with `SemanticLogger.remove_appender` and then add the new one.
 
 ### Flushing
 

@@ -53,6 +53,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- The formatter of an appender added with `async: true` (or batching) can be read and changed with
+  `formatter` and `formatter=`, as for any other appender. Before, these raised `NoMethodError`. See
+  [Changing an appender while running](https://logger.reidmorrison.com/config.html#changing-an-appender-while-running).
 - The default, color, and syslog text formatters no longer write a blank line after an exception that
   has no backtrace, such as a Rails routing error or an exception that was never raised, or after a
   cause that has no backtrace. The line break after the exception is now written only when exception
