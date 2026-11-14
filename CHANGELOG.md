@@ -95,6 +95,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   A custom formatter that read `log.context[:open_telemetry]` or `log.context[:new_relic_metadata]`
   reads `log.captured(:open_telemetry)` or `log.captured(:new_relic_metadata)` instead, and an
   `on_log` subscriber that set either key with `log.set_context` sets it with `log.capture`.
+- The `:sentry_ruby` appender sends each entry with the Sentry context of the thread that logged it:
+  the user, tags, contexts, breadcrumbs, trace, and request that `sentry-ruby`, `sentry-rails`, or
+  the application set for it. It sent the entry from the appender thread, with that thread's empty
+  Sentry scope, so the event was linked to no request, trace, or user other than those taken from
+  the named tags. The user taken from the named tags is merged into the thread's Sentry user.
 
 ## [5.2.0] 2026-10-30
 

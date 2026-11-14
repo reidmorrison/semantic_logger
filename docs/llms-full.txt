@@ -2522,12 +2522,19 @@ SemanticLogger.add_appender(appender: :sentry_ruby)
 > **Deprecated:** the older `appender: :sentry` (backed by the end-of-life `sentry-raven` gem) still
 > works but is deprecated and will be removed in v6. Switch to `appender: :sentry_ruby`.
 
-Some logging context is forwarded to Sentry:
+Each entry is sent with the Sentry context of the thread (or fiber) that logged it: the user, tags,
+contexts, breadcrumbs, trace, and request that `sentry-ruby`, `sentry-rails`, or the application set
+for it, such as with `Sentry.set_user`. The appender sends the entry from its own thread, so it
+registers an `on_log` subscriber that keeps a copy of that Sentry scope with each entry it will send
+(with `Log#capture`, so that no formatter writes it), as the entry is logged.
+
+Some logging context is also forwarded to Sentry, added to that of the thread:
 
 * From named tags, `transaction_name`. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/transaction-name/>.
 * From named tags, `user` is built from the `user_id`, `username`, `user_email`, and
-  `ip_address` keys, plus any `user` key that is itself a hash. See
+  `ip_address` keys, plus any `user` key that is itself a hash. Its fields replace the same fields
+  of the thread's Sentry user. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/identify-user/>.
 * From named tags, `fingerprint` (an Array of Strings, Symbols, or numbers) configures grouping
   granularity. See
