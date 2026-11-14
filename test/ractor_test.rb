@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require "timeout"
 
 module SemanticLogger
   # Logging from Ractors other than the main one (experimental, Ruby 4.0 and later).
@@ -38,6 +39,30 @@ module SemanticLogger
       end
     end
 
+    # An exception that cannot be copied to another Ractor, whose message needs its other data.
+    class CodedError < StandardError
+      def initialize
+        super("Failed")
+        @details = {code: 42, retry: -> { 1 }}
+      end
+
+      def message
+        "#{super} with code #{@details.fetch(:code)}"
+      end
+    end
+
+    # An exception that cannot be copied to another Ractor, whose message needs its cause.
+    class WrapError < StandardError
+      def initialize(message = "Wrapped")
+        super
+        @retry = -> { 1 }
+      end
+
+      def message
+        "#{super}: #{cause&.message}"
+      end
+    end
+
     describe "Logging from a Ractor" do
       # Only the entries from the tests' loggers, not those of the test reporter.
       let(:collector) { Collector.new(level: :trace, filter: /\A(InRactor|SemanticLogger::RactorTest)/) }
@@ -54,15 +79,20 @@ module SemanticLogger
       end
 
       # Runs the block in a new Ractor, without Ruby's warning that Ractors are experimental, and
-      # returns the entries written meanwhile.
-      def logs_from_ractor(*args, name: nil, &block)
+      # returns its value.
+      def in_ractor(*args, name: nil, &block)
         experimental           = Warning[:experimental]
         Warning[:experimental] = false
-        ::Ractor.new(*args, name: name, &block).join
-        SemanticLogger.flush
-        collector.logs
+        ::Ractor.new(*args, name: name, &block).value
       ensure
         Warning[:experimental] = experimental
+      end
+
+      # Runs the block in a new Ractor, and returns the entries written meanwhile.
+      def logs_from_ractor(*args, name: nil, &block)
+        in_ractor(*args, name: name, &block)
+        SemanticLogger.flush
+        collector.logs
       end
 
       it "writes the entries to the appenders of the main Ractor" do
@@ -123,6 +153,33 @@ module SemanticLogger
         refute_empty log.exception.backtrace
       end
 
+      it "keeps the instance variables that the message of an exception that cannot be copied needs" do
+        log = logs_from_ractor do
+          raise SemanticLogger::RactorTest::CodedError
+        rescue SemanticLogger::RactorTest::CodedError => e
+          SemanticLogger["InRactor"].error("Failed", e)
+        end.first
+
+        assert_instance_of CodedError, log.exception
+        assert_equal "Failed with code 42", log.exception.message
+      end
+
+      it "keeps the cause that the message of an exception that cannot be copied needs" do
+        log = logs_from_ractor do
+          begin
+            raise ArgumentError, "bad input"
+          rescue ArgumentError
+            raise SemanticLogger::RactorTest::WrapError
+          end
+        rescue SemanticLogger::RactorTest::WrapError => e
+          SemanticLogger["InRactor"].error("Failed", e)
+        end.first
+
+        assert_instance_of WrapError, log.exception
+        assert_equal "Wrapped: bad input", log.exception.message
+        assert_instance_of ArgumentError, log.exception.cause
+      end
+
       it "gives a Loggable class a logger of its own in the Ractor" do
         main_logger = Worker.logger
         log         = logs_from_ractor { SemanticLogger::RactorTest::Worker.new.work }.first
@@ -156,8 +213,7 @@ module SemanticLogger
 
       describe "on_log subscribers" do
         after do
-          SemanticLogger::Logger.subscribers&.clear
-          SemanticLogger::Logger.instance_variable_set(:@ractor_subscribers, nil)
+          SemanticLogger::Logger.clear_subscribers
         end
 
         it "calls only the shareable ones in the Ractor" do
@@ -169,12 +225,29 @@ module SemanticLogger
         end
       end
 
-      it "flushes from the Ractor" do
-        logs = logs_from_ractor do
-          SemanticLogger["InRactor"].info("Before flush", flushed: SemanticLogger.flush)
+      it "writes the entries of the Ractor by the time its flush returns" do
+        in_ractor do
+          SemanticLogger["InRactor"].info("Before flush")
+          SemanticLogger.flush
         end
 
-        assert logs.first.payload[:flushed]
+        assert_equal ["Before flush"], collector.logs.map(&:message)
+      end
+
+      it "flushes, rather than waiting on the receiving thread, while the process forks" do
+        flushed = Timeout.timeout(10) { RactorReceiver.pause { SemanticLogger.flush } }
+
+        refute_nil flushed
+      end
+
+      it "lets Ruby reject a fork in a Ractor" do
+        message = in_ractor do
+          fork { exit!(0) }
+        rescue StandardError => e
+          e.message
+        end
+
+        assert_match(/fork/, message)
       end
 
       it "writes the entries of a Ractor that did not flush" do

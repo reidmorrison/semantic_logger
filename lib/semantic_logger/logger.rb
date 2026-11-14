@@ -16,7 +16,9 @@ module SemanticLogger
 
       subscribers << subscriber
       # A Ractor other than the main one can only call a shareable subscriber.
-      @ractor_subscribers = [*@ractor_subscribers, subscriber].freeze if RACTORS && ::Ractor.shareable?(subscriber)
+      if RactorSupport.enabled? && ::Ractor.shareable?(subscriber)
+        @ractor_subscribers = [*@ractor_subscribers, subscriber].freeze
+      end
       subscribers
     end
 
@@ -24,22 +26,18 @@ module SemanticLogger
       attr_reader :subscribers
     end
 
-    # Whether this Ruby can log from Ractors other than the main one (Ruby 4.0 and later).
-    RACTORS = defined?(::Ractor::Port) ? true : false
-    private_constant :RACTORS
+    # Removes every on_log subscriber.
+    def self.clear_subscribers
+      @subscribers&.clear
+      @ractor_subscribers = nil
+    end
 
-    if RACTORS
-      # Returns the processor that writes log entries to the appenders, or in a Ractor other than the
-      # main one, the RactorProcessor that sends them to the main Ractor.
-      def self.processor
-        return RactorProcessor.current unless ::Ractor.main?
+    # Returns the processor that writes log entries to the appenders, or in a Ractor other than the
+    # main one, the RactorProcessor that sends them to the main Ractor.
+    def self.processor
+      return RactorProcessor.current if RactorSupport.other_ractor?
 
-        @processor ||= Processor.new
-      end
-    else
-      def self.processor
-        @processor ||= Processor.new
-      end
+      @processor ||= Processor.new
     end
 
     # Switch to the synchronous processor
@@ -99,7 +97,7 @@ module SemanticLogger
 
     # Calls the on_log subscribers, or in a Ractor other than the main one, the shareable ones.
     def self.call_subscribers(log)
-      subscribers = RACTORS && !::Ractor.main? ? @ractor_subscribers : @subscribers
+      subscribers = RactorSupport.other_ractor? ? @ractor_subscribers : @subscribers
       return unless subscribers
 
       subscribers.each do |subscriber|

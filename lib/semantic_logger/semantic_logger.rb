@@ -205,7 +205,7 @@ module SemanticLogger
     # Start appender thread if it is not already running
     Logger.processor.start
     # And the thread that receives the entries logged in other Ractors (Ruby 4.0 and later).
-    RactorReceiver.start if defined?(RactorReceiver)
+    RactorReceiver.start if RactorSupport.enabled?
     appender
   end
 
@@ -238,9 +238,9 @@ module SemanticLogger
   #  written first. In another Ractor, it waits until the main Ractor has written that Ractor's
   #  entries and flushed the appenders.
   def self.flush
-    return RactorReceiver.flush if defined?(RactorReceiver) && ::Ractor.main?
+    return Logger.processor.flush if !RactorSupport.enabled? || RactorSupport.other_ractor?
 
-    Logger.processor.flush
+    RactorReceiver.flush
   end
 
   # Close all appenders and flush any outstanding messages.
@@ -266,7 +266,7 @@ module SemanticLogger
     return if !force && @reopened_pid == ::Process.pid
 
     Logger.processor.reopen
-    RactorReceiver.reopen if defined?(RactorReceiver)
+    RactorReceiver.reopen if RactorSupport.enabled?
     @reopened_pid = ::Process.pid
   end
 
@@ -638,7 +638,7 @@ module SemanticLogger
   # A Ractor other than the main one cannot use the main Ractor's cache, or its loggers, so it has a
   # cache of its own (experimental, Ruby 4.0 and later).
   def self.cached_logger(klass)
-    if defined?(::Ractor::Port) && !::Ractor.main?
+    if RactorSupport.other_ractor?
       cache = ::Ractor.store_if_absent(:semantic_logger_logger_cache) { {} }
       return cache[klass] ||= Logger.new(klass)
     end

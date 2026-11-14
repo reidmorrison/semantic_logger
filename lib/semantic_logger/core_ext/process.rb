@@ -18,7 +18,7 @@ module SemanticLogger
       # while the thread that receives log entries from other Ractors is paused (see
       # RactorReceiver.pause).
       def self.pause_for_fork(&)
-        defined?(SemanticLogger::RactorReceiver) ? SemanticLogger::RactorReceiver.pause(&) : yield
+        SemanticLogger::RactorSupport.enabled? ? SemanticLogger::RactorReceiver.pause(&) : yield
       end
 
       # `_fork` runs in both the parent and the child. It returns 0 in the child

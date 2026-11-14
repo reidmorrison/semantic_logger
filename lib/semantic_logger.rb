@@ -3,6 +3,7 @@ require "semantic_logger/version"
 require "semantic_logger/utils"
 require "semantic_logger/ansi_colors"
 require "semantic_logger/levels"
+require "semantic_logger/ractor_support"
 require "semantic_logger/context"
 require "semantic_logger/base"
 require "semantic_logger/formatters"
@@ -21,7 +22,7 @@ require "semantic_logger/debug_as_trace_logger"
 require "semantic_logger/semantic_logger"
 
 # Logging from Ractors other than the main one (experimental), on Ruby 4.0 and later.
-if defined?(Ractor::Port)
+if SemanticLogger::RactorSupport.enabled?
   require "semantic_logger/ractor_copy"
   require "semantic_logger/ractor_receiver"
   require "semantic_logger/ractor_processor"

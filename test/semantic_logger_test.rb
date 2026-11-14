@@ -332,7 +332,7 @@ class SemanticLoggerTest < Minitest::Test
     describe ".on_log" do
       after do
         # Clear on_log subscribers
-        SemanticLogger::Logger.subscribers.clear
+        SemanticLogger::Logger.clear_subscribers
       end
 
       it "registers a log listener" do

@@ -490,12 +490,14 @@ Things to know:
 - `on_log` subscribers run for an entry logged in a Ractor only when they are shareable, such as a
   module with a `call` method, or a block made with `Ractor.shareable_proc`.
 - An entry is copied to the main Ractor. A value that Ruby cannot copy, such as a Proc in the payload,
-  is written as its `inspect`, and an exception that holds one is written with only its class,
-  message, backtrace, and cause.
+  is written as its `inspect`, and so is such a value held by a logged exception. The extra detail
+  that Ruby adds to some exceptions' messages, such as did_you_mean's "Did you mean?" suggestions, is
+  not written for an exception logged in a Ractor.
 - `SemanticLogger.flush` in a Ractor waits until the main Ractor has written that Ractor's entries.
-- The main Ractor accepts entries from other Ractors as fast as they are logged, so `max_queue_size`
-  and `non_blocking` do not slow down or drop them, and in sync mode they are still written by the
-  receiving thread.
+- The main Ractor accepts entries from other Ractors as fast as they are logged, so logging never
+  slows a Ractor down, however busy the appenders are. `max_queue_size` and `non_blocking` then apply
+  to the entries as usual, once the receiving thread hands them to the processor. In sync mode, too,
+  the receiving thread writes them.
 - On Ruby 3.4 and earlier, logging from a Ractor other than the main one raises
   `Ractor::IsolationError`, as it always has.
 

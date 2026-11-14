@@ -36,8 +36,9 @@ module SemanticLogger
     end
 
     # Waits until the main Ractor has written the entries sent before this call, and has flushed the
-    # appenders. Returns true once it has, or false when the flush failed, or when the main Ractor is
-    # not receiving yet, since no appender was added.
+    # appenders. Returns the result of the main Ractor's flush, as SemanticLogger.flush there would.
+    # Returns false without waiting when the main Ractor is not receiving, for example since no
+    # appender was added.
     def flush
       return false unless RactorReceiver.running?
 
