@@ -289,7 +289,35 @@ module SemanticLogger
       details
     end
 
+    # Returns [Array<String>] the backtrace of the supplied exception, or nil when it has none.
+    #
+    # Parameters
+    #   exception: [Exception]
+    #     This entry's exception, or one of its causes (see #each_exception).
+    #   cleaner: [Object|nil]
+    #     A backtrace cleaner, such as `Rails.backtrace_cleaner`, that responds to `#clean` or
+    #     `#call`. The backtrace is returned as it cleans it (see BacktraceCleaning.clean), and the
+    #     exception's own backtrace is left unchanged.
+    #     Default: nil (the exception's own backtrace)
+    #
+    # A cleaned backtrace is cached on this entry, since every appender's formatter may ask for it.
+    def backtrace_of(exception, cleaner: nil)
+      backtrace = exception.backtrace
+      return backtrace unless cleaner
+
+      key   = [exception, cleaner]
+      cache = @cleaned_backtraces
+      return cache[key] if cache&.key?(key)
+
+      cleaned = BacktraceCleaning.clean(backtrace, cleaner)
+      # Replace the cache rather than change it, since appenders on other threads may be reading it.
+      @cleaned_backtraces = (cache || {}).merge(key => cleaned).freeze
+      cleaned
+    end
+
     # Returns [String] the exception backtrace including all of the child / caused by exceptions
+    #
+    # When a cleaner is supplied, each backtrace is cleaned by it first (see #backtrace_of).
     #
     # When a block is supplied, each cause's message and each backtrace line is passed
     # to it, and the value it returns is written in its place. This lets a caller, for
@@ -297,10 +325,11 @@ module SemanticLogger
     #
     # Example:
     #   log.backtrace_to_s { |text| text.gsub("\n", "\\n") }
-    def backtrace_to_s(&block)
+    #   log.backtrace_to_s(cleaner: Rails.backtrace_cleaner)
+    def backtrace_to_s(cleaner: nil, &block)
       trace = ""
       each_exception do |exception, i|
-        lines = exception.backtrace || []
+        lines = backtrace_of(exception, cleaner: cleaner) || []
         lines = lines.map(&block) if block
         if i.zero?
           trace = lines.join("\n")

@@ -109,6 +109,68 @@ SemanticLogger.backtrace_level = :error
 To capture a backtrace for every entry, set it to `:trace`. To turn backtrace capture off entirely,
 set it to `nil`. It is strongly recommended to leave this at `:error` or higher in production.
 
+### Cleaning backtraces
+
+Most of an exception's backtrace is usually gems and Ruby itself, with the application's own frames
+somewhere in the middle. A backtrace cleaner leaves out or shortens lines before they are logged.
+Set the application's cleaner once:
+
+~~~ruby
+SemanticLogger.backtrace_cleaner = Rails.backtrace_cleaner
+~~~
+
+A cleaner is any object that responds to `#clean`, as `ActiveSupport::BacktraceCleaner` does, or to
+`#call`, such as a Proc. It is given each backtrace as an Array of Strings, and returns the lines to
+log:
+
+~~~ruby
+app_root = "#{Dir.pwd}/"
+SemanticLogger.backtrace_cleaner = lambda do |lines|
+  lines.select { |line| line.start_with?(app_root) }.map { |line| line.delete_prefix(app_root) }
+end
+~~~
+
+Only the text and JSON output changes: the `:default`, `:color`, `:pattern`, `:one_line`
+(which does not write backtraces), `:syslog`, `:json`, and `:fluentd` formatters clean the backtrace
+of the logged exception and of each exception that caused it. The exception itself is never
+changed, so appenders that send the exception to an error service, such as Sentry, Bugsnag, or
+Honeybadger, still send its full backtrace. The other formatters, including `:raw` (which the
+Elasticsearch, OpenSearch, MongoDB, Graylog, and Splunk appenders use) and the formatters written for
+a particular service, such as `:ecs`, `:loki`, `:new_relic_logs`, and `:open_telemetry`, write
+the full backtrace.
+
+The `backtrace_cleaner` formatter option chooses for one appender:
+
+| Value | Cleans backtraces with |
+|-------|------------------------|
+| `true` | The application's cleaner, `SemanticLogger.backtrace_cleaner`, when one is set. The default for the formatters listed above. |
+| `false` | Nothing: the full backtrace is written. The default for every other formatter. |
+| A cleaner | That cleaner, in place of the application's. |
+
+~~~ruby
+# Keep full backtraces in the JSON file:
+SemanticLogger.add_appender(file_name: "production.json", formatter: {json: {backtrace_cleaner: false}})
+
+# Clean the backtraces in logfmt output too:
+SemanticLogger.add_appender(io: $stdout, formatter: {logfmt: {backtrace_cleaner: true}})
+
+# Use a cleaner of its own for one appender:
+SemanticLogger.add_appender(io: $stdout, formatter: {color: {backtrace_cleaner: MyCleaner.new}})
+~~~
+
+Notes:
+
+* When the cleaner leaves out every line, for example for an exception raised entirely inside gems,
+  the full backtrace is logged, so the only clue to where it came from is never lost. The full
+  backtrace is also logged when the cleaner raises an exception or does not return an Array.
+* The cleaner is called on the appenders' threads, not the thread that logged the entry, so it must be
+  thread safe. It is called once for each exception in an entry, however many appenders write it.
+* The application's cleaner is looked up as each entry is written, so it can be set before or after
+  the appenders are added.
+* The file name and line number of an entry are not cleaned. They are where the entry was logged when
+  it captured a backtrace (see `backtrace_level` above), and otherwise the first line of the
+  exception's backtrace.
+
 ### Caching loggers
 
 By default `SemanticLogger[...]` returns a brand new logger instance on every call. Enable logger

@@ -412,6 +412,41 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".backtrace_cleaner=" do
+      after { SemanticLogger.backtrace_cleaner = nil }
+
+      it "is nil by default" do
+        assert_nil SemanticLogger.backtrace_cleaner
+      end
+
+      it "accepts an object that responds to #clean, or a Proc" do
+        cleaner = Object.new
+        def cleaner.clean(lines) = lines
+        SemanticLogger.backtrace_cleaner = cleaner
+
+        assert_same cleaner, SemanticLogger.backtrace_cleaner
+
+        cleaner = ->(lines) { lines }
+        SemanticLogger.backtrace_cleaner = cleaner
+
+        assert_same cleaner, SemanticLogger.backtrace_cleaner
+      end
+
+      it "accepts nil to stop cleaning backtraces" do
+        SemanticLogger.backtrace_cleaner = ->(lines) { lines }
+        SemanticLogger.backtrace_cleaner = nil
+
+        assert_nil SemanticLogger.backtrace_cleaner
+      end
+
+      it "rejects a value that cannot clean a backtrace" do
+        [true, "rails", :clean].each do |value|
+          assert_raises(ArgumentError, value.inspect) { SemanticLogger.backtrace_cleaner = value }
+        end
+        assert_nil SemanticLogger.backtrace_cleaner
+      end
+    end
+
     describe ".clear_appenders!" do
       it "closes the processor" do
         mock = Minitest::Mock.new

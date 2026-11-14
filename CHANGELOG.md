@@ -5,6 +5,22 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `SemanticLogger.backtrace_cleaner=` sets a backtrace cleaner, such as `Rails.backtrace_cleaner`,
+  that leaves out or shortens the lines of each exception's backtrace, and of each exception that
+  caused it, before they are logged. A cleaner is any object that responds to `#clean`, as
+  `ActiveSupport::BacktraceCleaner` does, or to `#call`, such as a Proc. The text formatters
+  (`:default`, `:color`, `:pattern`, `:one_line`, `:syslog`) and the JSON formatters (`:json`,
+  `:fluentd`) use it. The others, including `:raw` and the formatters written for a particular
+  service, write the full backtrace, and appenders that send the exception to an error service are
+  not affected. The new `backtrace_cleaner` formatter option chooses for one appender: `true` for
+  the application's cleaner, `false` for the full backtrace, or a cleaner of its own. When a cleaner
+  leaves out every line, or raises, the full backtrace is logged. Nothing changes until a cleaner is
+  set. See [Cleaning backtraces](https://logger.reidmorrison.com/config.html#cleaning-backtraces).
+- `Log#backtrace_of(exception, cleaner:)` returns an exception's backtrace as a cleaner cleans it,
+  cached on the entry, and `Log#backtrace_to_s` accepts `cleaner:`, for custom formatters.
+
 ### Changed
 
 - The `:open_telemetry` appender sends the message as the body of each log record, as documented,

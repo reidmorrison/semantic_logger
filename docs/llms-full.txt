@@ -835,6 +835,68 @@ SemanticLogger.backtrace_level = :error
 To capture a backtrace for every entry, set it to `:trace`. To turn backtrace capture off entirely,
 set it to `nil`. It is strongly recommended to leave this at `:error` or higher in production.
 
+### Cleaning backtraces
+
+Most of an exception's backtrace is usually gems and Ruby itself, with the application's own frames
+somewhere in the middle. A backtrace cleaner leaves out or shortens lines before they are logged.
+Set the application's cleaner once:
+
+~~~ruby
+SemanticLogger.backtrace_cleaner = Rails.backtrace_cleaner
+~~~
+
+A cleaner is any object that responds to `#clean`, as `ActiveSupport::BacktraceCleaner` does, or to
+`#call`, such as a Proc. It is given each backtrace as an Array of Strings, and returns the lines to
+log:
+
+~~~ruby
+app_root = "#{Dir.pwd}/"
+SemanticLogger.backtrace_cleaner = lambda do |lines|
+  lines.select { |line| line.start_with?(app_root) }.map { |line| line.delete_prefix(app_root) }
+end
+~~~
+
+Only the text and JSON output changes: the `:default`, `:color`, `:pattern`, `:one_line`
+(which does not write backtraces), `:syslog`, `:json`, and `:fluentd` formatters clean the backtrace
+of the logged exception and of each exception that caused it. The exception itself is never
+changed, so appenders that send the exception to an error service, such as Sentry, Bugsnag, or
+Honeybadger, still send its full backtrace. The other formatters, including `:raw` (which the
+Elasticsearch, OpenSearch, MongoDB, Graylog, and Splunk appenders use) and the formatters written for
+a particular service, such as `:ecs`, `:loki`, `:new_relic_logs`, and `:open_telemetry`, write
+the full backtrace.
+
+The `backtrace_cleaner` formatter option chooses for one appender:
+
+| Value | Cleans backtraces with |
+|-------|------------------------|
+| `true` | The application's cleaner, `SemanticLogger.backtrace_cleaner`, when one is set. The default for the formatters listed above. |
+| `false` | Nothing: the full backtrace is written. The default for every other formatter. |
+| A cleaner | That cleaner, in place of the application's. |
+
+~~~ruby
+# Keep full backtraces in the JSON file:
+SemanticLogger.add_appender(file_name: "production.json", formatter: {json: {backtrace_cleaner: false}})
+
+# Clean the backtraces in logfmt output too:
+SemanticLogger.add_appender(io: $stdout, formatter: {logfmt: {backtrace_cleaner: true}})
+
+# Use a cleaner of its own for one appender:
+SemanticLogger.add_appender(io: $stdout, formatter: {color: {backtrace_cleaner: MyCleaner.new}})
+~~~
+
+Notes:
+
+* When the cleaner leaves out every line, for example for an exception raised entirely inside gems,
+  the full backtrace is logged, so the only clue to where it came from is never lost. The full
+  backtrace is also logged when the cleaner raises an exception or does not return an Array.
+* The cleaner is called on the appenders' threads, not the thread that logged the entry, so it must be
+  thread safe. It is called once for each exception in an entry, however many appenders write it.
+* The application's cleaner is looked up as each entry is written, so it can be set before or after
+  the appenders are added.
+* The file name and line number of an entry are not cleaned. They are where the entry was logged when
+  it captured a backtrace (see `backtrace_level` above), and otherwise the first line of the
+  exception's backtrace.
+
 ### Caching loggers
 
 By default `SemanticLogger[...]` returns a brand new logger instance on every call. Enable logger
@@ -2642,7 +2704,8 @@ These read-only helpers derive convenient values from the attributes above:
 |`level_to_s`|`String`|The level as a single upper-case character, for example `"I"` for `:info`.|
 |`cleansed_message`|`String`|The message with Rails/ANSI color escape codes stripped. Used to keep terminal codes out of structured output.|
 |`each_exception`|Enumerator|Iterates the exception and its nested `cause` chain, yielding `(exception, depth)`.|
-|`backtrace_to_s`|`String`|The exception backtrace as a string, including every exception in the `cause` chain. With a block, each cause's message and each backtrace line is replaced by the value the block returns, for example to escape it.|
+|`backtrace_to_s(cleaner: nil)`|`String`|The exception backtrace as a string, including every exception in the `cause` chain. With a block, each cause's message and each backtrace line is replaced by the value the block returns, for example to escape it. With a `cleaner`, each backtrace is first cleaned as `backtrace_of` cleans it.|
+|`backtrace_of(exception, cleaner: nil)`|`Array<String>` or `nil`|The backtrace of `exception` (this event's exception or one of its causes). With a [backtrace cleaner](config.html#cleaning-backtraces), such as `Rails.backtrace_cleaner`, the lines it keeps, or the full backtrace when it keeps none; the exception is not changed. A cleaned backtrace is frozen and cached on the event.|
 |`exception_details(exception, source: false)`|`String` or `nil`|The detail Ruby's `Exception#detailed_message` adds to the message of `exception` (this event's exception or one of its causes), such as did_you_mean suggestions, without the class name. `source: true` also includes error_highlight's source snippet. `nil` when there is none. Cached on the event.|
 |`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's backtrace or exception. Pass `true` for just the base file name.|
 |`to_h`|`Hash`|The event as a plain Hash (via the Raw formatter), including `host`, `application`, and `environment`. Handy for inspecting an event or building a custom formatter.|
@@ -3367,6 +3430,25 @@ config.semantic_logger.backtrace_level = :info
 **Warning:** capturing a backtrace for every log entry allocates many objects. In production set this
 to `nil` (disabled) or to a high level such as `:error`. By default backtraces are only captured for
 `:error` and `:fatal`. This feature is best used in development.
+
+### Cleaning exception backtraces
+
+To log only your application's frames of an exception's backtrace, relative to `Rails.root`, as
+Rails' own log does, use the Rails backtrace cleaner:
+
+~~~ruby
+config.semantic_logger.backtrace_cleaner = Rails.backtrace_cleaner
+~~~
+
+The silencers and filters added in `config/initializers/backtrace_silencers.rb` apply, since they
+change the same cleaner. Set the `BACKTRACE` environment variable to log full backtraces again, as
+with the rest of Rails.
+
+The text and JSON formatters use it. Error services, such as Sentry, still receive the full
+backtrace. When an exception's backtrace has no application frames, such as a routing error raised
+in middleware, the full backtrace is logged. See
+[Cleaning backtraces](config.html#cleaning-backtraces) for which formatters use it, and how to choose
+for one appender.
 
 ### Add custom data to the Completed message
 

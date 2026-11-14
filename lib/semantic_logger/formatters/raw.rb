@@ -89,17 +89,19 @@ module SemanticLogger
         hash[:payload] = log.payload if log.payload.respond_to?(:empty?) && !log.payload.empty?
       end
 
-      # Exception
+      # Exception, with the stack trace of each exception cleaned by the backtrace cleaner (see
+      # Base#initialize).
       def exception
         return unless log.exception
 
-        root = hash
+        cleaner = active_backtrace_cleaner
+        root    = hash
         log.each_exception do |exception, i|
           name       = i.zero? ? :exception : :cause
           root[name] = {name: exception.class.name, message: exception.message}
           details    = exception_details_for(exception)
           root[name][:details]     = details if details
-          root[name][:stack_trace] = exception.backtrace
+          root[name][:stack_trace] = log.backtrace_of(exception, cleaner: cleaner)
           root = root[name]
         end
       end

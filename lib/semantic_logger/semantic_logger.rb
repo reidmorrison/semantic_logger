@@ -81,6 +81,38 @@ module SemanticLogger
     @backtrace_level_index
   end
 
+  # Sets the application's backtrace cleaner, which leaves out or shortens the lines of the
+  # backtraces that the text and JSON formatters log, such as `Rails.backtrace_cleaner`.
+  #
+  # Parameters
+  #   cleaner: [Object|nil]
+  #     An object that responds to `#clean`, as ActiveSupport::BacktraceCleaner does, or to `#call`,
+  #     such as a Proc. It is given each exception's backtrace as an Array of Strings, and returns
+  #     the lines to log. When it leaves out every line, or raises, the full backtrace is logged.
+  #     It is called on the appender threads, so it must be thread safe.
+  #     nil: Do not clean backtraces.
+  #     Default: nil
+  #
+  # The `:default`, `:color`, `:pattern`, `:one_line`, `:syslog`, `:json`, and `:fluentd`
+  # formatters use it unless given `backtrace_cleaner: false`. Other formatters only use it when
+  # given `backtrace_cleaner: true`. Appenders that send the exception itself, such as error
+  # services, are not affected.
+  #
+  # Example:
+  #   SemanticLogger.backtrace_cleaner = Rails.backtrace_cleaner
+  def self.backtrace_cleaner=(cleaner)
+    unless cleaner.nil? || BacktraceCleaning.cleaner?(cleaner)
+      raise(ArgumentError, "Backtrace cleaner must respond to #clean or #call: #{cleaner.inspect}")
+    end
+
+    @backtrace_cleaner = cleaner
+  end
+
+  # Returns the application's backtrace cleaner, or nil when there is none.
+  def self.backtrace_cleaner
+    @backtrace_cleaner
+  end
+
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
@@ -611,6 +643,7 @@ module SemanticLogger
   @default_level_index   = Levels.index(@default_level)
   @backtrace_level       = :error
   @backtrace_level_index = Levels.index(@backtrace_level)
+  @backtrace_cleaner     = nil
   @sync                  = false
   @cache_loggers         = false
   @logger_cache          = nil
