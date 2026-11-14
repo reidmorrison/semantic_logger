@@ -50,7 +50,8 @@ module SemanticLogger
   #
   # captures [Hash]
   #   Objects that an appender captured on the logging thread for its own use when the log entry
-  #   was created, such as the OpenTelemetry context. Formatters do not write them.
+  #   was created, such as the OpenTelemetry context. Only a formatter built for that appender writes
+  #   them, as the NewRelicLogs formatter writes the linking metadata its appender captures.
   class Log
     # Keys passed in without a payload that will be extracted and the remainder passed into the payload.
     NON_PAYLOAD_KEYS = %i[message exception backtrace exception
@@ -451,7 +452,7 @@ module SemanticLogger
     def set_context(key, value) = (self.context ||= {}).store(key, value)
 
     # Keeps the value, captured on the logging thread, for the appender that uses it. Unlike the
-    # context, no formatter writes it.
+    # context, formatters do not write it, unless one is built for that appender and reads its key.
     def capture(key, value) = (self.captures ||= {}).store(key, value)
 
     # Returns the value captured with the key, or nil when there is none.

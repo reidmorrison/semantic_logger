@@ -1598,7 +1598,8 @@ Because these callbacks run on the application's own thread, keep them fast. The
 available to appenders and formatters as `log.context`, and formatters that write the context, such
 as `:loki`, write it too. To hand an appender of your own an object it needs from the logging thread
 that is not log data, such as a client's current scope, use `log.capture(key, value)` instead, and
-read it in the appender with `log.captured(key)`: formatters do not write it.
+read it in the appender with `log.captured(key)`: formatters do not write it, unless one is built
+for that appender and reads its key.
 
 
 ---
@@ -2789,7 +2790,7 @@ situational field.
 |`tags`|`Array<String>`|Tags active on the thread when the call was made.|
 |`named_tags`|`Hash<String, Object>`|Named tags active on the thread when the call was made.|
 |`context`|`Hash`|Named contexts captured in-line at the point the event was created. `nil` when none.|
-|`captures`|`Hash`|Objects an appender captured in-line for its own use, such as the OpenTelemetry context. Unlike `context`, formatters do not write them. `nil` when none.|
+|`captures`|`Hash`|Objects an appender captured in-line for its own use, such as the OpenTelemetry context. Unlike `context`, formatters do not write them, except one built for that appender, as `:new_relic_logs` writes the linking metadata its appender captures. `nil` when none.|
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
@@ -2816,8 +2817,8 @@ These read-only helpers derive convenient values from the attributes above:
 |`exception_details(exception, source: false)`|`String` or `nil`|The detail Ruby's `Exception#detailed_message` adds to the message of `exception` (this event's exception or one of its causes), such as did_you_mean suggestions, without the class name. `source: true` also includes error_highlight's source snippet. `nil` when there is none. Cached on the event.|
 |`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's backtrace or exception. Pass `true` for just the base file name.|
 |`to_h`|`Hash`|The event as a plain Hash (via the Raw formatter), including `host`, `application`, and `environment`. Handy for inspecting an event or building a custom formatter.|
-|`set_context(key, value)`|`Hash`|Lazily initializes `context` and stores a key/value pair on it.|
-|`capture(key, value)`|`Object`|Lazily initializes `captures` and stores a key/value pair on it, for an appender that needs state of the logging thread, such as the current trace, that is not log data.|
+|`set_context(key, value)`|`Object`|Lazily initializes `context`, stores a key/value pair on it, and returns the value.|
+|`capture(key, value)`|`Object`|Lazily initializes `captures`, stores a key/value pair on it, and returns the value, for an appender that needs state of the logging thread, such as the current trace, that is not log data.|
 |`captured(key)`|`Object` or `nil`|The value captured with `key`, or `nil` when there is none.|
 
 ### Inspecting an event

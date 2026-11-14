@@ -93,7 +93,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   the OpenTelemetry context as a label such as `#<OpenTelemetry::Context:0x...>`, and the New Relic
   linking metadata as one holding the trace and span ids, so Loki created a new stream for each span.
   A custom formatter that read `log.context[:open_telemetry]` or `log.context[:new_relic_metadata]`
-  reads `log.captured(:open_telemetry)` or `log.captured(:new_relic_metadata)` instead.
+  reads `log.captured(:open_telemetry)` or `log.captured(:new_relic_metadata)` instead, and an
+  `on_log` subscriber that set either key with `log.set_context` sets it with `log.capture`.
 
 ## [5.2.0] 2026-10-30
 
