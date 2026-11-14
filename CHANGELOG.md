@@ -32,6 +32,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:loki` formatter writes the `stack_trace` of an exception one frame per line, followed by the
   backtrace of each exception that caused it, as the text formatters do. It wrote the backtrace as
   an inspected Ruby Array, such as `["app/a.rb:1:in 'A#a'", ...]`, and left out the causes.
+- The `:syslog_cee` formatter accepts the options of the `:raw` formatter, such as `log_host` and
+  `log_exception_details`, given to the formatter or with `formatter: {syslog_cee: {...}}`. It
+  raised `ArgumentError` for them.
 
 ## [5.2.0] 2026-10-30
 
