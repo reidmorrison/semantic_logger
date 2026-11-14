@@ -98,8 +98,8 @@ module SemanticLogger
       @thread_name = Log.thread_name_for(Thread.current)
       @name        = name
       @time        = Time.now
-      @tags        = SemanticLogger.tags
-      @named_tags  = SemanticLogger.named_tags
+      @tags        = Context.tags
+      @named_tags  = Context.named_tags
       @level_index = index.nil? ? Levels.index(level) : index
     end
 

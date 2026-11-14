@@ -45,21 +45,10 @@ module SemanticLogger
     #
     # Matches Ruby's `Logger#with_level`, which Sidekiq calls to apply a job's `log_level`.
     # Accepts the same levels as `#level=`. Returns the result of the block.
-    def with_level(level)
+    def with_level(level, &)
       index            = Levels.index(level)
-      overrides        = (Thread.current[:semantic_logger_with_level] ||= {}.compare_by_identity)
-      previous         = overrides[self]
       @with_level_used = true
-      overrides[self]  = index
-      begin
-        yield
-      ensure
-        if previous
-          overrides[self] = previous
-        else
-          overrides.delete(self)
-        end
-      end
+      Context.with_level(self, index, &)
     end
 
     # Implement the log level calls
@@ -166,9 +155,8 @@ module SemanticLogger
           Utils.extract_backtrace(caller)
         else
           log.thread_name = Log.thread_name_for(thread)
-          log.tags        = (thread[:semantic_logger_tags] || []).clone
-          # Named tags are held as a list of the Hashes pushed, merged as by SemanticLogger.named_tags.
-          log.named_tags  = (thread[:semantic_logger_named_tags] || []).reduce({}) { |sum, h| sum.merge(h) }
+          log.tags        = Context.tags(thread)
+          log.named_tags  = Context.named_tags(thread)
           thread.backtrace
         end
       # Like any entry from this logger, it carries the logger's own tags (see #tagged).
@@ -368,7 +356,7 @@ module SemanticLogger
 
     # Level index set for this instance by an enclosing `#with_level` block on the current fiber.
     def with_level_index
-      Thread.current[:semantic_logger_with_level]&.[](self)
+      Context.with_level_index(self)
     end
 
     # Whether to log the supplied message based on the current filter if any

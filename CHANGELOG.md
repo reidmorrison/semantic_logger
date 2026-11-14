@@ -21,6 +21,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Tags, named tags, `silence`, and `logger.with_level` are no longer shared between threads that copy
+  fiber-local variables, as Rails' `ActionController::Live` does for its streaming thread. Semantic
+  Logger changed its tag lists in place, so when the request left its `tagged` block, the streaming
+  thread lost the request's tags, and a tag pushed in either thread appeared in the other. Each
+  change now stores a new frozen value, and a block restores the previous one when it exits.
+  As a result, tags pushed with `push_tags` inside a `tagged` block, and not popped, are removed
+  when the block exits. Before, the block popped them in place of its own tags, which then stayed
+  on the thread.
 - `logger.backtrace` on a child logger, one returned by `logger.tagged` without a block, logs the
   child logger's own tags, as its other entries do. They were left out.
 - A thread dump (`logger.backtrace(thread:)`, and the `TTIN` signal handler) logs the named tags of

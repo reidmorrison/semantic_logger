@@ -372,19 +372,13 @@ module SemanticLogger
 
   # If the tag being supplied is definitely a string then this fast
   # tag api can be used for short lived tags
-  def self.fast_tag(tag)
+  def self.fast_tag(tag, &)
     return yield if tag.nil? || tag == ""
 
-    t = Thread.current[:semantic_logger_tags] ||= []
-    begin
-      t << tag
-      yield
-    ensure
-      t.pop
-    end
+    Context.fast_tag(tag, &)
   end
 
-  # Add the tags or named tags to the list of tags to log for this thread whilst the supplied block is active.
+  # Add the tags or named tags to the list of tags to log for this fiber whilst the supplied block is active.
   #
   # Returns result of block.
   #
@@ -413,20 +407,13 @@ module SemanticLogger
       return tag.is_a?(Hash) ? named_tagged(tag, &) : fast_tag(tag, &)
     end
 
-    begin
-      push_tags(*tags)
-      yield
-    ensure
-      pop_tags(tags.size)
-    end
+    Context.tagged(tags, &)
   end
 
-  # Returns a copy of the [Array] of [String] tags currently active for this thread
-  # Returns nil if no tags are set
+  # Returns a copy of the [Array] of [String] tags currently active for this fiber.
+  # Returns an empty Array if no tags are set.
   def self.tags
-    # Since tags are stored on a per thread basis this list is thread-safe
-    t = Thread.current[:semantic_logger_tags]
-    t.nil? ? [] : t.clone
+    Context.tags
   end
 
   # Add tags to the current scope
@@ -437,57 +424,43 @@ module SemanticLogger
   # - To get the flattening behavior use the slower api:
   #     `logger.push_tags`
   def self.push_tags(*tags)
-    (Thread.current[:semantic_logger_tags] ||= []).concat(tags)
+    Context.push_tags(tags)
     tags
   end
 
   # Remove specified number of tags from the current tag list
   def self.pop_tags(quantity = 1)
-    t = Thread.current[:semantic_logger_tags]
-    t&.pop(quantity)
+    Context.pop_tags(quantity)
   end
 
   # :nodoc
-  def self.named_tagged(hash)
+  def self.named_tagged(hash, &)
     return yield if hash.nil? || hash.empty?
     raise(ArgumentError, "#named_tagged only accepts named parameters (Hash)") unless hash.is_a?(Hash)
 
-    begin
-      push_named_tags(hash)
-      yield
-    ensure
-      pop_named_tags
-    end
+    Context.named_tagged(hash, &)
   end
 
-  # Returns [Hash] a copy of the named tags currently active for this thread.
+  # Returns [Hash] a copy of the named tags currently active for this fiber.
   def self.named_tags
-    if (list = Thread.current[:semantic_logger_named_tags]) && !list.empty?
-      if list.size > 1
-        list.reduce({}) { |sum, h| sum.merge(h) }
-      else
-        list.first.clone
-      end
-    else
-      {}
-    end
+    Context.named_tags
   end
 
   def self.push_named_tags(hash)
-    (Thread.current[:semantic_logger_named_tags] ||= []) << hash
+    Context.push_named_tags(hash)
     hash
   end
 
   def self.pop_named_tags(quantity = 1)
-    t = Thread.current[:semantic_logger_named_tags]
-    t&.pop(quantity)
+    Context.pop_named_tags(quantity)
   end
 
   # Silence noisy log levels by changing the default_level within the block
   #
-  # This setting is thread-safe and only applies to the current thread
+  # This setting only applies to the current fiber: every thread, and every fiber of a fiber
+  # scheduler such as Async, has its own.
   #
-  # Any threads spawned within the block will not be affected by this setting
+  # Threads and fibers started within the block are not affected by this setting
   #
   # #silence can be used to both raise and lower the log level within
   # the supplied block.
@@ -519,12 +492,8 @@ module SemanticLogger
   # Note:
   #   #silence does not affect any loggers which have had their log level set
   #   explicitly. I.e. That do not rely on the global default level
-  def self.silence(new_level = :error)
-    current_index                            = Thread.current[:semantic_logger_silence]
-    Thread.current[:semantic_logger_silence] = Levels.index(new_level)
-    yield
-  ensure
-    Thread.current[:semantic_logger_silence] = current_index
+  def self.silence(new_level = :error, &)
+    Context.silence(Levels.index(new_level), &)
   end
 
   # Returns [Integer] the number of log entries waiting to be written to the appenders.
@@ -590,7 +559,7 @@ module SemanticLogger
   end
 
   def self.default_level_index
-    Thread.current[:semantic_logger_silence] || @default_level_index
+    Context.silence_index || @default_level_index
   end
 
   # Run Semantic Logger in Synchronous mode.
