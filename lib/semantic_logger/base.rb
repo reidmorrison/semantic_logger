@@ -45,21 +45,10 @@ module SemanticLogger
     #
     # Matches Ruby's `Logger#with_level`, which Sidekiq calls to apply a job's `log_level`.
     # Accepts the same levels as `#level=`. Returns the result of the block.
-    def with_level(level)
+    def with_level(level, &)
       index            = Levels.index(level)
-      overrides        = (Thread.current[:semantic_logger_with_level] ||= {}.compare_by_identity)
-      previous         = overrides[self]
       @with_level_used = true
-      overrides[self]  = index
-      begin
-        yield
-      ensure
-        if previous
-          overrides[self] = previous
-        else
-          overrides.delete(self)
-        end
-      end
+      Context.with_level(self, index, &)
     end
 
     # Implement the log level calls
@@ -158,21 +147,11 @@ module SemanticLogger
                   payload: nil,
                   metric: nil,
                   metric_amount: nil)
-      log = Log.new(name, level)
+      # The entry has the name, tags, and named tags of the thread whose backtrace it logs.
+      log = new_log(level, nil, thread)
       return false unless meets_log_level?(log)
 
-      backtrace =
-        if thread == Thread.current
-          Utils.extract_backtrace(caller)
-        else
-          log.thread_name = Log.thread_name_for(thread)
-          log.tags        = (thread[:semantic_logger_tags] || []).clone
-          # Named tags are held as a list of the Hashes pushed, merged as by SemanticLogger.named_tags.
-          log.named_tags  = (thread[:semantic_logger_named_tags] || []).reduce({}) { |sum, h| sum.merge(h) }
-          thread.backtrace
-        end
-      # Like any entry from this logger, it carries the logger's own tags (see #tagged).
-      apply_instance_tags(log)
+      backtrace = thread == Thread.current ? Utils.extract_backtrace(caller) : thread.backtrace
       if backtrace
         message += "\n"
         message << backtrace.join("\n")
@@ -368,7 +347,7 @@ module SemanticLogger
 
     # Level index set for this instance by an enclosing `#with_level` block on the current fiber.
     def with_level_index
-      Thread.current[:semantic_logger_with_level]&.[](self)
+      Context.with_level_index(self)
     end
 
     # Whether to log the supplied message based on the current filter if any
@@ -384,9 +363,9 @@ module SemanticLogger
     end
 
     # Build a new Log entry, layering this logger's instance tags on top of the
-    # current thread context.
-    def new_log(level, index = nil)
-      apply_instance_tags(Log.new(name, level, index))
+    # context of the thread, by default the current one.
+    def new_log(level, index = nil, thread = Thread.current)
+      apply_instance_tags(Log.new(name, level, index, thread))
     end
 
     # Merge this logger's instance tags into the supplied Log entry.

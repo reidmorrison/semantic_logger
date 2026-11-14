@@ -59,6 +59,18 @@ the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `times
 `attributes:`), as `SemanticLogger::Formatters::OpenTelemetry` does, instead of a Hash shaped like the
 `:raw` formatter's.
 
+#### Other behaviour changes
+
+* A `tagged` block now restores the tags and named tags that it found when it exits, instead of
+  popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
+  that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and
+  `pop_named_tags`, across the edge of a block:
+  * Tags pushed inside a block, and not popped, are removed when the block exits. Before, the block
+    popped them in place of its own tags, which then stayed on the thread.
+  * Tags pushed before a block, and popped inside it, come back when the block exits.
+
+  Push and pop tags in matching pairs, or use the block form.
+
 ### Upgrading to Semantic Logger v5.2
 
 v5.2 sends the configured facility to remote syslog, deprecates the `:splunk` appender, stops
