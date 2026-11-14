@@ -21,7 +21,8 @@ module SemanticLogger
       #     Default: SemanticLogger::Formatters::Syslog::DEFAULT_MAX_SIZE (1024)
       #
       #   Any other options are those of SemanticLogger::Formatters::Raw, such as `log_host` or
-      #   `log_exception_details`.
+      #   `log_exception_details`. Its time options (`time_format`, `time_key`, and `precision`)
+      #   have no effect, since the time is in the header of the syslog packet.
       #
       # Example:
       #   # Log via udp to a remote syslog server on host: `server1` and port `8514`, using the CEE format.
