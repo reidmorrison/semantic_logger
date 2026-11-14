@@ -52,6 +52,16 @@ messages = semantic_logger_events(ApiClient) do
 end
 ~~~
 
+Passing a class replaces that class's `logger` while the block runs, so it captures only the log calls
+made through that logger. Capture without a class instead when:
+
+- the code under test logs through a logger it got some other way, such as `SemanticLogger["Name"]`
+  or a logger handed to it by a framework;
+- an instance of the class called `logger` before the block, since each instance keeps the first
+  logger it is given; or
+- you need to assert on `name`: events captured through a class are named
+  `SemanticLogger::Test::CaptureLogEvents`, not after the class.
+
 ### Step 3: assert on the events
 
 Check how many events were produced, then assert on each one with `assert_semantic_logger_event`:
@@ -184,6 +194,18 @@ events = capture_semantic_logger_events(ApiClient) do
   # Only ApiClient log events created during this block are captured.
 end
 ~~~
+
+Passing a class replaces that class's `logger` until the end of the example, not just the block, so
+it captures only the log calls made through that logger. Log calls made after the block are added to
+the same returned array, so check the event count before running more code that logs. Capture without
+a class instead when:
+
+- the code under test logs through a logger it got some other way, such as `SemanticLogger["Name"]`
+  or a logger handed to it by a framework;
+- an instance of the class called `logger` before the block, since each instance keeps the first
+  logger it is given; or
+- you need to assert on `name`: events captured through a class are named
+  `SemanticLogger::Test::CaptureLogEvents`, not after the class.
 
 ### Step 3: assert on the events
 
