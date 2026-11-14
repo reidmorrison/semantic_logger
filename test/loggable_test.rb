@@ -67,6 +67,18 @@ class AppenderFileTest < Minitest::Test
     include LoggableModule
   end
 
+  class ClassLoggerModuleHost
+    include LoggableModule
+
+    def self.logger
+      @logger ||= SemanticLogger::Test::CaptureLogEvents.new
+    end
+  end
+
+  class ExtendedModuleHost
+    extend LoggableModule
+  end
+
   class OwnLoggerModuleHost
     include LoggableModule
 
@@ -152,6 +164,18 @@ class AppenderFileTest < Minitest::Test
         host = LoggableModuleHost.new
 
         assert_same LoggableModuleHost.logger, host.logger
+      end
+
+      it "uses the class level logger of a class without Loggable" do
+        host = ClassLoggerModuleHost.new
+        host.work
+
+        assert_same ClassLoggerModuleHost.logger, host.logger
+        assert_equal "work", ClassLoggerModuleHost.logger.events.first.message
+      end
+
+      it "gives a class that extends the module a logger named after that class" do
+        assert_equal ExtendedModuleHost.name, ExtendedModuleHost.logger.name
       end
 
       it "keeps the logger a class defines itself" do

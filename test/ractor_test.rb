@@ -189,6 +189,32 @@ module SemanticLogger
         assert_same main_logger, Worker.logger
       end
 
+      it "gives a class that extends a Loggable module a logger of its own in the Ractor" do
+        main_logger = ExtendedWorker.logger
+        log         = logs_from_ractor { SemanticLogger::RactorTest::ExtendedWorker.work }.first
+
+        assert_equal "ExtendedWorker", log.message
+        assert_equal "SemanticLogger::RactorTest::ExtendedWorker", log.name
+        assert_same main_logger, ExtendedWorker.logger
+      end
+
+      it "replaces the logger of a class that extends a Loggable module in the Ractor only" do
+        main_logger = ExtendedWorker.logger
+        log         = logs_from_ractor do
+          SemanticLogger::RactorTest::ExtendedWorker.logger = SemanticLogger["InRactorReplaced"]
+          SemanticLogger::RactorTest::ExtendedWorker.work
+        end.first
+
+        assert_equal "InRactorReplaced", log.name
+        assert_same main_logger, ExtendedWorker.logger
+      end
+
+      it "gives an instance of a class that includes a Loggable module a logger in the Ractor" do
+        log = logs_from_ractor { SemanticLogger::RactorTest::IncludedWorker.new.work }.first
+
+        assert_equal "SemanticLogger::RactorTest::IncludedWorker", log.name
+      end
+
       it "caches loggers in the Ractor" do
         SemanticLogger.cache_loggers = true
         logs = logs_from_ractor do
@@ -310,6 +336,25 @@ module SemanticLogger
       def work
         logger.info("Worker")
       end
+    end
+
+    # A module that logs with Loggable.
+    module Working
+      include SemanticLogger::Loggable
+
+      def work
+        logger.info(instance_of?(Class) ? name.split("::").last : "IncludedWorker")
+      end
+    end
+
+    # A class that extends a module that logs with Loggable.
+    class ExtendedWorker
+      extend Working
+    end
+
+    # A class that includes a module that logs with Loggable, without including Loggable itself.
+    class IncludedWorker
+      include Working
     end
   end
 end

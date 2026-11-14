@@ -87,9 +87,9 @@ end
 Order.new.price(10)
 ~~~
 
-The entry is identified as coming from `Order`, the class that called `price`. When that class includes
-`SemanticLogger::Loggable`, the module's methods use its logger; when it defines a `logger` method of
-its own, they use that.
+The entry is identified as coming from `Order`, the class that called `price`. When that class has a
+class level `logger`, such as one from `SemanticLogger::Loggable`, the module's methods use it instead.
+When the class itself defines a `logger` instance method, they use that.
 
 By default `SemanticLogger[...]` returns a brand new logger on each call. To share a single logger
 per class instead, enable [logger caching](config.html#caching-loggers).

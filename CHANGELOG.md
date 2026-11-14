@@ -63,7 +63,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - When a module includes `SemanticLogger::Loggable`, its instance methods can now call `logger` in a
   class that includes the module without including `SemanticLogger::Loggable` itself. Before, they
   raised `NoMethodError`. The logger is named after the class, and the class is otherwise unchanged.
-  See
+  A class with a class level `logger` of its own keeps using it, as before. See
   [The Loggable mixin](https://logger.reidmorrison.com/api.html#the-loggable-mixin-recommended).
 - The default, color, and syslog text formatters no longer write a blank line after an exception that
   has no backtrace, such as a Rails routing error or an exception that was never raised, or after a
