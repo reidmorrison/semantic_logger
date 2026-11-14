@@ -7,6 +7,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+- Experimental: on Ruby 4.0 and later, code running in a Ractor other than the main one can log, and
+  the main Ractor writes its entries to the appenders. Before, any log call from such a Ractor raised
+  `Ractor::IsolationError`. See
+  [Log from Ractors](https://logger.reidmorrison.com/api.html#log-from-ractors-experimental).
 - `SemanticLogger.context` returns a frozen snapshot of the current tags, named tags, and silence
   level, and `SemanticLogger.with_context(context) { ... }` applies it in another thread or fiber,
   such as a thread pool's worker or an Async task. Tags belong to the fiber that set them, so these

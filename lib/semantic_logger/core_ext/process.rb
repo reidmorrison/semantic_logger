@@ -14,12 +14,19 @@ module SemanticLogger
     # (https://bugs.ruby-lang.org/issues/18911). Do not collapse this down to only
     # `_fork`.
     module Process
+      # Runs the block, which forks, with Semantic Logger ready for the fork: on Ruby 4.0 and later,
+      # while the thread that receives log entries from other Ractors is paused (see
+      # RactorReceiver.pause).
+      def self.pause_for_fork(&)
+        defined?(SemanticLogger::RactorReceiver) ? SemanticLogger::RactorReceiver.pause(&) : yield
+      end
+
       # `_fork` runs in both the parent and the child. It returns 0 in the child
       # and the child's pid in the parent, so only reopen in the child. Reopening
       # in the parent would needlessly recreate its queue and worker thread,
       # risking the loss of messages still on the queue.
       def _fork
-        child_pid = super
+        child_pid = Process.pause_for_fork { super }
         SemanticLogger.reopen if child_pid.zero? && SemanticLogger.reopen_on_fork?
         child_pid
       end
@@ -27,7 +34,7 @@ module SemanticLogger
       # `Process.daemon` does not route through `_fork`, so reopen explicitly. Once
       # it returns, the caller is running as the daemon (child) process.
       def daemon(...)
-        super.tap { SemanticLogger.reopen if SemanticLogger.reopen_on_fork? }
+        Process.pause_for_fork { super }.tap { SemanticLogger.reopen if SemanticLogger.reopen_on_fork? }
       end
     end
   end

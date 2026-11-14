@@ -432,6 +432,17 @@ module SemanticLogger
       metric && message.nil? && exception.nil?
     end
 
+    # Replaces the values of this entry that cannot be copied to another Ractor, such as a Proc in its
+    # payload (see RactorCopy). Returns self. Experimental, Ruby 4.0 and later only.
+    def make_copyable
+      %i[message payload tags named_tags context metric dimensions].each do |field|
+        public_send(:"#{field}=", RactorCopy.copyable(public_send(field)))
+      end
+      self.exception     = RactorCopy.copyable_exception(exception) if exception
+      @exception_details = nil
+      self
+    end
+
     private
 
     # Returns the kept payload with the keys of the added one that it does not have, so that a kept

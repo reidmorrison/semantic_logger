@@ -42,12 +42,18 @@ module SemanticLogger
 
         # Returns [SemanticLogger::Logger] class level logger
         def self.logger
+          return Loggable.ractor_loggers[self] ||= SemanticLogger[self] unless Loggable.main_ractor?
+
           @semantic_logger ||= SemanticLogger[self]
         end
 
         # Replace instance class level logger
         def self.logger=(logger)
-          @semantic_logger = logger
+          if Loggable.main_ractor?
+            @semantic_logger = logger
+          else
+            Loggable.ractor_loggers[self] = logger
+          end
         end
 
         # Returns [SemanticLogger::Logger] instance level logger
@@ -60,6 +66,24 @@ module SemanticLogger
           @semantic_logger = logger
         end
       end
+    end
+
+    # A Ractor other than the main one cannot set, or use, the class level logger of the main Ractor,
+    # which the class holds, so it has a logger of its own for each class (experimental, Ruby 4.0 and
+    # later).
+    if defined?(::Ractor::Port)
+      def self.main_ractor?
+        ::Ractor.main?
+      end
+    else
+      def self.main_ractor?
+        true
+      end
+    end
+
+    # Returns [Hash] the class level loggers of the current Ractor, when it is not the main one.
+    def self.ractor_loggers
+      ::Ractor.store_if_absent(:semantic_logger_loggable) { {} }
     end
 
     module ClassMethods

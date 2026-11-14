@@ -20,6 +20,13 @@ require "semantic_logger/logger"
 require "semantic_logger/debug_as_trace_logger"
 require "semantic_logger/semantic_logger"
 
+# Logging from Ractors other than the main one (experimental), on Ruby 4.0 and later.
+if defined?(Ractor::Port)
+  require "semantic_logger/ractor_copy"
+  require "semantic_logger/ractor_receiver"
+  require "semantic_logger/ractor_processor"
+end
+
 # Automatically reopen appenders in the child process after a fork.
 # Enabled by default; opt out with `SemanticLogger.reopen_on_fork = false`.
 # Skipped on platforms without `Process._fork` (e.g. JRuby), which cannot fork.
