@@ -93,13 +93,17 @@ module SemanticLogger
                   :tags, :named_tags, :context,
                   :metric, :metric_amount, :dimensions
 
-    def initialize(name, level, index = nil)
+    # Parameters
+    #   thread: [Thread]
+    #     The thread whose name, tags, and named tags the entry has.
+    #     Default: Thread.current
+    def initialize(name, level, index = nil, thread = Thread.current)
       @level       = level
-      @thread_name = Log.thread_name_for(Thread.current)
+      @thread_name = Log.thread_name_for(thread)
       @name        = name
       @time        = Time.now
-      @tags        = Context.tags
-      @named_tags  = Context.named_tags
+      @tags        = Context.tags(thread)
+      @named_tags  = Context.named_tags(thread)
       @level_index = index.nil? ? Levels.index(level) : index
     end
 

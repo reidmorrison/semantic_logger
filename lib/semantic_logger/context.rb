@@ -5,10 +5,10 @@ module SemanticLogger
   # Only this class knows where that state is kept: in fiber-local variables (`Thread.current[]`),
   # so that every fiber, including the fibers of a fiber scheduler such as Async, has its own.
   #
-  # The stored values are never changed in place. Each change stores a new frozen value, and the
-  # block forms restore the previous value when the block exits. Code that copies fiber-local
-  # variables into another thread, such as Rails' ActionController::Live, therefore hands over a
-  # snapshot that neither thread can change for the other.
+  # The stored lists are never changed in place. Each change stores a new frozen list, and the block
+  # forms restore the previous list when the block exits. Code that copies fiber-local variables into
+  # another thread, such as Rails' ActionController::Live, therefore hands over lists that Semantic
+  # Logger never changes for the other thread. The tags in them are the caller's own objects.
   class Context
     TAGS_KEY       = :semantic_logger_tags
     NAMED_TAGS_KEY = :semantic_logger_named_tags
@@ -37,22 +37,29 @@ module SemanticLogger
       # Runs the block with the tag added to the current fiber's tags.
       #
       # Like every block form below, it restores the previous value when the block exits, whatever
-      # the block did to it. Each is written out in full, since this is on the hot path.
+      # the block did to it. Each is written out in full, since this is on the hot path. Each reads
+      # the previous value before its `begin`, so that an exception raised into the thread, such as
+      # by Timeout, can never restore a value that was not read yet.
       def fast_tag(tag)
-        previous                 = Thread.current[TAGS_KEY]
-        Thread.current[TAGS_KEY] = (previous ? previous.dup << tag : [tag]).freeze
-        yield
-      ensure
-        Thread.current[TAGS_KEY] = previous
+        previous = Thread.current[TAGS_KEY]
+        begin
+          Thread.current[TAGS_KEY] = (previous ? previous.dup << tag : [tag]).freeze
+          yield
+        ensure
+          Thread.current[TAGS_KEY] = previous
+        end
       end
 
-      # Runs the block with the Array of tags added to the current fiber's tags.
+      # Runs the block with the Array of tags added to the current fiber's tags. Takes ownership of
+      # the Array, which it may freeze, so the caller must not keep it.
       def tagged(tags)
-        previous                 = Thread.current[TAGS_KEY]
-        Thread.current[TAGS_KEY] = (previous ? previous + tags : tags.dup).freeze
-        yield
-      ensure
-        Thread.current[TAGS_KEY] = previous
+        previous = Thread.current[TAGS_KEY]
+        begin
+          Thread.current[TAGS_KEY] = (previous ? previous + tags : tags).freeze
+          yield
+        ensure
+          Thread.current[TAGS_KEY] = previous
+        end
       end
 
       # Adds the Array of tags to the current fiber's tags, until they are popped.
@@ -68,11 +75,13 @@ module SemanticLogger
 
       # Runs the block with the Hash of named tags added to the current fiber's named tags.
       def named_tagged(hash)
-        previous                       = Thread.current[NAMED_TAGS_KEY]
-        Thread.current[NAMED_TAGS_KEY] = (previous ? previous.dup << hash : [hash]).freeze
-        yield
-      ensure
-        Thread.current[NAMED_TAGS_KEY] = previous
+        previous = Thread.current[NAMED_TAGS_KEY]
+        begin
+          Thread.current[NAMED_TAGS_KEY] = (previous ? previous.dup << hash : [hash]).freeze
+          yield
+        ensure
+          Thread.current[NAMED_TAGS_KEY] = previous
+        end
       end
 
       # Adds the Hash of named tags to the current fiber's named tags, until it is popped.
@@ -94,11 +103,13 @@ module SemanticLogger
 
       # Runs the block with the supplied level index as the current fiber's silence level.
       def silence(index)
-        previous                    = Thread.current[SILENCE_KEY]
-        Thread.current[SILENCE_KEY] = index
-        yield
-      ensure
-        Thread.current[SILENCE_KEY] = previous
+        previous = Thread.current[SILENCE_KEY]
+        begin
+          Thread.current[SILENCE_KEY] = index
+          yield
+        ensure
+          Thread.current[SILENCE_KEY] = previous
+        end
       end
 
       # Returns [Integer|nil] the level index set for the logger by an enclosing `with_level` block
@@ -109,13 +120,15 @@ module SemanticLogger
 
       # Runs the block with the supplied level index for the logger on the current fiber.
       def with_level(logger, index)
-        previous                       = Thread.current[WITH_LEVEL_KEY]
-        overrides                      = previous ? previous.dup : {}.compare_by_identity
-        overrides[logger]              = index
-        Thread.current[WITH_LEVEL_KEY] = overrides.freeze
-        yield
-      ensure
-        Thread.current[WITH_LEVEL_KEY] = previous
+        previous = Thread.current[WITH_LEVEL_KEY]
+        begin
+          overrides                      = previous ? previous.dup : {}.compare_by_identity
+          overrides[logger]              = index
+          Thread.current[WITH_LEVEL_KEY] = overrides.freeze
+          yield
+        ensure
+          Thread.current[WITH_LEVEL_KEY] = previous
+        end
       end
 
       private

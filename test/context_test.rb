@@ -91,6 +91,24 @@ module SemanticLogger
           assert_empty SemanticLogger.named_tags
         end
 
+        it "restore the tags that were popped inside the block when it exits" do
+          SemanticLogger.push_tags("a")
+          SemanticLogger.tagged("b", "c") { SemanticLogger.pop_tags(3) }
+
+          assert_equal ["a"], SemanticLogger.tags
+        ensure
+          SemanticLogger.pop_tags(10)
+        end
+
+        it "restore the named tags that were popped inside the block when it exits" do
+          SemanticLogger.push_named_tags(b: 2)
+          SemanticLogger.tagged(a: 1) { SemanticLogger.pop_named_tags(2) }
+
+          assert_equal({b: 2}, SemanticLogger.named_tags)
+        ensure
+          SemanticLogger.pop_named_tags(10)
+        end
+
         it "restore the tags when the block raises" do
           assert_raises(ArgumentError) { SemanticLogger.tagged("a", "b") { raise ArgumentError } }
           assert_empty SemanticLogger.tags

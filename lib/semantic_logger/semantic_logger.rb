@@ -407,6 +407,7 @@ module SemanticLogger
       return tag.is_a?(Hash) ? named_tagged(tag, &) : fast_tag(tag, &)
     end
 
+    # The rest Array is this call's own, so Context may keep it.
     Context.tagged(tags, &)
   end
 

@@ -147,20 +147,11 @@ module SemanticLogger
                   payload: nil,
                   metric: nil,
                   metric_amount: nil)
-      log = Log.new(name, level)
+      # The entry has the name, tags, and named tags of the thread whose backtrace it logs.
+      log = new_log(level, nil, thread)
       return false unless meets_log_level?(log)
 
-      backtrace =
-        if thread == Thread.current
-          Utils.extract_backtrace(caller)
-        else
-          log.thread_name = Log.thread_name_for(thread)
-          log.tags        = Context.tags(thread)
-          log.named_tags  = Context.named_tags(thread)
-          thread.backtrace
-        end
-      # Like any entry from this logger, it carries the logger's own tags (see #tagged).
-      apply_instance_tags(log)
+      backtrace = thread == Thread.current ? Utils.extract_backtrace(caller) : thread.backtrace
       if backtrace
         message += "\n"
         message << backtrace.join("\n")
@@ -372,9 +363,9 @@ module SemanticLogger
     end
 
     # Build a new Log entry, layering this logger's instance tags on top of the
-    # current thread context.
-    def new_log(level, index = nil)
-      apply_instance_tags(Log.new(name, level, index))
+    # context of the thread, by default the current one.
+    def new_log(level, index = nil, thread = Thread.current)
+      apply_instance_tags(Log.new(name, level, index, thread))
     end
 
     # Merge this logger's instance tags into the supplied Log entry.
