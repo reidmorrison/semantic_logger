@@ -217,10 +217,30 @@ module SemanticLogger
       end
 
       describe ".from" do
-        it "returns a CallSite as it is" do
-          call_site = CallSite.new(path: "/app/a.rb", line: 1, label: nil)
+        it "returns a CallSite of frozen Strings as it is" do
+          call_site = CallSite.new(path: "/app/a.rb".freeze, line: 1, label: nil)
 
           assert_same call_site, CallSite.from(call_site)
+        end
+
+        it "makes a frozen String of a String subclass, leaving it as it is" do
+          subclass  = Class.new(String)
+          path      = subclass.new("/app/a.rb")
+          call_site = CallSite.from(CallSite.new(path: path, line: 1, label: subclass.new("x")))
+
+          assert_instance_of String, call_site.path
+          assert_instance_of String, call_site.label
+          assert_predicate call_site.path, :frozen?
+          refute_predicate path, :frozen?
+        end
+
+        it "makes frozen copies of the Strings of a supplied CallSite" do
+          path      = +"/app/a.rb"
+          call_site = CallSite.from(CallSite.new(path: path, line: 1, label: +"x"))
+
+          assert_predicate call_site.path, :frozen?
+          assert_predicate call_site.label, :frozen?
+          refute_predicate path, :frozen?
         end
 
         it "makes a frozen call site from a Thread::Backtrace::Location" do
@@ -244,6 +264,27 @@ module SemanticLogger
           [nil, true, "/app/a.rb:1", ["/app/a.rb:1"], {path: "/app/a.rb"}, 1].each do |value|
             refute CallSite.supplied?(value), value.inspect
           end
+        end
+
+        it "rejects a CallSite without a String path and an Integer line" do
+          refute CallSite.supplied?(CallSite.new(path: nil, line: "x", label: 3))
+          refute CallSite.supplied?(CallSite.new(path: "/app/a.rb", line: 1, label: 3))
+        end
+
+        it "calls no method of a CallSite's values" do
+          lying = BasicObject.new
+          def lying.is_a?(_klass) = true
+
+          refute CallSite.supplied?(CallSite.new(path: BasicObject.new, line: 1, label: nil))
+          refute CallSite.supplied?(CallSite.new(path: "/app/a.rb", line: 1, label: BasicObject.new))
+          refute CallSite.supplied?(CallSite.new(path: lying, line: 1, label: nil))
+        end
+
+        it "calls no method of the value" do
+          value = BasicObject.new
+          def value.==(_other) = raise(TypeError, "compared")
+
+          refute CallSite.supplied?(value)
         end
       end
 
@@ -466,7 +507,7 @@ module SemanticLogger
           with_call_site_level(:info) do
             events = semantic_logger_events { SemanticLogger["Order"].info("Rendered", call_site: supplied) }
 
-            assert_same supplied, events.first.call_site
+            assert_equal supplied, events.first.call_site
           end
         end
 
@@ -514,7 +555,7 @@ module SemanticLogger
               SemanticLogger["Order"].info("Query", call_site: supplied, backtrace: ["/app/other.rb:1:in 'x'"])
             end
 
-            assert_same supplied, events.first.call_site
+            assert_equal supplied, events.first.call_site
             assert_equal ["/app/other.rb:1:in 'x'"], events.first.backtrace
           end
         end
@@ -536,6 +577,49 @@ module SemanticLogger
 
             assert_equal({call_site: "/app/forged.rb:1:in 'x'"}, events.first.payload)
             assert_equal line, events.first.call_site.line
+          end
+        end
+
+        it "keeps a malformed CallSite in the payload, and reads the stack" do
+          with_call_site_level(:info) do
+            malformed = CallSite.new(path: nil, line: "x", label: nil)
+            events    = semantic_logger_events { SemanticLogger["Order"].info("Webhook", call_site: malformed) }
+            line      = __LINE__ - 1
+
+            assert_equal({call_site: malformed}, events.first.payload)
+            assert_equal line, events.first.call_site.line
+          end
+        end
+
+        it "keeps a value whose == raises in the payload" do
+          with_call_site_level(:info) do
+            value = Object.new
+            def value.==(_other) = raise(TypeError, "compared")
+            events = semantic_logger_events { SemanticLogger["Order"].info("Webhook", call_site: value) }
+
+            assert_same value, events.first.payload[:call_site]
+          end
+        end
+
+        it "accepts it as a measure option" do
+          with_call_site_level(:info) do
+            events = semantic_logger_events do
+              SemanticLogger["View"].measure_info("Rendered", call_site: supplied) { 1 }
+              SemanticLogger["View"].measure_info("Rendered", call_site: false) { 1 }
+            end
+
+            assert_equal supplied, events[0].call_site
+            assert_nil events[1].call_site
+          end
+        end
+
+        it "still takes the file name and line from a captured backtrace for call_site: false" do
+          with_call_site_level(:info) do
+            events = semantic_logger_events { SemanticLogger["Rack"].error("Failed", call_site: false) }
+            line   = __LINE__ - 1
+
+            assert_nil events.first.call_site
+            assert_equal [File.basename(__FILE__), line], events.first.file_name_and_line(true)
           end
         end
 

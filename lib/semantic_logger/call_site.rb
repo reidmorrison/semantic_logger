@@ -81,25 +81,37 @@ module SemanticLogger
     # Without either (or with an empty backtrace), the first frame of the calling thread's stack
     # outside Semantic Logger (see .capture).
     def self.locate(call_site: nil, backtrace: nil)
-      return if call_site == false
+      return if false.equal?(call_site)
       return from(call_site) if call_site
 
       backtrace.nil? || backtrace.empty? ? capture : parse(backtrace.first)
     end
 
-    # Returns [CallSite] the call site, or the call site of a Thread::Backtrace::Location.
+    # Returns [CallSite] the call site, or the call site of a Thread::Backtrace::Location. A call site
+    # whose Strings are frozen is returned as it is; otherwise its Strings are copied, frozen and
+    # deduplicated, since the same few paths and labels are logged again and again.
     def self.from(call_site)
-      return call_site if call_site.is_a?(CallSite)
+      is_call_site = CallSite === call_site # rubocop:disable Style/CaseEquality
+      return call_site if is_call_site && call_site.path.frozen? && (call_site.label.nil? || call_site.label.frozen?)
 
       label = call_site.label
-      new(-call_site.path, call_site.lineno, label && -label)
+      new(frozen_copy(call_site.path), is_call_site ? call_site.line : call_site.lineno, label && frozen_copy(label))
     end
+
+    # Returns [String] a frozen, deduplicated copy of the String, or the String when it is already one.
+    # A subclass of String is copied to a String first, since JRuby freezes it in place instead.
+    def self.frozen_copy(string)
+      string.instance_of?(String) ? -string : -String.new(string)
+    end
+    private_class_method :frozen_copy
 
     # Whether the value can be supplied as a log entry's call site (see .locate). A value that parsed
     # data, such as JSON, can hold is not, other than false, so that untrusted data cannot set the
-    # location of an entry.
+    # location of an entry. Never calls a method of the value, which can be any object in a payload.
     def self.supplied?(value)
-      value == false || value.is_a?(CallSite) || value.is_a?(::Thread::Backtrace::Location)
+      return true if false.equal?(value) || ::Thread::Backtrace::Location === value # rubocop:disable Style/CaseEquality
+
+      CallSite === value && value.well_formed? # rubocop:disable Style/CaseEquality
     end
 
     # Returns [CallSite|nil] the first frame of the calling thread's stack outside Semantic Logger, Ruby's
@@ -191,6 +203,16 @@ module SemanticLogger
       skip_paths.any? { |skip_path| path.include?(skip_path) }
     end
     private_class_method :skip_path?
+
+    # Whether the path is a String, the line an Integer, and the label a String or nil, as the
+    # formatters need. A call site that Semantic Logger makes always is; one that a log call supplies
+    # is checked, and otherwise logged as part of the payload, like any other value that is not valid
+    # for its argument.
+    #
+    # Like .supplied?, calls no method of the values, which can be any objects.
+    def well_formed?
+      String === path && Integer === line && (nil.equal?(label) || String === label) # rubocop:disable Style/CaseEquality
+    end
 
     # Returns [Array<String, Integer>] the file name and line number of the call site. With short_name
     # the file name has no directory, such as "order.rb".

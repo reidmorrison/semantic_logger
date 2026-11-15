@@ -301,6 +301,9 @@ The second argument to a measure call is a Hash of options:
 - `:on_exception_level` [Symbol]: if an exception is raised, raise the log level to this level.
 - `:silence` [Symbol]: the level to silence other log messages to within the block (current fiber
   only).
+- `:call_site` [Thread::Backtrace::Location|SemanticLogger::CallSite|false]: where the entry was
+  logged, or `false` for none. See
+  [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged).
 
 An option with a value that is not valid for it, such as a non-numeric `:min_duration` or an unknown
 level, is ignored and its default is used. Other keys in the Hash are not logged; pass the data to

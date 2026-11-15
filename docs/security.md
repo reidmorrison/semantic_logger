@@ -69,8 +69,8 @@ valid level. Any other value stays in the payload as data, and a `nil` value is 
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
 A valid `backtrace` also sets where the entry is recorded as logged: its file name, line number, and,
 with [`call_site_level`](config.html#recording-where-each-entry-was-logged), its method. A
-`call_site` key can only leave out where the entry was logged, with `false`: the values that set a
-call site are Ruby objects that parsed data cannot hold.
+`call_site` key can only leave out the recorded call site, with `false`: the values that set one are
+Ruby objects that parsed data cannot hold.
 
 To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
 keys supplied alongside an explicit `payload:` are merged into it, and win over the explicit

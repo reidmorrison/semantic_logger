@@ -188,20 +188,26 @@ The `:logfmt` and `:loki` formatters write neither. A custom formatter reads the
 
 Which code counts as the call site:
 
-* When the log call supplies `call_site:`, that call site. Code that logs on behalf of other code,
-  such as a log subscriber, can say which code the entry is about with a `Thread::Backtrace::Location`
-  (for example from `Thread.each_caller_location`) or a `SemanticLogger::CallSite`, or that it has no
-  such code with `false`, which also skips reading the stack. A supplied call site is only recorded
-  when the entry is at or above `call_site_level`, so that it never adds a call site to the output of
-  an application that has not turned call sites on:
+* When the log call, or a `measure_*` call, supplies `call_site:`, that call site. Code that logs on
+  behalf of other code, such as a log subscriber, can say which code the entry is about with a
+  `Thread::Backtrace::Location` (for example from `Thread.each_caller_location`) or a
+  `SemanticLogger::CallSite`, or that it has no such code with `false`, which records no call site
+  without reading the stack for one. `nil` means none was supplied, so the call site is found as
+  usual. A supplied call site is only recorded when the entry is at or above `call_site_level`, so
+  that it never adds a call site to the output of an application that has not turned call sites on:
 
   ~~~ruby
-  logger.debug(message: "Order Load", duration: 0.4, call_site: backtrace_cleaner.first_clean_location)
+  # The application code that ran the query, or none when no frame is the application's
+  logger.debug(message: "Order Load", duration: 0.4,
+               call_site: backtrace_cleaner.first_clean_location || false)
   logger.info(message: "Started GET /orders", call_site: false)
   ~~~
 
-  A String, or any other value that parsed data can hold, is not accepted as a call site: it is
-  logged as part of the payload.
+  A String, or any other value that parsed data can hold, is not accepted as a call site, nor is a
+  `CallSite` without a String path, an Integer line, and a String or `nil` label: a log call logs it
+  as part of the payload, and a `measure_*` call ignores it. An entry
+  with `call_site: false` that captures a backtrace (see `backtrace_level`), or logs an exception,
+  still has a file name and line number from that backtrace, as the last point below says.
 * The first frame outside Semantic Logger, `rails_semantic_logger`, and Ruby's internal files (paths
   that start with `<internal:`). So an entry logged by a `measure_*` call, or by a logging block,
   records the code that called the logger. When the logger is called through `public_send`,
