@@ -231,6 +231,7 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
   "thread": "Thread name or id",
   "file": "filename",
   "line": "line number",
+  "method": "Method that logged it, such as Order#submit",
 
   "level": "trace|debug|info|warn|error|fatal",
   "level_index": "0|1|2|3|4|5",
@@ -288,7 +289,7 @@ Differences from `:json`:
 * `level` / `level_index` become `severity` / `severity_index`.
 * `host` is excluded by default (under Fluentd it is usually the not-very-useful container id). Pass
   `log_host: true` to include it.
-* The process fields `pid`, `thread`, `file`, and `line` are excluded by default. Pass
+* The process fields `pid`, `thread`, `file`, `line`, and `method` are excluded by default. Pass
   `need_process_info: true` to include them.
 
 Construct the formatter explicitly to override these defaults:
@@ -319,6 +320,7 @@ Semantic Logger fields map to ECS as follows:
 | `level` | `log.level` |
 | `name` | `log.logger` |
 | `file` / `line` | `log.origin.file.name` / `log.origin.file.line` |
+| `method` | `log.origin.function` |
 | `message` | `message` |
 | `thread` | `process.thread.name` |
 | `pid` | `process.pid` |
@@ -782,7 +784,8 @@ body. Semantic Logger adds these attributes when the entry has the value:
 |-----------|-------|
 | `exception.type`, `exception.message` | The class and message of the logged exception. |
 | `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
-| `code.file.path`, `code.line.number` | Where the entry was logged, when it captured a backtrace (see `backtrace_level`). |
+| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a call site (see [`call_site_level`](config.html#recording-where-each-entry-was-logged)) or captured a backtrace (see `backtrace_level`). |
+| `code.function.name` | The method that logged the entry, such as `Order#submit`, when it has a call site. |
 | `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
 | `process.pid` | The id of the process that logged the entry. |
 | `semantic_logger.name` | The logger's name, usually the class name. |
@@ -790,7 +793,7 @@ body. Semantic Logger adds these attributes when the entry has the value:
 | `semantic_logger.duration_ms` | The duration in milliseconds, from the `measure_*` methods. |
 | `semantic_logger.metric`, `semantic_logger.metric_amount` | The metric name and amount. |
 
-The first five rows use the names from the
+The first six rows use the names from the
 [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/). A named tag or
 payload key named like one of these attributes is prefixed with its source, as in
 `payload.exception.type`, so that logged data cannot replace or forge them.

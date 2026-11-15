@@ -67,6 +67,19 @@ module SemanticLogger
         end
       end
 
+      it "shares the call site skip paths" do
+        SemanticLogger.call_site_skip_paths = [+"app/lib/audit_log.rb"]
+
+        assert Ractor.shareable?(SemanticLogger.call_site_skip_paths)
+      ensure
+        SemanticLogger.call_site_skip_paths = nil
+      end
+
+      it "shares a call site" do
+        assert Ractor.shareable?(CallSite.capture)
+        assert Ractor.shareable?(CallSite.parse(+"/app/order.rb:42:in 'Order#submit'"))
+      end
+
       it "returns a value that cannot be copied as it is" do
         assert_same Thread.current, Utils.make_shareable(Thread.current, copy: true)
       end
@@ -104,6 +117,25 @@ module SemanticLogger
         assert_equal({user: "jack"}, payload)
         refute_empty backtrace
         assert_equal SemanticLogger.application, application
+      end
+
+      it "records a call site inside a Ractor, with skip paths" do
+        skip "Logging from a Ractor requires Ruby 4.0" unless ruby4?
+
+        begin
+          SemanticLogger.call_site_level      = :info
+          SemanticLogger.call_site_skip_paths = ["app/lib/audit_log.rb"]
+          call_site = in_ractor do
+            log = SemanticLogger::Log.new("InRactor", :info)
+            log.assign(message: "Hello")
+            log.call_site
+          end
+        ensure
+          SemanticLogger.call_site_level      = nil
+          SemanticLogger.call_site_skip_paths = nil
+        end
+
+        assert_equal __FILE__, call_site.path
       end
     end
   end

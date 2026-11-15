@@ -39,6 +39,8 @@ module SemanticLogger
     #   pid                  Process id.
     #   file_name            Ruby file name that logged the message, e.g. "app.rb".
     #   line                 Line number within the Ruby file, e.g. 42.
+    #   method               Method that logged the message, e.g. "Order#submit", when
+    #                        the entry has a call site (see SemanticLogger.call_site_level).
     #   tags                 Tags, comma separated.
     #   named_tags           All named tags, or one tag with named_tags:key.
     #   host                 Host name.
@@ -69,12 +71,18 @@ module SemanticLogger
         pid:               false,
         file_name:         false,
         line:              false,
+        method:            false,
         tags:              false,
         named_tags:        true,
         host:              false,
         application:       false,
         environment:       false
       }.freeze
+
+      # The formatter method of each directive not named like it: a method named `method` would
+      # replace Object#method.
+      DIRECTIVE_METHODS = {method: :method_name}.freeze
+      private_constant :DIRECTIVE_METHODS
 
       # A single interpolated directive within a compiled pattern.
       Token = Struct.new(:method_name, :arguments)
@@ -227,7 +235,7 @@ module SemanticLogger
             raise(ArgumentError, "Invalid pattern directive: %{#{name}}") unless DIRECTIVES.key?(name)
             raise(ArgumentError, "%{#{name}} does not accept an argument") if arg && !DIRECTIVES[name]
 
-            tokens << Token.new(name, arg ? [arg.strip] : []).freeze
+            tokens << Token.new(DIRECTIVE_METHODS.fetch(name, name), arg ? [arg.strip] : []).freeze
           end
 
           pos = current.end(0)

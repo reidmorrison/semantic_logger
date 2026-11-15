@@ -186,6 +186,23 @@ module SemanticLogger
           end
         end
 
+        describe "file, line, and method" do
+          it "includes the file, line, and method of the call site" do
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/models/order.rb", line: 42, label: "Order#submit")
+            result        = formatted_log
+
+            assert_equal "/app/models/order.rb", result.dig(:file, :name)
+            assert_equal "42", result.dig(:line, :number)
+            assert_equal "Order#submit", result.dig(:method, :name)
+          end
+
+          it "omits the method without a call site" do
+            log.backtrace = ["/app/models/order.rb:42:in 'Order#submit'"]
+
+            refute formatted_log.key?(:method)
+          end
+        end
+
         describe "metadata" do
           it "includes trace.id and span.id if present" do
             # Simulate recording a log message within a Rails transaction, where trace.id

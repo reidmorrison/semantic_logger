@@ -41,6 +41,11 @@ module SemanticLogger
   # backtrace [Array<String>]
   #   The backtrace captured at source when the log level >= SemanticLogger.backtrace_level
   #
+  # call_site [CallSite]
+  #   Where the entry was logged: the path, line, and label (usually the method) of the code that
+  #   made the log call, when the log level >= SemanticLogger.call_site_level. When the log call
+  #   supplies a backtrace, its first line. nil otherwise.
+  #
   # metric_amount [Numeric]
   #   Used for numeric or counter metrics.
   #   For example, the number of inquiries or, the amount purchased etc.
@@ -95,7 +100,7 @@ module SemanticLogger
     def self.thread_name_for(thread) = thread.name || thread.object_id.to_s
 
     attr_accessor :level, :level_index, :name, :message, :time, :duration,
-                  :payload, :exception, :thread_name, :backtrace,
+                  :payload, :exception, :thread_name, :backtrace, :call_site,
                   :tags, :named_tags, :context, :captures,
                   :metric, :metric_amount, :dimensions
 
@@ -168,10 +173,14 @@ module SemanticLogger
       return false if duration && (duration < min_duration) && exception.nil?
 
       if backtrace
-        self.backtrace = Utils.extract_backtrace(backtrace)
+        backtrace = self.backtrace = Utils.extract_backtrace(backtrace)
       elsif level_index >= SemanticLogger.backtrace_level_index
         self.backtrace = Utils.extract_backtrace(caller)
       end
+
+      # A backtrace supplied by the log call says where the entry is about, such as the application code
+      # that ran a query, or the thread whose backtrace is logged.
+      self.call_site = CallSite.locate(backtrace) if level_index >= SemanticLogger.call_site_level_index
 
       true
     end
@@ -399,11 +408,12 @@ module SemanticLogger
       [short_name ? File.basename(match[1]) : match[1], match[2].to_i]
     end
 
-    # Returns [String, String] the file_name and line_number from the backtrace supplied
-    # in either the backtrace or exception
+    # Returns [String, Integer] the file name and line number where the entry was logged: from the call
+    # site, or else the first line of the backtrace, or of the exception's backtrace.
+    # nil when there are none.
     def file_name_and_line(short_name = false)
-      stack = backtrace || exception&.backtrace
-      extract_file_and_line(stack, short_name)
+      call_site&.file_name_and_line(short_name: short_name) ||
+        extract_file_and_line(backtrace || exception&.backtrace, short_name)
     end
 
     # Strip the standard Rails colorizing from the logged message.

@@ -110,6 +110,27 @@ module SemanticLogger
 
             assert_equal "[#{$$}:#{log.thread_name} default_test.rb:99]", formatter.process_info
           end
+
+          it "logs the file name, line, and method of the call site" do
+            log.backtrace = backtrace
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/models/order.rb", line: 42, label: "Order#submit")
+
+            assert_equal "[#{$$}:#{log.thread_name} order.rb:42 Order#submit]", formatter.process_info
+          end
+
+          it "logs the file name and line of a call site without a label" do
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/models/order.rb", line: 42, label: nil)
+
+            assert_equal "[#{$$}:#{log.thread_name} order.rb:42]", formatter.process_info
+          end
+
+          it "escapes the method when escape_control_chars is enabled" do
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/order.rb", line: 1, label: "forged\e[2J")
+            formatter     = SemanticLogger::Formatters::Default.new(escape_control_chars: true)
+            formatter.call(log, nil)
+
+            assert_equal "order.rb:1 forged\\e[2J", formatter.file_name_and_line
+          end
         end
 
         describe "tags" do

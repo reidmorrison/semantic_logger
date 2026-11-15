@@ -188,6 +188,33 @@ module SemanticLogger
           end
         end
 
+        describe "method" do
+          it "interpolates the method of the call site" do
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/models/order.rb", line: 42, label: "Order#submit")
+
+            assert_equal "order.rb:42 Order#submit", formatted("%{file_name}:%{line} %{method}")
+          end
+
+          it "is blank without a call site" do
+            log.backtrace = backtrace
+
+            assert_equal "", formatted("%{method}")
+          end
+
+          it "escapes the method when escape_control_chars is enabled" do
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/order.rb", line: 1, label: "forged\e[2J")
+            output        = Pattern.new(pattern: "%{method}", escape_control_chars: true).call(log, nil)
+
+            assert_equal "forged\\e[2J", output
+          end
+
+          it "leaves the formatter's #method as Object#method" do
+            formatter = Pattern.new(pattern: "%{method}")
+
+            assert_kind_of Method, formatter.method(:call)
+          end
+        end
+
         describe "line" do
           it "interpolates the line number from the backtrace" do
             log.backtrace = backtrace

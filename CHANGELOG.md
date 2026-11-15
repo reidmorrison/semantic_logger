@@ -49,6 +49,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   tags, and exception are not redacted, and `on_log` subscribers and logger filters receive the
   entry as it was logged. Nothing changes until sensitive keys are set. See
   [Redacting sensitive data](https://logger.reidmorrison.com/security.html#redacting-sensitive-data).
+- `SemanticLogger.call_site_level=` records where each entry at or above that level was logged: the
+  file, line, and method of the code that made the log call, in `Log#call_site`. Unlike
+  `backtrace_level` it reads only the stack frames up to that code, so it adds about 1.3 µs to a log
+  call however deep the stack is, where a backtrace adds 16 µs or more. It is off (`nil`) by default.
+  With it on, the text formatters show the method after the file name and line number, `:json` and
+  the other formatters built on `:raw` add a `method` field, `:pattern` has a `%{method}` directive,
+  `:ecs` writes `log.origin.function`, `:new_relic_logs` writes `method.name`, and `:open_telemetry`
+  writes `code.function.name`. When a log call supplies a `backtrace:`, its first line is the call
+  site. `SemanticLogger.call_site_skip_paths=` skips the frames of an application's own logging
+  helpers, so that entries record the code that called them. See
+  [Recording where each entry was logged](https://logger.reidmorrison.com/config.html#recording-where-each-entry-was-logged).
+  Resolves discussion #219.
 
 ### Changed
 

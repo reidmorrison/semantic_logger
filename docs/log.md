@@ -55,8 +55,9 @@ A handful of attributes are populated for **every** event:
 
 The rest are **situational**: they are set only when relevant to that particular call. For example
 `duration` is present only for `measure_*` calls, `exception` only when an exception was logged,
-`metric`/`metric_amount`/`dimensions` only for metrics, and `backtrace` only when backtrace
-capture is enabled (`SemanticLogger.backtrace_level`). Always guard against `nil` when reading a
+`metric`/`metric_amount`/`dimensions` only for metrics, `backtrace` only when backtrace
+capture is enabled (`SemanticLogger.backtrace_level`), and `call_site` only when call site recording
+is enabled (`SemanticLogger.call_site_level`). Always guard against `nil` when reading a
 situational field.
 
 ### Attributes
@@ -77,9 +78,34 @@ situational field.
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
+|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`. See [The call site](#the-call-site).|
 |`metric`|`String`|The metric name, present for metric and `measure_*` calls. See [Metrics](metrics.html).|
 |`metric_amount`|`Float`|Numeric amount for a counter or gauge metric, for example the quantity purchased.|
 |`dimensions`|`Hash`|Dimensions (key/value labels) supplied for a metric.|
+
+### The call site
+
+`call_site` is a frozen value object that records where the entry was logged. See
+[Recording where each entry was logged](config.html#recording-where-each-entry-was-logged) for how
+it is found.
+
+|Method|Returns|Description|
+|------|-------|-----------|
+|`path`|`String`|The file, as in a backtrace, for example `"/app/models/order.rb"`.|
+|`line`|`Integer`|The line number in the file.|
+|`label`|`String` or `nil`|The label Ruby gives the frame, usually the method: `"Order#submit"` on Ruby 3.4 and later, `"submit"` on Ruby 3.2, 3.3, and JRuby.|
+|`file_name_and_line(short_name: false)`|`[String, Integer]`|The path and line. With `short_name: true` the file name has no directory, for example `"order.rb"`.|
+|`to_s`|`String`|The call site as a backtrace line, for example `"/app/models/order.rb:42:in 'Order#submit'"`.|
+
+~~~ruby
+class MyFormatter
+  def call(log, _logger)
+    site = log.call_site
+    location = site ? " (#{site.label} at #{File.basename(site.path)}:#{site.line})" : ""
+    "#{log.level_to_s} #{log.name} -- #{log.message}#{location}"
+  end
+end
+~~~
 
 ### Helper methods
 
@@ -98,7 +124,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`backtrace_to_s(cleaner: nil)`|`String`|The exception backtrace as a string, including every exception in the `cause` chain. Lines are separated by a line break, with none before the first or after the last, so put your own line break before it. With a block, each cause's message and each backtrace line is replaced by the value the block returns, for example to escape it. With a `cleaner`, each backtrace is first cleaned as `backtrace_of` cleans it.|
 |`backtrace_of(exception, cleaner: nil)`|`Array<String>` or `nil`|The backtrace of `exception` (this event's exception or one of its causes). With a [backtrace cleaner](config.html#cleaning-backtraces) object, such as `Rails.backtrace_cleaner` (not `true`, as the formatter option accepts), the lines it keeps, or the full backtrace when it keeps none; the exception is not changed. A cleaned backtrace, and each of its lines, is frozen and cached on the event.|
 |`exception_details(exception, source: false)`|`String` or `nil`|The detail Ruby's `Exception#detailed_message` adds to the message of `exception` (this event's exception or one of its causes), such as did_you_mean suggestions, without the class name. `source: true` also includes error_highlight's source snippet. `nil` when there is none. Cached on the event.|
-|`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's backtrace or exception. Pass `true` for just the base file name.|
+|`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's call site, or else its backtrace or exception. Pass `true` for just the base file name.|
 |`to_h`|`Hash`|The event as a plain Hash (via the Raw formatter), including `host`, `application`, and `environment`. Handy for inspecting an event or building a custom formatter.|
 |`set_context(key, value)`|`Object`|Lazily initializes `context`, stores a key/value pair on it, and returns the value.|
 |`capture(key, value)`|`Object`|Lazily initializes `captures`, stores a key/value pair on it, and returns the value, for an appender that needs state of the logging thread, such as the current trace, that is not log data.|

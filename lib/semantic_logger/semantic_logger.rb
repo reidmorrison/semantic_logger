@@ -81,6 +81,70 @@ module SemanticLogger
     @backtrace_level_index
   end
 
+  # Sets the level at and above which each log entry records where it was logged: the file, line,
+  # and method of the code that made the log call (see Log#call_site). The JSON and text formatters
+  # then write the method next to the file name and line number.
+  #
+  # Unlike backtrace_level, it reads only the frames of the stack up to the code that made the log
+  # call, which costs about a microsecond per entry however deep the stack is, instead of building
+  # the whole backtrace.
+  #
+  # Parameters
+  #   level: [Symbol|nil]
+  #     :trace, :debug, :info, :warn, :error, or :fatal.
+  #     nil: Do not record where entries were logged.
+  #     Default: nil
+  #
+  # Example:
+  #   SemanticLogger.call_site_level = :info
+  def self.call_site_level=(level)
+    # For performance reasons pre-calculate the level index
+    index                  = Levels.index(level)
+    @call_site_level_index = index.nil? ? 65_535 : index
+    @call_site_level       = index.nil? ? nil : Levels.level(index)
+  end
+
+  # Returns the level at and above which each log entry records where it was logged, or nil when
+  # it is not recorded.
+  def self.call_site_level
+    @call_site_level
+  end
+
+  # Returns the call site level index
+  # For internal use only
+  def self.call_site_level_index
+    @call_site_level_index
+  end
+
+  # Sets the paths, or parts of paths, of code that logs on behalf of its caller, such as an
+  # application's own logging helper. A frame in a file whose path includes one of them is skipped
+  # when recording where an entry was logged, so that the entry shows the code that called the
+  # helper. Semantic Logger's own frames are always skipped.
+  #
+  # Parameters
+  #   paths: [Array<String>|nil]
+  #     Each matches any file whose path includes it, such as "app/lib/audit_log.rb", or
+  #     "/my_logging_gem/" for every file of a gem.
+  #     nil: Skip only Semantic Logger's own frames.
+  #     Default: []
+  #
+  # Example:
+  #   SemanticLogger.call_site_skip_paths = ["app/lib/audit_log.rb"]
+  def self.call_site_skip_paths=(paths)
+    paths = [] if paths.nil?
+    valid = paths.is_a?(Array) && paths.all? { |path| path.is_a?(String) && !path.empty? }
+    raise(ArgumentError, "call_site_skip_paths must be an Array of non-empty Strings: #{paths.inspect}") unless valid
+
+    # Frozen copies, leaving the Strings supplied as they are, so that code in any Ractor can read them.
+    @call_site_skip_paths = Utils.make_shareable(paths.map(&:-@).freeze)
+  end
+
+  # Returns [Array<String>] the paths, or parts of paths, whose frames are skipped when recording
+  # where an entry was logged.
+  def self.call_site_skip_paths
+    @call_site_skip_paths
+  end
+
   # Sets the application's backtrace cleaner, which leaves out or shortens the lines of the
   # backtraces that the text and JSON formatters log, such as `Rails.backtrace_cleaner`.
   #
@@ -717,6 +781,10 @@ module SemanticLogger
   @sync                  = false
   @cache_loggers         = false
   @logger_cache          = nil
+
+  # Do not record where entries were logged, and skip only Semantic Logger's own frames.
+  self.call_site_level      = nil
+  self.call_site_skip_paths = nil
 
   # Lazily initialized thread-safe cache of one Logger per Class/Module.
   def self.logger_cache

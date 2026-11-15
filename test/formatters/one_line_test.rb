@@ -154,6 +154,12 @@ module SemanticLogger
 
             assert_equal "\\e]0;owned\\x07\\rx.rb:1", formatter.file_name_and_line
           end
+
+          it "logs the method of the call site, without new lines" do
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/order.rb", line: 1, label: "forged\r\nmethod")
+
+            assert_equal "order.rb:1 forgedmethod", formatter.file_name_and_line
+          end
         end
 
         describe "invalid UTF-8" do

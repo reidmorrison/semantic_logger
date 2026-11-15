@@ -15,7 +15,8 @@ module SemanticLogger
     # OpenTelemetry semantic conventions where there is one, and are otherwise prefixed with
     # "semantic_logger.", so that they do not collide with the application's keys:
     #   exception.type, exception.message, exception.stacktrace (with each exception that caused it)
-    #   code.file.path, code.line.number (where the entry was logged, when it captured a backtrace)
+    #   code.file.path, code.line.number (where the entry was logged, when it has a call site or
+    #   captured a backtrace), code.function.name (when it has a call site)
     #   thread.name, process.pid
     #   semantic_logger.name, semantic_logger.tags, semantic_logger.duration_ms,
     #   semantic_logger.metric, semantic_logger.metric_amount
@@ -37,6 +38,7 @@ module SemanticLogger
       EXCEPTION_STACKTRACE = "exception.stacktrace".freeze
       CODE_FILE_PATH       = "code.file.path".freeze
       CODE_LINE_NUMBER     = "code.line.number".freeze
+      CODE_FUNCTION_NAME   = "code.function.name".freeze
       THREAD_NAME          = "thread.name".freeze
       PROCESS_PID          = "process.pid".freeze
       NAME                 = "semantic_logger.name".freeze
@@ -47,7 +49,7 @@ module SemanticLogger
 
       ENTRY_ATTRIBUTES = [
         EXCEPTION_TYPE, EXCEPTION_MESSAGE, EXCEPTION_STACKTRACE, CODE_FILE_PATH, CODE_LINE_NUMBER,
-        THREAD_NAME, PROCESS_PID, NAME, TAGS, DURATION_MS, METRIC, METRIC_AMOUNT
+        CODE_FUNCTION_NAME, THREAD_NAME, PROCESS_PID, NAME, TAGS, DURATION_MS, METRIC, METRIC_AMOUNT
       ].to_h { |name| [name, true] }.freeze
 
       # Prefixes for a named tag or payload key named like one of the entry's own attributes.
@@ -112,18 +114,24 @@ module SemanticLogger
         add(attributes, THREAD_NAME, log.thread_name)
         add(attributes, PROCESS_PID, pid)
 
-        # Only the backtrace captured where the entry was logged, not the logged exception's, whose
-        # location is in its stacktrace.
-        file, line = log.extract_file_and_line(log.backtrace)
-        if file
-          add(attributes, CODE_FILE_PATH, file)
-          add(attributes, CODE_LINE_NUMBER, line)
-        end
+        add_code(attributes)
 
         add(attributes, TAGS, log.tags) if log.tags && !log.tags.empty?
         add(attributes, DURATION_MS, log.duration)
         add(attributes, METRIC, log.metric)
         add(attributes, METRIC_AMOUNT, log.metric_amount)
+      end
+
+      # Where the entry was logged: its call site, or else the first line of the backtrace it captured.
+      # Not the logged exception's backtrace, whose location is in its stacktrace.
+      def add_code(attributes)
+        call_site  = log.call_site
+        file, line = call_site ? call_site.file_name_and_line : log.extract_file_and_line(log.backtrace)
+        return unless file
+
+        add(attributes, CODE_FILE_PATH, file)
+        add(attributes, CODE_LINE_NUMBER, line)
+        add(attributes, CODE_FUNCTION_NAME, call_site&.label)
       end
 
       # The logged exception, with the backtrace of each exception that caused it in its stacktrace.

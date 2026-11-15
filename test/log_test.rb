@@ -892,6 +892,16 @@ module SemanticLogger
 
           assert_equal ["/path/to/file.rb", 42], log.file_name_and_line
         end
+
+        it "uses the call site before the backtrace and the exception backtrace" do
+          exception.set_backtrace(stack)
+          log.exception = exception
+          log.backtrace = stack
+          log.call_site = SemanticLogger::CallSite.new(path: "/app/order.rb", line: 12, label: "Order#submit")
+
+          assert_equal ["/app/order.rb", 12], log.file_name_and_line
+          assert_equal ["order.rb", 12], log.file_name_and_line(true)
+        end
       end
 
       describe "#cleansed_message in another encoding" do
