@@ -813,4 +813,8 @@ end
 ~~~
 
 Because these callbacks run on the application's own thread, keep them fast. The captured context is
-available to appenders and formatters as `log.context`.
+available to appenders and formatters as `log.context`, and formatters that write the context, such
+as `:loki`, write it too. To hand an appender of your own an object it needs from the logging thread
+that is not log data, such as a client's current scope, use `log.capture(key, value)` instead, and
+read it in the appender with `log.captured(key)`: formatters do not write it, unless one is built
+for that appender and reads its key.

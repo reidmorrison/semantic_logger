@@ -94,6 +94,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:syslog_cee` formatter accepts the options of the `:raw` formatter, such as `log_host` and
   `log_exception_details`, given to the formatter or with `formatter: {syslog_cee: {...}}`. It
   raised `ArgumentError` for them.
+- The `:open_telemetry` and `:new_relic_logs` appenders keep the trace context they capture as an
+  entry is logged with the new `Log#capture`, which formatters do not write, instead of in the log
+  context. The `:loki` formatter, which writes each value of the context as a stream label, wrote
+  the OpenTelemetry context as a label such as `#<OpenTelemetry::Context:0x...>`, and the New Relic
+  linking metadata as one holding the trace and span ids, so Loki created a new stream for each span.
+  A custom formatter that read `log.context[:open_telemetry]` or `log.context[:new_relic_metadata]`
+  reads `log.captured(:open_telemetry)` or `log.captured(:new_relic_metadata)` instead, and an
+  `on_log` subscriber that set either key with `log.set_context` sets it with `log.capture`.
 
 ## [5.2.0] 2026-10-30
 

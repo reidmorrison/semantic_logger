@@ -117,7 +117,7 @@ module SemanticLogger
 
       # returns "entity.name", "trace.id" etc from NewRelic::Agent.linking_metadata
       def linking_metadata(log)
-        (log.context && log.context[:new_relic_metadata]) || {}
+        log.captured(:new_relic_metadata) || {}
       end
     end
   end

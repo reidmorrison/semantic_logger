@@ -25,7 +25,7 @@ module SemanticLogger
     class NewRelicLogs < SemanticLogger::Subscriber
       CAPTURE_CONTEXT = lambda do |log|
         meta = ::NewRelic::Agent.linking_metadata
-        log.set_context(:new_relic_metadata, meta) unless meta.empty?
+        log.capture(:new_relic_metadata, meta) unless meta.empty?
       end
 
       # Create Appender

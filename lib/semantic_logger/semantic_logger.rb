@@ -321,7 +321,8 @@ module SemanticLogger
   end
 
   # Supply a callback to be called whenever a log entry is created.
-  # Useful for capturing appender specific context information.
+  # Useful for capturing appender specific context information. Keep an object that is for an
+  # appender of your own with `log.capture`, and data to be logged with `log.set_context`.
   #
   #  Parameters
   #    object: [Object | Proc]
@@ -330,13 +331,13 @@ module SemanticLogger
   #
   # Example:
   #   SemanticLogger.on_log do |log|
-  #     log.set_context(:honeybadger, Honeybadger.get_context)
+  #     log.capture(:honeybadger, Honeybadger.get_context)
   #   end
   #
   # Example:
   #   module CaptureContext
   #     def call(log)
-  #       log.set_context(:honeybadger, Honeybadger.get_context)
+  #       log.capture(:honeybadger, Honeybadger.get_context)
   #     end
   #   end
   #   SemanticLogger.on_log(CaptureContext)

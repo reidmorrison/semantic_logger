@@ -15,7 +15,7 @@ module SemanticLogger
     class OpenTelemetry < SemanticLogger::Subscriber
       attr_reader :name, :version, :provider, :logger
 
-      CAPTURE_CONTEXT = ->(log) { log.set_context(:open_telemetry, ::OpenTelemetry::Context.current) }
+      CAPTURE_CONTEXT = ->(log) { log.capture(:open_telemetry, ::OpenTelemetry::Context.current) }
 
       # Create a Open Telemetry Logger appender instance.
       #
@@ -53,7 +53,7 @@ module SemanticLogger
       def log(log)
         # return log_metric(log) if metrics && log.metric_only?
 
-        context = (log.context && log.context[:open_telemetry]) || ::OpenTelemetry::Context.current
+        context = log.captured(:open_telemetry) || ::OpenTelemetry::Context.current
         @logger.on_emit(**format_log(log), context: context)
         true
       end
