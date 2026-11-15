@@ -35,7 +35,10 @@ module SemanticLogger
       # A log call can supply the backtrace that the file name and method come from.
       def file_name_and_line
         file, line = log.file_name_and_line(true)
-        ["#{one_line(file)}:#{line}", method_name].compact.join(" ") if file
+        return unless file
+
+        label = method_name
+        label ? "#{one_line(file)}:#{line} #{label}" : "#{one_line(file)}:#{line}"
       end
 
       def method_name

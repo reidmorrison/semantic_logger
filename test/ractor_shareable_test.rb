@@ -26,6 +26,7 @@ module SemanticLogger
         assert Ractor.shareable?(Log.const_get(:ARGUMENT_VALIDATORS))
         assert Ractor.shareable?(Log.const_get(:REAL_NUMBER))
         assert Ractor.shareable?(Utils.extract_paths)
+        assert Ractor.shareable?(CallSite.const_get(:DISPATCH_LABELS))
         assert Ractor.shareable?(Levels::MAPPED_LEVELS)
       end
 

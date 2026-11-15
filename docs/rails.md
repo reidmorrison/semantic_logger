@@ -555,6 +555,11 @@ leave on in production. See
 [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged) for its
 cost, and for which formatters write it.
 
+The entries that Rails logs for its own events, such as `Processing`, `Completed`, `Rendered`, and
+SQL entries, are logged from Active Support's notifications, so their call site is an Active Support
+frame rather than your code. To see the application code that ran each SQL query, turn on
+`config.active_record.verbose_query_logs`, which adds it to the entry's payload as `source`.
+
 To capture the whole backtrace of each entry instead, use `backtrace_level`:
 
 ~~~ruby

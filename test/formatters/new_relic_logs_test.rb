@@ -193,13 +193,23 @@ module SemanticLogger
 
             assert_equal "/app/models/order.rb", result.dig(:file, :name)
             assert_equal "42", result.dig(:line, :number)
-            assert_equal "Order#submit", result.dig(:method, :name)
+            assert_equal "Order#submit", result[:"method.name"]
           end
 
           it "omits the method without a call site" do
             log.backtrace = ["/app/models/order.rb:42:in 'Order#submit'"]
 
-            refute formatted_log.key?(:method)
+            refute formatted_log.key?(:"method.name")
+          end
+
+          it "keeps a named tag called method" do
+            log.call_site  = SemanticLogger::CallSite.new(path: "/app/order.rb", line: 42, label: "Order#submit")
+            log.named_tags = {method: "GET"}
+            result         = formatted_log
+
+            assert_equal "GET", result[:method]
+            assert_equal "Order#submit", result[:"method.name"]
+            refute result.key?(:named_tag_conflicts)
           end
         end
 

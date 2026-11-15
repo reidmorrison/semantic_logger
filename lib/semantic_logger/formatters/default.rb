@@ -22,7 +22,10 @@ module SemanticLogger
       # backtrace, which a log call can supply from untrusted data.
       def file_name_and_line
         file, line = log.file_name_and_line(true)
-        ["#{escape_control_characters(file)}:#{line}", method_name].compact.join(" ") if file
+        return unless file
+
+        label = method_name
+        label ? "#{escape_control_characters(file)}:#{line} #{label}" : "#{escape_control_characters(file)}:#{line}"
       end
 
       # The method that logged the message, such as "Order#submit", when the entry has a call site.

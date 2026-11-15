@@ -880,6 +880,10 @@ module SemanticLogger
           assert_nil log.extract_file_and_line([])
         end
 
+        it "does not take the file name from a line after a forged line break" do
+          assert_nil log.extract_file_and_line(["forged\n/path/to/file.rb:42"])
+        end
+
         it "uses the log backtrace" do
           log.backtrace = stack
 

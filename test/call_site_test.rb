@@ -55,13 +55,42 @@ module SemanticLogger
         logger.info { "From a block" }
         __LINE__ - 1
       end
+
+      def in_each
+        [1].each { logger.info("In each") }
+        __LINE__ - 1
+      end
+
+      def via_public_send(level = :info)
+        logger.public_send(level, "Dispatched")
+        __LINE__ - 1
+      end
+
+      def via_method_call
+        logger.method(:info).call("Dispatched")
+        __LINE__ - 1
+      end
+
+      def via_bind_call
+        SemanticLogger::Logger.instance_method(:info).bind_call(logger, "Dispatched")
+        __LINE__ - 1
+      end
+
+      def via_public_send_in_block(level = :info)
+        [1].each { logger.public_send(level, "Dispatched") }
+        __LINE__ - 1
+      end
     end
 
     # Shared by the describe blocks, which do not inherit this class's methods.
     module Helpers
-      # Ruby 3.4 added the class to a frame's label.
+      # Ruby 3.4 added the class to a frame's label, but JRuby, which is Ruby 3.4 compatible, did not.
       def label_for(klass, method)
-        RUBY_VERSION >= "3.4" ? "#{klass}#{method}" : method.delete_prefix("#").delete_prefix(".")
+        if RUBY_ENGINE == "ruby" && RUBY_VERSION >= "3.4"
+          "#{klass}#{method}"
+        else
+          method.delete_prefix("#").delete_prefix(".")
+        end
       end
 
       def with_call_site_level(level)
@@ -180,8 +209,10 @@ module SemanticLogger
           assert_equal line, call_site.line
         end
 
-        it "returns nil for an empty supplied backtrace" do
-          assert_nil CallSite.locate([])
+        it "captures the call site for an empty supplied backtrace" do
+          call_site = CallSite.locate([])
+
+          assert_equal __FILE__, call_site.path
         end
       end
 
@@ -208,6 +239,49 @@ module SemanticLogger
 
           assert_equal "C:/app/order.rb", call_site.path
           assert_equal 42, call_site.line
+        end
+
+        it "returns nil for a line with a line break, which only a forged line has" do
+          assert_nil CallSite.parse("forged\n/app/order.rb:42:in 'Order#submit'")
+          assert_nil CallSite.parse("/app/order.rb:42:in 'Order#submit'\nforged")&.label
+        end
+
+        it "parses the path of code evaluated at runtime, which holds a line number of its own" do
+          assert_equal CallSite.new(path: "(eval at /app/a.rb:3)", line: 1, label: "<main>"),
+                       CallSite.parse("(eval at /app/a.rb:3):1:in '<main>'")
+        end
+
+        it "parses a long forged line, at the first line number followed by a label" do
+          call_site = CallSite.parse("#{"a:1:in 'x" * 20_000}'")
+
+          assert_equal "a", call_site.path
+          assert_equal 1, call_site.line
+          assert_equal 180_000 - 8, call_site.label.size
+        end
+
+        it "returns nil for a line that is not valid text" do
+          assert_nil CallSite.parse("/app/caf\xE9.rb:1:in 'x'")
+          assert_nil CallSite.parse("/app/order.rb:1:in 'x'".encode(Encoding::UTF_16LE))
+        end
+
+        it "parses a line in another ASCII compatible encoding" do
+          assert_equal 1, CallSite.parse("/app/order.rb:1:in 'x'".b).line
+        end
+
+        it "returns nil for a line number of more than 10 digits" do
+          assert_nil CallSite.parse("/app/order.rb:#{'9' * 11}:in 'x'")
+          assert_nil CallSite.parse("/app/order.rb:#{'9' * 11}")
+          assert_equal 9_999_999_999, CallSite.parse("/app/order.rb:#{'9' * 10}:in 'x'").line
+        end
+
+        it "leaves out the label of a line that ends with its opening quote" do
+          assert_equal CallSite.new(path: "/app/order.rb", line: 12, label: nil),
+                       CallSite.parse("/app/order.rb:12:in '")
+        end
+
+        it "returns nil for a line without a path" do
+          assert_nil CallSite.parse(":12:in 'x'")
+          assert_nil CallSite.parse(":12")
         end
 
         it "returns nil for a line without a line number, or a value that is not a String" do
@@ -296,6 +370,61 @@ module SemanticLogger
 
           assert_equal line, events.first.call_site.line
           assert_equal label_for(Order, "#with_block"), events.first.call_site.label
+        end
+      end
+
+      it "records the block, not Array#each, for a log call in a block" do
+        with_call_site_level(:info) do
+          line   = nil
+          events = semantic_logger_events { line = Order.new.in_each }
+
+          assert_equal line, events.first.call_site.line
+          assert_equal "block in #{label_for(Order, '#in_each')}", events.first.call_site.label
+        end
+      end
+
+      %i[via_public_send via_method_call via_bind_call].each do |method|
+        it "records the method that called the logger through #{method.to_s.delete_prefix('via_')}" do
+          with_call_site_level(:info) do
+            line   = nil
+            events = semantic_logger_events { line = Order.new.public_send(method) }
+
+            assert_equal CallSite.new(path: __FILE__, line: line, label: label_for(Order, "##{method}")),
+                         events.first.call_site
+          end
+        end
+      end
+
+      it "records the block that called the logger through public_send" do
+        with_call_site_level(:info) do
+          line   = nil
+          events = semantic_logger_events { line = Order.new.via_public_send_in_block }
+
+          assert_equal line, events.first.call_site.line
+          assert_equal "block in #{label_for(Order, '#via_public_send_in_block')}", events.first.call_site.label
+        end
+      end
+
+      it "records an application's own call method that the next frame called on the same line" do
+        skip "Only CRuby 3.4 and later can tell Method#call from a method named call" unless
+          RUBY_ENGINE == "ruby" && RUBY_VERSION >= "3.4"
+
+        with_call_site_level(:info) do
+          # Both methods on one line, so that the frame of outer is at the same path and line as call's.
+          handler = Class.new { def call(logger) = logger.info("Handled"); def outer(logger) = call(logger) }.new # rubocop:disable Style/Semicolon
+          line    = __LINE__ - 1
+          events  = semantic_logger_events { handler.outer(SemanticLogger["Handler"]) }
+
+          assert_equal line, events.first.call_site.line
+          assert_equal "call", events.first.call_site.label
+        end
+      end
+
+      it "logs a supplied backtrace that is not valid text, without a call site" do
+        with_call_site_level(:info) do
+          events = semantic_logger_events { SemanticLogger["Order"].info("x", backtrace: ["/app/caf\xE9.rb:1"]) }
+
+          assert_nil events.first.call_site
         end
       end
 

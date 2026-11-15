@@ -151,11 +151,12 @@ depth of the stack:
 | | `backtrace_level` | `call_site_level` |
 |-|-------------------|-------------------|
 | Records | The whole stack, as an Array of Strings | The file, line, and method of the log call |
-| Time added to a `logger.info` call, 100 frames deep | About 16 µs (Ruby 3.2) to 26 µs (Ruby 4.0) | About 1.3 µs |
+| Time added to a `logger.info` call, 100 frames deep | About 16 µs (Ruby 3.2) to 26 µs (Ruby 4.0) | About 1.5 µs |
 | On a deeper stack | Grows with the depth | The same |
 | Default | `:error` | `nil` (off) |
 
-(Measured on an Apple M5; a `logger.info` call without either takes about 1.3 µs.) The call site is
+(Measured on an Apple M5; a `logger.info` call without either takes about 1.3 µs. Reading the stack
+costs much more on JRuby: about 25 µs for the call site, and 180 µs for a backtrace.) The call site is
 cheap enough to record for every entry in most applications, but it still about doubles the time a
 log call spends on the thread that logs, so measure it when an application logs at a very high rate.
 
@@ -168,6 +169,8 @@ The method is the label Ruby gives the frame in a backtrace:
 | Block inside a method | `block in Order#submit` | `block in submit` |
 | Method defined with `define_method` | `block in <class:Order>` | `block in <class:Order>` |
 | Outside any method | `<main>`, `<class:Order>` | `<main>`, `<class:Order>` |
+
+JRuby gives a method defined with `define_method` its name, such as `submit`.
 
 Where each formatter writes the call site:
 
@@ -185,13 +188,20 @@ The `:logfmt` and `:loki` formatters write neither. A custom formatter reads the
 
 Which code counts as the call site:
 
-* The first frame outside Semantic Logger, `rails_semantic_logger`, and Ruby's own methods, such as
-  `Array#each`. So an entry logged by a `measure_*` call, or by a logging block, records the code
-  that called the logger.
+* The first frame outside Semantic Logger, `rails_semantic_logger`, and Ruby's internal files (paths
+  that start with `<internal:`). So an entry logged by a `measure_*` call, or by a logging block,
+  records the code that called the logger. When the logger is called through `public_send`,
+  `Method#call`, or `UnboundMethod#bind_call`, the call site is the code that called that method. (On
+  JRuby, `Method#call` inside a block records the right file and line, but the label `block in call`.)
+  Code in Ruby's standard library that calls the logger for you, such as a method that `Forwardable`
+  delegates, is recorded as the call site: add its path to `call_site_skip_paths` (see below).
 * When the log call supplies a `backtrace:`, the first line of that backtrace. For example
-  `rails_semantic_logger` passes the application code that ran a SQL query, and `logger.backtrace`
-  passes the backtrace of the thread it logs. A backtrace returned by a logging block does not
-  change the call site.
+  `logger.backtrace` passes the backtrace of the thread it logs, and `rails_semantic_logger` passes
+  the application code that ran a SQL query when it captures a backtrace for the entry (see
+  `backtrace_level` above). A backtrace returned by a logging block does not change the call site.
+* Entries that `rails_semantic_logger` logs for Rails' own events, such as `Processing`,
+  `Completed`, `Rendered`, and SQL entries without a backtrace, are logged from Active Support's
+  notifications, so their call site is an Active Support frame rather than the application's code.
 * With a call site, an entry's file name and line number are the call site's, also for an entry that
   logs an exception. Without one, they still come from a captured backtrace, or else the first line
   of the exception's backtrace.

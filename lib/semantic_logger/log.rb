@@ -396,16 +396,9 @@ module SemanticLogger
       "#{$$}:#{format("%.#{thread_name_length}s", thread_name)}#{file_name}"
     end
 
-    CALLER_REGEXP = /^(.*):(\d+).*/
-
-    # Extract the filename and line number from the last entry in the supplied backtrace
+    # Extract the file name and line number from the first line of the supplied backtrace.
     def extract_file_and_line(stack, short_name = false)
-      return unless stack&.size&.positive?
-
-      match = CALLER_REGEXP.match(stack.first)
-      return unless match
-
-      [short_name ? File.basename(match[1]) : match[1], match[2].to_i]
+      CallSite.parse(stack&.first)&.file_name_and_line(short_name: short_name)
     end
 
     # Returns [String, Integer] the file name and line number where the entry was logged: from the call
