@@ -60,6 +60,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Setting `formatter=` on a TCP or UDP syslog appender to `:syslog` or `:syslog_cee` keeps the
   appender's facility, level map, and maximum packet size, as passing `formatter:` when adding it
   already did. Before, the new formatter used the defaults.
+- When a module includes `SemanticLogger::Loggable`, its instance methods can now call `logger` in a
+  class that includes the module without including `SemanticLogger::Loggable` itself. Before, they
+  raised `NoMethodError`. The logger is named after the class, and the class is otherwise unchanged.
+  A class with a class level `logger` of its own keeps using it, as before. See
+  [The Loggable mixin](https://logger.reidmorrison.com/api.html#the-loggable-mixin-recommended).
 - The default, color, and syslog text formatters no longer write a blank line after an exception that
   has no backtrace, such as a Rails routing error or an exception that was never raised, or after a
   cause that has no backtrace. The line break after the exception is now written only when exception

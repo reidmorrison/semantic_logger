@@ -46,6 +46,47 @@ class AppenderFileTest < Minitest::Test
     logger_measure_method :quick, min_duration: 60_000
   end
 
+  module LoggableModule
+    include SemanticLogger::Loggable
+
+    def work
+      logger.info "work"
+    end
+
+    def double(value)
+      value * 2
+    end
+    logger_measure_method :double
+  end
+
+  class ModuleHost
+    include LoggableModule
+  end
+
+  class LoggableModuleHost < Base
+    include LoggableModule
+  end
+
+  class ClassLoggerModuleHost
+    include LoggableModule
+
+    def self.logger
+      @logger ||= SemanticLogger::Test::CaptureLogEvents.new
+    end
+  end
+
+  class ExtendedModuleHost
+    extend LoggableModule
+  end
+
+  class OwnLoggerModuleHost
+    include LoggableModule
+
+    def logger
+      @logger ||= SemanticLogger::Test::CaptureLogEvents.new
+    end
+  end
+
   describe SemanticLogger::Loggable do
     describe "inheritance" do
       it "should give child classes their own logger" do
@@ -91,6 +132,67 @@ class AppenderFileTest < Minitest::Test
         end
 
         assert called, "Did not call the correct logger"
+      end
+    end
+
+    describe "included into a module" do
+      it "gives the module a class level logger named after it" do
+        assert_equal LoggableModule.name, LoggableModule.logger.name
+      end
+
+      it "gives instances of a class without Loggable a logger named after that class" do
+        host = ModuleHost.new
+
+        assert_equal ModuleHost.name, host.logger.name
+        assert_same host.logger, host.logger
+      end
+
+      it "logs from module methods called on a class without Loggable" do
+        host    = ModuleHost.new
+        capture = SemanticLogger::Test::CaptureLogEvents.new
+        host.logger = capture
+        host.work
+
+        assert_equal "work", capture.events.first.message
+      end
+
+      it "adds no class level logger to a class without Loggable" do
+        refute_respond_to ModuleHost, :logger
+      end
+
+      it "uses the class level logger of a class with Loggable" do
+        host = LoggableModuleHost.new
+
+        assert_same LoggableModuleHost.logger, host.logger
+      end
+
+      it "uses the class level logger of a class without Loggable" do
+        host = ClassLoggerModuleHost.new
+        host.work
+
+        assert_same ClassLoggerModuleHost.logger, host.logger
+        assert_equal "work", ClassLoggerModuleHost.logger.events.first.message
+      end
+
+      it "gives a class that extends the module a logger named after that class" do
+        assert_equal ExtendedModuleHost.name, ExtendedModuleHost.logger.name
+      end
+
+      it "keeps the logger a class defines itself" do
+        host = OwnLoggerModuleHost.new
+        host.work
+
+        assert_equal "work", host.logger.events.first.message
+      end
+
+      it "measures a method declared in the module" do
+        host    = ModuleHost.new
+        capture = SemanticLogger::Test::CaptureLogEvents.new
+        host.logger = capture
+
+        assert_equal 4, host.double(2)
+        assert_equal "#double", capture.events.first.message
+        assert_equal "#{LoggableModule.name}/double", capture.events.first.metric
       end
     end
 
