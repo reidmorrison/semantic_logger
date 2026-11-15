@@ -37,7 +37,7 @@ module SemanticLogger
       #     Example: https://logs-prod-999.grafana.net?orgid=my_org
       #     Default: nil
       def initialize(url: nil,
-                     formatter: SemanticLogger::Formatters::Loki.new,
+                     formatter: nil,
                      header: {"Content-Type" => "application/json"},
                      path: INGESTION_PATH,
                      **args,
@@ -64,6 +64,13 @@ module SemanticLogger
         message = format_batch(logs)
         logger.trace(message)
         post(message)
+      end
+
+      private
+
+      # Use the Loki formatter by default
+      def default_formatter
+        SemanticLogger::Formatters::Loki.new
       end
     end
   end

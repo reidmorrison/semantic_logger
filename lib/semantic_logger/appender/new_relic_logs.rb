@@ -45,7 +45,7 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
-      def initialize(formatter: SemanticLogger::Formatters::NewRelicLogs.new, **args, &block)
+      def initialize(formatter: nil, **args, &block)
         super
 
         # Record NewRelic's "trace.id"/"entity.name"/"hostname"/etc, so we can include them
@@ -71,6 +71,13 @@ module SemanticLogger
 
       def self.log_newrelic(json_message, level)
         ::NewRelic::Agent.agent.log_event_aggregator.record(json_message, level)
+      end
+
+      private
+
+      # Use the New Relic Logs formatter by default
+      def default_formatter
+        SemanticLogger::Formatters::NewRelicLogs.new
       end
     end
   end

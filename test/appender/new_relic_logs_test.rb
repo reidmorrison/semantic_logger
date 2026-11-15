@@ -53,6 +53,23 @@ module Appender
         end
       end
 
+      it "uses the New Relic Logs formatter by default" do
+        assert_instance_of SemanticLogger::Formatters::NewRelicLogs, @appender.formatter
+      end
+
+      it "uses the New Relic Logs formatter when given a nil formatter" do
+        given_nil = SemanticLogger::Appender::NewRelicLogs.new(formatter: nil)
+
+        assert_instance_of SemanticLogger::Formatters::NewRelicLogs, given_nil.formatter
+      end
+
+      it "restores the New Relic Logs formatter when the formatter is set to nil" do
+        @appender.formatter = :json
+        @appender.formatter = nil
+
+        assert_instance_of SemanticLogger::Formatters::NewRelicLogs, @appender.formatter
+      end
+
       it "sends notification to New Relic with custom attributes" do
         SemanticLogger::Appender::NewRelicLogs.stub(:log_newrelic, method(:log_newrelic_stub)) do
           SemanticLogger.tagged("test") do

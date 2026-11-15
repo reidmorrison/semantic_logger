@@ -73,6 +73,21 @@ module Appender
           assert_instance_of SemanticLogger::Formatters::Loki, appender.formatter
         end
 
+        it "uses the Loki formatter when given a nil formatter" do
+          given_nil = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger::Appender::Loki.new(url: "http://localhost:3100", formatter: nil)
+          end
+
+          assert_instance_of SemanticLogger::Formatters::Loki, given_nil.formatter
+        end
+
+        it "restores the Loki formatter when the formatter is set to nil" do
+          appender.formatter = :json
+          appender.formatter = nil
+
+          assert_instance_of SemanticLogger::Formatters::Loki, appender.formatter
+        end
+
         it "sets the JSON content type header" do
           assert_equal "application/json", appender.header["Content-Type"]
         end

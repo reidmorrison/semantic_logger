@@ -30,7 +30,7 @@ module SemanticLogger
       #    SemanticLogger.add_appender(appender: :open_telemetry)
       def initialize(name: "SemanticLogger",
                      version: SemanticLogger::VERSION,
-                     formatter: SemanticLogger::Formatters::OpenTelemetry.new,
+                     formatter: nil,
                      metrics: true,
                      **args,
                      &)
@@ -86,6 +86,13 @@ module SemanticLogger
       #   ap log.payload
       #   true
       # end
+
+      private
+
+      # Use the Open Telemetry formatter by default: #log emits the log record it returns.
+      def default_formatter
+        SemanticLogger::Formatters::OpenTelemetry.new
+      end
     end
   end
 end

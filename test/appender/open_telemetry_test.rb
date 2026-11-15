@@ -50,6 +50,20 @@ module Appender
         it "defaults to the Open Telemetry formatter" do
           assert_instance_of SemanticLogger::Formatters::OpenTelemetry, appender.formatter
         end
+
+        it "uses the Open Telemetry formatter when given a nil formatter" do
+          ::OpenTelemetry.logger_provider = provider
+          given_nil = SemanticLogger::Appender::OpenTelemetry.new(formatter: nil)
+
+          assert_instance_of SemanticLogger::Formatters::OpenTelemetry, given_nil.formatter
+        end
+
+        it "restores the Open Telemetry formatter when the formatter is set to nil" do
+          appender.formatter = :json
+          appender.formatter = nil
+
+          assert_instance_of SemanticLogger::Formatters::OpenTelemetry, appender.formatter
+        end
       end
 
       describe "log" do
