@@ -1492,12 +1492,12 @@ Basic outline for an appender:
 require "semantic_logger"
 
 class SimpleAppender < SemanticLogger::Subscriber
-  attr_reader :host
+  attr_reader :url
 
   # Add additional arguments to the initializer while supporting all existing ones.
-  def initialize(host: host, **args, &block)
-    @host = host
+  def initialize(url:, **args, &block)
     super(**args, &block)
+    @url = url
   end
 
   # Display the log struct and the text formatted output
@@ -1520,6 +1520,11 @@ class SimpleAppender < SemanticLogger::Subscriber
   end
 end
 ~~~
+
+Do not give the appender an option of the same name as one that `super` already accepts, such as
+`host` or `level`: the appender's own keyword would take the value, so `super` would never receive
+it. Call `super` before setting the appender's own instance variables, since `super` sets those of
+every appender, such as `@name` and `@host`.
 
 When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
 discards the message, and the worker thread backs off before writing the next one, on the basis
@@ -1562,7 +1567,7 @@ end
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby
-SemanticLogger.add_appender(appender: SimpleAppender.new)
+SemanticLogger.add_appender(appender: SimpleAppender.new(url: "https://logs.example.com"))
 ~~~
 
 Look at the
