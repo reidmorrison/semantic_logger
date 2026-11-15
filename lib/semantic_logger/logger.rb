@@ -26,6 +26,12 @@ module SemanticLogger
       attr_reader :subscribers
     end
 
+    # Removes the on_log subscriber.
+    def self.unsubscribe(subscriber)
+      @subscribers&.delete(subscriber)
+      @ractor_subscribers = (@ractor_subscribers - [subscriber]).freeze if @ractor_subscribers
+    end
+
     # Removes every on_log subscriber.
     def self.clear_subscribers
       @subscribers&.clear

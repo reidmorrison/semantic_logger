@@ -7,6 +7,9 @@ module Appender
       let(:appender) { SemanticLogger::Appender::SentryRuby.new(level: :trace) }
       let(:amessage) { "AppenderRavenTest log message" }
 
+      # Each appender registers an on_log subscriber, which closing it removes.
+      after { appender.close }
+
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
           error_message = hash = scope = nil
@@ -200,6 +203,114 @@ module Appender
           expected_user_data = {id: 42, username: "joe"}
 
           assert_equal expected_user_data, @scope.user
+        end
+      end
+
+      describe "with the Sentry scope of the thread that logged the entry" do
+        let(:appender) { SemanticLogger::Appender::SentryRuby.new }
+
+        # Returns an entry logged on a thread of its own, after the block sets up that thread's
+        # Sentry scope, as a request would.
+        def log_on_thread(level = :error, named_tags: {})
+          appender
+          Thread.new do
+            ::Sentry.with_scope do |scope|
+              yield(scope) if block_given?
+              log = SemanticLogger::Log.new("Checkout", level)
+              log.assign(message: "Payment declined")
+              log.named_tags = named_tags
+              SemanticLogger::Logger.call_subscribers(log)
+              log
+            end
+          end.value
+        end
+
+        def request_scope(scope)
+          scope.set_user(id: 7, ip_address: "10.0.0.1")
+          scope.set_tags(request: "r1")
+          scope.set_contexts(order: {id: 42})
+          scope.add_breadcrumb(::Sentry::Breadcrumb.new(message: "Loaded order"))
+        end
+
+        # Logs the entry directly on this thread, as the appender thread does, and returns the Sentry
+        # scope it was captured with.
+        def capture(log)
+          scope = nil
+          ::Sentry.stub(:capture_message, ->(*) { scope = ::Sentry.get_current_scope }) do
+            appender.log(log)
+          end
+          scope
+        end
+
+        it "sends the user, tags, contexts, and breadcrumbs of that thread" do
+          scope = capture(log_on_thread { |s| request_scope(s) })
+
+          assert_equal({id: 7, ip_address: "10.0.0.1"}, scope.user)
+          assert_equal "r1", scope.tags[:request]
+          assert_equal({id: 42}, scope.contexts[:order])
+          crumbs = scope.breadcrumbs.to_h[:values].map { |crumb| crumb[:message] }
+
+          assert_equal ["Loaded order"], crumbs
+        end
+
+        it "adds the context from the named tags to it" do
+          log   = log_on_thread(named_tags: {user_id: 9, region: "eu"}) { |s| request_scope(s) }
+          scope = capture(log)
+
+          assert_equal({id: 9, ip_address: "10.0.0.1"}, scope.user)
+          assert_equal "eu", scope.tags["region"]
+          assert_equal "r1", scope.tags[:request]
+        end
+
+        it "replaces a field of that thread's user keyed by a String" do
+          log   = log_on_thread(named_tags: {user_id: 9}) { |s| s.set_user("id" => 7, "segment" => "paid") }
+          scope = capture(log)
+
+          assert_equal({id: 9, segment: "paid"}, scope.user)
+        end
+
+        it "runs the event processors of that thread's scope" do
+          processor = ->(event, _hint) { event }
+          scope     = capture(log_on_thread { |s| s.add_event_processor(&processor) })
+
+          assert_includes scope.event_processors, processor
+        end
+
+        it "leaves the Rack env, with the request body, on that thread" do
+          log = log_on_thread { |s| s.set_rack_env("REQUEST_METHOD" => "POST", "rack.input" => StringIO.new("a=1")) }
+
+          assert_empty log.captured(:sentry_scope).rack_env
+          assert_empty capture(log).rack_env
+        end
+
+        it "does not run the appender's filter on that thread" do
+          calls = 0
+          appender.filter = ->(_log) { calls += 1 }
+          log_on_thread
+
+          assert_equal 0, calls
+        end
+
+        it "leaves the scope held by the log entry unchanged" do
+          log = log_on_thread(named_tags: {region: "eu"}) { |s| request_scope(s) }
+          capture(log)
+          captured = log.captured(:sentry_scope)
+
+          assert_equal({request: "r1"}, captured.tags)
+          assert_empty captured.extra
+        end
+
+        it "does not capture the scope for an entry below the appender's level" do
+          log = log_on_thread(:info) { |s| request_scope(s) }
+
+          assert_nil log.captured(:sentry_scope)
+        end
+
+        it "stops capturing the scope once closed" do
+          appender.close
+          log = log_on_thread { |s| request_scope(s) }
+
+          assert_nil log.captured(:sentry_scope)
         end
       end
     end

@@ -21,6 +21,9 @@ module SemanticLogger
       # The types of value accepted in a fingerprint, which Sentry turns into Strings.
       FINGERPRINT_PART_TYPES = [String, Symbol, Numeric].freeze
 
+      # The key of the Sentry scope of the thread that logged the entry, as captured with the entry.
+      SCOPE_CAPTURE_KEY = :sentry_scope
+
       # Create Appender
       #
       # Parameters
@@ -56,6 +59,14 @@ module SemanticLogger
           end
         end
         super
+        # Sentry keeps the user, tags, contexts, breadcrumbs, and trace of a request in the Sentry
+        # scope of the thread or fiber handling it, but #log runs on the appender thread.
+        SemanticLogger::Logger.subscribe(method(:capture_scope))
+      end
+
+      # Stops capturing the Sentry scope of each log entry.
+      def close
+        SemanticLogger::Logger.unsubscribe(method(:capture_scope))
       end
 
       # Send an error notification to sentry
@@ -77,7 +88,8 @@ module SemanticLogger
         tags = extract_tags!(context)
 
         ::Sentry.with_scope do |scope|
-          scope.set_user(user) if user
+          apply_captured_scope(scope, log)
+          scope.set_user(merged_user(scope.user, user)) if user
           scope.set_level(context.delete(:level)) if context[:level]
           scope.set_fingerprint(fingerprint) if fingerprint
           scope.set_transaction_name(transaction_name) if transaction_name
@@ -98,6 +110,44 @@ module SemanticLogger
       end
 
       private
+
+      # As an on_log subscriber, on the thread that logs the entry, keeps a copy of its Sentry scope
+      # with the entry when it meets this appender's level. The filter is left to #log, so that it
+      # runs once, on the appender thread.
+      #
+      # The copy leaves out the Rack env: Sentry reads and rewinds the request body in it as it builds
+      # the request of an event, which must not happen on the appender thread while the request is
+      # still using it, or after it has closed the body.
+      def capture_scope(log)
+        return if log.captured(SCOPE_CAPTURE_KEY) || log.name == "Sentry"
+        return unless ::Sentry.initialized? && meets_log_level?(log)
+
+        scope = ::Sentry.get_current_scope&.dup
+        return unless scope
+
+        scope.set_rack_env(nil)
+        log.capture(SCOPE_CAPTURE_KEY, scope)
+      end
+
+      # Starts the scope of the event from the Sentry scope captured when the entry was logged, so
+      # that the event has the user, tags, contexts, breadcrumbs, trace, and event processors of the
+      # thread that logged it. Copies it again, since the scope adds tags and extras to its Hashes,
+      # which would otherwise be the ones held by the log entry.
+      def apply_captured_scope(scope, log)
+        captured = log.captured(SCOPE_CAPTURE_KEY)
+        return unless captured.is_a?(::Sentry::Scope)
+
+        captured = captured.dup
+        scope.update_from_scope(captured)
+        captured.event_processors.each { |processor| scope.add_event_processor(&processor) }
+      end
+
+      # Returns [Hash] the Sentry user of the thread with the fields of the user taken from the
+      # named tags, whose keys are Symbols, in place of the same fields, whether keyed by a String or
+      # a Symbol.
+      def merged_user(thread_user, user)
+        thread_user.transform_keys { |key| key.respond_to?(:to_sym) ? key.to_sym : key }.merge(user)
+      end
 
       # Use Raw Formatter by default
       def default_formatter
