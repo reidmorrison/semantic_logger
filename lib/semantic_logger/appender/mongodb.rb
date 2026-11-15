@@ -175,7 +175,8 @@ module SemanticLogger
       DOCUMENT_ERRORS = [BSON::Error, ArgumentError, RangeError, Mongo::Error::MaxBSONSize].freeze
 
       # Except BSON::Error::BSONDecodeError, which comes from reading the server's reply rather than
-      # from the document, so it is retried like any other error from the server.
+      # from the document, so it is treated like any other error from the server: the thread backs
+      # off.
       def message_error?(exception)
         return false if exception.is_a?(BSON::Error::BSONDecodeError)
 

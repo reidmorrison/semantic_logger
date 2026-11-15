@@ -67,7 +67,7 @@ module SemanticLogger
     #   dropped_message_report_seconds: [Integer]
     #     When non_blocking is enabled, log the count of dropped messages to the internal logger
     #     at most once every this number of seconds. Also limits how often messages discarded
-    #     because their content could not be written are reported, after the first.
+    #     because they could not be written are reported, after the first.
     #     Default: 30
     #
     #   async_max_retries: [Integer]
@@ -138,8 +138,8 @@ module SemanticLogger
     # Returns [Integer] the number of log messages dropped because the queue was full.
     def dropped_count = @dropped.total
 
-    # Returns [Integer] the number of log messages discarded because their content could not be
-    # written (see Subscriber#message_error?).
+    # Returns [Integer] the number of log messages discarded because they could not be written,
+    # whether their content or the destination was at fault (see Subscriber#message_error?).
     def failed_count = @failed.total
 
     # Returns [true|false] whether messages are processed in batches.
@@ -330,19 +330,25 @@ module SemanticLogger
     # queue with them. Returns false once a command (:close) stops processing.
     #
     # When the batch cannot be written, for example because the destination is unavailable, the
-    # commands still run before the error propagates to #process to back off. Otherwise they
-    # would be lost, and a caller waiting on #flush or #close, such as the flush at exit, would
-    # wait forever.
+    # messages not yet written are discarded and counted as failed, since #process starts again
+    # from the queue. The commands still run before the error propagates to #process to back off.
+    # Otherwise they would be lost, and a caller waiting on #flush or #close, such as the flush at
+    # exit, would wait forever.
     def write_batch_then_run(logs, commands)
+      accounted = processed_count + failed_count
       unless logs.empty?
         write_batch(logs)
         @retry_count = 0 unless retry_count.zero?
       end
       commands.all? { |command| command.run(appender) }
     rescue StandardError => e
+      # Every message taken off the queue was written or already discarded, except those still
+      # to be written when the error was raised: the last ones, since a batch is written in order.
+      unwritten = logs.size - (processed_count + failed_count - accounted)
+      messages_failed(logs.last(unwritten), e) if unwritten.positive?
       raise e if commands.all? { |command| process_message_after_failure(command) }
 
-      safe_log(:warn, "Async: Closed without writing #{logs.size} log messages", e)
+      safe_log(:warn, "Async: Closed without writing #{unwritten} log messages", e)
       false
     end
 
@@ -357,19 +363,19 @@ module SemanticLogger
 
     # Write one log message to the appender.
     #
-    # A message whose content cannot be written (see #message_error?) is discarded and reported,
-    # without restarting the thread. Any other error, such as the destination being unavailable,
-    # propagates to #process, which backs off before retrying. A stack overflow discards the
-    # message too (see #stack_overflowed).
+    # A message that cannot be written is discarded and reported. When its content is at fault
+    # (see #message_error?) the thread carries on with the next message. Any other error, such as
+    # the destination being unavailable, then propagates to #process, which backs off before
+    # carrying on with the next message. A stack overflow discards the message too (see
+    # #stack_overflowed).
     def write_message(log)
       appender.log(log)
       @processed_count += 1
     rescue SystemStackError => e
       stack_overflowed([log], e)
     rescue StandardError => e
-      raise unless message_error?(e)
-
       messages_failed([log], e)
+      raise e unless message_error?(e)
     end
 
     # Write the log messages to the appender as a batch.
@@ -408,12 +414,13 @@ module SemanticLogger
 
     # Whether the appender says the exception was caused by the content of a log message, rather
     # than by the destination. An appender that cannot tell (it does not implement
-    # #message_error?) has every error retried with a back-off.
+    # #message_error?) has every error treated as the destination's, so the thread backs off.
     def message_error?(exception) = appender.respond_to?(:message_error?) && appender.message_error?(exception)
 
-    # Record log messages discarded because their content could not be written. The first is
-    # reported to the internal logger straight away, with the error. After that the count is
-    # reported, with the latest error, at most once every dropped_message_report_seconds.
+    # Record log messages discarded because they could not be written, whether their content or
+    # the destination was at fault. The first is reported to the internal logger straight away,
+    # with the error. After that the count is reported, with the latest error, at most once every
+    # dropped_message_report_seconds.
     def messages_failed(logs, exception)
       @failed.record(logs.size, interval: dropped_message_report_seconds) do |count, seconds|
         period = seconds ? " in the last #{seconds.round} seconds" : ""

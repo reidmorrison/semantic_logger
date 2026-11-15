@@ -53,6 +53,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- When an async or batching appender's destination fails, the message (or batch) being written is
+  now counted as `failed` in `SemanticLogger.stats` and reported to the internal logger, as a message
+  whose content cannot be written already was. Before, it was discarded without being counted, and
+  the docs said it was retried. Delivery is unchanged: the worker thread backs off, then carries on
+  with the messages queued meanwhile. See
+  [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender).
 - The formatter of an appender added with `async: true` (or batching) can be read and changed with
   `formatter` and `formatter=`, as for any other appender. Before, these raised `NoMethodError`.
   An appender that formats its messages as one batch needs a formatter that implements `#batch`. See

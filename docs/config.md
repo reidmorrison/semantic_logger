@@ -678,10 +678,11 @@ end
 ~~~
 
 When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
-is retried after a back-off, on the basis that the destination may be briefly unavailable. An
-exception caused by the content of one message cannot succeed on retry, so that message is discarded
-instead. `#message_error?(exception)` decides which is which. Format each message with
-`format_log(log)` (or a batch with `format_batch(logs)`) rather than `formatter.call`: any error the
+discards the message, and the worker thread backs off before writing the next one, on the basis
+that the destination may be briefly unavailable. An exception caused by the content of one message
+says nothing about the destination, so the thread carries on straight away instead.
+`#message_error?(exception)` decides which is which. Format each message with `format_log(log)` (or
+a batch with `format_batch(logs)`) rather than `formatter.call`: any error the
 formatter raises is then raised as a `SemanticLogger::Subscriber::FormatError`, which
 `#message_error?` recognizes, since a formatter can only fail because of the content of the message.
 By default it also recognizes the errors raised when serializing a value that cannot be written
