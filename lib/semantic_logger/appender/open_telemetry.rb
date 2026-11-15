@@ -20,7 +20,8 @@ module SemanticLogger
       # Create a Open Telemetry Logger appender instance.
       #
       # The formatter maps each log entry to an Open Telemetry log record, returning the keyword
-      # arguments for `Logger#on_emit` other than `context:`. See SemanticLogger::Formatters::OpenTelemetry.
+      # arguments for `Logger#on_emit` other than `context:`.
+      # Default: SemanticLogger::Formatters::OpenTelemetry
       #
       # Metric only log events are sent to the Open Telemetry Metrics API instead of the Logs API.
       #   I.e. A metric without a message or an exception.
@@ -30,7 +31,7 @@ module SemanticLogger
       #    SemanticLogger.add_appender(appender: :open_telemetry)
       def initialize(name: "SemanticLogger",
                      version: SemanticLogger::VERSION,
-                     formatter: SemanticLogger::Formatters::OpenTelemetry.new,
+                     formatter: nil,
                      metrics: true,
                      **args,
                      &)
@@ -86,6 +87,13 @@ module SemanticLogger
       #   ap log.payload
       #   true
       # end
+
+      private
+
+      # Use the Open Telemetry formatter by default: #log emits the log record it returns.
+      def default_formatter
+        SemanticLogger::Formatters::OpenTelemetry.new
+      end
     end
   end
 end

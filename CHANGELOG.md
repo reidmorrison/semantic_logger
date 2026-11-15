@@ -119,6 +119,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   sent the entry from the appender thread, with that thread's empty Sentry scope, so the event had
   no trace, and no user other than the one taken from the named tags. The user taken from the named
   tags is merged into the thread's Sentry user.
+- The `:loki`, `:open_telemetry`, and `:new_relic_logs` appenders use their own formatter when given
+  `formatter: nil`, or when their formatter is set back to `nil` with `formatter=`. They used the
+  generic default instead: JSON for Loki, and plain text for the others, which made every log entry
+  fail for OpenTelemetry.
 
 ## [5.2.0] 2026-10-30
 
