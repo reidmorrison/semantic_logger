@@ -111,7 +111,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:loki`, `:open_telemetry`, and `:new_relic_logs` appenders use their own formatter when given
   `formatter: nil`, or when their formatter is set back to `nil` with `formatter=`. They used the
   generic default instead: JSON for Loki, and plain text for the others, which made every log entry
-  fail for Open Telemetry.
+  fail for OpenTelemetry.
 
 ## [5.2.0] 2026-10-30
 

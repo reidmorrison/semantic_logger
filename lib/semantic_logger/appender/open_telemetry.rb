@@ -20,7 +20,8 @@ module SemanticLogger
       # Create a Open Telemetry Logger appender instance.
       #
       # The formatter maps each log entry to an Open Telemetry log record, returning the keyword
-      # arguments for `Logger#on_emit` other than `context:`. See SemanticLogger::Formatters::OpenTelemetry.
+      # arguments for `Logger#on_emit` other than `context:`.
+      # Default: SemanticLogger::Formatters::OpenTelemetry
       #
       # Metric only log events are sent to the Open Telemetry Metrics API instead of the Logs API.
       #   I.e. A metric without a message or an exception.

@@ -98,7 +98,7 @@ module SemanticLogger
       #   formatter: [Object|Proc]
       #     An instance of a class that implements #call, or a Proc to be used to format
       #     the output from this appender
-      #     Default: Use the built-in formatter (See: #call)
+      #     Default: SemanticLogger::Formatters::Json
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
