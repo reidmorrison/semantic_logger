@@ -652,8 +652,8 @@ class SimpleAppender < SemanticLogger::Subscriber
 
   # Add additional arguments to the initializer while supporting all existing ones.
   def initialize(url:, **args, &block)
-    @url = url
     super(**args, &block)
+    @url = url
   end
 
   # Display the log struct and the text formatted output
@@ -677,9 +677,10 @@ class SimpleAppender < SemanticLogger::Subscriber
 end
 ~~~
 
-Give the appender's own options names that `SemanticLogger::Subscriber#initialize` does not already
-use (`level`, `formatter`, `filter`, `application`, `environment`, `host`, and `metrics`): `super`
-sets those, so it would overwrite a value the appender assigned to one of them before calling it.
+Do not give the appender an option of the same name as one that `super` already accepts, such as
+`host` or `level`: the appender's own keyword would take the value, so `super` would never receive
+it. Call `super` before setting the appender's own instance variables, since `super` sets those of
+every appender, such as `@name` and `@host`.
 
 When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
 discards the message, and the worker thread backs off before writing the next one, on the basis
