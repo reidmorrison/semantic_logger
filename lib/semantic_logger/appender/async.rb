@@ -115,8 +115,9 @@ module SemanticLogger
       #   processed:      [Integer] Cumulative number of log messages written since startup.
       #   dropped:        [Integer] Cumulative number of log messages dropped because the queue
       #                             was full (only possible when non_blocking is enabled).
-      #   failed:         [Integer] Cumulative number of log messages discarded because their
-      #                             content could not be written (see Subscriber#message_error?).
+      #   failed:         [Integer] Cumulative number of log messages discarded because they
+      #                             could not be written, whether their content or the
+      #                             destination was at fault (see Subscriber#message_error?).
       def stats
         {
           name:           name,

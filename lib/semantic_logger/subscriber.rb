@@ -120,8 +120,9 @@ module SemanticLogger
     # Whether the supplied exception, raised by #log or #batch, was caused by the content of a
     # log message, rather than by the destination, for example being unavailable.
     #
-    # Retrying cannot write such a message, so an asynchronous appender discards it and carries
-    # on, instead of backing off and retrying. Any other exception is retried with a back-off.
+    # Waiting cannot write such a message, so an asynchronous appender discards it and carries on
+    # straight away. On any other exception it also discards the message (or the batch), but then
+    # backs off before carrying on, since the destination may be briefly unavailable.
     #
     # Every error raised by the formatter is one (see #format_log). An appender whose client
     # raises its own errors for bad content can override this to recognize them.
@@ -162,9 +163,9 @@ module SemanticLogger
     # Returns the log messages formatted by the formatter's #batch, as for #format_log.
     #
     # A formatter that cannot format a batch is a configuration error rather than bad content, so
-    # it raises ArgumentError instead, which is retried with a back-off and reported like any
-    # other. That includes an appender that is its own formatter (it implements #call), whose
-    # #batch is the appender's own.
+    # it raises ArgumentError instead, which backs off and is reported like any other error from
+    # the destination. That includes an appender that is its own formatter (it implements #call),
+    # whose #batch is the appender's own.
     #
     # The formatter is read once, so that one changed by #formatter= on another thread cannot be
     # swapped in between the check and the call.

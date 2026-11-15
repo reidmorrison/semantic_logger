@@ -447,14 +447,14 @@ class QueueProcessorTest < Minitest::Test
           assert_match(/Discarded 3 log message\(s\) in the last \d+ seconds/, reports.last)
         end
 
-        it "backs off, instead of discarding, when the destination's response cannot be parsed" do
+        it "backs off when the destination's response cannot be parsed" do
           processor = build(async_max_retries: 0)
           appender.stub(:log, ->(_) { JSON.parse("<html>502 Bad Gateway</html>") }) do
             processor.queue << new_log
             processor.send(:process)
           end
 
-          assert_equal 0, processor.failed_count
+          assert_equal 1, processor.failed_count
           assert_predicate processor, :stopped?
         end
 
@@ -621,6 +621,107 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    describe "a message the destination cannot take" do
+      describe "streaming" do
+        it "discards and reports that message, then backs off and carries on with the next one" do
+          processor = build(async_max_retries: 1)
+          failures  = 1
+          original  = appender.method(:log)
+          down      = lambda do |log|
+            if failures.positive?
+              failures -= 1
+              raise IOError, "destination unavailable"
+            end
+            original.call(log)
+          end
+          processor.queue << new_log(message: "first")
+          processor.queue << new_log(message: "second")
+          processor.queue << request(:close)
+          slept = []
+          appender.stub(:log, down) do
+            processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+              processor.send(:process)
+            end
+          end
+
+          assert_equal %w[second], appender.events.map(&:message)
+          assert_equal [1], slept
+          assert_equal 1, processor.processed_count
+          assert_equal 1, processor.failed_count
+
+          report = internal_logger.events.find { |event| event.message.include?("Discarded 1 log message(s)") }
+
+          assert_kind_of IOError, report.exception
+        end
+      end
+
+      describe "batching" do
+        let(:appender) do
+          a        = BatchAppender.new
+          a.logger = internal_logger
+          a
+        end
+
+        def write_batch_of(processor, messages)
+          messages.each { |message| processor.queue << new_log(message: message) }
+          processor.signal.set
+          processor.stub(:sleep, nil) { processor.send(:process) }
+        end
+
+        it "discards and reports the whole batch, then backs off" do
+          processor = build(batch: true, batch_seconds: 60, async_max_retries: 0)
+          appender.stub(:batch, ->(_) { raise IOError, "destination unavailable" }) do
+            write_batch_of(processor, %w[first second third])
+          end
+
+          assert_equal 0, processor.processed_count
+          assert_equal 3, processor.failed_count
+          assert_predicate processor, :stopped?
+          assert(internal_logger.events.any? { |event| event.message.include?("Discarded 3 log message(s)") })
+        end
+
+        it "counts only the messages not yet written when a batch being split cannot be written" do
+          processor = build(batch: true, batch_seconds: 60, async_max_retries: 0)
+          appender.define_singleton_method(:batch_all_or_nothing?) { true }
+          calls    = 0
+          original = appender.method(:batch)
+          splitting = lambda do |logs|
+            calls += 1
+            raise JSON::GeneratorError, "cannot serialize" if calls == 1
+            raise IOError, "destination unavailable" if calls == 3
+
+            original.call(logs)
+          end
+          appender.stub(:batch, splitting) do
+            write_batch_of(processor, %w[first second third fourth])
+          end
+
+          assert_equal([%w[first second]], appender.batches.map { |logs| logs.map(&:message) })
+          assert_equal 2, processor.processed_count
+          assert_equal 2, processor.failed_count
+        end
+
+        it "counts every message when the first half of a batch being split cannot be written" do
+          processor = build(batch: true, batch_seconds: 60, async_max_retries: 0)
+          appender.define_singleton_method(:batch_all_or_nothing?) { true }
+          calls     = 0
+          splitting = lambda do |_logs|
+            calls += 1
+            raise JSON::GeneratorError, "cannot serialize" if calls == 1
+
+            raise IOError, "destination unavailable"
+          end
+          appender.stub(:batch, splitting) do
+            write_batch_of(processor, %w[first second third fourth])
+          end
+
+          assert_equal 2, calls, "the second half must not be written once the destination is unavailable"
+          assert_equal 0, processor.processed_count
+          assert_equal 4, processor.failed_count
+        end
+      end
+    end
+
     describe "a command taken off the queue with a batch that cannot be written" do
       let(:appender) do
         a        = UnavailableBatchAppender.new
@@ -655,6 +756,7 @@ class QueueProcessorTest < Minitest::Test
         assert close.wait { false }, "the close was not answered"
         assert_predicate appender, :closed
         refute_predicate processor, :stopped?
+        assert_equal 3, processor.failed_count
         assert(internal_logger.events.any? { |event| event.message.include?("Closed without writing 3 log messages") })
       end
 
