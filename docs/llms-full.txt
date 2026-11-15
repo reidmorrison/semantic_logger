@@ -422,6 +422,10 @@ logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", metric_amo
 
 # Attach a backtrace of your own, an Array of Strings, instead of the logger's call stack
 logger.warn(message: "Open redirect detected", backtrace: redirect_stack)
+
+# Say where the entry was logged, or that it has no such place (see call_site_level)
+logger.debug(message: "Order Load", duration: 0.4, call_site: query_location)
+logger.info(message: "Started GET /orders", call_site: false)
 ~~~
 
 In both forms, a key such as `duration` or `exception` is only used as an argument when its value is
@@ -1032,6 +1036,20 @@ The `:logfmt` and `:loki` formatters write neither. A custom formatter reads the
 
 Which code counts as the call site:
 
+* When the log call supplies `call_site:`, that call site. Code that logs on behalf of other code,
+  such as a log subscriber, can say which code the entry is about with a `Thread::Backtrace::Location`
+  (for example from `Thread.each_caller_location`) or a `SemanticLogger::CallSite`, or that it has no
+  such code with `false`, which also skips reading the stack. A supplied call site is only recorded
+  when the entry is at or above `call_site_level`, so that it never adds a call site to the output of
+  an application that has not turned call sites on:
+
+  ~~~ruby
+  logger.debug(message: "Order Load", duration: 0.4, call_site: backtrace_cleaner.first_clean_location)
+  logger.info(message: "Started GET /orders", call_site: false)
+  ~~~
+
+  A String, or any other value that parsed data can hold, is not accepted as a call site: it is
+  logged as part of the payload.
 * The first frame outside Semantic Logger, `rails_semantic_logger`, and Ruby's internal files (paths
   that start with `<internal:`). So an entry logged by a `measure_*` call, or by a logging block,
   records the code that called the logger. When the logger is called through `public_send`,
@@ -2999,7 +3017,7 @@ situational field.
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
-|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`. See [The call site](#the-call-site).|
+|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`, and the log call did not pass `call_site: false`. See [The call site](#the-call-site).|
 |`metric`|`String`|The metric name, present for metric and `measure_*` calls. See [Metrics](metrics.html).|
 |`metric_amount`|`Float`|Numeric amount for a counter or gauge metric, for example the quantity purchased.|
 |`dimensions`|`Hash`|Dimensions (key/value labels) supplied for a metric.|
@@ -5018,7 +5036,9 @@ Semantic Logger only uses such a key as an argument when its value is valid for 
 valid level. Any other value stays in the payload as data, and a `nil` value is ignored, so an
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
 A valid `backtrace` also sets where the entry is recorded as logged: its file name, line number, and,
-with [`call_site_level`](config.html#recording-where-each-entry-was-logged), its method.
+with [`call_site_level`](config.html#recording-where-each-entry-was-logged), its method. A
+`call_site` key can only leave out where the entry was logged, with `false`: the values that set a
+call site are Ruby objects that parsed data cannot hold.
 
 To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
 keys supplied alongside an explicit `payload:` are merged into it, and win over the explicit

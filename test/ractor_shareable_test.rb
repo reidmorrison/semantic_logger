@@ -120,6 +120,24 @@ module SemanticLogger
         assert_equal SemanticLogger.application, application
       end
 
+      it "records a Thread::Backtrace::Location supplied inside a Ractor as a call site" do
+        skip "Logging from a Ractor requires Ruby 4.0" unless ruby4?
+
+        begin
+          SemanticLogger.call_site_level = :info
+          call_site = in_ractor do
+            log = SemanticLogger::Log.new("InRactor", :info)
+            log.assign(message: "Hello", call_site: caller_locations(0, 1).first)
+            log.call_site
+          end
+        ensure
+          SemanticLogger.call_site_level = nil
+        end
+
+        assert_equal __FILE__, call_site.path
+        assert Ractor.shareable?(call_site)
+      end
+
       it "records a call site inside a Ractor, with skip paths" do
         skip "Logging from a Ractor requires Ruby 4.0" unless ruby4?
 

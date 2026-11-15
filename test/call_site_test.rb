@@ -196,7 +196,7 @@ module SemanticLogger
 
       describe ".locate" do
         it "returns the first line of a supplied backtrace" do
-          call_site = CallSite.locate(["/app/models/order.rb:42:in 'Order#submit'", "/app/b.rb:1"])
+          call_site = CallSite.locate(backtrace: ["/app/models/order.rb:42:in 'Order#submit'", "/app/b.rb:1"])
 
           assert_equal CallSite.new(path: "/app/models/order.rb", line: 42, label: "Order#submit"), call_site
         end
@@ -210,9 +210,40 @@ module SemanticLogger
         end
 
         it "captures the call site for an empty supplied backtrace" do
-          call_site = CallSite.locate([])
+          call_site = CallSite.locate(backtrace: [])
 
           assert_equal __FILE__, call_site.path
+        end
+      end
+
+      describe ".from" do
+        it "returns a CallSite as it is" do
+          call_site = CallSite.new(path: "/app/a.rb", line: 1, label: nil)
+
+          assert_same call_site, CallSite.from(call_site)
+        end
+
+        it "makes a frozen call site from a Thread::Backtrace::Location" do
+          location  = caller_locations(0, 1).first
+          call_site = CallSite.from(location)
+
+          assert_equal [location.path, location.lineno, location.label],
+                       [call_site.path, call_site.line, call_site.label]
+          assert_predicate call_site.label, :frozen?
+        end
+      end
+
+      describe ".supplied?" do
+        it "accepts false, a CallSite, or a Thread::Backtrace::Location" do
+          assert CallSite.supplied?(false)
+          assert CallSite.supplied?(CallSite.new(path: "/app/a.rb", line: 1, label: nil))
+          assert CallSite.supplied?(caller_locations(0, 1).first)
+        end
+
+        it "rejects the values parsed data can hold, other than false" do
+          [nil, true, "/app/a.rb:1", ["/app/a.rb:1"], {path: "/app/a.rb"}, 1].each do |value|
+            refute CallSite.supplied?(value), value.inspect
+          end
         end
       end
 
@@ -425,6 +456,97 @@ module SemanticLogger
           events = semantic_logger_events { SemanticLogger["Order"].info("x", backtrace: ["/app/caf\xE9.rb:1"]) }
 
           assert_nil events.first.call_site
+        end
+      end
+
+      describe "a call site that the log call supplies" do
+        let(:supplied) { CallSite.new(path: "/app/views/orders/index.html.erb", line: 1, label: nil) }
+
+        it "records a supplied CallSite" do
+          with_call_site_level(:info) do
+            events = semantic_logger_events { SemanticLogger["Order"].info("Rendered", call_site: supplied) }
+
+            assert_same supplied, events.first.call_site
+          end
+        end
+
+        it "records a supplied Thread::Backtrace::Location" do
+          with_call_site_level(:info) do
+            location = caller_locations(0, 1).first
+            events   = semantic_logger_events { SemanticLogger["Order"].info("Query", call_site: location) }
+
+            assert_equal CallSite.new(path: location.path, line: location.lineno, label: location.label),
+                         events.first.call_site
+          end
+        end
+
+        it "records no call site for call_site: false" do
+          with_call_site_level(:info) do
+            events = semantic_logger_events { SemanticLogger["Rack"].info("Started", call_site: false) }
+
+            assert_nil events.first.call_site
+            assert_nil events.first.payload
+          end
+        end
+
+        it "does not read the stack for call_site: false" do
+          with_call_site_level(:info) do
+            CallSite.stub(:capture, -> { raise "read the stack" }) do
+              events = semantic_logger_events { SemanticLogger["Rack"].info("Started", call_site: false) }
+
+              assert_nil events.first.call_site
+            end
+          end
+        end
+
+        it "accepts it with the message in the Hash" do
+          with_call_site_level(:info) do
+            events = semantic_logger_events { SemanticLogger["Rack"].info(message: "Started", call_site: false) }
+
+            assert_nil events.first.call_site
+            assert_equal "Started", events.first.message
+          end
+        end
+
+        it "prefers it to a supplied backtrace" do
+          with_call_site_level(:info) do
+            events = semantic_logger_events do
+              SemanticLogger["Order"].info("Query", call_site: supplied, backtrace: ["/app/other.rb:1:in 'x'"])
+            end
+
+            assert_same supplied, events.first.call_site
+            assert_equal ["/app/other.rb:1:in 'x'"], events.first.backtrace
+          end
+        end
+
+        it "does not record it below call_site_level" do
+          with_call_site_level(:warn) do
+            events = semantic_logger_events { SemanticLogger["Order"].info("Rendered", call_site: supplied) }
+
+            assert_nil events.first.call_site
+            assert_nil events.first.payload
+          end
+        end
+
+        it "keeps a value that parsed data can hold in the payload, and reads the stack" do
+          with_call_site_level(:info) do
+            forged = {call_site: "/app/forged.rb:1:in 'x'"}
+            events = semantic_logger_events { SemanticLogger["Order"].info("Webhook", forged) }
+            line   = __LINE__ - 1
+
+            assert_equal({call_site: "/app/forged.rb:1:in 'x'"}, events.first.payload)
+            assert_equal line, events.first.call_site.line
+          end
+        end
+
+        it "keeps a call site returned by a logging block in the payload" do
+          with_call_site_level(:info) do
+            events = semantic_logger_events { SemanticLogger["Order"].info("Hello") { {call_site: false} } }
+            line   = __LINE__ - 1
+
+            assert_equal({call_site: false}, events.first.payload)
+            assert_equal line, events.first.call_site.line
+          end
         end
       end
 

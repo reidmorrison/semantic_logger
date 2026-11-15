@@ -61,6 +61,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   helpers, so that entries record the code that called them. See
   [Recording where each entry was logged](https://logger.reidmorrison.com/config.html#recording-where-each-entry-was-logged).
   Resolves discussion #219.
+- A log call can pass `call_site:` to say where the entry was logged, as a `Thread::Backtrace::Location`
+  or a `SemanticLogger::CallSite`, or `call_site: false` for an entry with no such code, which also
+  skips reading the stack. For code that logs on behalf of other code, such as a log subscriber. It is
+  only recorded at or above `call_site_level`. See
+  [Recording where each entry was logged](https://logger.reidmorrison.com/config.html#recording-where-each-entry-was-logged).
 
 ### Changed
 

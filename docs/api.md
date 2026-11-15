@@ -203,6 +203,10 @@ logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", metric_amo
 
 # Attach a backtrace of your own, an Array of Strings, instead of the logger's call stack
 logger.warn(message: "Open redirect detected", backtrace: redirect_stack)
+
+# Say where the entry was logged, or that it has no such place (see call_site_level)
+logger.debug(message: "Order Load", duration: 0.4, call_site: query_location)
+logger.info(message: "Started GET /orders", call_site: false)
 ~~~
 
 In both forms, a key such as `duration` or `exception` is only used as an argument when its value is

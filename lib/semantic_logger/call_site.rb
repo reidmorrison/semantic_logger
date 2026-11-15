@@ -73,11 +73,33 @@ module SemanticLogger
     QUOTE = "'".freeze
     private_constant :QUOTE
 
-    # Returns [CallSite|nil] where a log entry was logged: the first line of the backtrace that the log
-    # call supplied, or without one (or an empty one), the first frame of the calling thread's stack
+    # Returns [CallSite|nil] where a log entry was logged, from what the log call supplied:
+    #   call_site: [CallSite|Thread::Backtrace::Location|false|nil]
+    #     The call site, or the frame it is made from. false: the entry has no call site.
+    #   backtrace: [Array<String>|nil]
+    #     Without a call site, its first line is the call site.
+    # Without either (or with an empty backtrace), the first frame of the calling thread's stack
     # outside Semantic Logger (see .capture).
-    def self.locate(supplied_backtrace = nil)
-      supplied_backtrace.nil? || supplied_backtrace.empty? ? capture : parse(supplied_backtrace.first)
+    def self.locate(call_site: nil, backtrace: nil)
+      return if call_site == false
+      return from(call_site) if call_site
+
+      backtrace.nil? || backtrace.empty? ? capture : parse(backtrace.first)
+    end
+
+    # Returns [CallSite] the call site, or the call site of a Thread::Backtrace::Location.
+    def self.from(call_site)
+      return call_site if call_site.is_a?(CallSite)
+
+      label = call_site.label
+      new(-call_site.path, call_site.lineno, label && -label)
+    end
+
+    # Whether the value can be supplied as a log entry's call site (see .locate). A value that parsed
+    # data, such as JSON, can hold is not, other than false, so that untrusted data cannot set the
+    # location of an entry.
+    def self.supplied?(value)
+      value == false || value.is_a?(CallSite) || value.is_a?(::Thread::Backtrace::Location)
     end
 
     # Returns [CallSite|nil] the first frame of the calling thread's stack outside Semantic Logger, Ruby's

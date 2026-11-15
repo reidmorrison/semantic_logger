@@ -43,8 +43,9 @@ module SemanticLogger
   #
   # call_site [CallSite]
   #   Where the entry was logged: the path, line, and label (usually the method) of the code that
-  #   made the log call, when the log level >= SemanticLogger.call_site_level. When the log call
-  #   supplies a backtrace, its first line. nil otherwise.
+  #   made the log call, when the log level >= SemanticLogger.call_site_level. The one the log call
+  #   supplies as `call_site:`, or nil for `call_site: false`, or else the first line of a backtrace
+  #   it supplies. nil below that level.
   #
   # metric_amount [Numeric]
   #   Used for numeric or counter metrics.
@@ -63,7 +64,7 @@ module SemanticLogger
   # #redact).
   class Log
     # Keys passed in without a payload that will be extracted and the remainder passed into the payload.
-    NON_PAYLOAD_KEYS = %i[message exception backtrace exception
+    NON_PAYLOAD_KEYS = %i[message exception backtrace call_site exception
                           duration min_duration
                           log_exception on_exception_level
                           metric metric_amount dimensions].freeze
@@ -81,6 +82,7 @@ module SemanticLogger
     ARGUMENT_VALIDATORS = Utils.make_shareable(
       {
         backtrace:          ->(value) { value.is_a?(Array) && value.all?(String) },
+        call_site:          ->(value) { CallSite.supplied?(value) },
         duration:           REAL_NUMBER,
         min_duration:       REAL_NUMBER,
         metric_amount:      REAL_NUMBER,
@@ -132,6 +134,7 @@ module SemanticLogger
                metric_amount: nil,
                duration: nil,
                backtrace: nil,
+               call_site: nil,
                log_exception: :full,
                on_exception_level: nil,
                dimensions: nil)
@@ -178,9 +181,11 @@ module SemanticLogger
         self.backtrace = Utils.extract_backtrace(caller)
       end
 
-      # A backtrace supplied by the log call says where the entry is about, such as the application code
-      # that ran a query, or the thread whose backtrace is logged.
-      self.call_site = CallSite.locate(backtrace) if level_index >= SemanticLogger.call_site_level_index
+      # A call site or backtrace supplied by the log call says where the entry is about, such as the
+      # application code that ran a query, or the thread whose backtrace is logged.
+      if level_index >= SemanticLogger.call_site_level_index
+        self.call_site = CallSite.locate(call_site: call_site, backtrace: backtrace)
+      end
 
       true
     end
