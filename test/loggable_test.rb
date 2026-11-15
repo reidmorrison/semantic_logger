@@ -27,36 +27,12 @@ class AppenderFileTest < Minitest::Test
     include SemanticLogger::Loggable
   end
 
-  class Measured
-    include SemanticLogger::Loggable
-
-    def double(value)
-      value * 2
-    end
-    logger_measure_method :double
-
-    def explode
-      raise "boom"
-    end
-    logger_measure_method :explode, level: :error
-
-    def quick
-      :done
-    end
-    logger_measure_method :quick, min_duration: 60_000
-  end
-
   module LoggableModule
     include SemanticLogger::Loggable
 
     def work
       logger.info "work"
     end
-
-    def double(value)
-      value * 2
-    end
-    logger_measure_method :double
   end
 
   class ModuleHost
@@ -184,16 +160,6 @@ class AppenderFileTest < Minitest::Test
 
         assert_equal "work", host.logger.events.first.message
       end
-
-      it "measures a method declared in the module" do
-        host    = ModuleHost.new
-        capture = SemanticLogger::Test::CaptureLogEvents.new
-        host.logger = capture
-
-        assert_equal 4, host.double(2)
-        assert_equal "#double", capture.events.first.message
-        assert_equal "#{LoggableModule.name}/double", capture.events.first.metric
-      end
     end
 
     describe "sample class" do
@@ -227,162 +193,6 @@ class AppenderFileTest < Minitest::Test
 
         assert_same custom, instance.logger
         refute_same custom, TestAttribute.new.logger
-      end
-    end
-
-    describe "#logger_measure_method" do
-      let(:capture) { SemanticLogger::Test::CaptureLogEvents.new }
-
-      before do
-        Measured.logger = capture
-      end
-
-      after do
-        Measured.logger = nil
-      end
-
-      it "logs the method duration and returns the result" do
-        assert_equal 8, Measured.new.double(4)
-
-        assert log = capture.events.first
-        assert_equal "#double", log.message
-        assert_equal :info, log.level
-        assert_equal "#{Measured.name}/double", log.metric
-        refute_nil log.duration
-      end
-
-      it "logs and re-raises when the method raises" do
-        assert_raises(RuntimeError) { Measured.new.explode }
-
-        assert log = capture.events.first
-        assert_equal :error, log.level
-        assert_match(/Exception: RuntimeError: boom/, log.message)
-      end
-
-      it "does not log when the duration is below min_duration" do
-        assert_equal :done, Measured.new.quick
-        assert_empty capture.events
-      end
-
-      it "runs the method without logging when the level is not met" do
-        capture.level = :fatal
-
-        assert_equal 8, Measured.new.double(4)
-        assert_empty capture.events
-      end
-
-      describe "arguments written into the generated method" do
-        let(:klass) do
-          Class.new do
-            include SemanticLogger::Loggable
-
-            def self.name = "MeasuredArguments"
-
-            def run = :ran
-          end
-        end
-
-        it "rejects a min_duration that is not a number, instead of evaluating it" do
-          assert_raises(ArgumentError) do
-            klass.logger_measure_method(:run, min_duration: "(raise('injected code ran'); 0.0)")
-          end
-
-          # Had the code been written into the method, calling it would raise.
-          assert_equal :ran, klass.new.run
-        end
-
-        it "rejects a method name that is not an identifier" do
-          assert_raises(ArgumentError) do
-            klass.logger_measure_method(:"run(*); raise('injected code ran'); def x")
-          end
-        end
-
-        it "rejects a method name that would write code into the generated method" do
-          ["run; raise('injected code ran')", "foo; system('x')", "run\nraise('x')", "@run", "@@run", "$run", "",
-           "Kernel.run", "Kernel::run"].each do |name|
-            assert_raises(ArgumentError, name.inspect) { klass.logger_measure_method(name) }
-          end
-          assert_equal :ran, klass.new.run
-        end
-
-        it "measures every kind of valid method name" do
-          operators = Class.new do
-            include SemanticLogger::Loggable
-
-            def self.name = "MeasuredOperators"
-
-            def [](key) = [:get, key]
-
-            def []=(key, value)
-              [:set, key, value]
-            end
-
-            def ==(other) = [:equal, other]
-            def +(other) = [:plus, other]
-            def -@ = :negated
-            def valid? = true
-            def save! = :saved
-
-            def value=(value)
-              [:value, value]
-            end
-
-            define_method("café") { :coffee }
-          end
-          names = %i[[] []= == + -@ valid? save! value=] + ["café"]
-
-          names.each { |name| assert operators.logger_measure_method(name), "name: #{name.inspect}" }
-          operators.logger = capture
-          instance = operators.new
-
-          assert_equal [:get, 1], instance[1]
-          assert_equal [:set, 1, 2], instance.public_send(:[]=, 1, 2)
-          assert_equal [:equal, 1], instance.public_send(:==, 1)
-          assert_equal [:plus, 1], instance + 1
-          assert_equal :negated, -instance
-          assert_predicate instance, :valid?
-          assert_equal :saved, instance.save!
-          assert_equal [:value, 3], instance.public_send(:value=, 3)
-          assert_equal :coffee, instance.public_send("café")
-          assert_equal names.map { |name| "##{name}" }, capture.events.map(&:message)
-        ensure
-          operators.logger = nil
-        end
-
-        it "rejects a min_duration that is not a finite number" do
-          ["1e400", "-1e400", Float::INFINITY, Float::NAN, nil, true, "", "abc", Object.new].each do |value|
-            assert_raises(ArgumentError, value.inspect) { klass.logger_measure_method(:run, min_duration: value) }
-          end
-          assert_equal :ran, klass.new.run
-        end
-
-        it "logs a metric only event when the message is nil" do
-          assert klass.logger_measure_method(:run, message: nil, metric: "Klass/run")
-          klass.logger = capture
-
-          assert_equal :ran, klass.new.run
-          assert log = capture.events.first
-          assert_nil log.message
-          assert_equal "Klass/run", log.metric
-          assert_predicate log, :metric_only?
-        ensure
-          klass.logger = nil
-        end
-
-        it "rejects an invalid log_exception value" do
-          assert_raises(ArgumentError) { klass.logger_measure_method(:run, log_exception: "full") }
-        end
-
-        it "accepts a numeric String min_duration, a String message, and String levels" do
-          assert klass.logger_measure_method(:run, min_duration: "0", message: "Running", level: "info",
-                                                   on_exception_level: "error")
-          klass.logger = capture
-
-          assert_equal :ran, klass.new.run
-          assert_equal "Running", capture.events.first.message
-        ensure
-          klass.logger = nil
-        end
       end
     end
   end

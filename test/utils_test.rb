@@ -107,36 +107,6 @@ module SemanticLogger
         end
       end
 
-      describe ".method_visibility" do
-        let(:mod) do
-          Module.new do
-            def public_method
-            end
-
-            private
-
-            def private_method
-            end
-          end
-        end
-
-        it "detects a public method" do
-          assert_equal :public, SemanticLogger::Utils.method_visibility(mod, :public_method)
-        end
-
-        it "detects a private method" do
-          assert_equal :private, SemanticLogger::Utils.method_visibility(mod, :private_method)
-        end
-
-        it "returns nil for an unknown method" do
-          assert_nil SemanticLogger::Utils.method_visibility(mod, :missing_method)
-        end
-
-        it "accepts a string method name" do
-          assert_equal :public, SemanticLogger::Utils.method_visibility(mod, "public_method")
-        end
-      end
-
       describe ".extract_path?" do
         it "is true for semantic logger paths" do
           assert SemanticLogger::Utils.extract_path?("/gems/foo/lib/semantic_logger/logger.rb:10")

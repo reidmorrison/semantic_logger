@@ -86,11 +86,6 @@ module SemanticLogger
     HASH_KEY = Utils.make_shareable(Hash.instance_method(:key?))
     private_constant :HASH_KEY
 
-    # Whether the value is accepted for the :log_exception argument of #assign.
-    def self.log_exception_option?(value)
-      value.nil? || LOG_EXCEPTION_OPTIONS.include?(value)
-    end
-
     # Returns [String] the name that identifies the thread in a log entry: the thread's own name,
     # or its object id when it has none, which Ruby never reuses within a process.
     def self.thread_name_for(thread) = thread.name || thread.object_id.to_s

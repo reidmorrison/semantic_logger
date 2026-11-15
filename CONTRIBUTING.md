@@ -177,7 +177,6 @@ classDiagram
     class Loggable {
         <<mixin>>
         +logger
-        +logger_measure_method()
     }
     class Levels {
         <<module>>

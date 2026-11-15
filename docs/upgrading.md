@@ -95,6 +95,24 @@ class MyJson < SemanticLogger::Formatters::Json
 end
 ~~~
 
+#### `logger_measure_method` has been removed
+
+`logger_measure_method`, an experiment that `SemanticLogger::Loggable` added to each class, has been
+removed. A class that still calls it raises `NoMethodError` when it is loaded. To keep logging how
+long a method takes, wrap its body in a `measure_*` block, and pass `metric:` to keep the metric it
+logged:
+
+~~~ruby
+def run
+  logger.measure_info("#run", metric: "MyClass/run") do
+    # ...
+  end
+end
+~~~
+
+To trace the method instead, use OpenTelemetry's `tracer.in_span`, or the method tracer of an APM
+agent.
+
 #### Other behaviour changes
 
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of

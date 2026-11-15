@@ -97,18 +97,6 @@ module SemanticLogger
       string
     end
 
-    # Returns the visibility for an instance method
-    def self.method_visibility(mod, method_name)
-      method_name = method_name.to_sym
-      if mod.instance_methods.include?(method_name)
-        :public
-      elsif mod.private_instance_methods.include?(method_name)
-        :private
-      elsif mod.protected_instance_methods.include?(method_name)
-        :protected
-      end
-    end
-
     # Extract the backtrace stripping off the leading semantic logger entries.
     # Leaves all other system and gem path entries in place.
     # Returns a new Array, leaving the supplied stack unchanged since it can belong to the caller.
