@@ -1028,6 +1028,22 @@ Notes:
   it captured a backtrace (see `backtrace_level` above), and otherwise the first line of the
   exception's backtrace.
 
+### Redacting sensitive keys
+
+Name the keys whose values must never be logged, such as passwords and access tokens, and their
+values are replaced with `[FILTERED]` in the payload, named tags, context, and metric dimensions of
+every log entry, at any depth, before any appender writes it:
+
+~~~ruby
+SemanticLogger.sensitive_keys = %i[passw secret token _key authorization cookie]
+~~~
+
+Symbols and Strings match any key whose name contains them, ignoring case, as in Rails'
+`config.filter_parameters`, and an `ActiveSupport::ParameterFilter`, a Regexp, or a Proc can be given
+instead. rails_semantic_logger sets it from `config.filter_parameters`. See
+[Redacting sensitive data](security.html#redacting-sensitive-data) for what is matched and redacted,
+and what is not.
+
 ### Caching loggers
 
 By default `SemanticLogger[...]` returns a brand new logger instance on every call. Enable logger
@@ -1192,10 +1208,11 @@ filter: ->(log) { log.message !~ /\Aheartbeat/ }
 ### Example: rewriting a message inside a filter
 
 A filter can also **modify** the log event before it is written, as long as it still returns `true`
-so the (now edited) entry is kept. This is handy for redacting sensitive data in a logger's filter,
-as below, or in `on_log` (see [Redacting sensitive data](security.html#redacting-sensitive-data)).
-Do not redact in an appender's filter: every appender writes the same log event, so the appenders
-added before it have already written the data. Resque, for example, logs the entire job payload,
+so the (now edited) entry is kept. This is handy for removing sensitive data from a message in a
+logger's filter, as below, or in `on_log`. To redact the values of sensitive keys in every entry, use
+[`SemanticLogger.sensitive_keys`](#redacting-sensitive-keys) instead. Do not redact in an appender's
+filter: every appender writes the same log event, so the appenders added before it have already
+written the data. Resque, for example, logs the entire job payload,
 which may contain private information:
 
 ```ruby
@@ -2558,8 +2575,9 @@ for more.
 
 ## Error and exception monitoring
 
-> **Note:** These appenders forward the payload as supplied. Take care not to push sensitive
-> information in tags or a payload.
+> **Note:** These appenders forward the payload and named tags. Name the keys whose values must not
+> be sent with [`SemanticLogger.sensitive_keys`](security.html#redacting-sensitive-data), and keep
+> sensitive information out of messages and tags, which are sent as they are.
 
 ### Bugsnag
 
@@ -2675,9 +2693,9 @@ SemanticLogger.on_log do |log|
 end
 ~~~
 
-It sends the whole entry, payload included, so register it after any `on_log` subscriber that
-[redacts sensitive data](security.html#redacting-sensitive-data): subscribers run in the order they
-were registered.
+It sends the whole entry, payload included, as it was logged: `on_log` subscribers run before
+[`SemanticLogger.sensitive_keys`](security.html#redacting-sensitive-data) redacts the entry, so its
+values are not filtered. Send only the fields Rollbar needs when entries can hold sensitive values.
 
 ## Databases and message queues
 
@@ -4872,126 +4890,141 @@ raises unless it is given a valid `:duration`.
 
 ### Redacting sensitive data
 
-Semantic Logger does not automatically redact secrets or personal information; it logs
-the message and payload it is given. Avoid logging passwords, tokens, full credit card
-numbers, and similar values in the first place.
+Semantic Logger logs the message and payload it is given. Avoid logging passwords, tokens, full
+credit card numbers, and similar values in the first place.
 
-When sensitive values can reach the logs indirectly, redact them. A global `on_log`
-subscriber runs inline, once per log event, before the event is handed to any appender,
-so it can scrub the payload for every destination. The example below matches keys at any depth,
-whether they are Strings, as in parsed JSON and Rails params, or Symbols, in any case and style,
-such as `api_key`, `apiKey`, or `X-Api-Key`. It builds a new payload rather than changing the logged
-one, which can be the application's own Hash. It fails closed: a payload that it cannot redact is
-replaced, never written as it is.
+When sensitive values can still reach the logs, for example in request headers or parameters that
+are logged as they are, name the sensitive keys once. The value of every matching key is replaced
+with `[FILTERED]` in every log entry, before any appender writes it:
 
 ~~~ruby
-module LogRedaction
-  # Matched against each key in lower case with "_" between its words, see sensitive_key?.
-  SENSITIVE_KEY = Regexp.union(
-    # Anywhere in the key, like the default filter_parameters of Rails.
-    /passw|passphrase|secret|token|_key|apikey|credential|authorization|cookie|crypt|certificate|email/,
-    # Only as a whole word, so that "otp" does not match "footprint", nor "ssn" "business_name".
-    /(?<![a-z])(?:auth|pwd|otp|ssn|salt|cvv|cvc)(?![a-z])/
-  )
-  REDACTED  = "[REDACTED]".freeze
-  MAX_DEPTH = 32
-
-  # Returns a copy of the value with the value of every sensitive key replaced, at any depth.
-  #
-  # copies maps each structure already walked to its copy, so that a structure held more than once
-  # is walked only once, and one that holds itself is cut off.
-  def self.redact(value, copies = {}.compare_by_identity, depth = 0)
-    return copies[value] || "[REDACTED: circular]" if copies.key?(value)
-
-    members = members(value)
-    return value if members.nil?
-    return "[REDACTED: nested too deeply]" if depth >= MAX_DEPTH
-
-    copies[value] = nil # Until its copy is complete.
-    copies[value] =
-      if members.is_a?(Hash)
-        members.each_with_object({}) do |(key, val), copy|
-          copy[key] = sensitive_key?(key) ? REDACTED : redact(val, copies, depth + 1)
-        end
-      else
-        members.map { |val| redact(val, copies, depth + 1) }
-      end
-  end
-
-  def self.sensitive_key?(key)
-    # As valid UTF-8, since a key with invalid bytes, as from a query string, makes a match raise.
-    name = key.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
-    # "apiKey", "API_KEY", and "X-Api-Key" become "api_key", "api_key", and "x_api_key".
-    name = name.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase.gsub(/[^a-z\d]+/, "_")
-    SENSITIVE_KEY.match?(name)
-  end
-
-  # Returns the members of a Hash, Array, Struct, Data, Set, OpenStruct, or
-  # ActionController::Parameters, as a Hash or an Array. Returns nil for any other value.
-  def self.members(value)
-    case value
-    when Hash, Array then value
-    when Struct, Data then value.to_h
-    when Set then value.to_a
-    else
-      if defined?(OpenStruct) && value.is_a?(OpenStruct)
-        value.to_h
-      elsif value.respond_to?(:to_unsafe_h) # ActionController::Parameters
-        value.to_unsafe_h
-      end
-    end
-  end
-end
-
-# Register it before any other on_log subscriber.
-SemanticLogger.on_log do |log|
-  log.payload = LogRedaction.redact(log.payload) unless log.payload.nil?
-rescue Exception => e
-  # Fail closed. Any Exception, since Semantic Logger rescues whatever an on_log subscriber raises
-  # and goes on to write the entry.
-  log.payload = {redaction_failed: e.class.name}
-end
+SemanticLogger.sensitive_keys = %i[passw secret token _key authorization cookie]
 ~~~
 
-`SENSITIVE_KEY` is a starting point: adapt it to the keys that your application logs. Like the
-default `filter_parameters` of Rails, it also matches some keys that are not secret, such as
-`max_tokens` or `cache_key`.
+~~~ruby
+logger.info("Calling API", headers: {"Authorization" => "Bearer abc123", "Accept" => "application/json"})
+# Written with: headers: {"Authorization" => "[FILTERED]", "Accept" => "application/json"}
+~~~
 
-The example looks inside Hashes and Arrays, and inside the Struct, Data, Set, and OpenStruct values
-that the JSON formatters write as objects and arrays, which it replaces with Hashes and Arrays. It
-reads `ActionController::Parameters` with `to_unsafe_h`. Any other object is left as it is, and is
-written the way the formatter writes it, which for some objects includes all of their attributes:
-for example a JSON formatter writes an Active Record model with `as_json`. Log a Hash of the values
-you need instead.
+Rails applications that use [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger)
+get this from `config.filter_parameters`; see [With Rails](#with-rails) below.
 
-Register it before any other `on_log` subscriber that reads the payload. Subscribers run in the
-order they were registered, so one registered before it, such as the [Rollbar](appenders.html#rollbar)
-integration that sends `log.to_h`, receives the payload before it is redacted.
+#### Naming the sensitive keys
 
-It only redacts the payload. The message, the tags and named tags, the message of the exception and
-those of its causes, the context that `on_log` subscribers add, and metric dimensions are written
-as they are, so keep secrets out of them. That includes a value other than a Hash passed after the
-message, such as `logger.info("Login", user)`, which is added to the message: pass it as
-`payload: user` instead.
+| Value | Sensitive keys |
+|-------|----------------|
+| An Array | Each Symbol or String matches any key whose name contains it, ignoring case, as in Rails' `config.filter_parameters`. Each Regexp matches as written. |
+| A Regexp | Keys whose names it matches. |
+| An `ActiveSupport::ParameterFilter` | Keys for which `filter_param(name, nil)` returns a value, which replaces the key's value, so a custom `mask:` is kept. Any object that responds to `#filter_param` works the same way. |
+| A Proc, or any object that responds to `#call` | Keys for which it returns true, given the key's name. |
+| `nil` | None: nothing is redacted. The default. |
 
-It copies the payload of every entry that is logged, even when there is nothing to redact, on the
-thread that logs it, so its cost grows with the size of the payloads.
+Keys are matched by name: the name of a Symbol key or a String key, both as written and in
+snake_case, which is lower case. So `:_key` above also matches `"X-Api-Key"` as `"x_api_key"`,
+`"apiKey"` and `"APIKey"` as `"api_key"`, and `"HTTP_X_API_KEY"` as `"http_x_api_key"`.
 
-A `filter` on a logger instance can redact the same way for that logger's entries; see
-[Filtering](config.html#filtering). Do not redact in an appender's `filter`: every appender writes
+Like the default `filter_parameters` of Rails, a name matches wherever it appears in a key, so it
+also matches some keys that are not secret: `:token` matches `max_tokens`, and `:_key` matches
+`cache_key`. To match whole words only, use a Regexp:
+
+~~~ruby
+SemanticLogger.sensitive_keys = [
+  # Anywhere in the key.
+  :passw, :secret, :token, :_key, :credential, :authorization, :cookie, :crypt, :certificate,
+  # Only as a whole word, so that "otp" does not match "footprint", nor "ssn" "business_name".
+  /(?<![a-z])(?:auth|pwd|otp|ssn|salt|cvv|cvc)(?![a-z])/
+]
+~~~
+
+The keys are read when they are assigned, so adding to the Array afterwards has no effect: assign
+the whole list again. The answer for each key name is remembered, so a Proc or object must always
+give the same answer for the same name. It is called on the thread that writes the entries, so it
+must be thread safe.
+
+#### What is redacted
+
+The payload, the named tags, the context that `on_log` subscribers add with `log.set_context`, and
+metric dimensions, at any depth: inside each Hash, including a key that is itself a Hash, and inside
+each Array, Set, Struct, Data, OpenStruct, and `ActionController::Parameters`. The value of a
+sensitive key is replaced whole, even when it is a Hash. A Struct, Data, or OpenStruct that holds a
+sensitive key is written as a Hash, and a Set as an Array, as the JSON formatters write them. A
+structure that holds itself is cut off with `[FILTERED: circular]`, and one nested more than 32
+levels deep is replaced with `[FILTERED: nested too deeply]`.
+
+The application's own Hashes are never changed: the entry is given a copy, and only when it holds a
+sensitive key, or a structure that holds itself or is nested too deeply. Other entries are written
+as they are.
+
+These are written as they are, so keep secrets out of them:
+
+* The message, and a value other than a Hash passed after it, such as `logger.info("Login", user)`,
+  which is added to the message: pass it as `payload: user` instead.
+* The tags, the message of the exception, and those of the exceptions that caused it.
+* Any other object, which is written the way the formatter writes it. For some objects that
+  includes all of their attributes: for example a JSON formatter writes an Active Record model with
+  `as_json`. Log a Hash of the values you need instead.
+
+To change text in messages, rewrite the message in a logger's `filter` or in an `on_log` subscriber;
+see [Filtering](config.html#filtering). Do not redact in an appender's `filter`: every appender writes
 the same log entry, so that only protects the appenders added after it, while the ones added before
 it have already written the secret.
 
-Rails applications should use the sister gem
-[rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger), which
-honours `config.filter_parameters` so that parameters Rails already considers sensitive
-are filtered out of the logs. To match the payload's keys against the same list, `sensitive_key?`
-can return `!filter.filter_param(name, nil).nil?`, where `filter` is
-`ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)`, created once the
-application has initialized, since one created from an incomplete list filters less. Proc filters
-in the list are not applied this way. Do not call its `#filter` in place of `redact`: it only looks
-inside Hashes and Arrays, raises for a key with invalid UTF-8, and has no protection against a Hash
-that holds itself or is held more than once.
+#### When it runs
+
+Each entry is redacted once, on the thread that writes entries to the appenders (the background
+thread, or with [synchronous logging](operations.html#synchronous-operation) the thread that logs),
+before any appender writes it or its `filter` reads it. That includes the appenders that send
+entries to error services, such as Sentry, Bugsnag, and Honeybadger, and appenders of your own. It
+costs a few microseconds for a typical payload, off the application's own threads.
+
+`on_log` subscribers and logger filters run earlier, on the thread that logs the entry, and receive it
+as it was logged. The [Rollbar](appenders.html#rollbar) integration is one: it sends `log.to_h`, so
+its entries are not redacted. So do the [testing helpers](testing.html), which capture entries as they
+were logged.
+
+When an entry cannot be redacted, for example because a Proc raises an error, the field is replaced
+with `{redaction_failed: "ErrorClass"}`, never written as it is. The error's class, and where it was
+raised, are reported to the internal logger, but not its message, which could hold the value.
+
+#### With Rails
+
+[rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger) sets
+`SemanticLogger.sensitive_keys` from `config.filter_parameters` once the application has initialized,
+so that the keys Rails filters out of request parameters are filtered out of every log entry. To
+turn it off:
+
+~~~ruby
+config.rails_semantic_logger.redact_filter_parameters = false
+~~~
+
+To use other keys instead, set them in `config/application.rb`, and they are kept:
+
+~~~ruby
+config.semantic_logger.sensitive_keys = %i[passw secret token _key authorization cookie]
+~~~
+
+Notes:
+
+* The default list of a new Rails application, in `config/initializers/filter_parameter_logging.rb`,
+  does not match the `Authorization` or `Cookie` header. Add them:
+  `Rails.application.config.filter_parameters += %i[authorization cookie]`.
+* That list includes `:email`, so an email address is filtered, including the `user_email` named tag
+  that the [Sentry](appenders.html#sentry) appender sends as the user's email. It also matches keys
+  that are not secret, such as `max_tokens` (`:token`) and `cache_key` (`:_key`).
+* A Proc in the list is left out, since it changes a value rather than naming a key. A dotted
+  filter, such as `"credit_card.code"`, only matches a key with that whole name, not `code` inside
+  `credit_card`.
+* Entries logged while the application starts, before the list is complete, may not be redacted.
+
+To set it yourself, for example without rails_semantic_logger, do the same once the application has
+initialized:
+
+~~~ruby
+Rails.application.config.after_initialize do
+  filters = Rails.application.config.filter_parameters.reject { |filter| filter.respond_to?(:call) }
+  SemanticLogger.sensitive_keys = ActiveSupport::ParameterFilter.new(filters)
+end
+~~~
 
 ### Transport encryption
 

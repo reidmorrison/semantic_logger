@@ -895,8 +895,9 @@ for more.
 
 ## Error and exception monitoring
 
-> **Note:** These appenders forward the payload as supplied. Take care not to push sensitive
-> information in tags or a payload.
+> **Note:** These appenders forward the payload and named tags. Name the keys whose values must not
+> be sent with [`SemanticLogger.sensitive_keys`](security.html#redacting-sensitive-data), and keep
+> sensitive information out of messages and tags, which are sent as they are.
 
 ### Bugsnag
 
@@ -1012,9 +1013,9 @@ SemanticLogger.on_log do |log|
 end
 ~~~
 
-It sends the whole entry, payload included, so register it after any `on_log` subscriber that
-[redacts sensitive data](security.html#redacting-sensitive-data): subscribers run in the order they
-were registered.
+It sends the whole entry, payload included, as it was logged: `on_log` subscribers run before
+[`SemanticLogger.sensitive_keys`](security.html#redacting-sensitive-data) redacts the entry, so its
+values are not filtered. Send only the fields Rollbar needs when entries can hold sensitive values.
 
 ## Databases and message queues
 

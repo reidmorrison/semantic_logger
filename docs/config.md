@@ -184,6 +184,22 @@ Notes:
   it captured a backtrace (see `backtrace_level` above), and otherwise the first line of the
   exception's backtrace.
 
+### Redacting sensitive keys
+
+Name the keys whose values must never be logged, such as passwords and access tokens, and their
+values are replaced with `[FILTERED]` in the payload, named tags, context, and metric dimensions of
+every log entry, at any depth, before any appender writes it:
+
+~~~ruby
+SemanticLogger.sensitive_keys = %i[passw secret token _key authorization cookie]
+~~~
+
+Symbols and Strings match any key whose name contains them, ignoring case, as in Rails'
+`config.filter_parameters`, and an `ActiveSupport::ParameterFilter`, a Regexp, or a Proc can be given
+instead. rails_semantic_logger sets it from `config.filter_parameters`. See
+[Redacting sensitive data](security.html#redacting-sensitive-data) for what is matched and redacted,
+and what is not.
+
 ### Caching loggers
 
 By default `SemanticLogger[...]` returns a brand new logger instance on every call. Enable logger
@@ -348,10 +364,11 @@ filter: ->(log) { log.message !~ /\Aheartbeat/ }
 ### Example: rewriting a message inside a filter
 
 A filter can also **modify** the log event before it is written, as long as it still returns `true`
-so the (now edited) entry is kept. This is handy for redacting sensitive data in a logger's filter,
-as below, or in `on_log` (see [Redacting sensitive data](security.html#redacting-sensitive-data)).
-Do not redact in an appender's filter: every appender writes the same log event, so the appenders
-added before it have already written the data. Resque, for example, logs the entire job payload,
+so the (now edited) entry is kept. This is handy for removing sensitive data from a message in a
+logger's filter, as below, or in `on_log`. To redact the values of sensitive keys in every entry, use
+[`SemanticLogger.sensitive_keys`](#redacting-sensitive-keys) instead. Do not redact in an appender's
+filter: every appender writes the same log event, so the appenders added before it have already
+written the data. Resque, for example, logs the entire job payload,
 which may contain private information:
 
 ```ruby

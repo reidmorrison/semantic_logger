@@ -333,26 +333,45 @@ module SemanticLogger
     end
     private_class_method :json_safe_object
 
-    # Returns a copy of the elements of a Hash, Array, Set, Struct, or Data, each made safe
-    # by .json_safe at the supplied depth.
+    # Returns a copy of the members of a Hash, Array, Set, Struct, Data, or OpenStruct (see
+    # .structure_members), each made safe by .json_safe at the supplied depth.
     def self.json_safe_members(value, depth, ancestors)
-      case value
-      when Hash
-        value.each_with_object({}) do |(key, val), hash|
+      members = structure_members(value)
+      if members.is_a?(Hash)
+        members.each_with_object({}) do |(key, val), hash|
           key       = json_safe(key, depth, ancestors)
           key       = key.to_json if key.is_a?(Hash) || key.is_a?(Array)
           hash[key] = json_safe(val, depth, ancestors)
         end
-      when Array, ::Set
-        value.map { |element| json_safe(element, depth, ancestors) }
+      elsif json_array?(value)
+        members.map { |element| json_safe(element, depth, ancestors) }
       else
-        # A Struct, Data, or OpenStruct. A #to_h that does not return a Hash is made safe one
-        # level deeper, so that the recursion still ends.
-        members = value.to_h
-        members.is_a?(Hash) ? json_safe_members(members, depth, ancestors) : json_safe(members, depth, ancestors)
+        # A #to_h that does not return a Hash is made safe one level deeper, so that the
+        # recursion still ends.
+        json_safe(members, depth, ancestors)
       end
     end
     private_class_method :json_safe_members
+
+    # Returns [true|false] whether the value is a structure that the JSON formatters write as an array
+    # of its own elements (see .structure_members): an Array or a Set.
+    def self.json_array?(value)
+      value.is_a?(Array) || value.is_a?(::Set)
+    end
+
+    # Returns the members of a structure (see .structure?), as the JSON formatters write them: a
+    # Hash or an Array as it is, the elements of a Set as an Array, and the #to_h of a Struct, Data,
+    # or OpenStruct, which is a Hash unless that method returns something else.
+    def self.structure_members(value)
+      case value
+      when Hash, Array
+        value
+      when ::Set
+        value.to_a
+      else
+        value.to_h
+      end
+    end
 
     # Returns a copy of the supplied value with every String converted to valid UTF-8.
     #

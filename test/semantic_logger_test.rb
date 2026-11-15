@@ -454,6 +454,96 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".sensitive_keys=" do
+      after { SemanticLogger.sensitive_keys = nil }
+
+      it "is nil by default, with no redactor" do
+        assert_nil SemanticLogger.sensitive_keys
+        assert_nil SemanticLogger.redactor
+      end
+
+      it "returns the sensitive keys as supplied, and builds a redactor for them" do
+        keys = %i[password token]
+        SemanticLogger.sensitive_keys = keys
+
+        assert_same keys, SemanticLogger.sensitive_keys
+        assert_instance_of SemanticLogger::Redactor, SemanticLogger.redactor
+        assert_same keys, SemanticLogger.redactor.sensitive_keys
+      end
+
+      it "accepts keys that do not define #nil?, such as a mock" do
+        keys = Minitest::Mock.new.expect(:filter_param, nil, [String, nil])
+        SemanticLogger.sensitive_keys = keys
+
+        assert_equal keys.__id__, SemanticLogger.sensitive_keys.__id__
+      end
+
+      it "accepts nil to stop redacting" do
+        SemanticLogger.sensitive_keys = [:password]
+        SemanticLogger.sensitive_keys = nil
+
+        assert_nil SemanticLogger.sensitive_keys
+        assert_nil SemanticLogger.redactor
+      end
+
+      it "rejects any other value, keeping the sensitive keys it had" do
+        keys = [:password]
+        SemanticLogger.sensitive_keys = keys
+
+        [true, "password", :password, [42]].each do |value|
+          assert_raises(ArgumentError, value.inspect) { SemanticLogger.sensitive_keys = value }
+        end
+
+        assert_same keys, SemanticLogger.sensitive_keys
+      end
+
+      describe "when logging" do
+        let(:appender) { InMemoryAppender.new }
+        let(:mask) { SemanticLogger::Redactor::MASK }
+
+        before do
+          SemanticLogger.add_appender(appender: appender)
+          SemanticLogger.sensitive_keys = %i[password authorization]
+        end
+
+        after do
+          SemanticLogger.appenders.each { |appender| SemanticLogger.remove_appender(appender) }
+          SemanticLogger::Logger.clear_subscribers
+        end
+
+        it "writes the entry with the values of the sensitive keys replaced" do
+          payload = {user: "jack", password: "secret"}
+          SemanticLogger.named_tagged(authorization: "Bearer abc") { logger.info("Login", payload) }
+          SemanticLogger.flush
+
+          assert_equal({user: "jack", password: mask}, appender.message.payload)
+          assert_equal({authorization: mask}, appender.message.named_tags)
+          assert_equal({user: "jack", password: "secret"}, payload)
+        end
+
+        it "redacts the context that an on_log subscriber adds, which receives the entry as logged" do
+          seen = nil
+          SemanticLogger.on_log do |log|
+            seen = log.payload[:password]
+            log.set_context(:request, {"Authorization" => "Bearer abc"})
+          end
+          logger.info("Login", password: "secret")
+          SemanticLogger.flush
+
+          assert_equal "secret", seen
+          assert_equal({password: mask}, appender.message.payload)
+          assert_equal({request: {"Authorization" => mask}}, appender.message.context)
+        end
+
+        it "redacts the dimensions of a metric" do
+          logger.info(message: "Login", metric: "user/login", dimensions: {password: "x", region: "us"})
+          SemanticLogger.flush
+
+          assert_equal({password: mask, region: "us"}, appender.message.dimensions)
+        end
+      end
+    end
+
     describe ".clear_appenders!" do
       it "closes the processor" do
         mock = Minitest::Mock.new

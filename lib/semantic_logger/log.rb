@@ -52,6 +52,10 @@ module SemanticLogger
   #   Objects that an appender captured on the logging thread for its own use when the log entry
   #   was created, such as the OpenTelemetry context. Only a formatter built for that appender writes
   #   them, as the NewRelicLogs formatter writes the linking metadata its appender captures.
+  #
+  # The payload, named tags, context, and dimensions have the values of sensitive keys replaced
+  # before the entry is written to any appender, when SemanticLogger.sensitive_keys is set (see
+  # #redact).
   class Log
     # Keys passed in without a payload that will be extracted and the remainder passed into the payload.
     NON_PAYLOAD_KEYS = %i[message exception backtrace exception
@@ -373,9 +377,7 @@ module SemanticLogger
     end
 
     # Returns [String] single character upper case log level
-    def level_to_s
-      level.to_s[0..0].upcase
-    end
+    def level_to_s = level.to_s[0..0].upcase
 
     # DEPRECATED
     def process_info(thread_name_length = 30)
@@ -428,14 +430,10 @@ module SemanticLogger
     # Rendered with #inspect, or with the block when given (for example Amazing Print). A payload
     # nested too deeply for either is first cut off at Utils::MAX_JSON_SAFE_DEPTH, rather than
     # raising SystemStackError (see Utils.safe_inspect).
-    def payload_to_s(&)
-      Utils.safe_inspect(payload, &) if payload?
-    end
+    def payload_to_s(&) = (Utils.safe_inspect(payload, &) if payload?)
 
     # Returns [true|false] whether the log entry has a payload
-    def payload?
-      !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
-    end
+    def payload? = !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
 
     def to_h(host = SemanticLogger.host, application = SemanticLogger.application,
              environment = SemanticLogger.environment)
@@ -453,10 +451,24 @@ module SemanticLogger
     # Returns the value captured with the key, or nil when there is none.
     def captured(key) = captures&.[](key)
 
-    # A metric only event has a metric but no message or exception.
-    def metric_only?
-      metric && message.nil? && exception.nil?
+    # Replaces this entry's payload, named tags, context, and metric dimensions, the fields that
+    # hold keyed data, with copies in which the value of every sensitive key is replaced (see
+    # Redactor#redact). Returns self.
+    #
+    # The values replaced are left as they are, since they can be the application's own, or be
+    # shared with other entries, as named tags are. A field with no sensitive key is kept as it is.
+    #
+    # Called once, before the entry is written to any appender (see SemanticLogger.sensitive_keys=).
+    def redact(redactor)
+      self.payload    = redactor.redact(payload)
+      self.named_tags = redactor.redact(named_tags)
+      self.context    = redactor.redact(context)
+      self.dimensions = redactor.redact(dimensions)
+      self
     end
+
+    # A metric only event has a metric but no message or exception.
+    def metric_only? = metric && message.nil? && exception.nil?
 
     # Replaces the values of this entry that cannot be copied to another Ractor, such as a Proc in its
     # payload (see RactorCopy). Returns self. Experimental, Ruby 4.0 and later only.

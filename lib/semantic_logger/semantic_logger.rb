@@ -113,6 +113,62 @@ module SemanticLogger
     @backtrace_cleaner
   end
 
+  # Sets the keys whose values are replaced with "[FILTERED]" in every log entry, such as
+  # passwords and access tokens, before any appender writes it.
+  #
+  # Parameters
+  #   keys: [Array|Regexp|Object|nil]
+  #     Array: Symbols and Strings, each matching any key whose name contains it, ignoring case,
+  #       as in Rails' `config.filter_parameters`, and Regexps.
+  #     Regexp: Matches the names of the sensitive keys.
+  #     An object that responds to `#filter_param`, such as ActiveSupport::ParameterFilter, which
+  #       is asked about each key name: `filter_param(name, nil)` returns nil when the key is not
+  #       sensitive, and otherwise the value that replaces the key's value.
+  #     An object that responds to `#call`, such as a Proc, given each key name, which returns
+  #       whether the key is sensitive.
+  #     nil: Do not redact.
+  #     Default: nil
+  #
+  # The keys of the payload, named tags, context, and metric dimensions of each entry are matched,
+  # at any depth, both as written and in snake_case, so that "X-Api-Key" and "apiKey" are also
+  # matched as "x_api_key" and "api_key". The message, tags, and exception are not changed.
+  #
+  # Each entry is redacted once, on the thread that writes it to the appenders, before any of them
+  # writes it, so the keys must be thread safe. `on_log` subscribers and logger filters run before,
+  # on the thread that logs the entry, and receive it as it was logged. The application's own
+  # Hashes are never changed: the entry gets a copy.
+  #
+  # The keys are read when they are assigned, so changing an Array of them afterwards has no effect:
+  # assign them again instead.
+  #
+  # When an entry cannot be redacted, for example because the keys raise an error, the field is
+  # replaced with `{redaction_failed: "ErrorClass"}`, and the error is reported to the internal
+  # logger.
+  #
+  # Example:
+  #   SemanticLogger.sensitive_keys = [:password, :secret, :token, :authorization]
+  #
+  # Example, with the parameters that Rails filters, except its Proc filters, which change a value
+  # rather than name a key (rails_semantic_logger does this once the application has initialized):
+  #   filters = Rails.application.config.filter_parameters.reject { |filter| filter.respond_to?(:call) }
+  #   SemanticLogger.sensitive_keys = ActiveSupport::ParameterFilter.new(filters)
+  def self.sensitive_keys=(keys)
+    # Compared by identity, since the keys, such as a test double, need not define #nil?.
+    @redactor = nil.equal?(keys) ? nil : Redactor.new(keys)
+  end
+
+  # Returns the sensitive keys, as supplied to .sensitive_keys=, or nil when there are none.
+  def self.sensitive_keys
+    @redactor&.sensitive_keys
+  end
+
+  # Internal: Returns [SemanticLogger::Redactor] the redactor for the sensitive keys, which each
+  # entry is asked to redact itself with before it is written (see Appenders#log), or nil when
+  # there are no sensitive keys.
+  def self.redactor
+    @redactor
+  end
+
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
   def self.host
@@ -657,6 +713,7 @@ module SemanticLogger
   @backtrace_level       = :error
   @backtrace_level_index = Levels.index(@backtrace_level)
   @backtrace_cleaner     = nil
+  @redactor              = nil
   @sync                  = false
   @cache_loggers         = false
   @logger_cache          = nil

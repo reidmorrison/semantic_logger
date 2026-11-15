@@ -442,6 +442,51 @@ module SemanticLogger
         end
       end
 
+      describe ".json_array?" do
+        it "is true for an Array or a Set" do
+          [[], Set[], Class.new(Array).new].each do |value|
+            assert SemanticLogger::Utils.json_array?(value), "for #{value.inspect}"
+          end
+        end
+
+        it "is false for any other value, even a structure" do
+          [{}, Struct.new(:a).new(1), Data.define(:a).new(a: 1), "text", nil].each do |value|
+            refute SemanticLogger::Utils.json_array?(value), "for #{value.inspect}"
+          end
+        end
+      end
+
+      describe ".structure_members" do
+        it "returns a Hash or an Array as it is" do
+          hash  = {a: 1}
+          array = [1]
+
+          assert_same hash, SemanticLogger::Utils.structure_members(hash)
+          assert_same array, SemanticLogger::Utils.structure_members(array)
+        end
+
+        it "returns the elements of a Set as an Array" do
+          assert_equal [1, 2], SemanticLogger::Utils.structure_members(Set[1, 2])
+        end
+
+        it "returns the #to_h of a Struct, Data, or OpenStruct" do
+          require "ostruct"
+          open_struct = OpenStruct.new(a: 1) # rubocop:disable Style/OpenStructUse
+
+          [Struct.new(:a).new(1), Data.define(:a).new(a: 1), open_struct].each do |value|
+            assert_equal({a: 1}, SemanticLogger::Utils.structure_members(value), value.inspect)
+          end
+        end
+
+        it "returns what #to_h returns, even when it is not a Hash" do
+          struct_class = Struct.new(:a) do
+            def to_h = [1]
+          end
+
+          assert_equal [1], SemanticLogger::Utils.structure_members(struct_class.new(1))
+        end
+      end
+
       describe ".safe_inspect" do
         it "returns #inspect for a value that can be inspected" do
           assert_equal({a: [1, "b"]}.inspect, SemanticLogger::Utils.safe_inspect({a: [1, "b"]}))

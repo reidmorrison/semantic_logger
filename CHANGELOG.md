@@ -32,6 +32,23 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   [Cleaning backtraces](https://logger.reidmorrison.com/config.html#cleaning-backtraces).
 - `Log#backtrace_of(exception, cleaner:)` returns an exception's backtrace as a cleaner cleans it,
   cached on the entry, and `Log#backtrace_to_s` accepts `cleaner:`, for custom formatters.
+- `SemanticLogger.sensitive_keys=` names the keys, such as passwords and access tokens, whose values
+  are replaced with `[FILTERED]` in every log entry before any appender writes it (discussion #272).
+  It takes an Array of Symbols and Strings, which match any key whose name contains them, ignoring
+  case, as in Rails' `config.filter_parameters`, and Regexps; or a Regexp; or an
+  `ActiveSupport::ParameterFilter`, or any object that responds to `#filter_param`; or a Proc. Keys
+  are matched by name, as written and in snake_case, so that `:_key` also matches `"X-Api-Key"`,
+  `"apiKey"`, and `"APIKey"`. The payload, named tags, the context that `on_log` subscribers add,
+  and metric dimensions are redacted at any depth, inside Hashes, Arrays, Sets, Structs, Data,
+  OpenStructs, and `ActionController::Parameters`, once per entry on the thread that writes the
+  entries, so every appender, including error services and appenders of your own, writes the
+  redacted entry. The application's own Hashes are never changed, and an entry with no sensitive key
+  is written as it is, unless it holds a structure that holds itself or is nested more than 32
+  levels deep. When an entry cannot be redacted, the field is replaced with
+  `{redaction_failed: "ErrorClass"}` and the error is reported to the internal logger. The message,
+  tags, and exception are not redacted, and `on_log` subscribers and logger filters receive the
+  entry as it was logged. Nothing changes until sensitive keys are set. See
+  [Redacting sensitive data](https://logger.reidmorrison.com/security.html#redacting-sensitive-data).
 
 ### Changed
 
