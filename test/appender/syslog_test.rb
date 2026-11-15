@@ -116,6 +116,17 @@ module Appender
           assert_equal ::Syslog::LOG_LOCAL1, formatter.facility
         end
 
+        it "passes its facility, level map, and maximum packet size when the formatter is changed later" do
+          appender = SemanticLogger::Appender::Syslog.new(max_size: 2048, **options)
+          appender.formatter = :syslog_cee
+          formatter = appender.formatter
+
+          assert_instance_of SemanticLogger::Formatters::SyslogCee, formatter
+          assert_equal ::Syslog::LOG_LOCAL0, formatter.facility
+          assert_equal ::Syslog::LOG_ALERT, formatter.level_map[:info]
+          assert_equal 2048, formatter.max_size
+        end
+
         it "rejects an invalid facility even with another formatter" do
           assert_raises(ArgumentError) do
             SemanticLogger::Appender::Syslog.new(url: "udp://localhost:88888", facility: 1, formatter: :json)

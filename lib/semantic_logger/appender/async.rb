@@ -16,7 +16,8 @@ module SemanticLogger
       # Methods forwarded directly to the wrapped appender (run on the caller's thread).
       def_delegators :@appender,
                      :name, :should_log?, :filter, :host, :application, :environment,
-                     :level, :level=, :logger, :logger=, :console_stream, :console_output?
+                     :level, :level=, :formatter, :formatter=, :logger, :logger=, :console_stream,
+                     :console_output?
 
       # Methods forwarded to the queue processor that owns the thread and queue.
       # Tuning options (max_queue_size, batch_size, non_blocking, ...) are set once at

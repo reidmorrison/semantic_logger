@@ -171,11 +171,19 @@ module SemanticLogger
         if %i[tcp udp].include?(@protocol)
           # Reject an invalid facility when the appender is created, even with a formatter that ignores it.
           SemanticLogger::Formatters::Syslog.facility_number(@facility)
-          args[:formatter] = with_packet_options(args[:formatter]) if args.key?(:formatter)
         end
 
         super(**args, &)
         reopen
+      end
+
+      # Set the formatter from Symbol|Hash|Block, as for any appender.
+      #
+      # When sending over TCP or UDP, a formatter named as one of the PACKET_FORMATTERS also gets
+      # this appender's facility, level map, and maximum packet size, whether it is supplied when
+      # the appender is created or set later.
+      def formatter=(formatter)
+        super(%i[tcp udp].include?(@protocol) ? with_packet_options(formatter) : formatter)
       end
 
       # After forking an active process call #reopen to re-open
@@ -251,7 +259,7 @@ module SemanticLogger
 
       private
 
-      # Returns the supplied `formatter:` argument, with this appender's facility, level map, and
+      # Returns the supplied formatter, with this appender's facility, level map, and
       # maximum packet size added when it names one of the PACKET_FORMATTERS, so that they are not
       # silently ignored. Options in a
       # `{syslog: {...}}` Hash take precedence. A formatter instance keeps its own settings.

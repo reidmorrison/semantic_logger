@@ -165,13 +165,18 @@ module SemanticLogger
     # it raises ArgumentError instead, which is retried with a back-off and reported like any
     # other. That includes an appender that is its own formatter (it implements #call), whose
     # #batch is the appender's own.
+    #
+    # The formatter is read once, so that one changed by #formatter= on another thread cannot be
+    # swapped in between the check and the call.
     def format_batch(logs)
-      unless formatter.respond_to?(:batch) && !formatter.equal?(self)
-        raise(ArgumentError, "#{formatter.class.name} cannot format a batch. It must implement #batch(logs, logger)")
+      batch_formatter = formatter
+      unless batch_formatter.respond_to?(:batch) && !batch_formatter.equal?(self)
+        raise(ArgumentError,
+              "#{batch_formatter.class.name} cannot format a batch. It must implement #batch(logs, logger)")
       end
 
       begin
-        formatter.batch(logs, self)
+        batch_formatter.batch(logs, self)
       rescue StandardError => e
         raise FormatError, "Could not format the batch of log messages (#{e.class})"
       end

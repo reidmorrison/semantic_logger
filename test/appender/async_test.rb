@@ -26,6 +26,60 @@ module Appender
         end
       end
 
+      describe "#formatter=" do
+        let(:io) { StringIO.new }
+        let(:appender) { SemanticLogger::Appender::IO.new(io) }
+        let(:added_appender) { SemanticLogger.add_appender(appender: appender, async: true) }
+
+        it "changes the wrapped appender's formatter while it is running" do
+          logger.info("before")
+          SemanticLogger.flush
+          added_appender.formatter = :json
+
+          assert_instance_of SemanticLogger::Formatters::Json, appender.formatter
+          assert_same appender.formatter, added_appender.formatter
+
+          logger.info("after")
+          SemanticLogger.flush
+          before, after = io.string.lines
+
+          assert_match(/ I .* TestLogger -- before$/, before)
+          assert_equal "after", JSON.parse(after)["message"]
+        end
+
+        it "restores the wrapped appender's default formatter when set to nil" do
+          added_appender.formatter = :json
+          added_appender.formatter = nil
+
+          assert_instance_of SemanticLogger::Formatters::Default, appender.formatter
+        end
+
+        describe "in batch mode" do
+          let(:appender) do
+            Class.new(SemanticLogger::Subscriber) do
+              attr_reader :formatted
+
+              def batch(logs)
+                @formatted = format_batch(logs)
+              end
+            end.new
+          end
+          let(:added_appender) { SemanticLogger.add_appender(appender: appender, batch: true) }
+
+          it "formats the batch with the new formatter on the worker thread" do
+            added_appender.formatter = :json
+
+            assert_predicate added_appender, :batch?
+            logger.info("hello")
+            SemanticLogger.flush
+
+            entries = JSON.parse(appender.formatted)
+
+            assert_equal(["hello"], entries.map { |entry| entry["message"] })
+          end
+        end
+      end
+
       describe "#inspect" do
         it "shows the wrapped appender's own #inspect, but not the instance variables" do
           batch_appender = InMemoryBatchAppender.new
