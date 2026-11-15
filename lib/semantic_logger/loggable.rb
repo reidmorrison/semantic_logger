@@ -23,15 +23,9 @@
 #       end
 #     end
 #   end
-#
-# Notes:
-# * To forcibly replace Rails or any other existing logging methods
-#   use `prepend` instead of `include`. For example:
-#     ExternalSupplier.prepend SemanticLogger::Loggable
 module SemanticLogger
   module Loggable
     def self.included(base)
-      base.extend ClassMethods
       base.singleton_class.class_eval do
         undef_method :logger if method_defined?(:logger)
         undef_method :logger= if method_defined?(:logger=)
@@ -116,96 +110,6 @@ module SemanticLogger
     # later).
     def self.ractor_loggers
       ::Ractor.store_if_absent(:semantic_logger_loggable) { {} }
-    end
-
-    module ClassMethods
-      # Measure and log the performance of an instance method.
-      #
-      # Parameters:
-      #   method_name: [Symbol]
-      #     The name of the method that should be measured.
-      #
-      #   options: [Hash]
-      #     Any valid options that can be passed to measure.
-      #
-      # Approximate overhead when logging a method call with a metric:
-      #   0.044 ms  per method call.
-      #   0.009 ms  per method call. If `min_duration` is not met
-      #   0.0005 ms per method call. If `level` is not met
-      def logger_measure_method(method_name,
-                                min_duration: 0.0,
-                                metric: "#{name}/#{method_name}",
-                                log_exception: :partial,
-                                on_exception_level: nil,
-                                message: "##{method_name}",
-                                level: :info)
-        # unless visibility = Utils.method_visibility(self, method_name)
-        #   logger.warn("Unable to measure method: #{name}##{method_name} since it does not exist")
-        #   return false
-        # end
-
-        # These values are written into the source of the generated method, so only accept values
-        # that are certain to produce valid literals, rather than code.
-        #
-        # Ruby writes a Symbol that is a valid method name, including operators such as `[]=` and
-        # non-ASCII identifiers, without quotes. Any other Symbol is quoted, as in `:"a; b"`.
-        # Instance, class, and global variable names are unquoted, but are not method names.
-        source_name = method_name.to_s.to_sym.inspect.delete_prefix(":")
-        if source_name.start_with?('"', "@", "$")
-          raise(ArgumentError, "Invalid method name to measure: #{method_name.inspect}")
-        end
-        unless Log.log_exception_option?(log_exception)
-          raise(ArgumentError, "Invalid value:#{log_exception.inspect} for argument :log_exception")
-        end
-
-        duration = Float(min_duration, exception: false)
-        unless duration&.finite?
-          raise(ArgumentError, "Invalid value:#{min_duration.inspect} for argument :min_duration")
-        end
-
-        index              = Levels.index(level)
-        level              = Levels.level(index)
-        on_exception_level = Levels.level(Levels.index(on_exception_level)) if on_exception_level
-        message            = message&.to_s
-        metric             = metric&.to_s
-
-        logger_measure_module.module_eval(<<~MEASURE_METHOD, __FILE__, __LINE__ + 1)
-          def #{source_name}(*args, &block)
-            if logger.send(:level_index) <= #{index}
-              logger.send(
-                :measure_method,
-                index:              #{index},
-                level:              #{level.inspect},
-                message:            #{message.inspect},
-                min_duration:       #{duration},
-                metric:             #{metric.inspect},
-                log_exception:      #{log_exception.inspect},
-                on_exception_level: #{on_exception_level.inspect}
-              ) do
-                super(*args, &block)
-              end
-            else
-              super(*args, &block)
-            end
-          end
-        MEASURE_METHOD
-        # {"#{visibility} :#{method_name}" unless visibility == :public}
-        true
-      end
-
-      private
-
-      # Dynamic Module to intercept method calls for measuring purposes.
-      def logger_measure_module
-        if const_defined?(:SemanticLoggerMeasure, _search_ancestors = false)
-          const_get(:SemanticLoggerMeasure)
-        else
-          mod = const_set(:SemanticLoggerMeasure, Module.new)
-          prepend mod
-
-          mod
-        end
-      end
     end
   end
 end

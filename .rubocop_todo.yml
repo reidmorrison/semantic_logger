@@ -26,11 +26,6 @@ Lint/DuplicateBranch:
   Exclude:
     - 'test/formatters/new_relic_logs_test.rb'
 
-# Offense count: 1
-Lint/LiteralAssignmentInCondition:
-  Exclude:
-    - 'lib/semantic_logger/loggable.rb'
-
 # Offense count: 29
 Lint/RescueException:
   Enabled: false
@@ -151,11 +146,10 @@ Naming/VariableNumber:
     - 'test/formatters/default_test.rb'
     - 'test/formatters/raw_test.rb'
 
-# Offense count: 3
+# Offense count: 2
 Style/DocumentDynamicEvalDefinition:
   Exclude:
     - 'lib/semantic_logger/base.rb'
-    - 'lib/semantic_logger/loggable.rb'
     - 'test/appender/wrapper_test.rb'
 
 # Offense count: 2

@@ -51,6 +51,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   custom formatter for this appender must do the same. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html). Resolves #428.
 
+### Removed
+
+- `logger_measure_method`, an undocumented experiment that `SemanticLogger::Loggable` added to each
+  class. To log how long a method takes, wrap its body in a `measure_*` block, such as
+  `logger.measure_info("#run") { ... }`. To trace it, use OpenTelemetry's `tracer.in_span`, or the
+  method tracer of an APM agent.
+
 ### Fixed
 
 - When an async or batching appender's destination fails, the message (or batch) being written is

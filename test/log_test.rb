@@ -121,14 +121,13 @@ module SemanticLogger
             end
           end
 
-          it "accepts the same log_exception values that log_exception_option? accepts" do
+          it "accepts only :full, :partial, :none, or nil for log_exception" do
             [:full, :partial, :none, nil].each do |value|
-              assert SemanticLogger::Log.log_exception_option?(value), "value: #{value.inspect}"
               log.assign(exception: exception, log_exception: value)
             end
+
             [:bogus, "full", 1].each do |value|
-              refute SemanticLogger::Log.log_exception_option?(value), "value: #{value.inspect}"
-              assert_raises(ArgumentError) { log.assign(exception: exception, log_exception: value) }
+              assert_raises(ArgumentError, value.inspect) { log.assign(exception: exception, log_exception: value) }
             end
           end
 

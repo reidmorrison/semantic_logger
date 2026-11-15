@@ -531,39 +531,5 @@ module SemanticLogger
       silence_level = :error if silence_level == true
       silence_level if Levels.valid?(silence_level)
     end
-
-    # For measuring methods and logging their duration.
-    def measure_method(index:,
-                       level:,
-                       message:,
-                       min_duration:,
-                       metric:,
-                       log_exception:,
-                       on_exception_level:)
-      # Ignores filter, silence, payload
-      exception = nil
-      start     = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      begin
-        yield
-      rescue Exception => e
-        exception = e
-      ensure
-        log = new_log(level, index)
-        # May return false due to elastic logging
-        should_log = log.assign(
-          message:            message,
-          min_duration:       min_duration,
-          exception:          exception,
-          metric:             metric,
-          duration:           1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start),
-          log_exception:      log_exception,
-          on_exception_level: on_exception_level
-        )
-
-        # Log level may change during assign due to :on_exception_level
-        log(log) if should_log && should_log?(log)
-        raise exception if exception
-      end
-    end
   end
 end
