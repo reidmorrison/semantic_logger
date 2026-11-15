@@ -52,10 +52,15 @@ module SemanticLogger
     # Write the log message to every appender that should log it. An appender that fails is
     # reported, and the others still write the message.
     #
+    # The values of the sensitive keys are first replaced, once, so that no appender writes them
+    # (see SemanticLogger.sensitive_keys=).
+    #
     # A stack overflow is not a failure of the appender but of the thread, which must not overflow
     # again: on macOS a second stack overflow on the same thread crashes Ruby. It is raised to the
     # processor running this thread instead, and the message goes to no further appenders.
     def log(log)
+      redactor = SemanticLogger.redactor
+      log.redact(redactor) if redactor
       each do |appender|
         appender.log(log) if appender.should_log?(log)
       rescue SystemStackError

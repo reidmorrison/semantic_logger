@@ -1009,6 +1009,60 @@ module SemanticLogger
         end
       end
 
+      describe "#redact" do
+        let(:redactor) { SemanticLogger::Redactor.new(%i[password authorization]) }
+        let(:mask) { SemanticLogger::Redactor::MASK }
+
+        it "redacts the payload, named tags, context, and metric dimensions" do
+          log.payload    = {user: "jack", password: "x"}
+          log.named_tags = {authorization: "Bearer abc", request_id: "r1"}.freeze
+          log.set_context(:request, {headers: {"Authorization" => "Bearer abc"}})
+          log.dimensions = {password: "x", region: "us"}
+          log.redact(redactor)
+
+          assert_equal({user: "jack", password: mask}, log.payload)
+          assert_equal({authorization: mask, request_id: "r1"}, log.named_tags)
+          assert_equal({request: {headers: {"Authorization" => mask}}}, log.context)
+          assert_equal({password: mask, region: "us"}, log.dimensions)
+        end
+
+        it "leaves the replaced values, such as the application's payload and the shared named tags, unchanged" do
+          payload        = {password: "x"}
+          named_tags     = {authorization: "Bearer abc"}.freeze
+          log.payload    = payload
+          log.named_tags = named_tags
+          log.redact(redactor)
+
+          assert_equal({password: "x"}, payload)
+          assert_equal({authorization: "Bearer abc"}, named_tags)
+        end
+
+        it "keeps a field that has no sensitive key, and one that is nil" do
+          payload     = {user: "jack"}
+          log.payload = payload
+          log.redact(redactor)
+
+          assert_same payload, log.payload
+          assert_nil log.context
+          assert_nil log.dimensions
+        end
+
+        it "leaves the message, tags, and exception as they are" do
+          log.message   = "password: x"
+          log.tags      = ["password"]
+          log.exception = exception
+          log.redact(redactor)
+
+          assert_equal "password: x", log.message
+          assert_equal ["password"], log.tags
+          assert_same exception, log.exception
+        end
+
+        it "returns the entry" do
+          assert_same log, log.redact(redactor)
+        end
+      end
+
       describe "#metric_only?" do
         it "is true when only a metric is present" do
           log.metric = "user/login"

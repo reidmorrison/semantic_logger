@@ -198,6 +198,51 @@ class AppendersTest < Minitest::Test
         assert_raises(SystemStackError) { appenders.log(log) }
         assert_empty recording.events
       end
+
+      describe "with sensitive keys" do
+        let(:payload) { {user: "jack", password: "secret"} }
+        let(:log) do
+          log         = SemanticLogger::Log.new("Test", :info)
+          log.message = "hello"
+          log.payload = payload
+          log
+        end
+
+        before { SemanticLogger.sensitive_keys = [:password] }
+        after { SemanticLogger.sensitive_keys = nil }
+
+        it "redacts the entry once, before any appender writes it" do
+          first  = SemanticLogger::Test::CaptureLogEvents.new
+          second = SemanticLogger::Test::CaptureLogEvents.new
+          appenders << first
+          appenders << second
+          appenders.log(log)
+
+          [first, second].each do |appender|
+            assert_equal({user: "jack", password: SemanticLogger::Redactor::MASK}, appender.events.first.payload)
+          end
+          assert_equal "secret", payload[:password]
+        end
+
+        it "redacts the entry before an appender's filter reads it" do
+          seen = nil
+          recording        = SemanticLogger::Test::CaptureLogEvents.new
+          recording.filter = ->(log) { (seen = log.payload[:password]) && true }
+          appenders << recording
+          appenders.log(log)
+
+          assert_equal SemanticLogger::Redactor::MASK, seen
+        end
+
+        it "writes the entry as it is when there are no sensitive keys" do
+          SemanticLogger.sensitive_keys = nil
+          recording = SemanticLogger::Test::CaptureLogEvents.new
+          appenders << recording
+          appenders.log(log)
+
+          assert_same payload, recording.events.first.payload
+        end
+      end
     end
 
     describe "#flush" do
