@@ -31,7 +31,8 @@ module SemanticLogger
 
       # Standing in for a logger, it runs the `on_log` subscribers for the log events it created, as a
       # logger does. Log events from a logger, received as the processor or an appender, already
-      # went through them.
+      # went through them. A log event built elsewhere and passed to `#log` is captured without
+      # running them, since it cannot be told apart from one received from a logger.
       def log(log)
         Logger.call_subscribers(log) if @created.key?(log)
         @events << log
