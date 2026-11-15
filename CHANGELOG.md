@@ -59,6 +59,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   the docs said it was retried. Delivery is unchanged: the worker thread backs off, then carries on
   with the messages queued meanwhile. See
   [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender).
+- The test helpers now call each `on_log` subscriber once per log event. Before, they called it twice
+  when capturing the events of every class: with `semantic_logger_events` or
+  `capture_semantic_logger_events` without a class, or with a `SemanticLogger::Test::CaptureLogEvents`
+  that replaces the processor or is added as an appender.
 - The custom appender example in the configuration guide now runs. Its `host: host` option default
   is a syntax error on Ruby 3.2 and 3.3 and is `nil` on later versions, and `host` is already an
   option of every appender, so the example's value was overwritten. The example now takes a
