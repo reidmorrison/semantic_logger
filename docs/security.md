@@ -126,8 +126,8 @@ get this from `config.filter_parameters`; see [With Rails](#with-rails) below.
 | `nil` | None: nothing is redacted. The default. |
 
 Keys are matched by name: the name of a Symbol key or a String key, both as written and in
-snake_case, which is lower case. So `:_key` above also matches `"X-Api-Key"`, `"apiKey"`, and
-`"HTTP_X_API_KEY"`, which are also matched as `"x_api_key"`, `"api_key"`, and `"http_x_api_key"`.
+snake_case, which is lower case. So `:_key` above also matches `"X-Api-Key"` as `"x_api_key"`,
+`"apiKey"` and `"APIKey"` as `"api_key"`, and `"HTTP_X_API_KEY"` as `"http_x_api_key"`.
 
 Like the default `filter_parameters` of Rails, a name matches wherever it appears in a key, so it
 also matches some keys that are not secret: `:token` matches `max_tokens`, and `:_key` matches
@@ -142,21 +142,24 @@ SemanticLogger.sensitive_keys = [
 ]
 ~~~
 
-The answer for each key name is remembered, so a Proc or object must always give the same answer
-for the same name. It is called on the thread that writes the entries, so it must be thread safe.
+The keys are read when they are assigned, so adding to the Array afterwards has no effect: assign
+the whole list again. The answer for each key name is remembered, so a Proc or object must always
+give the same answer for the same name. It is called on the thread that writes the entries, so it
+must be thread safe.
 
 #### What is redacted
 
 The payload, the named tags, the context that `on_log` subscribers add with `log.set_context`, and
-metric dimensions, at any depth: inside each Hash, Array, Set, Struct, Data, OpenStruct, and
-`ActionController::Parameters`. The value of a sensitive key is replaced whole, even when it is a
-Hash. A Struct, Data, or OpenStruct that holds a sensitive key is written as a Hash, and a Set as an
-Array, as the JSON formatters write them. A structure that holds itself is cut off with
-`[FILTERED: circular]`, and one nested more than 32 levels deep is replaced with
-`[FILTERED: nested too deeply]`.
+metric dimensions, at any depth: inside each Hash, including a key that is itself a Hash, and inside
+each Array, Set, Struct, Data, OpenStruct, and `ActionController::Parameters`. The value of a
+sensitive key is replaced whole, even when it is a Hash. A Struct, Data, or OpenStruct that holds a
+sensitive key is written as a Hash, and a Set as an Array, as the JSON formatters write them. A
+structure that holds itself is cut off with `[FILTERED: circular]`, and one nested more than 32
+levels deep is replaced with `[FILTERED: nested too deeply]`.
 
 The application's own Hashes are never changed: the entry is given a copy, and only when it holds a
-sensitive key. Entries without one are written as they are.
+sensitive key, or a structure that holds itself or is nested too deeply. Other entries are written
+as they are.
 
 These are written as they are, so keep secrets out of them:
 

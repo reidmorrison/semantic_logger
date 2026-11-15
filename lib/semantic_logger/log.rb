@@ -460,9 +460,10 @@ module SemanticLogger
     #
     # Called once, before the entry is written to any appender (see SemanticLogger.sensitive_keys=).
     def redact(redactor)
-      %i[payload named_tags context dimensions].each do |field|
-        public_send(:"#{field}=", redactor.redact(public_send(field)))
-      end
+      self.payload    = redactor.redact(payload)
+      self.named_tags = redactor.redact(named_tags)
+      self.context    = redactor.redact(context)
+      self.dimensions = redactor.redact(dimensions)
       self
     end
 

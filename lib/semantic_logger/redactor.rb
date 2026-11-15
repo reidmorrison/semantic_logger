@@ -23,13 +23,20 @@ module SemanticLogger
 
     MAX_DEPTH = Utils::MAX_JSON_SAFE_DEPTH
 
-    # A key name in snake_case already, which is not converted (see #snake_case).
+    # A key name in snake_case already, which is not converted (see #snake_case_forms).
     SNAKE_CASE = /\A[a-z\d_]*\z/
 
-    # How many keys the answer is remembered for (see #replacement_for). Log entries use the same few
-    # keys over and over, but the names of request parameters, for example, are chosen by whoever
-    # sends the request, so the number remembered is capped.
+    # How many keys the answer is remembered for (see #remember). Log entries use the same few keys
+    # over and over, but the names of request parameters, for example, are chosen by whoever sends
+    # the request, so neither how many nor how long they are is left to them.
     MAX_REMEMBERED_KEYS = 1_000
+
+    # The longest key name, in characters, that the answer is remembered for (see #remember).
+    MAX_REMEMBERED_KEY_LENGTH = 128
+
+    # No snake_case forms of a key name, for one that is in snake_case already (see #snake_case_forms).
+    EMPTY_FORMS = [].freeze
+    private_constant :EMPTY_FORMS
 
     # Stands for a key not yet asked about in the remembered answers, in which nil means "not sensitive".
     UNKNOWN = Object.new.freeze
@@ -67,17 +74,21 @@ module SemanticLogger
 
     # Returns a copy of the value in which the value of every sensitive key is replaced, at any
     # depth, or the value itself when it has no sensitive key, so that what the formatters write
-    # only changes when something is redacted.
+    # only changes when something is redacted. The exceptions are a structure that holds itself,
+    # cut off with CIRCULAR, and one nested deeper than MAX_DEPTH, replaced with NESTED_TOO_DEEPLY.
     #
-    # Looks inside a Hash, Array, Set, Struct, Data, OpenStruct, or an object that responds to
-    # #to_unsafe_h, such as ActionController::Parameters, the structures that the formatters write
-    # as JSON objects and arrays. A copy is a Hash or an Array, as they write it. Any other value is
-    # returned as it is. The value and the structures in it are never changed, since they can be
-    # the application's own, or be shared by other log entries, as named tags are.
+    # Looks inside the keys and values of the structures that the formatters write as JSON objects
+    # and arrays (see Utils.structure?), such as a Hash, Array, Set, Struct, or Data, and inside an
+    # object that responds to #to_unsafe_h, such as ActionController::Parameters. A copy is a Hash or
+    # an Array, as they write it. Any other value is returned as it is. The value and the structures
+    # in it are never changed, since they can be the application's own, or be shared by other log
+    # entries, as named tags are.
     #
     # Never raises a StandardError: when the value cannot be redacted, such as when the sensitive
     # keys raise, it is replaced whole, and the error is reported to the internal logger.
     def redact(value)
+      return value unless structure?(value)
+
       walk(value, {}.compare_by_identity, 0)
     rescue StandardError => e
       report(e)
@@ -87,8 +98,8 @@ module SemanticLogger
     # Returns the value that replaces the value of a sensitive key, or nil when the key is not
     # sensitive, or is neither a Symbol nor a String.
     #
-    # The answer is remembered for up to MAX_REMEMBERED_KEYS keys, since asking the sensitive keys
-    # costs far more than looking it up.
+    # The answer is remembered (see #remember), since asking the sensitive keys costs far more than
+    # looking it up.
     def replacement_for(key)
       return unless key.is_a?(Symbol) || key.is_a?(String)
 
@@ -96,7 +107,7 @@ module SemanticLogger
       return replacement unless UNKNOWN.equal?(replacement)
 
       replacement = ask(key)
-      @replacements[key] = replacement if @replacements.size < MAX_REMEMBERED_KEYS
+      remember(key, replacement)
       replacement
     end
 
@@ -138,15 +149,31 @@ module SemanticLogger
       end
     end
 
-    # Asks the sensitive keys about the key's name, and when that is not sensitive, about its name
-    # in snake_case.
+    # Asks the sensitive keys about the key's name, and when that is not sensitive, about each of its
+    # snake_case forms (see #snake_case_forms).
     def ask(key)
       name        = Utils.encode_utf8_string(key.is_a?(Symbol) ? key.name : key)
       replacement = @matcher.call(name)
       return replacement unless replacement.nil?
 
-      snake = snake_case(name)
-      @matcher.call(snake) unless snake.equal?(name)
+      snake_case_forms(name).each do |snake|
+        replacement = @matcher.call(snake)
+        return replacement unless replacement.nil?
+      end
+      nil
+    end
+
+    # Remembers the answer for the key, unless its name is longer than MAX_REMEMBERED_KEY_LENGTH.
+    # When MAX_REMEMBERED_KEYS are already remembered, they are forgotten first, so that the keys
+    # being logged now are remembered, rather than the first ones ever seen.
+    def remember(key, replacement)
+      return if key.length > MAX_REMEMBERED_KEY_LENGTH
+
+      @replacements.clear if @replacements.size >= MAX_REMEMBERED_KEYS
+      # A frozen copy of a String key that is not frozen, as a Hash keeps, so that changing the key
+      # afterwards cannot change what it is remembered under.
+      key = key.dup.freeze if key.is_a?(String) && !key.frozen?
+      @replacements[key] = replacement
     end
 
     # Returns the redacted copy of the value, or the value itself when nothing in it is sensitive.
@@ -164,28 +191,38 @@ module SemanticLogger
       return NESTED_TOO_DEEPLY if depth >= MAX_DEPTH
 
       seen[value] = nil # Until its result is known.
-      members     = members_of(value)
-      seen[value] =
-        if members.is_a?(Hash)
-          walk_hash(value, members, seen, depth)
-        else
-          walk_array(value, members, seen, depth)
-        end
+      seen[value] = walk_members(value, members_of(value), seen, depth)
+    end
+
+    def walk_members(value, members, seen, depth)
+      if members.is_a?(Hash)
+        walk_hash(value, members, seen, depth)
+      elsif Utils.json_array?(value)
+        walk_array(value, members, seen, depth)
+      else
+        # A #to_h, or #to_unsafe_h, that does not return a Hash is walked as a value of its own, one
+        # level deeper, the way the formatters write it.
+        redacted = walk(members, seen, depth + 1)
+        redacted.equal?(members) ? value : redacted
+      end
     end
 
     # Copies are only made from the first value that changes, since most entries have no sensitive
     # key, and the structures before it are kept.
+    #
+    # A key that is itself a structure, which the formatters write as its JSON, is redacted too.
     def walk_hash(value, members, seen, depth)
       copy  = nil
       index = 0
       members.each_pair do |key, val|
+        new_key     = key.is_a?(Symbol) || key.is_a?(String) ? key : walk(key, seen, depth + 1)
         replacement = replacement_for(key)
         new_val     = replacement.nil? ? walk(val, seen, depth + 1) : replacement
         if copy
-          copy[key] = new_val
-        elsif !new_val.equal?(val)
-          copy      = hash_head(members, index)
-          copy[key] = new_val
+          copy[new_key] = new_val
+        elsif !(new_val.equal?(val) && new_key.equal?(key))
+          copy          = hash_head(members, index)
+          copy[new_key] = new_val
         end
         index += 1
       end
@@ -217,40 +254,45 @@ module SemanticLogger
       copy || value
     end
 
-    # Whether the value is a structure that #walk looks inside (see #redact).
+    # Whether the value is a structure that #walk looks inside: one that the formatters write as a
+    # JSON object or array (see Utils.structure?), or an object that responds to #to_unsafe_h, such
+    # as ActionController::Parameters, which they write with all of its parameters.
     def structure?(value)
       case value
       when String, Symbol, Integer, Float, NilClass, TrueClass, FalseClass
-        # The most common values, ruled out before the slower checks below.
+        # The most common values, ruled out before the slower checks.
         false
-      when Hash, Array, ::Set, Struct, ::Data
-        true
       else
         Utils.structure?(value) || value.respond_to?(:to_unsafe_h)
       end
     end
 
-    # Returns [Hash|Array] the members of a structure (see #structure?).
+    # Returns the members of a structure (see #structure?), usually a Hash or an Array.
     def members_of(value)
-      case value
-      when Hash, Array
-        value
-      when ::Set
-        value.to_a
-      else
-        members = value.respond_to?(:to_unsafe_h) ? value.to_unsafe_h : value.to_h
-        # A #to_h that returns something else is walked as a single element, as the formatters do.
-        members.is_a?(Hash) ? members : [members]
-      end
+      Utils.structure?(value) ? Utils.structure_members(value) : value.to_unsafe_h
     end
 
-    # Returns [String] the key name in snake_case, such as "x_api_key" for "X-Api-Key" and
-    # "api_key" for "apiKey", or the same name when it is already.
-    def snake_case(name)
-      return name if SNAKE_CASE.match?(name)
+    # Returns [Array<String>] the key name in snake_case, in one or two forms, or none when it is
+    # snake_case already: words split where a lower case letter or digit meets a capital, such as
+    # "x_api_key" for "X-Api-Key", "api_key" for "apiKey", and "session_ids" for "sessionIDs"; and
+    # when it differs, with a run of capitals also split before its last capital, so that an
+    # acronym starts a word of its own, such as "api_key" for "APIKey" and "otp_code" for "OTPCode".
+    # Asking about both means a plural acronym, which the second form splits into "session_i_ds", is
+    # still matched by the first.
+    #
+    # Each pattern takes time in proportion to the length of the name, on JRuby too, since a key
+    # name can be long and chosen by whoever sends a request.
+    def snake_case_forms(name)
+      return EMPTY_FORMS if SNAKE_CASE.match?(name)
 
-      name.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase.gsub(/[^a-z\d]+/, "_")
+      words    = name.gsub(/([a-z\d])([A-Z])/, '\1_\2')
+      acronyms = words.gsub(/([A-Z\d])(?=[A-Z][a-z])/, '\1_')
+      forms    = [to_snake_case(words)]
+      forms << to_snake_case(acronyms) unless acronyms == words
+      forms
     end
+
+    def to_snake_case(words) = words.downcase.gsub(/[^a-z\d]+/, "_")
 
     # Reports an error raised while redacting to the internal logger. Only its class and where it
     # was raised: its message, or the exception given to the internal logger, could hold the data

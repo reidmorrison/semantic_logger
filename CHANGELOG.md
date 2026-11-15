@@ -37,16 +37,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   It takes an Array of Symbols and Strings, which match any key whose name contains them, ignoring
   case, as in Rails' `config.filter_parameters`, and Regexps; or a Regexp; or an
   `ActiveSupport::ParameterFilter`, or any object that responds to `#filter_param`; or a Proc. Keys
-  are matched by name, as written and in snake_case, so that `:_key` also matches `"X-Api-Key"` and
-  `"apiKey"`. The payload, named tags, the context that `on_log` subscribers add, and metric
-  dimensions are redacted at any depth, inside Hashes, Arrays, Sets, Structs, Data, OpenStructs, and
-  `ActionController::Parameters`, once per entry on the thread that writes the entries, so every
-  appender, including error services and appenders of your own, writes the redacted entry. The
-  application's own Hashes are never changed, and an entry with no sensitive key is written as it
-  is. When an entry cannot be redacted, the field is replaced with `{redaction_failed: "ErrorClass"}`
-  and the error is reported to the internal logger. The message, tags, and exception are not
-  redacted, and `on_log` subscribers and logger filters receive the entry as it was logged. Nothing
-  changes until sensitive keys are set. See
+  are matched by name, as written and in snake_case, so that `:_key` also matches `"X-Api-Key"`,
+  `"apiKey"`, and `"APIKey"`. The payload, named tags, the context that `on_log` subscribers add,
+  and metric dimensions are redacted at any depth, inside Hashes, Arrays, Sets, Structs, Data,
+  OpenStructs, and `ActionController::Parameters`, once per entry on the thread that writes the
+  entries, so every appender, including error services and appenders of your own, writes the
+  redacted entry. The application's own Hashes are never changed, and an entry with no sensitive key
+  is written as it is, unless it holds a structure that holds itself or is nested more than 32
+  levels deep. When an entry cannot be redacted, the field is replaced with
+  `{redaction_failed: "ErrorClass"}` and the error is reported to the internal logger. The message,
+  tags, and exception are not redacted, and `on_log` subscribers and logger filters receive the
+  entry as it was logged. Nothing changes until sensitive keys are set. See
   [Redacting sensitive data](https://logger.reidmorrison.com/security.html#redacting-sensitive-data).
 
 ### Changed

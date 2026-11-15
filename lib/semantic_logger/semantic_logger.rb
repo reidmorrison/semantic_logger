@@ -138,6 +138,9 @@ module SemanticLogger
   # on the thread that logs the entry, and receive it as it was logged. The application's own
   # Hashes are never changed: the entry gets a copy.
   #
+  # The keys are read when they are assigned, so changing an Array of them afterwards has no effect:
+  # assign them again instead.
+  #
   # When an entry cannot be redacted, for example because the keys raise an error, the field is
   # replaced with `{redaction_failed: "ErrorClass"}`, and the error is reported to the internal
   # logger.

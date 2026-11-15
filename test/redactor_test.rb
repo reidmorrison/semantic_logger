@@ -146,6 +146,40 @@ class RedactorTest < Minitest::Test
         assert_nil redactor.replacement_for("monkey")
       end
 
+      it "splits a key name that starts with an acronym into words" do
+        redactor = SemanticLogger::Redactor.new([:_key])
+
+        %w[APIKey XAPIKey SSHKey AWSSecretKeyID SHA256Key].each do |key|
+          assert_equal mask, redactor.replacement_for(key), key
+        end
+      end
+
+      it "still matches a plural acronym, which splitting acronyms would break up" do
+        redactor = SemanticLogger::Redactor.new([:session_id, /(?<![a-z])(?:pin|otp|ssn)s?(?![a-z])/])
+
+        %w[sessionIDs userPINs OTPs SSNs PINs].each { |key| assert_equal mask, redactor.replacement_for(key), key }
+      end
+
+      # Only fails on JRuby, whose regexps do not memoize: there a pattern that backtracks over a run
+      # of capitals, such as /([A-Z\d]+)([A-Z][a-z])/, took over a minute for this name. MRI matches
+      # even that pattern in linear time, so this cannot catch it on the Rubies that CI runs.
+      it "takes time in proportion to the length of a key name of capitals" do
+        redactor = SemanticLogger::Redactor.new([:_key])
+        started  = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        redactor.replacement_for("A" * 100_000)
+
+        assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 2
+      end
+
+      it "matches a whole-word Regexp against the words of a key name with an acronym" do
+        redactor = SemanticLogger::Redactor.new([/(?<![a-z])(?:otp|ssn|cvv)(?![a-z])/])
+
+        %w[OTPCode SSNNumber CVVCode otpCode userSSN].each do |key|
+          assert_equal mask, redactor.replacement_for(key), key
+        end
+        assert_nil redactor.replacement_for("footprint")
+      end
+
       it "asks about the key name as written first, and in snake_case only when that is not sensitive" do
         names    = []
         redactor = SemanticLogger::Redactor.new(->(name) { (names << name) && false })
@@ -172,15 +206,38 @@ class RedactorTest < Minitest::Test
         assert_equal %w[password user], names
       end
 
-      it "remembers no more than MAX_REMEMBERED_KEYS keys" do
-        asked    = 0
-        redactor = SemanticLogger::Redactor.new(->(_name) { (asked += 1) && false })
+      it "forgets the keys it remembers once it holds MAX_REMEMBERED_KEYS, and remembers the new one" do
+        names    = []
+        redactor = SemanticLogger::Redactor.new(->(name) { (names << name) && false })
         SemanticLogger::Redactor::MAX_REMEMBERED_KEYS.times { |i| redactor.replacement_for("key#{i}") }
-        asked = 0
+        names.clear
         2.times { redactor.replacement_for("one_more") }
         redactor.replacement_for("key0")
 
-        assert_equal 2, asked
+        assert_equal %w[one_more key0], names
+      end
+
+      # On MRI, Concurrent::Map keeps a frozen copy of such a key itself; on JRuby it keeps the key.
+      it "remembers a String key that is not frozen under a frozen copy, so changing the key changes nothing" do
+        redactor = SemanticLogger::Redactor.new([:password])
+        key      = +"password"
+
+        assert_equal mask, redactor.replacement_for(key)
+        key.replace("user")
+
+        assert_nil redactor.replacement_for(key)
+        assert_equal mask, redactor.replacement_for("password")
+      end
+
+      it "does not remember a key name longer than MAX_REMEMBERED_KEY_LENGTH, but still redacts it" do
+        names    = []
+        redactor = SemanticLogger::Redactor.new(->(name) { (names << name) && name.start_with?("password") })
+        long_key = "password#{'x' * SemanticLogger::Redactor::MAX_REMEMBERED_KEY_LENGTH}"
+
+        2.times { assert_equal mask, redactor.replacement_for(long_key) }
+        2.times { redactor.replacement_for("p" * SemanticLogger::Redactor::MAX_REMEMBERED_KEY_LENGTH) }
+
+        assert_equal [long_key, long_key, "p" * SemanticLogger::Redactor::MAX_REMEMBERED_KEY_LENGTH], names
       end
     end
 
@@ -194,6 +251,12 @@ class RedactorTest < Minitest::Test
         redacted = {request: {headers: {"Authorization" => mask}}, users: [{password: mask}, {password: mask}]}
 
         assert_equal redacted, redactor.redact(payload)
+      end
+
+      it "redacts a key that is itself a structure" do
+        payload = {{password: "x", user: "jack"} => 1, :other => 2}
+
+        assert_equal({{password: mask, user: "jack"} => 1, :other => 2}, redactor.redact(payload))
       end
 
       it "replaces the whole value of a sensitive key, even a structure" do
@@ -263,6 +326,14 @@ class RedactorTest < Minitest::Test
         [Struct.new(:user).new("jack"), Data.define(:user).new(user: "jack"), open_struct].each do |value|
           assert_same value, redactor.redact(value)
         end
+      end
+
+      it "walks the #to_h of a Struct that does not return a Hash as a value of its own" do
+        struct_class = Struct.new(:user) do
+          def to_h = [{password: "x"}]
+        end
+
+        assert_equal [{password: mask}], redactor.redact(struct_class.new("jack"))
       end
 
       it "returns an Array for a Set holding a sensitive key" do
