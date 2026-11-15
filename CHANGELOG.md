@@ -59,6 +59,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   the docs said it was retried. Delivery is unchanged: the worker thread backs off, then carries on
   with the messages queued meanwhile. See
   [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender).
+- The custom appender example in the configuration guide now runs. Its `host: host` option default
+  is a syntax error on Ruby 3.2, and `host` is already an option of every appender, so the example's
+  value was overwritten. The example now takes a required `url:` option. See
+  [Custom appenders](https://logger.reidmorrison.com/config.html#custom-appenders).
 - The formatter of an appender added with `async: true` (or batching) can be read and changed with
   `formatter` and `formatter=`, as for any other appender. Before, these raised `NoMethodError`.
   An appender that formats its messages as one batch needs a formatter that implements `#batch`. See
