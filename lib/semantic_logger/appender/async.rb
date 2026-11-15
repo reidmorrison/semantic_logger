@@ -76,7 +76,7 @@ module SemanticLogger
       #   dropped_message_report_seconds: [Integer]
       #     When non_blocking is enabled, log the count of dropped messages to the internal logger
       #     at most once every this number of seconds. Also limits how often messages discarded
-      #     because their content could not be written are reported, after the first.
+      #     because they could not be written are reported, after the first.
       #     Default: 30
       #
       #   async_max_retries: [Integer]

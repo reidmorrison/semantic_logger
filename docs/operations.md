@@ -167,12 +167,12 @@ message is processed successfully. The message being written when the destinatio
 batching, the batch) is discarded; the messages logged meanwhile wait on the queue, and are written
 once the thread carries on.
 
-A message that fails because of its own content, rather than the destination, is discarded without
-backing off: for example a value the formatter cannot serialize (a `JSON::GeneratorError`,
-`JSON::NestingError`, encoding error, or `FloatDomainError`). That one message is discarded, and the
-thread carries on straight away. When batching with an appender that sends the whole batch in a single request,
-such as the HTTP, Loki, Splunk HTTP, Elasticsearch, and OpenSearch appenders, only that message is
-discarded and the rest of the batch is still written. With an appender that may have written part
+A message that fails because of its own content, rather than the destination, is discarded and the
+thread carries on straight away, without backing off: for example a value the formatter cannot
+serialize (a `JSON::GeneratorError`, `JSON::NestingError`, encoding error, or `FloatDomainError`).
+When batching with an appender that sends the whole batch in a single request, such as the HTTP,
+Loki, Splunk HTTP, Elasticsearch, and OpenSearch appenders, only that message is discarded and the
+rest of the batch is still written. With an appender that may have written part
 of the batch before failing, the whole batch is discarded, so that no message is written twice.
 
 Whether its content or the destination was at fault, the first discarded message is reported to the
@@ -181,8 +181,8 @@ latest error, at most once every `dropped_message_report_seconds` (default `30`)
 as `failed` for that appender in `SemanticLogger.stats[:appenders]`.
 
 A `JSON::ParserError`, such as from a destination that answered with an HTML error page, is a
-problem with the destination, so the thread backs off as for any other error. The appender decides which
-errors are caused by message content; see [Custom appenders](config.html#custom-appenders).
+problem with the destination, so the thread backs off as for any other error. The appender decides
+which errors are caused by message content; see [Custom appenders](config.html#custom-appenders).
 
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
 rather than spinning forever on a persistent failure. From then on new log messages for that

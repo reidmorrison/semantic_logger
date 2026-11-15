@@ -138,8 +138,8 @@ module SemanticLogger
     # Returns [Integer] the number of log messages dropped because the queue was full.
     def dropped_count = @dropped.total
 
-    # Returns [Integer] the number of log messages discarded because their content could not be
-    # written (see Subscriber#message_error?).
+    # Returns [Integer] the number of log messages discarded because they could not be written,
+    # whether their content or the destination was at fault (see Subscriber#message_error?).
     def failed_count = @failed.total
 
     # Returns [true|false] whether messages are processed in batches.
