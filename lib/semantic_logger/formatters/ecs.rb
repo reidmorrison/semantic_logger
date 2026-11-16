@@ -142,6 +142,7 @@ module SemanticLogger
         extra[:payload]       = hash[:payload] if hash[:payload]
         extra[:metric]        = hash[:metric] if hash[:metric]
         extra[:metric_amount] = hash[:metric_amount] if hash[:metric_amount]
+        extra[:dimensions]    = hash[:dimensions] if hash[:dimensions]
 
         unless extra.empty?
           namespace ? result[namespace] = extra : labels.merge!(extra)

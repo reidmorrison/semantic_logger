@@ -197,6 +197,24 @@ module SemanticLogger
             assert_equal 3, attributes["semantic_logger.metric_amount"]
           end
 
+          it "includes each dimension as an attribute of its own" do
+            log.metric     = "user/created"
+            log.dimensions = {region: "us", tier: 2, plan: :gold}
+
+            assert_equal "us", attributes["semantic_logger.dimensions.region"]
+            assert_equal 2, attributes["semantic_logger.dimensions.tier"]
+            assert_equal "gold", attributes["semantic_logger.dimensions.plan"]
+          end
+
+          it "prefixes a payload key that would forge a dimension" do
+            log.metric     = "user/created"
+            log.dimensions = {region: "us"}
+            log.payload    = {"semantic_logger.dimensions.region" => "forged"}
+
+            assert_equal "us", attributes["semantic_logger.dimensions.region"]
+            assert_equal "forged", attributes["payload.semantic_logger.dimensions.region"]
+          end
+
           describe "named tags" do
             it "are attributes of their own" do
               log.named_tags = {request_id: "abc", "user" => "jack"}

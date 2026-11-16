@@ -286,6 +286,13 @@ module SemanticLogger
             assert_equal 100, payload_obj["metric_value"]
           end
 
+          it "includes the metric's dimensions as a single JSON value" do
+            log.metric     = "my_metric"
+            log.dimensions = {region: "us", tier: 2}
+
+            assert_equal({"region" => "us", "tier" => 2}, JSON.parse(values_data[2]["dimensions"]))
+          end
+
           it "merges metric with existing payload" do
             log.payload = {data: "sample"}
             log.metric = "my_metric"

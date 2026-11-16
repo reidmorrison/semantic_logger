@@ -130,6 +130,13 @@ module SemanticLogger
             assert_equal 3, parsed["metric_amount"]
           end
 
+          it "serializes the metric's dimensions" do
+            log.metric     = "user/login"
+            log.dimensions = {region: bad}
+
+            assert_equal({"region" => "Bad: "}, parsed["dimensions"])
+          end
+
           it "serializes tags" do
             log.tags = ["good", bad]
 

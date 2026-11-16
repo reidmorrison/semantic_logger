@@ -273,6 +273,20 @@ module SemanticLogger
             assert_equal 3, formatter.hash[:metric_amount]
           end
 
+          it "logs the dimensions" do
+            log.metric     = "user/login"
+            log.dimensions = {region: "us", tier: 2}
+
+            assert_equal({region: "us", tier: 2}, formatter.hash[:dimensions])
+          end
+
+          it "omits empty dimensions" do
+            log.metric     = "user/login"
+            log.dimensions = {}
+
+            refute formatter.hash.key?(:dimensions)
+          end
+
           it "is omitted without a metric" do
             refute formatter.hash.key?(:metric)
             refute formatter.hash.key?(:metric_amount)
