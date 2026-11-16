@@ -42,8 +42,12 @@ module SemanticLogger
       end
 
       # Send an error notification to honeybadger
+      #
+      # Honeybadger replaces each byte of text that is not valid UTF-8 with "?", including binary text
+      # that holds UTF-8, such as a response body, so the Strings are converted first, as the JSON
+      # formatters convert them (see Utils.encode_utf8).
       def log(log)
-        context = format_log(log)
+        context = Utils.encode_utf8(format_log(log))
         if log.exception
           context.delete(:exception)
           ::Honeybadger.notify(log.exception, context)

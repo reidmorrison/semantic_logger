@@ -51,6 +51,24 @@ module Appender
         end
       end
 
+      # Sentry serializes the event with JSON, which raises for such text with json 3.1, and warns
+      # about it with json 2.8 to 3.0.x.
+      it "sends binary text as UTF-8, keeping its characters" do
+        error_message = scope = nil
+        capture       = lambda { |msg, _h = {}|
+          error_message = msg
+          scope         = ::Sentry.get_current_scope
+        }
+
+        ::Sentry.stub(:capture_message, capture) do
+          appender.error("Café ☕".b, body: "Café \xFF☕".b)
+        end
+
+        assert_equal "Café ☕", error_message
+        assert_equal "Café ☕", scope.extra[:body]
+        assert_equal Encoding::UTF_8, error_message.encoding
+      end
+
       describe "with the Sentry user or fingerprint in the payload" do
         # Logs the entry directly, and returns the Sentry scope it was captured with.
         def capture(log)

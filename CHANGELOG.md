@@ -159,8 +159,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   module to Ruby's `Warning` that drops that one warning when it comes from serializing log data;
   the application's own JSON, including an exception's own `#message`, still warns. `:graylog` now
   hands the gelf gem a copy with such Strings converted to UTF-8, since the gem serializes it
-  itself. An appender that hands the data to another gem that serializes it, such as
-  `:sentry_ruby`, can still print the warning.
+  itself, and so does `:sentry_ruby`.
 - A `measure_*` block that raises an exception whose `#message` raises, such as one that reads a
   record that is nil, now re-raises its own exception. Before, with `log_exception: :partial` (the
   default), the error that `#message` raised replaced it, without it as the cause, and nothing was
@@ -267,6 +266,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `formatter: nil`, or when their formatter is set back to `nil` with `formatter=`. They used the
   generic default instead: JSON for Loki, and plain text for the others, which made every log entry
   fail for OpenTelemetry.
+- The `:sentry_ruby` appender no longer loses an event whose data holds a binary String that holds
+  bytes outside ASCII, such as a response body in the payload, with json 3.1, and no longer prints
+  the json gem's warning about it with json 2.8.0 through 3.0.x. Sentry serializes the event itself,
+  so with json 3.1 it raised as Sentry sent the event, which dropped it. Now the appender hands
+  Sentry a copy of any data that JSON cannot write as it is, as `:graylog` does: binary text is read
+  as the UTF-8 it usually holds, invalid bytes are dropped, and Infinity and NaN become Strings. The
+  `:bugsnag`, `:honeybadger`, and `:honeybadger_insights` appenders now hand over the text of an
+  entry converted to valid UTF-8 in the same way, keeping its characters: Bugsnag replaced each byte
+  of binary text outside ASCII with U+FFFD, and Honeybadger with "?", so `"Café".b` arrived as
+  `"Caf��"` or `"Caf??"`.
 - The `:mongodb` appender no longer discards an entry that holds text BSON cannot store: a binary
   String that holds bytes outside ASCII, such as a response body in the payload, a US-ASCII String
   that holds UTF-8, such as a file read where no locale is set, invalid UTF-8, such as an exception

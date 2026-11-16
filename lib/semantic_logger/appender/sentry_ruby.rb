@@ -74,7 +74,11 @@ module SemanticLogger
         # Ignore logs coming from Sentry itself
         return false if log.name == "Sentry"
 
-        context = format_log(log)
+        # Sentry serializes the event with JSON itself, which raises for a binary String that holds
+        # bytes outside ASCII (json 3.1) or warns about it (json 2.8 to 3.0.x), for invalid UTF-8,
+        # Infinity, or NaN, and then loses the event. Such data is sent as a copy that JSON can
+        # write, as the JSON formatters write it (see Utils.json_ready).
+        context = Utils.json_ready(format_log(log))
         # Copies, since the payload and named tags are the log entry's own, which every other
         # appender writes after this one, and the payload can be the application's own Hash. The
         # keys taken out below must only be left out of what is sent to Sentry.
