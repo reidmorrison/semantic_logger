@@ -1,5 +1,6 @@
 require "json"
 require "uri"
+require "semantic_logger/core_ext/warning"
 
 module SemanticLogger
   # Internal-use only utility functions for Semantic Logger.
@@ -171,7 +172,8 @@ module SemanticLogger
     # * Invalid UTF-8. Depending on the json gem version this raises
     #   Encoding::UndefinedConversionError (an EncodingError) or JSON::GeneratorError.
     #   From json 3.1 so does a binary String that holds bytes outside ASCII, even valid UTF-8,
-    #   which earlier versions write as UTF-8.
+    #   which earlier versions write as UTF-8, with a warning that is dropped for log data (see
+    #   CoreExt::Warning).
     # * Infinity and NaN, which raise JSON::GeneratorError.
     # * Structures nested deeper than the json gem allows, which raise
     #   JSON::NestingError (a JSON::ParserError, not a GeneratorError).
@@ -199,8 +201,11 @@ module SemanticLogger
     # Returns the value when JSON writes it as it is, otherwise a .json_safe copy, for a writer
     # that serializes the value itself, such as GELF. The check costs one #to_json; only the
     # rare value that needs repairing is copied.
+    #
+    # That includes a value holding a binary String that json 2.8 through 3.0.x warn about, since
+    # the writer's own serializing is not Semantic Logger's, so it would print the warning.
     def self.json_ready(value)
-      clean_json(value) ? value : json_safe(value)
+      CoreExt::Warning.unless_binary_string_warned { clean_json(value) } ? value : json_safe(value)
     end
 
     # Returns [String] the value's JSON, or nil when .to_json has to repair the data.
