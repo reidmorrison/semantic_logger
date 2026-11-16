@@ -3789,6 +3789,41 @@ Notes:
 * If a value returns `nil`, that key is omitted for that request.
 * To turn named tags off in development, set `config.log_tags = nil` in
   `config/environments/development.rb`.
+* The tags are computed when the request enters the middleware stack, before the session is loaded
+  and before authentication middleware such as Warden (used by Devise) runs. A value can come from
+  the request's headers or cookies, but not from the signed-in user.
+
+#### Tag a request with the signed-in user
+
+To tag every entry logged while a controller handles a request with values that are only known
+inside the controller, such as the signed-in user, wrap the action in an `around_action`:
+
+~~~ruby
+class ApplicationController < ActionController::Base
+  around_action :tag_logs
+
+  private
+
+  def tag_logs(&)
+    SemanticLogger.tagged({user_id: current_user&.id}.compact, &)
+  end
+end
+~~~
+
+The tags apply until the action finishes, and are removed even when it raises an exception. The
+`compact` leaves the tag out for a request without a signed-in user. The tags are not on the
+`Started`, `Processing`, and `Completed` entries, which are logged outside the action's callbacks. To
+add the user to the `Completed` entry as well, see
+[Add custom data to the Completed message](#add-custom-data-to-the-completed-message).
+
+Use the block form, as above, rather than `SemanticLogger.push_named_tags` in a `before_action`.
+Tags added with `push_tags` or `push_named_tags` stay on the thread until they are popped, and web
+servers such as Puma serve many requests on each thread, so tags pushed during one request would be
+logged for every later request on that thread.
+
+When a nested block sets a named tag that is already set, its value replaces the earlier one. A
+Hash value, such as `user: {id: 1}`, is replaced as a whole rather than merged with the earlier
+Hash, so prefer flat keys such as `user_id:`.
 
 ### Source file name, line number, and method
 
