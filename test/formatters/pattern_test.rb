@@ -392,6 +392,54 @@ module SemanticLogger
             assert_includes result, "-- Hello World"
           end
         end
+
+        # Joining texts that both hold bytes outside ASCII, in incompatible encodings, raises
+        # Encoding::CompatibilityError, which used to lose the entry.
+        describe "text in encodings that cannot be joined" do
+          let(:binary) { "Grüße ☕".b }
+
+          def assert_utf8(output)
+            assert_predicate output, :valid_encoding?
+            assert_equal Encoding::UTF_8, output.encoding
+          end
+
+          it "writes a binary message after a non-ASCII logger name" do
+            log.name    = "Café::Commande"
+            log.message = binary
+            output      = formatted("%{name} -- %{message}")
+
+            assert_utf8 output
+            assert_equal "Café::Commande -- Grüße ☕", output
+          end
+
+          it "writes a UTF-8 message with a binary exception message and the binary message of its cause" do
+            log.message   = "Café"
+            log.exception =
+              begin
+                begin
+                  raise binary
+                rescue RuntimeError
+                  raise ArgumentError, binary
+                end
+              rescue ArgumentError => e
+                e
+              end
+            output = formatted("%{message} -- %{exception_class}: %{exception_message}\n%{backtrace}")
+
+            assert_utf8 output
+            assert_equal "Café -- ArgumentError: Grüße ☕", output.lines.first.chomp
+            assert_includes output, "\nCause: RuntimeError: Grüße ☕\n"
+          end
+
+          it "writes tags and named tags in incompatible encodings" do
+            log.tags       = ["Café", binary]
+            log.named_tags = {city: "Zürich", greeting: binary}
+            output         = formatted("%{tags} %{named_tags} %{named_tags:greeting}")
+
+            assert_utf8 output
+            assert_equal "Café, Grüße ☕ city: Zürich, greeting: Grüße ☕ Grüße ☕", output
+          end
+        end
       end
     end
   end

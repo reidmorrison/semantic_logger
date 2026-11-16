@@ -128,6 +128,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Now they are joined the way `log_exception: :partial` joins the message and the exception's
   message. So a binary String added to an ASCII message is now read as UTF-8 too, and the message
   stays UTF-8, without the String's bytes that are not valid UTF-8, rather than becoming binary.
+- `:default`, `:color`, and `:pattern` without `escape_control_chars` no longer lose an entry whose
+  texts are in incompatible encodings, such as a UTF-8 message logged with an exception whose
+  message is binary and holds bytes outside ASCII, a binary message after a logger name with
+  accented letters, tags or named tags in different encodings, or the binary message of an
+  exception that caused the logged one. A UTF-16 message no longer loses the entry either. Before,
+  formatting raised `Encoding::CompatibilityError`, and the appender reported the error to the
+  internal logger instead of writing the entry. Now a String that holds bytes outside ASCII in an
+  encoding other than UTF-8 is converted to UTF-8 before it is written, as `:one_line`, `:syslog`,
+  and `escape_control_chars: true` already do: binary text is read as the UTF-8 it usually holds,
+  and its invalid bytes are dropped, and text in another encoding, such as ISO-8859-1, is
+  converted. So these formatters now always write UTF-8, also for an entry whose text is all in
+  one other encoding, which they used to write in that encoding.
 - A `measure_*` block that raises an exception whose `#message` raises, such as one that reads a
   record that is nil, now re-raises its own exception. Before, with `log_exception: :partial` (the
   default), the error that `#message` raised replaced it, without it as the cause, and nothing was
