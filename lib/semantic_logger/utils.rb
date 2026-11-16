@@ -146,6 +146,8 @@ module SemanticLogger
     # repaired copy when serialization fails because of the data:
     # * Invalid UTF-8. Depending on the json gem version this raises
     #   Encoding::UndefinedConversionError (an EncodingError) or JSON::GeneratorError.
+    #   From json 3.1 so does a binary String that holds bytes outside ASCII, even valid UTF-8,
+    #   which earlier versions write as UTF-8.
     # * Infinity and NaN, which raise JSON::GeneratorError.
     # * Structures nested deeper than the json gem allows, which raise
     #   JSON::NestingError (a JSON::ParserError, not a GeneratorError).
@@ -404,30 +406,41 @@ module SemanticLogger
     ENCODE_UTF8_OPTIONS = {invalid: :replace, undef: :replace, replace: "".freeze}.freeze
 
     # Returns the string converted to valid UTF-8, dropping any invalid bytes.
+    #
+    # Binary text, such as a response body, Base64-decoded text, or a C extension's error message,
+    # and US-ASCII text that holds bytes outside ASCII, such as a file read where no locale is set,
+    # do not say which characters those bytes are. They are read as the UTF-8 they usually hold,
+    # keeping its characters, as the json gem did before 3.1. Converting them would drop every byte
+    # outside ASCII, valid UTF-8 or not, since neither encoding defines one. Text in any other
+    # encoding, such as ISO-8859-1, is converted.
     def self.encode_utf8_string(string)
-      return string if string.encoding == Encoding::UTF_8 && string.valid_encoding?
-
-      if string.encoding == Encoding::UTF_8
-        # Correctly tagged as UTF-8 but contains invalid byte sequences.
-        string.scrub("")
+      case string.encoding
+      when Encoding::UTF_8
+        string.valid_encoding? ? string : string.scrub("")
+      when Encoding::BINARY, Encoding::US_ASCII
+        read_as_utf8(string)
       else
-        # Different encoding (e.g. ASCII-8BIT / Latin-1): transcode into UTF-8.
         string.encode(Encoding::UTF_8, **ENCODE_UTF8_OPTIONS)
       end
     rescue EncodingError
-      # Last resort for encodings without a converter to UTF-8: reinterpret the
-      # raw bytes as UTF-8 and drop anything invalid. Logging must never raise.
-      string.dup.force_encoding(Encoding::UTF_8).scrub("")
+      # Last resort for encodings without a converter to UTF-8. Logging must never raise.
+      read_as_utf8(string)
     end
+
+    # Returns [String] a copy of the string's bytes read as UTF-8, without its invalid bytes.
+    def self.read_as_utf8(string)
+      String.new(string, encoding: Encoding::UTF_8).scrub!("")
+    end
+    private_class_method :read_as_utf8
 
     # Returns [String] the texts joined into a new String, such as a log message and an exception's
     # message, whatever their encodings.
     #
     # Texts are joined as they are, so that text in an encoding such as ISO-8859-1 can still be
     # joined with the application's other text in that encoding. Two texts are converted to valid
-    # UTF-8 first (see .utf8_text) only when joining them would raise, such as for UTF-8 and binary
-    # texts that both hold bytes outside ASCII, or would make text that is not binary binary, such as
-    # an ASCII message joined with a binary exception message.
+    # UTF-8 first (see .encode_utf8_string) only when joining them would raise, such as for UTF-8
+    # and binary texts that both hold bytes outside ASCII, or would make text that is not binary
+    # binary, such as an ASCII message joined with a binary exception message.
     #
     # Each text is formatted as interpolation would, rather than added or converted with #to_s, so
     # that a String subclass whose #+ escapes the text added to it, such as
@@ -439,21 +452,9 @@ module SemanticLogger
         if encoding && (encoding != Encoding::BINARY || joined.encoding == Encoding::BINARY)
           "#{joined}#{text}"
         else
-          "#{utf8_text(joined)}#{utf8_text(text)}"
+          "#{encode_utf8_string(joined)}#{encode_utf8_string(text)}"
         end
       end
     end
-
-    # Returns [String] the text as valid UTF-8, for .join_texts. Binary text, such as a response
-    # body or a C extension's error message, is read as UTF-8, which it usually holds, keeping its
-    # characters and dropping its invalid bytes. Text in other encodings is converted (see
-    # .encode_utf8_string).
-    def self.utf8_text(text)
-      return encode_utf8_string(text) unless text.encoding == Encoding::BINARY
-
-      text.dup.force_encoding(Encoding::UTF_8).scrub("")
-    end
-
-    private_class_method :utf8_text
   end
 end

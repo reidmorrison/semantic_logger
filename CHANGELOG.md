@@ -121,6 +121,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   its message would raise, or would make an ASCII message binary, they are converted to valid UTF-8
   first: binary text is read as the UTF-8 it usually holds, and invalid bytes are dropped. Text in
   another encoding, such as ISO-8859-1, otherwise stays in it.
+- The JSON based formatters (`:json`, `:raw`, `:fluentd`, `:ecs`, `:loki`, ...), `:logfmt`,
+  `:one_line`, `:open_telemetry`, `:syslog`, the other text formatters with
+  `escape_control_chars: true`, and `:cloudwatch_logs` no longer drop the characters of a binary
+  String that holds UTF-8, such as a response body, Base64-decoded text, or a C extension's error
+  message, or of a US-ASCII String that holds UTF-8, such as a file read or an environment variable
+  where no locale is set. Before, every byte outside ASCII was dropped, valid UTF-8 or not, so
+  `"Café ☕".b` was written as `"Caf "`. On every json gem version this happened to the message, and
+  to the text that `:open_telemetry` writes or that a formatter escapes; since json 3.1, which no
+  longer writes a binary String as UTF-8, it also happened to payload values and keys, tags, named
+  tags, and exception messages in the JSON based formatters. Now such text is read as UTF-8, and
+  only its invalid bytes are dropped. A binary key name that holds UTF-8, such as `"contraseña"`, now
+  also matches `SemanticLogger.sensitive_keys`.
 - When an async or batching appender's destination fails, the message (or batch) being written is
   now counted as `failed` in `SemanticLogger.stats` and reported to the internal logger, as a message
   whose content cannot be written already was. Before, it was discarded without being counted, and

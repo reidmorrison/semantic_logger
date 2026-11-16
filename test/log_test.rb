@@ -1104,6 +1104,12 @@ module SemanticLogger
 
           assert_equal "hi", log.cleansed_message
         end
+
+        it "keeps the UTF-8 characters of a binary message, dropping its invalid bytes" do
+          log.message = "Café \xFF☕ ".b
+
+          assert_equal "Café ☕", log.cleansed_message
+        end
       end
 
       describe "#cleansed_message" do
