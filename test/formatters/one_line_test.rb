@@ -191,6 +191,7 @@ module SemanticLogger
 
             assert_predicate output, :valid_encoding?
             assert_includes output, "Café"
+            assert_includes output, "café"
           end
         end
 

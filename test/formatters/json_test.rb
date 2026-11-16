@@ -189,6 +189,45 @@ module SemanticLogger
           end
         end
 
+        # Binary data usually holds UTF-8, such as a response body or Base64-decoded text. Its
+        # characters are kept, and only its invalid bytes dropped.
+        describe "binary data that holds UTF-8" do
+          # Valid UTF-8 and one invalid byte (0xFF), so that no json gem version writes it as it is.
+          let(:binary) { "Café \xFF☕".b }
+
+          it "keeps the characters of the message" do
+            log.message = "Café ☕".b
+
+            assert_equal "Café ☕", parsed["message"]
+          end
+
+          it "keeps the characters of the message, dropping its invalid bytes" do
+            log.message = binary
+
+            assert_equal "Café ☕", parsed["message"]
+          end
+
+          it "keeps the characters of tags and named tags" do
+            log.tags       = [binary]
+            log.named_tags = {"clé".b => binary}
+
+            assert_equal ["Café ☕"], parsed["tags"]
+            assert_equal({"clé" => "Café ☕"}, parsed["named_tags"])
+          end
+
+          it "keeps the characters of payload keys and values" do
+            log.payload = {"clé".b => {inner: binary, list: [binary]}}
+
+            assert_equal({"clé" => {"inner" => "Café ☕", "list" => ["Café ☕"]}}, parsed["payload"])
+          end
+
+          it "keeps the characters of the exception message" do
+            log.exception = RuntimeError.new(binary)
+
+            assert_equal "Café ☕", parsed["exception"]["message"]
+          end
+        end
+
         describe "payload values that JSON cannot represent" do
           it "serializes a float that is not finite, instead of dropping the event" do
             log.message = "Transfer"

@@ -195,6 +195,10 @@ class RedactorTest < Minitest::Test
         assert_equal mask, redactor.replacement_for("password".encode(Encoding::UTF_16LE))
       end
 
+      it "matches a binary key name that holds UTF-8 characters" do
+        assert_equal mask, SemanticLogger::Redactor.new(["contraseña"]).replacement_for("contraseña".b)
+      end
+
       it "remembers the answer for each key" do
         names    = []
         redactor = SemanticLogger::Redactor.new(->(name) { (names << name) && name == "password" })

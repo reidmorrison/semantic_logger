@@ -646,6 +646,41 @@ module SemanticLogger
         end
       end
 
+      describe ".encode_utf8_string" do
+        it "keeps the UTF-8 characters of a binary string" do
+          result = Utils.encode_utf8_string("Café ☕".b)
+
+          assert_equal "Café ☕", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "keeps the UTF-8 characters of a binary string, dropping its invalid bytes" do
+          assert_equal "Café ☕", Utils.encode_utf8_string("Café \xFF☕".b)
+        end
+
+        it "drops the bytes of a binary string that are not UTF-8" do
+          assert_equal "caf", Utils.encode_utf8_string("caf\xE9".b)
+        end
+
+        it "keeps the UTF-8 characters of a US-ASCII string, as read where no locale is set" do
+          result = Utils.encode_utf8_string((+"Café").force_encoding(Encoding::US_ASCII))
+
+          assert_equal "Café", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "converts a string in another encoding" do
+          assert_equal "Grüße", Utils.encode_utf8_string("Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1))
+        end
+
+        it "reads a frozen binary string without changing it" do
+          string = "Café".b.freeze
+
+          assert_equal "Café", Utils.encode_utf8_string(string)
+          assert_equal Encoding::BINARY, string.encoding
+        end
+      end
+
       describe ".join_texts" do
         let(:latin1) { "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1) }
 
@@ -700,6 +735,12 @@ module SemanticLogger
 
         it "keeps the UTF-8 characters of a binary text joined with a UTF-8 one" do
           assert_equal "Grüße -- Fehler ü", Utils.join_texts("Grüße".b, " -- ", "Fehler ü")
+        end
+
+        it "keeps the UTF-8 characters of a US-ASCII text that it converts" do
+          text = (+"Fehler ü").force_encoding(Encoding::US_ASCII)
+
+          assert_equal "Grüße -- Fehler ü", Utils.join_texts("Grüße", " -- ", text)
         end
 
         it "leaves text in another encoding joined to an ASCII text as it is" do
