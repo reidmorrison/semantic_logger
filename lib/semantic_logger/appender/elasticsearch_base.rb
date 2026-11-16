@@ -12,6 +12,10 @@ module SemanticLogger
     # `SemanticLogger.add_appender(appender: :elasticsearch, ...)` or
     # `appender: :opensearch`, never by referencing this class directly.
     class ElasticsearchBase < SemanticLogger::Subscriber
+      # The most different failures that one report of a bulk request lists (see #report_failures).
+      MAX_REPORTED_FAILURES = 10
+      private_constant :MAX_REPORTED_FAILURES
+
       attr_accessor :url, :index, :date_pattern, :client, :flush_interval, :timeout_interval, :batch_size,
                     :client_args
 
@@ -176,7 +180,7 @@ module SemanticLogger
         @client = Utils.without_url_in_errors(option: ":url or :hosts") { client_class.new(@client_args) }
       end
 
-      # Log to the index for today
+      # Log to the index for today, or to the data stream.
       def log(log)
         bulk_write([bulk_index(log), bulk_line(log)])
         true
@@ -231,17 +235,50 @@ module SemanticLogger
             @client.bulk(body: body)
           end
 
-        return unless bulk_result["errors"]
+        report_failures(bulk_result["items"]) if bulk_result["errors"]
+      end
 
-        failed = bulk_result["items"].reject { |x| x["status"] == 201 }
-        logger.error("#{self.class.name}: Write failed. Messages discarded. : #{failed}")
+      # Reports to the internal logger the entries of a bulk request that were not indexed, which
+      # are discarded, since sending the request again would index the others twice. The response
+      # has an item for each entry, under the name of its action, such as
+      # `{"index" => {"_index" => ..., "status" => 400, "error" => {"type" => ..., "reason" => ...}}}`,
+      # without the document. Each different failure is listed once, with the number of entries it
+      # failed, so that a batch whose entries all fail for one reason, such as a read-only index, is
+      # reported in a short line. Only the first MAX_REPORTED_FAILURES are listed, since a reason can
+      # name its entry, as a mapping error names the document's id.
+      def report_failures(items)
+        failures = items.filter_map { |item| bulk_failure(item.values.first) }.tally
+        return if failures.empty?
+
+        listed = failures.first(MAX_REPORTED_FAILURES).map do |failure, count|
+          count > 1 ? "#{failure} (#{count} entries)" : failure
+        end
+        listed << "and #{failures.size - MAX_REPORTED_FAILURES} other failures" if failures.size > MAX_REPORTED_FAILURES
+
+        logger.error(
+          "#{failures.values.sum} of #{items.size} log entries were not indexed, and are discarded: " \
+          "#{listed.join('; ')}"
+        )
+      end
+
+      # Returns [String] why an entry was not indexed, from the result of its action in the bulk
+      # response, or nil when it was indexed. It failed when the result has an error, or a status of
+      # 300 or above: an `index` action succeeds with 201 (created) or 200 (updated), and a `create`
+      # action with 201.
+      def bulk_failure(result)
+        error = result["error"]
+        return if error.nil? && result["status"].to_i < 300
+
+        where = "in #{result['_index']}"
+        return "#{result['status']} #{where}" unless error
+
+        "#{result['status']} #{error['type']} #{where}: #{error['reason']}"
       end
 
       def bulk_index(log)
-        expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
         return {"create" => {}} if @data_stream
 
-        {"index" => {"_index" => expanded_index_name}}
+        {"index" => {"_index" => log.time.strftime("#{index}-#{date_pattern}")}}
       end
 
       def default_formatter

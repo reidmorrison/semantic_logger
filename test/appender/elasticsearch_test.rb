@@ -78,6 +78,108 @@ module Appender
         end
       end
 
+      describe "a bulk response with errors" do
+        let :appender do
+          client_class.stub_any_instance(:bulk, true) do
+            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
+          end
+        end
+
+        let :internal_logger do
+          SemanticLogger::Test::CaptureLogEvents.new
+        end
+
+        let :log do
+          log         = SemanticLogger::Log.new("User", :info)
+          log.message = "hello world"
+          log
+        end
+
+        let :created do
+          {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-created", "_version" => 1,
+                       "result" => "created", "_seq_no" => 0, "_primary_term" => 1, "status" => 201}}
+        end
+
+        let :updated do
+          {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-updated", "_version" => 2,
+                       "result" => "updated", "_seq_no" => 1, "_primary_term" => 1, "status" => 200}}
+        end
+
+        let :rejected do
+          {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-rejected", "status" => 400,
+                       "error" => {"type"   => "mapper_parsing_exception",
+                                   "reason" => "failed to parse field [payload.amount] of type [long]"}}}
+        end
+
+        before do
+          appender.logger = internal_logger
+        end
+
+        after do
+          appender.close
+        end
+
+        it "reports only the entries that were not indexed" do
+          write(created, rejected, updated)
+
+          assert_equal 1, internal_logger.events.size
+          event = internal_logger.events.first
+
+          assert_equal :error, event.level
+          assert_equal "1 of 3 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
+                       "in semantic_logger-2026.11.16: failed to parse field [payload.amount] of type [long]",
+                       event.message
+        end
+
+        it "reports an entry with a status of 300 or above, even without an error" do
+          unavailable = {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-503", "status" => 503}}
+          write(created, unavailable, created)
+
+          assert_equal ["1 of 3 log entries were not indexed, and are discarded: 503 in semantic_logger-2026.11.16"],
+                       internal_logger.events.map(&:message)
+        end
+
+        it "lists each failure once, with the number of entries that it failed" do
+          blocked = {"index" => {"_index" => "semantic_logger-2026.11.16", "status" => 429,
+                                 "error" => {"type"   => "cluster_block_exception",
+                                             "reason" => "index [semantic_logger-2026.11.16] blocked by: " \
+                                                         "[TOO_MANY_REQUESTS/12/disk usage exceeded]"}}}
+          write(*Array.new(300, blocked))
+
+          assert_equal ["300 of 300 log entries were not indexed, and are discarded: 429 cluster_block_exception " \
+                        "in semantic_logger-2026.11.16: index [semantic_logger-2026.11.16] blocked by: " \
+                        "[TOO_MANY_REQUESTS/12/disk usage exceeded] (300 entries)"],
+                       internal_logger.events.map(&:message)
+        end
+
+        it "lists at most 10 different failures" do
+          failures = Array.new(12) do |i|
+            {"index" => {"_index" => "semantic_logger-2026.11.16", "status" => 400,
+                         "error" => {"type" => "mapper_parsing_exception", "reason" => "field [f#{i}]"}}}
+          end
+          write(*failures)
+
+          message = internal_logger.events.first.message
+
+          assert_includes message, "12 of 12 log entries were not indexed"
+          assert_includes message, "field [f9]"
+          refute_includes message, "field [f10]"
+          assert message.end_with?("; and 2 other failures"), message
+        end
+
+        it "reports nothing when every entry was indexed" do
+          write(created, updated, created, errors: false)
+
+          assert_empty internal_logger.events
+        end
+
+        # Sends a batch of one entry for each item, to a server that responds with these items.
+        def write(*items, errors: true)
+          response = {"took" => 3, "errors" => errors, "items" => items}
+          appender.client.stub(:bulk, response) { appender.batch(Array.new(items.size, log)) }
+        end
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["ELASTICSEARCH"]
@@ -270,6 +372,22 @@ module Appender
 
         it "uses @timestamp as time_key" do
           assert_equal "@timestamp", appender.formatter.time_key
+        end
+
+        it "reports only the entries that were not indexed" do
+          internal        = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal
+          backing_index   = ".ds-semantic_logger-2026.11.16-000001"
+          created         = {"create" => {"_index" => backing_index, "_id" => "id-created", "status" => 201}}
+          rejected        = {"create" => {"_index" => backing_index, "_id" => "id-rejected", "status" => 400,
+                                          "error" => {"type"   => "document_parsing_exception",
+                                                      "reason" => "[1:15] failed to parse field [payload.amount]"}}}
+          response        = {"took" => 3, "errors" => true, "items" => [created, rejected]}
+          appender.client.stub(:bulk, response) { appender.batch([log, log]) }
+
+          assert_equal ["1 of 2 log entries were not indexed, and are discarded: 400 document_parsing_exception " \
+                        "in #{backing_index}: [1:15] failed to parse field [payload.amount]"],
+                       internal.events.map(&:message)
         end
 
         describe "synchronous" do

@@ -84,6 +84,23 @@ module Appender
           refute bulk_index["index"].key?("_type"), bulk_index
         end
 
+        it "reports only the entries that were not indexed" do
+          internal        = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal
+          created         = {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-created",
+                                         "status" => 201}}
+          rejected        = {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-rejected",
+                                         "status" => 400,
+                                         "error" => {"type"   => "mapper_parsing_exception",
+                                                     "reason" => "failed to parse field [payload.amount]"}}}
+          response        = {"took" => 3, "errors" => true, "items" => [created, rejected]}
+          appender.client.stub(:bulk, response) { appender.batch([log, log]) }
+
+          assert_equal ["1 of 2 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
+                        "in semantic_logger-2026.11.16: failed to parse field [payload.amount]"],
+                       internal.events.map(&:message)
+        end
+
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil

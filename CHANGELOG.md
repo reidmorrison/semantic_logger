@@ -502,6 +502,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   whose exception has no backtrace, such as `logger.error("Failed", RuntimeError.new("never raised"))`.
   Formatting raised `NoMethodError`, and the appender reported the error instead of sending the
   entry. Its `error.stack` is now empty.
+- When Elasticsearch or OpenSearch does not index some of the entries that the `:elasticsearch` or
+  `:opensearch` appender sends, the error that the appender reports to the internal logger names only
+  those entries. Before, it listed the server's response for every entry of the request, up to 300 in
+  a batch by default, including the ones that were indexed, since it read each entry's status from
+  the wrong place. Now it says how many of the entries were not indexed, and lists each different
+  failure once, with its status, error type, index, and reason, and the number of entries it failed,
+  up to ten different failures.
 
 ## [5.2.0] 2026-10-30
 
