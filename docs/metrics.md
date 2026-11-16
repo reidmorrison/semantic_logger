@@ -27,8 +27,10 @@ There are two parts to using metrics:
 1. **Emit** a metric by adding the `:metric` option to any log or `measure_` call. This is covered in
    Steps 1 to 3 below.
 2. **Subscribe** a destination (Statsd, New Relic, SignalFx, and so on) that receives those metrics.
-   Until a subscriber is registered, the `:metric` option is harmless and the number goes nowhere.
-   See [Send metrics to a backend](#send-metrics-to-a-backend).
+   Until a subscriber is registered, the `:metric` option is harmless: the number reaches no metrics
+   backend, though the log appenders that write structured data still write it with the entry. See
+   [Send metrics to a backend](#send-metrics-to-a-backend) and
+   [Metrics in log appenders](#metrics-in-log-appenders).
 
 Metric subscribers are notified asynchronously on the background log thread, so emitting a metric
 never slows the calling thread. A metric rides along with its log entry, so it obeys the same level
@@ -101,7 +103,7 @@ dimensions; **SignalFx** is built around them. See each subscriber below.
 
 ## Send metrics to a backend
 
-A metric goes nowhere until a **metric subscriber** is registered. Add one with
+A metric reaches no metrics backend until a **metric subscriber** is registered. Add one with
 `SemanticLogger.add_appender(metric: ...)`, usually when your application starts. A subscriber
 receives every logged entry that has a `:metric`, asynchronously on the background thread.
 
@@ -151,9 +153,10 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-When a duration metric has no dimensions, SignalFx receives the duration and a count, so you can
-chart both the timing and the number of occurrences. When dimensions are present, the metric is sent
-as-is.
+When a duration metric has no dimensions, SignalFx receives both its value and a count, so you can
+chart both the timing and the number of occurrences. The value is the duration and the count is 1,
+unless a `metric_amount` is given, which is sent as both. When dimensions are present, the metric is
+sent as-is.
 
 ## Metrics in log appenders
 
@@ -165,8 +168,8 @@ as part of the log entry that carries it:
   it without a metric subscriber. The text formatters do not write it; they show only the
   entry's duration.
 * **A metric-only entry**, one with a metric but no message and no exception, such as
-  `logger.info(metric: "users/signup")`, is meant for the metric subscribers, since there can be
-  many of them. Log appenders leave them out, unless one is added with `metrics: true`:
+  `logger.info(metric: "users/signup")`, is meant for the metric subscribers. There can be many
+  such entries, so log appenders leave them out, unless one is added with `metrics: true`:
 
   ~~~ruby
   # Also index metric-only entries in Elasticsearch:
@@ -180,7 +183,8 @@ What each formatter writes for a metric on an entry with a message:
 
 | Formatter | Metric fields written |
 |-----------|-----------------------|
-| `:json`, `:raw`, `:fluentd`, `:ecs`, `:syslog_cee`, `:new_relic_logs` | `metric` and `metric_amount` |
+| `:json`, `:raw`, `:fluentd`, `:syslog_cee`, `:new_relic_logs` | `metric` and `metric_amount` |
+| `:ecs` | `metric` and `metric_amount`, under its namespace, `semantic_logger` by default, or in `labels` when it has none |
 | `:loki` | `metric` and `metric_value`, in the structured metadata |
 | `:open_telemetry` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes |
 | `:default`, `:color`, `:one_line`, `:pattern`, `:syslog`, `:logfmt` | None; only the duration is shown |

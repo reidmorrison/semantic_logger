@@ -53,9 +53,6 @@ module SemanticLogger
       # If dimensions are added to the metric, then the metric will be sent as-is and
       # the above logic will _not_ be applied.
       #
-      # Example, Gauge metric, supplying the duration in `metric_amount`:
-      #   logger.info(metric: 'Filters.average', metric_amount: 1.2, dimensions: {user: 'jbloggs'})
-      #
       # Example, Counter metric:
       #   logger.info(metric: 'Filters.count', dimensions: {user: 'jbloggs'})
       #
