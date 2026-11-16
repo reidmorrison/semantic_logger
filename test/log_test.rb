@@ -191,6 +191,32 @@ module SemanticLogger
               assert_equal "Grüße -- Exception: RuntimeError: Speichern fehlgeschlagen ü " \
                            "-- Cause: IOError: Datei  voll", log.message
             end
+
+            it "folds a UTF-8 cause's message into a message in another encoding" do
+              latin1    = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+              exception = raise_with_cause(IOError.new("Datei voll ü"))
+              log.assign(message: latin1, exception: exception, log_exception: :partial)
+
+              assert_equal "Grüße -- Exception: RuntimeError: save failed -- Cause: IOError: Datei voll ü", log.message
+            end
+
+            it "folds a binary cause's message into an ASCII message as UTF-8" do
+              exception = raise_with_cause(IOError.new("disk \xFF full".b))
+              log.assign(message: "Saving", exception: exception, log_exception: :partial)
+
+              assert_equal "Saving -- Exception: RuntimeError: save failed -- Cause: IOError: disk  full", log.message
+              assert_equal Encoding::UTF_8, log.message.encoding
+            end
+
+            it "leaves a message in another encoding as it is when its causes can be joined" do
+              latin1    = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+              exception = raise_with_cause(IOError.new("disk full"))
+              log.assign(message: latin1, exception: exception, log_exception: :partial)
+
+              assert_equal Encoding::ISO_8859_1, log.message.encoding
+              assert_equal "Grüße -- Exception: RuntimeError: save failed -- Cause: IOError: disk full",
+                           log.message.encode(Encoding::UTF_8)
+            end
           end
 
           it "folds an exception message in another encoding into a UTF-8 message when log_exception is :partial" do

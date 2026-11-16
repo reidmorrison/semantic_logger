@@ -158,7 +158,7 @@ module SemanticLogger
           # The class and message of the exception, then of each exception that caused it: the same
           # exceptions that :full writes (see #backtrace_to_s).
           self.message = Utils.join_texts(message, " -- Exception: ", exception.class, ": ", exception.message)
-          each_exception(exception) { |ex, depth| self.message += partial_cause(ex) unless depth.zero? }
+          each_exception(exception) { |ex, depth| self.message = with_cause(ex) unless depth.zero? }
         when nil, :none
           # Log the message without the exception that was raised
           nil
@@ -547,15 +547,15 @@ module SemanticLogger
     # Returns [String] the value as text in valid UTF-8 (see Utils.encode_utf8_string).
     def utf8(value) = Utils.encode_utf8_string(value.to_s)
 
-    # Returns [String] what log_exception: :partial adds to this entry's message for an exception
-    # that caused the logged one: its class, then its message (see #cause_message).
-    def partial_cause(cause) = " -- Cause: #{cause.class}#{cause_message(cause.class.to_s, utf8(cause.message))}"
+    # Returns [String] this entry's message, as log_exception: :partial writes it, followed by the
+    # class of an exception that caused the logged one, then its message (see #with_cause_message).
+    def with_cause(cause) = with_cause_message(Utils.join_texts(message, " -- Cause: ", cause.class), cause.message)
 
-    # Returns [String] the text that writes the message of an exception that caused the logged one,
-    # or nil when the message is empty, is the class name (as when the exception was raised without
-    # one), or is already in this entry's message (as when the exception that wraps it copied it into
-    # its own).
-    def cause_message(name, text) = (": #{text}" unless message.include?(text) || text == name)
+    # Returns [String] the text followed by the message of an exception that caused the logged one,
+    # or the text alone when it already holds that message: as when the message is empty, is the
+    # class name that the text ends with (when the exception was raised without a message), or was
+    # copied by the exception that wraps it into its own. Compared as UTF-8, so that it never raises.
+    def with_cause_message(text, added) = utf8(text).include?(utf8(added)) ? text : Utils.join_texts(text, ": ", added)
 
     # Whether a log argument from the Hash returned by a logging block, already checked by
     # .argument?, is assigned to its attribute: only when this entry does not have it yet. As in
