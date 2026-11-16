@@ -221,6 +221,14 @@ module SemanticLogger
             end
           end
 
+          it "writes a named tag or context value that is not a String as Loki stores it" do
+            log.named_tags = {count: 42, admin: true, plan: :gold, filter: {a: 1}, ids: [1, "a"]}
+            log.context    = {retries: 2}
+
+            assert_equal ["42", "true", "gold", "{\"a\":1}", "[1,\"a\"]", "2"],
+                         stream_data.values_at("count", "admin", "plan", "filter", "ids", "retries")
+          end
+
           # Loki rejects the whole push, with "couldn't parse labels", for any other label name.
           describe "when a named tag or context key is not a label name Loki accepts" do
             # Raises for a label written twice, of which Loki keeps only the last value.
@@ -286,6 +294,20 @@ module SemanticLogger
 
               assert_equal "abc", labels["request_id"]
               refute labels.key?("request_id_2")
+            end
+
+            it "writes a replaced name once when another label has the same value as another type" do
+              log.named_tags = {request_id: "1", "request-id": 1}
+
+              assert_equal "1", labels["request_id"]
+              refute labels.key?("request_id_2")
+            end
+
+            it "writes a replaced name once when one of its own labels has the same value" do
+              log.named_tags = {"\xFFlevel".b.force_encoding(Encoding::UTF_8) => "debug"}
+
+              assert_equal "debug", labels["level"]
+              refute labels.key?("level_2")
             end
           end
 

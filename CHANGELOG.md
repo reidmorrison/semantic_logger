@@ -217,11 +217,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   label name is now written as Loki writes the names of structured metadata: each run of characters
   other than ASCII letters and digits replaced with one `_`, and `key_` before a name that would
   start with a digit, or is empty. So `request-id` is written as `request_id`, and `1st` as
-  `key_1st`. When another label already has that name with another value, a number is added, as in
-  `request_id_2`, so that both are kept. Such a payload key is written with the `payload_` prefix, as
+  `key_1st`. When another label already has that name with another value, as Loki stores it, a
+  number is added, as in `request_id_2`, so that both are kept. Such a payload key is written with the `payload_` prefix, as
   Loki stores it, so an empty key as `payload_`, and with the prefix again when another key has that
-  name, so that Loki keeps every value. A named tag or context value that is nil, and a nil host,
-  are left out, instead of being written as the label `null`.
+  name, so that Loki keeps the value of each. A named tag that is nil, and a nil host, are left out,
+  instead of being written as the label `null`.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

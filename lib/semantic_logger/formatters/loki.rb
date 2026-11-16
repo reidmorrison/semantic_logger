@@ -129,11 +129,11 @@ module SemanticLogger
       def context
         return unless log.context && !log.context.empty?
 
-        log.context.each { |key, value| add_label(key.to_s, loki_value(value)) unless value.nil? }
+        log.context.each { |key, value| add_label(key.to_s, value) }
       end
 
-      # Adds a label from the named tags or the context, unless its value is nil, which Loki would
-      # store as the text "null".
+      # Adds a label from the named tags or the context, with its value as Loki stores it (see
+      # #loki_value), unless the value is nil, which Loki would store as the text "null".
       #
       # Loki rejects the whole push for a label name it does not accept (see LABEL_NAME), so such a
       # name is replaced (see #label_name_for), and the label added after the others, by
@@ -141,6 +141,7 @@ module SemanticLogger
       def add_label(key, value)
         return if value.nil?
 
+        value = loki_value(value)
         if label_name?(key)
           stream[:stream][key] = value
         else
@@ -166,14 +167,16 @@ module SemanticLogger
       # Adds the labels whose names were replaced, after the others, so that a label written under
       # its own name keeps it. A name that another label already has is written with a number after
       # it, as in `request_id_2`, so that both values are kept, unless that label has the same
-      # value, which is then written once.
+      # value, once Loki stores it, which is then written once. The value of one of this formatter's
+      # own labels, such as the `level` Symbol or the `pid` Integer, is compared as Loki stores it
+      # too.
       def renamed_labels
         return unless @renamed_labels
 
         labels = stream[:stream].transform_keys(&:to_s)
         @renamed_labels.each do |name, value|
           if labels.key?(name)
-            next if labels[name] == value
+            next if loki_value(labels[name]) == value
 
             number = 2
             number += 1 while labels.key?("#{name}_#{number}")
