@@ -748,7 +748,15 @@ is prefixed too, and written as Loki stores it: `payload_metric_value`. When ano
 that name once Loki has stored it, the prefix is added again, as in `payload_payload_metric_value`,
 so that Loki keeps the value of each prefixed key. A key that is exactly one of these names gets the
 name with one prefix, so `payload_metric_value` always holds the payload's `metric_value`. Loki keeps
-only one value of other payload keys that it stores alike, such as `a.b` and `a_b`.
+only one value of other payload keys that it stores alike, such as `a.b` and `a_b`. Loki rejects a
+payload key without an ASCII letter or digit, such as an empty key or `-`, so it is prefixed too, and
+written as `payload_`.
+
+Loki also rejects a label name other than an ASCII letter or underscore followed by letters, digits,
+and underscores. A named tag or context key that it would reject, such as `request-id` or `1st`, is
+written under the name Loki would give it as structured metadata, such as `request_id` or `key_1st`,
+and an empty key as `key_`. When another label already has that name with another value, a number is
+added, as in `request_id_2`. A named tag or context value that is nil is left out.
 
 ### CloudWatch Logs
 

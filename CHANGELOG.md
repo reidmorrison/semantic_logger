@@ -209,6 +209,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   the name with one prefix, whatever the order of the keys. See
   [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53)
   and [Grafana Loki](https://logger.reidmorrison.com/appenders.html#grafana-loki).
+- The `:loki` formatter no longer loses an entry, with every other entry pushed with it, for a named
+  tag or context key that Loki does not accept as a label name, such as `request-id`, `1st`, or an
+  empty key, or for a payload key without an ASCII letter or digit, such as an empty key, `-`, or
+  the `_` that jQuery adds to the parameters of a request it keeps from being cached. Loki rejected
+  the push with `400 Bad Request` ("couldn't parse labels") or `500` ("label name is empty"). Such a
+  label name is now written as Loki writes the names of structured metadata: each run of characters
+  other than ASCII letters and digits replaced with one `_`, and `key_` before a name that would
+  start with a digit, or is empty. So `request-id` is written as `request_id`, and `1st` as
+  `key_1st`. When another label already has that name with another value, a number is added, as in
+  `request_id_2`, so that both are kept. Such a payload key is written with the `payload_` prefix, as
+  Loki stores it, so an empty key as `payload_`, and with the prefix again when another key has that
+  name, so that Loki keeps every value. A named tag or context value that is nil, and a nil host,
+  are left out, instead of being written as the label `null`.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

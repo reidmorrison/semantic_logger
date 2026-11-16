@@ -200,6 +200,95 @@ module SemanticLogger
             end
           end
 
+          describe "when a value is nil" do
+            it "leaves out a named tag" do
+              log.named_tags = {tenant: nil, user: "jack"}
+
+              refute stream_data.key?("tenant")
+              assert_equal "jack", stream_data["user"]
+            end
+
+            it "leaves out a value of the context" do
+              log.context = {request_id: nil}
+
+              refute stream_data.key?("request_id")
+            end
+
+            it "leaves out the host" do
+              logger = MOCK_LOGGER.new(nil, "test_app", "TestLogger", "test")
+
+              refute JSON.parse(formatter.call(log, logger))["streams"][0]["stream"].key?("host")
+            end
+          end
+
+          # Loki rejects the whole push, with "couldn't parse labels", for any other label name.
+          describe "when a named tag or context key is not a label name Loki accepts" do
+            # Raises for a label written twice, of which Loki keeps only the last value.
+            let(:labels) do
+              JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]["stream"]
+            end
+
+            it "replaces each character that Loki does not accept with an underscore" do
+              log.named_tags = {"request-id": "a", "a.b c" => "b"}
+
+              assert_equal "a", labels["request_id"]
+              assert_equal "b", labels["a_b_c"]
+              refute labels.key?("request-id")
+            end
+
+            it "writes two or more underscores in a row as one, as Loki writes structured metadata names" do
+              log.named_tags = {"a--b" => "a", "c-_d" => "b"}
+
+              assert_equal "a", labels["a_b"]
+              assert_equal "b", labels["c_d"]
+            end
+
+            it "prefixes a name that would start with a digit, and an empty name" do
+              log.named_tags = {"1st" => "a", "" => "b", 2 => "c"}
+
+              assert_equal %w[a b c], labels.values_at("key_1st", "key_", "key_2")
+            end
+
+            it "replaces a key outside ASCII as it is written, without invalid bytes" do
+              log.named_tags = {"région" => "a", "\xFFid".b.force_encoding(Encoding::UTF_8) => "b"}
+
+              assert_equal "a", labels["r_gion"]
+              assert_equal "b", labels["id"]
+            end
+
+            it "keeps a name that Loki accepts" do
+              log.named_tags = {"_x" => "a", "Ab_9" => "b", "a__b" => "c", :sym => "d"}
+
+              assert_equal %w[a b c d], labels.values_at("_x", "Ab_9", "a__b", "sym")
+            end
+
+            it "replaces a key of the context" do
+              log.context = {"trace-id" => "abc"}
+
+              assert_equal "abc", labels["trace_id"]
+            end
+
+            it "numbers a replaced name that another label has, keeping both values" do
+              log.named_tags = {"request-id": "a", request_id: "b", "request.id": "c"}
+
+              assert_equal %w[b a c], labels.values_at("request_id", "request_id_2", "request_id_3")
+            end
+
+            it "numbers a replaced key of the context that a named tag has" do
+              log.named_tags = {request_id: "a"}
+              log.context    = {"request-id" => "b"}
+
+              assert_equal %w[a b], labels.values_at("request_id", "request_id_2")
+            end
+
+            it "writes a replaced name once when another label has the same name and value" do
+              log.named_tags = {"request-id": "abc", request_id: "abc"}
+
+              assert_equal "abc", labels["request_id"]
+              refute labels.key?("request_id_2")
+            end
+          end
+
           describe "when message is nil" do
             it "includes empty string for message" do
               log.message = nil
@@ -601,6 +690,49 @@ module SemanticLogger
               set_exception
 
               assert_equal Loki::OWN_KEYS.sort, structured_metadata.keys.sort
+            end
+          end
+
+          # Loki rejects the whole push for it, with "label name is empty", or "normalization for label
+          # name "-" resulted in invalid name "_"".
+          describe "when a payload key has no ASCII letter or digit" do
+            let(:structured_metadata) do
+              JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]["values"][0][2]
+            end
+
+            it "prefixes an empty key" do
+              log.payload = {"" => "a", "user" => "jack"}
+
+              assert_equal({"user" => "jack", "payload_" => "a"}, structured_metadata)
+            end
+
+            it "prefixes a key of other characters, as Loki stores it" do
+              log.payload = {"-" => "a"}
+
+              assert_equal({"payload_" => "a"}, structured_metadata)
+            end
+
+            # jQuery adds `_` to the parameters of a request it keeps from being cached.
+            it "prefixes an underscore" do
+              log.payload = {"_" => "1700000000000"}
+
+              assert_equal({"payload_" => "1700000000000"}, structured_metadata)
+            end
+
+            # Loki stores each of them as `payload_` once prefixed, and would keep one value of them.
+            it "prefixes again each key that the others are stored as" do
+              log.payload = {"" => "a", "-" => "b", "_" => "c"}
+
+              assert_equal(
+                {"payload_" => "a", "payload_payload_" => "b", "payload_payload_payload_" => "c"},
+                structured_metadata
+              )
+            end
+
+            it "prefixes a key of invalid bytes, which is written as an empty key" do
+              log.payload = {"\xFF".b.force_encoding(Encoding::UTF_8) => "a"}
+
+              assert_equal({"payload_" => "a"}, structured_metadata)
             end
           end
 
