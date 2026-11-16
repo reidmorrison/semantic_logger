@@ -510,6 +510,13 @@ module Appender
 
             assert_equal File.size(file_name), appender.log_size
           end
+
+          it "counts the bytes written in the file's encoding" do
+            appender = SemanticLogger::Appender::File.new(file_name, reopen_size: 1000, encoding: "UTF-16LE")
+            appender.info("Hello world")
+
+            assert_equal File.size(file_name), appender.log_size
+          end
         end
 
         describe "reopen_period" do
