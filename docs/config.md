@@ -608,12 +608,15 @@ SemanticLogger.add_appender(
 ### Formatter as a block or Proc
 
 For full control with minimal ceremony, give `add_appender` a block. It formats every entry written
-to that appender. It is called with two arguments, the log event and the appender; a block may
-accept just the log event and ignore the appender. For the structure of the log event, see
+to that appender. It is called with two arguments, the log event and the appender. A block, or a
+Proc made with `proc`, may take just the log event; a lambda or method, passed with `&` or as
+`formatter:`, must accept both arguments. For the structure of the log event, see
 [Log Event](log.html). The appender holds the `host`, `application`, and `environment` to write
 with the entry.
 
 ~~~ruby
+SemanticLogger.application = "MyApp"
+
 SemanticLogger.add_appender(io: $stdout) do |log, appender|
   "#{log.level.upcase} #{appender.application} #{log.name} -- #{log.message}"
 end
@@ -626,10 +629,14 @@ wrapped logger.
 
 A block works the same way for an appender or metric subscriber named by a Symbol. It takes the
 place of the formatter the appender uses by default, so it returns what that formatter returns: a
-String for the text and JSON destinations, such as `:tcp`, `:udp`, `:http`, and `:syslog`, and a
-Hash for those that store a document, such as `:elasticsearch` and `:mongodb`. A metric subscriber
-formats a metric: `metric: :new_relic` expects the metric name, `metric: :signalfx` the JSON body it
-posts, and `metric: :statsd` has no formatter, so it never calls the block.
+String for the text and JSON destinations, such as `:tcp`, `:udp`, `:http`, and `:syslog` with its
+default local url, and a Hash for those that store a document, such as `:elasticsearch` and
+`:mongodb`. For `:loki`, and for `:syslog` with a `tcp://` or `udp://` url, the default formatter
+builds the whole request body or syslog packet, so a block would have to build it too: use a
+formatter class instead, such as a subclass of `SemanticLogger::Formatters::Loki` or
+`SemanticLogger::Formatters::Syslog` (see [Formatter as a class](#formatter-as-a-class)). A metric
+subscriber formats a metric: `metric: :new_relic` expects the metric name, `metric: :signalfx` the
+JSON body it posts, and `metric: :statsd` does not use a formatter, so it never calls the block.
 
 ~~~ruby
 SemanticLogger.add_appender(file_name: "development.log") { |log| "#{log.name} -- #{log.message}" }
@@ -644,8 +651,7 @@ When both a block and `formatter:` are given, the block takes precedence, and `f
 ignored.
 
 The same formatter can be given to `formatter:` as a Proc, for example to share it between
-appenders. A Proc made with `proc` may also take just the log event, but a lambda must accept both
-arguments:
+appenders:
 
 ~~~ruby
 formatter = proc do |log|
