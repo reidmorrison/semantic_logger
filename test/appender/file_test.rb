@@ -102,6 +102,20 @@ module Appender
             assert_equal 0, reopened
           end
 
+          it "does not reopen the file for text that the file cannot take" do
+            appender = SemanticLogger::Appender::File.new(file_name, encoding: "UTF-16LE")
+            log.message = (+"bad \xFF byte").force_encoding(Encoding::UTF_8)
+            reopened = 0
+
+            appender.stub(:reopen, -> { reopened += 1 }) do
+              error = assert_raises(Encoding::InvalidByteSequenceError) { appender.log(log) }
+
+              assert appender.message_error?(error)
+            end
+
+            assert_equal 0, reopened
+          end
+
           it "when retry is disabled" do
             appender.retry_count = 0
 
@@ -489,6 +503,12 @@ module Appender
 
               refute_equal file_handle, appender.instance_variable_get(:@file).object_id
             end
+          end
+
+          it "counts bytes, not characters" do
+            appender.info("日本語 ☕")
+
+            assert_equal File.size(file_name), appender.log_size
           end
         end
 

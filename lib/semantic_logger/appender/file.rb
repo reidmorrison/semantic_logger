@@ -123,6 +123,8 @@ module SemanticLogger
       #
       #   :reopen_size [Integer]
       #     Approximate number of bytes to write to a log file by this process before closing and re-opening it.
+      #     Counts the bytes of each entry as it is formatted, which with an `encoding` other than the
+      #     default can differ from the bytes written, such as for UTF-16.
       #     Notes:
       #     - When `append: true` and the file already exists, it reads the size of the current log file
       #       and starts with that size.
@@ -216,16 +218,17 @@ module SemanticLogger
         begin
           file.write(message)
           @log_count += 1
-          @log_size  += message.size
+          @log_size  += message.bytesize
         rescue StandardError => e
-          if count < retry_count
-            count += 1
-            file = reopen
-            return refused unless file
+          # Nor can it fix text that the file cannot take, such as text that cannot be converted to
+          # the `encoding` of the file (see #message_error?).
+          raise(e) if count >= retry_count || message_error?(e)
 
-            retry
-          end
-          raise(e)
+          count += 1
+          file = reopen
+          return refused unless file
+
+          retry
         end
         true
       end
