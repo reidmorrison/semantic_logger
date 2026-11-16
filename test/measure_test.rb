@@ -91,6 +91,16 @@ class MeasureTest < Minitest::Test
             assert_equal "hello world -- Exception: RuntimeError: Test", log.message
           end
 
+          it ":partial re-raises an exception whose message is in another encoding" do
+            error = assert_raises RuntimeError do
+              appender.send(measure_level, "Grüße", log_exception: :partial) { raise "Datei \xFC kaputt".b }
+            end
+
+            assert_equal "Datei \xFC kaputt".b, error.message
+            assert log = appender.events.first
+            assert_equal "Grüße -- Exception: RuntimeError: Datei  kaputt", log.message
+          end
+
           it ":none" do
             assert_raises RuntimeError do
               appender.send(measure_level, "hello world", log_exception: :none) { raise "Test" }

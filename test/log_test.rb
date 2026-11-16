@@ -108,6 +108,28 @@ module SemanticLogger
             assert_equal "Boom -- Exception: RuntimeError: An exception", log.message
           end
 
+          it "folds an exception message in another encoding into a UTF-8 message when log_exception is :partial" do
+            binary = RuntimeError.new("Datei \xFC kaputt".b)
+            log.assign(message: "Grüße", exception: binary, log_exception: :partial)
+
+            assert_equal "Grüße -- Exception: RuntimeError: Datei  kaputt", log.message
+            assert_predicate log.message, :valid_encoding?
+          end
+
+          it "folds an exception message into a message in another encoding when log_exception is :partial" do
+            log.assign(message: "Gr\xFC\xDFe".b, exception: RuntimeError.new("Fehler ü"), log_exception: :partial)
+
+            assert_equal "Gre -- Exception: RuntimeError: Fehler ü", log.message
+            assert_equal Encoding::UTF_8, log.message.encoding
+          end
+
+          it "keeps a message in a convertible encoding when log_exception is :partial" do
+            latin1 = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+            log.assign(message: latin1, exception: RuntimeError.new("Fehler ü"), log_exception: :partial)
+
+            assert_equal "Grüße -- Exception: RuntimeError: Fehler ü", log.message
+          end
+
           it "ignores the exception when log_exception is :none" do
             log.assign(message: "Boom", exception: exception, log_exception: :none)
 

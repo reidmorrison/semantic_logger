@@ -102,6 +102,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
+  `Encoding::CompatibilityError` when the log message and the exception's message are in
+  incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
+  that holds bytes outside ASCII. Both are converted to valid UTF-8 first, dropping any invalid bytes.
+  Before, the log call raised, and a `measure_*` block raised that error in place of its own
+  exception.
 - When an async or batching appender's destination fails, the message (or batch) being written is
   now counted as `failed` in `SemanticLogger.stats` and reported to the internal logger, as a message
   whose content cannot be written already was. Before, it was discarded without being counted, and
