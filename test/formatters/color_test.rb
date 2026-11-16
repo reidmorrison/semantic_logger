@@ -263,6 +263,41 @@ module SemanticLogger
             end
           end
         end
+
+        # Joining texts that both hold bytes outside ASCII, in incompatible encodings, raises
+        # Encoding::CompatibilityError, which used to lose the entry.
+        describe "text in encodings that cannot be joined" do
+          let(:binary) { "Grüße ☕".b }
+
+          let(:output) do
+            output = SemanticLogger::Formatters::Color.new.call(log, nil)
+
+            assert_predicate output, :valid_encoding?
+            output
+          end
+
+          it "writes a binary message after a non-ASCII logger name" do
+            log.name    = "Café::Commande"
+            log.message = binary
+
+            assert_includes output, "Café::Commande#{clear} -- Grüße ☕"
+          end
+
+          it "writes a UTF-8 message with a binary exception message" do
+            log.message   = "Café"
+            log.exception = RuntimeError.new(binary)
+
+            assert_includes output, "-- Café -- Exception: #{color}RuntimeError: Grüße ☕#{clear}"
+          end
+
+          it "writes tags and named tags in incompatible encodings" do
+            log.tags       = ["Café", binary]
+            log.named_tags = {city: "Zürich", greeting: binary}
+
+            assert_includes output, "Grüße ☕#{clear}]"
+            assert_includes output, "greeting: Grüße ☕#{clear}}"
+          end
+        end
       end
     end
   end

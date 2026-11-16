@@ -392,6 +392,141 @@ module SemanticLogger
             assert_includes result, "-- Hello World"
           end
         end
+
+        # Joining texts that both hold bytes outside ASCII, in incompatible encodings, raises
+        # Encoding::CompatibilityError, which used to lose the entry.
+        describe "text in encodings that cannot be joined" do
+          let(:binary) { "Grüße ☕".b }
+
+          def assert_utf8(output)
+            assert_predicate output, :valid_encoding?
+            assert_equal Encoding::UTF_8, output.encoding
+          end
+
+          it "writes a binary message after a non-ASCII logger name" do
+            log.name    = "Café::Commande"
+            log.message = binary
+            output      = formatted("%{name} -- %{message}")
+
+            assert_utf8 output
+            assert_equal "Café::Commande -- Grüße ☕", output
+          end
+
+          it "writes a UTF-8 message with a binary exception message and the binary message of its cause" do
+            log.message   = "Café"
+            log.exception =
+              begin
+                begin
+                  raise binary
+                rescue RuntimeError
+                  raise ArgumentError, binary
+                end
+              rescue ArgumentError => e
+                e
+              end
+            output = formatted("%{message} -- %{exception_class}: %{exception_message}\n%{backtrace}")
+
+            assert_utf8 output
+            assert_equal "Café -- ArgumentError: Grüße ☕", output.lines.first.chomp
+            assert_includes output, "\nCause: RuntimeError: Grüße ☕\n"
+          end
+
+          it "writes a pattern in another encoding with a message in that encoding" do
+            log.message = "Grüße".encode(Encoding::ISO_8859_1)
+            output      = formatted("Ünd %{time:%Y Ü} %{message}".encode(Encoding::ISO_8859_1))
+
+            assert_utf8 output
+            assert_equal "Ünd 2017 Ü Grüße", output
+          end
+
+          it "writes an application name in another encoding with a non-ASCII message" do
+            log.message = "Café"
+            # As read from the environment where no locale is set.
+            application = (+"Commandé").force_encoding(Encoding::US_ASCII)
+            app_logger  = Struct.new(:host, :application, :environment).new("hôst".b, application, "prod")
+            output      = formatted("%{host} %{application} %{environment} -- %{message}", log, app_logger)
+
+            assert_utf8 output
+            assert_equal "hôst Commandé prod -- Café", output
+          end
+
+          it "writes an ASCII application name in another encoding as it is" do
+            application = (+"orders").force_encoding(Encoding::US_ASCII)
+            formatter   = Pattern.new(pattern: "%{application}")
+            formatter.call(log, Struct.new(:host, :application, :environment).new("host", application, "prod"))
+
+            assert_same application, formatter.application
+          end
+
+          it "finds a named tag by a key written in the pattern's own encoding" do
+            key            = "Größe".encode(Encoding::ISO_8859_1)
+            log.named_tags = {key.to_sym => "42"}
+            output         = formatted("#{key}: %{named_tags:#{key}} %{message}")
+
+            assert_utf8 output
+            assert_equal "Größe: 42 Hello World", output
+          end
+
+          it "reads a pattern that holds UTF-8 as UTF-8, as read from a file where no locale is set" do
+            pattern = (+"%{level} → %{message}").force_encoding(Encoding::US_ASCII)
+
+            assert_equal "debug → Hello World", formatted(pattern)
+          end
+
+          it "converts a pattern in an encoding that is not ASCII-compatible" do
+            assert_equal "Hello World é", formatted("%{message} é".encode(Encoding::UTF_16LE))
+          end
+
+          it "finds a named tag by a key in a binary pattern, as read from the environment where no locale is set" do
+            log.named_tags = {Größe: "42"}
+
+            assert_equal "Größe=42", formatted("Größe=%{named_tags:Größe}".b)
+          end
+
+          it "raises when it is built from a pattern that is not valid in its own encoding" do
+            assert_raises(ArgumentError) { Pattern.new(pattern: "Caf\xE9: %{message}".dup.force_encoding(Encoding::Shift_JIS)) }
+          end
+
+          it "raises when it is built from a US-ASCII pattern that does not hold UTF-8" do
+            pattern = "Gr\xF6\xDFe=%{named_tags:Gr\xF6\xDFe}".dup.force_encoding(Encoding::US_ASCII)
+
+            assert_raises(ArgumentError) { Pattern.new(pattern: pattern) }
+          end
+
+          it "raises when it is built from a UTF-16 pattern without its byte order mark" do
+            pattern = "%{message}".encode(Encoding::UTF_16BE).force_encoding(Encoding::UTF_16)
+
+            assert_raises(Encoding::InvalidByteSequenceError) { Pattern.new(pattern: pattern) }
+          end
+
+          it "converts a UTF-16 pattern with its byte order mark" do
+            assert_equal "Hello World", formatted("%{message}".encode(Encoding::UTF_16))
+          end
+
+          it "raises when it is built from a pattern with a character that has no UTF-8 equivalent" do
+            pattern = "a\x81b %{message}".dup.force_encoding(Encoding::Windows_1252)
+
+            assert_raises(Encoding::UndefinedConversionError) { Pattern.new(pattern: pattern) }
+          end
+
+          it "accepts a binary pattern, replacing the bytes that are not UTF-8 so that it keeps its shape" do
+            assert_equal "caf\uFFFD Hello World", formatted("caf\xE9 %{message}".b)
+            assert_equal "100%\uFFFD{message}", formatted("100%\xFF{message}".b)
+          end
+
+          it "still raises when it is built from a pattern that is not valid UTF-8" do
+            assert_raises(ArgumentError) { Pattern.new(pattern: "Caf\xE9 %{message}".dup.force_encoding(Encoding::UTF_8)) }
+          end
+
+          it "writes tags and named tags in incompatible encodings" do
+            log.tags       = ["Café", binary]
+            log.named_tags = {city: "Zürich", greeting: binary}
+            output         = formatted("%{tags} %{named_tags} %{named_tags:greeting}")
+
+            assert_utf8 output
+            assert_equal "Café, Grüße ☕ city: Zürich, greeting: Grüße ☕ Grüße ☕", output
+          end
+        end
       end
     end
   end

@@ -493,6 +493,160 @@ module SemanticLogger
             assert_equal str, formatter.call(log, nil).lines.first
           end
         end
+
+        # Joining texts that both hold bytes outside ASCII, in incompatible encodings, raises
+        # Encoding::CompatibilityError, which used to lose the entry.
+        describe "text in encodings that cannot be joined" do
+          # Valid UTF-8, in a binary String, such as a response body or a C extension's error.
+          let(:binary) { "Grüße ☕".b }
+
+          let(:output) do
+            output = SemanticLogger::Formatters::Default.new.call(log, nil)
+
+            assert_predicate output, :valid_encoding?
+            assert_equal Encoding::UTF_8, output.encoding
+            output
+          end
+
+          def raised(message, error_class = RuntimeError)
+            raise error_class, message
+          rescue error_class => e
+            e
+          end
+
+          it "writes a binary message after a non-ASCII logger name" do
+            log.name    = "Café::Commande"
+            log.message = binary
+
+            assert_includes output, "Café::Commande -- Grüße ☕"
+          end
+
+          it "writes a UTF-8 message with a binary exception message" do
+            log.message   = "Café"
+            log.exception = raised(binary)
+
+            assert_includes output, "-- Café -- Exception: RuntimeError: Grüße ☕"
+          end
+
+          it "writes a binary message with a UTF-8 exception message" do
+            log.message   = binary
+            log.exception = raised("Café")
+
+            assert_includes output, "-- Grüße ☕ -- Exception: RuntimeError: Café"
+          end
+
+          it "converts an ISO-8859-1 exception message to UTF-8" do
+            log.message   = "Café"
+            log.exception = raised("Grüße".encode(Encoding::ISO_8859_1))
+
+            assert_includes output, "-- Café -- Exception: RuntimeError: Grüße"
+          end
+
+          it "writes the binary message of an exception that caused the logged one" do
+            log.message   = "Échec"
+            log.exception =
+              begin
+                begin
+                  raise binary
+                rescue RuntimeError
+                  raise ArgumentError, "Café"
+                end
+              rescue ArgumentError => e
+                e
+              end
+
+            assert_includes output, "-- Échec -- Exception: ArgumentError: Café\n"
+            assert_includes output, "\nCause: RuntimeError: Grüße ☕\n"
+          end
+
+          it "writes the backtrace when a cause's binary message cannot be joined with a backtrace line" do
+            log.message   = "Échec"
+            log.exception =
+              begin
+                begin
+                  raise binary
+                rescue RuntimeError
+                  raise ArgumentError, "Café"
+                end
+              rescue ArgumentError => e
+                e
+              end
+            log.exception.set_backtrace(["/app/naïve.rb:2:in 'save'"])
+            log.exception.cause.set_backtrace(["/app/io.rb:7:in 'read'"])
+
+            assert_includes output,
+                            "Café\n/app/naïve.rb:2:in 'save'\nCause: RuntimeError: Grüße ☕\n/app/io.rb:7:in 'read'"
+          end
+
+          it "writes the UTF-16 message of an exception that caused the logged one" do
+            log.exception =
+              begin
+                begin
+                  raise "Disk full".encode(Encoding::UTF_16LE)
+                rescue RuntimeError
+                  raise ArgumentError, "Café"
+                end
+              rescue ArgumentError => e
+                e
+              end
+
+            assert_includes output, "\nCause: RuntimeError: Disk full\n"
+          end
+
+          it "writes a time format in another encoding with a message in that encoding" do
+            log.message = "Grüße".encode(Encoding::ISO_8859_1)
+            formatter   = SemanticLogger::Formatters::Default.new(time_format: "%Y Ü".encode(Encoding::ISO_8859_1))
+            output      = formatter.call(log, nil)
+
+            assert_equal Encoding::UTF_8, output.encoding
+            assert_equal "2017 Ü D [", output[0, 10]
+            assert_includes output, "-- Grüße"
+          end
+
+          it "writes binary exception details" do
+            detail_class = Class.new(StandardError) do
+              def detailed_message(highlight: false, **)
+                "#{super}\n#{'Détail ☕'.b}"
+              end
+            end
+            log.message   = "Café"
+            log.exception = raised("failed", detail_class)
+
+            assert_includes output, "Détail ☕"
+          end
+
+          it "writes tags and named tags in incompatible encodings" do
+            log.tags       = ["Café", binary]
+            log.named_tags = {city: "Zürich", greeting: binary}
+
+            assert_includes output, "[Café] [Grüße ☕] {city: Zürich, greeting: Grüße ☕}"
+          end
+
+          it "writes a binary thread name with a non-ASCII message" do
+            log.thread_name = "wörker".b
+            log.message     = "Café"
+
+            assert_includes output, ":wörker] DefaultTest -- Café"
+          end
+
+          it "writes a UTF-16 message" do
+            log.message = "Hello".encode(Encoding::UTF_16LE)
+
+            assert_includes output, "DefaultTest -- Hello"
+          end
+
+          it "drops the bytes of a binary message that are not UTF-8" do
+            log.message = "caf\xE9".b
+
+            assert_includes output, "DefaultTest -- caf"
+          end
+
+          it "writes a UTF-8 message that holds invalid bytes as it is" do
+            log.message = "Caf\xC3".dup.force_encoding(Encoding::UTF_8)
+
+            assert_equal "-- Caf\xC3".dup.force_encoding(Encoding::UTF_8), formatter.message
+          end
+        end
       end
     end
   end

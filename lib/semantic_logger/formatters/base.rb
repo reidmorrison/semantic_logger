@@ -2,7 +2,7 @@ require "time"
 module SemanticLogger
   module Formatters
     class Base
-      attr_accessor :log, :logger, :time_format, :log_host, :log_application, :log_environment, :precision,
+      attr_accessor :log, :logger, :log_host, :log_application, :log_environment, :precision,
                     :escape_control_chars, :log_exception_details
 
       # Printable escapes for the most common control characters. Any other
@@ -91,7 +91,7 @@ module SemanticLogger
                      escape_control_chars: false,
                      log_exception_details: default_log_exception_details,
                      backtrace_cleaner: default_backtrace_cleaner)
-        @time_format          = time_format || self.class.build_time_format(precision)
+        self.time_format      = time_format || self.class.build_time_format(precision)
         @log_host             = log_host
         @log_application      = log_application
         @log_environment      = log_environment
@@ -99,6 +99,18 @@ module SemanticLogger
         @escape_control_chars  = escape_control_chars
         @log_exception_details = log_exception_details
         self.backtrace_cleaner = backtrace_cleaner
+      end
+
+      # Returns [String|Symbol] the `time_format` option. See #initialize.
+      attr_reader :time_format
+
+      # Sets the `time_format` option. See #initialize.
+      #
+      # A format String is converted once, here, as #joinable_text converts the formatter's own
+      # text: a format with characters outside ASCII in another encoding, such as ISO-8859-1, could
+      # not otherwise be joined with the entry's other text.
+      def time_format=(time_format)
+        @time_format = joinable_text(time_format)
       end
 
       # Returns [true|false|Object] the `backtrace_cleaner` option. See #initialize.
@@ -142,7 +154,7 @@ module SemanticLogger
       # When `escape_control_chars` is enabled, return a copy of the supplied
       # value with any control characters replaced by a printable escaped form
       # so that untrusted log data cannot forge log entries or inject terminal
-      # escape sequences. Otherwise the value is returned unchanged.
+      # escape sequences.
       #
       # Note: This escapes (preserves) control characters, and is opt-in. It is
       # distinct from Log#cleansed_message, which unconditionally *strips* ANSI
@@ -152,11 +164,37 @@ module SemanticLogger
       # untrusted binary input, or in another encoding, is first converted to valid UTF-8
       # (dropping the invalid bytes), since matching against it would raise and the log entry
       # would be lost.
+      #
+      # Otherwise the value is returned unchanged, unless it is a String that cannot be joined with
+      # UTF-8 text: one that holds bytes outside ASCII in another encoding, such as a binary
+      # response body or ISO-8859-1 text, or that is not ASCII-compatible, such as UTF-16. Joining
+      # it with the entry's other text, such as an accented logger name, would raise and lose the
+      # entry, so it is converted to valid UTF-8 (see Utils.encode_utf8_string), and this
+      # formatter's output is UTF-8. A String tagged UTF-8 that holds invalid bytes joins with
+      # UTF-8 text, so it is still written as it is.
       def escape_control_characters(value)
-        return value unless escape_control_chars && value
+        unless escape_control_chars
+          # As #joinable_text, written out here since every field of every entry passes through,
+          # and almost every one is UTF-8 or ASCII.
+          return value unless value.is_a?(String) && value.encoding != Encoding::UTF_8 && !value.ascii_only?
+
+          return Utils.encode_utf8_string(value)
+        end
+        return value unless value
 
         string = Utils.encode_utf8_string(value.to_s)
         string.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
+      end
+
+      # Returns the value as text that can be joined with this formatter's UTF-8 output: a String
+      # that holds bytes outside ASCII in another encoding converted to UTF-8 (see
+      # Utils.encode_utf8_string), and anything else as it is, including a UTF-8 String that holds
+      # invalid bytes. For the formatter's own text, such as its time format, which is not escaped.
+      # #escape_control_characters applies the same rule to the entry's fields.
+      def joinable_text(value)
+        return value unless value.is_a?(String) && value.encoding != Encoding::UTF_8 && !value.ascii_only?
+
+        Utils.encode_utf8_string(value)
       end
 
       # Whether this formatter logs exception details unless told otherwise. See #initialize.
@@ -198,11 +236,31 @@ module SemanticLogger
       # line is passed through #escape_control_characters, the same as the message of the
       # logged exception: causes are often parser or validation errors that quote untrusted
       # input, and a backtrace can be set from untrusted data.
+      #
+      # Otherwise they are written as they are, unless the text cannot be joined with UTF-8 text,
+      # such as when a cause's message is binary: then each is converted as
+      # #escape_control_characters converts the other fields.
       def exception_backtrace
         cleaner = active_backtrace_cleaner
-        return log.backtrace_to_s(cleaner: cleaner) unless escape_control_chars
+        unless escape_control_chars
+          text = joinable_backtrace(cleaner)
+          return text if text
+        end
 
         log.backtrace_to_s(cleaner: cleaner) { |text| escape_control_characters(text) }
+      end
+
+      # Returns [String] the backtrace as Log#backtrace_to_s writes it, or nil when that text
+      # cannot be joined with UTF-8 text (see #escape_control_characters), or holds two texts that
+      # cannot be joined with each other.
+      #
+      # The text is checked once, rather than each of what is usually dozens of lines, which
+      # would double the time it takes to format an exception.
+      def joinable_backtrace(cleaner)
+        text = log.backtrace_to_s(cleaner: cleaner)
+        text if text.encoding == Encoding::UTF_8 || text.ascii_only?
+      rescue Encoding::CompatibilityError
+        nil
       end
 
       # Return the Time as a formatted string

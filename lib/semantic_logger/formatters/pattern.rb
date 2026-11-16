@@ -100,7 +100,7 @@ module SemanticLogger
         # Parse the pattern once, up front, so that formatting every log entry
         # is just a walk over the pre-compiled tokens (no regex on the hot path).
         # Unknown directives raise here, at configuration time, not per log.
-        @tokens = compile(pattern)
+        @tokens = compile(compilable(pattern)).map { |token| joinable_token(token) }
       end
 
       # Formatted timestamp. With a strftime format argument, e.g.
@@ -190,19 +190,23 @@ module SemanticLogger
         end
       end
 
+      # The host, application, and environment names are converted as the formatter's own text is
+      # (see Base#joinable_text), since they can be in another encoding, such as when read from the
+      # environment where no locale is set.
+
       # Host name.
       def host
-        logger&.host if log_host
+        joinable_text(logger&.host) if log_host
       end
 
       # Application name.
       def application
-        logger&.application if log_application
+        joinable_text(logger&.application) if log_application
       end
 
       # Environment name.
       def environment
-        logger&.environment if log_environment
+        joinable_text(logger&.environment) if log_environment
       end
 
       def call(log, logger)
@@ -215,6 +219,46 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [String] the pattern to compile, which raises when the pattern is not valid text, as
+      # one that is not valid UTF-8 always has, rather than writing a different pattern. Binary is
+      # the exception, since a binary pattern has always been accepted.
+      #
+      # * UTF-8, or another ASCII-compatible encoding that says which characters its bytes are, such
+      #   as ISO-8859-1: as it is, so that a %{named_tags:...} key in it still names the
+      #   application's own key in that encoding (see #joinable_token).
+      # * US-ASCII with bytes outside ASCII, such as a pattern read from a file or the environment
+      #   where no locale is set: read as the UTF-8 it usually holds, as the fields are.
+      # * Binary: read as UTF-8 too, with any byte that is not UTF-8 replaced by U+FFFD, so that the
+      #   pattern keeps its shape: a dropped byte could join a "%" to a "{".
+      # * Any other encoding, such as UTF-16: converted to UTF-8.
+      def compilable(pattern)
+        encoding = pattern.encoding
+        return pattern if encoding == Encoding::UTF_8 || pattern.ascii_only?
+        return String.new(pattern, encoding: Encoding::UTF_8).scrub if encoding == Encoding::BINARY
+        return String.new(pattern, encoding: Encoding::UTF_8) if encoding == Encoding::US_ASCII
+
+        encoding.ascii_compatible? ? pattern : pattern.encode(Encoding::UTF_8)
+      end
+
+      # Returns the compiled token with its text in UTF-8, so that a pattern with characters outside
+      # ASCII in, say, ISO-8859-1 can be joined with the entry's fields: a literal, or the format of
+      # %{time:...}. The key of %{named_tags:...} is left as written, so that it still names the
+      # application's own key.
+      #
+      # Converted strictly, since this runs once, when the formatter is built: a character with no
+      # UTF-8 equivalent, or an encoding that cannot be converted, raises rather than being dropped.
+      def joinable_token(token)
+        return utf8_pattern_text(token) if token.is_a?(String)
+        return token unless token.method_name == :time
+
+        Token.new(token.method_name, token.arguments.map { |format| utf8_pattern_text(format) }).freeze
+      end
+
+      # Returns [String] the pattern's own text in UTF-8, frozen (see #joinable_token).
+      def utf8_pattern_text(text)
+        (text.encoding == Encoding::UTF_8 || text.ascii_only? ? text : text.encode(Encoding::UTF_8)).freeze
+      end
 
       # Parse the pattern string into an array of tokens: frozen literal strings
       # and Token structs for each %{directive} placeholder. %%{...} is an escape
