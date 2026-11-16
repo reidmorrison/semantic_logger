@@ -145,6 +145,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   formatter is built, and the host, application, and environment names that `:pattern` writes are
   converted too, such as an application name read from the environment where no locale is set.
   See [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53).
+- `:one_line` now also removes the Unicode next line (U+0085), line separator (U+2028), and
+  paragraph separator (U+2029) from every text field, or escapes them as `\u0085`, `\u2028`, and
+  `\u2029` with `escape_control_chars: true`. Editors, browsers, and some log viewers start a new
+  line at each, so logged text that held one, such as a user's input, could show an entry over
+  two lines. Exception details are also split into lines at them, and joined with a space.
 - A `measure_*` block that raises an exception whose `#message` raises, such as one that reads a
   record that is nil, now re-raises its own exception. Before, with `log_exception: :partial` (the
   default), the error that `#message` raised replaced it, without it as the cause, and nothing was

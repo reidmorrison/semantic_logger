@@ -195,6 +195,62 @@ module SemanticLogger
           end
         end
 
+        # Editors, browsers, and some log viewers start a new line at these too.
+        describe "Unicode line breaks" do
+          {
+            "next line"           => "\u0085",
+            "line separator"      => "\u2028",
+            "paragraph separator" => "\u2029"
+          }.each do |name, char|
+            it "strips the #{name} from every text field" do
+              text            = "Café#{char}forged"
+              log.message     = text
+              log.name        = text
+              log.tags        = [text]
+              log.named_tags  = {user: text}
+              log.exception   = RuntimeError.new(text)
+              log.thread_name = text
+              log.backtrace   = ["order#{char}.rb:1:in 'submit'"]
+
+              output = formatter.call(log, nil)
+
+              refute_includes output, char
+              assert_includes output, "-- Caféforged -- Exception: RuntimeError: Caféforged"
+              assert_includes output, "[Caféforged] {user: Caféforged}"
+              assert_includes output, "order.rb:1"
+            end
+
+            it "escapes the #{name} when escape_control_chars is enabled" do
+              log.message = "Café#{char}forged\nline"
+
+              output = SemanticLogger::Formatters::OneLine.new(escape_control_chars: true).call(log, nil)
+
+              refute_includes output, char
+              assert_includes output, "-- Café#{format('\\u%04x', char.ord)}forged\\nline"
+            end
+          end
+
+          it "strips them from text in another encoding, next to ASCII text" do
+            log.message = "Hello\nWorld"
+            log.name    = "Gr\u2028üße".encode(Encoding::UTF_16LE)
+
+            assert_includes formatter.call(log, nil), "] Grüße -- HelloWorld"
+          end
+
+          it "joins the lines of exception details that one of them separates with a space" do
+            detailed = Class.new(StandardError) do
+              def detailed_message(highlight: false, **)
+                "#{super}\n  first line\u2028  second line\u0085third line"
+              end
+            end
+            log.exception = detailed.new("Order rejected")
+
+            output = SemanticLogger::Formatters::OneLine.new(log_exception_details: true).call(log, nil)
+
+            assert_includes output, "Order rejected -- first line second line third line"
+          end
+        end
+
         describe "call" do
           it "keeps the whole entry on one line" do
             log.message    = "msg\nforged"
