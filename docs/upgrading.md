@@ -117,9 +117,15 @@ agent.
 
 #### Other behaviour changes
 
-* The `:statsd` and `:new_relic` metric subscribers now record a metric that has `dimensions`,
-  without its dimensions, which neither backend has. Before, they left it out, so a counter or
-  timer logged with dimensions can now show higher counts there.
+* The `:statsd` and `:new_relic` metric subscribers now record a metric that has `dimensions` under
+  its name alone, leaving out the dimensions, which their clients do not accept. Before, they left
+  such a metric out, so a counter or timer logged with dimensions can now show higher counts there.
+  To leave them out again, add either subscriber with a filter:
+
+  ~~~ruby
+  SemanticLogger.add_appender(metric: :statsd, filter: ->(log) { !log.dimensions? })
+  SemanticLogger.add_appender(metric: :new_relic, filter: ->(log) { !log.dimensions? })
+  ~~~
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and

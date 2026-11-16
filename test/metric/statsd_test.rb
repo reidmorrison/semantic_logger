@@ -214,16 +214,35 @@ module Metric
       end
 
       describe "a metric with dimensions" do
-        it "is counted without its dimensions" do
-          appender.log(metric_log(metric_amount: 2, dimensions: {action: "login"}))
+        it "is counted under its name alone" do
+          appender.info(metric: metric, metric_amount: 2, dimensions: {action: "login"})
 
           assert_equal [[metric, 2]], fake.counts
         end
 
-        it "is timed without its dimensions" do
-          appender.log(metric_log(duration: 200, dimensions: {action: "login"}))
+        it "is timed under its name alone" do
+          appender.info(metric: metric, duration: 200, dimensions: {action: "login"})
 
           assert_equal [[metric, 200]], fake.timings
+        end
+
+        it "can be left out with a filter" do
+          appender.filter = ->(log) { !log.dimensions? }
+          appender.info(metric: metric, dimensions: {action: "login"})
+          appender.info(metric: metric)
+
+          assert_equal [[metric, 1]], fake.counts
+        end
+      end
+
+      describe "options" do
+        it "applies the filter: and level: given to add_appender" do
+          filter     = ->(log) { !log.dimensions? }
+          subscriber = SemanticLogger::Appender.factory(metric: :statsd, filter: filter, level: :warn)
+
+          refute subscriber.should_log?(metric_log(level: :info))
+          refute subscriber.should_log?(metric_log(level: :warn, dimensions: {action: "login"}))
+          assert subscriber.should_log?(metric_log(level: :warn))
         end
       end
     end

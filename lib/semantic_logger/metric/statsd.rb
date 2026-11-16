@@ -21,14 +21,16 @@ module SemanticLogger
       #       udp://localhost:8125/namespace
       #     Default: udp://localhost:8125
       #
+      #   level, filter: See SemanticLogger::Subscriber, as for the other metric subscribers.
+      #
       # Example:
       #   SemanticLogger.add_appender(
       #     metric: :statsd,
       #     url:    'udp://localhost:8125'
       #   )
-      def initialize(url: "udp://localhost:8125")
+      def initialize(url: "udp://localhost:8125", **args, &)
         @url = url
-        super()
+        super(**args, &)
         reopen
       end
 
@@ -75,7 +77,7 @@ module SemanticLogger
 
       # Only forward log entries that contain metrics.
       def should_log?(log)
-        # Records a metric that has dimensions without them, since the backend has no dimensions.
+        # Records a metric that has dimensions under its name alone, since statsd-ruby has no tags.
         log.metric && meets_log_level?(log) && !filtered?(log)
       end
 

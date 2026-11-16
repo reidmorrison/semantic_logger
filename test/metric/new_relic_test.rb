@@ -31,14 +31,32 @@ module Metric
         assert duration
       end
 
-      it "logs a metric that has dimensions, without them" do
+      it "counts a metric that has dimensions under its name alone" do
         name = amount = nil
-        NewRelic::Agent.stub(:increment_metric, ->(name_, amount_) { name = name_, amount = amount_ }) do
+        increment = lambda do |name_, amount_|
+          name   = name_
+          amount = amount_
+        end
+        NewRelic::Agent.stub(:increment_metric, increment) do
           appender.info(message: amessage, metric: "User/authenticated", dimensions: {region: "us"})
         end
 
-        assert_equal "Custom/User/authenticated", name.first
+        assert_equal "Custom/User/authenticated", name
         assert_equal 1, amount
+      end
+
+      it "times a metric that has dimensions under its name alone" do
+        name = duration = nil
+        record = lambda do |name_, duration_|
+          name     = name_
+          duration = duration_
+        end
+        NewRelic::Agent.stub(:record_metric, record) do
+          appender.info(message: amessage, metric: "User/authenticate", duration: 12.5, dimensions: {region: "us"})
+        end
+
+        assert_equal "Custom/User/authenticate", name
+        assert_in_delta 0.0125, duration
       end
     end
   end
