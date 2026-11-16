@@ -2,6 +2,11 @@ require_relative "test_helper"
 
 module SemanticLogger
   class LogTest < Minitest::Test
+    # An exception whose #message raises, as one that reads a record that is nil can.
+    class BrokenMessageError < StandardError
+      def message = raise(NoMethodError, "undefined method 'id' for nil")
+    end
+
     describe SemanticLogger::Log do
       let(:log) do
         SemanticLogger::Log.new("LogTest", :info)
@@ -108,6 +113,12 @@ module SemanticLogger
             assert_equal "Boom -- Exception: RuntimeError: An exception", log.message
           end
 
+          it "folds in the message it was raised with when #message raises when log_exception is :partial" do
+            assert log.assign(message: "Boom", exception: BrokenMessageError.new("Order 7"), log_exception: :partial)
+
+            assert_equal "Boom -- Exception: #{BrokenMessageError.name}: Order 7", log.message
+          end
+
           describe "with causes when log_exception is :partial" do
             # Returns the exception raised with the supplied message while rescuing the supplied cause.
             def raise_with_cause(cause, message = "save failed")
@@ -161,6 +172,14 @@ module SemanticLogger
               log.assign(message: "Boom", exception: raise_with_cause(IOError), log_exception: :partial)
 
               assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: IOError", log.message
+            end
+
+            it "folds in the message a cause was raised with when its #message raises" do
+              exception = raise_with_cause(BrokenMessageError.new("Order 7"))
+              log.assign(message: "Boom", exception: exception, log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: #{BrokenMessageError.name}: Order 7",
+                           log.message
             end
 
             it "folds in the same causes as the backtrace of :full" do

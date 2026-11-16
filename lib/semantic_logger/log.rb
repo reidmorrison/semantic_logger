@@ -157,7 +157,7 @@ module SemanticLogger
         when :partial
           # The class and message of the exception, then of each exception that caused it: the same
           # exceptions that :full writes (see #backtrace_to_s).
-          self.message = Utils.join_texts(message, " -- Exception: ", exception.class, ": ", exception.message)
+          self.message = Utils.join_texts(message, " -- Exception: ", exception.class, ": ", message_of(exception))
           each_exception(exception) { |ex, depth| self.message = with_cause(ex) unless depth.zero? }
         when nil, :none
           # Log the message without the exception that was raised
@@ -547,9 +547,14 @@ module SemanticLogger
     # Returns [String] the value as text in valid UTF-8 (see Utils.encode_utf8_string).
     def utf8(value) = Utils.encode_utf8_string(value.to_s)
 
+    # Returns [String] the exception's message, without raising, so that log_exception: :partial
+    # never replaces the exception being logged with one that its #message raises (see
+    # Utils.exception_message).
+    def message_of(exception) = Utils.exception_message(exception)
+
     # Returns [String] this entry's message, as log_exception: :partial writes it, followed by the
     # class of an exception that caused the logged one, then its message (see #with_cause_message).
-    def with_cause(cause) = with_cause_message(Utils.join_texts(message, " -- Cause: ", cause.class), cause.message)
+    def with_cause(cause) = with_cause_message(Utils.join_texts(message, " -- Cause: ", cause.class), message_of(cause))
 
     # Returns [String] the text followed by the message of an exception that caused the logged one,
     # or the text alone when it already holds that message: as when the message is empty, is the
