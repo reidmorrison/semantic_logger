@@ -751,6 +751,70 @@ module SemanticLogger
         end
       end
 
+      describe ".serializing_log_data?" do
+        # Records whether Utils is serializing log data when it is asked for its JSON or message.
+        let(:probe) do
+          Class.new do
+            attr_reader :serializing
+
+            def to_json(*)
+              @serializing = SemanticLogger::Utils.serializing_log_data?
+              "{}"
+            end
+          end.new
+        end
+
+        it "is true for an object's own #to_json, called to serialize log data" do
+          Utils.to_json({payload: probe})
+
+          assert probe.serializing
+        end
+
+        it "is true however deep the object is, under others whose #to_json serializes a Hash" do
+          node = Struct.new(:child) { def to_json(*args) = {child: child}.to_json(*args) }
+          Utils.to_json((1..40).reduce(probe) { |child, _| node.new(child) })
+
+          assert probe.serializing
+        end
+
+        it "is true in each of the methods that serialize, when the data has to be repaired" do
+          answers = []
+          probe   = Class.new { define_method(:to_json) { |*| (answers << Utils.serializing_log_data?) && "{}" } }.new
+          # NaN takes the repair path, which asks .json_safe_object for the probe's JSON, serializes
+          # a Hash key that is itself a structure in .json_safe_members, and serializes the repaired
+          # copy in .to_json.
+          Utils.to_json({nan: Float::NAN, payload: probe, {key: probe} => 1})
+
+          assert_operator answers.size, :>=, 3
+          assert_predicate answers, :all?, "answers: #{answers.inspect}"
+        end
+
+        it "names only methods of Utils" do
+          (Utils::SERIALIZERS - ["to_json"]).each { |name| assert_respond_to Utils, name, include_all: true }
+        end
+
+        it "is true while readying data for a writer that serializes it" do
+          Utils.json_ready({payload: probe})
+
+          assert probe.serializing
+        end
+
+        it "is false for an exception's own #message, though Utils called it" do
+          serializing = :not_asked
+          error       = Class.new(StandardError) do
+            define_method(:message) { (serializing = Utils.serializing_log_data?) && "failed" }
+          end
+
+          Utils.exception_message(error.new)
+
+          refute serializing
+        end
+
+        it "is false outside Utils" do
+          refute_predicate Utils, :serializing_log_data?
+        end
+      end
+
       describe ".join_texts" do
         let(:latin1) { "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1) }
 

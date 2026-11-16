@@ -39,6 +39,11 @@ if Process.respond_to?(:_fork)
   Process.singleton_class.prepend(SemanticLogger::CoreExt::Process)
 end
 
+# json 2.8.0 through 3.0.x warn about each binary String they write as UTF-8. Drop that warning
+# when it comes from Semantic Logger serializing log data, which it writes the same way with
+# json 3.1 (see SemanticLogger::CoreExt::Warning).
+Warning.singleton_class.prepend(SemanticLogger::CoreExt::Warning) if SemanticLogger::CoreExt::Warning::NEEDED
+
 # Flush all appenders at exit, waiting for outstanding messages on the queue
 # to be written first.
 at_exit do
