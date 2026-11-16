@@ -130,6 +130,44 @@ module SemanticLogger
             assert_equal "Grüße -- Exception: RuntimeError: Fehler ü", log.message
           end
 
+          it "leaves a message in another encoding as it is when it can be joined when log_exception is :partial" do
+            latin1 = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+            log.assign(message: latin1, exception: RuntimeError.new("Fehler"), log_exception: :partial)
+
+            assert_equal Encoding::ISO_8859_1, log.message.encoding
+            assert_equal "Grüße -- Exception: RuntimeError: Fehler", log.message.encode(Encoding::UTF_8)
+            # Can still be joined with the application's other text in that encoding, such as a tag.
+            assert_equal "Grüße -- Exception: RuntimeError: Fehler Grüße", "#{log.message} #{latin1}".encode("UTF-8")
+          end
+
+          it "folds a binary exception message into an ASCII message as UTF-8 when log_exception is :partial" do
+            log.assign(message: "Boom", exception: RuntimeError.new("Datei \xFC kaputt".b), log_exception: :partial)
+
+            assert_equal "Boom -- Exception: RuntimeError: Datei  kaputt", log.message
+            assert_equal Encoding::UTF_8, log.message.encoding
+          end
+
+          it "folds the exception into an html_safe message as plain text when log_exception is :partial" do
+            # Like ActiveSupport::SafeBuffer: #to_s returns itself and #+ escapes the text added to it.
+            safe_buffer = Class.new(String) do
+              def to_s = self
+              def +(other) = self.class.new(super(other.to_s.gsub("'", "&#39;")))
+            end
+            log.assign(message: safe_buffer.new("Loaded"), exception: NoMethodError.new("undefined method 'title'"),
+                       log_exception: :partial)
+
+            assert_equal "Loaded -- Exception: NoMethodError: undefined method 'title'", log.message
+            assert_instance_of String, log.message
+          end
+
+          it "folds an exception class name in another encoding into a UTF-8 message when log_exception is :partial" do
+            klass = Class.new(StandardError)
+            klass.define_singleton_method(:to_s) { "Fehl\xC4r".dup.force_encoding(Encoding::ISO_8859_1) }
+            log.assign(message: "Grüße", exception: klass.new("kaputt"), log_exception: :partial)
+
+            assert_equal "Grüße -- Exception: FehlÄr: kaputt", log.message
+          end
+
           it "ignores the exception when log_exception is :none" do
             log.assign(message: "Boom", exception: exception, log_exception: :none)
 

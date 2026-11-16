@@ -155,9 +155,7 @@ module SemanticLogger
         when :full
           self.exception = exception
         when :partial
-          # Both messages are made valid UTF-8 first, since joining a UTF-8 message with a binary one
-          # that holds other bytes raises, and so would the log call.
-          self.message = "#{utf8(message)} -- Exception: #{exception.class}: #{utf8(exception.message)}"
+          self.message = Utils.join_texts(message, " -- Exception: ", exception.class, ": ", exception.message)
         when nil, :none
           # Log the message without the exception that was raised
           nil
@@ -535,10 +533,6 @@ module SemanticLogger
       # Merged into the cache as it is now: another appender may have added to it meanwhile.
       yield.tap { |value| @cache = (@cache || {}).merge(key => value).freeze }
     end
-
-    # Returns [String] the value as text in valid UTF-8, so that it can be joined with other text
-    # whatever its encoding (see Utils.encode_utf8_string).
-    def utf8(value) = Utils.encode_utf8_string(value.to_s)
 
     # Whether a log argument from the Hash returned by a logging block, already checked by
     # .argument?, is assigned to its attribute: only when this entry does not have it yet. As in

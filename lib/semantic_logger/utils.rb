@@ -419,5 +419,41 @@ module SemanticLogger
       # raw bytes as UTF-8 and drop anything invalid. Logging must never raise.
       string.dup.force_encoding(Encoding::UTF_8).scrub("")
     end
+
+    # Returns [String] the texts joined into a new String, such as a log message and an exception's
+    # message, whatever their encodings.
+    #
+    # Texts are joined as they are, so that text in an encoding such as ISO-8859-1 can still be
+    # joined with the application's other text in that encoding. Two texts are converted to valid
+    # UTF-8 first (see .utf8_text) only when joining them would raise, such as for UTF-8 and binary
+    # texts that both hold bytes outside ASCII, or would make text that is not binary binary, such as
+    # an ASCII message joined with a binary exception message.
+    #
+    # Each text is formatted as interpolation would, rather than added or converted with #to_s, so
+    # that a String subclass whose #+ escapes the text added to it, such as
+    # ActiveSupport::SafeBuffer, is joined as plain text, and an object whose #to_s does not return a
+    # String is still joined.
+    def self.join_texts(*texts)
+      texts.map { |text| format("%s", text) }.reduce do |joined, text|
+        encoding = Encoding.compatible?(joined, text)
+        if encoding && (encoding != Encoding::BINARY || joined.encoding == Encoding::BINARY)
+          "#{joined}#{text}"
+        else
+          "#{utf8_text(joined)}#{utf8_text(text)}"
+        end
+      end
+    end
+
+    # Returns [String] the text as valid UTF-8, for .join_texts. Binary text, such as a response
+    # body or a C extension's error message, is read as UTF-8, which it usually holds, keeping its
+    # characters and dropping its invalid bytes. Text in other encodings is converted (see
+    # .encode_utf8_string).
+    def self.utf8_text(text)
+      return encode_utf8_string(text) unless text.encoding == Encoding::BINARY
+
+      text.dup.force_encoding(Encoding::UTF_8).scrub("")
+    end
+
+    private_class_method :utf8_text
   end
 end

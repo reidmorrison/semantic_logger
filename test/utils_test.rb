@@ -645,6 +645,91 @@ module SemanticLogger
           assert_nil SemanticLogger::Utils.encode_utf8(nil)
         end
       end
+
+      describe ".join_texts" do
+        let(:latin1) { "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1) }
+
+        # Like ActiveSupport::SafeBuffer: #to_s returns itself and #+ escapes the text added to it.
+        let(:safe_buffer_class) do
+          Class.new(String) do
+            def to_s = self
+            def +(other) = self.class.new(super(other.to_s.gsub("<", "&lt;")))
+          end
+        end
+
+        it "joins the texts" do
+          assert_equal "Boom -- Exception: RuntimeError: failed",
+                       Utils.join_texts("Boom", " -- Exception: ", RuntimeError, ": ", "failed")
+        end
+
+        it "joins values that are not Strings by their text" do
+          assert_equal " -- 42", Utils.join_texts(nil, " -- ", 42)
+        end
+
+        it "leaves text in another encoding as it is when the texts can be joined" do
+          result = Utils.join_texts(latin1, " -- ", "failed")
+
+          assert_equal Encoding::ISO_8859_1, result.encoding
+          assert_equal "Grüße -- failed", result.encode(Encoding::UTF_8)
+        end
+
+        it "converts a UTF-8 text and a binary one that holds other bytes to valid UTF-8" do
+          result = Utils.join_texts("Grüße", " -- ", "Datei \xFC kaputt".b)
+
+          assert_equal "Grüße -- Datei  kaputt", result
+          assert_predicate result, :valid_encoding?
+        end
+
+        it "converts an ASCII text and a binary one that holds other bytes to valid UTF-8" do
+          result = Utils.join_texts("Boom", " -- ", "Datei \xFC kaputt".b)
+
+          assert_equal "Boom -- Datei  kaputt", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "converts texts in other encodings that cannot be joined to UTF-8" do
+          assert_equal "Grüße -- Fehler ü", Utils.join_texts(latin1, " -- ", "Fehler ü")
+        end
+
+        it "keeps the UTF-8 characters of a binary text that it converts" do
+          result = Utils.join_texts("Calling API", " -- ", "Failed: エラー".b)
+
+          assert_equal "Calling API -- Failed: エラー", result
+          assert_predicate result, :valid_encoding?
+        end
+
+        it "keeps the UTF-8 characters of a binary text joined with a UTF-8 one" do
+          assert_equal "Grüße -- Fehler ü", Utils.join_texts("Grüße".b, " -- ", "Fehler ü")
+        end
+
+        it "leaves text in another encoding joined to an ASCII text as it is" do
+          result = Utils.join_texts("Import", " -- ", latin1)
+
+          assert_equal Encoding::ISO_8859_1, result.encoding
+          assert_equal "Import -- Grüße", result.encode(Encoding::UTF_8)
+        end
+
+        it "leaves a binary text joined with ASCII texts as it is" do
+          result = Utils.join_texts("Grüße".b, " -- ", "failed")
+
+          assert_equal Encoding::BINARY, result.encoding
+          assert_equal "Grüße -- failed".b, result
+        end
+
+        it "joins an object whose #to_s does not return a String" do
+          object = Object.new
+          object.define_singleton_method(:to_s) { nil }
+
+          assert_match(/\ABoom -- #<Object:0x\h+>\z/, Utils.join_texts("Boom", " -- ", object))
+        end
+
+        it "joins a String subclass as plain text" do
+          result = Utils.join_texts(safe_buffer_class.new("Loaded <rows>"), " -- ", "<z>")
+
+          assert_equal "Loaded <rows> -- <z>", result
+          assert_instance_of String, result
+        end
+      end
     end
   end
 end
