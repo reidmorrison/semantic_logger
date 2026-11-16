@@ -127,6 +127,14 @@ module SemanticLogger
             assert_kind_of String, result.dig(:error, :stack_trace)
           end
 
+          it "writes a stack trace whose lines are in encodings that cannot be joined" do
+            exception = RuntimeError.new("Oh no")
+            exception.set_backtrace(["app/café.rb:1:in 'm'", "lib/x.rb:2:in 'n'".encode(Encoding::UTF_16LE)])
+            log.exception = exception
+
+            assert_equal "app/café.rb:1:in 'm'\nlib/x.rb:2:in 'n'", result.dig(:error, :stack_trace)
+          end
+
           it "omits error when not set" do
             refute result.key?(:error)
           end

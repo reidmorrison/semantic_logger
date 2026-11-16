@@ -129,8 +129,17 @@ module SemanticLogger
         result[:error] = {
           type:        hash[:exception][:name],
           message:     hash[:exception][:message],
-          stack_trace: Array(hash[:exception][:stack_trace]).join("\n")
+          stack_trace: stack_trace(Array(hash[:exception][:stack_trace]))
         }
+      end
+
+      # Returns [String] the lines of the stack trace, one per line. Lines that cannot be joined,
+      # such as a UTF-16 line from a backtrace that the application set, are converted to valid
+      # UTF-8 first (see Utils.encode_utf8_string), rather than losing the entry.
+      def stack_trace(lines)
+        lines.join("\n")
+      rescue Encoding::CompatibilityError
+        lines.map { |line| Utils.encode_utf8_string(line.to_s) }.join("\n")
       end
 
       # Place SemanticLogger-specific data (payload, metric) that has no native

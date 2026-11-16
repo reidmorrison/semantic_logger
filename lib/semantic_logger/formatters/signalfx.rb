@@ -21,8 +21,10 @@ module SemanticLogger
       # Create SignalFx friendly metric.
       #   Strip leading '/'
       #   Convert remaining '/' to '.'
+      # A name that is not valid UTF-8, such as one with invalid bytes or in UTF-16, which matching
+      # it raises for, is converted to valid UTF-8 first (see Utils.encode_utf8_string).
       def metric
-        name = log.metric.to_s.sub(%r{\A/+}, "")
+        name = Utils.encode_utf8_string(log.metric.to_s).sub(%r{\A/+}, "")
         if log.dimensions
           name.tr!("/", ".")
           hash[:metric] = name

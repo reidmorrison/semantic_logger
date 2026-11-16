@@ -354,7 +354,16 @@ module SemanticLogger
     def filtered?(log)
       return false if @filter.nil?
 
-      @filter.is_a?(Regexp) ? (@filter =~ log.name).nil? : @filter.call(log) != true
+      @filter.is_a?(Regexp) ? !name_matches_filter?(log.name) : @filter.call(log) != true
+    end
+
+    # Whether the name matches the Regexp filter. A name that is not valid in its encoding, which
+    # matching raises for, is matched converted to valid UTF-8 (see Utils.encode_utf8_string), since
+    # a log call must not raise.
+    def name_matches_filter?(name)
+      @filter.match?(name)
+    rescue ArgumentError, EncodingError
+      @filter.match?(Utils.encode_utf8_string(name.to_s))
     end
 
     # Ensure minimum log level is met

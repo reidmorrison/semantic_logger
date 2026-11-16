@@ -313,6 +313,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   and does not convert to one (`#to_str`), such as nil, raised `NoMethodError`, taken the same way,
   and one that returns an Array had it written as an Array; either is now the entry's own error, so
   it is discarded without waiting.
+- A logger or appender with a Regexp `filter:` no longer raises `ArgumentError` into the application
+  when the logger's name is not valid in its encoding, such as a name built from binary input; the
+  name is matched converted to valid UTF-8. The `:ecs` formatter no longer loses an entry whose
+  stack trace mixes lines in encodings that cannot be joined, such as a UTF-16 line in a backtrace
+  set by the application, and the SignalFx metrics formatter no longer loses one whose metric name
+  is not valid UTF-8; such text is converted to valid UTF-8.
 
 ## [5.2.0] 2026-10-30
 
