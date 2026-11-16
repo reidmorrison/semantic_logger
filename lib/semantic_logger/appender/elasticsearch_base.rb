@@ -12,9 +12,12 @@ module SemanticLogger
     # `SemanticLogger.add_appender(appender: :elasticsearch, ...)` or
     # `appender: :opensearch`, never by referencing this class directly.
     class ElasticsearchBase < SemanticLogger::Subscriber
-      # The most different failures that one report of a bulk request lists (see #report_failures).
+      # The most groups of failures that one report of a bulk request lists (see #report_failures).
       MAX_REPORTED_FAILURES = 10
-      private_constant :MAX_REPORTED_FAILURES
+      # The most characters of each reason that the report writes: a reason can repeat a whole value,
+      # as the "For input string" of a number that could not be parsed does.
+      MAX_REPORTED_REASON = 500
+      private_constant :MAX_REPORTED_FAILURES, :MAX_REPORTED_REASON
 
       attr_accessor :url, :index, :date_pattern, :client, :flush_interval, :timeout_interval, :batch_size,
                     :client_args
@@ -242,37 +245,93 @@ module SemanticLogger
       # are discarded, since sending the request again would index the others twice. The response
       # has an item for each entry, under the name of its action, such as
       # `{"index" => {"_index" => ..., "status" => 400, "error" => {"type" => ..., "reason" => ...}}}`,
-      # without the document. Each different failure is listed once, with the number of entries it
-      # failed, so that a batch whose entries all fail for one reason, such as a read-only index, is
-      # reported in a short line. Only the first MAX_REPORTED_FAILURES are listed, since a reason can
-      # name its entry, as a mapping error names the document's id.
+      # without the document. An entry failed when its result has an error, or a status of 300 or
+      # above: an `index` action succeeds with 201 (created) or 200 (updated), and a `create` action
+      # with 201. The failures are grouped by their kind (see #bulk_failure_kind), since the reasons
+      # for one kind differ by each entry's id and value, so that a batch whose entries all fail the
+      # same way is reported in a short line. Only the first MAX_REPORTED_FAILURES groups are listed.
       def report_failures(items)
-        failures = items.filter_map { |item| bulk_failure(item.values.first) }.tally
-        return if failures.empty?
+        failed = items.map { |item| item.values.first }
+        failed.select! { |result| result.key?("error") || result["status"].to_i >= 300 }
+        return if failed.empty?
 
-        listed = failures.first(MAX_REPORTED_FAILURES).map do |failure, count|
-          count > 1 ? "#{failure} (#{count} entries)" : failure
+        groups = failed.group_by { |result| bulk_failure_kind(result) }
+        listed = groups.first(MAX_REPORTED_FAILURES).map do |kind, results|
+          bulk_failure(kind, results.first["error"], results.size)
         end
-        listed << "and #{failures.size - MAX_REPORTED_FAILURES} other failures" if failures.size > MAX_REPORTED_FAILURES
+        others = groups.values.drop(MAX_REPORTED_FAILURES)
+        unless others.empty?
+          listed << "and #{others.size} other failure#{'s' unless others.size == 1} " \
+                    "(#{bulk_entries(others.sum(&:size))})"
+        end
 
         logger.error(
-          "#{failures.values.sum} of #{items.size} log entries were not indexed, and are discarded: " \
-          "#{listed.join('; ')}"
+          "#{failed.size} of #{items.size} log entries were not indexed, and are discarded: #{listed.join('; ')}"
         )
       end
 
-      # Returns [String] why an entry was not indexed, from the result of its action in the bulk
-      # response, or nil when it was indexed. It failed when the result has an error, or a status of
-      # 300 or above: an `index` action succeeds with 201 (created) or 200 (updated), and a `create`
-      # action with 201.
-      def bulk_failure(result)
+      # Returns [Array] the kind of failure of an entry, from the result of its action: its status,
+      # error type, and index, and the type of the innermost error that caused it, so that a number
+      # and a date that could not be parsed, both a mapping error, are told apart. An error that is a
+      # String, as from Elasticsearch 1.x, has no type.
+      def bulk_failure_kind(result)
         error = result["error"]
-        return if error.nil? && result["status"].to_i < 300
+        return [result["status"], nil, result["_index"], nil] unless error.is_a?(Hash)
 
-        where = "in #{result['_index']}"
-        return "#{result['status']} #{where}" unless error
+        [result["status"], error["type"], result["_index"], bulk_causes(error).last&.fetch("type", nil)]
+      end
 
-        "#{result['status']} #{error['type']} #{where}: #{error['reason']}"
+      # Returns [String] a kind of failure of the given number of entries: its status, error type,
+      # and index, then the error of the first, as an example when there are others.
+      def bulk_failure(kind, error, count)
+        status, type, index = kind
+        failure = [status, type, "in #{index}"].compact.join(" ")
+        failure += " (#{bulk_entries(count)})" if count > 1
+        reason = bulk_error_reason(error)
+        return failure unless reason
+
+        "#{failure}#{', e.g.' if count > 1}: #{reason}"
+      end
+
+      # Returns [String] the reason for an error, followed by each error that caused it, such as the
+      # parser's error under a mapping error's "failed to parse", or nil when it has none. An error
+      # that is a String is its reason. A cause without a reason is written as its type alone.
+      def bulk_error_reason(error)
+        return bulk_reason_text(error) unless error.is_a?(Hash)
+
+        reasons = [bulk_reason_text(error["reason"])]
+        bulk_causes(error).each do |cause|
+          reason = bulk_reason_text(cause["reason"])
+          reasons << (reason ? "caused by #{cause['type']}: #{reason}" : "caused by #{cause['type']}")
+        end
+        reasons.compact!
+        reasons.join(", ") unless reasons.empty?
+      end
+
+      # Returns [Array<Hash>] the errors that caused this one, from the first to the innermost.
+      def bulk_causes(error)
+        causes = []
+        cause  = error
+        causes << cause while (cause = cause["caused_by"]).is_a?(Hash)
+        causes
+      end
+
+      # Returns [String] a reason as the report writes it, or nil when there is none: its first line
+      # only, since the JSON parser adds the error's location on the next, with part of the document;
+      # cut to MAX_REPORTED_REASON characters, followed by "..."; and inspected, since it can repeat a
+      # value of the entry, so that a control character in that value, such as a line break, cannot
+      # forge a line of the log.
+      def bulk_reason_text(reason)
+        text = reason.to_s.partition("\n").first
+        return if text.empty?
+        return text.inspect if text.size <= MAX_REPORTED_REASON
+
+        "#{text[0, MAX_REPORTED_REASON].inspect}..."
+      end
+
+      # Returns [String] the number of entries, such as "1 entry" or "3 entries".
+      def bulk_entries(count)
+        count == 1 ? "1 entry" : "#{count} entries"
       end
 
       def bulk_index(log)

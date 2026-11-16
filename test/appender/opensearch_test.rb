@@ -97,7 +97,7 @@ module Appender
           appender.client.stub(:bulk, response) { appender.batch([log, log]) }
 
           assert_equal ["1 of 2 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
-                        "in semantic_logger-2026.11.16: failed to parse field [payload.amount]"],
+                        "in semantic_logger-2026.11.16: \"failed to parse field [payload.amount]\""],
                        internal.events.map(&:message)
         end
 

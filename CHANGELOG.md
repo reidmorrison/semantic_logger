@@ -506,9 +506,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `:opensearch` appender sends, the error that the appender reports to the internal logger names only
   those entries. Before, it listed the server's response for every entry of the request, up to 300 in
   a batch by default, including the ones that were indexed, since it read each entry's status from
-  the wrong place. Now it says how many of the entries were not indexed, and lists each different
-  failure once, with its status, error type, index, and reason, and the number of entries it failed,
-  up to ten different failures.
+  the wrong place. Now it says how many of the entries were not indexed, and groups them by status,
+  error type, index, and the innermost error that caused it, up to ten groups, each with its number
+  of entries and the reason of its first, followed by each error that caused it. A reason is quoted,
+  with its control characters escaped, without the lines after its first, where the server can add
+  part of the document, and cut to 500 characters.
 
 ## [5.2.0] 2026-10-30
 
