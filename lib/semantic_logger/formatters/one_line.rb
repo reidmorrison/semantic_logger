@@ -7,20 +7,25 @@ module SemanticLogger
     #   named tags, message, payload and exception message. They are new lines and carriage
     #   returns, and the Unicode next line (U+0085), line separator (U+2028), and paragraph
     #   separator (U+2029), at which editors, browsers, and some log viewers also start a new line.
-    #   With `escape_control_chars: true` they, and all other control characters, are escaped
-    #   instead, like the other text formatters.
+    #   With `escape_control_chars: true` they are escaped instead, the Unicode ones in the
+    #   `\uXXXX` form, and so are the other ASCII control characters, as the other text
+    #   formatters escape them.
     # * Exceptions only include the class and message, the stack trace is not shown.
     # * Exception details, when enabled, are joined onto the same line.
     class OneLine < Default
       # The line breaks that Unicode adds to the line feed and carriage return: next line, line
       # separator, and paragraph separator.
-      UNICODE_LINE_BREAK = /[\u0085\u2028\u2029]/
+      UNICODE_LINE_BREAKS = "\u0085\u2028\u2029".freeze
+
+      # A Unicode line break.
+      UNICODE_LINE_BREAK = /[#{UNICODE_LINE_BREAKS}]/
 
       # Every line break, as a String#delete character set.
-      LINE_BREAKS = "\r\n\u0085\u2028\u2029".freeze
+      LINE_BREAKS = "\r\n#{UNICODE_LINE_BREAKS}".freeze
 
-      # A line break, with the white space around it, between two lines of exception details.
-      DETAILS_LINE_BREAK = /\s*[\r\n\u0085\u2028\u2029]\s*/
+      # A line break, with the white space around it, between two lines of exception details. A
+      # carriage return before a line feed is part of that white space.
+      DETAILS_LINE_BREAK = /\s*[\n#{UNICODE_LINE_BREAKS}]\s*/
 
       def thread_name
         format("%.30s", one_line(log.thread_name))

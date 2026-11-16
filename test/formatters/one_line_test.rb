@@ -197,7 +197,11 @@ module SemanticLogger
 
         # Editors, browsers, and some log viewers start a new line at these too.
         describe "Unicode line breaks" do
-          {"next line" => "\u0085", "line separator" => " ", "paragraph separator" => " "}.each do |name, char|
+          {
+            "next line"           => "\u0085",
+            "line separator"      => "\u2028",
+            "paragraph separator" => "\u2029"
+          }.each do |name, char|
             it "strips the #{name} from every text field" do
               text            = "Café#{char}forged"
               log.message     = text
@@ -228,7 +232,7 @@ module SemanticLogger
 
           it "strips them from text in another encoding, next to ASCII text" do
             log.message = "Hello\nWorld"
-            log.name    = "Gr üße".encode(Encoding::UTF_16LE)
+            log.name    = "Gr\u2028üße".encode(Encoding::UTF_16LE)
 
             assert_includes formatter.call(log, nil), "] Grüße -- HelloWorld"
           end
@@ -236,7 +240,7 @@ module SemanticLogger
           it "joins the lines of exception details that one of them separates with a space" do
             detailed = Class.new(StandardError) do
               def detailed_message(highlight: false, **)
-                "#{super}\n  first line   second line\u0085third line"
+                "#{super}\n  first line\u2028  second line\u0085third line"
               end
             end
             log.exception = detailed.new("Order rejected")
