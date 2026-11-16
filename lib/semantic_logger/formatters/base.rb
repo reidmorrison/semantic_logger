@@ -5,9 +5,10 @@ module SemanticLogger
       attr_accessor :log, :logger, :log_host, :log_application, :log_environment, :precision,
                     :escape_control_chars, :log_exception_details
 
-      # Printable escapes for the most common control characters. Any other
+      # Printable escapes for the most common control characters. Any other ASCII
       # control character is escaped to its hexadecimal `\xHH` form by
-      # #escape_control_characters.
+      # #escape_control_characters, and a Unicode one (see UNICODE_CONTROL_CHARS)
+      # to its `\uXXXX` form.
       CONTROL_CHAR_ESCAPES = Utils.make_shareable(
         {
           "\n" => "\\n",

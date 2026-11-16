@@ -8,8 +8,9 @@ module SemanticLogger
     #   returns, and the Unicode next line (U+0085), line separator (U+2028), and paragraph
     #   separator (U+2029), at which editors, browsers, and some log viewers also start a new line.
     #   With `escape_control_chars: true` they are escaped instead, the Unicode ones in the
-    #   `\uXXXX` form, and so are the other ASCII control characters, as the other text
-    #   formatters escape them.
+    #   `\uXXXX` form, and so are the other control characters, as the other text formatters
+    #   escape them: the ASCII ones, and the Unicode ones that control how text is shown, such as
+    #   the bidirectional controls (see Base::UNICODE_CONTROL_CHARS).
     # * Exceptions only include the class and message, the stack trace is not shown.
     # * Exception details, when enabled, are joined onto the same line.
     class OneLine < Default
@@ -100,6 +101,8 @@ module SemanticLogger
       # from it, or joining it with UTF-8 text, would raise and lose the entry.
       def one_line(value)
         text = Utils.encode_utf8_string(escape_control_characters(value.to_s))
+        # #escape_control_characters has already escaped every line break.
+        return text if escape_control_chars
         # Most text is ASCII, and deleting two characters is quicker than deleting five.
         return text.delete("\r\n") if text.ascii_only?
 

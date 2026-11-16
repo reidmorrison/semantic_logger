@@ -328,9 +328,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   line and paragraph separators (U+2028, U+2029), at which editors, browsers, and some log viewers
   start a new line, and the bidirectional controls (U+202A to U+202E, U+2066 to U+2069), such as the
   right-to-left override, which can make logged text, such as a forged `user=admin`, read in another
-  order than it was written. It escaped only the ASCII control characters, except in `:one_line`,
-  which already escaped the next line and the two separators. Text that is all ASCII is checked as
-  quickly as before.
+  order than it was written. It escaped only the ASCII control characters. The `:syslog` formatter,
+  and the syslog appender's own formatter, escape by default, so their output changes too. Text that
+  is all ASCII is checked as quickly as before. See
+  [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53).
 
 ## [5.2.0] 2026-10-30
 

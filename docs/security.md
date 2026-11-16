@@ -28,6 +28,10 @@ characters in that data can be abused:
   record into two at a collector that frames records with a separator.
 * An ANSI escape sequence can spoof or hide terminal output when the log is viewed in
   a terminal.
+* A Unicode line or paragraph separator (U+2028, U+2029) starts a new line in editors,
+  browsers, and some log viewers, and a bidirectional control, such as the right-to-left
+  override (U+202E), can make a forged entry, such as `user=admin`, read in another order
+  than it was written.
 
 The structured formatters, such as `:json`, are **not** affected, because JSON encoding
 always escapes control characters. They are the recommended choice when forwarding logs
@@ -37,7 +41,7 @@ By design the human readable text formatters (`:default` and `:color`) preserve
 newlines and ANSI color codes, since multi-line and colorized output is useful when
 reading logs locally. When the text output may contain untrusted data, enable the
 `escape_control_chars` option to replace control characters with a printable, escaped
-form (for example a newline becomes `\n`):
+form (for example a newline becomes `\n`, and the right-to-left override `\u202e`):
 
 ~~~ruby
 SemanticLogger.add_appender(file_name: "production.log", formatter: {default: {escape_control_chars: true}})
