@@ -1,6 +1,8 @@
 module SemanticLogger
   module Formatters
     class Syslog < Default
+      include SyslogHeader
+
       attr_accessor :max_size
       attr_reader :facility, :level_map
 
@@ -173,9 +175,9 @@ module SemanticLogger
       # Create Syslog Packet
       def create_syslog_packet(message)
         packet          = SyslogProtocol::Packet.new
-        packet.hostname = logger.host
+        packet.hostname = syslog_hostname(logger.host)
         packet.facility = @facility_number
-        packet.tag      = logger.application.delete(" ")
+        packet.tag      = syslog_tag(logger.application)
         packet.content  = message
         packet.time     = log.time
         packet.severity = level_map[log.level]

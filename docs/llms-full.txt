@@ -2406,6 +2406,12 @@ The `facility:`, `level_map:`, and `max_size:` options also apply when `formatte
 as in `formatter: {syslog: {facility: ::Syslog::LOG_LOCAL1}}`, take precedence. A formatter passed
 as an instance keeps its own settings.
 
+Over TCP or UDP, each record's header holds the host name and the application name, as its tag. The
+syslog protocol allows only printable ASCII characters other than the space in either, and up to 32
+in the tag, so any other character is left out, and the application name is cut to 32 characters:
+an application named `"Café Orders"` is written as `CafOrders`. A name with no character left is
+written as `localhost` or `SemanticLogger`.
+
 Add a filter to exclude noisy entries such as health checks:
 
 ~~~ruby

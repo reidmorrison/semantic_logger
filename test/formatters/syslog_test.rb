@@ -240,6 +240,43 @@ module SemanticLogger
           end
         end
 
+        # syslog_protocol raises for a host or application name with any character outside
+        # printable ASCII, or an application name over 32 characters.
+        describe "header names" do
+          def packet_for(host:, application:)
+            logger = SemanticLogger::Appender::IO.new(StringIO.new, host: host, application: application)
+            SemanticLogger::Formatters::Syslog.new.call(log, logger)
+          end
+
+          it "leaves out the characters of the host and application names outside printable ASCII" do
+            packet = packet_for(host: "café.example.com", application: "Café Résumé\tApp")
+
+            assert_includes packet, " caf.example.com CafRsumApp: "
+          end
+
+          it "cuts the application name to 32 characters" do
+            packet = packet_for(host: "app1", application: "#{'a' * 40} b")
+
+            assert_includes packet, " app1 #{'a' * 32}: "
+          end
+
+          it "writes localhost and SemanticLogger for names with no character left" do
+            packet = packet_for(host: "サーバー", application: "アプリ")
+
+            assert_includes packet, " localhost SemanticLogger: "
+          end
+
+          it "works the names out again only when they are replaced" do
+            formatter = SemanticLogger::Formatters::Syslog.new
+            logger    = SemanticLogger::Appender::IO.new(StringIO.new, host: "web 1", application: "My App")
+
+            assert_includes formatter.call(log, logger), " web1 MyApp: "
+            logger.application = "Other App"
+
+            assert_includes formatter.call(log, logger), " web1 OtherApp: "
+          end
+        end
+
         describe "max_size" do
           it "defaults to 1024 bytes" do
             assert_equal 1024, SemanticLogger::Formatters::Syslog.new.max_size
