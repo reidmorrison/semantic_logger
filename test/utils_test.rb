@@ -7,10 +7,7 @@ module SemanticLogger
     # A named Struct, so that the placeholder for one nested too deeply names its class.
     DeepNode = Struct.new(:child)
 
-    # An exception whose #message raises, as one that reads a record that is nil can.
-    class BrokenMessageError < StandardError
-      def message = raise(NoMethodError, "undefined method 'id' for nil")
-    end
+    include ExceptionFixtures
 
     describe Utils do
       describe ".constantize_symbol" do
@@ -166,6 +163,17 @@ module SemanticLogger
           assert_equal "Order 7", SemanticLogger::Utils.exception_message(BrokenMessageError.new("Order 7"))
         end
 
+        it "returns the message the exception was raised with when its #message raises NotImplementedError" do
+          assert_equal "Order 7", SemanticLogger::Utils.exception_message(AbstractMessageError.new("Order 7"))
+        end
+
+        it "raises an error from #message that is neither a StandardError nor a ScriptError" do
+          exception = RuntimeError.new("disk full")
+          exception.define_singleton_method(:message) { raise Interrupt }
+
+          assert_raises(Interrupt) { SemanticLogger::Utils.exception_message(exception) }
+        end
+
         it "returns the class name when #message raises and the exception was raised without a message" do
           assert_equal BrokenMessageError.name, SemanticLogger::Utils.exception_message(BrokenMessageError.new)
         end
@@ -202,6 +210,13 @@ module SemanticLogger
         it "returns the class name when the message it was raised with cannot be converted to a String" do
           message = Object.new
           message.define_singleton_method(:to_s) { raise NoMethodError, "undefined method 'id' for nil" }
+
+          assert_equal "IOError", SemanticLogger::Utils.raised_message(IOError.new(message))
+        end
+
+        it "returns the class name when converting the message it was raised with raises NotImplementedError" do
+          message = Object.new
+          message.define_singleton_method(:to_s) { raise NotImplementedError }
 
           assert_equal "IOError", SemanticLogger::Utils.raised_message(IOError.new(message))
         end

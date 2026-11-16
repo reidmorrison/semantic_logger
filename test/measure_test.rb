@@ -1,10 +1,7 @@
 require_relative "test_helper"
 
 class MeasureTest < Minitest::Test
-  # An exception whose #message raises, as one that reads a record that is nil can.
-  class BrokenMessageError < StandardError
-    def message = raise(NoMethodError, "undefined method 'id' for nil")
-  end
+  include ExceptionFixtures
 
   describe "Measure" do
     let(:appender) { SemanticLogger::Test::CaptureLogEvents.new }
@@ -128,7 +125,7 @@ class MeasureTest < Minitest::Test
             end
 
             assert log = appender.events.first
-            assert_equal "hello world -- Exception: MeasureTest::BrokenMessageError: Order 7", log.message
+            assert_equal "hello world -- Exception: ExceptionFixtures::BrokenMessageError: Order 7", log.message
           end
 
           it ":partial re-raises the exception when the #message of its cause raises" do
@@ -142,7 +139,7 @@ class MeasureTest < Minitest::Test
 
             assert log = appender.events.first
             assert_equal "hello world -- Exception: RuntimeError: Test " \
-                         "-- Cause: MeasureTest::BrokenMessageError: Order 7", log.message
+                         "-- Cause: ExceptionFixtures::BrokenMessageError: Order 7", log.message
           end
 
           it ":none" do

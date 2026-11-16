@@ -2,10 +2,7 @@ require_relative "test_helper"
 
 module SemanticLogger
   class LogTest < Minitest::Test
-    # An exception whose #message raises, as one that reads a record that is nil can.
-    class BrokenMessageError < StandardError
-      def message = raise(NoMethodError, "undefined method 'id' for nil")
-    end
+    include ExceptionFixtures
 
     describe SemanticLogger::Log do
       let(:log) do

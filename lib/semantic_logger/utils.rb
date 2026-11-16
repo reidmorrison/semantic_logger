@@ -138,25 +138,27 @@ module SemanticLogger
       strip_paths.any? { |exclude| path.start_with?(exclude) }
     end
 
-    # Returns [String] the exception's message, without raising.
+    # Returns [String] the exception's message, without raising the error that its #message raises.
     #
     # An exception class can override #message or #to_s with code that raises, such as code that
-    # reads a record that is nil. Logging the exception must not replace it with that error, such as
-    # the one that a measure_* block re-raises. When #message raises, or does not return a String or
-    # an object that converts to one, the message the exception was raised with is returned instead
-    # (see .raised_message).
+    # reads a record that is nil, or an abstract #message that raises NotImplementedError. Logging the
+    # exception must not replace it with that error, such as the one that a measure_* block re-raises.
+    # When #message raises a StandardError or a ScriptError, or does not return a String or an object
+    # that converts to one, the message the exception was raised with is returned instead (see
+    # .raised_message). Other errors, such as Interrupt, still propagate.
     def self.exception_message(exception)
       String(exception.message)
-    rescue StandardError
+    rescue StandardError, ScriptError
       raised_message(exception)
     end
 
     # Returns [String] the message the exception was raised with, without what its class's own
-    # #message or #to_s adds: its class name when it was raised without one. Without raising, so the
-    # class name when that message cannot be converted to a String either.
+    # #message or #to_s adds: its class name when it was raised without one. Its class name too when
+    # that message cannot be converted to a String, since converting it raised a StandardError or a
+    # ScriptError (see .exception_message).
     def self.raised_message(exception)
       Exception.instance_method(:to_s).bind_call(exception)
-    rescue StandardError
+    rescue StandardError, ScriptError
       exception.class.to_s
     end
 
