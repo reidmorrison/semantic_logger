@@ -300,6 +300,14 @@ agent.
   the bidirectional controls (U+202A to U+202E, U+2066 to U+2069). Searches or parsers that match
   logged text holding them, such as localized text wrapped in bidirectional isolates, need to match
   the escaped form instead.
+* The `:new_relic` metric subscriber now adds `Custom/` to a metric name that starts with `Custom`
+  but not with `Custom/`, recording `Customers/signup` as `Custom/Customers/signup`, and
+  `CustomerSignup` as `Custom/CustomerSignup`. Before, it recorded such a name as it was, which New
+  Relic does not chart as a custom metric. With another `prefix:`, the same applies to a name that
+  starts with that prefix but not with it and a `/`. A prefix given with a trailing `/` no longer
+  doubles it: with `prefix: "Custom/"`, `Orders/placed` is recorded as `Custom/Orders/placed`, not
+  `Custom//Orders/placed`. Dashboards, alerts, and NRQL queries on an old name stop receiving data,
+  so update them to the new one.
 
 ### Upgrading to Semantic Logger v5.2
 

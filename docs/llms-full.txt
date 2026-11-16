@@ -3402,8 +3402,9 @@ SemanticLogger.add_appender(metric: :new_relic)
 
 New Relic charts custom metrics only under `Custom/`, so the subscriber records
 `metric: "Orders/placed"` as `Custom/Orders/placed`, and a name that already starts with `Custom/`
-as it is. Pass `prefix:` to use another prefix. A metric is sent under its name alone, leaving out
-its dimensions, since the agent's metric API takes none.
+as it is. To group an application's metrics, pass a `prefix:` that also starts with `Custom/`:
+`prefix: "Custom/MyApp"` records `Orders/placed` as `Custom/MyApp/Orders/placed`. A metric is sent
+under its name alone, leaving out its dimensions, since the agent's metric API takes none.
 
 ### SignalFx
 
@@ -6003,6 +6004,14 @@ agent.
   the bidirectional controls (U+202A to U+202E, U+2066 to U+2069). Searches or parsers that match
   logged text holding them, such as localized text wrapped in bidirectional isolates, need to match
   the escaped form instead.
+* The `:new_relic` metric subscriber now adds `Custom/` to a metric name that starts with `Custom`
+  but not with `Custom/`, recording `Customers/signup` as `Custom/Customers/signup`, and
+  `CustomerSignup` as `Custom/CustomerSignup`. Before, it recorded such a name as it was, which New
+  Relic does not chart as a custom metric. With another `prefix:`, the same applies to a name that
+  starts with that prefix but not with it and a `/`. A prefix given with a trailing `/` no longer
+  doubles it: with `prefix: "Custom/"`, `Orders/placed` is recorded as `Custom/Orders/placed`, not
+  `Custom//Orders/placed`. Dashboards, alerts, and NRQL queries on an old name stop receiving data,
+  so update them to the new one.
 
 ### Upgrading to Semantic Logger v5.2
 

@@ -17,7 +17,7 @@ end
 module SemanticLogger
   module Metric
     class NewRelic < SemanticLogger::Subscriber
-      attr_accessor :prefix
+      attr_reader :prefix
 
       # Create the New Relic metrics subscriber
       #
@@ -26,7 +26,9 @@ module SemanticLogger
       #     Prefix to add, with a `/`, to every metric name that does not already start with it and
       #     a `/`, before forwarding to NewRelic, which charts custom metrics only under `Custom/`.
       #     So 'Customers/signup' is recorded as 'Custom/Customers/signup', and 'Custom/Orders/placed'
-      #     as it is. An empty prefix adds nothing. Only the default formatter, #call, adds it.
+      #     as it is. Another prefix should start with `Custom/` too, such as 'Custom/MyApp'. A
+      #     trailing `/` is left out, and an empty prefix adds nothing. Only the default formatter,
+      #     #call, adds it.
       #     Default: 'Custom'
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
@@ -45,16 +47,23 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(prefix: "Custom", **args, &)
-        @prefix = prefix
+        self.prefix = prefix
         super(**args, &)
+      end
+
+      # Sets the prefix that #call adds, without a trailing `/`, since #call adds one. An empty
+      # prefix is added as an empty String, which every name already starts with.
+      def prefix=(prefix)
+        @prefix            = prefix.to_s.delete_suffix("/")
+        @prefix_with_slash = @prefix.empty? ? "" : "#{@prefix}/"
       end
 
       # Returns metric name to use.
       def call(log, _logger)
         metric = log.metric
-        return metric if prefix.empty? || metric.start_with?("#{prefix}/")
+        return metric if metric.start_with?(@prefix_with_slash)
 
-        "#{prefix}/#{metric}"
+        "#{@prefix_with_slash}#{metric}"
       end
 
       def log(log)

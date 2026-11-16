@@ -76,6 +76,22 @@ module Metric
           assert_equal "App/User/authenticated", counted_name(appender, "App/User/authenticated")
         end
 
+        it "adds a prefix given with a trailing slash once" do
+          appender = SemanticLogger::Metric::NewRelic.new(prefix: "Custom/")
+
+          assert_equal "Custom", appender.prefix
+          assert_equal "Custom/Orders/placed", counted_name(appender, "Orders/placed")
+          assert_equal "Custom/Orders/placed", counted_name(appender, "Custom/Orders/placed")
+        end
+
+        it "uses a prefix set after the subscriber was added" do
+          appender.prefix = "Custom/MyApp/"
+
+          assert_equal "Custom/MyApp", appender.prefix
+          assert_equal "Custom/MyApp/Orders/placed", counted_name(appender, "Orders/placed")
+          assert_equal "Custom/MyApp/Orders/placed", counted_name(appender, "Custom/MyApp/Orders/placed")
+        end
+
         it "adds nothing with an empty prefix" do
           appender = SemanticLogger::Metric::NewRelic.new(prefix: "")
 

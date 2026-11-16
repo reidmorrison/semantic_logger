@@ -515,7 +515,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   that starts with the prefix but not with the prefix and a `/`, such as `Customers/signup` or
   `CustomerSignup`. Before, it recorded such a name as it was, since it only checked that the name
   started with `Custom`, and New Relic charts custom metrics only under `Custom/`. A name that starts
-  with `Custom/` is still recorded as it is, and an empty prefix still adds nothing.
+  with `Custom/` is still recorded as it is, and an empty prefix still adds nothing. A prefix given
+  with a trailing `/`, such as `Custom/`, is added with one `/`. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ## [5.2.0] 2026-10-30
 

@@ -143,8 +143,9 @@ SemanticLogger.add_appender(metric: :new_relic)
 
 New Relic charts custom metrics only under `Custom/`, so the subscriber records
 `metric: "Orders/placed"` as `Custom/Orders/placed`, and a name that already starts with `Custom/`
-as it is. Pass `prefix:` to use another prefix. A metric is sent under its name alone, leaving out
-its dimensions, since the agent's metric API takes none.
+as it is. To group an application's metrics, pass a `prefix:` that also starts with `Custom/`:
+`prefix: "Custom/MyApp"` records `Orders/placed` as `Custom/MyApp/Orders/placed`. A metric is sent
+under its name alone, leaving out its dimensions, since the agent's metric API takes none.
 
 ### SignalFx
 
