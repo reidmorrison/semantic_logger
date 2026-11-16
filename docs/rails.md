@@ -630,10 +630,10 @@ is logged on one line, after the response's status, as in Rails' own log:
 Rails -- 404 Not Found -- Exception: ActionController::RoutingError: No route matches [GET] "/apple-touch-icon.png"
 ~~~
 
-That entry has the exception's class and message, but not the exception itself
-(`log_exception: :partial`): the `:json` formatter writes them in its `message`, and Semantic
-Logger's own error service appenders, such as `sentry_ruby`, receive a message rather than an
-exception. Error services hooked into Rails still receive the exception. Set `BACKTRACE` to log
+That entry has the exception's class and message, and names the exceptions that caused it, which
+Rails lists as "Caused by", but not the exception itself (`log_exception: :partial`): the `:json`
+formatter writes them in its `message`, and Semantic Logger's own error service appenders, such as
+`sentry_ruby`, receive a message rather than an exception. Error services hooked into Rails still receive the exception. Set `BACKTRACE` to log
 these with their backtrace, or set `config.action_dispatch.log_rescued_responses = false` to leave
 them out of the log.
 
