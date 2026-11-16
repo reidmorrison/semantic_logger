@@ -79,7 +79,7 @@ module SemanticLogger
 
     def self.plain_exception(exception, depth)
       copy = exception.class.allocate
-      Exception.instance_method(:initialize).bind_call(copy, raw_message(exception))
+      Exception.instance_method(:initialize).bind_call(copy, Utils.raised_message(exception))
       exception.instance_variables.each do |name|
         copy.instance_variable_set(name, copyable_variable(exception.instance_variable_get(name), depth))
       end
@@ -89,7 +89,7 @@ module SemanticLogger
       copy.message
       copy
     rescue StandardError
-      plain = RuntimeError.new("#{exception.class.name}: #{message(exception)}")
+      plain = RuntimeError.new("#{exception.class.name}: #{Utils.exception_message(exception)}")
       plain.set_backtrace(exception.backtrace || [])
       with_cause(plain, exception.cause, depth)
     end
@@ -114,20 +114,5 @@ module SemanticLogger
       end
     end
     private_class_method :with_cause
-
-    # Returns [String] the message the exception was raised with, without what the class's own
-    # #message or #to_s adds.
-    def self.raw_message(exception)
-      Exception.instance_method(:to_s).bind_call(exception)
-    end
-    private_class_method :raw_message
-
-    # Returns [String] the exception's message, or the message it was raised with when #message raises.
-    def self.message(exception)
-      exception.message
-    rescue StandardError
-      raw_message(exception)
-    end
-    private_class_method :message
   end
 end

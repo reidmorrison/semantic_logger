@@ -121,6 +121,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   its message would raise, or would make an ASCII message binary, they are converted to valid UTF-8
   first: binary text is read as the UTF-8 it usually holds, and invalid bytes are dropped. Text in
   another encoding, such as ISO-8859-1, otherwise stays in it.
+- A `measure_*` block that raises an exception whose `#message` raises, such as one that reads a
+  record that is nil, now re-raises its own exception. Before, with `log_exception: :partial` (the
+  default), the error that `#message` raised replaced it, without it as the cause, and nothing was
+  logged; a log call with `log_exception: :partial` raised that error too. Now `:partial` writes the
+  message the exception was raised with instead, or its class name when it was raised without one,
+  as in `Saving -- Exception: OrderError: OrderError`, and does the same for each exception that
+  caused it.
 - The JSON based formatters (`:json`, `:raw`, `:fluentd`, `:ecs`, `:loki`, ...), `:logfmt`,
   `:one_line`, `:open_telemetry`, `:syslog`, the other text formatters with
   `escape_control_chars: true`, and `:cloudwatch_logs` no longer drop the characters of a binary

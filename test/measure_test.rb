@@ -1,6 +1,8 @@
 require_relative "test_helper"
 
 class MeasureTest < Minitest::Test
+  include ExceptionFixtures
+
   describe "Measure" do
     let(:appender) { SemanticLogger::Test::CaptureLogEvents.new }
     let(:payload) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345, message: "Message from payload"} }
@@ -113,6 +115,31 @@ class MeasureTest < Minitest::Test
             assert_equal "Datei \xFC kaputt".b, error.message
             assert log = appender.events.first
             assert_equal "Grüße -- Exception: RuntimeError: Datei  kaputt", log.message
+          end
+
+          it ":partial re-raises an exception whose #message raises" do
+            assert_raises BrokenMessageError do
+              appender.send(measure_level, "hello world", log_exception: :partial) do
+                raise BrokenMessageError, "Order 7"
+              end
+            end
+
+            assert log = appender.events.first
+            assert_equal "hello world -- Exception: ExceptionFixtures::BrokenMessageError: Order 7", log.message
+          end
+
+          it ":partial re-raises the exception when the #message of its cause raises" do
+            assert_raises RuntimeError do
+              appender.send(measure_level, "hello world", log_exception: :partial) do
+                raise BrokenMessageError, "Order 7"
+              rescue BrokenMessageError
+                raise "Test"
+              end
+            end
+
+            assert log = appender.events.first
+            assert_equal "hello world -- Exception: RuntimeError: Test " \
+                         "-- Cause: ExceptionFixtures::BrokenMessageError: Order 7", log.message
           end
 
           it ":none" do

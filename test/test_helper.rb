@@ -34,6 +34,7 @@ require_relative "in_memory_batch_appender"
 require_relative "in_memory_metrics_appender"
 require_relative "in_memory_appender_helper"
 require_relative "backtrace_cleaner_fixtures"
+require_relative "exception_fixtures"
 require "amazing_print"
 
 # Add Semantic Logger helpers for Minitest

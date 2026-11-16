@@ -7,6 +7,8 @@ module SemanticLogger
     # A named Struct, so that the placeholder for one nested too deeply names its class.
     DeepNode = Struct.new(:child)
 
+    include ExceptionFixtures
+
     describe Utils do
       describe ".constantize_symbol" do
         it "resolves a built-in appender symbol" do
@@ -149,6 +151,74 @@ module SemanticLogger
 
         it "is false for application paths" do
           refute SemanticLogger::Utils.strip_path?("/app/models/user.rb:10")
+        end
+      end
+
+      describe ".exception_message" do
+        it "returns the exception's message" do
+          assert_equal "disk full", SemanticLogger::Utils.exception_message(IOError.new("disk full"))
+        end
+
+        it "returns the message the exception was raised with when its #message raises" do
+          assert_equal "Order 7", SemanticLogger::Utils.exception_message(BrokenMessageError.new("Order 7"))
+        end
+
+        it "returns the message the exception was raised with when its #message raises NotImplementedError" do
+          assert_equal "Order 7", SemanticLogger::Utils.exception_message(AbstractMessageError.new("Order 7"))
+        end
+
+        it "raises an error from #message that is neither a StandardError nor a ScriptError" do
+          exception = RuntimeError.new("disk full")
+          exception.define_singleton_method(:message) { raise Interrupt }
+
+          assert_raises(Interrupt) { SemanticLogger::Utils.exception_message(exception) }
+        end
+
+        it "returns the class name when #message raises and the exception was raised without a message" do
+          assert_equal BrokenMessageError.name, SemanticLogger::Utils.exception_message(BrokenMessageError.new)
+        end
+
+        it "converts a message that is not a String" do
+          exception = RuntimeError.new
+          exception.define_singleton_method(:message) { :disk_full }
+
+          assert_equal "disk_full", SemanticLogger::Utils.exception_message(exception)
+        end
+
+        it "returns the message the exception was raised with when its #message cannot be converted to a String" do
+          text = Object.new
+          text.define_singleton_method(:to_s) { nil }
+          exception = RuntimeError.new("disk full")
+          exception.define_singleton_method(:message) { text }
+
+          assert_equal "disk full", SemanticLogger::Utils.exception_message(exception)
+        end
+      end
+
+      describe ".raised_message" do
+        it "returns the message the exception was raised with, without what its class's #message adds" do
+          exception = RuntimeError.new("disk full")
+          exception.define_singleton_method(:message) { "#{super()} on /var" }
+
+          assert_equal "disk full", SemanticLogger::Utils.raised_message(exception)
+        end
+
+        it "returns the class name when the exception was raised without a message" do
+          assert_equal "IOError", SemanticLogger::Utils.raised_message(IOError.new)
+        end
+
+        it "returns the class name when the message it was raised with cannot be converted to a String" do
+          message = Object.new
+          message.define_singleton_method(:to_s) { raise NoMethodError, "undefined method 'id' for nil" }
+
+          assert_equal "IOError", SemanticLogger::Utils.raised_message(IOError.new(message))
+        end
+
+        it "returns the class name when converting the message it was raised with raises NotImplementedError" do
+          message = Object.new
+          message.define_singleton_method(:to_s) { raise NotImplementedError }
+
+          assert_equal "IOError", SemanticLogger::Utils.raised_message(IOError.new(message))
         end
       end
 
