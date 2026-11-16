@@ -61,6 +61,16 @@ the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `times
 `attributes:`), as `SemanticLogger::Formatters::OpenTelemetry` does, instead of a Hash shaped like the
 `:raw` formatter's.
 
+The appender no longer sends metric-only entries, such as `logger.info(metric: "users/signup")`,
+which have a metric but no message and no exception. It sent each one as a log record with no body,
+its metric in the attributes, never as an OpenTelemetry metric. Metric-only entries are meant for the
+[metric subscribers](metrics.html#send-metrics-to-a-backend), as for the other log appenders. To keep
+sending them as log records, add the appender with `metrics: true`:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :open_telemetry, metrics: true)
+~~~
+
 #### Loki stack traces
 
 The `:loki` formatter now writes the `stack_trace` of a logged exception one frame per line, followed

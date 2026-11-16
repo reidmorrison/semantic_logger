@@ -77,6 +77,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- The `:open_telemetry` appender no longer sends metric-only entries, which have a metric but no
+  message and no exception, by default. It sent each one as a log record with no body, never as an
+  OpenTelemetry metric; they are meant for the metric subscribers. Add the appender with
+  `metrics: true` to keep sending them. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - The `:statsd` and `:new_relic` metric subscribers record a metric that has `dimensions` under its
   name alone, leaving out the dimensions, which neither the `statsd-ruby` client nor the New Relic
   agent's metric API accepts. Before, they left such a metric out altogether. The `:statsd`
