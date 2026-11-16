@@ -351,6 +351,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   characters are left out of the header, as spaces always were from the application name, the
   application name is cut to 32 characters, and a name with no character left is written as
   `localhost` or `SemanticLogger`. Each name is worked out once, and again only when it changes.
+- The `:new_relic_logs` formatter, and so the `:new_relic_logs` appender, no longer loses an entry
+  whose exception has no backtrace, such as `logger.error("Failed", RuntimeError.new("never raised"))`.
+  Formatting raised `NoMethodError`, and the appender reported the error instead of sending the
+  entry. Its `error.stack` is now empty.
 
 ## [5.2.0] 2026-10-30
 

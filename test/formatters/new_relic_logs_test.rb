@@ -169,6 +169,14 @@ module SemanticLogger
             assert_equal "app/café.rb:1:in 'm'\nlib/x.rb:2\nbin.rb:3", formatted_log.dig(:error, :stack)
           end
 
+          it "logs an exception that was never raised, which has no backtrace" do
+            log.exception = RuntimeError.new("Never raised")
+            result        = formatted_log
+
+            assert_equal "Never raised", result.dig(:error, :message)
+            assert_equal "", result.dig(:error, :stack)
+          end
+
           it "omits exception if not set" do
             result = formatted_log
 

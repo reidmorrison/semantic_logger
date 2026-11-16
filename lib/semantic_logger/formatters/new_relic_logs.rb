@@ -75,7 +75,8 @@ module SemanticLogger
           result[:error] = {
             message: hash[:exception][:message],
             class:   hash[:exception][:name],
-            stack:   stack_trace(hash[:exception][:stack_trace])
+            # An exception that was never raised, such as one built to be logged, has no backtrace.
+            stack:   stack_trace(Array(hash[:exception][:stack_trace]))
           }
         end
 
