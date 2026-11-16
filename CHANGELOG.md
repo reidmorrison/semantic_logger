@@ -252,6 +252,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `SemanticLogger.flush`. Before, a flush replaced the appender's producer with one built without
   it, so ruby-kafka's default of `:all`, which waits for every in-sync replica to acknowledge each
   delivery, replaced the appender's default of `1`, or the value given.
+- The `LoadError` raised when the `:kafka` appender is added without the `ruby-kafka` gem names
+  Kafka. It said that the gem is required for logging to Elasticsearch.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require "open3"
 
 module Appender
   class KafkaTest < Minitest::Test
@@ -39,15 +40,18 @@ module Appender
         end
       end
 
+      # Loads the appender in another Ruby, without RubyGems or the bundle, so that the gem cannot be found, rather than
+      # loading it a second time here, which would replace its line coverage.
       it "names Kafka in its error when the ruby-kafka gem is missing" do
-        path    = File.expand_path("../../lib/semantic_logger/appender/kafka.rb", __dir__)
-        missing = ->(_name) { raise LoadError, "cannot load such file -- kafka" }
-        error   = TOPLEVEL_BINDING.receiver.stub(:require, missing) do
-          assert_raises(LoadError) { load(path) }
-        end
+        path            = File.expand_path("../../lib/semantic_logger/appender/kafka.rb", __dir__)
+        script          = "begin; load(ARGV.fetch(0)); rescue LoadError => e; print(e.message); end"
+        message, status = Open3.capture2e(
+          {"RUBYOPT" => nil, "RUBYLIB" => nil}, RbConfig.ruby, "--disable-gems", "-e", script, path
+        )
 
-        assert_includes error.message, "ruby-kafka is required for logging to Kafka."
-        assert_includes error.message, 'gem "ruby-kafka"'
+        assert_predicate status, :success?, message
+        assert_includes message, "ruby-kafka is required for logging to Kafka."
+        assert_includes message, 'gem "ruby-kafka"'
       end
 
       describe "#flush" do
