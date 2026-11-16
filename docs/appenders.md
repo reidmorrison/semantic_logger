@@ -52,7 +52,7 @@ destination can keep a different subset of the logs in a different format:
 | Option | Description |
 |--------|-------------|
 | `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level`. |
-| `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Custom formatters](config.html#custom-formatters). |
+| `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. A [block given to `add_appender`](config.html#formatter-as-a-block-or-proc) takes its place. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
 | `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`, which default to `true` until v6, and warn when it is not supplied. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |

@@ -365,7 +365,7 @@ settings, almost every appender accepts these common options:
 | Option | Description |
 |--------|-------------|
 | `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level`. |
-| `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Custom formatters](#custom-formatters). |
+| `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. A [block given to `add_appender`](#formatter-as-a-block-or-proc) takes its place. See [Custom formatters](#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
 
@@ -524,7 +524,7 @@ The formatter turns each log event into the text or JSON that an appender writes
 `formatter:` when adding an appender. The simplest options are the built-in formatters selected by
 name (`:default`, `:color`, `:json`, `:logfmt`, and others; see [Appenders](appenders.html)). For
 anything beyond those, you have three choices, in increasing order of effort: a pattern string, a
-Proc, or a formatter class.
+block or Proc, or a formatter class.
 
 ### Pattern formatter
 
@@ -605,11 +605,47 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-### Formatter as a Proc
+### Formatter as a block or Proc
 
-For full control with minimal ceremony, supply a block. It is called with two arguments, the log
-event and the appender; a block may accept just the log event and ignore the appender. For the
-structure of the log event, see [Log Event](log.html).
+For full control with minimal ceremony, give `add_appender` a block. It formats every entry written
+to that appender. It is called with two arguments, the log event and the appender; a block may
+accept just the log event and ignore the appender. For the structure of the log event, see
+[Log Event](log.html). The appender holds the `host`, `application`, and `environment` to write
+with the entry.
+
+~~~ruby
+SemanticLogger.add_appender(io: $stdout) do |log, appender|
+  "#{log.level.upcase} #{appender.application} #{log.name} -- #{log.message}"
+end
+# => INFO MyApp Order -- Order submitted
+~~~
+
+The block returns what the appender writes. For `io:`, `file_name:`, and `logger:`, return the entry
+as a String: `io:` and `file_name:` write it followed by a newline, and `logger:` passes it to the
+wrapped logger.
+
+A block works the same way for an appender or metric subscriber named by a Symbol. It takes the
+place of the formatter the appender uses by default, so it returns what that formatter returns: a
+String for the text and JSON destinations, such as `:tcp`, `:udp`, `:http`, and `:syslog`, and a
+Hash for those that store a document, such as `:elasticsearch` and `:mongodb`. A metric subscriber
+formats a metric: `metric: :new_relic` expects the metric name, `metric: :signalfx` the JSON body it
+posts, and `metric: :statsd` has no formatter, so it never calls the block.
+
+~~~ruby
+SemanticLogger.add_appender(file_name: "development.log") { |log| "#{log.name} -- #{log.message}" }
+SemanticLogger.add_appender(appender: :tcp, server: "localhost:514") { |log| "#{log.level} #{log.message}" }
+~~~
+
+A block formats one entry at a time, so it cannot format the single request that `:http`, `:loki`,
+and `metric: :signalfx` send for a whole batch when added with `batch: true`: those need a formatter
+that implements `#batch(logs, logger)`.
+
+When both a block and `formatter:` are given, the block takes precedence, and `formatter:` is
+ignored.
+
+The same formatter can be given to `formatter:` as a Proc, for example to share it between
+appenders. A Proc made with `proc` may also take just the log event, but a lambda must accept both
+arguments:
 
 ~~~ruby
 formatter = proc do |log|
@@ -617,6 +653,17 @@ formatter = proc do |log|
   log.inspect
 end
 SemanticLogger.add_appender(io: $stdout, formatter: formatter)
+SemanticLogger.add_appender(file_name: "development.log", formatter: formatter)
+~~~
+
+An appender created with `new` and added as `appender:` or `metric:` already has its formatter, so
+`add_appender` ignores a block given with it, as it does `formatter:`, and reports a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings); v6 raises an `ArgumentError`.
+Give the block, or `formatter:`, to `new` instead:
+
+~~~ruby
+appender = SemanticLogger::Appender::Tcp.new(server: "localhost:514") { |log| "#{log.level} #{log.message}" }
+SemanticLogger.add_appender(appender: appender)
 ~~~
 
 ### Formatter as a class
