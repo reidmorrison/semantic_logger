@@ -468,8 +468,8 @@ module SemanticLogger
     # do not say which characters those bytes are. They are read as the UTF-8 they usually hold,
     # keeping its characters, as the json gem did before 3.1. Converting them would drop every byte
     # outside ASCII, valid UTF-8 or not, since neither encoding defines one. Text in any other
-    # encoding, such as ISO-8859-1, is converted, and UTF-16 or UTF-32 text without a byte order mark
-    # is read as big-endian (see .encode_byte_ordered).
+    # encoding, such as ISO-8859-1, is converted, and text tagged UTF-16 or UTF-32 (not UTF-16LE
+    # and the like) without a byte order mark is read as big-endian (see .encode_byte_ordered).
     def self.encode_utf8_string(string)
       case string.encoding
       when Encoding::UTF_8
