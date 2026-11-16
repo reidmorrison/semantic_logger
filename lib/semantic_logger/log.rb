@@ -155,7 +155,7 @@ module SemanticLogger
         when :full
           self.exception = exception
         when :partial
-          self.message = "#{message} -- Exception: #{exception.class}: #{exception.message}"
+          self.message = Utils.join_texts(message, " -- Exception: ", exception.class, ": ", exception.message)
         when nil, :none
           # Log the message without the exception that was raised
           nil
