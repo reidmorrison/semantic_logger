@@ -315,6 +315,13 @@ module SemanticLogger
             assert_equal "Café -- Grüße", last_log.message
           end
 
+          it "reads a binary result added to an ASCII message as UTF-8, dropping its invalid bytes" do
+            logger.info("Response") { "ab\xFFcd ☕".b }
+
+            assert_equal "Response -- abcd ☕", last_log.message
+            assert_equal Encoding::UTF_8, last_log.message.encoding
+          end
+
           it "leaves a result in the message's own encoding in that encoding" do
             latin1 = "Grüße".encode(Encoding::ISO_8859_1)
             logger.info(latin1) { latin1 }

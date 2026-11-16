@@ -126,7 +126,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   with a binary body that holds bytes outside ASCII, or when the second argument is such a String,
   as in `logger.info("Café", response.body)`. Before, the error was raised into the application.
   Now they are joined the way `log_exception: :partial` joins the message and the exception's
-  message.
+  message. So a binary String added to an ASCII message is now read as UTF-8 too, and the message
+  stays UTF-8, without the String's bytes that are not valid UTF-8, rather than becoming binary.
 - A `measure_*` block that raises an exception whose `#message` raises, such as one that reads a
   record that is nil, now re-raises its own exception. Before, with `log_exception: :partial` (the
   default), the error that `#message` raised replaced it, without it as the cause, and nothing was

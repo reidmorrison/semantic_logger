@@ -470,7 +470,15 @@ module SemanticLogger
     # that a String subclass whose #+ escapes the text added to it, such as
     # ActiveSupport::SafeBuffer, is joined as plain text, and an object whose #to_s does not return a
     # String is still joined.
+    #
+    # Plain Strings that are all UTF-8, the usual texts, always join as they are, so they are joined
+    # without those checks, which take several times as long. With an explicit separator, so that a
+    # global `$,` set by another library is not added between them.
     def self.join_texts(*texts)
+      if texts.all? { |text| text.instance_of?(String) && text.encoding == Encoding::UTF_8 }
+        return texts.join("") # rubocop:disable Style/RedundantArgument
+      end
+
       texts.map { |text| format("%s", text) }.reduce do |joined, text|
         encoding = Encoding.compatible?(joined, text)
         if encoding && (encoding != Encoding::BINARY || joined.encoding == Encoding::BINARY)
