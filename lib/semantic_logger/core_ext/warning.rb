@@ -13,12 +13,15 @@ module SemanticLogger
     #
     # Finding the binary Strings before serializing would mean walking every log entry, which
     # takes longer than serializing it, and marking each serialization would slow every entry
-    # too. Instead the warning is recognized by where it comes from: a call in Utils, the file
-    # that serializes log data, among the frames that lead to it. Only a warning pays for that.
+    # too. Instead, when the warning is raised, Utils is asked whether it comes from serializing
+    # log data (see Utils.serializing_log_data?). Only a warning pays for that.
     #
-    # Extended into `Warning` when Semantic Logger is loaded on CRuby with json 2.8.0 through
-    # 3.0.x (see NEEDED). Any other warning, and this one from anywhere else, such as the
-    # application's own JSON, is passed on unchanged.
+    # Prepended to `Warning` when Semantic Logger is loaded on CRuby with json 2.8.0 through 3.0.x
+    # (see NEEDED), so that it sees the warning before a `Warning.warn` that the application
+    # defines on `Warning`, extends into it, or prepends to it before loading Semantic Logger. A
+    # module prepended afterwards, such as a test helper that raises on warnings, sees it first.
+    # Any other warning, and this one from anywhere else, such as the application's own JSON, is
+    # passed on unchanged.
     module Warning
       # Part of the warning, which json 2.8.0 through 3.0.x prefix with "JSON.generate: ".
       BINARY_STRING = "UTF-8 string passed as BINARY".freeze
@@ -30,15 +33,8 @@ module SemanticLogger
                  (version <=> [2, 8]) >= 0 && (version <=> [3, 1]).negative?
                end
 
-      # The file that serializes log data. A warning raised under one of its calls is dropped.
-      SERIALIZER = File.expand_path("../utils.rb", __dir__).freeze
-
-      # How many frames above the warning to look through for SERIALIZER. Without ActiveSupport
-      # its call is the first; ActiveSupport's #to_json adds about ten frames of its own.
-      FRAMES = 32
-
-      # Key of the fiber-local state of .unless_binary_string_warned: :warned once it dropped the
-      # warning.
+      # Key of the fiber-local state of .unless_binary_string_warned: :watching while it runs, and
+      # :warned once the warning was dropped meanwhile.
       STATE = :semantic_logger_json_warning
 
       # Returns the block's result, or nil when the json gem warned about a binary String while
@@ -48,26 +44,26 @@ module SemanticLogger
         return yield unless NEEDED
 
         previous = Thread.current[STATE]
-        Thread.current[STATE] = nil
+        Thread.current[STATE] = :watching
         result = yield
         result unless Thread.current[STATE] == :warned
       ensure
         Thread.current[STATE] = previous if NEEDED
       end
 
-      # Whether the warning being raised comes from Semantic Logger serializing log data.
-      def self.serializing_log_data?
-        caller_locations(2, FRAMES).any? { |location| (location.absolute_path || location.path) == SERIALIZER }
-      end
-
       # Called by Ruby for each warning. Drops the json gem's binary String warning when it comes
-      # from Semantic Logger serializing log data (see .serializing_log_data?), and notes that it
-      # did; passes on every other warning.
+      # from Semantic Logger serializing log data, noting it for .unless_binary_string_warned;
+      # passes on every other warning.
+      #
+      # The category is passed on only to a #warn that accepts it, as Ruby itself does, so that a
+      # `Warning.warn(message)` of the application's own keeps working.
       def warn(message, *, **)
-        return super unless message.is_a?(String) && message.include?(BINARY_STRING) && Warning.serializing_log_data?
+        if message.is_a?(String) && message.include?(BINARY_STRING) && Utils.serializing_log_data?
+          Thread.current[STATE] = :warned if Thread.current[STATE]
+          return
+        end
 
-        Thread.current[STATE] = :warned
-        nil
+        Warning.instance_method(:warn).bind(self).super_method.arity == 1 ? super(message) : super
       end
     end
   end

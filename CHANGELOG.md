@@ -153,12 +153,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - With json 2.8.0 through 3.0.x, logging a binary String that holds UTF-8, such as a response body,
   in a payload, tag, named tag, or exception message no longer prints "warning: JSON.generate:
   UTF-8 string passed as BINARY, this will raise an encoding error in json 3.0" to standard error,
-  once for each such String every time a JSON based formatter, `:logfmt`, or an appender that
-  writes JSON writes the entry. The JSON is unchanged: the String is written as UTF-8, as it is
-  with json 3.1. On those json versions Semantic Logger extends Ruby's `Warning` module to drop
-  that one warning when it comes from serializing log data; the application's own JSON still
-  warns. `:graylog` now hands the gelf gem a copy with such Strings converted to UTF-8, since the
-  gem serializes it itself.
+  once for each such String every time a JSON based formatter or `:logfmt` writes the entry,
+  including in the appenders that use them, and `:graylog`. The JSON is unchanged: the String is
+  written as UTF-8, as it is with json 3.1. On those json versions Semantic Logger prepends a
+  module to Ruby's `Warning` that drops that one warning when it comes from serializing log data;
+  the application's own JSON, including an exception's own `#message`, still warns. `:graylog` now
+  hands the gelf gem a copy with such Strings converted to UTF-8, since the gem serializes it
+  itself. An appender that hands the data to another gem that serializes it, such as
+  `:sentry_ruby`, can still print the warning.
 - A `measure_*` block that raises an exception whose `#message` raises, such as one that reads a
   record that is nil, now re-raises its own exception. Before, with `log_exception: :partial` (the
   default), the error that `#message` raised replaced it, without it as the cause, and nothing was

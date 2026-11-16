@@ -58,6 +58,24 @@ did not fork (see [Log rotation](#log-rotation)).
 You might opt out if another library forks in ways you do not want to trigger a reopen, or you need
 to control exactly when the appender thread restarts.
 
+## The json gem's warning about binary text
+
+json 2.8.0 through 3.0.x print this warning each time they serialize a binary String that holds
+UTF-8, such as a response body or Base64-decoded text:
+
+```
+warning: JSON.generate: UTF-8 string passed as BINARY, this will raise an encoding error in json 3.0
+```
+
+Semantic Logger writes such text as UTF-8 with every json version, so with those versions it
+prepends a module to Ruby's `Warning` when it is loaded. The module drops this one warning when it
+comes from Semantic Logger serializing log data. Every other warning is passed on, and so is this
+one from the application's own JSON, including JSON that an exception's `#message` builds. A
+module that the application prepends to `Warning` after loading Semantic Logger, such as a test
+helper that raises on warnings, sees the warning first. The module is not installed with json 3.1
+and later, which raise on such a String instead (Semantic Logger then writes a converted copy),
+or on JRuby.
+
 ## Log rotation
 
 For performance the log file is **not** re-opened on every write, so a log file must be rotated with
