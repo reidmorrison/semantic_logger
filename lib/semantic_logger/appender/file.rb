@@ -210,8 +210,10 @@ module SemanticLogger
         file = time_to_reopen? ? reopen : @file
         return refused unless file
 
-        # Formatted once, outside the retry below: reopening the file cannot fix the content.
-        message = format_log(log) << "\n"
+        # Formatted once, outside the retry below: reopening the file cannot fix the content. A new
+        # String, since the formatter's can be one it does not own, such as a custom formatter's
+        # log.message, the application's own, or frozen.
+        message = "#{format_log(log)}\n"
         count   = 0
         begin
           # The number of bytes written, in the file's `encoding`, as IO#write returns it.

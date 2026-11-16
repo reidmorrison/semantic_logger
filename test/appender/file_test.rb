@@ -102,6 +102,18 @@ module Appender
             assert_equal 0, reopened
           end
 
+          it "leaves a String the formatter does not own unchanged, and writes a frozen one" do
+            appender.instance_variable_set(:@formatter, ->(log, _) { log.message })
+            message = +"Started"
+
+            appender.info(message)
+
+            assert appender.log(log.tap { |entry| entry.message = "Frozen".freeze })
+
+            assert_equal "Started", message
+            assert_equal "Started\nFrozen\n", File.read(file_name)
+          end
+
           it "does not reopen the file for text that the file cannot take" do
             reopened = 0
 

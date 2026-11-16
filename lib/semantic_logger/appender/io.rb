@@ -50,7 +50,9 @@ module SemanticLogger
         # Since only one appender thread will be writing to the file at a time
         # it is not necessary to protect access to the file with a semaphore
         # Allow this logger to filter out log levels lower than it's own
-        TextOutput.write(@io, format_log(log) << "\n")
+        # A new String, since the formatter's can be one it does not own, such as a custom
+        # formatter's log.message, the application's own, or frozen.
+        TextOutput.write(@io, "#{format_log(log)}\n")
         true
       end
 
