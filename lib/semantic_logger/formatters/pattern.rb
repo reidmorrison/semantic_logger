@@ -230,7 +230,7 @@ module SemanticLogger
           if match.start_with?("%%")
             tokens << match[1..].freeze
           else
-            name, arg = match[/\{([^}]+)\}/, 1].split(":", 2)
+            name, arg = match[2..-2].split(":", 2)
             name      = name.strip.to_sym
             raise(ArgumentError, "Invalid pattern directive: %{#{name}}") unless DIRECTIVES.key?(name)
             raise(ArgumentError, "%{#{name}} does not accept an argument") if arg && !DIRECTIVES[name]

@@ -36,7 +36,7 @@ module Appender
       let(:mock_logger) { MockLogger.new }
       let(:appender) { SemanticLogger::Appender::Wrapper.new(logger: mock_logger) }
       let(:ahash) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345} }
-      let(:hash_str) { ahash.inspect.sub("{", '\\{').sub("}", '\\}') }
+      let(:hash_str) { Regexp.escape(ahash.inspect) }
       let(:file_name_reg_exp) { ' wrapper_test.rb:\d+' }
       let(:log) do
         log         = SemanticLogger::Log.new("User", :info)
