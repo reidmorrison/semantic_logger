@@ -91,9 +91,29 @@ class AppenderTest < Minitest::Test
             assert_same formatter, subscriber.formatter
           end
 
-          it "says that v6 raises ArgumentError for the block, and to set it on the instance itself" do
-            assert_deprecated(/#{instance}, and v6 raises ArgumentError for it\. Set it on the instance itself\./) do
+          it "says that v6 raises ArgumentError for the block, to set it on the instance, and what applies to it" do
+            advice = "Set it on the instance itself; only async:, batch:, and the queue options of add_appender " \
+                     "apply to an instance."
+            assert_deprecated(/#{instance}, and v6 raises ArgumentError for it\. #{Regexp.escape(advice)}$/) do
               build(option => subscriber) { |log, _logger| log.message }
+            end
+          end
+
+          it "does not warn for the options that are nil, which set nothing" do
+            result = refute_deprecated { build(option => subscriber, level: nil, formatter: nil, filter: nil) }
+
+            assert_same subscriber, result
+          end
+
+          it "names only the options that are not nil" do
+            assert_deprecated(/#{ignored} formatter: #{instance}, .* for it\. Set it /) do
+              build(option => subscriber, level: nil, formatter: :json)
+            end
+          end
+
+          it "names a misspelled option of add_appender, and the options that apply to an instance" do
+            assert_deprecated(/#{ignored} max_queue: #{instance}, .*; only async:, batch:, and the queue options /) do
+              SemanticLogger::Appender.factory(option => subscriber, max_queue: 5)
             end
           end
 

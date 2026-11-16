@@ -5754,7 +5754,7 @@ SemanticLogger.add_appender(appender: appender)
 ~~~
 
 The options of `add_appender` itself, such as `async:`, `batch:`, and `max_queue_size:`, still apply
-to an instance.
+to an instance. An option given as `nil`, such as `level: nil`, sets nothing, so it is not reported.
 
 #### Loki stack traces
 

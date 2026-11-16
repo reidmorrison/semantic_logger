@@ -113,9 +113,12 @@ module SemanticLogger
     # Returns [Subscriber] the appender or metric subscriber supplied as an instance, with the `option` that named it,
     # `:appender` or `:metric`, as it is, since it was created with its own options. The options and block that .build
     # would hand to an appender that it creates are not used, so reports a deprecation warning that names each one,
-    # since v6 raises ArgumentError for them. Remove in v6, raising ArgumentError in its place.
+    # since v6 raises ArgumentError for them. An option whose value is nil, the default of a Subscriber, sets nothing,
+    # so it is not reported, and v6 must not raise for it either, so that a caller can pass on its optional settings.
+    # Since an option of .factory that is misspelled arrives here too, the warning names the options that do apply to
+    # an instance. Remove in v6, raising ArgumentError in its place.
     def self.subscriber_instance(option, subscriber, **args)
-      ignored = args.keys.map { |key| "#{key}:" }
+      ignored = args.compact.keys.map { |key| "#{key}:" }
       ignored.unshift("the formatter block") if block_given?
       return subscriber if ignored.empty?
 
@@ -123,7 +126,8 @@ module SemanticLogger
       pronoun = ignored.one? ? "it" : "them"
       Deprecation.warn(
         "add_appender ignores #{list} when #{option}: is a Subscriber instance (#{subscriber.class}), " \
-        "and v6 raises ArgumentError for #{pronoun}. Set #{pronoun} on the instance itself."
+        "and v6 raises ArgumentError for #{pronoun}. Set #{pronoun} on the instance itself; " \
+        "only async:, batch:, and the queue options of add_appender apply to an instance."
       )
       subscriber
     end

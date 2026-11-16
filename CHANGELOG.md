@@ -137,8 +137,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `add_appender(appender: my_appender, level: :warn)`. The instance was created with its own options,
   so they were ignored without a word. They still are, but `add_appender` now reports a deprecation
   warning that names them, and v6 raises `ArgumentError` for them. Set them on the instance itself.
-  The options of `add_appender` itself, such as `async:` and `batch:`, still apply to an instance. See
-  the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+  An option given as `nil` sets nothing, and is not reported. The options of `add_appender` itself,
+  such as `async:` and `batch:`, still apply to an instance. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ### Removed
 
