@@ -3097,6 +3097,7 @@ These read-only helpers derive convenient values from the attributes above:
 |Method|Returns|Description|
 |------|-------|-----------|
 |`payload?`|`true`/`false`|Whether the event carries a non-empty payload.|
+|`dimensions?`|`true`/`false`|Whether the event has a metric with dimensions, a `Hash` that is not empty. The formatters write the dimensions only then.|
 |`payload_to_s`|`String` or `nil`|The payload rendered with `inspect`, or `nil` when absent.|
 |`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, `:udp`, and `:open_telemetry`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
 |`duration_to_s`|`String` or `nil`|The duration in milliseconds as a short string, for example `"12ms"`. `nil` when there is no duration.|
@@ -5586,8 +5587,10 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
   backends recognize it, and so do `code.file.path`, `code.line.number`, `thread.name`, and
   `process.pid`. The logger name, tags, duration, and metric are `semantic_logger.name`,
   `semantic_logger.tags`, `semantic_logger.duration_ms`, `semantic_logger.metric`, and
-  `semantic_logger.metric_amount`. A named tag or payload key with one of these names is prefixed with
-  its source, as in `payload.exception.type`.
+  `semantic_logger.metric_amount`, and each of a metric's dimensions is a
+  `semantic_logger.dimensions.<key>` attribute. A named tag or payload key with one of these names, or
+  starting with `semantic_logger.dimensions.`, is prefixed with its source, as in
+  `payload.exception.type`.
 * The host, application, and environment are no longer sent. Set them in the OpenTelemetry resource
   instead, which is sent once per export, with `OTEL_SERVICE_NAME=my_app` and
   `OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,host.name=web-1`.

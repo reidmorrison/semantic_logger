@@ -11,7 +11,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `:json`, `:raw`, `:fluentd`, `:ecs`, `:syslog_cee`, and `:new_relic_logs` as a `dimensions` Hash,
   `:loki` as a `dimensions` value in JSON, and `:open_telemetry` as a
   `semantic_logger.dimensions.<key>` attribute for each one. So do the appenders that use them,
-  such as `:elasticsearch`, `:splunk_http`, and `:mongodb`. See
+  such as `:elasticsearch`, `:splunk_http`, and `:mongodb`. They are written only with a metric, as
+  `Log#dimensions?` tells a custom formatter. See
   [Metrics in log appenders](https://logger.reidmorrison.com/metrics.html#metrics-in-log-appenders).
 - Experimental: on Ruby 4.0 and later, code running in a Ractor other than the main one can log, and
   the main Ractor writes its entries to the appenders. Before, any log call from such a Ractor raised

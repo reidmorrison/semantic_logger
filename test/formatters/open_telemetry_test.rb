@@ -206,6 +206,12 @@ module SemanticLogger
             assert_equal "gold", attributes["semantic_logger.dimensions.plan"]
           end
 
+          it "omits dimensions without a metric" do
+            log.dimensions = {region: "us"}
+
+            refute(attributes.keys.any? { |key| key.start_with?("semantic_logger.dimensions.") })
+          end
+
           it "prefixes a payload key that would forge a dimension" do
             log.metric     = "user/created"
             log.dimensions = {region: "us"}

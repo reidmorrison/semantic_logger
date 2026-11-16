@@ -127,7 +127,7 @@ module SemanticLogger
 
       # Each dimension of a metric is an attribute of its own, so that it can be queried.
       def add_dimensions(attributes)
-        return unless log.dimensions.is_a?(Hash)
+        return unless log.dimensions?
 
         log.dimensions.each_pair do |key, value|
           add(attributes, DIMENSIONS_PREFIX + Utils.encode_utf8_string(key.to_s), value)

@@ -287,6 +287,13 @@ module SemanticLogger
             refute formatter.hash.key?(:dimensions)
           end
 
+          it "omits dimensions without a metric" do
+            log.message    = "Resized"
+            log.dimensions = {width: 10}
+
+            refute formatter.hash.key?(:dimensions)
+          end
+
           it "is omitted without a metric" do
             refute formatter.hash.key?(:metric)
             refute formatter.hash.key?(:metric_amount)

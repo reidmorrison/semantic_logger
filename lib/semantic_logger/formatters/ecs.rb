@@ -35,6 +35,7 @@ module SemanticLogger
     #   named_tags            -> labels.*         (scalar key/value pairs)
     #   payload               -> <namespace>.*    (or labels.* when namespace is nil)
     #   metric/metric_amount  -> <namespace>.metric / <namespace>.metric_amount
+    #   dimensions            -> <namespace>.dimensions
     #
     # == Reference
     #   * https://www.elastic.co/docs/reference/ecs
@@ -45,7 +46,7 @@ module SemanticLogger
 
       # namespace: [String|Symbol|nil]
       #   Top-level field set used to hold SemanticLogger-specific data that has
-      #   no native ECS home (payload, metric, metric_amount). A proper-noun
+      #   no native ECS home (payload, metric, metric_amount, dimensions). A proper-noun
       #   namespace is guaranteed never to collide with a current or future ECS
       #   field. Set to nil to merge the payload into ECS `labels` instead.
       #   Default: "semantic_logger"
@@ -133,7 +134,7 @@ module SemanticLogger
         }
       end
 
-      # Place SemanticLogger-specific data (payload, metric) that has no native
+      # Place SemanticLogger-specific data (payload, metric, dimensions) that has no native
       # ECS home into the configured namespace, plus named_tags into labels.
       def add_extras(result, hash)
         labels = hash[:named_tags].is_a?(Hash) ? hash[:named_tags].dup : {}

@@ -293,6 +293,12 @@ module SemanticLogger
             assert_equal({"region" => "us", "tier" => 2}, JSON.parse(values_data[2]["dimensions"]))
           end
 
+          it "omits dimensions without a metric" do
+            log.dimensions = {region: "us"}
+
+            refute values_data[2].key?("dimensions")
+          end
+
           it "merges metric with existing payload" do
             log.payload = {data: "sample"}
             log.metric = "my_metric"
