@@ -124,6 +124,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - `add_appender(metric: ...)` with a value that is neither a Symbol nor a `SemanticLogger::Subscriber`
   now names that value in its `ArgumentError`. Before, the message named the `appender:` option
   in its place, usually as `not: nil`.
+- A block given to `add_appender` formats the entries of an appender or metric subscriber named by a
+  Symbol, as it does for `io:` and `file_name:`, such as
+  `add_appender(appender: :http, url: "https://example.com/logs") { |log| log.message }`. Before,
+  the block was ignored and the appender used its default formatter.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

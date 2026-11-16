@@ -16,6 +16,15 @@ class AppenderTest < Minitest::Test
           assert_includes error.message, "Parameter :appender"
           assert_includes error.message, "not: \"not valid\""
         end
+
+        it "formats with the block, for an appender named by a Symbol" do
+          formatter = ->(log, _logger) { log.message }
+          appender  = build(appender: :udp, server: "localhost:10514", &formatter)
+
+          assert_same formatter, appender.formatter
+        ensure
+          appender&.close
+        end
       end
 
       describe "with :metric" do
@@ -30,6 +39,16 @@ class AppenderTest < Minitest::Test
           appender = build(metric: metric)
 
           assert_same metric, appender
+        end
+
+        it "formats with the block, for a metric subscriber named by a Symbol" do
+          SemanticLogger::Metric.const_set(:BlockFormatted, Class.new(SemanticLogger::Subscriber))
+          formatter = ->(log, _logger) { log.metric }
+          appender  = build(metric: :block_formatted, &formatter)
+
+          assert_same formatter, appender.formatter
+        ensure
+          SemanticLogger::Metric.send(:remove_const, :BlockFormatted)
         end
 
         it "raises when not a Symbol or Subscriber" do
