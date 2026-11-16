@@ -332,6 +332,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   and the syslog appender's own formatter, escape by default, so their output changes too. Text that
   is all ASCII is checked as quickly as before. See
   [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53).
+- `:one_line` shortens the thread name to 30 characters before escaping it, as the other text
+  formatters do. It shortened the escaped name, so with `escape_control_chars: true` an escape near
+  the end, such as `\e` or `\u2028`, could be cut in two, leaving a lone backslash.
 
 ## [5.2.0] 2026-10-30
 

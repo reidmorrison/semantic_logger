@@ -25,8 +25,10 @@ module SemanticLogger
       # carriage return before a line feed is part of that white space.
       DETAILS_LINE_BREAK = /\s*[\n#{UNICODE_LINE_BREAKS}]\s*/
 
+      # Shortened before its line breaks are removed or escaped, as the other text formatters do,
+      # so that an escape, such as "\\e" or "\\u2028", is never cut in two.
       def thread_name
-        format("%.30s", one_line(log.thread_name))
+        one_line(format("%.30s", log.thread_name))
       end
 
       def tags

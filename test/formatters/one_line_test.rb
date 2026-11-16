@@ -127,6 +127,14 @@ module SemanticLogger
 
             assert_equal "workerforged", formatter.thread_name
           end
+
+          it "shortens the thread name before escaping it, so that no escape is cut in two" do
+            log.thread_name = "#{'a' * 29}\e[31m"
+            formatter       = SemanticLogger::Formatters::OneLine.new(escape_control_chars: true)
+            formatter.call(log, nil)
+
+            assert_equal "#{'a' * 29}\\e", formatter.thread_name
+          end
         end
 
         describe "payload" do
