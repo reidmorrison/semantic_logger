@@ -17,9 +17,6 @@ module SemanticLogger
       # separator, and paragraph separator.
       UNICODE_LINE_BREAKS = "\u0085\u2028\u2029".freeze
 
-      # A Unicode line break.
-      UNICODE_LINE_BREAK = /[#{UNICODE_LINE_BREAKS}]/
-
       # Every line break, as a String#delete character set.
       LINE_BREAKS = "\r\n#{UNICODE_LINE_BREAKS}".freeze
 
@@ -95,8 +92,8 @@ module SemanticLogger
       end
 
       # Returns [String] the value without line breaks, so that the entry stays on one line.
-      # With `escape_control_chars: true`, the Unicode line breaks are escaped, as in "\u2028",
-      # since #escape_control_characters escapes only the ASCII ones.
+      # With `escape_control_chars: true`, #escape_control_characters has already escaped them, the
+      # Unicode ones as in "\u2028".
       #
       # A String with invalid bytes, such as a request parameter decoded from "%FF", or in another
       # encoding, such as a binary request body, is converted to valid UTF-8 first, since deleting
@@ -106,9 +103,6 @@ module SemanticLogger
         # Most text is ASCII, and deleting two characters is quicker than deleting five.
         return text.delete("\r\n") if text.ascii_only?
 
-        if escape_control_chars && text.match?(UNICODE_LINE_BREAK)
-          text = text.gsub(UNICODE_LINE_BREAK) { |char| format("\\u%04x", char.ord) }
-        end
         text.delete(LINE_BREAKS)
       end
     end

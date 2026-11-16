@@ -20,6 +20,14 @@ module SemanticLogger
       # Matches C0 control characters (including newlines and the ANSI escape) and DEL.
       CONTROL_CHARS = /[\x00-\x1f\x7f]/
 
+      # Matches the characters of CONTROL_CHARS, and the Unicode characters that control how text
+      # is shown: the C1 control characters (U+0080 to U+009F, including the next line U+0085),
+      # which some terminals act on, the line and paragraph separators (U+2028, U+2029), at which
+      # editors, browsers, and some log viewers start a new line, and the bidirectional controls
+      # (U+202A to U+202E, U+2066 to U+2069), which can make logged text read in a different order
+      # than it was written. Escaped in the `\uXXXX` form.
+      UNICODE_CONTROL_CHARS = /[\x00-\x1f\x7f\u0080-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/
+
       # Time precision varies by Ruby interpreter
       # JRuby 9.1.8.0 supports microseconds
       PRECISION =
@@ -51,7 +59,8 @@ module SemanticLogger
       #     How many fractional digits to log times with.
       #     Default: PRECISION (6, except on older JRuby, where 3)
       #   escape_control_chars: [Boolean]
-      #     Replace control characters (newlines, the ANSI escape, etc.) in
+      #     Replace control characters (newlines, the ANSI escape, etc., and the Unicode
+      #     characters that control how text is shown, such as U+2028 and U+202E) in
       #     untrusted log data (logger name, thread name, message, payload, tags,
       #     named tags, and the message and backtrace lines of the exception and
       #     of each exception that caused it) with a printable escaped form, e.g. "\n".
@@ -183,7 +192,10 @@ module SemanticLogger
         return value unless value
 
         string = Utils.encode_utf8_string(value.to_s)
-        string.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
+        # Most text is ASCII, which only the ASCII control characters need to be looked for in.
+        string.gsub(string.ascii_only? ? CONTROL_CHARS : UNICODE_CONTROL_CHARS) do |char|
+          CONTROL_CHAR_ESCAPES[char] || format(char.ord < 0x80 ? "\\x%02x" : "\\u%04x", char.ord)
+        end
       end
 
       # Returns the value as text that can be joined with this formatter's UTF-8 output: a String

@@ -695,8 +695,12 @@ For the text formatters, enable the `escape_control_chars` option to replace con
 untrusted log data (the logger name, thread name, message, payload, tags, named tags, the message,
 details, and backtrace lines of the logged exception, and the message and backtrace lines of each
 exception that caused it) with a printable, escaped form. For example a newline is written as `\n`
-and the ANSI escape as `\e`. The option is **disabled by default** to preserve the existing human
-readable output:
+and the ANSI escape as `\e`. The Unicode characters that control how text is shown are escaped too,
+in the `\uXXXX` form: the C1 control characters (U+0080 to U+009F), the line and paragraph
+separators (U+2028, U+2029), at which editors and some log viewers start a new line, and the
+bidirectional controls (U+202A to U+202E, U+2066 to U+2069), such as the right-to-left override that
+can make logged text read backwards. The option is **disabled by default** to preserve the existing
+human readable output:
 
 ```ruby
 # Text appender that escapes control characters in untrusted data:

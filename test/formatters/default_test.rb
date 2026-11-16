@@ -214,6 +214,31 @@ module SemanticLogger
             assert_equal "-- a\\rb\\tc\\x00d", formatter.message
           end
 
+          it "escapes the Unicode control characters, line separators, and bidirectional controls" do
+            # A C1 escape (CSI), next line, line and paragraph separators, and right-to-left
+            # override and isolate, which can make "user=admin" read backwards.
+            log.message = "café \u009b2J\u0085a b  ‮user=admin‬ ⁧x⁩\n"
+
+            assert_equal "-- café \\u009b2J\\u0085a\\u2028b\\u2029 \\u202euser=admin\\u202c \\u2067x\\u2069\\n",
+                         formatter.message
+          end
+
+          it "leaves other characters outside ASCII as they are" do
+            log.message = "Grüße ☕ ​  مرحبا"
+
+            assert_equal "-- Grüße ☕ ​  مرحبا", formatter.message
+          end
+
+          it "escapes the Unicode control characters in tags, named tags, and the exception message" do
+            log.tags       = ["a b"]
+            log.named_tags = {user: "‮nimda"}
+            log.exception  = RuntimeError.new("x\u0085y")
+
+            assert_equal "[a\\u2028b]", formatter.tags
+            assert_equal "{user: \\u202enimda}", formatter.named_tags
+            assert_includes formatter.exception, "RuntimeError: x\\u0085y"
+          end
+
           it "escapes control characters in tags" do
             injected = "bad\ninjected"
             log.tags = ["good", injected]
