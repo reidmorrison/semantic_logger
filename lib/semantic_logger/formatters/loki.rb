@@ -5,6 +5,29 @@ module SemanticLogger
     class Loki < Base
       attr_accessor :stream, :payload_value
 
+      # The names of the structured metadata that this formatter writes itself. A payload key that
+      # Loki would store under one of these names is written with PAYLOAD_PREFIX, as in
+      # `payload_duration`, whether or not the entry has that field, so that each name always holds
+      # this formatter's value. Loki keeps only the last value of a name written twice, and stores
+      # a name such as `metric.value` as `metric_value` (see OWN_NAME), so the payload's value
+      # would otherwise be lost, or replace this formatter's.
+      OWN_KEYS = %w[
+        metric metric_value dimensions duration duration_human exception_name exception_message
+        stack_trace
+      ].freeze
+
+      # Matches a name that Loki stores as one of OWN_KEYS.
+      #
+      # Loki replaces each character of a name other than an ASCII letter, digit, or underscore
+      # with an underscore, and writes two or more underscores in a row as one. So `metric.value`,
+      # `metric__value`, and `metric` followed by a zero width space and `value` are all stored as
+      # `metric_value`: each underscore of an own name stands for any run of those characters.
+      OWN_NAME = /\A(?:#{OWN_KEYS.map { |key| key.gsub('_', '[^A-Za-z0-9]+') }.join('|')})\z/
+
+      # The prefix of a payload key named like one of OWN_KEYS. The :logfmt and :open_telemetry
+      # formatters write `payload.`, which Loki would store as `payload_`.
+      PAYLOAD_PREFIX = "payload_".freeze
+
       # Returns [String] a single JSON log
       def call(log, logger)
         self.logger = logger
@@ -101,7 +124,7 @@ module SemanticLogger
         self.payload_value = if !log.payload?
                                {}
                              elsif log.payload.is_a?(Hash)
-                               stringify_hash(log.payload)
+                               payload_metadata(log.payload)
                              else
                                # A log call can supply any value as the payload, such as a String
                                # parsed from a request body.
@@ -151,11 +174,40 @@ module SemanticLogger
         )
       end
 
-      # Loki only accepts Strings as keys and values.
-      def stringify_hash(hash)
-        hash.each_with_object({}) do |(key, value), result|
-          result[key.to_s] = loki_value(value)
+      # Returns [Hash] the payload as structured metadata, with String keys and values, since Loki
+      # only accepts Strings.
+      #
+      # A key that Loki would store as one of this formatter's own names (see OWN_KEYS) is written
+      # with PAYLOAD_PREFIX, after the other keys, and with it again while that name is already a
+      # key of the payload, so that no value is lost. Such a key is converted as Utils.to_json
+      # converts it, since one that is not ASCII-compatible, such as UTF-16, cannot be joined with
+      # the prefix.
+      def payload_metadata(hash)
+        metadata = {}
+        own      = nil
+        hash.each_pair do |key, value|
+          name = key.to_s
+          if own_key?(name)
+            (own ||= []) << [name, value]
+          else
+            metadata[name] = loki_value(value)
+          end
         end
+        own&.each do |name, value|
+          name = PAYLOAD_PREFIX + Utils.encode_utf8_string(name)
+          name = PAYLOAD_PREFIX + name while metadata.key?(name)
+          metadata[name] = loki_value(value)
+        end
+        metadata
+      end
+
+      # Whether Loki would store the name as one of this formatter's own names (see OWN_NAME).
+      #
+      # A name with characters outside ASCII is matched as Utils.to_json writes it: in UTF-8,
+      # without invalid bytes, which matching it as it is could raise for.
+      def own_key?(name)
+        name = Utils.encode_utf8_string(name) unless name.ascii_only?
+        name.match?(OWN_NAME)
       end
 
       # Returns [String] the value as Loki accepts it.

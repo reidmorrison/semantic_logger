@@ -475,6 +475,107 @@ module SemanticLogger
             assert_empty(values_data[2].values.reject { |value| value.is_a?(String) })
           end
 
+          describe "when a payload key is named like one of its own" do
+            # Raises for a key written twice, of which Loki keeps only the last value.
+            let(:structured_metadata) do
+              JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]["values"][0][2]
+            end
+
+            it "prefixes the payload's metric keys" do
+              log.metric        = "my_metric"
+              log.metric_amount = 3
+              log.dimensions    = {region: "us"}
+              log.payload       = {"metric" => "a", :metric_value => "b", "dimensions" => "10x20"}
+
+              assert_equal(
+                {
+                  "payload_metric"       => "a",
+                  "payload_metric_value" => "b",
+                  "payload_dimensions"   => "10x20",
+                  "metric"               => "my_metric",
+                  "metric_value"         => "3",
+                  "dimensions"           => "{\"region\":\"us\"}"
+                },
+                structured_metadata
+              )
+            end
+
+            it "prefixes the payload's duration keys" do
+              log.duration = 1.5
+              log.payload  = {duration: "PT5S", "duration_human" => "five seconds"}
+
+              assert_equal "1.5", structured_metadata["duration"]
+              assert_equal "PT5S", structured_metadata["payload_duration"]
+              assert_equal "five seconds", structured_metadata["payload_duration_human"]
+            end
+
+            it "prefixes the payload's exception keys" do
+              log.exception = RuntimeError.new("Oh no")
+              names         = %w[exception_name exception_message stack_trace]
+              log.payload   = names.zip(%w[a b c]).to_h
+
+              assert_equal "RuntimeError", structured_metadata["exception_name"]
+              assert_equal "Oh no", structured_metadata["exception_message"]
+              assert_equal "", structured_metadata["stack_trace"]
+              assert_equal %w[a b c], structured_metadata.values_at(*names.map { |name| "payload_#{name}" })
+            end
+
+            it "prefixes it when the entry does not have that field, so that the name always means the same" do
+              log.payload = {"duration" => "PT5S", "metric" => "a"}
+
+              assert_equal({"payload_duration" => "PT5S", "payload_metric" => "a"}, structured_metadata)
+            end
+
+            it "prefixes a key that Loki would store under one of its own names" do
+              log.metric        = "my_metric"
+              log.metric_amount = 3
+              zero_width        = "metric#{0x200B.chr(Encoding::UTF_8)}value"
+              names             = ["metric.value", "metric__value", "metric-value", zero_width]
+              log.payload       = names.zip(%w[a b c d]).to_h
+
+              assert_equal "3", structured_metadata["metric_value"]
+              assert_equal %w[a b c d], structured_metadata.values_at(*names.map { |name| "payload_#{name}" })
+            end
+
+            it "compares a key with invalid UTF-8 as it is written, without the invalid bytes" do
+              log.payload = {
+                "metric\xFF".b.force_encoding(Encoding::UTF_8)      => "a",
+                "metric\xFFvalue".b.force_encoding(Encoding::UTF_8) => "b"
+              }
+
+              assert_equal({"payload_metric" => "a", "metricvalue" => "b"}, structured_metadata)
+            end
+
+            it "prefixes a key in an encoding that is not ASCII-compatible" do
+              log.payload = {"metric".encode(Encoding::UTF_16LE) => "a"}
+
+              assert_equal({"payload_metric" => "a"}, structured_metadata)
+            end
+
+            it "keeps other keys as they are" do
+              log.metric  = "my_metric"
+              log.payload = {"Metric" => "a", "metrics" => "b", "_metric" => "c", "metric_" => "d", "payload_x" => "e"}
+
+              assert_equal log.payload.merge("metric" => "my_metric"), structured_metadata
+            end
+
+            it "prefixes it again when the payload already has the prefixed key" do
+              log.payload = {"metric" => "a", "payload_metric" => "b"}
+
+              assert_equal({"payload_metric" => "b", "payload_payload_metric" => "a"}, structured_metadata)
+            end
+
+            it "names every field that the formatter writes itself" do
+              log.metric        = "my_metric"
+              log.metric_amount = 3
+              log.dimensions    = {region: "us"}
+              log.duration      = 1.5
+              set_exception
+
+              assert_equal Loki::OWN_KEYS.sort, structured_metadata.keys.sort
+            end
+          end
+
           # Issue #180: .to_json raises Encoding::UndefinedConversionError on non UTF-8 data.
           it "serializes non UTF-8 data without raising" do
             log.message    = "Bad: \xE2".b

@@ -194,6 +194,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   fail. The `exception_name` of an exception whose class is anonymous, and the `exception_message`
   of one whose `#message` returns nil, which were `null` too, are now Strings: the name as the text
   formatters write it, such as `#<Class:0x000...>`, and an empty message.
+- The `:loki` formatter writes a payload key named like one of its own structured metadata fields,
+  `metric`, `metric_value`, `dimensions`, `duration`, `duration_human`, `exception_name`,
+  `exception_message`, or `stack_trace`, with a `payload_` prefix, as in `payload_duration`, as
+  `:logfmt` and `:open_telemetry` prefix theirs with `payload.`. It wrote the payload's value and its
+  own under the same name, and Loki keeps only the last, so the payload's value was lost. A payload
+  key that Loki stores under one of those names, such as `metric.value`, `metric__value`, or one
+  with an invisible character, replaced the formatter's value instead, so that a query that
+  `unwrap`s `metric_value` failed. The key is prefixed whether or not the entry has that field, so
+  that each of these names always holds the formatter's value. See
+  [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53).
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
