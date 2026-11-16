@@ -109,13 +109,15 @@ module SemanticLogger
                              end
       end
 
-      # The dimensions are a single value, as JSON, since structured metadata only holds Strings.
+      # Every value is a String, since structured metadata only holds Strings: Loki rejects the
+      # whole push, with every entry in it, when one holds a number or null. The dimensions are a
+      # single value, as JSON.
       def metric
         return unless log.metric
 
-        payload_value[:metric] = log.metric
-        payload_value[:metric_value] = log.metric_amount
-        payload_value[:dimensions] = loki_value(log.dimensions) if log.dimensions?
+        payload_value[:metric]       = loki_value(log.metric)
+        payload_value[:metric_value] = log.metric_amount.to_s if log.metric_amount
+        payload_value[:dimensions]   = loki_value(log.dimensions) if log.dimensions?
       end
 
       def duration
@@ -127,12 +129,16 @@ module SemanticLogger
 
       # The stack trace is one line per frame, followed by each exception that caused it, as the
       # text formatters write it.
+      #
+      # The name and message are Strings too: an anonymous exception class has no name, so it is
+      # written as the text formatters write it, such as `#<Class:0x000...>`, and a #message that
+      # returns nil, or raises, is replaced as Utils.exception_message replaces it.
       def exception
         return unless log.exception
 
         payload_value.merge!(
-          exception_name:    log.exception.class.name,
-          exception_message: log.exception.message,
+          exception_name:    log.exception.class.to_s,
+          exception_message: Utils.exception_message(log.exception),
           stack_trace:       exception_backtrace
         )
       end

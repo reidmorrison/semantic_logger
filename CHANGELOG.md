@@ -184,6 +184,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   duration without a count, without the `class` and `action` taken from its name, or the named tags
   listed in the subscriber's `dimensions:` option. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The `:loki` formatter writes a metric's `metric_value` as a String, such as `"3"`, as it writes the
+  `duration`, and leaves it out for a metric without an amount. Loki accepts only Strings in
+  structured metadata, and rejected the whole push with `400 Bad Request` for a number or `null`, so
+  every entry with a metric was lost, and with `batch: true` so was every other entry in its batch.
+  The appender reported each rejection to the internal logger. LogQL still compares and `unwrap`s
+  the `metric_value` as a number. The `exception_name` of an exception whose class is anonymous, and
+  the `exception_message` of one whose `#message` returns nil, which were `null` too, are now
+  Strings: the name as the text formatters write it, such as `#<Class:0x000...>`, and an empty
+  message.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
