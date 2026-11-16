@@ -32,7 +32,7 @@ module Appender
 
       describe "#message_error?" do
         it "is true for a document that BSON cannot serialize" do
-          [{big: 2**64}, {object: Object.new}].each do |payload|
+          [{big: 2**64}, {object: Object.new}, {pattern: Regexp.new("a\0b")}].each do |payload|
             error = assert_raises(StandardError) { appender.info("Webhook received", payload: payload) }
 
             assert appender.message_error?(error), "expected #{error.class} to be a message error"
@@ -70,6 +70,67 @@ module Appender
             document["payload"]
           )
           assert_equal "quoted  input", document["exception"]["message"]
+        end
+
+        # BSON's own serializer overflows the stack, killing the process, when it reaches a
+        # structure that holds itself, so the binary body must come before it.
+        it "stores a document that holds itself, cut off where it repeats" do
+          payload         = {body: "Café ☕".b}
+          payload[:self]  = payload
+          payload[:again] = payload
+
+          appender.info("Looped", payload: payload)
+          stored = appender.collection.find.first["payload"]
+
+          assert_equal "Café ☕", stored["body"]
+          assert_equal "#<Hash nested too deeply>", stored["self"]
+          assert_equal "#<Hash nested too deeply>", stored["again"]
+        end
+
+        it "keeps the types of the other values of a deep entry" do
+          nested = {body: "Café".b}
+          40.times { nested = {a: nested} }
+          at = Time.utc(2026, 11, 16)
+
+          appender.info("Deep", payload: nested.merge(ratio: Float::NAN, max: Float::INFINITY, at: at))
+          stored = appender.collection.find.first["payload"]
+
+          assert_predicate stored["ratio"], :nan?
+          assert_equal Float::INFINITY, stored["max"]
+          assert_equal at, stored["at"]
+        end
+
+        # BSON reaches the deep binary body first, under :a, then refuses the object.
+        it "leaves an object of a deep entry for BSON to refuse, without its JSON" do
+          broken = Object.new
+          def broken.to_json(*) = raise("not JSON")
+          nested = {body: "Café".b}
+          40.times { nested = {a: nested} }
+
+          error = assert_raises(BSON::Error) { appender.info("Deep", payload: nested.merge(broken: broken)) }
+
+          assert appender.message_error?(error)
+        end
+
+        # BSON refuses the binary body before it reaches the key.
+        it "leaves a key that is a structure for BSON to refuse, without copying it" do
+          key      = {}
+          key[key] = 1
+
+          error = assert_raises(BSON::Error) { appender.info("Keyed", payload: {body: "Café".b, key => 1}) }
+
+          assert appender.message_error?(error)
+        end
+
+        it "stores text nested deeper than the JSON formatters write, cut off there" do
+          nested = {body: "Café".b}
+          40.times { nested = {a: nested} }
+
+          appender.info("Deep", payload: nested)
+          stored = appender.collection.find.first["payload"]
+          30.times { stored = stored["a"] }
+
+          assert_equal "#<Hash nested too deeply>", stored["a"]
         end
 
         it "does not copy a document that BSON accepts" do

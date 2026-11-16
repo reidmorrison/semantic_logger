@@ -274,7 +274,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   NUL byte. Before, BSON raised, and the appender reported the error to the internal logger instead of
   storing the entry. Now such an entry is stored as a copy with its text converted, as the JSON
   formatters write it: binary text is read as the UTF-8 it usually holds, invalid bytes are dropped,
-  and NUL bytes are removed from keys. Only an entry that BSON refuses is copied.
+  and NUL bytes are removed from keys. Only an entry that BSON refuses is copied, and such an entry
+  nested more than 32 levels deep is cut off there, as the JSON formatters cut it off.
 
 ## [5.2.0] 2026-10-30
 

@@ -248,9 +248,10 @@ module SemanticLogger
     # "#<" unless the Set holds an object. Nil where Set#inspect starts with "#<" too.
     INSPECTED_SET = (::Set.new.inspect.start_with?("#<") ? nil : "\"Set[").freeze
 
-    # Nesting depth after which .json_safe replaces a Hash, Array, Struct, or Data with a
-    # placeholder. Well below the json gem's default max_nesting of 100, leaving room for
-    # the levels that a formatter wraps the payload in.
+    # Nesting depth after which .json_safe, and any other copy made by .bounded_structure,
+    # replaces a Hash, Array, Struct, or Data with a placeholder. Well below the json gem's
+    # default max_nesting of 100, leaving room for the levels that a formatter wraps the payload
+    # in.
     MAX_JSON_SAFE_DEPTH = 32
 
     # Returns [String] value#inspect, or what the block renders the value as (for example with
@@ -349,16 +350,19 @@ module SemanticLogger
         value.finite? ? value : value.to_s
       when Integer, NilClass, TrueClass, FalseClass
         value
-      when Hash, Array, ::Set, Struct, ::Data
-        json_safe_structure(value, depth, ancestors)
       else
-        open_struct?(value) ? json_safe_structure(value, depth, ancestors) : json_safe_object(value)
+        return json_safe_object(value) unless structure?(value)
+
+        bounded_structure(value, depth, ancestors) { |level, seen| json_safe_members(value, level, seen) }
       end
     end
 
-    # Returns a copy of a Hash, Array, Set, Struct, Data, or OpenStruct, or the placeholder for
-    # one nested too deeply or that holds itself.
-    def self.json_safe_structure(value, depth, ancestors)
+    # Returns a bounded copy of a structure, such as a Hash or Array, for .json_safe, or for an
+    # appender that copies log data for a gem that writes it itself: what the block returns for its
+    # members, given the next depth and the structures it is inside of, or, for one nested deeper
+    # than MAX_JSON_SAFE_DEPTH or that holds itself, a placeholder String naming its class, such
+    # as "#<Hash nested too deeply>", in place of the structure.
+    def self.bounded_structure(value, depth, ancestors)
       ancestors ||= []
       if depth >= MAX_JSON_SAFE_DEPTH || ancestors.any? { |ancestor| ancestor.equal?(value) }
         return "#<#{value.class} nested too deeply>"
@@ -366,12 +370,11 @@ module SemanticLogger
 
       ancestors.push(value)
       begin
-        json_safe_members(value, depth + 1, ancestors)
+        yield depth + 1, ancestors
       ensure
         ancestors.pop
       end
     end
-    private_class_method :json_safe_structure
 
     # Returns any other object as it is, when JSON can write it, otherwise its #to_s converted
     # to valid UTF-8.
