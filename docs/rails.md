@@ -76,6 +76,11 @@ With no configuration at all, Rails Semantic Logger:
 * Logs to **standard error** when you run `rails console`, so log lines do not get mixed up with
   the return values of the commands you type.
 * Replaces the multi-line Rails request log with a single structured "Completed" line.
+* Redacts the keys in `config.filter_parameters`, such as `password` and `token`, from every log
+  entry, not only from the request parameters. See [Redacting sensitive data](#redacting-sensitive-data).
+* In development, records the file, line number, and method of the code behind each entry, such as
+  `orders_controller.rb:12 OrdersController#create`. See
+  [Source file name, line number, and method](#source-file-name-line-number-and-method).
 
 Standard Rails log output for a single page request:
 
@@ -95,8 +100,8 @@ Use those two places, not `config/initializers/*`. Rails builds the logger **bef
 initializers, so the appenders block and the `semantic`, `replace_sidekiq_logger`, and
 `replace_solid_queue_logger` options have no effect from an initializer; Rails Semantic Logger
 prints a warning when it detects this. The output-tuning options consumed later in boot (`started`,
-`processing`, `rendered`, `quiet_assets`, `action_message_format`) do still work from an
-initializer, but not once the application has finished booting.
+`processing`, `rendered`, `quiet_assets`, `action_message_format`, `redact_filter_parameters`) do
+still work from an initializer, but not once the application has finished booting.
 
 ---
 
@@ -540,14 +545,25 @@ Notes:
 
 ### Source file name, line number, and method
 
-To include the file, line number, and method where each message originated:
+In development, Rails Semantic Logger records the file, line number, and method of the code behind
+each entry, at every level. In the Rails console it records them for each entry at the console's log
+level, in every environment.
+
+~~~
+2026-11-15 13:58:05.906754 I [8462:puma srv tp 001 orders_controller.rb:12 OrdersController#create] OrdersController -- Creating order
+~~~
+
+To record them in another environment, or only at and above a level, set that level:
 
 ~~~ruby
 config.semantic_logger.call_site_level = :info
 ~~~
 
-~~~
-2026-11-15 13:58:05.906754 I [8462:puma srv tp 001 orders_controller.rb:12 OrdersController#create] OrdersController -- Creating order
+To stop recording them in development, set it to `nil` in `config/application.rb`,
+`config/environments/development.rb`, or an initializer:
+
+~~~ruby
+config.semantic_logger.call_site_level = nil
 ~~~
 
 This reads only the stack frames up to the code that made the log call, so it is cheap enough to
@@ -555,10 +571,31 @@ leave on in production. See
 [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged) for its
 cost, and for which formatters write it.
 
-The entries that Rails logs for its own events, such as `Processing`, `Completed`, `Rendered`, and
-SQL entries, are logged from Active Support's notifications, so their call site is an Active Support
-frame rather than your code. To see the application code that ran each SQL query, turn on
-`config.active_record.verbose_query_logs`, which adds it to the entry's payload as `source`.
+Rails logs the entries for its own events from Active Support's notifications, so the code that makes
+their log call is Active Support's. Rails Semantic Logger records the application code behind each
+one instead:
+
+| Entry | Call site |
+|-------|-----------|
+| SQL query, strict loading violation | The code that ran the query |
+| `Redirected to`, `Sent data`, `Sent file`, unpermitted parameters, fragment caching | The line in the action |
+| `Processing`, `Completed`, CSRF warnings | The controller's action |
+| `rescue_from` | Where the exception was raised |
+| `Rendering`, `Rendered` | The code that called `render`, or the template that rendered a partial |
+| Active Job | The code that enqueued or performed the job, or else the job's `#perform`, as for a job that a worker, or the inline or test adapter, performs from its queue |
+| Action Mailer | The code that delivered the mail, or else the mailer's action |
+| An exception that a request raised | Where your code raised it |
+
+Entries with no application code behind them record no call site: `Started`, a halted filter chain,
+a template that Rails renders once the action has returned, and the entries of Sidekiq's and Solid
+Queue's own processes. Code that only wraps what Rails runs, such as an `around_action` or a
+worker's middleware, is not taken for the code behind an entry that Rails logs once it has taken over
+from your code, as it does to render an action's template, or to perform a job from its queue. The
+application code is the first frame that the subscriber's `backtrace_cleaner` keeps,
+`Rails.backtrace_cleaner` unless you assign another, such as
+`RailsSemanticLogger::ActiveRecord::LogSubscriber.backtrace_cleaner`. It is also the `source` that
+`config.active_record.verbose_query_logs` and `config.active_job.verbose_enqueue_logs` add to the
+payload.
 
 To capture the whole backtrace of each entry instead, use `backtrace_level`:
 
@@ -574,23 +611,92 @@ to `nil` (disabled) or to a high level such as `:error`. By default backtraces a
 
 ### Cleaning exception backtraces
 
-To log only your application's frames of an exception's backtrace, relative to `Rails.root`, as
-Rails' own log does, use the Rails backtrace cleaner:
-
-~~~ruby
-config.semantic_logger.backtrace_cleaner = Rails.backtrace_cleaner
-~~~
-
-The silencers and filters added in `config/initializers/backtrace_silencers.rb` apply, since they
-change the same cleaner. Set the `BACKTRACE` environment variable to log full backtraces again, as
-with the rest of Rails.
+Rails Semantic Logger cleans the backtraces of logged exceptions with `Rails.backtrace_cleaner`, as
+Rails' own log does: only your application's frames are logged, relative to `Rails.root`. The
+silencers and filters added in `config/initializers/backtrace_silencers.rb` apply, since they change
+the same cleaner. Set the `BACKTRACE` environment variable to log full backtraces again, as with the
+rest of Rails.
 
 The text and JSON formatters use it, including the JSON sent by the HTTP, Elasticsearch HTTP, TCP,
 UDP, Kafka, RabbitMQ, and CloudWatch Logs appenders. Error services, such as Sentry, still receive
-the full backtrace. When an exception's backtrace has no application frames, such as a routing error
-raised in middleware, the full backtrace is logged. See
-[Cleaning backtraces](config.html#cleaning-backtraces) for which formatters use it, and how to choose
-for one appender.
+the full backtrace. When none of an exception's frames is your application's, such as one raised
+entirely within a gem, the full backtrace is logged.
+
+A request for a missing route, and the other exceptions that Rails logs without a backtrace when
+none of its frames is your application's (those in `ActionDispatch::ExceptionWrapper.silent_exceptions`),
+is logged on one line, after the response's status, as in Rails' own log:
+
+~~~
+Rails -- 404 Not Found -- Exception: ActionController::RoutingError: No route matches [GET] "/apple-touch-icon.png"
+~~~
+
+That entry has the exception's class and message, and names the exceptions that caused it, which
+Rails lists as "Caused by", but not the exception itself (`log_exception: :partial`): the `:json`
+formatter writes them in its `message`, and Semantic Logger's own error service appenders, such as
+`sentry_ruby`, receive a message rather than an exception. Error services hooked into Rails still receive the exception. Set `BACKTRACE` to log
+these with their backtrace, or set `config.action_dispatch.log_rescued_responses = false` to leave
+them out of the log.
+
+To use another cleaner, or none, assign it in `config/application.rb`. This does not change how the
+exceptions above are logged:
+
+~~~ruby
+config.semantic_logger.backtrace_cleaner = nil
+~~~
+
+See [Cleaning backtraces](config.html#cleaning-backtraces) for which formatters use it, and how to
+choose for one appender.
+
+### Redacting sensitive data
+
+Rails filters `config.filter_parameters` only from the request parameters that it logs. Rails Semantic
+Logger also has Semantic Logger redact them from every log entry: the value of each key that they
+match is written as `"[FILTERED]"`, at any depth, in the payload, named tags, and context, by every
+appender. That covers your own calls, such as `logger.info("Charged", card: card_params)`, and the
+entries of other gems, as well as Rails' own. The filters are read once the application has
+initialized, so those in `config/initializers/filter_parameter_logging.rb` apply.
+
+Keys are matched by name, both as written and in snake_case, so `:_key` also matches an `X-Api-Key`
+header, as `x_api_key`. A filter matches any key that contains it, so the default list of a new Rails
+application (`:passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv,
+:cvc`) also redacts keys that are not secret, such as `max_tokens`, `token_count`, `cache_key`, and
+`api_key_id`, the `concurrency_key` of Solid Queue's entries, and every `email`.
+
+That list does not match the `Authorization` or `Cookie` header. Add them:
+
+~~~ruby
+# config/initializers/filter_parameter_logging.rb
+Rails.application.config.filter_parameters += %i[authorization cookie]
+~~~
+
+What is not redacted:
+
+* Active Job `arguments` and Action Mailer `args`, which are logged as JSON text. For a job that takes
+  a secret, leave its arguments out of the log with `self.log_arguments = false`.
+* A key that only a Proc filter matches: a Proc changes a value rather than naming a key, so it is
+  left out.
+* A key nested under the one a dotted filter names. A filter such as `"credit_card.code"` only
+  matches a key with that whole name, not `code` inside `credit_card`. That includes the
+  `"model.attribute"` filters that Rails adds for Active Record encrypted attributes.
+* The message, plain tags, and exception messages: only keyed data is redacted.
+* Entries logged while the application starts, before the list is complete.
+
+To use other keys instead, assign them in `config/application.rb`, and Rails Semantic Logger keeps
+them:
+
+~~~ruby
+config.semantic_logger.sensitive_keys = %i[passw secret token _key authorization cookie]
+~~~
+
+To turn redaction off:
+
+~~~ruby
+config.rails_semantic_logger.redact_filter_parameters = false
+~~~
+
+Assigning `config.semantic_logger.sensitive_keys = nil` does not turn it off, since that cannot be
+told apart from never assigning it. See [Redacting sensitive data](security.html#redacting-sensitive-data)
+for what `sensitive_keys` accepts, and when redaction runs.
 
 ### Add custom data to the Completed message
 
