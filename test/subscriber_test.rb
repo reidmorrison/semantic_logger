@@ -15,7 +15,7 @@ class SubscriberTest < Minitest::Test
   describe SemanticLogger::Subscriber do
     let(:appender) { SimpleSubscriber.new }
     let(:hash_value) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345} }
-    let(:hash_str) { hash_value.inspect.sub("{", '\\{').sub("}", '\\}') }
+    let(:hash_str) { Regexp.escape(hash_value.inspect) }
     let(:file_name_reg_exp) { ' subscriber_test.rb:\d+' }
 
     # Shared prefix of a formatted log line: "<time> <level> [<pid>:<thread> <file>:<line>] <name>".
