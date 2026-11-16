@@ -166,8 +166,16 @@ SemanticLogger.add_appender(
 
 When a duration metric has no dimensions, SignalFx receives both its value and a count, so you can
 chart both the timing and the number of occurrences. The value is the duration and the count is 1,
-unless a `metric_amount` is given, which is sent as both. When dimensions are present, the metric is
-sent as-is: under its own name, with each `/` replaced by `.`, and a duration without a count.
+unless a `metric_amount` is given, which is sent as both. They are sent as `Application.average` and
+`Application.counter`, with `class` and `action` dimensions taken from the metric name, such as
+`class: "supplier"` and `action: "add_user"` for `supplier/add_user`. A count without dimensions is
+sent as `Application.counter` alone, with the same `class` and `action` dimensions.
+
+When dimensions are present, the metric is sent as-is: under its own name, without its leading `/`
+characters and with each other `/` replaced by `.`, with its value (the `metric_amount` when given,
+otherwise the duration, or 1 for a count), and, for a duration, without a count. Its dimensions are sent in place of the named tags
+listed in `dimensions:` above, so add any of those values it needs to its own dimensions. Empty
+dimensions, such as `{}`, count as none.
 
 ## Metrics in log appenders
 

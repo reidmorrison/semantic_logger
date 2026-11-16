@@ -204,8 +204,18 @@ agent.
   metric subscriber sends a metric measured with dimensions as it sends any metric with dimensions:
   under its own name, such as `supplier.add_user` for `metric: "supplier/add_user"`, with those
   dimensions, and without a count. Before, it sent it as `Application.average` and
-  `Application.counter`, with `class` and `action` dimensions taken from the metric name. A filter on
+  `Application.counter`, with `class` and `action` dimensions taken from the metric name. It also
+  no longer adds the named tags listed in the subscriber's own `dimensions:` option, which it only
+  adds to a metric without dimensions, so put any of those values the metric needs in its
+  `dimensions:`, such as `dimensions: {supplier: "acme", user_id: user.id}`. A filter on
   `log.dimensions?`, as above, now applies to it too.
+
+  Empty dimensions, such as `dimensions: {}` or `{supplier: nil}.compact`, now count as none for
+  `:signalfx`, on a log call too: the metric is sent as it would be without them, so a duration is
+  sent as `Application.average` and `Application.counter`, and a count as `Application.counter`,
+  each with the `class` and `action` dimensions taken from the metric name and the named tags listed
+  in the subscriber's `dimensions:` option. Before, either was sent under its own name, without those
+  dimensions, and a duration without a count.
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and

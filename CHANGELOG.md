@@ -168,7 +168,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   not break the metric down by them, and the structured formatters did not write them. A
   `dimensions:` value that is not a Hash is ignored, as the other measure options ignore a value
   that is not valid for them. SignalFx now sends such a metric under its own name, as it sends any
-  metric with dimensions, instead of as `Application.average` and `Application.counter`. See the
+  metric with dimensions, instead of as `Application.average` and `Application.counter`, and
+  without the named tags listed in its own `dimensions:` option, which it only adds to a metric
+  without dimensions, so put those values in the metric's `dimensions:`. SignalFx also treats empty
+  dimensions, such as `dimensions: {}` or `{supplier: nil}.compact`, as none, as `Log#dimensions?`
+  does, on a log call too. Before, a metric logged with them was sent under its own name, and a
+  duration without a count, without the `class` and `action` taken from its name, or the named tags
+  listed in the subscriber's `dimensions:` option. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
