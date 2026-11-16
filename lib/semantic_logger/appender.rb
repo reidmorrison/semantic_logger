@@ -99,7 +99,7 @@ module SemanticLogger
         else
           raise(ArgumentError,
                 "Parameter :metric must be either a Symbol or an object derived from " \
-                "SemanticLogger::Subscriber, not: #{appender.inspect}")
+                "SemanticLogger::Subscriber, not: #{metric.inspect}")
         end
       else
         raise(ArgumentError,

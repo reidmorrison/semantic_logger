@@ -14,6 +14,7 @@ class AppenderTest < Minitest::Test
             build(appender: "not valid")
           end
           assert_includes error.message, "Parameter :appender"
+          assert_includes error.message, "not: \"not valid\""
         end
       end
 
@@ -36,6 +37,7 @@ class AppenderTest < Minitest::Test
             build(metric: "not valid")
           end
           assert_includes error.message, "Parameter :metric"
+          assert_includes error.message, "not: \"not valid\""
         end
       end
 
