@@ -771,6 +771,25 @@ module SemanticLogger
           assert_equal " -- 42", Utils.join_texts(nil, " -- ", 42)
         end
 
+        it "joins UTF-8 texts into a new String, leaving any invalid bytes as they are" do
+          message = "Caf\xC3".dup.force_encoding(Encoding::UTF_8)
+          result  = Utils.join_texts(message, " -- ", "Grüße")
+
+          assert_equal "Caf\xC3 -- Grüße".dup.force_encoding(Encoding::UTF_8), result
+          assert_equal Encoding::UTF_8, result.encoding
+          refute_same message, Utils.join_texts(message)
+        end
+
+        it "joins UTF-8 texts without the separator that Array#join adds by default" do
+          separator = $,
+          # Assigning $, warns that it is deprecated, when deprecation warnings are on.
+          capture_io { $, = "," }
+
+          assert_equal "Café -- x", Utils.join_texts("Café", " -- ", "x")
+        ensure
+          capture_io { $, = separator }
+        end
+
         it "leaves text in another encoding as it is when the texts can be joined" do
           result = Utils.join_texts(latin1, " -- ", "failed")
 
