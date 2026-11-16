@@ -309,7 +309,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `->(log, _) { log.message }`, appended a line break to the application's own message, and one that
   returns a frozen String, such as a message from a file with `# frozen_string_literal: true`, raised
   `FrozenError`, which the appender took for a failing destination: the entry was discarded, and an
-  async appender waited before carrying on.
+  async appender waited before carrying on. A formatter that returns something that is not a String
+  and does not convert to one (`#to_str`), such as nil, raised `NoMethodError`, taken the same way,
+  and one that returns an Array had it written as an Array; either is now the entry's own error, so
+  it is discarded without waiting.
 
 ## [5.2.0] 2026-10-30
 

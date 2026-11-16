@@ -35,6 +35,13 @@ module Appender
           assert_equal "Started\n", io.string
         end
 
+        it "takes a formatter's output that is not a String for the entry's error" do
+          appender = SemanticLogger::Appender::IO.new(io, formatter: ->(_log, _) {})
+          error    = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.log(log) }
+
+          assert appender.message_error?(error)
+        end
+
         it "writes a frozen message" do
           assert appender.log(log.tap { |entry| entry.message = "Frozen".freeze })
           assert_equal "Frozen\n", io.string

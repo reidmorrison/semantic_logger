@@ -2,6 +2,7 @@ require_relative "../test_helper"
 require "stringio"
 require "tmpdir"
 require "tempfile"
+require "pathname"
 
 module Appender
   class TextOutputTest < Minitest::Test
@@ -26,6 +27,36 @@ module Appender
           written << text
         end
         io
+      end
+
+      describe ".line" do
+        it "returns a new String, leaving a frozen one unchanged" do
+          text = "Started".freeze
+          line = SemanticLogger::Appender::TextOutput.line(text)
+
+          assert_equal "Started\n", line
+          refute_predicate line, :frozen?
+          assert_equal "Started", text
+        end
+
+        it "keeps the text's encoding" do
+          [Encoding::US_ASCII, Encoding::BINARY, Encoding::ISO_8859_1].each do |encoding|
+            assert_equal encoding, SemanticLogger::Appender::TextOutput.line((+"abc").force_encoding(encoding)).encoding
+          end
+        end
+
+        it "reads an object that converts to a String implicitly as that String" do
+          text = Object.new
+          def text.to_str = "Started"
+
+          assert_equal "Started\n", SemanticLogger::Appender::TextOutput.line(text)
+        end
+
+        it "raises for anything other than a String" do
+          [nil, {a: 1}, ["a"], Pathname.new("x")].each do |text|
+            assert_raises(TypeError) { SemanticLogger::Appender::TextOutput.line(text) }
+          end
+        end
       end
 
       it "writes text that the IO takes as it is" do

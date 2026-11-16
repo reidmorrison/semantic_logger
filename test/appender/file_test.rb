@@ -76,6 +76,32 @@ module Appender
           end
         end
 
+        describe "a formatter that returns a String it does not own" do
+          it "takes a formatter's output that is not a String for the entry's error, without reopening" do
+            appender.formatter = ->(_log, _) {}
+            reopened           = 0
+
+            appender.stub(:reopen, -> { reopened += 1 }) do
+              error = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.log(log) }
+
+              assert appender.message_error?(error)
+            end
+
+            assert_equal 0, reopened
+          end
+
+          it "leaves the String unchanged, and writes a frozen one" do
+            appender.formatter = ->(log, _) { log.message }
+            message            = +"Started"
+
+            appender.info(message)
+
+            assert appender.log(log.tap { |entry| entry.message = "Frozen".freeze })
+            assert_equal "Started", message
+            assert_equal "Started\nFrozen\n", File.read(file_name)
+          end
+        end
+
         describe "retry_count" do
           # The local file system writes the output to nowhere when the file is deleted.
           # This logic is for shared file systems that return an exception when the file
@@ -100,18 +126,6 @@ module Appender
             end
 
             assert_equal 0, reopened
-          end
-
-          it "leaves a String the formatter does not own unchanged, and writes a frozen one" do
-            appender.instance_variable_set(:@formatter, ->(log, _) { log.message })
-            message = +"Started"
-
-            appender.info(message)
-
-            assert appender.log(log.tap { |entry| entry.message = "Frozen".freeze })
-
-            assert_equal "Started", message
-            assert_equal "Started\nFrozen\n", File.read(file_name)
           end
 
           it "does not reopen the file for text that the file cannot take" do
