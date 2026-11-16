@@ -244,6 +244,13 @@ module SemanticLogger
           assert_equal '"€ café"', SemanticLogger::Utils.to_json("€ café")
         end
 
+        it "writes a Symbol key whose name is neither UTF-8 nor ASCII" do
+          # UTF-8 bytes tagged US-ASCII, which every json gem version refuses.
+          key = "Café ☕".dup.force_encoding(Encoding::US_ASCII).to_sym
+
+          assert_equal({"Café ☕" => 1}, JSON.parse(SemanticLogger::Utils.to_json({key => 1})))
+        end
+
         it "writes an object whose own #to_json cannot serialize it as its #to_s" do
           broken = Object.new
           def broken.to_json(*) = raise(JSON::GeneratorError, "cannot serialize")
@@ -713,6 +720,27 @@ module SemanticLogger
           assert_equal 42, SemanticLogger::Utils.encode_utf8(42)
           assert_equal :sym, SemanticLogger::Utils.encode_utf8(:sym)
           assert_nil SemanticLogger::Utils.encode_utf8(nil)
+        end
+
+        it "returns a UTF-8 or ASCII Symbol unchanged" do
+          assert_same :café, SemanticLogger::Utils.encode_utf8(:café)
+          assert_same :plain, SemanticLogger::Utils.encode_utf8("plain".b.to_sym)
+        end
+
+        it "converts the name of a Symbol made from binary text, keeping its UTF-8 characters" do
+          result = SemanticLogger::Utils.encode_utf8("Café \xFF☕".b.to_sym)
+
+          assert_equal :"Café ☕", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "converts the name of a Symbol in another encoding" do
+          assert_equal :café, SemanticLogger::Utils.encode_utf8("café".encode(Encoding::ISO_8859_1).to_sym)
+          assert_equal :café, SemanticLogger::Utils.encode_utf8("café".encode(Encoding::UTF_16LE).to_sym)
+        end
+
+        it "converts Symbol keys" do
+          assert_equal({clé: 1}, SemanticLogger::Utils.encode_utf8({"clé".b.to_sym => 1}))
         end
       end
 

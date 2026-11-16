@@ -108,9 +108,7 @@ module SemanticLogger
     # Paths whose entries are stripped from the top of a captured backtrace.
     EXTRACT_PATHS = make_shareable(%w[lib/semantic_logger lib/rails_semantic_logger].freeze)
 
-    def self.extract_paths
-      EXTRACT_PATHS
-    end
+    def self.extract_paths = EXTRACT_PATHS
 
     # Whether this path should be excluded from any cleansed backtrace
     def self.extract_path?(path)
@@ -319,7 +317,8 @@ module SemanticLogger
     private_class_method :open_struct?
 
     # Returns a copy of the supplied value that JSON can represent:
-    # * Every String is converted to valid UTF-8, as by .encode_utf8.
+    # * Every String is converted to valid UTF-8, as by .encode_utf8, and so is the name of every
+    #   Symbol, such as a Hash key, that is not UTF-8 or ASCII (see .encode_utf8_symbol).
     # * Infinity and NaN floats become the Strings "Infinity", "-Infinity", and "NaN".
     # * A Struct, Data, or OpenStruct instance becomes a Hash of its members (from #to_h),
     #   and a Set an Array, as ActiveSupport's #as_json does, so that its members follow
@@ -345,9 +344,10 @@ module SemanticLogger
       case value
       when String
         encode_utf8_string(value)
+      when Symbol then encode_utf8_symbol(value)
       when Float
         value.finite? ? value : value.to_s
-      when Symbol, Integer, NilClass, TrueClass, FalseClass
+      when Integer, NilClass, TrueClass, FalseClass
         value
       when Hash, Array, ::Set, Struct, ::Data
         json_safe_structure(value, depth, ancestors)
@@ -405,9 +405,7 @@ module SemanticLogger
 
     # Returns [true|false] whether the value is a structure that the JSON formatters write as an array
     # of its own elements (see .structure_members): an Array or a Set.
-    def self.json_array?(value)
-      value.is_a?(Array) || value.is_a?(::Set)
-    end
+    def self.json_array?(value) = value.is_a?(Array) || value.is_a?(::Set)
 
     # Returns the members of a structure (see .structure?), as the JSON formatters write them: a
     # Hash or an Array as it is, the elements of a Set as an Array, and the #to_h of a Struct, Data,
@@ -423,12 +421,13 @@ module SemanticLogger
       end
     end
 
-    # Returns a copy of the supplied value with every String converted to valid UTF-8.
+    # Returns a copy of the supplied value with every String converted to valid UTF-8, and every
+    # Symbol whose name is not UTF-8 or ASCII converted the same way (see .encode_utf8_symbol).
     #
     # Recurses through Hash and Array structures, cleansing both keys and values.
     # Strings that are already valid UTF-8 are returned unchanged (the common case),
-    # so the fast path allocates nothing. Any other value (Symbol, Numeric, Time, nil,
-    # ...) is returned as-is.
+    # and so are Symbols that are UTF-8 or ASCII, so the fast path allocates nothing. Any
+    # other value (Numeric, Time, nil, ...) is returned as-is.
     #
     # Used by .to_json on the rare failing path, and directly by formatters that
     # serialize per value or emit to a non-JSON sink (where a single `.to_json`
@@ -437,6 +436,7 @@ module SemanticLogger
       case value
       when String
         encode_utf8_string(value)
+      when Symbol then encode_utf8_symbol(value)
       when Hash
         value.each_with_object({}) do |(key, val), hash|
           hash[encode_utf8(key)] = encode_utf8(val)
@@ -473,6 +473,16 @@ module SemanticLogger
     rescue EncodingError
       # Last resort for encodings without a converter to UTF-8. Logging must never raise.
       read_as_utf8(string)
+    end
+
+    # Returns [Symbol] the Symbol, or, when its name is neither UTF-8 nor ASCII, a Symbol named with
+    # that name converted to valid UTF-8 (see .encode_utf8_string).
+    #
+    # A Symbol is named in the encoding of the text it was made from, such as a binary key from a
+    # request turned into a Symbol, which JSON cannot write once it holds bytes outside ASCII (from
+    # json 3.1, or on JRuby, even when they are valid UTF-8), and a UTF-8 Symbol is always valid.
+    def self.encode_utf8_symbol(symbol)
+      symbol.name.ascii_only? || symbol.encoding == Encoding::UTF_8 ? symbol : encode_utf8_string(symbol.name).to_sym
     end
 
     # Returns [String] a copy of the string's bytes read as UTF-8, without its invalid bytes.

@@ -221,6 +221,15 @@ module SemanticLogger
             assert_equal({"clé" => {"inner" => "Café ☕", "list" => ["Café ☕"]}}, parsed["payload"])
           end
 
+          # Such as the keys of a request's binary text turned into Symbols.
+          it "keeps the characters of Symbol keys made from binary text" do
+            log.named_tags = {binary.to_sym => "v"}
+            log.payload    = {binary.to_sym => 1}
+
+            assert_equal({"Café ☕" => "v"}, parsed["named_tags"])
+            assert_equal({"Café ☕" => 1}, parsed["payload"])
+          end
+
           it "keeps the characters of the exception message" do
             log.exception = RuntimeError.new(binary)
 
