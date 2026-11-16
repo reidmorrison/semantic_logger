@@ -68,6 +68,22 @@ module SemanticLogger
           end
         end
 
+        describe "origin" do
+          it "maps the file, line, and method to log.origin" do
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/models/order.rb", line: 42, label: "Order#submit")
+
+            expected = {file: {name: "/app/models/order.rb", line: 42}, function: "Order#submit"}
+
+            assert_equal expected, result.dig(:log, :origin)
+          end
+
+          it "omits the function without a call site" do
+            log.backtrace = ["/app/models/order.rb:42:in 'Order#submit'"]
+
+            assert_equal({file: {name: "/app/models/order.rb", line: 42}}, result.dig(:log, :origin))
+          end
+        end
+
         describe "duration" do
           it "converts milliseconds to event.duration in nanoseconds" do
             log.duration = 1.5

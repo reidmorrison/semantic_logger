@@ -76,6 +76,15 @@ RSpec.describe SemanticLogger::Test::RSpec do
       expect(event).to be_a_semantic_logger_event(metric: "User/enabled")
     end
 
+    it "matches the call site" do
+      SemanticLogger.call_site_level = :info
+      event = capture_semantic_logger_events { user.enable! }.first
+
+      expect(event).to be_a_semantic_logger_event(call_site: SemanticLogger::CallSite)
+    ensure
+      SemanticLogger.call_site_level = nil
+    end
+
     it "matches a Class expectation against the value's type" do
       expect(event).to be_a_semantic_logger_event(time: Time)
     end

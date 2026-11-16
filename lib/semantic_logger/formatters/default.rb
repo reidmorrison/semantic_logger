@@ -15,13 +15,23 @@ module SemanticLogger
         escape_control_characters(format("%.30s", log.thread_name))
       end
 
-      # Ruby file name and line number that logged the message.
+      # Ruby file name and line number that logged the message, followed by the method when the
+      # entry has a call site (see SemanticLogger.call_site_level), such as "order.rb:42 Order#submit".
       #
       # The file name is escaped like the other fields, since it comes from the first line of the
       # backtrace, which a log call can supply from untrusted data.
       def file_name_and_line
         file, line = log.file_name_and_line(true)
-        "#{escape_control_characters(file)}:#{line}" if file
+        return unless file
+
+        label = method_name
+        label ? "#{escape_control_characters(file)}:#{line} #{label}" : "#{escape_control_characters(file)}:#{line}"
+      end
+
+      # The method that logged the message, such as "Order#submit", when the entry has a call site.
+      # Escaped like the file name, which it comes from.
+      def method_name
+        escape_control_characters(log.call_site&.label)
       end
 
       # Returns [String] the available process info

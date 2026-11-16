@@ -880,6 +880,10 @@ module SemanticLogger
           assert_nil log.extract_file_and_line([])
         end
 
+        it "does not take the file name from a line after a forged line break" do
+          assert_nil log.extract_file_and_line(["forged\n/path/to/file.rb:42"])
+        end
+
         it "uses the log backtrace" do
           log.backtrace = stack
 
@@ -891,6 +895,16 @@ module SemanticLogger
           log.exception = exception
 
           assert_equal ["/path/to/file.rb", 42], log.file_name_and_line
+        end
+
+        it "uses the call site before the backtrace and the exception backtrace" do
+          exception.set_backtrace(stack)
+          log.exception = exception
+          log.backtrace = stack
+          log.call_site = SemanticLogger::CallSite.new(path: "/app/order.rb", line: 12, label: "Order#submit")
+
+          assert_equal ["/app/order.rb", 12], log.file_name_and_line
+          assert_equal ["order.rb", 12], log.file_name_and_line(true)
         end
       end
 

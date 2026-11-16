@@ -544,6 +544,75 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".call_site_level=" do
+      after { SemanticLogger.call_site_level = nil }
+
+      it "is nil by default, with an index that no level reaches" do
+        assert_nil SemanticLogger.call_site_level
+        assert_operator SemanticLogger.call_site_level_index, :>, SemanticLogger::Levels.index(:fatal)
+      end
+
+      it "sets the level and its index" do
+        SemanticLogger.call_site_level = :info
+
+        assert_equal :info, SemanticLogger.call_site_level
+        assert_equal SemanticLogger::Levels.index(:info), SemanticLogger.call_site_level_index
+      end
+
+      it "stores a level supplied as a String as its Symbol" do
+        SemanticLogger.call_site_level = "warn"
+
+        assert_equal :warn, SemanticLogger.call_site_level
+      end
+
+      it "accepts nil to stop recording call sites" do
+        SemanticLogger.call_site_level = :info
+        SemanticLogger.call_site_level = nil
+
+        assert_nil SemanticLogger.call_site_level
+        assert_operator SemanticLogger.call_site_level_index, :>, SemanticLogger::Levels.index(:fatal)
+      end
+
+      it "rejects an invalid level, keeping the current one" do
+        SemanticLogger.call_site_level = :info
+
+        assert_raises(ArgumentError) { SemanticLogger.call_site_level = :verbose }
+        assert_equal :info, SemanticLogger.call_site_level
+      end
+    end
+
+    describe ".call_site_skip_paths=" do
+      after { SemanticLogger.call_site_skip_paths = nil }
+
+      it "is empty by default" do
+        assert_empty SemanticLogger.call_site_skip_paths
+      end
+
+      it "stores frozen copies, leaving the Strings supplied as they are" do
+        path = +"app/lib/audit_log.rb"
+        SemanticLogger.call_site_skip_paths = [path]
+
+        assert_equal ["app/lib/audit_log.rb"], SemanticLogger.call_site_skip_paths
+        assert_predicate SemanticLogger.call_site_skip_paths, :frozen?
+        assert_predicate SemanticLogger.call_site_skip_paths.first, :frozen?
+        refute_predicate path, :frozen?
+      end
+
+      it "accepts nil to skip only Semantic Logger's own frames" do
+        SemanticLogger.call_site_skip_paths = ["app/lib/audit_log.rb"]
+        SemanticLogger.call_site_skip_paths = nil
+
+        assert_empty SemanticLogger.call_site_skip_paths
+      end
+
+      it "rejects a value that is not an Array of non-empty Strings" do
+        ["app/lib", [:app], [""], [nil]].each do |value|
+          assert_raises(ArgumentError, value.inspect) { SemanticLogger.call_site_skip_paths = value }
+        end
+        assert_empty SemanticLogger.call_site_skip_paths
+      end
+    end
+
     describe ".clear_appenders!" do
       it "closes the processor" do
         mock = Minitest::Mock.new

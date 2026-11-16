@@ -538,9 +538,29 @@ Notes:
 * To turn named tags off in development, set `config.log_tags = nil` in
   `config/environments/development.rb`.
 
-### Source file name and line number
+### Source file name, line number, and method
 
-To include the file and line number where each message originated:
+To include the file, line number, and method where each message originated:
+
+~~~ruby
+config.semantic_logger.call_site_level = :info
+~~~
+
+~~~
+2026-11-15 13:58:05.906754 I [8462:puma srv tp 001 orders_controller.rb:12 OrdersController#create] OrdersController -- Creating order
+~~~
+
+This reads only the stack frames up to the code that made the log call, so it is cheap enough to
+leave on in production. See
+[Recording where each entry was logged](config.html#recording-where-each-entry-was-logged) for its
+cost, and for which formatters write it.
+
+The entries that Rails logs for its own events, such as `Processing`, `Completed`, `Rendered`, and
+SQL entries, are logged from Active Support's notifications, so their call site is an Active Support
+frame rather than your code. To see the application code that ran each SQL query, turn on
+`config.active_record.verbose_query_logs`, which adds it to the entry's payload as `source`.
+
+To capture the whole backtrace of each entry instead, use `backtrace_level`:
 
 ~~~ruby
 config.semantic_logger.backtrace_level = :info

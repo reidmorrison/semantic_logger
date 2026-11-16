@@ -138,6 +138,21 @@ module SemanticLogger
             assert_equal 99, attributes["code.line.number"]
           end
 
+          it "includes the file, line, and function from the call site" do
+            log.backtrace = backtrace
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/models/order.rb", line: 42, label: "Order#submit")
+
+            assert_equal "/app/models/order.rb", attributes["code.file.path"]
+            assert_equal 42, attributes["code.line.number"]
+            assert_equal "Order#submit", attributes["code.function.name"]
+          end
+
+          it "omits the function without a call site" do
+            log.backtrace = backtrace
+
+            refute attributes.key?("code.function.name")
+          end
+
           # The location of a logged exception is in its stacktrace, so it is not reported as the
           # location of the entry when the entry did not capture a backtrace of its own.
           it "does not take the file and line from the logged exception" do

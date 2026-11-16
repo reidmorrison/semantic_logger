@@ -32,10 +32,18 @@ module SemanticLogger
         one_line(log.name) if log.name
       end
 
-      # A log call can supply the backtrace that the file name comes from.
+      # A log call can supply the backtrace that the file name and method come from.
       def file_name_and_line
         file, line = log.file_name_and_line(true)
-        "#{one_line(file)}:#{line}" if file
+        return unless file
+
+        label = method_name
+        label ? "#{one_line(file)}:#{line} #{label}" : "#{one_line(file)}:#{line}"
+      end
+
+      def method_name
+        label = log.call_site&.label
+        one_line(label) if label
       end
 
       def message

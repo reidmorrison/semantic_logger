@@ -80,6 +80,7 @@ module SemanticLogger
             log.time        = log_time
             log.thread_name = "worker-1"
             log.backtrace   = backtrace
+            log.call_site   = SemanticLogger::CallSite.new(path: "/app/order.rb", line: 42, label: "Order#submit")
             log
           end
 
@@ -90,6 +91,7 @@ module SemanticLogger
             refute hash.key?("thread"), "expected thread to be excluded"
             refute hash.key?("file"), "expected file to be excluded"
             refute hash.key?("line"), "expected line to be excluded"
+            refute hash.key?("method"), "expected method to be excluded"
           end
 
           it "excludes host by default" do
@@ -112,6 +114,7 @@ module SemanticLogger
             assert_equal "worker-1", hash["thread"]
             assert hash.key?("file"), "expected file to be included"
             assert hash.key?("line"), "expected line to be included"
+            assert_equal "Order#submit", hash["method"]
           end
         end
       end

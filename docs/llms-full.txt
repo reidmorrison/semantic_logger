@@ -943,8 +943,10 @@ formatter such as `:json`.
 
 ### Capturing backtraces
 
-Semantic Logger can capture the file name and line number where each log entry was created, include
-it in the output, and forward it to error services such as Bugsnag.
+Semantic Logger can capture the backtrace of the code that created each log entry, include its file
+name and line number in the output, and forward it to error services such as Bugsnag. To record only
+where each entry was logged, at a fraction of the cost, see
+[Recording where each entry was logged](#recording-where-each-entry-was-logged) below.
 
 Capturing a backtrace is expensive, so it is controlled by its own level, which defaults to
 `:error`. Only entries at this level or higher capture a backtrace:
@@ -956,6 +958,109 @@ SemanticLogger.backtrace_level = :error
 
 To capture a backtrace for every entry, set it to `:trace`. To turn backtrace capture off entirely,
 set it to `nil`. It is strongly recommended to leave this at `:error` or higher in production.
+
+### Recording where each entry was logged
+
+To record the file, line, and method of the code that made each log call, set `call_site_level`.
+Entries at this level or higher record their call site. It is off (`nil`) by default:
+
+~~~ruby
+# Record where :info and higher entries were logged
+SemanticLogger.call_site_level = :info
+
+# Every entry
+SemanticLogger.call_site_level = :trace
+
+# Off (the default)
+SemanticLogger.call_site_level = nil
+~~~
+
+In Rails, set it in `config/application.rb` with `config.semantic_logger.call_site_level = :info`.
+
+The text formatters then show the method after the file name and line number, and the JSON formatter
+adds a `method` field:
+
+~~~
+2026-11-15 13:58:05.906754 I [8462:main order.rb:42 Order#submit] Order -- Submitted
+~~~
+
+~~~json
+{"file":"/app/models/order.rb","line":42,"method":"Order#submit","name":"Order","message":"Submitted"}
+~~~
+
+Unlike a backtrace, the call site is found by reading only the stack frames up to the code that made
+the log call. A backtrace builds a String for every frame of the stack, so its cost grows with the
+depth of the stack:
+
+| | `backtrace_level` | `call_site_level` |
+|-|-------------------|-------------------|
+| Records | The whole stack, as an Array of Strings | The file, line, and method of the log call |
+| Time added to a `logger.info` call, 100 frames deep | About 16 µs (Ruby 3.2) to 26 µs (Ruby 4.0) | About 1.5 µs |
+| On a deeper stack | Grows with the depth | The same |
+| Default | `:error` | `nil` (off) |
+
+(Measured on an Apple M5; a `logger.info` call without either takes about 1.3 µs. Reading the stack
+costs much more on JRuby: about 25 µs for the call site, and 180 µs for a backtrace.) The call site is
+cheap enough to record for every entry in most applications, but it still about doubles the time a
+log call spends on the thread that logs, so measure it when an application logs at a very high rate.
+
+The method is the label Ruby gives the frame in a backtrace:
+
+| Code that logged | Ruby 3.4 and later | Ruby 3.2, 3.3, and JRuby |
+|------------------|--------------------|--------------------------|
+| Instance method | `Order#submit` | `submit` |
+| Class method | `Order.find_open` | `find_open` |
+| Block inside a method | `block in Order#submit` | `block in submit` |
+| Method defined with `define_method` | `block in <class:Order>` | `block in <class:Order>` |
+| Outside any method | `<main>`, `<class:Order>` | `<main>`, `<class:Order>` |
+
+JRuby gives a method defined with `define_method` its name, such as `submit`.
+
+Where each formatter writes the call site:
+
+| Formatter | File and line | Method |
+|-----------|---------------|--------|
+| `:default`, `:color`, `:one_line`, `:syslog` | `order.rb:42`, after the thread name | After the line number |
+| `:pattern` | `%{file_name}`, `%{line}` | `%{method}` |
+| `:json`, `:raw`, `:syslog_cee`, `:fluentd` (with `need_process_info: true`), and the appenders that use them | `file`, `line` | `method` |
+| `:ecs` | `log.origin.file.name`, `log.origin.file.line` | `log.origin.function` |
+| `:new_relic_logs` | `file.name`, `line.number` | `method.name` |
+| `:open_telemetry` | `code.file.path`, `code.line.number` | `code.function.name` |
+
+The `:logfmt` and `:loki` formatters write neither. A custom formatter reads the call site from
+[`log.call_site`](log.html#attributes).
+
+Which code counts as the call site:
+
+* The first frame outside Semantic Logger, `rails_semantic_logger`, and Ruby's internal files (paths
+  that start with `<internal:`). So an entry logged by a `measure_*` call, or by a logging block,
+  records the code that called the logger. When the logger is called through `public_send`,
+  `Method#call`, or `UnboundMethod#bind_call`, the call site is the code that called that method. (On
+  JRuby, `Method#call` inside a block records the right file and line, but the label `block in call`.)
+  Code in Ruby's standard library that calls the logger for you, such as a method that `Forwardable`
+  delegates, is recorded as the call site: add its path to `call_site_skip_paths` (see below).
+* When the log call supplies a `backtrace:`, the first line of that backtrace. For example
+  `logger.backtrace` passes the backtrace of the thread it logs, and `rails_semantic_logger` passes
+  the application code that ran a SQL query when it captures a backtrace for the entry (see
+  `backtrace_level` above). A backtrace returned by a logging block does not change the call site.
+* Entries that `rails_semantic_logger` logs for Rails' own events, such as `Processing`,
+  `Completed`, `Rendered`, and SQL entries without a backtrace, are logged from Active Support's
+  notifications, so their call site is an Active Support frame rather than the application's code.
+* With a call site, an entry's file name and line number are the call site's, also for an entry that
+  logs an exception. Without one, they still come from a captured backtrace, or else the first line
+  of the exception's backtrace.
+
+Code that logs on behalf of its caller, such as an application's own logging helper, would always be
+recorded as the call site. Skip its frames with `call_site_skip_paths`, so that entries record the
+code that called it. Each entry matches any file whose path includes it:
+
+~~~ruby
+# AuditLog.record(...) logs for its callers
+SemanticLogger.call_site_skip_paths = ["app/lib/audit_log.rb"]
+
+# Every file of a gem that wraps the logger
+SemanticLogger.call_site_skip_paths = ["app/lib/audit_log.rb", "/my_logging_gem/"]
+~~~
 
 ### Cleaning backtraces
 
@@ -1025,8 +1130,8 @@ Notes:
 * The application's cleaner is looked up as each entry is written, so it can be set before or after
   the appenders are added.
 * The file name and line number of an entry are not cleaned. They are where the entry was logged when
-  it captured a backtrace (see `backtrace_level` above), and otherwise the first line of the
-  exception's backtrace.
+  it has a call site (see `call_site_level` above) or captured a backtrace (see `backtrace_level`
+  above), and otherwise the first line of the exception's backtrace.
 
 ### Redacting sensitive keys
 
@@ -1289,6 +1394,7 @@ Available directives:
 | `%{pid}`               | Process id.                                              |
 | `%{file_name}`         | Ruby file name that logged the message, e.g. `app.rb`.   |
 | `%{line}`              | Line number within the Ruby file, e.g. `42`.             |
+| `%{method}`            | Method that logged the message, e.g. `Order#submit`, when the entry has a call site. See [Recording where each entry was logged](#recording-where-each-entry-was-logged). |
 | `%{tags}`              | Tags, comma separated.                                   |
 | `%{named_tags}`        | All named tags. One tag with `%{named_tags:request_id}`. |
 | `%{host}`              | Host name.                                               |
@@ -1911,6 +2017,7 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
   "thread": "Thread name or id",
   "file": "filename",
   "line": "line number",
+  "method": "Method that logged it, such as Order#submit",
 
   "level": "trace|debug|info|warn|error|fatal",
   "level_index": "0|1|2|3|4|5",
@@ -1968,7 +2075,7 @@ Differences from `:json`:
 * `level` / `level_index` become `severity` / `severity_index`.
 * `host` is excluded by default (under Fluentd it is usually the not-very-useful container id). Pass
   `log_host: true` to include it.
-* The process fields `pid`, `thread`, `file`, and `line` are excluded by default. Pass
+* The process fields `pid`, `thread`, `file`, `line`, and `method` are excluded by default. Pass
   `need_process_info: true` to include them.
 
 Construct the formatter explicitly to override these defaults:
@@ -1999,6 +2106,7 @@ Semantic Logger fields map to ECS as follows:
 | `level` | `log.level` |
 | `name` | `log.logger` |
 | `file` / `line` | `log.origin.file.name` / `log.origin.file.line` |
+| `method` | `log.origin.function` |
 | `message` | `message` |
 | `thread` | `process.thread.name` |
 | `pid` | `process.pid` |
@@ -2462,7 +2570,8 @@ body. Semantic Logger adds these attributes when the entry has the value:
 |-----------|-------|
 | `exception.type`, `exception.message` | The class and message of the logged exception. |
 | `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
-| `code.file.path`, `code.line.number` | Where the entry was logged, when it captured a backtrace (see `backtrace_level`). |
+| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a call site (see [`call_site_level`](config.html#recording-where-each-entry-was-logged)) or captured a backtrace (see `backtrace_level`). |
+| `code.function.name` | The method that logged the entry, such as `Order#submit`, when it has a call site. |
 | `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
 | `process.pid` | The id of the process that logged the entry. |
 | `semantic_logger.name` | The logger's name, usually the class name. |
@@ -2470,7 +2579,7 @@ body. Semantic Logger adds these attributes when the entry has the value:
 | `semantic_logger.duration_ms` | The duration in milliseconds, from the `measure_*` methods. |
 | `semantic_logger.metric`, `semantic_logger.metric_amount` | The metric name and amount. |
 
-The first five rows use the names from the
+The first six rows use the names from the
 [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/). A named tag or
 payload key named like one of these attributes is prefixed with its source, as in
 `payload.exception.type`, so that logged data cannot replace or forge them.
@@ -2867,8 +2976,9 @@ A handful of attributes are populated for **every** event:
 
 The rest are **situational**: they are set only when relevant to that particular call. For example
 `duration` is present only for `measure_*` calls, `exception` only when an exception was logged,
-`metric`/`metric_amount`/`dimensions` only for metrics, and `backtrace` only when backtrace
-capture is enabled (`SemanticLogger.backtrace_level`). Always guard against `nil` when reading a
+`metric`/`metric_amount`/`dimensions` only for metrics, `backtrace` only when backtrace
+capture is enabled (`SemanticLogger.backtrace_level`), and `call_site` only when call site recording
+is enabled (`SemanticLogger.call_site_level`). Always guard against `nil` when reading a
 situational field.
 
 ### Attributes
@@ -2889,9 +2999,34 @@ situational field.
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
+|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`. See [The call site](#the-call-site).|
 |`metric`|`String`|The metric name, present for metric and `measure_*` calls. See [Metrics](metrics.html).|
 |`metric_amount`|`Float`|Numeric amount for a counter or gauge metric, for example the quantity purchased.|
 |`dimensions`|`Hash`|Dimensions (key/value labels) supplied for a metric.|
+
+### The call site
+
+`call_site` is a frozen value object that records where the entry was logged. See
+[Recording where each entry was logged](config.html#recording-where-each-entry-was-logged) for how
+it is found.
+
+|Method|Returns|Description|
+|------|-------|-----------|
+|`path`|`String`|The file, as in a backtrace, for example `"/app/models/order.rb"`.|
+|`line`|`Integer`|The line number in the file.|
+|`label`|`String` or `nil`|The label Ruby gives the frame, usually the method: `"Order#submit"` on Ruby 3.4 and later, `"submit"` on Ruby 3.2, 3.3, and JRuby.|
+|`file_name_and_line(short_name: false)`|`[String, Integer]`|The path and line. With `short_name: true` the file name has no directory, for example `"order.rb"`.|
+|`to_s`|`String`|The call site as a backtrace line, for example `"/app/models/order.rb:42:in 'Order#submit'"`.|
+
+~~~ruby
+class MyFormatter
+  def call(log, _logger)
+    site = log.call_site
+    location = site ? " (#{site.label} at #{File.basename(site.path)}:#{site.line})" : ""
+    "#{log.level_to_s} #{log.name} -- #{log.message}#{location}"
+  end
+end
+~~~
 
 ### Helper methods
 
@@ -2910,7 +3045,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`backtrace_to_s(cleaner: nil)`|`String`|The exception backtrace as a string, including every exception in the `cause` chain. Lines are separated by a line break, with none before the first or after the last, so put your own line break before it. With a block, each cause's message and each backtrace line is replaced by the value the block returns, for example to escape it. With a `cleaner`, each backtrace is first cleaned as `backtrace_of` cleans it.|
 |`backtrace_of(exception, cleaner: nil)`|`Array<String>` or `nil`|The backtrace of `exception` (this event's exception or one of its causes). With a [backtrace cleaner](config.html#cleaning-backtraces) object, such as `Rails.backtrace_cleaner` (not `true`, as the formatter option accepts), the lines it keeps, or the full backtrace when it keeps none; the exception is not changed. A cleaned backtrace, and each of its lines, is frozen and cached on the event.|
 |`exception_details(exception, source: false)`|`String` or `nil`|The detail Ruby's `Exception#detailed_message` adds to the message of `exception` (this event's exception or one of its causes), such as did_you_mean suggestions, without the class name. `source: true` also includes error_highlight's source snippet. `nil` when there is none. Cached on the event.|
-|`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's backtrace or exception. Pass `true` for just the base file name.|
+|`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's call site, or else its backtrace or exception. Pass `true` for just the base file name.|
 |`to_h`|`Hash`|The event as a plain Hash (via the Raw formatter), including `host`, `application`, and `environment`. Handy for inspecting an event or building a custom formatter.|
 |`set_context(key, value)`|`Object`|Lazily initializes `context`, stores a key/value pair on it, and returns the value.|
 |`capture(key, value)`|`Object`|Lazily initializes `captures`, stores a key/value pair on it, and returns the value, for an appender that needs state of the logging thread, such as the current trace, that is not log data.|
@@ -3623,9 +3758,29 @@ Notes:
 * To turn named tags off in development, set `config.log_tags = nil` in
   `config/environments/development.rb`.
 
-### Source file name and line number
+### Source file name, line number, and method
 
-To include the file and line number where each message originated:
+To include the file, line number, and method where each message originated:
+
+~~~ruby
+config.semantic_logger.call_site_level = :info
+~~~
+
+~~~
+2026-11-15 13:58:05.906754 I [8462:puma srv tp 001 orders_controller.rb:12 OrdersController#create] OrdersController -- Creating order
+~~~
+
+This reads only the stack frames up to the code that made the log call, so it is cheap enough to
+leave on in production. See
+[Recording where each entry was logged](config.html#recording-where-each-entry-was-logged) for its
+cost, and for which formatters write it.
+
+The entries that Rails logs for its own events, such as `Processing`, `Completed`, `Rendered`, and
+SQL entries, are logged from Active Support's notifications, so their call site is an Active Support
+frame rather than your code. To see the application code that ran each SQL query, turn on
+`config.active_record.verbose_query_logs`, which adds it to the entry's payload as `source`.
+
+To capture the whole backtrace of each entry instead, use `backtrace_level`:
 
 ~~~ruby
 config.semantic_logger.backtrace_level = :info
@@ -4169,6 +4324,7 @@ test. The available checks are:
 | `time` | When the entry was created. |
 | `duration` | Duration of a measure call, in milliseconds. |
 | `backtrace` | The captured backtrace, if any. |
+| `call_site` | Where the entry was logged, a `SemanticLogger::CallSite`, when `SemanticLogger.call_site_level` is set. |
 | `thread_name` | Name of the thread that logged the entry, or its object id when the thread has no name. |
 
 ### Match part of a message or payload
@@ -4861,6 +5017,8 @@ Semantic Logger only uses such a key as an argument when its value is valid for 
 `duration` must be a finite real number, `backtrace` an Array of Strings, and `on_exception_level` a
 valid level. Any other value stays in the payload as data, and a `nil` value is ignored, so an
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
+A valid `backtrace` also sets where the entry is recorded as logged: its file name, line number, and,
+with [`call_site_level`](config.html#recording-where-each-entry-was-logged), its method.
 
 To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
 keys supplied alongside an explicit `payload:` are merged into it, and win over the explicit

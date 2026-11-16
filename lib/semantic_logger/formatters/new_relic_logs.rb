@@ -79,17 +79,7 @@ module SemanticLogger
           }
         end
 
-        if hash[:file]
-          result[:file] = {
-            name: hash[:file]
-          }
-        end
-
-        if hash[:line]
-          result[:line] = {
-            number: hash[:line].to_s
-          }
-        end
+        add_location(result, hash)
 
         # NOTE: Any named tags are merged directly into the result
         # unless there are conflicts with other keys. In that
@@ -114,6 +104,16 @@ module SemanticLogger
       end
 
       private
+
+      # Where the entry was logged: the file name, line number, and method, when it has them.
+      #
+      # The method is a flat "method.name" key, which New Relic reads as the same attribute as a nested
+      # one, so that it does not replace a named tag called "method", such as a request's HTTP method.
+      def add_location(result, hash)
+        result[:file]          = {name: hash[:file]} if hash[:file]
+        result[:line]          = {number: hash[:line].to_s} if hash[:line]
+        result[:"method.name"] = hash[:method] if hash[:method]
+      end
 
       # returns "entity.name", "trace.id" etc from NewRelic::Agent.linking_metadata
       def linking_metadata(log)

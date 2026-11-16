@@ -139,6 +139,21 @@ module SemanticLogger
             refute formatter.hash.key?(:file)
             refute formatter.hash.key?(:line)
           end
+
+          it "logs file, line, and method from the call site" do
+            log.backtrace = backtrace
+            log.call_site = SemanticLogger::CallSite.new(path: "/app/models/order.rb", line: 42, label: "Order#submit")
+
+            assert_equal "/app/models/order.rb", formatter.hash[:file]
+            assert_equal 42, formatter.hash[:line]
+            assert_equal "Order#submit", formatter.hash[:method]
+          end
+
+          it "omits the method without a call site" do
+            log.backtrace = backtrace
+
+            refute formatter.hash.key?(:method)
+          end
         end
 
         describe "duration" do

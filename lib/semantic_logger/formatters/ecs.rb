@@ -22,6 +22,7 @@ module SemanticLogger
     #   level                 -> log.level
     #   name                  -> log.logger
     #   file_name / line      -> log.origin.file.name / log.origin.file.line
+    #   method                -> log.origin.function
     #   message               -> message
     #   thread_name           -> process.thread.name
     #   pid                   -> process.pid
@@ -110,7 +111,9 @@ module SemanticLogger
       def add_origin(result, hash)
         return unless hash[:file]
 
-        result[:log][:origin] = {file: {name: hash[:file], line: hash[:line]}.compact}
+        origin            = {file: {name: hash[:file], line: hash[:line]}.compact}
+        origin[:function] = hash[:method] if hash[:method]
+        result[:log][:origin] = origin
       end
 
       # ECS event.duration is measured in nanoseconds.

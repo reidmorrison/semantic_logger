@@ -47,13 +47,16 @@ module SemanticLogger
         hash[:thread] = log.thread_name
       end
 
-      # Ruby file name and line number that logged the message.
+      # Ruby file name and line number that logged the message, and the method when the entry has a
+      # call site (see SemanticLogger.call_site_level).
       def file_name_and_line
         file, line = log.file_name_and_line
         return unless file
 
-        hash[:file] = file
-        hash[:line] = line.to_i
+        hash[:file]   = file
+        hash[:line]   = line.to_i
+        label         = log.call_site&.label
+        hash[:method] = label if label
       end
 
       # Tags

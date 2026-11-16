@@ -23,7 +23,7 @@ module SemanticLogger
       # Verify a single log event has all the required attributes.
       def assert_semantic_logger_event(event, level: nil, name: nil, message: nil, message_includes: nil,
                                        payload: nil, payload_includes: nil,
-                                       exception: nil, exception_includes: nil, backtrace: nil,
+                                       exception: nil, exception_includes: nil, backtrace: nil, call_site: nil,
                                        thread_name: nil, tags: nil, named_tags: nil, context: nil,
                                        level_index: nil, duration: nil, time: nil,
                                        metric: nil, metric_amount: nil, dimensions: nil)
@@ -44,6 +44,7 @@ module SemanticLogger
         assert_semantic_logger_entry(event, :time, time)
         assert_semantic_logger_entry(event, :exception, exception)
         assert_semantic_logger_entry(event, :backtrace, backtrace)
+        assert_semantic_logger_entry(event, :call_site, call_site)
         assert_semantic_logger_entry(event, :payload, payload)
 
         if message_includes

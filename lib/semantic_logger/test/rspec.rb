@@ -31,7 +31,7 @@ module SemanticLogger
       EVENT_ATTRIBUTES = %i[
         level name message thread_name tags named_tags context
         metric metric_amount dimensions level_index duration time
-        exception backtrace payload
+        exception backtrace call_site payload
       ].freeze
 
       # Matches a single SemanticLogger::Log against a set of expectations.

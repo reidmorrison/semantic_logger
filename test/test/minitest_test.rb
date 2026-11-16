@@ -86,6 +86,21 @@ class MinitestHelpersTest < Minitest::Test
       assert_semantic_logger_event(error_event, exception: StandardError)
     end
 
+    it "matches the call site" do
+      original = SemanticLogger.call_site_level
+      SemanticLogger.call_site_level = :info
+      begin
+        event = semantic_logger_events { User.new.enable! }.first
+      ensure
+        SemanticLogger.call_site_level = original
+      end
+
+      expected = SemanticLogger::CallSite.new(path: __FILE__, line: 10, label: event.call_site.label)
+
+      assert_semantic_logger_event(event, call_site: SemanticLogger::CallSite)
+      assert_semantic_logger_event(event, call_site: expected)
+    end
+
     it "fails when there is no event" do
       assert_raises(Minitest::Assertion) do
         assert_semantic_logger_event(nil, message: "anything")

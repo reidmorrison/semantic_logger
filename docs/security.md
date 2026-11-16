@@ -67,6 +67,8 @@ Semantic Logger only uses such a key as an argument when its value is valid for 
 `duration` must be a finite real number, `backtrace` an Array of Strings, and `on_exception_level` a
 valid level. Any other value stays in the payload as data, and a `nil` value is ignored, so an
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
+A valid `backtrace` also sets where the entry is recorded as logged: its file name, line number, and,
+with [`call_site_level`](config.html#recording-where-each-entry-was-logged), its method.
 
 To make sure none of its keys are treated as arguments, pass it as the explicit `payload:`. Any other
 keys supplied alongside an explicit `payload:` are merged into it, and win over the explicit
