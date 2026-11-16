@@ -57,10 +57,9 @@ module SemanticLogger
                      **http_args,
                      &)
         if type
-          Kernel.warn(
+          Deprecation.warn(
             "The Elasticsearch/OpenSearch appender `type:` parameter is deprecated and will be removed in v6. " \
-            "Document `_type` has been unused since Elasticsearch 7 and is ignored by OpenSearch.",
-            category: :deprecated
+            "Document `_type` has been unused since Elasticsearch 7 and is ignored by OpenSearch."
           )
         end
 

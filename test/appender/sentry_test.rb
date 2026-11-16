@@ -4,17 +4,16 @@ require_relative "../test_helper"
 module Appender
   class SentryTest < Minitest::Test
     describe SemanticLogger::Appender::Sentry do
+      allow_deprecation(/Appender::Sentry \(appender: :sentry\) is deprecated/)
+
       let(:appender) { SemanticLogger::Appender::Sentry.new(level: :trace) }
       let(:amessage) { "AppenderRavenTest log message" }
 
       it "warns that the appender is deprecated" do
-        original                = Warning[:deprecated]
-        Warning[:deprecated]    = true
-        assert_output(nil, /deprecated.*sentry_ruby/m) do
+        line = __LINE__ + 2
+        assert_deprecated(/sentry_test\.rb:#{line}: warning: SemanticLogger: .*deprecated.*sentry_ruby/m) do
           SemanticLogger::Appender::Sentry.new(level: :trace)
         end
-      ensure
-        Warning[:deprecated] = original
       end
 
       SemanticLogger::LEVELS.each do |level|

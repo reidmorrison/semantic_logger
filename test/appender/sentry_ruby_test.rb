@@ -109,6 +109,8 @@ module Appender
       end
 
       describe "with the Sentry user or fingerprint in the payload" do
+        allow_deprecation(/SentryRuby took the Sentry user or fingerprint from the log payload/)
+
         # Logs the entry directly, and returns the Sentry scope it was captured with.
         def capture(log)
           scope = nil
@@ -225,27 +227,18 @@ module Appender
         end
 
         it "warns that taking a user Hash from the payload is deprecated" do
-          original             = Warning[:deprecated]
-          Warning[:deprecated] = true
-          _out, err            = capture_io do
+          assert_deprecated(/SemanticLogger: .*SentryRuby took the Sentry user or fingerprint from the log payload/) do
             capture(error_log({user: {segment: "paid"}}, {user_id: 7}))
           end
-
-          assert_includes err, "SentryRuby took the Sentry user or fingerprint from the log payload"
-        ensure
-          Warning[:deprecated] = original
         end
 
         it "warns once that taking them from the payload is deprecated" do
-          original             = Warning[:deprecated]
-          Warning[:deprecated] = true
-          _out, err            = capture_io do
+          _result, warnings = deprecations_of do
             2.times { capture(error_log({user_id: 7})) }
           end
 
-          assert_equal 1, err.scan("SentryRuby took the Sentry user or fingerprint from the log payload").size
-        ensure
-          Warning[:deprecated] = original
+          assert_equal 1, warnings.size
+          assert_match(/SentryRuby took the Sentry user or fingerprint from the log payload/, warnings.first)
         end
       end
 
@@ -269,7 +262,9 @@ module Appender
                 SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
                   ::Sentry.stub(:capture_message, capture) do
                     args = {username: "joe", fingerprint: ["bar"], other: "unrelated"}
-                    appender.error("some message", **args)
+                    assert_deprecated(/took the Sentry user or fingerprint from the log payload/) do
+                      appender.error("some message", **args)
+                    end
                   end
                 end
               end

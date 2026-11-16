@@ -12,6 +12,45 @@ description: >-
 * TOC
 {:toc}
 
+### Seeing deprecation warnings
+
+Semantic Logger reports the use of a deprecated appender or option as a Ruby deprecation warning, the
+same way that Ruby reports its own, naming the line of your application that used it, and what to use
+instead:
+
+~~~
+config/initializers/logging.rb:12: warning: SemanticLogger: SemanticLogger::Appender::Sentry (appender: :sentry) is deprecated and will be removed in v6. It depends on the end-of-life sentry-raven gem. Use appender: :sentry_ruby instead.
+~~~
+
+When a gem adds the appender for you, the warning names the line of that gem that added it.
+
+Ruby only shows deprecation warnings while `Warning[:deprecated]` is true, which it is not by default,
+so production stays quiet without any configuration:
+
+| Where | Deprecation warnings |
+|-------|----------------------|
+| Tests run with Minitest or test-unit | On, since both turn them on |
+| Tests run with RSpec | Off, unless run with `rspec --warnings`, or `Warning[:deprecated] = true` is set in `spec_helper.rb` |
+| Development | Off, unless `RUBYOPT=-W:deprecated` is set in the environment, or `Warning[:deprecated] = true` in code that only runs in development, such as `config/environments/development.rb` |
+| Production | Off |
+
+Rails settings such as `config.active_support.deprecation` only apply to the deprecation warnings of
+Rails, not to those that Ruby reports.
+
+Ruby writes each warning to `$stderr`. To send them elsewhere, such as to your log, or to raise them
+in your tests so that each use is found, extend `Warning` with your own `warn`:
+
+~~~ruby
+module SemanticLoggerDeprecations
+  def warn(message, *, **)
+    return super unless message.include?("SemanticLogger: ")
+
+    SemanticLogger["Deprecations"].warn(message.chomp)
+  end
+end
+Warning.extend(SemanticLoggerDeprecations)
+~~~
+
 ### Upgrading to Semantic Logger v5.3
 
 #### OpenTelemetry log records

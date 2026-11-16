@@ -256,11 +256,10 @@ module SemanticLogger
         return if @payload_context_deprecated
 
         @payload_context_deprecated = true
-        Kernel.warn(
+        Deprecation.warn(
           "SemanticLogger::Appender::SentryRuby took the Sentry user or fingerprint from the log payload. " \
           "This is deprecated and will be removed in v6, since the payload can hold untrusted data: " \
-          "set them with named tags instead, for example SemanticLogger.tagged(user_id: user.id).",
-          category: :deprecated
+          "set them with named tags instead, for example SemanticLogger.tagged(user_id: user.id)."
         )
       end
 
