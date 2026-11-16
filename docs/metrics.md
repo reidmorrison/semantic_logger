@@ -115,6 +115,9 @@ forward them to [Graphite](https://graphiteapp.org), MongoDB, and others (requir
 SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
 ~~~
 
+The `url:` must be `udp://`, and its host must resolve when the subscriber is added, or `add_appender`
+raises. A path in the url, as in `udp://localhost:8125/my_app`, is the namespace of every metric.
+
 Counters are integers (float amounts are rounded). Does not support dimensions.
 
 ### New Relic
