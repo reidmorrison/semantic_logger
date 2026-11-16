@@ -116,28 +116,36 @@ module SemanticLogger
         return unless log.metric
 
         payload_value[:metric]       = loki_value(log.metric)
-        payload_value[:metric_value] = log.metric_amount.to_s if log.metric_amount
+        payload_value[:metric_value] = number_text(log.metric_amount) if log.metric_amount
         payload_value[:dimensions]   = loki_value(log.dimensions) if log.dimensions?
       end
 
       def duration
         return unless log.duration
 
-        payload_value[:duration] = log.duration.to_s
+        payload_value[:duration] = number_text(log.duration)
         payload_value[:duration_human] = log.duration_human
+      end
+
+      # Returns [String] the number as LogQL reads it, to compare it or `unwrap` it: an Integer as
+      # it is, and any other number as a Float, which is how LogQL holds it. A Rational's own text,
+      # such as `3/2`, would make every LogQL query that unwraps it fail, and a BigDecimal's, such
+      # as `0.25e1`, is not how anyone writes a number.
+      def number_text(number)
+        number.is_a?(Integer) ? number.to_s : number.to_f.to_s
       end
 
       # The stack trace is one line per frame, followed by each exception that caused it, as the
       # text formatters write it.
       #
-      # The name and message are Strings too: an anonymous exception class has no name, so it is
-      # written as the text formatters write it, such as `#<Class:0x000...>`, and a #message that
-      # returns nil, or raises, is replaced as Utils.exception_message replaces it.
+      # The name and message are Strings too: the class's name, or, for an anonymous class, which
+      # has none, the class as the text formatters write it, such as `#<Class:0x000...>`. A
+      # #message that returns nil, or raises, is replaced as Utils.exception_message replaces it.
       def exception
         return unless log.exception
 
         payload_value.merge!(
-          exception_name:    log.exception.class.to_s,
+          exception_name:    (log.exception.class.name || log.exception.class).to_s,
           exception_message: Utils.exception_message(log.exception),
           stack_trace:       exception_backtrace
         )

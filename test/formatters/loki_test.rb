@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require "bigdecimal"
 require "json"
 
 module SemanticLogger
@@ -295,6 +296,18 @@ module SemanticLogger
             assert_equal "1.5", values_data[2]["metric_value"]
           end
 
+          # LogQL cannot read a Rational's own text, `3/2`, so every query that unwraps it would fail.
+          it "writes a Rational or BigDecimal amount as a decimal number" do
+            log.metric        = "my_metric"
+            log.metric_amount = Rational(3, 2)
+
+            assert_equal "1.5", values_data[2]["metric_value"]
+
+            log.metric_amount = BigDecimal("2.5")
+
+            assert_equal "2.5", JSON.parse(formatter.call(log, logger))["streams"][0]["values"][0][2]["metric_value"]
+          end
+
           it "omits metric_value for a metric without an amount" do
             log.metric = "my_metric"
 
@@ -335,6 +348,15 @@ module SemanticLogger
                 assert_equal "123.456", payload_obj["duration"]
                 assert_equal "123.46ms", payload_obj["duration_human"]
               end
+            end
+
+            it "writes an Integer as it is, and a Rational or BigDecimal as a decimal number" do
+              durations = [5, Rational(5, 2), BigDecimal("0.5")].map do |duration|
+                log.duration = duration
+                JSON.parse(formatter.call(log, logger))["streams"][0]["values"][0][2]["duration"]
+              end
+
+              assert_equal %w[5 2.5 0.5], durations
             end
           end
 
@@ -417,6 +439,16 @@ module SemanticLogger
             assert_equal "my_metric", payload_obj["metric"]
             assert_equal "100", payload_obj["metric_value"]
             assert_equal "RuntimeError", payload_obj["exception_name"]
+          end
+
+          it "names an exception by its class's name, as :json does, rather than the class's #to_s" do
+            error_class = Class.new(StandardError) do
+              def self.name = "Payments::Declined"
+              def self.to_s = "custom"
+            end
+            log.exception = error_class.new("Declined")
+
+            assert_equal "Payments::Declined", values_data[2]["exception_name"]
           end
 
           it "names an exception of an anonymous class as the text formatters do" do
