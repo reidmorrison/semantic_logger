@@ -85,7 +85,7 @@ module SemanticLogger
         if appender.is_a?(Symbol)
           SemanticLogger::Utils.constantize_symbol(appender).new(**args, &)
         elsif appender.is_a?(Subscriber)
-          appender
+          subscriber_instance(:appender, appender, **args, &)
         else
           raise(ArgumentError,
                 "Parameter :appender must be either a Symbol or an object derived from " \
@@ -95,7 +95,7 @@ module SemanticLogger
         if metric.is_a?(Symbol)
           SemanticLogger::Utils.constantize_symbol(metric, "SemanticLogger::Metric").new(**args, &)
         elsif metric.is_a?(Subscriber)
-          metric
+          subscriber_instance(:metric, metric, **args, &)
         else
           raise(ArgumentError,
                 "Parameter :metric must be either a Symbol or an object derived from " \
@@ -109,5 +109,24 @@ module SemanticLogger
     end
 
     private_class_method :build
+
+    # Returns [Subscriber] the appender or metric subscriber supplied as an instance, with the `option` that named it,
+    # `:appender` or `:metric`, as it is, since it was created with its own options. The options and block that .build
+    # would hand to an appender that it creates are not used, so reports a deprecation warning that names each one,
+    # since v6 raises ArgumentError for them. Remove in v6, raising ArgumentError in its place.
+    def self.subscriber_instance(option, subscriber, **args)
+      ignored = args.keys.map { |key| "#{key}:" }
+      ignored.unshift("the formatter block") if block_given?
+      return subscriber if ignored.empty?
+
+      list    = ignored.size < 3 ? ignored.join(" and ") : "#{ignored[0..-2].join(', ')}, and #{ignored.last}"
+      pronoun = ignored.one? ? "it" : "them"
+      Deprecation.warn(
+        "add_appender ignores #{list} when #{option}: is a Subscriber instance (#{subscriber.class}), " \
+        "and v6 raises ArgumentError for #{pronoun}. Set #{pronoun} on the instance itself."
+      )
+      subscriber
+    end
+    private_class_method :subscriber_instance
   end
 end

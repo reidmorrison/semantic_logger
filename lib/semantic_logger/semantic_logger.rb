@@ -291,6 +291,8 @@ module SemanticLogger
   #     An instance of an appender derived from SemanticLogger::Subscriber
   #     For example:
   #       SemanticLogger::Appender::Http.new(url: 'http://localhost:8088/path')
+  #     It is added as it is: set its options, such as level: and formatter:, and its formatter block,
+  #     on the instance itself. Only async:, batch:, and the other options of the async proxy apply to it.
   #
   #   Or,
   #   logger: [Logger|Log4r]

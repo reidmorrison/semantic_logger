@@ -135,6 +135,28 @@ SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], met
 SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: false)
 ~~~
 
+#### Set the options of an appender instance on the instance
+
+`add_appender` adds an appender or metric subscriber that is already created, given as `appender:` or
+`metric:`, as it is, since it was created with its own options. A formatter block, or the options of
+an appender, such as `level:`, `formatter:`, or `filter:`, given with it were ignored without a word.
+They still are, but `add_appender` now reports a [deprecation warning](#seeing-deprecation-warnings)
+that names them, and v6 raises `ArgumentError` for them. Set them on the instance itself, such as
+when creating a [custom appender](config.html#custom-appenders):
+
+~~~ruby
+# Before, level: and formatter: were ignored:
+appender = SimpleAppender.new(url: "https://logs.example.com")
+SemanticLogger.add_appender(appender: appender, level: :warn, formatter: :json)
+
+# After:
+appender = SimpleAppender.new(url: "https://logs.example.com", level: :warn, formatter: :json)
+SemanticLogger.add_appender(appender: appender)
+~~~
+
+The options of `add_appender` itself, such as `async:`, `batch:`, and `max_queue_size:`, still apply
+to an instance.
+
 #### Loki stack traces
 
 The `:loki` formatter now writes the `stack_trace` of a logged exception one frame per line, followed

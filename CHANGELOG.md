@@ -132,6 +132,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   them out by default, as the other log appenders do, so they now report a deprecation warning. Pass
   `metrics: true` to keep sending them, or `metrics: false` to leave them out. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- Giving `add_appender` a formatter block, or the options of an appender, such as `level:`,
+  `formatter:`, or `filter:`, with an appender or metric subscriber instance, such as
+  `add_appender(appender: my_appender, level: :warn)`. The instance was created with its own options,
+  so they were ignored without a word. They still are, but `add_appender` now reports a deprecation
+  warning that names them, and v6 raises `ArgumentError` for them. Set them on the instance itself.
+  The options of `add_appender` itself, such as `async:` and `batch:`, still apply to an instance. See
+  the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ### Removed
 

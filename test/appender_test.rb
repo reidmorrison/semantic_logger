@@ -66,6 +66,89 @@ class AppenderTest < Minitest::Test
         end
         assert_includes error.message, ":io, :file_name, :appender, :metric, or :logger"
       end
+
+      [[:appender, InMemoryAppender], [:metric, InMemoryMetricsAppender]].each do |option, subscriber_class|
+        describe "with a Subscriber instance as #{option}:" do
+          let(:subscriber) { subscriber_class.new }
+          let(:ignored) { "add_appender ignores" }
+          let(:instance) { Regexp.escape("when #{option}: is a Subscriber instance (#{subscriber_class})") }
+
+          it "returns the instance, without a warning" do
+            result = refute_deprecated { build(option => subscriber) }
+
+            assert_same subscriber, result
+          end
+
+          it "warns that the block is ignored, at the line that supplied it, and returns the instance unchanged" do
+            formatter = subscriber.formatter
+            line      = __LINE__ + 3
+            warning   = /appender_test\.rb:#{line}: warning: SemanticLogger: #{ignored} the formatter block /
+            result    = assert_deprecated(warning) do
+              SemanticLogger::Appender.factory(option => subscriber) { |log, _logger| log.message }
+            end
+
+            assert_same subscriber, result
+            assert_same formatter, subscriber.formatter
+          end
+
+          it "says that v6 raises ArgumentError for the block, and to set it on the instance itself" do
+            assert_deprecated(/#{instance}, and v6 raises ArgumentError for it\. Set it on the instance itself\./) do
+              build(option => subscriber) { |log, _logger| log.message }
+            end
+          end
+
+          it "warns naming each option that is ignored, and returns the instance unchanged" do
+            level     = subscriber.level
+            formatter = subscriber.formatter
+            result    = assert_deprecated(
+              /#{ignored} level:, formatter:, filter:, application:, and metrics: #{instance}, .* for them\. Set them /
+            ) do
+              build(option => subscriber, level: :fatal, formatter: :json, filter: /Other/, application: "Other",
+                    metrics: true)
+            end
+
+            assert_same subscriber, result
+            assert_equal level, subscriber.level
+            assert_same formatter, subscriber.formatter
+            assert_nil subscriber.filter
+            assert_equal SemanticLogger.application, subscriber.application
+            refute_predicate subscriber, :metrics?
+          end
+
+          it "warns naming the block and the option that are ignored" do
+            assert_deprecated(/#{ignored} the formatter block and level: #{instance}, .* for them\. Set them /) do
+              build(option => subscriber, level: :fatal) { |log, _logger| log.message }
+            end
+          end
+
+          it "applies the options of add_appender to the instance, without a warning" do
+            added = refute_deprecated do
+              SemanticLogger::Appender.factory(option => subscriber, async: true, max_queue_size: 5,
+                                               lag_check_interval: 10, lag_threshold_s: 1, non_blocking: true,
+                                               dropped_message_report_seconds: 1, async_max_retries: 1)
+            end
+
+            assert_instance_of SemanticLogger::Appender::Async, added
+            assert_same subscriber, added.appender
+            assert_equal 5, added.max_queue_size
+          ensure
+            added&.close
+          end
+
+          it "applies the batch options of add_appender to the instance, without a warning" do
+            batcher = InMemoryBatchAppender.new
+            added   = refute_deprecated do
+              SemanticLogger::Appender.factory(option => batcher, batch: true, batch_size: 2, batch_seconds: 1)
+            end
+
+            assert_predicate added, :batch?
+            assert_same batcher, added.appender
+            assert_equal 2, added.processor.batch_size
+          ensure
+            added&.close
+          end
+        end
+      end
     end
   end
 end
