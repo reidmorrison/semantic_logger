@@ -155,7 +155,10 @@ module SemanticLogger
         when :full
           self.exception = exception
         when :partial
+          # The class and message of the exception, then of each exception that caused it: the same
+          # exceptions that :full writes (see #backtrace_to_s).
           self.message = Utils.join_texts(message, " -- Exception: ", exception.class, ": ", exception.message)
+          each_exception(exception) { |ex, depth| self.message = with_cause(ex) unless depth.zero? }
         when nil, :none
           # Log the message without the exception that was raised
           nil
@@ -264,17 +267,24 @@ module SemanticLogger
 
     MAX_EXCEPTIONS_TO_UNWRAP = 5
     # Call the block for exception and any nested exception
-    def each_exception
+    #
+    # Parameters
+    #   first: [Exception|nil]
+    #     The exception to start from, for one that this entry does not keep, such as the one that
+    #     log_exception: :partial writes into the message.
+    #     Default: this entry's exception
+    #
+    # Yields each exception with its depth: 0 for the first one, 1 for the exception that caused it,
+    # and so on.
+    def each_exception(first = exception)
       # With thanks to https://github.com/bugsnag/bugsnag-ruby/blob/6348306e44323eee347896843d16c690cd7c4362/lib/bugsnag/notification.rb#L81
-      depth      = 0
       exceptions = []
-      ex         = exception
+      ex         = first
       while !ex.nil? && !exceptions.include?(ex) && exceptions.length < MAX_EXCEPTIONS_TO_UNWRAP
         exceptions << ex
-        yield(ex, depth)
+        yield(ex, exceptions.length - 1)
 
-        depth += 1
-        ex    =
+        ex =
           if ex.respond_to?(:cause) && ex.cause
             ex.cause
           elsif ex.respond_to?(:continued_exception) && ex.continued_exception
@@ -533,6 +543,19 @@ module SemanticLogger
       # Merged into the cache as it is now: another appender may have added to it meanwhile.
       yield.tap { |value| @cache = (@cache || {}).merge(key => value).freeze }
     end
+
+    # Returns [String] the value as text in valid UTF-8 (see Utils.encode_utf8_string).
+    def utf8(value) = Utils.encode_utf8_string(value.to_s)
+
+    # Returns [String] this entry's message, as log_exception: :partial writes it, followed by the
+    # class of an exception that caused the logged one, then its message (see #with_cause_message).
+    def with_cause(cause) = with_cause_message(Utils.join_texts(message, " -- Cause: ", cause.class), cause.message)
+
+    # Returns [String] the text followed by the message of an exception that caused the logged one,
+    # or the text alone when it already holds that message: as when the message is empty, is the
+    # class name that the text ends with (when the exception was raised without a message), or was
+    # copied by the exception that wraps it into its own. Compared as UTF-8, so that it never raises.
+    def with_cause_message(text, added) = utf8(text).include?(utf8(added)) ? text : Utils.join_texts(text, ": ", added)
 
     # Whether a log argument from the Hash returned by a logging block, already checked by
     # .argument?, is assigned to its attribute: only when this entry does not have it yet. As in

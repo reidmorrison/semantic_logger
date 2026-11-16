@@ -108,6 +108,117 @@ module SemanticLogger
             assert_equal "Boom -- Exception: RuntimeError: An exception", log.message
           end
 
+          describe "with causes when log_exception is :partial" do
+            # Returns the exception raised with the supplied message while rescuing the supplied cause.
+            def raise_with_cause(cause, message = "save failed")
+              begin
+                raise cause
+              rescue StandardError
+                raise message
+              end
+            rescue StandardError => e
+              e
+            end
+
+            it "folds each cause's class and message into the message" do
+              exception = raise_with_cause(IOError.new("disk full"))
+              log.assign(message: "Boom", exception: exception, log_exception: :partial)
+
+              assert_nil log.exception
+              assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: IOError: disk full", log.message
+            end
+
+            it "folds the causes in order" do
+              inner = raise_with_cause(IOError.new("disk full"), "write failed")
+              log.assign(message: "Boom", exception: raise_with_cause(inner), log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: RuntimeError: write failed " \
+                           "-- Cause: IOError: disk full", log.message
+            end
+
+            it "leaves out a cause's message that the message already holds" do
+              exception = raise_with_cause(IOError.new("disk full"), "Could not save: disk full")
+              log.assign(message: "Boom", exception: exception, log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: Could not save: disk full -- Cause: IOError", log.message
+            end
+
+            it "leaves out a cause's message that a cause before it already holds" do
+              inner = raise_with_cause(IOError.new("disk full"), "disk full")
+              log.assign(message: "Boom", exception: raise_with_cause(inner), log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: RuntimeError: disk full " \
+                           "-- Cause: IOError", log.message
+            end
+
+            it "leaves out a cause's message that is empty" do
+              log.assign(message: "Boom", exception: raise_with_cause(IOError.new("")), log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: IOError", log.message
+            end
+
+            it "leaves out a cause's message that is its class name" do
+              log.assign(message: "Boom", exception: raise_with_cause(IOError), log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: IOError", log.message
+            end
+
+            it "folds in the same causes as the backtrace of :full" do
+              exception = (0..Log::MAX_EXCEPTIONS_TO_UNWRAP).reduce(IOError.new("cause 0")) do |cause, i|
+                raise_with_cause(cause, "cause #{i + 1}")
+              end
+              log.assign(message: "Boom", exception: exception, log_exception: :partial)
+              full = SemanticLogger::Log.new("LogTest", :info).tap { |entry| entry.exception = exception }
+
+              assert_equal full.backtrace_to_s.scan(/^Cause: .*$/).map { |line| " -- #{line}" }.join,
+                           log.message.delete_prefix("Boom -- Exception: RuntimeError: cause 6")
+            end
+
+            it "folds in each cause once when the causes form a loop" do
+              first  = RuntimeError.new("first")
+              second = IOError.new("second")
+              first.define_singleton_method(:cause) { second }
+              second.define_singleton_method(:cause) { first }
+              log.assign(message: "Boom", exception: first, log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: first -- Cause: IOError: second", log.message
+            end
+
+            it "folds a cause's message in another encoding into a UTF-8 message" do
+              exception = raise_with_cause(IOError.new("Datei \xFC voll".b), "Speichern fehlgeschlagen ü")
+              log.assign(message: "Grüße", exception: exception, log_exception: :partial)
+
+              assert_equal "Grüße -- Exception: RuntimeError: Speichern fehlgeschlagen ü " \
+                           "-- Cause: IOError: Datei  voll", log.message
+            end
+
+            it "folds a UTF-8 cause's message into a message in another encoding" do
+              latin1    = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+              exception = raise_with_cause(IOError.new("Datei voll ü"))
+              log.assign(message: latin1, exception: exception, log_exception: :partial)
+
+              assert_equal "Grüße -- Exception: RuntimeError: save failed -- Cause: IOError: Datei voll ü", log.message
+            end
+
+            it "folds a binary cause's message into an ASCII message as UTF-8" do
+              exception = raise_with_cause(IOError.new("disk \xFF full".b))
+              log.assign(message: "Saving", exception: exception, log_exception: :partial)
+
+              assert_equal "Saving -- Exception: RuntimeError: save failed -- Cause: IOError: disk  full", log.message
+              assert_equal Encoding::UTF_8, log.message.encoding
+            end
+
+            it "leaves a message in another encoding as it is when its causes can be joined" do
+              latin1    = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+              exception = raise_with_cause(IOError.new("disk full"))
+              log.assign(message: latin1, exception: exception, log_exception: :partial)
+
+              assert_equal Encoding::ISO_8859_1, log.message.encoding
+              assert_equal "Grüße -- Exception: RuntimeError: save failed -- Cause: IOError: disk full",
+                           log.message.encode(Encoding::UTF_8)
+            end
+          end
+
           it "folds an exception message in another encoding into a UTF-8 message when log_exception is :partial" do
             binary = RuntimeError.new("Datei \xFC kaputt".b)
             log.assign(message: "Grüße", exception: binary, log_exception: :partial)
@@ -585,6 +696,25 @@ module SemanticLogger
           log.each_exception { yielded = true }
 
           refute yielded
+        end
+
+        it "starts from a supplied exception instead of the entry's own" do
+          ex =
+            begin
+              begin
+                raise "the cause"
+              rescue StandardError
+                raise "the effect"
+              end
+            rescue StandardError => e
+              e
+            end
+          log.exception = RuntimeError.new("the entry's own")
+
+          collected = []
+          log.each_exception(ex) { |e, depth| collected << [e.message, depth] }
+
+          assert_equal [["the effect", 0], ["the cause", 1]], collected
         end
       end
 

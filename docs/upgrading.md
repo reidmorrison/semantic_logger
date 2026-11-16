@@ -124,6 +124,18 @@ agent.
   * Tags pushed before a block, and popped inside it, come back when the block exits.
 
   Push and pop tags in matching pairs, or use the block form.
+* `log_exception: :partial`, the default for `measure_*` blocks, now also adds the class of each
+  exception that caused the logged one to the message, and its message when the text does not
+  already hold it, as `log_exception: :full` already wrote them:
+
+  ```
+  # Before:
+  Saving order -- Exception: RuntimeError: Could not save
+  # After:
+  Saving order -- Exception: RuntimeError: Could not save -- Cause: IOError: disk full
+  ```
+
+  Alerts, searches, or tests that match the whole message of such an entry need updating.
 
 ### Upgrading to Semantic Logger v5.2
 

@@ -515,8 +515,14 @@ The second argument to a measure call is a Hash of options:
 - `:duration` [Float]: the duration in ms, used when no block is supplied (then it is mandatory; with
   a block it is ignored).
 - `:log_exception` [Symbol]: how to report an exception raised in the block. `:full` logs the class,
-  message, and backtrace; `:partial` logs the class and message only; `:none` does not log it.
-  Default `:partial`.
+  message, and backtrace of the exception and of each exception that caused it; `:partial` adds their
+  classes and messages to the log message, without backtraces; `:none` does not log it. Default
+  `:partial`. With `:partial`, a cause's message is left out when it is empty, is its class name, or
+  is already in the log message, as when the exception that wraps it copied it into its own:
+
+  ```
+  Rendering -- Exception: ActionDispatch::Http::MimeNegotiation::InvalidType: "foo/bar" is not a valid MIME type -- Cause: Mime::Type::InvalidMimeType
+  ```
 - `:on_exception_level` [Symbol]: if an exception is raised, raise the log level to this level.
 - `:silence` [Symbol]: the level to silence other log messages to within the block (current fiber
   only).
@@ -5546,6 +5552,18 @@ agent.
   * Tags pushed before a block, and popped inside it, come back when the block exits.
 
   Push and pop tags in matching pairs, or use the block form.
+* `log_exception: :partial`, the default for `measure_*` blocks, now also adds the class of each
+  exception that caused the logged one to the message, and its message when the text does not
+  already hold it, as `log_exception: :full` already wrote them:
+
+  ```
+  # Before:
+  Saving order -- Exception: RuntimeError: Could not save
+  # After:
+  Saving order -- Exception: RuntimeError: Could not save -- Cause: IOError: disk full
+  ```
+
+  Alerts, searches, or tests that match the whole message of such an entry need updating.
 
 ### Upgrading to Semantic Logger v5.2
 

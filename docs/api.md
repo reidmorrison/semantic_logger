@@ -296,8 +296,14 @@ The second argument to a measure call is a Hash of options:
 - `:duration` [Float]: the duration in ms, used when no block is supplied (then it is mandatory; with
   a block it is ignored).
 - `:log_exception` [Symbol]: how to report an exception raised in the block. `:full` logs the class,
-  message, and backtrace; `:partial` logs the class and message only; `:none` does not log it.
-  Default `:partial`.
+  message, and backtrace of the exception and of each exception that caused it; `:partial` adds their
+  classes and messages to the log message, without backtraces; `:none` does not log it. Default
+  `:partial`. With `:partial`, a cause's message is left out when it is empty, is its class name, or
+  is already in the log message, as when the exception that wraps it copied it into its own:
+
+  ```
+  Rendering -- Exception: ActionDispatch::Http::MimeNegotiation::InvalidType: "foo/bar" is not a valid MIME type -- Cause: Mime::Type::InvalidMimeType
+  ```
 - `:on_exception_level` [Symbol]: if an exception is raised, raise the log level to this level.
 - `:silence` [Symbol]: the level to silence other log messages to within the block (current fiber
   only).
