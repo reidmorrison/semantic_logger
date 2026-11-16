@@ -42,6 +42,12 @@ module SemanticLogger
         assert Ractor.shareable?(Formatters::Logfmt.const_get(:EXCEPTION_FIELDS))
       end
 
+      it "shares the constants read while reporting a deprecation" do
+        %i[LIB_DIR LIB_FILE PREFIX WARNING RUBY_PATHS RUBY_LIB_DIRS].each do |name|
+          assert Ractor.shareable?(Deprecation.const_get(name)), "#{name} is not shareable"
+        end
+      end
+
       describe "settings" do
         %i[host application environment].each do |setting|
           it "stores a shareable copy of the #{setting}, leaving the value supplied as it is" do

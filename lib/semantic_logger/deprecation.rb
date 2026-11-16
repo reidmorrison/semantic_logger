@@ -33,12 +33,17 @@ module SemanticLogger
     private_constant :WARNING
 
     # The start of the paths of the code of Ruby itself, rather than of a file of it: the core methods that CRuby
-    # writes in Ruby, such as `Kernel#tap`, and the standard library of JRuby, when it is loaded from its jar.
-    RUBY_PATHS = ["<internal:", "uri:classloader:"].freeze
+    # writes in Ruby, such as `Kernel#tap`, and the files of JRuby itself, when it is loaded from its jar. Only those
+    # of JRuby's own home and its own Ruby code in the jar, such as the block that `java_import` calls, since an
+    # application packaged in a jar, such as with Warbler, is loaded from it too. Shareable, so that a Ractor other
+    # than the main one can report a deprecation.
+    RUBY_PATHS = Utils.make_shareable(
+      ["<internal:", "uri:classloader:/META-INF/jruby.home/", "uri:classloader:/jruby/"]
+    )
     private_constant :RUBY_PATHS
 
     # The directory of the standard library of Ruby.
-    RUBY_LIB_DIRS = [RbConfig::CONFIG["rubylibdir"]].compact.map { |dir| "#{dir}/".freeze }.freeze
+    RUBY_LIB_DIRS = Utils.make_shareable([RbConfig::CONFIG["rubylibdir"]].compact.map { |dir| "#{dir}/" })
     private_constant :RUBY_LIB_DIRS
 
     # Reports that the application used something deprecated, unless deprecation warnings are off, with the message,

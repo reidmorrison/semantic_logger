@@ -78,8 +78,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - A deprecation warning now names the line of the application that used what is deprecated, such as
-  where it added a deprecated appender, rather than a line of Semantic Logger, and starts with
-  `SemanticLogger: `, as in `config/initializers/logging.rb:12: warning: SemanticLogger: ...`. As
+  where it added a deprecated appender, and starts with `SemanticLogger: `, as in
+  `config/initializers/logging.rb:12: warning: SemanticLogger: ...`. Before, it named no line. As
   before, Ruby only shows it while `Warning[:deprecated]` is true. See
   [Seeing deprecation warnings](https://logger.reidmorrison.com/upgrading.html#seeing-deprecation-warnings).
 - The `:open_telemetry` appender no longer sends metric-only entries, which have a metric but no

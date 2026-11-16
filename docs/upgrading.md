@@ -22,7 +22,10 @@ instead:
 config/initializers/logging.rb:12: warning: SemanticLogger: SemanticLogger::Appender::Sentry (appender: :sentry) is deprecated and will be removed in v6. It depends on the end-of-life sentry-raven gem. Use appender: :sentry_ruby instead.
 ~~~
 
-When a gem adds the appender for you, the warning names the line of that gem that added it.
+When a gem adds the appender for you, the warning names the line of that gem that added it. A
+warning about a log entry that an appender reports while it writes the entry, on Semantic Logger's
+background thread, names no line, since your code is not on that thread; to see the line, run with
+`SemanticLogger.sync!`, as tests often do.
 
 Ruby only shows deprecation warnings while `Warning[:deprecated]` is true, which it is not by default,
 so production stays quiet without any configuration:
@@ -37,19 +40,24 @@ so production stays quiet without any configuration:
 Rails settings such as `config.active_support.deprecation` only apply to the deprecation warnings of
 Rails, not to those that Ruby reports.
 
-Ruby writes each warning to `$stderr`. To send them elsewhere, such as to your log, or to raise them
-in your tests so that each use is found, extend `Warning` with your own `warn`:
+Ruby writes each warning to `$stderr`. To send them elsewhere, such as to a file of their own, or to
+raise them in your tests so that each use is found, extend `Warning` with your own `warn`:
 
 ~~~ruby
 module SemanticLoggerDeprecations
+  DEPRECATIONS = ::Logger.new("log/deprecations.log")
+
   def warn(message, *, **)
     return super unless message.include?("SemanticLogger: ")
 
-    SemanticLogger["Deprecations"].warn(message.chomp)
+    DEPRECATIONS.warn(message.chomp)
   end
 end
 Warning.extend(SemanticLoggerDeprecations)
 ~~~
+
+Do not log them through Semantic Logger itself: a warning reported on its background thread would
+then wait on that thread's own queue, which can stop all logging while the queue is full.
 
 ### Upgrading to Semantic Logger v5.3
 
