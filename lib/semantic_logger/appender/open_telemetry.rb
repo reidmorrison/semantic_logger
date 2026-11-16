@@ -32,12 +32,11 @@ module SemanticLogger
       def initialize(name: "SemanticLogger",
                      version: SemanticLogger::VERSION,
                      formatter: nil,
-                     metrics: false,
                      **args,
                      &)
         # Base#initialize (via Subscriber) overwrites @name with the class name,
         # so call super first and then assign our own attributes.
-        super(formatter: formatter, metrics: metrics, **args, &)
+        super(formatter: formatter, **args, &)
 
         @name      = name
         @version   = version
