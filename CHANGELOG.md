@@ -202,8 +202,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   key that Loki stores under one of those names, such as `metric.value`, `metric__value`, or one
   with an invisible character, replaced the formatter's value instead, so that a query that
   `unwrap`s `metric_value` failed. The key is prefixed whether or not the entry has that field, so
-  that each of these names always holds the formatter's value. See
-  [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53).
+  that each of these names always holds the formatter's value. It is written under the name Loki
+  stores it as, such as `payload_metric_value` for `metric.value`, and with the prefix again when
+  another payload key has that name once Loki has stored it, as in `payload_payload_metric_value`,
+  so that Loki keeps the value of each prefixed key. A key that is exactly one of these names gets
+  the name with one prefix, whatever the order of the keys. See
+  [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53)
+  and [Grafana Loki](https://logger.reidmorrison.com/appenders.html#grafana-loki).
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

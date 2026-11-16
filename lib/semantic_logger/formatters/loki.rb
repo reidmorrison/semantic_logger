@@ -8,25 +8,32 @@ module SemanticLogger
       # The names of the structured metadata that this formatter writes itself. A payload key that
       # Loki would store under one of these names is written with PAYLOAD_PREFIX, as in
       # `payload_duration`, whether or not the entry has that field, so that each name always holds
-      # this formatter's value. Loki keeps only the last value of a name written twice, and stores
-      # a name such as `metric.value` as `metric_value` (see OWN_NAME), so the payload's value
-      # would otherwise be lost, or replace this formatter's.
+      # this formatter's value. Loki keeps one value of a name: the last of a name written twice,
+      # but of names that it stores alike, such as `metric.value` and `metric_value` (see
+      # OWN_NAME), the one it had to change. So the payload's value would otherwise be lost, or
+      # replace this formatter's.
       OWN_KEYS = %w[
         metric metric_value dimensions duration duration_human exception_name exception_message
         stack_trace
       ].freeze
 
-      # Matches a name that Loki stores as one of OWN_KEYS.
-      #
-      # Loki replaces each character of a name other than an ASCII letter, digit, or underscore
-      # with an underscore, and writes two or more underscores in a row as one. So `metric.value`,
-      # `metric__value`, and `metric` followed by a zero width space and `value` are all stored as
-      # `metric_value`: each underscore of an own name stands for any run of those characters.
-      OWN_NAME = /\A(?:#{OWN_KEYS.map { |key| key.gsub('_', '[^A-Za-z0-9]+') }.join('|')})\z/
+      # A run of characters other than ASCII letters and digits, which Loki replaces with one
+      # underscore in the name of structured metadata. So Loki stores `metric.value`,
+      # `metric__value`, and `metric` followed by a zero width space and `value` all as
+      # `metric_value`.
+      LOKI_SEPARATOR = /[^A-Za-z0-9]+/
+
+      # Matches a name that Loki stores as one of OWN_KEYS: each underscore of an own name stands
+      # for a LOKI_SEPARATOR. Matching it allocates nothing, unlike comparing #loki_name with each
+      # own name, and nearly every payload key is checked against it.
+      OWN_NAME = /\A(?:#{OWN_KEYS.map { |key| key.gsub('_', LOKI_SEPARATOR.source) }.join('|')})\z/
 
       # The prefix of a payload key named like one of OWN_KEYS. The :logfmt and :open_telemetry
       # formatters write `payload.`, which Loki would store as `payload_`.
       PAYLOAD_PREFIX = "payload_".freeze
+
+      # A name that starts with a digit, which Loki stores with `key_` before it.
+      LEADING_DIGIT = /\A[0-9]/
 
       # Returns [String] a single JSON log
       def call(log, logger)
@@ -178,10 +185,7 @@ module SemanticLogger
       # only accepts Strings.
       #
       # A key that Loki would store as one of this formatter's own names (see OWN_KEYS) is written
-      # with PAYLOAD_PREFIX, after the other keys, and with it again while that name is already a
-      # key of the payload, so that no value is lost. Such a key is converted as Utils.to_json
-      # converts it, since one that is not ASCII-compatible, such as UTF-16, cannot be joined with
-      # the prefix.
+      # with PAYLOAD_PREFIX, after the other keys (see #add_prefixed).
       def payload_metadata(hash)
         metadata = {}
         own      = nil
@@ -193,12 +197,46 @@ module SemanticLogger
             metadata[name] = loki_value(value)
           end
         end
-        own&.each do |name, value|
-          name = PAYLOAD_PREFIX + Utils.encode_utf8_string(name)
-          name = PAYLOAD_PREFIX + name while metadata.key?(name)
+        add_prefixed(metadata, own) if own
+        metadata
+      end
+
+      # Adds each of the payload's keys named like this formatter's own with PAYLOAD_PREFIX, under
+      # the name Loki stores it as (see #loki_name), such as `payload_metric_value` for
+      # `metric.value`, and with the prefix again while another key has that name once Loki has
+      # stored it. Loki keeps only one value of the names that it stores alike, so this keeps the
+      # value of each of these keys. Other payload keys that Loki stores alike, such as `a.b` and
+      # `a_b`, still keep only one.
+      #
+      # A key that is exactly one of OWN_KEYS is named first, so that `payload_metric_value` holds
+      # the payload's `metric_value`, whatever the order of the keys, and `metric.value` is
+      # prefixed again.
+      #
+      # Joining the prefix with the name as Loki stores it gives the name Loki stores the joined
+      # name as, since such a key starts with a letter.
+      def add_prefixed(metadata, own)
+        taken = Set.new(metadata.each_key) { |name| loki_name(name) }
+        exact, lookalikes = own.partition { |name, _value| OWN_KEYS.include?(name) }
+        (exact + lookalikes).each do |name, value|
+          name = PAYLOAD_PREFIX + loki_name(name)
+          name = PAYLOAD_PREFIX + name while taken.include?(name)
+          taken << name
           metadata[name] = loki_value(value)
         end
-        metadata
+      end
+
+      # Returns [String] the name that Loki stores structured metadata of the supplied name under:
+      # in UTF-8 without invalid bytes, as Utils.to_json writes it, with each run of characters
+      # other than ASCII letters and digits replaced with one underscore, and `key_` before a name
+      # that starts with a digit.
+      #
+      # The `key_` cannot change which name a prefixed key gets: that name starts with
+      # PAYLOAD_PREFIX, and only the other keys it is checked against can start with a digit. It is
+      # there so that this returns the name Loki stores for any name, not only for the names it is
+      # used for here.
+      def loki_name(name)
+        name = Utils.encode_utf8_string(name).gsub(LOKI_SEPARATOR, "_")
+        name.match?(LEADING_DIGIT) ? "key_#{name}" : name
       end
 
       # Whether Loki would store the name as one of this formatter's own names (see OWN_NAME).

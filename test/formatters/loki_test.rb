@@ -526,15 +526,43 @@ module SemanticLogger
               assert_equal({"payload_duration" => "PT5S", "payload_metric" => "a"}, structured_metadata)
             end
 
-            it "prefixes a key that Loki would store under one of its own names" do
+            # Loki stores each of these as `metric_value`, and would keep one value of them.
+            it "prefixes a key that Loki would store under one of its own names, under the name it stores" do
               log.metric        = "my_metric"
               log.metric_amount = 3
               zero_width        = "metric#{0x200B.chr(Encoding::UTF_8)}value"
-              names             = ["metric.value", "metric__value", "metric-value", zero_width]
-              log.payload       = names.zip(%w[a b c d]).to_h
+              log.payload       = ["metric.value", "metric__value", "metric-value", zero_width].zip(%w[a b c d]).to_h
 
-              assert_equal "3", structured_metadata["metric_value"]
-              assert_equal %w[a b c d], structured_metadata.values_at(*names.map { |name| "payload_#{name}" })
+              assert_equal(
+                {
+                  "metric"                                       => "my_metric",
+                  "metric_value"                                 => "3",
+                  "payload_metric_value"                         => "a",
+                  "payload_payload_metric_value"                 => "b",
+                  "payload_payload_payload_metric_value"         => "c",
+                  "payload_payload_payload_payload_metric_value" => "d"
+                },
+                structured_metadata
+              )
+            end
+
+            # So that a query on `payload_metric_value` reads the payload's `metric_value`.
+            it "prefixes again a lookalike of a key that is exactly one of its own, whatever their order" do
+              expected = {"payload_metric_value" => "exact", "payload_payload_metric_value" => "lookalike"}
+              log.payload = {"metric.value" => "lookalike", "metric_value" => "exact"}
+
+              assert_equal expected, structured_metadata
+
+              log.payload = {"metric_value" => "exact", "metric.value" => "lookalike"}
+
+              assert_equal expected, JSON.parse(formatter.call(log, logger))["streams"][0]["values"][0][2]
+            end
+
+            # Loki stores `payload.metric` as `payload_metric`.
+            it "prefixes again a key that a key of the payload is stored as once Loki changes its name" do
+              log.payload = {"payload.metric" => "x", "metric" => "y"}
+
+              assert_equal({"payload.metric" => "x", "payload_payload_metric" => "y"}, structured_metadata)
             end
 
             it "compares a key with invalid UTF-8 as it is written, without the invalid bytes" do
