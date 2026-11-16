@@ -23,8 +23,10 @@ module SemanticLogger
       #
       # Parameters
       #   prefix: [String]
-      #     Prefix to add to every metric name that does not already start with it, before
-      #     forwarding to NewRelic. Only the default formatter, #call, adds it.
+      #     Prefix to add, with a `/`, to every metric name that does not already start with it and
+      #     a `/`, before forwarding to NewRelic, which charts custom metrics only under `Custom/`.
+      #     So 'Customers/signup' is recorded as 'Custom/Customers/signup', and 'Custom/Orders/placed'
+      #     as it is. An empty prefix adds nothing. Only the default formatter, #call, adds it.
       #     Default: 'Custom'
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
@@ -50,9 +52,9 @@ module SemanticLogger
       # Returns metric name to use.
       def call(log, _logger)
         metric = log.metric
-        # Add prefix for NewRelic
-        metric = "#{prefix}/#{metric}" unless metric.start_with?(prefix)
-        metric
+        return metric if prefix.empty? || metric.start_with?("#{prefix}/")
+
+        "#{prefix}/#{metric}"
       end
 
       def log(log)

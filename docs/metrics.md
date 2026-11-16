@@ -141,8 +141,10 @@ Forward metrics to New Relic so they can be displayed on custom dashboards (requ
 SemanticLogger.add_appender(metric: :new_relic)
 ~~~
 
-A metric is sent under its name alone, leaving out its dimensions, since the agent's metric API takes
-none.
+New Relic charts custom metrics only under `Custom/`, so the subscriber records
+`metric: "Orders/placed"` as `Custom/Orders/placed`, and a name that already starts with `Custom/`
+as it is. Pass `prefix:` to use another prefix. A metric is sent under its name alone, leaving out
+its dimensions, since the agent's metric API takes none.
 
 ### SignalFx
 

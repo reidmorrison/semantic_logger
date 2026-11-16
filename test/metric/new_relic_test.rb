@@ -58,6 +58,39 @@ module Metric
         assert_equal "Custom/User/authenticate", name
         assert_in_delta 0.0125, duration
       end
+
+      describe "prefix" do
+        it "adds the prefix to a name that starts with its letters, but not with it and a slash" do
+          assert_equal "Custom/Customers/signup", counted_name(appender, "Customers/signup")
+          assert_equal "Custom/CustomerSignup", counted_name(appender, "CustomerSignup")
+        end
+
+        it "leaves a name that starts with the prefix and a slash as it is" do
+          assert_equal "Custom/User/authenticated", counted_name(appender, "Custom/User/authenticated")
+        end
+
+        it "uses a prefix given to the subscriber" do
+          appender = SemanticLogger::Metric::NewRelic.new(prefix: "App")
+
+          assert_equal "App/Application/boot", counted_name(appender, "Application/boot")
+          assert_equal "App/User/authenticated", counted_name(appender, "App/User/authenticated")
+        end
+
+        it "adds nothing with an empty prefix" do
+          appender = SemanticLogger::Metric::NewRelic.new(prefix: "")
+
+          assert_equal "User/authenticated", counted_name(appender, "User/authenticated")
+        end
+
+        # Returns the name that the appender counts the metric under.
+        def counted_name(appender, metric)
+          name = nil
+          NewRelic::Agent.stub(:increment_metric, ->(name_, _amount) { name = name_ }) do
+            appender.info(message: amessage, metric: metric)
+          end
+          name
+        end
+      end
     end
   end
 end
