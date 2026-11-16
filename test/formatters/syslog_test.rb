@@ -260,20 +260,40 @@ module SemanticLogger
             assert_includes packet, " app1 #{'a' * 32}: "
           end
 
+          it "notices a host that is not a String changed in place" do
+            host = Struct.new(:name) { def to_s = name }.new("web1")
+            formatter = SemanticLogger::Formatters::Syslog.new
+            logger    = SemanticLogger::Appender::IO.new(StringIO.new, host: host, application: "App")
+
+            assert_includes formatter.call(log, logger), " web1 App: "
+            host.name = "web2"
+
+            assert_includes formatter.call(log, logger), " web2 App: "
+          end
+
           it "writes localhost and SemanticLogger for names with no character left" do
             packet = packet_for(host: "サーバー", application: "アプリ")
 
             assert_includes packet, " localhost SemanticLogger: "
           end
 
-          it "works the names out again only when they are replaced" do
-            formatter = SemanticLogger::Formatters::Syslog.new
-            logger    = SemanticLogger::Appender::IO.new(StringIO.new, host: "web 1", application: "My App")
+          it "works the names out again only when they change" do
+            formatter   = SemanticLogger::Formatters::Syslog.new
+            application = +"My App"
+            host        = +"web 1"
+            logger      = SemanticLogger::Appender::IO.new(StringIO.new, host: host, application: application)
 
             assert_includes formatter.call(log, logger), " web1 MyApp: "
-            logger.application = "Other App"
+            assert_same formatter.send(:syslog_tag, application), formatter.send(:syslog_tag, application)
+
+            logger.application = +"Other App"
 
             assert_includes formatter.call(log, logger), " web1 OtherApp: "
+
+            logger.application << " Two"
+            host << "x"
+
+            assert_includes formatter.call(log, logger), " web1x OtherAppTwo: "
           end
         end
 

@@ -350,7 +350,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   the appender reported the error to the internal logger instead of sending the entry. Now those
   characters are left out of the header, as spaces always were from the application name, the
   application name is cut to 32 characters, and a name with no character left is written as
-  `localhost` or `SemanticLogger`. Each name is worked out once, and again only when it is replaced.
+  `localhost` or `SemanticLogger`. Each name is worked out once, and again only when it changes.
 
 ## [5.2.0] 2026-10-30
 
