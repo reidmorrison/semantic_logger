@@ -128,6 +128,16 @@ module SemanticLogger
             assert_equal "workerforged", formatter.thread_name
           end
 
+          it "shortens a binary thread name that holds UTF-8 by characters, not bytes" do
+            log.thread_name = ("é" * 40).b
+
+            assert_equal "é" * 30, formatter.thread_name
+
+            log.thread_name = "#{'a' * 29}é".b
+
+            assert_equal "#{'a' * 29}é", formatter.thread_name
+          end
+
           it "shortens the thread name before escaping it, so that no escape is cut in two" do
             log.thread_name = "#{'a' * 29}\e[31m"
             formatter       = SemanticLogger::Formatters::OneLine.new(escape_control_chars: true)

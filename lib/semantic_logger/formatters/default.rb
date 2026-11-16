@@ -10,9 +10,10 @@ module SemanticLogger
         log.level_to_s
       end
 
-      # Name of the thread that logged the message.
+      # Name of the thread that logged the message, shortened before it is escaped, so that an
+      # escape is never cut in two.
       def thread_name
-        escape_control_characters(format("%.30s", log.thread_name))
+        escape_control_characters(shortened_thread_name)
       end
 
       # Ruby file name and line number that logged the message, followed by the method when the
@@ -110,6 +111,12 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [String] the name of the thread, shortened to 30 characters. A name that holds bytes
+      # outside ASCII in another encoding, such as a binary name that holds UTF-8, is converted
+      # first (see #joinable_text), so that it is shortened by characters, rather than by bytes,
+      # which would split a character in two.
+      def shortened_thread_name = format("%.30s", joinable_text(log.thread_name))
 
       # Returns [String] the exception details and backtrace that follow the exception line, each
       # starting on a new line. Empty when there are neither, such as for an exception that was
