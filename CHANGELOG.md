@@ -222,6 +222,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Loki stores it, so an empty key as `payload_`, and with the prefix again when another key has that
   name, so that Loki keeps the value of each. A named tag that is nil, and a nil host, are left out,
   instead of being written as the label `null`.
+- The `:open_telemetry` appender, and an appender added with `logger:`, work with `async: true`.
+  Before, the worker thread stopped as it started, with `NoMethodError` (undefined method 'trace'),
+  so the appender wrote nothing, and unless it was added with `non_blocking: true`, every log call
+  blocked once its queue was full. With a `logger:` that has a `trace` method, the worker thread
+  wrote its own messages to that logger instead. The
+  `#logger` of these two appenders returned the logger they write to, rather than the internal
+  logger that every appender reports its own problems to, which the worker thread uses. Now it
+  returns the internal logger, as for every other appender, and a `logger:` appender's
+  `#wrapped_logger` returns the logger it writes to. The `:open_telemetry` appender also reports a
+  failure to flush or shut down to its internal logger, as the other appenders do, rather than to
+  `SemanticLogger::Processor.logger`, so that the report names the appender.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

@@ -226,6 +226,10 @@ agent.
   # After:
   {application="shop"} | payload_duration="PT5S"
   ```
+* The `#logger` of an appender added with `logger:`, such as the one `add_appender(logger: ...)`
+  returns, is now its internal logger, the one it reports its own problems to, as for every other
+  appender. Before, it returned the logger the appender writes to, which is now `#wrapped_logger`.
+  The `:open_telemetry` appender's `#logger` likewise no longer returns the OpenTelemetry logger.
 * The `:statsd` and `:new_relic` metric subscribers now record a metric that has `dimensions` under
   its name alone, leaving out the dimensions, which their clients do not accept. Before, they left
   such a metric out, so a counter or timer logged with dimensions can now show higher counts there.

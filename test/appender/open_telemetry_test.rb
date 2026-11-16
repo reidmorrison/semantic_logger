@@ -172,6 +172,34 @@ module Appender
         end
       end
 
+      describe "async: true" do
+        it "emits log records from its own thread" do
+          proxy       = SemanticLogger::Appender::Async.new(appender: appender)
+          log         = SemanticLogger::Log.new("OpenTelemetryTest", :info)
+          log.message = "From the worker"
+          proxy.log(log)
+
+          assert proxy.flush, "the worker thread should be running to flush"
+          assert_equal ["From the worker"], exporter.emitted_log_records.map(&:body)
+        ensure
+          proxy&.close
+        end
+      end
+
+      describe "logger" do
+        it "is the internal logger every appender reports its own problems to" do
+          assert_kind_of SemanticLogger::Subscriber, appender.logger
+          assert_equal "SemanticLogger::Appender::OpenTelemetry", appender.logger.name
+        end
+
+        it "can be replaced without changing where log records are emitted" do
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          record          = emit { info("Still emitted") }.first
+
+          assert_equal "Still emitted", record.body
+        end
+      end
+
       describe "flush" do
         it "is a no-op once the provider is closed" do
           appender.close
@@ -179,10 +207,15 @@ module Appender
           assert_nil appender.flush
         end
 
-        it "swallows provider errors" do
+        it "swallows provider errors and reports them to its internal logger" do
+          internal        = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal
           appender.provider.stub(:force_flush, ->(*) { raise "boom" }) do
             appender.flush # does not raise
           end
+
+          assert_equal ["Flush failed"], internal.events.map(&:message)
+          assert_equal "boom", internal.events.first.exception.message
         end
       end
 
@@ -194,13 +227,17 @@ module Appender
           assert_nil target.provider
         end
 
-        it "swallows shutdown errors and still clears the provider" do
-          target = appender
+        it "swallows shutdown errors, reports them to its internal logger, and still clears the provider" do
+          internal      = SemanticLogger::Test::CaptureLogEvents.new
+          target        = appender
+          target.logger = internal
           target.provider.stub(:shutdown, ->(*) { raise "boom" }) do
             target.close
           end
 
           assert_nil target.provider
+          assert_equal ["Shutdown failed"], internal.events.map(&:message)
+          assert_equal "boom", internal.events.first.exception.message
         end
       end
     end

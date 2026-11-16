@@ -107,6 +107,48 @@ module Appender
           )
         end
       end
+
+      describe "wrapped_logger" do
+        it "is the logger it writes to" do
+          assert_same mock_logger, appender.wrapped_logger
+        end
+      end
+
+      describe "logger" do
+        it "is the internal logger every appender reports its own problems to" do
+          assert_kind_of SemanticLogger::Subscriber, appender.logger
+          assert_equal "SemanticLogger::Appender::Wrapper", appender.logger.name
+        end
+
+        it "can be replaced without changing the logger it writes to" do
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          appender.log(log)
+
+          assert_match(/User -- hello world/, mock_logger.message)
+        end
+      end
+
+      describe "async: true" do
+        it "writes to the wrapped logger from its own thread" do
+          proxy = SemanticLogger::Appender::Async.new(appender: appender)
+          proxy.log(log)
+
+          assert proxy.flush, "the worker thread should be running to flush"
+          assert_match(/User -- hello world/, mock_logger.message)
+        ensure
+          proxy&.close
+        end
+
+        it "does not write its worker thread's own messages to the wrapped logger" do
+          mock_logger.define_singleton_method(:trace) { |message = nil, progname = nil| debug(message, progname) }
+          proxy = SemanticLogger::Appender::Async.new(appender: appender)
+
+          assert proxy.flush, "the worker thread should be running to flush"
+          assert_nil mock_logger.message
+        ensure
+          proxy&.close
+        end
+      end
     end
   end
 end
