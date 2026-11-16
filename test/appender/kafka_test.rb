@@ -39,6 +39,53 @@ module Appender
         end
       end
 
+      it "names Kafka in its error when the ruby-kafka gem is missing" do
+        path    = File.expand_path("../../lib/semantic_logger/appender/kafka.rb", __dir__)
+        missing = ->(_name) { raise LoadError, "cannot load such file -- kafka" }
+        error   = TOPLEVEL_BINDING.receiver.stub(:require, missing) do
+          assert_raises(LoadError) { load(path) }
+        end
+
+        assert_includes error.message, "ruby-kafka is required for logging to Kafka."
+        assert_includes error.message, 'gem "ruby-kafka"'
+      end
+
+      describe "#flush" do
+        # Returns [Array<Hash>] the options of each producer that a Kafka appender asks its client for while the block
+        # runs, which is given the appender to flush.
+        def producer_options(**args)
+          client  = ::Kafka.new(["localhost:9092"])
+          build   = client.method(:async_producer)
+          options = []
+          spy     = lambda do |**producer_options|
+            options << producer_options
+            build.call(**producer_options)
+          end
+          ::Kafka.stub(:new, client) do
+            client.stub(:async_producer, spy) do
+              kafka = SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: true, **args)
+              yield(kafka)
+            ensure
+              kafka&.close
+            end
+          end
+          options
+        end
+
+        it "replaces the producer with one built with the options of the first" do
+          options  = producer_options(required_acks: 0, delivery_threshold: 7, delivery_interval: 3, &:flush)
+          expected = {delivery_threshold: 7, delivery_interval: 3, required_acks: 0}
+
+          assert_equal [expected, expected], options
+        end
+
+        it "keeps the default required_acks of 1, rather than ruby-kafka's default of :all" do
+          options = producer_options(&:flush)
+
+          assert_equal([1, 1], options.map { |producer| producer[:required_acks] })
+        end
+      end
+
       it "does not show the TLS private key or SASL password in #inspect" do
         appender.ssl_client_cert_key = "-----BEGIN PRIVATE KEY-----\nkafka-key\n-----END PRIVATE KEY-----"
         appender.instance_variable_set(:@sasl_plain_password, "kafka-s3cr3t")

@@ -248,6 +248,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   an appender added with `async: true` or in batches. Before, the thread it replaced, as it ended,
   cleared the new one, so that `SemanticLogger.flush` returned `false` without waiting for the
   queued entries, and entries still queued at exit could be lost.
+- The `:kafka` appender keeps its `required_acks:` after it is flushed, such as with
+  `SemanticLogger.flush`. Before, a flush replaced the appender's producer with one built without
+  it, so ruby-kafka's default of `:all`, which waits for every in-sync replica to acknowledge each
+  delivery, replaced the appender's default of `1`, or the value given.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
