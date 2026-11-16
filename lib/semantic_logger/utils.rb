@@ -479,8 +479,9 @@ module SemanticLogger
     # that name converted to valid UTF-8 (see .encode_utf8_string).
     #
     # A Symbol is named in the encoding of the text it was made from, such as a binary key from a
-    # request turned into a Symbol, which JSON cannot write once it holds bytes outside ASCII (from
-    # json 3.1, or on JRuby, even when they are valid UTF-8), and a UTF-8 Symbol is always valid.
+    # request turned into a Symbol, which JSON cannot always write once it holds bytes outside
+    # ASCII: from json 3.1 not even valid UTF-8, and on CRuby with earlier versions not invalid
+    # bytes, nor, from json 2.9, UTF-8 bytes tagged US-ASCII. A UTF-8 Symbol is always valid.
     def self.encode_utf8_symbol(symbol)
       symbol.name.ascii_only? || symbol.encoding == Encoding::UTF_8 ? symbol : encode_utf8_string(symbol.name).to_sym
     end

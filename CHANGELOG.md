@@ -182,12 +182,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   also matches `SemanticLogger.sensitive_keys`.
 - The JSON based formatters (`:json`, `:fluentd`, `:ecs`, `:loki`, `:syslog_cee`, ...) no longer
   drop an entry whose payload or named tags hold a Symbol named in an encoding other than UTF-8 that
-  holds bytes outside ASCII, such as the binary key of a request turned into a Symbol. On every json
-  gem version that included a Symbol with invalid bytes, or with UTF-8 bytes tagged US-ASCII, and a
-  UTF-16 Symbol; with json 3.1, and on JRuby, also a binary Symbol that holds valid UTF-8. Before,
-  formatting raised `JSON::GeneratorError`, and the appender reported the error to the internal
-  logger instead of writing the entry. Now the name of such a Symbol is converted to valid UTF-8, as
-  a String is, so `"Café".b.to_sym` is written as `"Café"`.
+  holds bytes outside ASCII, such as the binary key of a request turned into a Symbol. With json 3.1
+  that included a binary Symbol that holds valid UTF-8, and on CRuby with earlier versions a Symbol
+  with invalid bytes, and from json 2.9 one with UTF-8 bytes tagged US-ASCII. Before, formatting
+  raised `JSON::GeneratorError`, and the appender reported the error to the internal logger instead
+  of writing the entry. Now the name of such a Symbol is converted to valid UTF-8, as a String is, so
+  `"Café".b.to_sym` is written as `"Café"`. `:graylog` now also hands the gelf gem such a Symbol
+  converted, so that the gem neither raises nor prints the json gem's warning about it.
 - When an async or batching appender's destination fails, the message (or batch) being written is
   now counted as `failed` in `SemanticLogger.stats` and reported to the internal logger, as a message
   whose content cannot be written already was. Before, it was discarded without being counted, and

@@ -245,7 +245,9 @@ module SemanticLogger
         end
 
         it "writes a Symbol key whose name is neither UTF-8 nor ASCII" do
-          # UTF-8 bytes tagged US-ASCII, which every json gem version refuses.
+          # UTF-8 bytes tagged US-ASCII, which json refuses from 2.9. JRuby cannot make such a Symbol.
+          skip "JRuby cannot make a US-ASCII Symbol outside ASCII" if defined?(JRUBY_VERSION)
+
           key = "Café ☕".dup.force_encoding(Encoding::US_ASCII).to_sym
 
           assert_equal({"Café ☕" => 1}, JSON.parse(SemanticLogger::Utils.to_json({key => 1})))
@@ -502,6 +504,13 @@ module SemanticLogger
 
         it "returns a copy that JSON can write otherwise" do
           assert_equal({amount: "Infinity"}, SemanticLogger::Utils.json_ready({amount: Float::INFINITY}))
+        end
+
+        it "returns a copy with a binary Symbol key converted to UTF-8" do
+          key = SemanticLogger::Utils.json_ready({"Café \xFF".b.to_sym => 1}).keys.first
+
+          assert_equal :"Café ", key
+          assert_equal Encoding::UTF_8, key.encoding
         end
       end
 
