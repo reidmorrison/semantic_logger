@@ -91,6 +91,20 @@ class MeasureTest < Minitest::Test
             assert_equal "hello world -- Exception: RuntimeError: Test", log.message
           end
 
+          it ":partial with a cause" do
+            assert_raises RuntimeError do
+              appender.send(measure_level, "hello world", log_exception: :partial) do
+                raise IOError, "disk full"
+              rescue IOError
+                raise "Test"
+              end
+            end
+
+            assert log = appender.events.first
+            refute log.exception
+            assert_equal "hello world -- Exception: RuntimeError: Test -- Cause: IOError: disk full", log.message
+          end
+
           it ":partial re-raises an exception whose message is in another encoding" do
             error = assert_raises RuntimeError do
               appender.send(measure_level, "Grüße", log_exception: :partial) { raise "Datei \xFC kaputt".b }

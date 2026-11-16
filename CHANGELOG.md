@@ -70,6 +70,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- `log_exception: :partial`, the default for `measure_*` blocks, now also adds each exception that
+  caused the logged one to the message, as ` -- Cause: Class: message`, so that it names the same
+  exceptions as `log_exception: :full`. A cause's message is left out when it is empty, is its class
+  name, or is already in the message, as when the exception that wraps it copied it into its own:
+  `-- Exception: ActionDispatch::Http::MimeNegotiation::InvalidType: "foo/bar" is not a valid MIME
+  type -- Cause: Mime::Type::InvalidMimeType`. Before, the causes were left out. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+
+- `Log#each_exception` accepts the exception to start from, for custom formatters and appenders that
+  walk the causes of an exception the entry does not keep.
+
 - A `call_site` key of a logged Hash is now the `call_site:` argument when its value is `false`, a
   `Thread::Backtrace::Location`, or a well-formed `SemanticLogger::CallSite`, and is no longer logged
   in the payload. A `nil` value counts as not supplied, as for the other arguments, and is not logged
