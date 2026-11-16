@@ -4774,6 +4774,33 @@ helper that raises on warnings, sees the warning first. The module is not instal
 and later, which raise on such a String instead (Semantic Logger then writes a converted copy),
 or on JRuby.
 
+## Payload text where no locale is set
+
+Where no UTF-8 locale is set, as in cron jobs, systemd services, and many container images
+(`LANG` and `LC_ALL` unset, or `C` or `POSIX`), Ruby's default external encoding is US-ASCII. The
+text formatters (`:default`, `:color`, `:one_line`, `:syslog`, and `%{payload}` in `:pattern`)
+write the payload with Ruby's `#inspect`, which then writes each character outside ASCII as an
+escape:
+
+```
+2026-11-16 09:10:53.874476 I [86699:1312] Checkout -- José -- {name: "Jos\u00E9"}
+```
+
+The message, tags, and named tags are written as they are, and the JSON formatters are not
+affected. Rails sets the default external encoding to UTF-8 (`config.encoding`), so Rails
+applications are not affected either.
+
+To write the payload's characters, run Ruby with a UTF-8 locale or default external encoding,
+for example:
+
+```shell
+export LANG=C.UTF-8
+# or
+export RUBYOPT=-Eutf-8
+```
+
+or set `Encoding.default_external = Encoding::UTF_8` when the application starts.
+
 ## Log rotation
 
 For performance the log file is **not** re-opened on every write, so a log file must be rotated with
