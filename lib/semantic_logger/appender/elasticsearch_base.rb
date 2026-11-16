@@ -57,6 +57,10 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       #
+      #   metrics: [true|false]
+      #     Whether to also index metric-only entries: a metric without a message or an exception.
+      #     Default: false
+      #
       # Client Parameters (passed through to the backing client):
       #   url: [String]
       #     Fully qualified address to the service.
@@ -131,6 +135,7 @@ module SemanticLogger
                      environment: nil,
                      host: nil,
                      data_stream: false,
+                     metrics: false,
                      **client_args,
                      &)
         if type
@@ -150,7 +155,7 @@ module SemanticLogger
         @data_stream          = data_stream
 
         super(level: level, formatter: formatter, filter: filter, application: application,
-              environment: environment, host: host, metrics: false, &)
+              environment: environment, host: host, metrics: metrics, &)
         reopen
       end
 
