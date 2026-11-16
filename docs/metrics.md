@@ -92,8 +92,8 @@ option:
 # A counter, broken down by user:
 logger.info(metric: "filters.count", dimensions: {user: "jbloggs"})
 
-# A gauge with an amount and dimensions:
-logger.info(metric: "filters.average", metric_amount: 1.2, dimensions: {user: "jbloggs"})
+# An amount, broken down by user:
+logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbloggs"})
 ~~~
 
 Not every backend supports dimensions. **Statsd** and **New Relic** ignore any metric that carries
@@ -151,16 +151,43 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-When a duration metric has no dimensions, SignalFx receives both a gauge and a counter, so you can
+When a duration metric has no dimensions, SignalFx receives the duration and a count, so you can
 chart both the timing and the number of occurrences. When dimensions are present, the metric is sent
 as-is.
 
-### Elasticsearch and Splunk
+## Metrics in log appenders
 
-These are ordinary log [appenders](appenders.html), not metric subscribers, but a metric is part of
-the log entry, so `metric`, `metric_amount`, and any dimensions are written into the document
-automatically. You can build dashboards on those fields directly, without registering a separate
-metric subscriber.
+Metric subscribers are the destinations for metrics. Log [appenders](appenders.html) treat a metric
+as part of the log entry that carries it:
+
+* **A metric on an entry with a message or an exception** is written with the entry by the
+  formatters that write structured data, so a log store such as Elasticsearch or Splunk can chart
+  it without a metric subscriber. The text formatters do not write it; they show only the
+  entry's duration.
+* **A metric-only entry**, one with a metric but no message and no exception, such as
+  `logger.info(metric: "users/signup")`, is meant for the metric subscribers, since there can be
+  many of them. Log appenders leave them out, unless one is added with `metrics: true`:
+
+  ~~~ruby
+  # Also index metric-only entries in Elasticsearch:
+  SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200", metrics: true)
+  ~~~
+
+  The `:kafka`, `:rabbitmq`, `:udp`, and `:open_telemetry` appenders send them by default. Pass
+  `metrics: false` to leave them out.
+
+What each formatter writes for a metric on an entry with a message:
+
+| Formatter | Metric fields written |
+|-----------|-----------------------|
+| `:json`, `:raw`, `:fluentd`, `:ecs`, `:syslog_cee`, `:new_relic_logs` | `metric` and `metric_amount` |
+| `:loki` | `metric` and `metric_value`, in the structured metadata |
+| `:open_telemetry` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes |
+| `:default`, `:color`, `:one_line`, `:pattern`, `:syslog`, `:logfmt` | None; only the duration is shown |
+
+An appender writes what its formatter writes. For example `:elasticsearch`, `:opensearch`,
+`:splunk_http`, `:mongodb`, and `:graylog` use `:raw` by default, and `:http`, `:tcp`, `:udp`,
+`:kafka`, `:rabbitmq`, and `:cloudwatch_logs` use `:json`.
 
 ## How metrics behave
 
