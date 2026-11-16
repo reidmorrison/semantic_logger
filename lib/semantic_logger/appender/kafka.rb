@@ -19,6 +19,9 @@ require "date"
 #
 #     # Set an optional client id in order to identify the client to Kafka:
 #     client_id: "my-application",
+#
+#     # Leave out metric-only entries, as v6 does by default:
+#     metrics: false
 #   )
 module SemanticLogger
   module Appender
@@ -130,7 +133,7 @@ module SemanticLogger
                      ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil, ssl_ca_certs_from_system: false,
                      topic: "log_messages", partition: nil, partition_key: nil, key: nil,
                      delivery_threshold: 100, delivery_interval: 10, required_acks: 1,
-                     metrics: nil, **args, &)
+                     metrics: METRICS_NOT_SUPPLIED, **args, &)
         @seed_brokers             = seed_brokers
         @client_id                = client_id
         @connect_timeout          = connect_timeout

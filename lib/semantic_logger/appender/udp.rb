@@ -10,6 +10,7 @@ module SemanticLogger
     #   SemanticLogger.add_appender(
     #     appender: :udp,
     #     server:   'server:3300',
+    #     metrics:  false
     #   )
     class Udp < SemanticLogger::Subscriber
       attr_accessor :server, :udp_flags
@@ -59,9 +60,10 @@ module SemanticLogger
       # Example:
       #   SemanticLogger.add_appender(
       #     appender: :udp,
-      #     server:   'server:3300'
+      #     server:   'server:3300',
+      #     metrics:  false
       #   )
-      def initialize(server:, udp_flags: 0, metrics: nil, **args, &)
+      def initialize(server:, udp_flags: 0, metrics: METRICS_NOT_SUPPLIED, **args, &)
         @server    = server
         @udp_flags = udp_flags
 

@@ -24,6 +24,9 @@ end
 #
 #     # All other options accepted by Bunny.new call
 #     vhost: 'production',
+#
+#     # Leave out metric-only entries, as v6 does by default:
+#     metrics: false
 #   )
 module SemanticLogger
   module Appender
@@ -82,7 +85,7 @@ module SemanticLogger
       #   more parameters supported by Bunny: http://rubybunny.info/articles/connecting.html
       def initialize(queue_name: "semantic_logger", rabbitmq_host: nil,
                      level: nil, formatter: nil, filter: nil, application: nil, environment: nil,
-                     host: nil, metrics: nil, **args, &)
+                     host: nil, metrics: METRICS_NOT_SUPPLIED, **args, &)
         @queue_name             = queue_name
         @rabbitmq_args          = args.dup
         @rabbitmq_args[:host]   = rabbitmq_host

@@ -32,6 +32,14 @@ module Appender
         ensure
           udp&.close
         end
+
+        it "leaves metric-only entries out with metrics: nil, without a warning, as before" do
+          udp = refute_deprecated { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: nil) }
+
+          refute udp.should_log?(metric_only)
+        ensure
+          udp&.close
+        end
       end
 
       describe "#message_error?" do
