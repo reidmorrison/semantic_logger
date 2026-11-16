@@ -357,13 +357,31 @@ module SemanticLogger
       @filter.is_a?(Regexp) ? !name_matches_filter?(log.name) : @filter.call(log) != true
     end
 
-    # Whether the name matches the Regexp filter. A name that is not valid in its encoding, which
-    # matching raises for, is matched converted to valid UTF-8 (see Utils.encode_utf8_string), since
-    # a log call must not raise.
+    # Whether the name matches the Regexp filter. A name that is not valid in its encoding, or is
+    # not ASCII-compatible, which matching raises for, is matched converted to valid UTF-8 (see
+    # Utils.encode_utf8_string), since a log call must not raise.
     def name_matches_filter?(name)
       @filter.match?(name)
     rescue ArgumentError, EncodingError
-      @filter.match?(Utils.encode_utf8_string(name.to_s))
+      utf8_name_matches_filter?(Utils.encode_utf8_string(name.to_s))
+    end
+
+    # Whether the Regexp filter matches the name, which is valid UTF-8. A Regexp fixed to another
+    # encoding, such as one that holds characters outside ASCII written in a source file in
+    # ISO-8859-1, cannot match UTF-8 text, so it matches the name in its own encoding: as bytes for
+    # a binary Regexp, otherwise converted, with "?" for a character the encoding does not have. A
+    # name that it still cannot match, such as for an encoding with no converter from UTF-8, does
+    # not match.
+    def utf8_name_matches_filter?(name)
+      @filter.match?(name)
+    rescue ArgumentError, EncodingError
+      encoding = @filter.encoding
+      begin
+        text = encoding == Encoding::BINARY ? name.b : name.encode(encoding, invalid: :replace, undef: :replace)
+        @filter.match?(text)
+      rescue ArgumentError, EncodingError
+        false
+      end
     end
 
     # Ensure minimum log level is met

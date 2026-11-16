@@ -75,7 +75,7 @@ module SemanticLogger
           result[:error] = {
             message: hash[:exception][:message],
             class:   hash[:exception][:name],
-            stack:   hash[:exception][:stack_trace].join("\n")
+            stack:   stack_trace(hash[:exception][:stack_trace])
           }
         end
 
