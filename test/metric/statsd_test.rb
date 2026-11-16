@@ -208,8 +208,22 @@ module Metric
           refute appender.should_log?(metric_log(metric: nil))
         end
 
-        it "is false when the metric has dimensions" do
-          refute appender.should_log?(metric_log(dimensions: {action: "login"}))
+        it "is true when the metric has dimensions" do
+          assert appender.should_log?(metric_log(dimensions: {action: "login"}))
+        end
+      end
+
+      describe "a metric with dimensions" do
+        it "is counted without its dimensions" do
+          appender.log(metric_log(metric_amount: 2, dimensions: {action: "login"}))
+
+          assert_equal [[metric, 2]], fake.counts
+        end
+
+        it "is timed without its dimensions" do
+          appender.log(metric_log(duration: 200, dimensions: {action: "login"}))
+
+          assert_equal [[metric, 200]], fake.timings
         end
       end
     end

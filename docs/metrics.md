@@ -98,9 +98,9 @@ logger.info(metric: "filters.count", dimensions: {user: "jbloggs"})
 logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbloggs"})
 ~~~
 
-Not every backend supports dimensions. **Statsd** and **New Relic** ignore any metric that carries
-dimensions; **SignalFx** is built around them. See each subscriber below. The formatters that write
-structured data also write the dimensions with the entry, see
+Not every backend supports dimensions. **Statsd** and **New Relic** record a metric that carries
+dimensions without them; **SignalFx** is built around them. See each subscriber below. The formatters
+that write structured data also write the dimensions with the entry, see
 [Metrics in log appenders](#metrics-in-log-appenders).
 
 ## Send metrics to a backend
@@ -122,7 +122,7 @@ SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
 The `url:` must be `udp://`, and its host must resolve when the subscriber is added, or `add_appender`
 raises. A path in the url, as in `udp://localhost:8125/my_app`, is the namespace of every metric.
 
-Counters are integers (float amounts are rounded). Does not support dimensions.
+Counters are integers (float amounts are rounded). Has no dimensions, so a metric is sent without them.
 
 ### New Relic
 
@@ -133,7 +133,7 @@ Forward metrics to New Relic so they can be displayed on custom dashboards (requ
 SemanticLogger.add_appender(metric: :new_relic)
 ~~~
 
-Does not support dimensions.
+Has no dimensions, so a metric is sent without them.
 
 ### SignalFx
 

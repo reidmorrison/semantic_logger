@@ -30,6 +30,16 @@ module Metric
         assert_equal "Custom/User/authenticate", name.first
         assert duration
       end
+
+      it "logs a metric that has dimensions, without them" do
+        name = amount = nil
+        NewRelic::Agent.stub(:increment_metric, ->(name_, amount_) { name = name_, amount = amount_ }) do
+          appender.info(message: amessage, metric: "User/authenticated", dimensions: {region: "us"})
+        end
+
+        assert_equal "Custom/User/authenticated", name.first
+        assert_equal 1, amount
+      end
     end
   end
 end

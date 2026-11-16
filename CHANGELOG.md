@@ -77,6 +77,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- The `:statsd` and `:new_relic` metric subscribers record a metric that has `dimensions`, without
+  its dimensions, which neither backend has. Before, they left such a metric out altogether. See
+  the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - `log_exception: :partial`, the default for `measure_*` blocks, now also adds each exception that
   caused the logged one to the message, as ` -- Cause: Class: message`, so that it names the same
   exceptions as `log_exception: :full`. A cause's message is left out when it is empty, is its class
