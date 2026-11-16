@@ -293,6 +293,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   before it was reopened. With an `encoding:` such as `"UTF-16LE"`, an entry whose text cannot be
   converted to it, such as invalid UTF-8, no longer makes the appender close and reopen the log file
   before the entry is discarded, since reopening cannot fix the text.
+- The file and IO appenders no longer discard an entry whose text the file or IO cannot take in its
+  encoding. A file opened with an `encoding:` such as `"UTF-16LE"`, or an IO opened after Rails sets
+  `Encoding.default_internal` to UTF-8, converts what it writes, and raised `EncodingError` for
+  invalid UTF-8, for binary text that holds bytes outside ASCII, which a custom formatter can return,
+  or for a character its encoding does not have. Now such an entry is written converted, as the
+  JSON formatters convert text: binary text is read as the UTF-8 it usually holds, invalid bytes are
+  dropped, and a character that the encoding does not have is written as `?`. Only an entry that the
+  file or IO refuses is converted.
 
 ## [5.2.0] 2026-10-30
 

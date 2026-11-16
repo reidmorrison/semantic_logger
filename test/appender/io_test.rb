@@ -22,6 +22,22 @@ module Appender
         end
       end
 
+      describe "an IO that converts what it writes to UTF-8" do
+        # Such as one opened after Rails sets Encoding.default_internal to UTF-8.
+        it "writes binary text that a formatter returns, converted to UTF-8" do
+          reader, writer = ::IO.pipe
+          writer.set_encoding(Encoding::UTF_8)
+          appender = SemanticLogger::Appender::IO.new(writer, formatter: ->(log, _) { log.message })
+
+          appender.info("Café ☕".b)
+          writer.close
+
+          assert_equal "Café ☕\n", reader.read
+        ensure
+          reader&.close
+        end
+      end
+
       describe "#flush" do
         it "flushes output" do
           appender = SemanticLogger::Appender::IO.new($stdout)

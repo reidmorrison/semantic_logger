@@ -103,17 +103,28 @@ module Appender
           end
 
           it "does not reopen the file for text that the file cannot take" do
-            appender = SemanticLogger::Appender::File.new(file_name, encoding: "UTF-16LE")
-            log.message = (+"bad \xFF byte").force_encoding(Encoding::UTF_8)
             reopened = 0
 
+            refuse = ->(_) { raise(Encoding::CompatibilityError, "no") }
             appender.stub(:reopen, -> { reopened += 1 }) do
-              error = assert_raises(Encoding::InvalidByteSequenceError) { appender.log(log) }
+              appender.instance_variable_get(:@file).stub(:write, refuse) do
+                error = assert_raises(Encoding::CompatibilityError) { appender.log(log) }
 
-              assert appender.message_error?(error)
+                assert appender.message_error?(error)
+              end
             end
 
             assert_equal 0, reopened
+          end
+
+          it "writes text that the file's encoding refuses, converted" do
+            appender    = SemanticLogger::Appender::File.new(file_name, encoding: "UTF-16LE")
+            log.message = (+"bad \xFF byte").force_encoding(Encoding::UTF_8)
+
+            assert appender.log(log)
+            written = File.binread(file_name).force_encoding(Encoding::UTF_16LE).encode(Encoding::UTF_8)
+
+            assert_includes written, "bad  byte"
           end
 
           it "when retry is disabled" do
