@@ -260,6 +260,13 @@ module SemanticLogger
           assert_nil last_log.payload
         end
 
+        it "appends a non-hash payload in an incompatible encoding to the message, without raising" do
+          logger.info("Café", "Grüße ☕".b)
+
+          assert_equal "Café -- Grüße ☕", last_log.message
+          assert_equal Encoding::UTF_8, last_log.message.encoding
+        end
+
         it "splits a hash message into message and payload" do
           logger.info(message: "Hello", user: "joe")
 
@@ -286,6 +293,35 @@ module SemanticLogger
           logger.info("Base") { "more" }
 
           assert_equal "Base -- more", last_log.message
+        end
+
+        describe "a string block result in an encoding incompatible with the message" do
+          it "appends a binary result to a UTF-8 message, without raising" do
+            logger.info("Café") { "Grüße ☕".b }
+
+            assert_equal "Café -- Grüße ☕", last_log.message
+            assert_equal Encoding::UTF_8, last_log.message.encoding
+          end
+
+          it "appends a UTF-8 result to a binary message, without raising" do
+            logger.info("Grüße ☕".b) { "Café" }
+
+            assert_equal "Grüße ☕ -- Café", last_log.message
+          end
+
+          it "appends an ISO-8859-1 result to a UTF-8 message, without raising" do
+            logger.info("Café") { "Grüße".encode(Encoding::ISO_8859_1) }
+
+            assert_equal "Café -- Grüße", last_log.message
+          end
+
+          it "leaves a result in the message's own encoding in that encoding" do
+            latin1 = "Grüße".encode(Encoding::ISO_8859_1)
+            logger.info(latin1) { latin1 }
+
+            assert_equal Encoding::ISO_8859_1, last_log.message.encoding
+            assert_equal "Grüße -- Grüße", last_log.message.encode(Encoding::UTF_8)
+          end
         end
 
         it "merges a hash block result" do

@@ -121,6 +121,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   its message would raise, or would make an ASCII message binary, they are converted to valid UTF-8
   first: binary text is read as the UTF-8 it usually holds, and invalid bytes are dropped. Text in
   another encoding, such as ISO-8859-1, otherwise stays in it.
+- A log call no longer raises `Encoding::CompatibilityError` when the String that a block returns is
+  in an encoding incompatible with the message, such as `logger.info("Café") { response.body }`
+  with a binary body that holds bytes outside ASCII, or when the second argument is such a String,
+  as in `logger.info("Café", response.body)`. Before, the error was raised into the application.
+  Now they are joined the way `log_exception: :partial` joins the message and the exception's
+  message.
 - A `measure_*` block that raises an exception whose `#message` raises, such as one that reads a
   record that is nil, now re-raises its own exception. Before, with `log_exception: :partial` (the
   default), the error that `#message` raised replaced it, without it as the cause, and nothing was

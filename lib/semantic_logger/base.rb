@@ -418,7 +418,9 @@ module SemanticLogger
         exception = payload
         payload   = nil
       elsif payload && !payload.is_a?(Hash)
-        message = message.nil? ? payload : "#{message} -- #{payload}"
+        # Joined so that texts in incompatible encodings, such as a UTF-8 message and a binary
+        # response body, cannot make the log call raise (see Utils.join_texts).
+        message = message.nil? ? payload : Utils.join_texts(message, " -- ", payload)
         payload = nil
       end
 
@@ -448,11 +450,14 @@ module SemanticLogger
     # arguments. Lambdas enforce their arity, so yielding the log to a zero-arity lambda would
     # raise ArgumentError. Blocks that accept an argument still receive the log so they can read
     # or mutate it.
+    #
+    # A String result is joined to the message with Utils.join_texts, so that texts in incompatible
+    # encodings, such as a UTF-8 message and a binary block result, cannot make the log call raise.
     def apply_block_result(log, &block)
       result = block.arity.zero? ? block.call : block.call(log)
       case result
       when String
-        log.message = log.message.nil? ? result : "#{log.message} -- #{result}"
+        log.message = log.message.nil? ? result : Utils.join_texts(log.message, " -- ", result)
       when Hash
         log.assign_hash(result)
       end
