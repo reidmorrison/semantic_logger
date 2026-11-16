@@ -117,9 +117,9 @@ module SemanticLogger
 
       # Returns [Array(Integer, String, Integer)] the address family, host, and port of the server. A host in brackets
       # is an IPv6 address. Any other host is an IPv4 address, or a name, which is resolved to its IPv4 address, as
-      # before.
+      # before. Whitespace around the server, such as the newline at the end of an environment variable, is ignored.
       def server_address
-        match = SERVER.match(server.to_s)
+        match = SERVER.match(server.to_s.strip)
         unless match
           raise(ArgumentError,
                 "Invalid :server #{server.inspect}, it must be \"host:port\", such as \"localhost:8088\", " \

@@ -66,8 +66,24 @@ module Appender
           assert_equal amessage, entry["message"]
         end
 
-        it "sends to a host name over IPv4, as before, even when it resolves to an IPv6 address first" do
+        it "sends to a host name over IPv4, as before" do
           entry = received(Socket::AF_INET, "127.0.0.1") { |port| "localhost:#{port}" }
+
+          assert_equal amessage, entry["message"]
+        end
+
+        it "sends to a host name over IPv4 when the name resolves to an IPv6 address first" do
+          unless Addrinfo.getaddrinfo("localhost", nil, nil, :DGRAM).first.ipv6?
+            skip("localhost does not resolve to an IPv6 address first")
+          end
+
+          entry = received(Socket::AF_INET, "127.0.0.1") { |port| "localhost:#{port}" }
+
+          assert_equal amessage, entry["message"]
+        end
+
+        it "ignores whitespace after the server, such as an environment variable's newline, as before" do
+          entry = received(Socket::AF_INET, "127.0.0.1") { |port| "localhost:#{port} \n" }
 
           assert_equal amessage, entry["message"]
         end
