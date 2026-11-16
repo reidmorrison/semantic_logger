@@ -507,7 +507,8 @@ module SemanticLogger
           metric_amount:      measure_option(params, :metric_amount),
           duration:           duration,
           log_exception:      measure_option(params, :log_exception) || :partial,
-          on_exception_level: measure_option(params, :on_exception_level)
+          on_exception_level: measure_option(params, :on_exception_level),
+          call_site:          measure_option(params, :call_site)
         )
 
         # Log level may change during assign due to :on_exception_level

@@ -78,7 +78,7 @@ situational field.
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
-|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`. See [The call site](#the-call-site).|
+|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`, and the log call did not pass `call_site: false`. See [The call site](#the-call-site).|
 |`metric`|`String`|The metric name, present for metric and `measure_*` calls. See [Metrics](metrics.html).|
 |`metric_amount`|`Float`|Numeric amount for a counter or gauge metric, for example the quantity purchased.|
 |`dimensions`|`Hash`|Dimensions (key/value labels) supplied for a metric.|

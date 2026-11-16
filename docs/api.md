@@ -203,6 +203,10 @@ logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", metric_amo
 
 # Attach a backtrace of your own, an Array of Strings, instead of the logger's call stack
 logger.warn(message: "Open redirect detected", backtrace: redirect_stack)
+
+# Say where the entry was logged, or that it has no such place (see call_site_level)
+logger.debug(message: "Order Load", duration: 0.4, call_site: query_location)
+logger.info(message: "Started GET /orders", call_site: false)
 ~~~
 
 In both forms, a key such as `duration` or `exception` is only used as an argument when its value is
@@ -297,6 +301,9 @@ The second argument to a measure call is a Hash of options:
 - `:on_exception_level` [Symbol]: if an exception is raised, raise the log level to this level.
 - `:silence` [Symbol]: the level to silence other log messages to within the block (current fiber
   only).
+- `:call_site` [Thread::Backtrace::Location|SemanticLogger::CallSite|false]: where the entry was
+  logged, or `false` for none. See
+  [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged).
 
 An option with a value that is not valid for it, such as a non-numeric `:min_duration` or an unknown
 level, is ignored and its default is used. Other keys in the Hash are not logged; pass the data to

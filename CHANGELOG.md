@@ -61,8 +61,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   helpers, so that entries record the code that called them. See
   [Recording where each entry was logged](https://logger.reidmorrison.com/config.html#recording-where-each-entry-was-logged).
   Resolves discussion #219.
+- A log call, or a `measure_*` call, can pass `call_site:` to say where the entry was logged, as a
+  `Thread::Backtrace::Location` or a `SemanticLogger::CallSite`, or `call_site: false` for an entry
+  with no such code, which records none without reading the stack for it. For code that logs on
+  behalf of other code, such as a log subscriber. It is only recorded at or above `call_site_level`.
+  See
+  [Recording where each entry was logged](https://logger.reidmorrison.com/config.html#recording-where-each-entry-was-logged).
 
 ### Changed
+
+- A `call_site` key of a logged Hash is now the `call_site:` argument when its value is `false`, a
+  `Thread::Backtrace::Location`, or a well-formed `SemanticLogger::CallSite`, and is no longer logged
+  in the payload. A `nil` value counts as not supplied, as for the other arguments, and is not logged
+  either. Other values, such as a String, are still logged in the payload.
 
 - `SemanticLogger.host=`, `application=`, and `environment=` store a frozen copy of the value
   supplied, so that code in a Ractor can read it, and the default host name is frozen too.
