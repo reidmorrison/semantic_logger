@@ -237,5 +237,18 @@ module SemanticLogger
     def metrics?
       @metrics
     end
+
+    # Returns [true|false] the `metrics` option of an appender that sends metric-only entries unless told otherwise:
+    # true when it is not supplied, with a deprecation warning, since v6 leaves them out by default, as the other log
+    # appenders do. Remove in v6, with the `metrics: nil` default of the appenders that call it.
+    def deprecated_metrics_default(metrics, appender)
+      return metrics unless metrics.nil?
+
+      Deprecation.warn(
+        "The #{appender.inspect} appender sends metric-only entries by default, which changes in v6. " \
+        "Add it with metrics: true to keep sending them, or metrics: false to leave them out."
+      )
+      true
+    end
   end
 end

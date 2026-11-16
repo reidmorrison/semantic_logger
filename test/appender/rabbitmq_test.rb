@@ -11,12 +11,44 @@ module Appender
       it "does not show the password in #inspect" do
         Bunny.stub(:new, ->(*args) { FakeBunny.new(args) }) do
           @appender = SemanticLogger::Appender::Rabbitmq.new(
-            queue_name: "test_queue", rabbitmq_host: "localhost", username: "the-username", password: "the-password"
+            queue_name: "test_queue", rabbitmq_host: "localhost", username: "the-username", password: "the-password",
+            metrics:    true
           )
         end
 
         refute_includes @appender.inspect, "the-password"
         assert_includes @appender.inspect, %( queue_name="test_queue">)
+      end
+
+      describe "metrics:" do
+        let(:metric_only) do
+          log        = SemanticLogger::Log.new("Test", :info)
+          log.metric = "users/signup"
+          log
+        end
+
+        it "warns that the default changes in v6, and sends metric-only entries, when it is not supplied" do
+          Bunny.stub(:new, ->(*args) { FakeBunny.new(args) }) do
+            line      = __LINE__ + 3
+            pattern   = /rabbitmq_test\.rb:#{line}: warning: SemanticLogger: The :rabbitmq appender/
+            @appender = assert_deprecated(pattern) do
+              SemanticLogger::Appender::Rabbitmq.new(queue_name: "test_queue", rabbitmq_host: "localhost")
+            end
+          end
+
+          assert @appender.should_log?(metric_only)
+        end
+
+        it "leaves metric-only entries out with metrics: false, without a warning" do
+          Bunny.stub(:new, ->(*args) { FakeBunny.new(args) }) do
+            @appender = refute_deprecated do
+              SemanticLogger::Appender::Rabbitmq.new(queue_name: "test_queue", rabbitmq_host: "localhost",
+                                                     metrics: false)
+            end
+          end
+
+          refute @appender.should_log?(metric_only)
+        end
       end
 
       it "sends log messages in JSON format" do
@@ -26,7 +58,8 @@ module Appender
             queue_name:    "test_queue",
             rabbitmq_host: "localhost",
             username:      "the-username",
-            password:      "the-password"
+            password:      "the-password",
+            metrics:       true
           )
 
           bunny_args = bunny.args.first

@@ -50,7 +50,7 @@ module SemanticLogger
       #
       #   metrics: [Boolean]
       #     Send metrics only events over udp.
-      #     Default: true
+      #     Default: true, with a deprecation warning when it is not supplied, since v6 changes it to false.
       #
       # Limitations:
       # * UDP packet size is limited by the connected network and any routers etc
@@ -61,11 +61,11 @@ module SemanticLogger
       #     appender: :udp,
       #     server:   'server:3300'
       #   )
-      def initialize(server:, udp_flags: 0, metrics: true, **args, &)
+      def initialize(server:, udp_flags: 0, metrics: nil, **args, &)
         @server    = server
         @udp_flags = udp_flags
 
-        super(metrics: metrics, **args, &)
+        super(metrics: deprecated_metrics_default(metrics, :udp), **args, &)
         reopen
       end
 

@@ -118,6 +118,23 @@ To keep sending them as log records, add the appender with `metrics: true`:
 SemanticLogger.add_appender(appender: :open_telemetry, metrics: true)
 ~~~
 
+#### Choose `metrics:` for the `:kafka`, `:rabbitmq`, and `:udp` appenders
+
+Unlike the other log appenders, `:kafka`, `:rabbitmq`, and `:udp` send metric-only entries by
+default: entries such as `logger.info(metric: "users/signup")`, which have a metric but no message and
+no exception, and are meant for the [metric subscribers](metrics.html#send-metrics-to-a-backend). v6
+leaves them out by default, as the other log appenders do. Until then, adding one of these appenders
+without `metrics:` still sends them, and reports a
+[deprecation warning](#seeing-deprecation-warnings). Pass `metrics:` to choose:
+
+~~~ruby
+# Keep sending metric-only entries:
+SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: true)
+
+# Leave them out, as v6 does by default:
+SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: false)
+~~~
+
 #### Loki stack traces
 
 The `:loki` formatter now writes the `stack_trace` of a logged exception one frame per line, followed

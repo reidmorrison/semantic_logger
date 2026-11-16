@@ -62,7 +62,7 @@ module SemanticLogger
       #
       #   metrics: [Boolean]
       #     Also send metrics only events to rabbitmq.
-      #     Default: true
+      #     Default: true, with a deprecation warning when it is not supplied, since v6 changes it to false.
       #
       # RabbitMQ Parameters:
       #
@@ -82,14 +82,14 @@ module SemanticLogger
       #   more parameters supported by Bunny: http://rubybunny.info/articles/connecting.html
       def initialize(queue_name: "semantic_logger", rabbitmq_host: nil,
                      level: nil, formatter: nil, filter: nil, application: nil, environment: nil,
-                     host: nil, metrics: true, **args, &)
+                     host: nil, metrics: nil, **args, &)
         @queue_name             = queue_name
         @rabbitmq_args          = args.dup
         @rabbitmq_args[:host]   = rabbitmq_host
         @rabbitmq_args[:logger] = logger
 
         super(level: level, formatter: formatter, filter: filter, application: application,
-              environment: environment, host: host, metrics: metrics, &)
+              environment: environment, host: host, metrics: deprecated_metrics_default(metrics, :rabbitmq), &)
         reopen
       end
 

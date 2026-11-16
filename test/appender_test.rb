@@ -19,7 +19,7 @@ class AppenderTest < Minitest::Test
 
         it "formats with the block, for an appender named by a Symbol" do
           formatter = ->(log, _logger) { log.message }
-          appender  = build(appender: :udp, server: "localhost:10514", &formatter)
+          appender  = build(appender: :udp, server: "localhost:10514", metrics: false, &formatter)
 
           assert_same formatter, appender.formatter
         ensure
