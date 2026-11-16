@@ -213,6 +213,9 @@ To use other keys instead, set them in `config/application.rb`, and they are kep
 config.semantic_logger.sensitive_keys = %i[passw secret token _key authorization cookie]
 ~~~
 
+Setting `config.semantic_logger.sensitive_keys = nil` does not turn it off, since that cannot be told
+apart from never setting it; use `redact_filter_parameters = false`.
+
 Notes:
 
 * The default list of a new Rails application, in `config/initializers/filter_parameter_logging.rb`,
@@ -224,6 +227,8 @@ Notes:
 * A Proc in the list is left out, since it changes a value rather than naming a key. A dotted
   filter, such as `"credit_card.code"`, only matches a key with that whole name, not `code` inside
   `credit_card`.
+* Active Job `arguments` and Action Mailer `args` are logged as JSON text, which is not redacted. For
+  a job that takes a secret, leave its arguments out of the log with `self.log_arguments = false`.
 * Entries logged while the application starts, before the list is complete, may not be redacted.
 
 To set it yourself, for example without rails_semantic_logger, do the same once the application has
