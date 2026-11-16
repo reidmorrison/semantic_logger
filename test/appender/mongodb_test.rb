@@ -32,7 +32,7 @@ module Appender
 
       describe "#message_error?" do
         it "is true for a document that BSON cannot serialize" do
-          [{"a\u0000b" => 1}, {big: 2**64}, {object: Object.new}].each do |payload|
+          [{big: 2**64}, {object: Object.new}].each do |payload|
             error = assert_raises(StandardError) { appender.info("Webhook received", payload: payload) }
 
             assert appender.message_error?(error), "expected #{error.class} to be a message error"
@@ -45,6 +45,39 @@ module Appender
 
         it "is false for a reply from the server that cannot be decoded" do
           refute appender.message_error?(BSON::Error::BSONDecodeError.new("invalid reply"))
+        end
+      end
+
+      # BSON stores only valid UTF-8 text, and keys without NUL bytes.
+      describe "text that BSON refuses" do
+        it "stores the entry, with its text converted to valid UTF-8" do
+          appender.error(
+            "Webhook \xFF failed".b,
+            payload:   {
+              body:                                    "Café ☕".b,
+              "clé".encode(Encoding::ISO_8859_1)       => "latin",
+              "a\u0000b"                               => "nul",
+              "Café".b.to_sym                          => "symbol",
+              ascii: "Café".dup.force_encoding(Encoding::US_ASCII)
+            },
+            exception: RuntimeError.new((+"quoted \xFF input").force_encoding(Encoding::UTF_8))
+          )
+          document = appender.collection.find.first
+
+          assert_equal "Webhook  failed", document["message"]
+          assert_equal(
+            {"body" => "Café ☕", "clé" => "latin", "ab" => "nul", "Café" => "symbol", "ascii" => "Café"},
+            document["payload"]
+          )
+          assert_equal "quoted  input", document["exception"]["message"]
+        end
+
+        it "does not copy a document that BSON accepts" do
+          appender.stub(:storable, ->(_) { raise "copied" }) do
+            appender.info("Café ☕", payload: {body: "Café ☕"})
+          end
+
+          assert_equal "Café ☕", appender.collection.find.first["message"]
         end
       end
 

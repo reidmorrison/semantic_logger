@@ -1053,6 +1053,11 @@ Each entry is stored as a document:
 }
 ~~~
 
+MongoDB stores only valid UTF-8 text, and keys without NUL bytes. An entry holding other text, such
+as a binary response body in its payload, or an exception message that quotes invalid input, is
+stored with that text converted, as the JSON formatters write it: binary text is read as the UTF-8 it
+usually holds, invalid bytes are dropped, and NUL bytes are removed from keys.
+
 ### Apache Kafka
 
 Publish log entries to an Apache Kafka broker (requires the `ruby-kafka` gem):

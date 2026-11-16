@@ -162,17 +162,31 @@ module SemanticLogger
       end
 
       # Log the message to MongoDB
+      #
+      # BSON stores only valid UTF-8 text, and keys without NUL bytes. A document that holds other
+      # text, such as a binary response body in the payload, or an exception message that quotes
+      # invalid input, is stored as a copy that BSON accepts (see #storable). Only such a document is
+      # copied: BSON checks the text as it serializes the document, before anything is sent.
       def log(log)
-        # Insert log entry into Mongo
-        collection.insert_one(format_log(log))
+        document = format_log(log)
+        begin
+          collection.insert_one(document)
+        rescue *TEXT_ERRORS
+          collection.insert_one(storable(document))
+        end
         true
       end
 
       # Errors raised for a document that cannot be stored, which retrying cannot insert either.
       # BSON raises BSON::Error, ArgumentError (a key with a NUL byte), or RangeError (an Integer too
       # large for 64 bits) while the document is serialized, before anything is sent, and the driver
-      # raises Mongo::Error::MaxBSONSize for a document larger than the server accepts.
+      # raises Mongo::Error::MaxBSONSize for a document larger than the server accepts. A document
+      # whose text is at fault (TEXT_ERRORS) is first tried again as a copy that BSON accepts.
       DOCUMENT_ERRORS = [BSON::Error, ArgumentError, RangeError, Mongo::Error::MaxBSONSize].freeze
+
+      # Errors BSON raises for text it cannot store: EncodingError for text that is not valid UTF-8 or
+      # cannot be converted to it, and ArgumentError for a key that holds a NUL byte.
+      TEXT_ERRORS = [EncodingError, ArgumentError].freeze
 
       # Except BSON::Error::BSONDecodeError, which comes from reading the server's reply rather than
       # from the document, so it is treated like any other error from the server: the thread backs
@@ -192,6 +206,29 @@ module SemanticLogger
 
       def default_formatter
         SemanticLogger::Formatters::Raw.new
+      end
+
+      # Returns a copy of the document that BSON can store: every String and Symbol converted to
+      # valid UTF-8 (see Utils.encode_utf8), and the NUL bytes removed from every key, which BSON
+      # writes as a C string. Binary text is read as the UTF-8 it usually holds, and invalid bytes
+      # are dropped, as the JSON formatters write them.
+      def storable(value)
+        case value
+        when Hash
+          value.each_with_object({}) { |(key, val), hash| hash[storable_key(key)] = storable(val) }
+        when Array
+          value.map { |element| storable(element) }
+        else
+          Utils.encode_utf8(value)
+        end
+      end
+
+      # Returns the key, converted to valid UTF-8 and without NUL bytes (see #storable).
+      def storable_key(key)
+        key = Utils.encode_utf8(key)
+        return key unless (key.is_a?(String) || key.is_a?(Symbol)) && key.to_s.include?("\0")
+
+        key.is_a?(Symbol) ? key.name.delete("\0").to_sym : key.delete("\0")
       end
     end
   end

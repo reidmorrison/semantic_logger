@@ -267,6 +267,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `formatter: nil`, or when their formatter is set back to `nil` with `formatter=`. They used the
   generic default instead: JSON for Loki, and plain text for the others, which made every log entry
   fail for OpenTelemetry.
+- The `:mongodb` appender no longer discards an entry that holds text BSON cannot store: a binary
+  String that holds bytes outside ASCII, such as a response body in the payload, a US-ASCII String
+  that holds UTF-8, such as a file read where no locale is set, invalid UTF-8, such as an exception
+  message that quotes invalid input, a key in another encoding, such as ISO-8859-1, or a key with a
+  NUL byte. Before, BSON raised, and the appender reported the error to the internal logger instead of
+  storing the entry. Now such an entry is stored as a copy with its text converted, as the JSON
+  formatters write it: binary text is read as the UTF-8 it usually holds, invalid bytes are dropped,
+  and NUL bytes are removed from keys. Only an entry that BSON refuses is copied.
 
 ## [5.2.0] 2026-10-30
 
