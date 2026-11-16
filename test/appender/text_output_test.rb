@@ -1,6 +1,7 @@
 require_relative "../test_helper"
 require "stringio"
 require "tmpdir"
+require "tempfile"
 
 module Appender
   class TextOutputTest < Minitest::Test
@@ -14,16 +15,14 @@ module Appender
         end
       end
 
-      # An IO without an external encoding that refuses the first text written to it.
+      # An object that is not an IO, which refuses the text, but would take it written again.
       let(:refusing_io) do
         io = Object.new
         def io.written = (@written ||= [])
 
         def io.write(text)
-          unless @refused
-            @refused = true
-            raise(Encoding::CompatibilityError, "refused")
-          end
+          raise(Encoding::CompatibilityError, "refused") if (@writes = @writes.to_i + 1) == 1
+
           written << text
         end
         io
@@ -52,27 +51,52 @@ module Appender
         assert_equal "Café ?\n".encode(Encoding::ISO_8859_1).b, written("Café ☕\n", "ISO-8859-1")
       end
 
-      it "writes text to a StringIO that holds text in an incompatible encoding" do
-        io = StringIO.new
+      it "writes text to a StringIO that holds text in an encoding that cannot take it" do
+        io = StringIO.new("é\n".encode(Encoding::ISO_8859_1))
+        io.seek(0, ::IO::SEEK_END)
+
         SemanticLogger::Appender::TextOutput.write(io, "☕\n")
 
-        SemanticLogger::Appender::TextOutput.write(io, "Café\n".encode(Encoding::ISO_8859_1))
-
-        assert_equal "☕\nCafé\n", io.string
+        assert_equal "é\n?\n".encode(Encoding::ISO_8859_1), io.string
       end
 
-      it "writes the text as valid UTF-8 to an IO without an external encoding" do
-        SemanticLogger::Appender::TextOutput.write(refusing_io, "Café \xFF☕".b)
+      it "does not write again to another object, which could have written part of the text" do
+        assert_raises(Encoding::CompatibilityError) { SemanticLogger::Appender::TextOutput.write(refusing_io, "Café".b) }
+        assert_empty refusing_io.written
+      end
 
-        assert_equal ["Café ☕"], refusing_io.written
-        assert_equal Encoding::UTF_8, refusing_io.written.first.encoding
+      it "returns the number of bytes written in the IO's encoding" do
+        Dir.mktmpdir do |dir|
+          File.open(File.join(dir, "test.log"), "a", encoding: "UTF-16LE") do |file|
+            assert_equal 6, SemanticLogger::Appender::TextOutput.write(file, "ab\n")
+            assert_equal 4, SemanticLogger::Appender::TextOutput.write(file, (+"a\xFF\n").force_encoding(Encoding::UTF_8))
+          end
+        end
       end
 
       it "raises when the IO refuses the converted text too" do
-        io = Object.new
-        def io.write(_text) = raise(Encoding::CompatibilityError, "refused")
+        io = StringIO.new
+        def io.writes = (@writes ||= 0)
+
+        def io.write(_text)
+          @writes = writes + 1
+          raise(Encoding::CompatibilityError, "refused")
+        end
 
         assert_raises(Encoding::CompatibilityError) { SemanticLogger::Appender::TextOutput.write(io, "Café".b) }
+        assert_equal 2, io.writes
+      end
+
+      # A Tempfile delegates to a File, so it is not an IO itself.
+      it "writes binary text that holds UTF-8 to a Tempfile that converts to UTF-8" do
+        file = Tempfile.new("text_output")
+        file.set_encoding(Encoding::UTF_8)
+        SemanticLogger::Appender::TextOutput.write(file, "Café\n".b)
+        file.flush
+
+        assert_equal "Café\n".b, File.binread(file.path)
+      ensure
+        file&.close!
       end
     end
   end

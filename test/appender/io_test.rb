@@ -34,6 +34,7 @@ module Appender
 
           assert_equal "Café ☕\n", reader.read
         ensure
+          writer&.close unless writer&.closed?
           reader&.close
         end
       end

@@ -219,8 +219,8 @@ module SemanticLogger
           @log_count += 1
           @log_size  += written
         rescue StandardError => e
-          # Nor can it fix text that the file cannot take, even converted (see TextOutput), such as
-          # text that cannot be converted to the `encoding` of the file (see #message_error?).
+          # Nor can it fix text that the file refuses even converted (see TextOutput and
+          # #message_error?).
           raise(e) if count >= retry_count || message_error?(e)
 
           count += 1
