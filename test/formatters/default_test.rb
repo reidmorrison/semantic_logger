@@ -559,6 +559,50 @@ module SemanticLogger
             assert_includes output, "\nCause: RuntimeError: Grüße ☕\n"
           end
 
+          it "writes the backtrace when a cause's binary message cannot be joined with a backtrace line" do
+            log.message   = "Échec"
+            log.exception =
+              begin
+                begin
+                  raise binary
+                rescue RuntimeError
+                  raise ArgumentError, "Café"
+                end
+              rescue ArgumentError => e
+                e
+              end
+            log.exception.set_backtrace(["/app/naïve.rb:2:in 'save'"])
+            log.exception.cause.set_backtrace(["/app/io.rb:7:in 'read'"])
+
+            assert_includes output,
+                            "Café\n/app/naïve.rb:2:in 'save'\nCause: RuntimeError: Grüße ☕\n/app/io.rb:7:in 'read'"
+          end
+
+          it "writes the UTF-16 message of an exception that caused the logged one" do
+            log.exception =
+              begin
+                begin
+                  raise "Disk full".encode(Encoding::UTF_16LE)
+                rescue RuntimeError
+                  raise ArgumentError, "Café"
+                end
+              rescue ArgumentError => e
+                e
+              end
+
+            assert_includes output, "\nCause: RuntimeError: Disk full\n"
+          end
+
+          it "writes a time format in another encoding with a message in that encoding" do
+            log.message = "Grüße".encode(Encoding::ISO_8859_1)
+            formatter   = SemanticLogger::Formatters::Default.new(time_format: "%Y Ü".encode(Encoding::ISO_8859_1))
+            output      = formatter.call(log, nil)
+
+            assert_equal Encoding::UTF_8, output.encoding
+            assert_equal "2017 Ü D [", output[0, 10]
+            assert_includes output, "-- Grüße"
+          end
+
           it "writes binary exception details" do
             detail_class = Class.new(StandardError) do
               def detailed_message(highlight: false, **)

@@ -2,7 +2,7 @@ require "time"
 module SemanticLogger
   module Formatters
     class Base
-      attr_accessor :log, :logger, :time_format, :log_host, :log_application, :log_environment, :precision,
+      attr_accessor :log, :logger, :log_host, :log_application, :log_environment, :precision,
                     :escape_control_chars, :log_exception_details
 
       # Printable escapes for the most common control characters. Any other
@@ -91,7 +91,7 @@ module SemanticLogger
                      escape_control_chars: false,
                      log_exception_details: default_log_exception_details,
                      backtrace_cleaner: default_backtrace_cleaner)
-        @time_format          = time_format || self.class.build_time_format(precision)
+        self.time_format      = time_format || self.class.build_time_format(precision)
         @log_host             = log_host
         @log_application      = log_application
         @log_environment      = log_environment
@@ -99,6 +99,18 @@ module SemanticLogger
         @escape_control_chars  = escape_control_chars
         @log_exception_details = log_exception_details
         self.backtrace_cleaner = backtrace_cleaner
+      end
+
+      # Returns [String|Symbol] the `time_format` option. See #initialize.
+      attr_reader :time_format
+
+      # Sets the `time_format` option. See #initialize.
+      #
+      # A format String is converted once, here, as #joinable_text converts the formatter's own
+      # text: a format with characters outside ASCII in another encoding, such as ISO-8859-1, could
+      # not otherwise be joined with the entry's other text.
+      def time_format=(time_format)
+        @time_format = joinable_text(time_format)
       end
 
       # Returns [true|false|Object] the `backtrace_cleaner` option. See #initialize.
@@ -162,8 +174,8 @@ module SemanticLogger
       # UTF-8 text, so it is still written as it is.
       def escape_control_characters(value)
         unless escape_control_chars
-          # Checked here rather than in a method of its own, since every field of every entry
-          # passes through, and almost every one is UTF-8 or ASCII.
+          # As #joinable_text, written out here since every field of every entry passes through,
+          # and almost every one is UTF-8 or ASCII.
           return value unless value.is_a?(String) && value.encoding != Encoding::UTF_8 && !value.ascii_only?
 
           return Utils.encode_utf8_string(value)
@@ -172,6 +184,17 @@ module SemanticLogger
 
         string = Utils.encode_utf8_string(value.to_s)
         string.gsub(CONTROL_CHARS) { |char| CONTROL_CHAR_ESCAPES[char] || format("\\x%02x", char.ord) }
+      end
+
+      # Returns the value as text that can be joined with this formatter's UTF-8 output: a String
+      # that holds bytes outside ASCII in another encoding converted to UTF-8 (see
+      # Utils.encode_utf8_string), and anything else as it is, including a UTF-8 String that holds
+      # invalid bytes. For the formatter's own text, such as its time format, which is not escaped.
+      # #escape_control_characters applies the same rule to the entry's fields.
+      def joinable_text(value)
+        return value unless value.is_a?(String) && value.encoding != Encoding::UTF_8 && !value.ascii_only?
+
+        Utils.encode_utf8_string(value)
       end
 
       # Whether this formatter logs exception details unless told otherwise. See #initialize.

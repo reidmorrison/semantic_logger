@@ -136,6 +136,14 @@ agent.
   ```
 
   Alerts, searches, or tests that match the whole message of such an entry need updating.
+* `:default`, `:color`, `:pattern`, and `:syslog` with `escape_control_chars: false` now always
+  write UTF-8, as the JSON based formatters, `:one_line`, and `:syslog` with its default
+  `escape_control_chars: true` already did. Text in another encoding, such as ISO-8859-1, used to be
+  written in that encoding, and an entry that mixed it with UTF-8 text was lost; it is now converted
+  to UTF-8, and so are a pattern or time format in another encoding. Binary text is read as the
+  UTF-8 it usually holds, without its bytes that are not valid UTF-8, instead of being written
+  byte for byte. An application whose log files, or the tools that read them, expect another
+  encoding needs to expect UTF-8 instead.
 
 ### Upgrading to Semantic Logger v5.2
 
