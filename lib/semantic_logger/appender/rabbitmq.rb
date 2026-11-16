@@ -11,7 +11,7 @@ end
 #   SemanticLogger.add_appender(
 #     appender: :rabbitmq,
 #
-#     # Name of the queue in RabbitMQ where to publish the logs. This queue will be bound to "amqp.direct" exchange.
+#     # Name of the queue in RabbitMQ where to publish the logs, through the default exchange.
 #     queue_name: 'semantic_logger',
 #
 #     # This host will be used for RabbitMQ connection.
@@ -20,7 +20,7 @@ end
 #
 #     # RabbitMQ credentials
 #     username: 'my-username',
-#     password: 'my-secrect-pass',
+#     password: 'my-secret-pass',
 #
 #     # All other options accepted by Bunny.new call
 #     vhost: 'production',
@@ -47,7 +47,7 @@ module SemanticLogger
       #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call, or a Proc to be used to format
       #     the output from this appender
-      #     Default: :json (See: #call)
+      #     Default: :json
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
@@ -72,15 +72,15 @@ module SemanticLogger
       #   rabbitmq_host: [String]
       #     Host for AMQP connection. in Bunny this is called :host but here it has
       #     been remapped to avoid conflicting with SemanticLogger's :host param.
-      #     Default: localhost
+      #     Default: Bunny's default, 127.0.0.1
       #
       #   username: [String]
       #     Username for AMQP connection
-      #     Default: nil
+      #     Default: Bunny's default, guest
       #
       #   password: [String]
       #     Password for AMQP connection
-      #     Default: nil
+      #     Default: Bunny's default, guest
       #
       #   more parameters supported by Bunny: http://rubybunny.info/articles/connecting.html
       def initialize(queue_name: "semantic_logger", rabbitmq_host: nil,

@@ -14,7 +14,7 @@ module SemanticLogger
       #
       # Parameters:
       #   url: [String]
-      #     Valid URL to post to.
+      #     Url of the Statsd server to send metrics to. Only udp is supported.
       #     Example:
       #       udp://localhost:8125
       #     Example, send all metrics to a particular namespace:

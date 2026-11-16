@@ -41,8 +41,9 @@ module SemanticLogger
       #   seed_brokers: [Array<String>, String]
       #     The list of brokers used to initialize the client. Either an Array of connections,
       #     or a comma separated string of connections.
-      #     Connections can either be a string of "port:protocol" or a full URI with a scheme.
-      #     If there's a scheme it's ignored and only host/port are used.
+      #     Connections can either be a string of "hostname:port" or a full URI with a scheme.
+      #     The scheme must be kafka, kafka+ssl, plaintext, or ssl, or ruby-kafka raises
+      #     Kafka::Error. Otherwise only the host and port are used, the port defaulting to 9092.
       #
       #   client_id: [String]
       #     The identifier for this application.
@@ -81,7 +82,7 @@ module SemanticLogger
       #     Must be used in combination with ssl_client_cert_key.
       #     Default: nil
       #
-      #   ssl_client_cert_key [String]
+      #   ssl_client_cert_key: [String]
       #     A PEM encoded client cert key to use with a SSL connection.
       #     Must be used in combination with ssl_client_cert.
       #     Default: nil
@@ -89,17 +90,17 @@ module SemanticLogger
       #   ssl_ca_certs_from_system: [boolean]
       #     Delegate SSL CA cert to the system certs
       #
-      #    delivery_threshold: [Integer]
-      #      Number of messages between triggering a delivery of messages to Apache Kafka.
-      #      Default: 100
+      #   delivery_threshold: [Integer]
+      #     Number of messages between triggering a delivery of messages to Apache Kafka.
+      #     Default: 100
       #
-      #    delivery_interval: [Integer]
-      #      Number of seconds between triggering a delivery of messages to Apache Kafka.
-      #      Default: 5
+      #   delivery_interval: [Integer]
+      #     Number of seconds between triggering a delivery of messages to Apache Kafka.
+      #     Default: 10
       #
-      #    required_acks: [Integer]
-      #      Number of replicas that must acknowledge receipt of each log message to the topic
-      #      Default: 1
+      #   required_acks: [Integer]
+      #     Number of replicas that must acknowledge receipt of each log message to the topic
+      #     Default: 1
       #
       # Semantic Logger Parameters:
       #
@@ -110,7 +111,7 @@ module SemanticLogger
       #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call, or a Proc to be used to format
       #     the output from this appender
-      #     Default: :raw_json (See: #call)
+      #     Default: :json
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.

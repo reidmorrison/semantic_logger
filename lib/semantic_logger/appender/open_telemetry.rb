@@ -19,6 +19,16 @@ module SemanticLogger
 
       # Create a Open Telemetry Logger appender instance.
       #
+      # Parameters
+      #   name: [String]
+      #     Name of the Open Telemetry logger, which is the instrumentation scope of every log record
+      #     it emits.
+      #     Default: "SemanticLogger"
+      #
+      #   version: [String]
+      #     Version of that instrumentation scope.
+      #     Default: SemanticLogger::VERSION
+      #
       # The formatter maps each log entry to an Open Telemetry log record, returning the keyword
       # arguments for `Logger#on_emit` other than `context:`.
       # Default: SemanticLogger::Formatters::OpenTelemetry

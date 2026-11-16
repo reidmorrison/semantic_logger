@@ -1,4 +1,4 @@
-# Forward application metrics to a Loki instance using HTTP push API
+# Forward log messages to a Grafana Loki instance using its HTTP push API
 #
 # Example:
 #   SemanticLogger.add_appender(
@@ -23,11 +23,11 @@ module SemanticLogger
       #           The Proc must return true or false.
       #
       #   host: [String]
-      #     Name of this host to send as a dimension.
+      #     Name of this host to send as a stream label.
       #     Default: SemanticLogger.host
       #
       #   application: [String]
-      #     Name of this application to send as a dimension.
+      #     Name of this application to send as a stream label.
       #     Default: SemanticLogger.application
       #
       #   url: [String]
@@ -35,7 +35,16 @@ module SemanticLogger
       #     Example: https://logs-prod-999.grafana.net
       #     A query string is kept and sent with every request.
       #     Example: https://logs-prod-999.grafana.net?orgid=my_org
-      #     Default: nil
+      #     Required.
+      #
+      #   path: [String]
+      #     Path of the push API, appended to the path of the url.
+      #     Default: 'loki/api/v1/push'
+      #
+      #   header: [Hash]
+      #     HTTP headers to send with every request, such as X-Scope-OrgID, merged over the
+      #     headers of the HTTP appender, whose Content-Type is already application/json.
+      #     Default: {'Content-Type' => 'application/json'}
       #
       #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call and #batch, or a Proc, to be used to
