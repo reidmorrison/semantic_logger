@@ -29,6 +29,7 @@ module SemanticLogger
       def initialize(url: "udp://localhost:8125")
         @url = url
         super()
+        reopen
       end
 
       def reopen

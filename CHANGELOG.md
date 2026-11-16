@@ -113,6 +113,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- The `:statsd` metric subscriber records metrics as soon as it is added. Before, it created its
+  Statsd client only when reopened, such as after a fork, so in a process that did not fork, such as
+  a single Puma or Sidekiq process, every metric failed with `NoMethodError` and was reported to the
+  internal logger instead. A `url:` that is not `udp://` now raises as the subscriber is added.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

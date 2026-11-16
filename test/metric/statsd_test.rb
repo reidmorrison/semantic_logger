@@ -52,9 +52,18 @@ module Metric
       end
 
       describe "#reopen" do
-        it "raises when the scheme is not udp" do
-          subscriber = SemanticLogger::Metric::Statsd.new(url: "tcp://localhost:8125")
-          assert_raises(RuntimeError) { subscriber.reopen }
+        it "raises when the scheme is not udp, as the subscriber is created" do
+          assert_raises(RuntimeError) { SemanticLogger::Metric::Statsd.new(url: "tcp://localhost:8125") }
+        end
+
+        it "connects as the subscriber is created, so that it records metrics without a reopen" do
+          counts = []
+          ::Statsd.stub_any_instance(:count, ->(metric, amount) { counts << [metric, amount] }) do
+            subscriber = SemanticLogger::Metric::Statsd.new
+            subscriber.info(metric: "user/login")
+          end
+
+          assert_equal [["user/login", 1]], counts
         end
 
         it "sets the namespace from the url path" do
