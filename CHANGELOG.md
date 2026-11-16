@@ -338,6 +338,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The text formatters (`:default`, `:color`, `:one_line`, `:pattern`, `:syslog`) shorten a binary
   thread name that holds UTF-8 to 30 characters rather than 30 bytes. They split the character at
   the cut, and wrote fewer characters, such as 15 for a name of 40 `é`.
+- UTF-16 or UTF-32 text without a byte order mark, such as UTF-16 bytes tagged with Ruby's
+  `Encoding::UTF_16`, is now written as the text it holds, read as big-endian as Unicode reads such
+  text. Ruby's converter needs the byte order mark, so every formatter that converts text to UTF-8
+  wrote it as an empty String.
 
 ## [5.2.0] 2026-10-30
 

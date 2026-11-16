@@ -816,6 +816,26 @@ module SemanticLogger
           assert_equal "Café", Utils.encode_utf8_string(string)
           assert_equal Encoding::BINARY, string.encoding
         end
+
+        # UTF-16 and UTF-32 say their byte order with a byte order mark; Unicode reads text without
+        # one as big-endian.
+        it "reads UTF-16 and UTF-32 text without a byte order mark as big-endian" do
+          utf16 = "Café ☕".encode(Encoding::UTF_16BE).force_encoding(Encoding::UTF_16)
+          utf32 = "Café ☕".encode(Encoding::UTF_32BE).force_encoding(Encoding::UTF_32)
+
+          assert_equal "Café ☕", Utils.encode_utf8_string(utf16)
+          assert_equal "Café ☕", Utils.encode_utf8_string(utf32)
+          assert_equal Encoding::UTF_16, utf16.encoding
+        end
+
+        it "reads UTF-16 and UTF-32 text in the byte order that its byte order mark says" do
+          little16 = ("\xFF\xFE".b + "Café".encode(Encoding::UTF_16LE).b).force_encoding(Encoding::UTF_16)
+          little32 = ("\xFF\xFE\x00\x00".b + "Café".encode(Encoding::UTF_32LE).b).force_encoding(Encoding::UTF_32)
+
+          assert_equal "Café", Utils.encode_utf8_string(little16)
+          assert_equal "Café", Utils.encode_utf8_string(little32)
+          assert_equal "Café", Utils.encode_utf8_string("Café".encode(Encoding::UTF_16))
+        end
       end
 
       describe ".serializing_log_data?" do

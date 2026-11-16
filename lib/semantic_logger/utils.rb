@@ -468,13 +468,15 @@ module SemanticLogger
     # do not say which characters those bytes are. They are read as the UTF-8 they usually hold,
     # keeping its characters, as the json gem did before 3.1. Converting them would drop every byte
     # outside ASCII, valid UTF-8 or not, since neither encoding defines one. Text in any other
-    # encoding, such as ISO-8859-1, is converted.
+    # encoding, such as ISO-8859-1, is converted, and UTF-16 or UTF-32 text without a byte order mark
+    # is read as big-endian (see .encode_byte_ordered).
     def self.encode_utf8_string(string)
       case string.encoding
       when Encoding::UTF_8
         string.valid_encoding? ? string : string.scrub("")
       when Encoding::BINARY, Encoding::US_ASCII
         read_as_utf8(string)
+      when Encoding::UTF_16, Encoding::UTF_32 then encode_byte_ordered(string)
       else
         string.encode(Encoding::UTF_8, **ENCODE_UTF8_OPTIONS)
       end
@@ -496,6 +498,16 @@ module SemanticLogger
 
     # Returns [String] a copy of the string's bytes read as UTF-8, without its invalid bytes.
     private_class_method def self.read_as_utf8(string) = String.new(string, encoding: Encoding::UTF_8).scrub!("")
+
+    # Returns [String] UTF-16 or UTF-32 text converted to valid UTF-8. These encodings say their
+    # byte order with a byte order mark at the start, and Ruby's converter drops all the text that
+    # does not have one. Unicode reads such text as big-endian, and so does this.
+    private_class_method def self.encode_byte_ordered(string)
+      big_endian = string.encoding == Encoding::UTF_16 ? Encoding::UTF_16BE : Encoding::UTF_32BE
+      mark       = "\uFEFF".encode(big_endian).b
+      string     = String.new(string, encoding: big_endian) unless string.b.start_with?(mark, mark.reverse)
+      string.encode(Encoding::UTF_8, **ENCODE_UTF8_OPTIONS)
+    end
 
     # Returns [String] the texts joined into a new String, such as a log message and an exception's
     # message, whatever their encodings.
