@@ -200,6 +200,12 @@ agent.
   SemanticLogger.add_appender(metric: :statsd, filter: ->(log) { !log.dimensions? })
   SemanticLogger.add_appender(metric: :new_relic, filter: ->(log) { !log.dimensions? })
   ~~~
+* A `measure_*` call now keeps its `dimensions:` option, which it used to drop. So the `:signalfx`
+  metric subscriber sends a metric measured with dimensions as it sends any metric with dimensions:
+  under its own name, such as `supplier.add_user` for `metric: "supplier/add_user"`, with those
+  dimensions, and without a count. Before, it sent it as `Application.average` and
+  `Application.counter`, with `class` and `action` dimensions taken from the metric name. A filter on
+  `log.dimensions?`, as above, now applies to it too.
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and

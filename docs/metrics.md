@@ -96,6 +96,11 @@ logger.info(metric: "filters.count", dimensions: {user: "jbloggs"})
 
 # An amount, broken down by user:
 logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbloggs"})
+
+# A duration, broken down by supplier:
+logger.measure_info("Called supplier", metric: "supplier/add_user", dimensions: {supplier: "acme"}) do
+  # Code to call the external service ...
+end
 ~~~
 
 Not every subscriber supports dimensions. **Statsd** and **New Relic** record a metric with
@@ -162,7 +167,7 @@ SemanticLogger.add_appender(
 When a duration metric has no dimensions, SignalFx receives both its value and a count, so you can
 chart both the timing and the number of occurrences. The value is the duration and the count is 1,
 unless a `metric_amount` is given, which is sent as both. When dimensions are present, the metric is
-sent as-is.
+sent as-is: under its own name, with each `/` replaced by `.`, and a duration without a count.
 
 ## Metrics in log appenders
 

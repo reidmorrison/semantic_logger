@@ -6,6 +6,8 @@ class MeasureTest < Minitest::Test
   describe "Measure" do
     let(:appender) { SemanticLogger::Test::CaptureLogEvents.new }
     let(:payload) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345, message: "Message from payload"} }
+    let(:metric) { "supplier/call" }
+    let(:dimensions) { {supplier: "acme", region: "us"} }
 
     # Ensure that any log level can be measured and logged
     SemanticLogger::LEVELS.each do |level|
@@ -162,6 +164,38 @@ class MeasureTest < Minitest::Test
           assert_equal metric_name, log.metric
         end
 
+        describe ":dimensions" do
+          it "with a block" do
+            assert_equal "result", appender.send(measure_level, "hello world", metric: metric, dimensions: dimensions) {
+              "result"
+            }
+
+            assert log = appender.events.first
+            assert_equal metric, log.metric
+            assert_equal dimensions, log.dimensions
+            assert_predicate log, :dimensions?
+          end
+
+          it "with :duration" do
+            appender.send(measure_level, "hello world", metric: metric, dimensions: dimensions, duration: 12.5)
+
+            assert log = appender.events.first
+            assert_in_delta 12.5, log.duration
+            assert_equal dimensions, log.dimensions
+            assert_predicate log, :dimensions?
+          end
+        end
+
+        it ":dimensions with #benchmark_#{level}" do
+          assert_equal "result",
+                       appender.send(:"benchmark_#{level}", "hello world", metric: metric, dimensions: dimensions) {
+                         "result"
+                       }
+
+          assert log = appender.events.first
+          assert_equal dimensions, log.dimensions
+        end
+
         it ":backtrace_level" do
           SemanticLogger.stub(:backtrace_level_index, 0) do
             assert_equal "result", appender.send(measure_level, "hello world") { "result" }
@@ -246,6 +280,22 @@ class MeasureTest < Minitest::Test
 
           assert log = appender.events.first
           assert_equal metric_name, log.metric
+        end
+
+        it ":dimensions" do
+          assert_equal "result",
+                       appender.measure(level, "hello world", metric: metric, dimensions: dimensions) { "result" }
+
+          assert log = appender.events.first
+          assert_equal dimensions, log.dimensions
+        end
+
+        it ":dimensions with #benchmark(#{level})" do
+          assert_equal "result",
+                       appender.benchmark(level, "hello world", metric: metric, dimensions: dimensions) { "result" }
+
+          assert log = appender.events.first
+          assert_equal dimensions, log.dimensions
         end
 
         it ":backtrace_level" do
@@ -338,6 +388,25 @@ class MeasureTest < Minitest::Test
           assert_equal metric_name, log.metric
         end
 
+        it ":dimensions" do
+          assert_equal "result",
+                       appender.send(measure_level, message: "hello world", metric: metric, dimensions: dimensions) {
+                         "result"
+                       }
+
+          assert log = appender.events.first
+          assert_equal "hello world", log.message
+          assert_equal dimensions, log.dimensions
+        end
+
+        it ":dimensions with :duration" do
+          appender.send(measure_level, message: "hello world", metric: metric, dimensions: dimensions, duration: 12.5)
+
+          assert log = appender.events.first
+          assert_in_delta 12.5, log.duration
+          assert_equal dimensions, log.dimensions
+        end
+
         it ":backtrace_level" do
           SemanticLogger.stub(:backtrace_level_index, 0) do
             assert_equal "result", appender.send(measure_level, message: "hello world") { "result" }
@@ -402,7 +471,8 @@ class MeasureTest < Minitest::Test
           log_exception:      :off,
           on_exception_level: 2**70,
           silence:            "bogus",
-          exception:          "not an exception"
+          exception:          "not an exception",
+          dimensions:         [%i[supplier acme]]
         }
 
         assert_equal "result", appender.measure_info("hello world", untrusted) { "result" }
@@ -412,6 +482,25 @@ class MeasureTest < Minitest::Test
         assert_equal :info, log.level
         assert_nil log.metric_amount
         assert_nil log.exception
+        assert_nil log.dimensions
+      end
+
+      it "keeps the metric when its dimensions are not a Hash" do
+        assert_equal "result", appender.measure_info("hello world", metric: metric, dimensions: "acme") { "result" }
+
+        assert log = appender.events.first
+        assert_equal metric, log.metric
+        assert_nil log.dimensions
+        refute_predicate log, :dimensions?
+        assert_nil log.payload
+      end
+
+      it "ignores dimensions that are not a Hash with :duration" do
+        appender.measure_info("hello world", metric: metric, dimensions: "acme", duration: 12.5)
+
+        assert log = appender.events.first
+        assert_equal metric, log.metric
+        assert_nil log.dimensions
       end
 
       it "uses the defaults for invalid values when the block raises" do
@@ -437,6 +526,28 @@ class MeasureTest < Minitest::Test
         assert_raises RuntimeError do
           appender.measure_info("hello world", duration: "12")
         end
+      end
+    end
+
+    describe "with a logger and an appender" do
+      include InMemoryAppenderHelper
+
+      it "writes the dimensions of a measured metric to the appender" do
+        logger.measure_info("Called supplier", metric: metric, dimensions: dimensions) { "result" }
+
+        assert log = log_message
+        assert_equal "Called supplier", log.message
+        assert_equal metric, log.metric
+        assert_equal dimensions, log.dimensions
+        assert_kind_of Float, log.duration
+      end
+
+      it "writes the dimensions of a metric measured with :duration to the appender" do
+        logger.measure_info("Called supplier", metric: metric, dimensions: dimensions, duration: 12.5)
+
+        assert log = log_message
+        assert_equal dimensions, log.dimensions
+        assert_in_delta 12.5, log.duration
       end
     end
 

@@ -162,6 +162,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:elasticsearch` and `:opensearch` appenders accept `metrics: true`, to also index metric-only
   entries: a metric without a message or an exception. Before, `metrics:` was passed on to the
   Elasticsearch or OpenSearch client, and those appenders always left metric-only entries out.
+- The `measure_*` and `benchmark_*` methods, and `measure` and `benchmark`, keep a `dimensions:`
+  option, such as `metric: "supplier/add_user", dimensions: {supplier: "acme"}`, with a block or
+  with `duration:`. Before, the entry had no dimensions, so the `:signalfx` metric subscriber could
+  not break the metric down by them, and the structured formatters did not write them. A
+  `dimensions:` value that is not a Hash is ignored, as the other measure options ignore a value
+  that is not valid for them. SignalFx now sends such a metric under its own name, as it sends any
+  metric with dimensions, instead of as `Application.average` and `Application.counter`. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
