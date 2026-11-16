@@ -18,6 +18,16 @@ module Appender
         assert_equal "Café ☕", hash[:context][:payload][:body]
       end
 
+      it "sends a payload that holds itself, cut off where it repeats" do
+        payload        = {name: "loop", body: "Café".b}
+        payload[:self] = payload
+        hash           = nil
+        Honeybadger.stub(:notify, ->(h) { hash = h }) { appender.error("Looped", payload) }
+
+        assert_equal "Café", hash[:context][:payload][:body]
+        assert_equal "#<Hash nested too deeply>", hash[:context][:payload][:self][:self]
+      end
+
       it "sends the binary text of an exception's entry as UTF-8" do
         hash = nil
         Honeybadger.stub(:notify, ->(_exception, h) { hash = h }) do

@@ -74,17 +74,17 @@ module SemanticLogger
         # Ignore logs coming from Sentry itself
         return false if log.name == "Sentry"
 
-        # Sentry serializes the event with JSON itself, which raises for a binary String that holds
-        # bytes outside ASCII (json 3.1) or warns about it (json 2.8 to 3.0.x), for invalid UTF-8,
-        # Infinity, or NaN, and then loses the event. Such data is sent as a copy that JSON can
-        # write, as the JSON formatters write it (see Utils.json_ready).
-        context = Utils.json_ready(format_log(log))
-        # Copies, since the payload and named tags are the log entry's own, which every other
-        # appender writes after this one, and the payload can be the application's own Hash. The
-        # keys taken out below must only be left out of what is sent to Sentry.
-        payload               = payload_copy(context.delete(:payload))
-        named_tags            = (context[:named_tags] || {}).dup
-        context[:named_tags]  = named_tags
+        # Sentry serializes the event with JSON.generate itself, which raises for a binary String
+        # that holds bytes outside ASCII (json 3.1), or warns about it (json 2.8 to 3.0.x), and for
+        # invalid UTF-8, and then loses the event. So the data is sent as a copy with its text
+        # converted to valid UTF-8, as the JSON formatters write it, and a Hash or Array nested too
+        # deeply, or that holds itself, cut off there as they cut it off (see Utils.encode_utf8).
+        # Any other object is sent as it is, for Sentry to write as it writes it.
+        context = format_log(log) { |data| Utils.encode_utf8(data) }
+        # The payload and named tags are this appender's own copies (above), so the keys taken out
+        # below are left out only of what is sent to Sentry.
+        payload               = payload_extras(context.delete(:payload), log.payload)
+        named_tags            = (context[:named_tags] = like_original(context[:named_tags] || {}, log.named_tags))
         transaction_name      = named_tags.delete(:transaction_name)
         fingerprint           = extract_fingerprint!(named_tags) || extract_fingerprint!(payload, from_payload: true)
 
@@ -227,14 +227,28 @@ module SemanticLogger
         FINGERPRINT_PART_TYPES.any? { |type| part.is_a?(type) }
       end
 
-      # Returns [Hash] a copy of the payload that keys can be taken out of. A payload that is not a
-      # Hash is sent to Sentry as the extra named payload.
-      def payload_copy(payload)
+      # Returns [Hash] the payload, from this appender's own copy, as a Hash that keys can be taken out
+      # of. A payload that is not a Hash is sent to Sentry as the extra named payload.
+      def payload_extras(payload, original)
         case payload
         when nil  then {}
-        when Hash then payload.dup
+        when Hash then like_original(payload, original)
         else {payload: payload}
         end
+      end
+
+      # Returns [Hash] this appender's copy of the payload or named tags as a Hash of the class of the
+      # log entry's own, such as HashWithIndifferentAccess, so that the keys taken out of it, such as
+      # :user_id, are found as in the application's Hash. The class's own #update may convert the
+      # nested Hashes too, as HashWithIndifferentAccess does. A plain Hash, or one whose class cannot
+      # be rebuilt this way, is returned as it is.
+      def like_original(copy, original)
+        return copy if original.instance_of?(Hash) || !original.is_a?(Hash)
+
+        rebuilt = original.class.new.update(copy)
+        rebuilt.is_a?(Hash) ? rebuilt : copy
+      rescue StandardError
+        copy
       end
 
       # Warns once that the Sentry user or fingerprint was taken from the payload.

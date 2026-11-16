@@ -269,13 +269,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `:sentry_ruby` appender no longer loses an event whose data holds a binary String that holds
   bytes outside ASCII, such as a response body in the payload, with json 3.1, and no longer prints
   the json gem's warning about it with json 2.8.0 through 3.0.x. Sentry serializes the event itself,
-  so with json 3.1 it raised as Sentry sent the event, which dropped it. Now the appender hands
-  Sentry a copy of any data that JSON cannot write as it is, as `:graylog` does: binary text is read
-  as the UTF-8 it usually holds, invalid bytes are dropped, and Infinity and NaN become Strings. The
-  `:bugsnag`, `:honeybadger`, and `:honeybadger_insights` appenders now hand over the text of an
-  entry converted to valid UTF-8 in the same way, keeping its characters: Bugsnag replaced each byte
-  of binary text outside ASCII with U+FFFD, and Honeybadger with "?", so `"Café".b` arrived as
-  `"Caf��"` or `"Caf??"`.
+  so it raised as Sentry sent the event, which dropped it. Now the appender hands Sentry a copy of
+  the data with its text converted to valid UTF-8, as the JSON formatters write it: binary text is
+  read as the UTF-8 it usually holds, and invalid bytes are dropped. The `:bugsnag`, `:honeybadger`,
+  and `:honeybadger_insights` appenders now hand over such a copy too, keeping the characters of
+  binary text: Bugsnag replaced each of its bytes outside ASCII with U+FFFD, and Honeybadger with "?",
+  so `"Café".b` arrived as `"Caf\uFFFD\uFFFD"` or `"Caf??"`. A Hash or Array nested more than 32 levels
+  deep, or that holds itself, is cut off there, as the JSON formatters cut it off, so a payload that
+  holds itself no longer makes Sentry drop the event either. Any other object in the data is handed
+  over as it is, for the service to write as before, and the message of a logged exception is still
+  the service's to convert.
 - The `:mongodb` appender no longer discards an entry that holds text BSON cannot store: a binary
   String that holds bytes outside ASCII, such as a response body in the payload, a US-ASCII String
   that holds UTF-8, such as a file read where no locale is set, invalid UTF-8, such as an exception
