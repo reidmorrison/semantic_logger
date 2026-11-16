@@ -29,7 +29,8 @@ module SemanticLogger
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this subscriber.
-      #     Default: SemanticLogger.default_level
+      #     Default: none (:trace), so it records every metric entry that a logger emits; each
+      #     logger filters by its own level.
       #
       #   formatter: [Object|Proc]
       #     An instance of a class that implements #call, or a Proc, that returns the name to
