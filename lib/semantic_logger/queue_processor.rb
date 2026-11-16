@@ -1,5 +1,6 @@
 require "semantic_logger/queue_processor/request"
 require "semantic_logger/queue_processor/throttled_counter"
+require "semantic_logger/queue_processor/reporter"
 
 module SemanticLogger
   # Internal class that processes log messages from a queue on a separate thread.
@@ -103,8 +104,7 @@ module SemanticLogger
       @thread                         = nil
       # Only batch mode parks the worker on the signal; streaming mode never touches it.
       @signal                         = Concurrent::Event.new if batch
-      @dropped                        = ThrottledCounter.new
-      @failed                         = ThrottledCounter.new(reported_at: nil)
+      @reporter                       = Reporter.new(appender)
       @processed_count                = 0
       create_queue
 
@@ -114,7 +114,7 @@ module SemanticLogger
     end
 
     # Internal logger used to report problems encountered while processing log messages.
-    def logger = appender.logger
+    def logger = @reporter.logger
 
     # Returns [Thread] the worker thread.
     #
@@ -136,11 +136,11 @@ module SemanticLogger
     def non_blocking? = @non_blocking && capped?
 
     # Returns [Integer] the number of log messages dropped because the queue was full.
-    def dropped_count = @dropped.total
+    def dropped_count = @reporter.dropped_count
 
     # Returns [Integer] the number of log messages discarded because they could not be written,
     # whether their content or the destination was at fault (see Subscriber#message_error?).
-    def failed_count = @failed.total
+    def failed_count = @reporter.failed_count
 
     # Returns [true|false] whether messages are processed in batches.
     def batch? = @batch
@@ -189,6 +189,9 @@ module SemanticLogger
     end
 
     # Re-open the queue and worker thread after a fork.
+    #
+    # Also called from a signal trap, such as one that reopens the log files after a rotation, where
+    # Ruby does not allow a Mutex to be locked, so it takes none.
     def reopen
       # Workaround CRuby crash on fork by recreating queue on reopen
       #   https://github.com/reidmorrison/semantic_logger/issues/103
@@ -232,10 +235,14 @@ module SemanticLogger
     end
 
     # Separate thread for processing log messages.
+    #
+    # This thread is designed to never go down unless the main thread terminates or the appender is
+    # closed. A StandardError while processing restarts the processing, after a back-off, up to
+    # async_max_retries times. Any other exception, even one from the first report, stops this
+    # processor, which then drops new messages, rather than ending the thread and leaving the
+    # calling threads blocked on a full queue.
     def process
-      # This thread is designed to never go down unless the main thread terminates
-      # or the appender is closed.
-      logger.trace "Async: Appender thread active"
+      safe_log(:trace, "Async: Appender thread active")
       begin
         carry_on = batch? ? process_messages_in_batches : process_messages
       rescue StandardError => e
@@ -250,23 +257,20 @@ module SemanticLogger
           @stopped = true
           safe_log(:error, "Async: Stopping after #{retry_count} failed retries, dropping new messages", e)
         end
-      rescue Exception => e
-        @stopped = true
-        safe_log(:error, "Async: Stopping due to fatal exception", e)
-      ensure
-        # A thread that overflowed its stack hands the queue over to a new one (see #stack_overflowed).
-        @thread = carry_on ? spawn_worker : nil
-        safe_log(:trace, "Async: Thread has stopped") unless carry_on
       end
+    rescue Exception => e
+      @stopped = true
+      safe_log(:error, "Async: Stopping due to fatal exception", e)
+    ensure
+      # A thread that overflowed its stack hands the queue over to a new one (see #stack_overflowed),
+      # unless #reopen has already replaced it. Any other thread leaves @thread as it is, since one
+      # that has ended reads as inactive, and #reopen may already have replaced it with a new one.
+      @thread = spawn_worker if carry_on && @thread.equal?(Thread.current)
+      safe_log(:trace, "Async: Thread has stopped") unless carry_on
     end
 
-    # Log to the internal logger, ignoring any error.
-    # These calls may run after Ruby has released file handles during shutdown.
-    def safe_log(level, message, exception = nil)
-      logger.public_send(level, message, exception)
-    rescue StandardError
-      nil
-    end
+    # Report to the internal logger, ignoring any error (see Reporter#log).
+    def safe_log(level, message, exception = nil) = @reporter.log(level, message, exception)
 
     # Streaming: write each log message to the appender as it is dequeued.
     #
@@ -286,10 +290,10 @@ module SemanticLogger
             count = 0
           end
         else
-          break unless message.run(appender)
+          break unless run_command(message)
         end
       end
-      logger.trace "Async: Queue Closed"
+      safe_log(:trace, "Async: Queue Closed")
       false
     end
 
@@ -340,7 +344,7 @@ module SemanticLogger
         write_batch(logs)
         @retry_count = 0 unless retry_count.zero?
       end
-      commands.all? { |command| command.run(appender) }
+      commands.all? { |command| run_command(command) }
     rescue StandardError => e
       # Every message taken off the queue was written or already discarded, except those still
       # to be written when the error was raised: the last ones, since a batch is written in order.
@@ -355,10 +359,18 @@ module SemanticLogger
     # Run a command after a batch could not be written. Returns false once a command (:close)
     # stops processing, even when the command itself fails.
     def process_message_after_failure(command)
-      command.run(appender)
+      run_command(command)
     rescue StandardError => e
       safe_log(:warn, "Async: Failed to #{command.command} the appender", e)
       command.command != :close
+    end
+
+    # Run a command taken off the queue on the appender, reporting one it does not know. Returns
+    # false once message processing must stop (:close).
+    def run_command(request)
+      request.run(appender) do |command|
+        safe_log(:warn, "Async: Appender thread: Ignoring unknown command: #{command}")
+      end
     end
 
     # Write one log message to the appender.
@@ -418,36 +430,22 @@ module SemanticLogger
     def message_error?(exception) = appender.respond_to?(:message_error?) && appender.message_error?(exception)
 
     # Record log messages discarded because they could not be written, whether their content or
-    # the destination was at fault. The first is reported to the internal logger straight away,
-    # with the error. After that the count is reported, with the latest error, at most once every
-    # dropped_message_report_seconds.
+    # the destination was at fault, reported at most once every dropped_message_report_seconds
+    # after the first (see Reporter#failed).
     def messages_failed(logs, exception)
-      @failed.record(logs.size, interval: dropped_message_report_seconds) do |count, seconds|
-        period = seconds ? " in the last #{seconds.round} seconds" : ""
-        safe_log(:error, "Async: Discarded #{count} log message(s)#{period} that could not be written, " \
-                         "most recently from #{logs.first.name}", exception)
-      end
+      @reporter.failed(logs, exception, interval: dropped_message_report_seconds)
     end
 
-    # Record a dropped message, reporting the running count to the internal logger at most
-    # once every dropped_message_report_seconds.
-    def message_dropped
-      @dropped.record(interval: dropped_message_report_seconds) do |count, seconds|
-        logger.warn(
-          "Async: Dropped #{count} log messages in the last #{seconds.round} seconds. " \
-          "The queue is full (max_queue_size: #{max_queue_size}). " \
-          "Consider reducing the log level, increasing max_queue_size, or changing the appenders"
-        )
-      end
-    end
+    # Record a dropped message, reported at most once every dropped_message_report_seconds.
+    def message_dropped = @reporter.dropped(max_queue_size, interval: dropped_message_report_seconds)
 
     def check_lag(log)
       diff = Time.now - log.time
       return unless diff > lag_threshold_s
 
-      logger.warn "Async: Appender thread has fallen behind by #{diff} seconds with " \
-                  "#{queue.size} messages queued up. Consider reducing the log level or " \
-                  "changing the appenders"
+      safe_log(:warn, "Async: Appender thread has fallen behind by #{diff} seconds with " \
+                      "#{queue.size} messages queued up. Consider reducing the log level or " \
+                      "changing the appenders")
     end
 
     # Submit a command to the worker thread and wait for the reply.
@@ -457,11 +455,11 @@ module SemanticLogger
       queue_size = queue.size
       msg        = "Async: Queued log messages: #{queue_size}, running command: #{command}"
       if queue_size > 1_000
-        logger.warn msg
+        safe_log(:warn, msg)
       elsif queue_size > 100
-        logger.info msg
+        safe_log(:info, msg)
       elsif queue_size.positive?
-        logger.trace msg
+        safe_log(:trace, msg)
       end
 
       # Wake up the processing thread to process this command immediately.

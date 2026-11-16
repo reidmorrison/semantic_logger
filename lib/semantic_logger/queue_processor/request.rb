@@ -24,7 +24,8 @@ module SemanticLogger
       end
 
       # Called by the worker thread: run this command on the appender, then reply. Returns false
-      # once message processing must stop (:close).
+      # once message processing must stop (:close). A command it does not know is yielded to the
+      # block, for the caller to report, and otherwise ignored.
       def run(appender)
         case command
         when :flush
@@ -33,7 +34,7 @@ module SemanticLogger
           reply { appender.close }
           return false
         else
-          reply { appender.logger.warn "Async: Appender thread: Ignoring unknown command: #{command}" }
+          reply { yield(command) if block_given? }
         end
         true
       end
