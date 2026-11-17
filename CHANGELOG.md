@@ -164,6 +164,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- `add_appender` raises `ArgumentError` when it would batch an appender whose formatter cannot
+  format a batch, such as a formatter block given to `:http`, `:loki`, or `metric: :signalfx` with
+  `batch: true`, and says what to do instead. Before, it added the appender, but every batch failed
+  on the appender's worker thread, which backed off and tried again, so nothing was ever written,
+  and once its queue was full, logging blocked, unless it was added with `non_blocking: true`. A
+  custom appender whose `#batch` formats each entry with `format_log` is batched with any formatter,
+  as before. See the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - The `:statsd` metric subscriber records metrics as soon as it is added. Before, it created its
   Statsd client only when reopened, such as after a fork, so in a process that did not fork, such as
   a single Puma or Sidekiq process, every metric failed with `NoMethodError` and was reported to the

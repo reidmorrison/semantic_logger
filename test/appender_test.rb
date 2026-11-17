@@ -242,6 +242,89 @@ class AppenderTest < Minitest::Test
     end
 
     describe ".factory" do
+      describe "batching an appender whose formatter cannot format a batch" do
+        let(:block) { ->(log, _logger) { log.message } }
+        let(:refused) { "add_appender cannot batch %s, since its formatter cannot format a batch" }
+
+        # Creates the appender without connecting to its server.
+        def factory(**, &)
+          Net::HTTP.stub_any_instance(:start, true) { SemanticLogger::Appender.factory(**, &) }
+        end
+
+        {
+          SemanticLogger::Appender::Http   => {appender: :http, url: "http://localhost:8088/path"},
+          SemanticLogger::Appender::Loki   => {appender: :loki, url: "http://localhost:3100"},
+          SemanticLogger::Metric::Signalfx => {metric: :signalfx, token: "TEST"}
+        }.each_pair do |appender_class, options|
+          it "raises ArgumentError for #{options.values.first.inspect} with batch: true and a formatter block" do
+            error = assert_raises(ArgumentError) { factory(**options, batch: true, &block) }
+
+            assert_includes error.message, format(refused, appender_class)
+          end
+        end
+
+        it "says to give it a formatter that implements #batch, or to add it with batch: false" do
+          error = assert_raises(ArgumentError) do
+            factory(appender: :http, url: "http://localhost:8088/path", batch: true, formatter: :default)
+          end
+
+          assert_equal "#{format(refused, SemanticLogger::Appender::Http)}, as a formatter block or Proc cannot. " \
+                       "Give it a formatter that implements #batch(logs, logger), or add it with batch: false.",
+                       error.message
+        end
+
+        it "raises ArgumentError for an appender instance given with batch: true" do
+          appender = factory(appender: :http, url: "http://localhost:8088/path", &block)
+
+          assert_raises(ArgumentError) { factory(appender: appender, batch: true) }
+        end
+
+        it "raises ArgumentError for an appender batched by default" do
+          batched = Class.new(SemanticLogger::Appender::Http) do
+            def batch_by_default? = true
+          end
+
+          appender = Net::HTTP.stub_any_instance(:start, true) { batched.new(url: "http://localhost:8088/path", &block) }
+
+          assert_raises(ArgumentError) { factory(appender: appender) }
+        end
+
+        it "batches the appender with a formatter that can format a batch" do
+          added = factory(appender: :http, url: "http://localhost:8088/path", batch: true)
+
+          assert_predicate added, :batch?
+        ensure
+          added&.close
+        end
+
+        it "adds the appender with a formatter block, when not batched" do
+          added = factory(appender: :http, url: "http://localhost:8088/path", batch: false, &block)
+
+          assert_instance_of SemanticLogger::Appender::Http, added
+          assert_same block, added.formatter
+        end
+
+        it "batches an appender whose #batch formats each log message, with a formatter block" do
+          appender = Class.new(SemanticLogger::Subscriber) do
+            def written
+              @written ||= []
+            end
+
+            def batch(logs)
+              logs.each { |log| written << format_log(log) }
+            end
+          end.new(&block)
+          added    = factory(appender: appender, batch: true)
+          log      = SemanticLogger::Log.new("Test", :info).tap { |entry| entry.message = "hello" }
+          added.log(log)
+          added.flush
+
+          assert_equal ["hello"], appender.written
+        ensure
+          added&.close
+        end
+      end
+
       describe "with async: true" do
         # A custom appender may define its own #logger, as the appender contract allows. The worker
         # thread reports to it, starting with a trace, so one that cannot take that must not stop it.

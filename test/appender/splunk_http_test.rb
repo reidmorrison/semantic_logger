@@ -80,6 +80,11 @@ module Appender
         end
       end
 
+      it "cannot be batched with its default formatter, which is the appender itself" do
+        assert_same appender, appender.formatter
+        refute_predicate appender, :batch_formatter?
+      end
+
       def decompress_data(data)
         str = StringIO.new(data)
         gz  = Zlib::GzipReader.new(str)

@@ -106,6 +106,20 @@ module SemanticLogger
       true
     end
 
+    # Whether #batch can write a batch of log messages with this appender's formatter, which
+    # add_appender asks before it batches the appender, with `batch: true` or by default, see
+    # #batch_by_default?, and raises ArgumentError when it cannot, rather than the worker thread
+    # failing on every batch, so that nothing is ever written.
+    #
+    # True, since a #batch that writes each log message, formatted by #format_log, works with any
+    # formatter. An appender whose #batch formats the whole batch with #format_batch, such as
+    # Appender::Http, answers whether its formatter can format a batch instead, see
+    # #formats_batch?, so that a formatter block, which formats one log message at a time, is
+    # refused.
+    def batch_formatter?
+      true
+    end
+
     # Raised by #format_log and #format_batch when the formatter fails, with the formatter's
     # error as its cause. A formatter has no destination, so it can only fail because of the
     # content of the log message, whatever it raises.
@@ -162,16 +176,17 @@ module SemanticLogger
 
     # Returns the log messages formatted by the formatter's #batch, as for #format_log.
     #
-    # A formatter that cannot format a batch is a configuration error rather than bad content, so
-    # it raises ArgumentError instead, which backs off and is reported like any other error from
-    # the destination. That includes an appender that is its own formatter (it implements #call),
-    # whose #batch is the appender's own.
+    # A formatter that cannot format a batch, see #formats_batch?, is a configuration error rather
+    # than bad content, so it raises ArgumentError instead, which backs off and is reported like any
+    # other error from the destination. add_appender refuses such a formatter for an appender whose
+    # #batch_formatter? says so, such as Appender::Http, so for one of those this only happens when
+    # #formatter= replaces it afterwards.
     #
     # The formatter is read once, so that one changed by #formatter= on another thread cannot be
     # swapped in between the check and the call.
     def format_batch(logs)
       batch_formatter = formatter
-      unless batch_formatter.respond_to?(:batch) && !batch_formatter.equal?(self)
+      unless formats_batch?(batch_formatter)
         raise(ArgumentError,
               "#{batch_formatter.class.name} cannot format a batch. It must implement #batch(logs, logger)")
       end
@@ -181,6 +196,14 @@ module SemanticLogger
       rescue StandardError => e
         raise FormatError, "Could not format the batch of log messages (#{e.class})"
       end
+    end
+
+    # Returns [true|false] whether the formatter can format a batch: it implements
+    # #batch(logs, logger), which a formatter block or Proc does not, and it is not this appender
+    # itself, which is its own formatter when it implements #call, and whose #batch is the
+    # appender's own.
+    def formats_batch?(batch_formatter)
+      batch_formatter.respond_to?(:batch) && !batch_formatter.equal?(self)
     end
 
     # Initializer for Abstract Class SemanticLogger::Subscriber

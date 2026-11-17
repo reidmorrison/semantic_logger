@@ -652,7 +652,10 @@ SemanticLogger.add_appender(appender: :tcp, server: "localhost:514") { |log| "#{
 
 A block formats one entry at a time, so it cannot format the single request that `:http`, `:loki`,
 and `metric: :signalfx` send for a whole batch when added with `batch: true`: those need a formatter
-that implements `#batch(logs, logger)`.
+that implements `#batch(logs, logger)`, such as the one each uses by default. `add_appender` raises
+an `ArgumentError` for a block, or any other formatter that cannot format a batch, given to one of
+them with `batch: true`. Add it without `batch: true` to send one request for each entry, formatted
+by the block.
 
 When both a block and `formatter:` are given, the block takes precedence, and `formatter:` is
 ignored.
@@ -927,6 +930,22 @@ def batch_all_or_nothing?
 end
 ~~~
 
+Such a `#batch` works with any formatter, including a formatter block. One that formats the whole
+batch with `format_batch(logs)` instead needs a formatter that implements `#batch(logs, logger)`.
+Return whether it has one from `#batch_formatter?`, so that `add_appender` raises an
+`ArgumentError` for any other formatter when it batches the appender, rather than every batch
+failing and nothing being written:
+
+~~~ruby
+def batch(logs)
+  client.send_request(format_batch(logs))
+end
+
+def batch_formatter?
+  formats_batch?(formatter)
+end
+~~~
+
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby
@@ -992,7 +1011,9 @@ console.formatter = :json
 ~~~
 
 An appender that formats its messages as one batch, such as `:http` or `:loki` with `batch: true`,
-needs a formatter that implements `#batch(logs, logger)`, such as `:json`.
+needs a formatter that implements `#batch(logs, logger)`, such as `:json`. `add_appender` checks the
+formatter it is added with, but not one set later: a batch that the new formatter cannot format is
+not written.
 
 Messages are formatted as they are written. When the appender runs asynchronously, messages still
 on its queue are written with the new formatter. Call `SemanticLogger.flush` just before changing it

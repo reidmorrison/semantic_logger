@@ -88,6 +88,16 @@ module Appender
           refute_predicate appender, :batch_by_default?
         end
 
+        it "can be batched only with a formatter that can format a batch, as its default one can" do
+          assert_predicate appender, :batch_formatter?
+
+          [->(log, _logger) { log.message }, :default].each do |formatter|
+            appender.formatter = formatter
+
+            refute_predicate appender, :batch_formatter?
+          end
+        end
+
         it "sends nothing from a batch that has a message it cannot format" do
           assert_predicate appender, :batch_all_or_nothing?
 

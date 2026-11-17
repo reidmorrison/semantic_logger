@@ -47,6 +47,7 @@ module SemanticLogger
       batch    = true if batch.nil? && appender.respond_to?(:batch) && appender.batch_by_default?
 
       if batch == true
+        check_batch_formatter(appender)
         Appender::Async.new(
           appender:                       appender,
           batch:                          true,
@@ -72,6 +73,19 @@ module SemanticLogger
         appender
       end
     end
+
+    # Raises ArgumentError when the appender, about to be batched, cannot write a batch with its formatter, see
+    # Subscriber#batch_formatter?, such as a formatter block given to :http, :loki, or metric: :signalfx with
+    # `batch: true`. Its worker thread would otherwise fail on every batch, and write nothing.
+    def self.check_batch_formatter(appender)
+      return if appender.batch_formatter?
+
+      raise(ArgumentError,
+            "add_appender cannot batch #{appender.class}, since its formatter cannot format a batch, as a formatter " \
+            "block or Proc cannot. Give it a formatter that implements #batch(logs, logger), or add it with " \
+            "batch: false.")
+    end
+    private_class_method :check_batch_formatter
 
     # Returns [Subscriber] instance from the supplied options.
     #

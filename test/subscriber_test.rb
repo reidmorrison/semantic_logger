@@ -205,6 +205,14 @@ class SubscriberTest < Minitest::Test
       end
     end
 
+    describe "#batch_formatter?" do
+      it "is true whatever the formatter, since #batch may format each log message with #format_log" do
+        appender.formatter = ->(log, _logger) { log.message }
+
+        assert_predicate appender, :batch_formatter?
+      end
+    end
+
     describe "#inspect" do
       it "shows the class and object address, but not the instance variables" do
         appender.instance_variable_set(:@password, "s3cr3t")

@@ -234,6 +234,12 @@ module SemanticLogger
         true
       end
 
+      # The whole batch is formatted by the formatter's #batch, so it can only be batched with a
+      # formatter that implements it, such as the default one, rather than a formatter block.
+      def batch_formatter?
+        formats_batch?(formatter)
+      end
+
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
       # See Utils.redacted_url.
       def redacted_url
