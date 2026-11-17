@@ -80,6 +80,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   once, rather than split up and each part written again to find the entries at fault. It returns
   `false` by default, so that every batch is split as before. See
   [Custom appenders](https://logger.reidmorrison.com/config.html#custom-appenders).
+- The `:loki` formatter's `pid_and_thread_labels: false` option writes the process id and the thread
+  name as the structured metadata `pid` and `thread`, instead of as stream labels, so that a process
+  restart or a new thread no longer adds a Loki stream. A query can still filter on them, as in
+  `{application="shop"} | thread="worker-1"`. A payload key named `pid` or `thread` is then written
+  as `payload_pid` or `payload_thread`. The default is still to write them as labels; v6 changes it.
+  Set it with `add_appender(appender: :loki, formatter: {loki: {pid_and_thread_labels: false}}, ...)`.
+  See [pid and thread as structured metadata](https://logger.reidmorrison.com/appenders.html#pid-and-thread-as-structured-metadata).
 
 ### Changed
 

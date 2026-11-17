@@ -854,6 +854,7 @@ entry has the value:
 | `duration`, `duration_human` | The duration in milliseconds, from the `measure_*` methods, and as text. |
 | `exception_name`, `exception_message` | The class and message of the logged exception. |
 | `stack_trace` | Its backtrace, followed by each exception that caused it. |
+| `pid`, `thread` | The process id and the thread name, instead of as labels, with [`pid_and_thread_labels: false`](#pid-and-thread-as-structured-metadata) only. |
 
 Structured metadata holds only Strings, so a nested value in the payload is written as JSON, and any
 other value as its text. A payload key named like one of these fields is written with a `payload_`
@@ -883,6 +884,28 @@ was replaced, under that name when no label has it yet; and then the rest, numbe
 label keeps the name it was written under. So the named tags `host: "db-1", host_2: "db-2"` are
 written as `host_2="db-2"` and `host_3="db-1"`, and so are `host: "db-1", "host-2": "db-2"`, in
 either order.
+
+#### pid and thread as structured metadata
+
+Loki [advises against](https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/) labels
+whose values are many and keep changing, as `pid` and `thread` do: every process restart, and every
+thread, adds a stream, which Loki indexes and stores on its own. Its documentation names process and
+thread ids as data for
+[structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/)
+instead. Set the formatter's `pid_and_thread_labels: false` to write them there, where a query can
+still filter on them, as in `{application="shop"} | thread="worker-1"`, but a stream selector cannot:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :loki,
+  url:       "https://logs-prod-001.grafana.net",
+  formatter: {loki: {pid_and_thread_labels: false}}
+)
+~~~
+
+A payload key named `pid` or `thread` is then written with the `payload_` prefix, as for the other
+fields above. The default, `true`, writes them as labels. Semantic Logger v6 changes the default to
+`false`.
 
 #### Loki's label limits
 

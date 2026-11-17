@@ -135,6 +135,36 @@ SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], met
 SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: false)
 ~~~
 
+#### Choose where Loki writes `pid` and `thread`
+
+The `:loki` formatter writes the process id and the thread name as the stream labels `pid` and
+`thread`, so every process restart, and every thread, adds a Loki stream. Its new
+`pid_and_thread_labels: false` option writes them as structured metadata instead, as Loki advises,
+and v6 makes that the default. Nothing changes in v5.3 unless the option is set. To move them now,
+or to keep them as labels after v6:
+
+~~~ruby
+# Write them as structured metadata, as v6 does by default:
+SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
+                            formatter: {loki: {pid_and_thread_labels: false}})
+
+# Keep them as labels:
+SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
+                            formatter: {loki: {pid_and_thread_labels: true}})
+~~~
+
+As structured metadata, a query filters on them after the stream selector, and a payload key named
+`pid` or `thread` is written as `payload_pid` or `payload_thread`:
+
+```
+# Labels:
+{application="shop", thread="worker-1"}
+# Structured metadata:
+{application="shop"} | thread="worker-1"
+```
+
+See [pid and thread as structured metadata](appenders.html#pid-and-thread-as-structured-metadata).
+
 #### Set the options of an appender instance on the instance
 
 `add_appender` adds an appender or metric subscriber that is already created, given as `appender:` or

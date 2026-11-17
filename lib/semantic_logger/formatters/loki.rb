@@ -18,6 +18,11 @@ module SemanticLogger
         stack_trace
       ].freeze
 
+      # The names of the labels that `pid_and_thread_labels: false` writes to the structured
+      # metadata instead (see #initialize), which are then among this formatter's own names, as
+      # OWN_KEYS are.
+      PID_AND_THREAD_KEYS = %w[pid thread].freeze
+
       # A run of characters other than ASCII letters and digits, which Loki replaces with one
       # underscore in the name of structured metadata. So Loki stores `metric.value`,
       # `metric__value`, and `metric` followed by a zero width space and `value` all as
@@ -28,6 +33,10 @@ module SemanticLogger
       # for a LOKI_SEPARATOR. Matching it allocates nothing, unlike comparing #loki_name with each
       # own name, and nearly every payload key is checked against it.
       OWN_NAME = /\A(?:#{OWN_KEYS.map { |key| key.gsub('_', LOKI_SEPARATOR.source) }.join('|')})\z/
+
+      # Matches a name that Loki stores as one of OWN_KEYS or PID_AND_THREAD_KEYS, which have no
+      # underscore.
+      OWN_OR_PID_AND_THREAD_NAME = Regexp.union(OWN_NAME, /\A(?:#{PID_AND_THREAD_KEYS.join('|')})\z/)
 
       # Matches a name that holds an ASCII letter or digit. Loki rejects the whole push for a
       # structured metadata name without one, such as an empty name, `-`, or `_`, since it would
@@ -48,7 +57,21 @@ module SemanticLogger
       # #initialize.
       attr_reader :max_label_names_per_series, :max_label_name_length, :max_label_value_length
 
-      # Parameters, each an Integer of 1 or more
+      # Whether the process id and the thread name are written as the labels `pid` and `thread`,
+      # rather than as structured metadata. See #initialize.
+      attr_reader :pid_and_thread_labels
+
+      # Parameters
+      #   pid_and_thread_labels: [true|false]
+      #     Whether to write the process id and the thread name as the stream labels `pid` and
+      #     `thread`. Loki advises against labels like these, whose values are many and change: each
+      #     process, and each of its threads, adds a stream, which Loki indexes and stores apart.
+      #     false: Write them as the structured metadata `pid` and `thread` instead, where a query
+      #            can still filter on them, as in `{application="shop"} | thread="worker-1"`. A
+      #            payload key named `pid` or `thread` is then written with PAYLOAD_PREFIX, as a key
+      #            named like any other of this formatter's own fields is.
+      #     Default: true. Semantic Logger v6 changes the default to false.
+      #
       #   max_label_names_per_series: [Integer]
       #     The most labels that Loki accepts for a stream. Loki rejects the whole push, with every
       #     entry in it, for a stream with more, so a label past it, in the order they are written
@@ -63,13 +86,16 @@ module SemanticLogger
       #     many tags, is written to the structured metadata instead.
       #     Default: 2048, as Loki's `max_label_value_length`
       #
-      #   Set each to the limit of the same name in the `limits_config` of a Loki tenant that raises
-      #   it.
+      #   Set each limit, an Integer of 1 or more, to the limit of the same name in the
+      #   `limits_config` of a Loki tenant that raises it.
       #
       #   See Formatters::Base for the other options.
-      def initialize(max_label_names_per_series: 15, max_label_name_length: 1024, max_label_value_length: 2048,
-                     **args)
+      def initialize(pid_and_thread_labels: true, max_label_names_per_series: 15, max_label_name_length: 1024,
+                     max_label_value_length: 2048, **args)
         super(**args)
+        @pid_and_thread_labels      = pid_and_thread_labels ? true : false
+        @own_keys                   = @pid_and_thread_labels ? OWN_KEYS : (OWN_KEYS + PID_AND_THREAD_KEYS).freeze
+        @own_name                   = @pid_and_thread_labels ? OWN_NAME : OWN_OR_PID_AND_THREAD_NAME
         @max_label_names_per_series = label_limit(:max_label_names_per_series, max_label_names_per_series)
         @max_label_name_length      = label_limit(:max_label_name_length, max_label_name_length)
         @max_label_value_length     = label_limit(:max_label_value_length, max_label_value_length)
@@ -170,15 +196,15 @@ module SemanticLogger
       end
 
       # The labels are written in this order: this formatter's own (pid, application, environment,
-      # host, level, thread, and tags), each named tag, and each value of the context, under their
-      # own names, and then each named tag and context key whose name another label has, or that
-      # Loki does not accept, under another name, or not at all (see Labels#add). So every label
-      # written under its own name keeps it. Their names are Strings, so that a named tag or context
-      # key, whether a Symbol or a String, is found among them by name, as Loki finds it. The labels
-      # past Loki's limits are then taken out and written to the structured metadata (see
-      # #finish_loki_stream).
+      # host, level, thread, and tags, without pid and thread unless pid_and_thread_labels), each
+      # named tag, and each value of the context, under their own names, and then each named tag
+      # and context key whose name another label has, or that Loki does not accept, under another
+      # name, or not at all (see Labels#add). So every label written under its own name keeps it.
+      # Their names are Strings, so that a named tag or context key, whether a Symbol or a String,
+      # is found among them by name, as Loki finds it. The labels past Loki's limits are then taken
+      # out and written to the structured metadata (see #finish_loki_stream).
       def build_stream
-        self.stream = {stream: {"pid" => pid}, values: [[]]}
+        self.stream = {stream: pid_and_thread_labels ? {"pid" => pid} : {}, values: [[]]}
 
         application
         environment
@@ -194,6 +220,7 @@ module SemanticLogger
         metric
         duration
         exception
+        pid_and_thread
         finish_loki_stream
 
         stream[:values][0] << payload_value
@@ -217,7 +244,7 @@ module SemanticLogger
       end
 
       def thread
-        stream[:stream]["thread"] = log.thread_name if log.thread_name
+        stream[:stream]["thread"] = log.thread_name if pid_and_thread_labels && log.thread_name
       end
 
       def tags
@@ -368,6 +395,15 @@ module SemanticLogger
         )
       end
 
+      # Writes the process id and the thread name to the structured metadata, as Strings, unless
+      # they are labels (see #initialize).
+      def pid_and_thread
+        return if pid_and_thread_labels
+
+        payload_value[:pid]    = pid.to_s
+        payload_value[:thread] = log.thread_name if log.thread_name
+      end
+
       # Returns [Hash] the payload as structured metadata, with String keys and values, since Loki
       # only accepts Strings.
       #
@@ -396,12 +432,13 @@ module SemanticLogger
       # one value of the names that it stores alike, so this keeps the value of each of these keys.
       # Other payload keys that Loki stores alike, such as `a.b` and `a_b`, still keep only one.
       #
-      # A key that is exactly one of OWN_KEYS is named first, so that `payload_metric_value` holds
-      # the payload's `metric_value`, whatever the order of the keys, and `metric.value` is
-      # prefixed again.
+      # A key that is exactly one of this formatter's own names, OWN_KEYS, and PID_AND_THREAD_KEYS
+      # unless pid_and_thread_labels, is named first, so that `payload_metric_value` holds the
+      # payload's `metric_value`, whatever the order of the keys, and `metric.value` is prefixed
+      # again.
       def add_prefixed(metadata, prefixed)
         taken = Set.new(metadata.each_key) { |name| loki_name(name) }
-        exact, lookalikes = prefixed.partition { |name, _value| OWN_KEYS.include?(name) }
+        exact, lookalikes = prefixed.partition { |name, _value| @own_keys.include?(name) }
         (exact + lookalikes).each do |name, value|
           name = prefixed_name(name)
           name = PAYLOAD_PREFIX + name while taken.include?(name)
@@ -425,15 +462,15 @@ module SemanticLogger
       def loki_name(name) = Loki.loki_name(name)
 
       # Whether the payload key is written with PAYLOAD_PREFIX: Loki would store it as one of this
-      # formatter's own names (see OWN_NAME), or it has no ASCII letter or digit (see
-      # LETTER_OR_DIGIT).
+      # formatter's own names (see OWN_NAME, and OWN_OR_PID_AND_THREAD_NAME unless
+      # pid_and_thread_labels), or it has no ASCII letter or digit (see LETTER_OR_DIGIT).
       #
       # A name with characters outside ASCII is matched as Utils.to_json writes it: in UTF-8,
       # without invalid bytes, which matching it as it is could raise for. So a key of invalid
       # bytes alone is prefixed, since it is written as an empty name.
       def prefixed_key?(name)
         name = Utils.encode_utf8_string(name) unless name.ascii_only?
-        name.match?(OWN_NAME) || !name.match?(LETTER_OR_DIGIT)
+        name.match?(@own_name) || !name.match?(LETTER_OR_DIGIT)
       end
 
       # Returns [String] the value as Loki accepts it, as both the labels (see #loki_labels) and

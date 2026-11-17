@@ -1454,6 +1454,64 @@ module SemanticLogger
             end
           end
 
+          describe "with pid_and_thread_labels: false" do
+            let(:formatter) { Loki.new(pid_and_thread_labels: false) }
+            let(:output) { JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0] }
+            let(:labels) { output["stream"] }
+            let(:structured_metadata) { output["values"][0][2] }
+
+            it "writes the pid and the thread as structured metadata, as Strings, instead of as labels" do
+              assert_equal %w[application environment host level], labels.keys
+              assert_equal({"pid" => Process.pid.to_s, "thread" => thread_name}, structured_metadata)
+            end
+
+            it "leaves out the thread of an entry without one" do
+              log.thread_name = nil
+
+              assert_equal({"pid" => Process.pid.to_s}, structured_metadata)
+            end
+
+            it "prefixes a payload key named pid or thread, as the other keys named like its own" do
+              log.payload = {:pid => 1, "thread" => "worker", "metric" => "a"}
+
+              assert_equal(
+                {
+                  "payload_pid"    => "1",
+                  "payload_thread" => "worker",
+                  "payload_metric" => "a",
+                  "pid"            => Process.pid.to_s,
+                  "thread"         => thread_name
+                },
+                structured_metadata
+              )
+            end
+
+            it "names every field that the formatter writes itself" do
+              log.metric        = "my_metric"
+              log.metric_amount = 3
+              log.dimensions    = {region: "us"}
+              log.duration      = 1.5
+              set_exception
+
+              assert_equal (Loki::OWN_KEYS + Loki::PID_AND_THREAD_KEYS).sort, structured_metadata.keys.sort
+            end
+
+            it "leaves room for two more labels within Loki's limit" do
+              log.named_tags = (1..11).to_h { |i| ["tag#{i}", "t#{i}"] }
+
+              assert_equal 15, labels.size
+              refute structured_metadata.key?("tag11")
+            end
+          end
+
+          it "keeps a payload key named pid or thread as it is while they are labels" do
+            log.payload = {"pid" => "1", "thread" => "worker"}
+
+            assert_equal({"pid" => "1", "thread" => "worker"}, values_data[2])
+            assert_equal Process.pid, stream_data["pid"]
+            assert_equal thread_name, stream_data["thread"]
+          end
+
           # Issue #180: .to_json raises Encoding::UndefinedConversionError on non UTF-8 data.
           it "serializes non UTF-8 data without raising" do
             log.message    = "Bad: \xE2".b
