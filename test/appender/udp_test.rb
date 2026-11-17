@@ -7,6 +7,41 @@ module Appender
       let(:appender) { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: true) }
       let(:amessage) { "AppenderUdpTest log message" }
 
+      # Runs the block while Addrinfo.getaddrinfo resolves the name to the addresses, in that order, rather than
+      # asking a resolver. Other names resolve as before.
+      def resolving(name, *addresses, &)
+        getaddrinfo = Addrinfo.method(:getaddrinfo)
+        resolve     = lambda do |host, port, *args|
+          next getaddrinfo.call(host, port, *args) unless host == name
+
+          addresses.map { |address| Addrinfo.udp(address, port) }
+        end
+        Addrinfo.stub(:getaddrinfo, resolve, &)
+      end
+
+      # Runs the block while Addrinfo.getaddrinfo raises the SocketError of a name that does not resolve, rather than
+      # asking a resolver.
+      def not_resolving(&)
+        error = ->(*) { raise(SocketError, "getaddrinfo: nodename nor servname provided, or not known") }
+        Addrinfo.stub(:getaddrinfo, error, &)
+      end
+
+      # Runs the block while each new UDP socket of one of the families cannot connect, raising Errno::ENETUNREACH as
+      # a socket does on a host with no route for its family. Yields the sockets created.
+      def unreachable(*families)
+        new_socket = UDPSocket.method(:new)
+        created    = []
+        build      = lambda do |family|
+          socket = new_socket.call(family)
+          created << socket
+          if families.include?(family)
+            socket.define_singleton_method(:connect) { |*| raise(Errno::ENETUNREACH, "family #{family}") }
+          end
+          socket
+        end
+        UDPSocket.stub(:new, build) { yield(created) }
+      end
+
       describe "metrics:" do
         let(:metric_only) do
           log        = SemanticLogger::Log.new("Test", :info)
@@ -82,6 +117,55 @@ module Appender
           assert_equal amessage, entry["message"]
         end
 
+        it "sends over IPv6 to a host name that has only IPv6 addresses" do
+          skip("IPv6 is not available") unless Socket.ip_address_list.any?(&:ipv6_loopback?)
+
+          entry = resolving("logs.example", "::1") do
+            received(Socket::AF_INET6, "::1") { |port| "logs.example:#{port}" }
+          end
+
+          assert_equal amessage, entry["message"]
+        end
+
+        it "sends over IPv4 to a host name that has both, whichever the resolver returns first, as before" do
+          entry = resolving("logs.example", "::1", "127.0.0.1") do
+            received(Socket::AF_INET, "127.0.0.1") { |port| "logs.example:#{port}" }
+          end
+
+          assert_equal amessage, entry["message"]
+        end
+
+        it "sends over IPv6 to a host name that has both when it cannot connect over IPv4" do
+          skip("IPv6 is not available") unless Socket.ip_address_list.any?(&:ipv6_loopback?)
+
+          entry = resolving("logs.example", "127.0.0.1", "::1") do
+            unreachable(Socket::AF_INET) do
+              received(Socket::AF_INET6, "::1") { |port| "logs.example:#{port}" }
+            end
+          end
+
+          assert_equal amessage, entry["message"]
+        end
+
+        it "raises the error from the last address when it cannot connect to any, closing each socket" do
+          resolving("logs.example", "127.0.0.1", "::1") do
+            unreachable(Socket::AF_INET, Socket::AF_INET6) do |sockets|
+              error = assert_raises(Errno::ENETUNREACH) do
+                SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false)
+              end
+
+              assert_includes error.message, "family #{Socket::AF_INET6}"
+              assert_equal(2, sockets.count(&:closed?))
+            end
+          end
+        end
+
+        it "raises SocketError, as before, for a host name that does not resolve" do
+          not_resolving do
+            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false) }
+          end
+        end
+
         it "ignores whitespace after the server, such as an environment variable's newline, as before" do
           entry = received(Socket::AF_INET, "127.0.0.1") { |port| "localhost:#{port} \n" }
 
@@ -116,16 +200,6 @@ module Appender
       end
 
       describe "#reopen" do
-        # Returns [UDPSocket] a socket whose #connect raises the error that a host name that does not resolve raises,
-        # without asking a resolver.
-        def unresolvable_socket
-          socket = UDPSocket.new
-          socket.define_singleton_method(:connect) do |*|
-            raise(SocketError, "getaddrinfo: nodename nor servname provided, or not known")
-          end
-          socket
-        end
-
         it "connects a new socket, then closes the one it replaces" do
           socket          = appender.socket
           new_socket      = UDPSocket.new
@@ -161,29 +235,33 @@ module Appender
           appender.close
         end
 
-        it "keeps its socket, and raises, when a new one cannot connect, such as to a name that does not resolve" do
-          socket   = appender.socket
-          rejected = unresolvable_socket
+        it "keeps its socket, and raises, when the server is a host name that does not resolve" do
+          socket          = appender.socket
+          appender.server = "logs.example:8088"
 
-          UDPSocket.stub(:new, rejected) do
+          not_resolving do
             assert_raises(SocketError) { appender.reopen }
           end
 
           assert_same socket, appender.socket
           refute_predicate socket, :closed?
-          assert_predicate rejected, :closed?
         ensure
           appender.close
         end
 
-        it "raises, as before, when the appender is added, closing the socket that cannot connect" do
-          rejected = unresolvable_socket
+        it "keeps its socket, and raises, when a new one cannot connect, closing the new one" do
+          socket = appender.socket
 
-          UDPSocket.stub(:new, rejected) do
-            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: false) }
+          unreachable(Socket::AF_INET, Socket::AF_INET6) do |sockets|
+            assert_raises(Errno::ENETUNREACH) { appender.reopen }
+            refute_empty sockets
+            assert(sockets.all?(&:closed?), "Left a socket that could not connect open")
           end
 
-          assert_predicate rejected, :closed?
+          assert_same socket, appender.socket
+          refute_predicate socket, :closed?
+        ensure
+          appender.close
         end
       end
 

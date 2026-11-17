@@ -24,7 +24,8 @@ module SemanticLogger
       #
       #   server: [String]
       #     The server to write UDP messages to, as "host:port", such as "localhost:8088", with an IPv6
-      #     address in brackets, as a URL writes it, such as "[::1]:8088".
+      #     address in brackets, as a URL writes it, such as "[::1]:8088". A host name is sent to over
+      #     IPv4 when it has an IPv4 address, and otherwise, or when it cannot connect over IPv4, over IPv6.
       #
       #   udp_flags: [Integer]
       #     Should be a bitwise OR of Socket::MSG_* constants.
@@ -81,7 +82,7 @@ module SemanticLogger
       #
       # Connects a new socket to the server before closing the one it replaces. When it cannot, it
       # raises, keeping the socket it has: ArgumentError for a server that is not "host:port", or
-      # the error from connecting, such as SocketError for a host name that does not resolve.
+      # the error from resolving or connecting, such as SocketError for a host name that does not resolve.
       def reopen
         socket     = connected_socket
         old_socket = @socket
@@ -117,22 +118,37 @@ module SemanticLogger
 
       private
 
-      # Returns [UDPSocket] a new socket, connected to the server. Closes the socket when it does not return it, such as
-      # when connecting raises, or the thread is interrupted.
+      # Returns [UDPSocket] a new socket, connected to the first of the server's addresses that it can connect to, as
+      # Ruby's own UDPSocket#connect tries the addresses of its socket's family in turn. When it cannot connect to any,
+      # raises the error from the last one.
       def connected_socket
-        family, host, port = server_address
-        socket             = UDPSocket.new(family)
-        socket.connect(host, port)
+        *earlier, last = server_addresses
+        earlier.each do |address|
+          return connect_to(address)
+        rescue SystemCallError
+          # Try the next address.
+        end
+        connect_to(last)
+      end
+
+      # Returns [UDPSocket] a new socket of the address's family, connected to it. Closes the socket when it does not
+      # return it, such as when connecting raises, or the thread is interrupted.
+      def connect_to(address)
+        socket = UDPSocket.new(address.afamily)
+        socket.connect(address.ip_address, address.ip_port)
         connected = true
         socket
       ensure
         socket&.close unless connected
       end
 
-      # Returns [Array(Integer, String, Integer)] the address family, host, and port of the server. A host in brackets
-      # is an IPv6 address. Any other host is an IPv4 address, or a name, which is resolved to its IPv4 address, as
-      # before. Whitespace around the server, such as the newline at the end of an environment variable, is ignored.
-      def server_address
+      # Returns [Array<Addrinfo>] the addresses of the server, in the order to try them. A host in brackets is an IPv6
+      # address. Any other host is an IPv4 address, or a name, whose IPv4 addresses come first, so that a name with both
+      # is still sent to over IPv4, as when the socket was IPv4 only, followed by its IPv6 addresses, so that a name
+      # with only IPv6 addresses can be used. Each family keeps the resolver's order. A name that does not resolve
+      # raises the resolver's SocketError, as connecting to it did. Whitespace around the server, such as the newline
+      # at the end of an environment variable, is ignored.
+      def server_addresses
         match = SERVER.match(server.to_s.strip)
         unless match
           raise(ArgumentError,
@@ -141,7 +157,9 @@ module SemanticLogger
         end
 
         port = match[:port].to_i
-        match[:ipv6] ? [Socket::AF_INET6, match[:ipv6], port] : [Socket::AF_INET, match[:host], port]
+        return Addrinfo.getaddrinfo(match[:ipv6], port, :INET6, :DGRAM) if match[:ipv6]
+
+        Addrinfo.getaddrinfo(match[:host], port, nil, :DGRAM).partition(&:ipv4?).flatten
       end
 
       # Returns [SemanticLogger::Formatters::Json] formatter default for this Appender

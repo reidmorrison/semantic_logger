@@ -301,7 +301,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   after closing it no longer raises `NoMethodError`, and logging to it raises `IOError` instead.
 - The `:udp` appender sends to an IPv6 address written in brackets, as a URL writes it, such as
   `server: "[::1]:8088"`. Before, it split the server at every colon, and its socket was IPv4 only,
-  so it could not be given an IPv6 address. A host name is still resolved to its IPv4 address. A
+  so it could not be given an IPv6 address. A host name with an IPv4 address still uses it. A
   `server:` that is not `"host:port"`, such as one without a port, or an IPv6 address without
   brackets, now raises `ArgumentError`, which names the form to use, as the appender is added.
   Before, a missing port was taken as port 0.
@@ -310,6 +310,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   address it connected to. It raises the error as before, which `SemanticLogger.reopen` reports to
   the internal logger. Before, it closed that socket first, and kept a new one that was not
   connected, so every entry after it failed with `Errno::EDESTADDRREQ` until the next reopen.
+- The `:udp` appender sends to a host name that has only IPv6 addresses, over IPv6. Before, its
+  socket was IPv4 only, so adding it raised `SocketError`, since the name has no IPv4 address. A
+  name with both is still sent to over IPv4, whichever address the resolver returns first, unless
+  it cannot connect over IPv4, such as on a host with no IPv4 route, when it now uses IPv6 instead
+  of raising. A name that does not resolve raises `SocketError` as before.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

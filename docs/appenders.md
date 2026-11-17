@@ -542,7 +542,10 @@ SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", metrics: f
 ~~~
 
 The `server:` is `"host:port"`. Write an IPv6 address in brackets, as a URL does, such as
-`server: "[::1]:8088"`. A host name is resolved to its IPv4 address.
+`server: "[::1]:8088"`. A host name with an IPv4 address is sent to over IPv4, even when the
+resolver returns its IPv6 address first, as it does for `localhost` on macOS. It is sent to over
+IPv6 when it has only IPv6 addresses, or when the socket cannot connect over IPv4, such as on a
+machine with no IPv4 route.
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it sends them and reports a
