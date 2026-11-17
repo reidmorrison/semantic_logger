@@ -55,6 +55,13 @@ did not fork (see [Log rotation](#log-rotation)).
    SemanticLogger.reopen(force: true) # same process, e.g. after external log rotation
    ~~~
 
+   Within the same process, `reopen` keeps the log entries that are still queued, and the thread
+   that writes them keeps running, so they are written in order, ahead of the entries logged after
+   it. That thread is only started again if it has stopped, such as after `async_max_retries`.
+   After a fork, the child starts with an empty queue, since the parent process writes the entries
+   it had queued. `reopen` can be called from a signal trap, except in synchronous mode (see
+   [Synchronous operation](#synchronous-operation)).
+
 You might opt out if another library forks in ways you do not want to trigger a reopen, or you need
 to control exactly when the appender thread restarts.
 

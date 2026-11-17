@@ -374,6 +374,11 @@ agent.
   doubles it: with `prefix: "Custom/"`, `Orders/placed` is recorded as `Custom/Orders/placed`, not
   `Custom//Orders/placed`. Dashboards, alerts, and NRQL queries on an old name stop receiving data,
   so update them to the new one.
+* `SemanticLogger.reopen` within the same process, such as `reopen(force: true)` after a log
+  rotation, keeps the log entries that are still queued, and the thread that writes them, rather
+  than replacing both and losing the entries. So it no longer stops a thread that is waiting
+  between retries after an appender failed, or one that is stuck writing; it only starts the thread
+  again once it has stopped. After a fork, the child still starts with an empty queue.
 
 ### Upgrading to Semantic Logger v5.2
 
