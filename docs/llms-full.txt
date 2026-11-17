@@ -4774,6 +4774,35 @@ helper that raises on warnings, sees the warning first. The module is not instal
 and later, which raise on such a String instead (Semantic Logger then writes a converted copy),
 or on JRuby.
 
+## Payload text where no locale is set
+
+Where no UTF-8 locale is set, as in cron jobs, many container images, and systems with no locale
+configured (`LC_ALL`, `LC_CTYPE`, and `LANG` unset, or set to `C` or `POSIX`), CRuby's default
+external encoding is US-ASCII. The text formatters (`:default`, `:color`, `:one_line`, `:syslog`,
+and `%{payload}` in `:pattern`) write the payload with Ruby's `#inspect`, which then writes each
+character outside ASCII as an escape:
+
+```
+2026-11-16 09:10:53.874476 I [86699:1312] Checkout -- José -- {name: "Jos\u00E9"}
+```
+
+The message, tags, and named tags whose values are Strings are written as they are. A named tag
+whose value is an Array or a Hash is written with `#inspect`, and so is escaped as the payload is.
+The JSON formatters are not affected, and neither are Rails applications, since Rails sets the
+default external encoding to UTF-8 (`config.encoding`), nor JRuby, whose default is UTF-8.
+
+To write these characters, run Ruby with a UTF-8 locale or default external encoding, for example:
+
+```shell
+export LC_ALL=C.UTF-8
+# or
+export RUBYOPT=-Eutf-8
+```
+
+or set `Encoding.default_external = Encoding::UTF_8` when the application starts. `LC_ALL`, then
+`LC_CTYPE`, take precedence over `LANG`, so setting `LANG=C.UTF-8` is not enough when either is set
+to `C` or `POSIX`.
+
 ## Log rotation
 
 For performance the log file is **not** re-opened on every write, so a log file must be rotated with
