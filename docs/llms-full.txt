@@ -5231,6 +5231,10 @@ the internal logger at most once every 30 seconds, and the count is available fr
 `SemanticLogger.stats[:dropped]`. It is not supported in synchronous mode (`SemanticLogger.sync!`),
 which has no queue.
 
+A message logged in a signal trap, such as by the handlers of
+[`add_signal_handler`](#linux-signals), is dropped and counted the same way, and reported with the
+next messages dropped outside a trap.
+
 Either setting keeps logging calls from blocking; neither makes `SemanticLogger.flush` return sooner.
 A flush, including the one that runs automatically when the process exits, still waits for every
 message already on the queue to be written.

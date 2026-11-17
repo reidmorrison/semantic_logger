@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require_relative "signal_trap_helper"
 
 class QueueProcessorTest < Minitest::Test
   # Captures log events in memory and records flush/close calls.
@@ -173,6 +174,8 @@ class QueueProcessorTest < Minitest::Test
       SemanticLogger::QueueProcessor::Request.new(command)
     end
 
+    include SignalTrapHelper
+
     def new_log(message: "hello world", level: :info, time: Time.now)
       log         = SemanticLogger::Log.new("User", level)
       log.message = message
@@ -297,6 +300,40 @@ class QueueProcessorTest < Minitest::Test
         processor.non_blocking = true
 
         refute processor.log(new_log)
+        assert_equal 1, processor.dropped_count
+      end
+
+      # Ruby does not allow a Mutex to be locked in a signal trap.
+      it "drops messages in a signal trap when non_blocking and the queue is full, and counts them" do
+        processor = build(max_queue_size: 1, non_blocking: true, dropped_message_report_seconds: 0)
+        processor.log(new_log)
+
+        logged = in_signal_trap { [processor.log(new_log), processor.log(new_log)] }
+
+        assert_equal [false, false], logged
+        assert_equal 2, processor.dropped_count
+      end
+
+      it "reports the messages dropped in a signal trap with the next ones dropped" do
+        processor = build(max_queue_size: 1, non_blocking: true, dropped_message_report_seconds: 0)
+        processor.log(new_log)
+        in_signal_trap { 2.times { processor.log(new_log) } }
+
+        refute processor.log(new_log)
+        assert_equal 3, processor.dropped_count
+        reports = internal_logger.events.map { |event| event.message[/\AAsync: Dropped \d+ log messages/] }
+
+        assert_equal ["Async: Dropped 3 log messages"], reports
+      end
+
+      it "drops messages in a signal trap once the worker thread has stopped" do
+        processor = build(max_queue_size: 1)
+        processor.log(new_log)
+        processor.instance_variable_set(:@stopped, true)
+
+        logged = in_signal_trap { processor.log(new_log) }
+
+        refute logged
         assert_equal 1, processor.dropped_count
       end
     end
@@ -1057,29 +1094,12 @@ class QueueProcessorTest < Minitest::Test
         assert_predicate processor, :stopped?
       end
 
-      # Calls #reopen in a handler trapping USR1, and returns what it returned or raised.
+      # Calls #reopen in a signal trap, and returns :reopened, or what it raised.
       def reopen_in_signal_trap(processor)
-        result = nil
-        reopen = proc do
+        in_signal_trap do
           processor.reopen
-          result = :reopened
-        rescue StandardError => e
-          result = e
+          :reopened
         end
-        with_signal_trap("USR1", reopen) do
-          Process.kill("USR1", Process.pid)
-          deadline = Time.now + 5
-          sleep(0.01) until result || Time.now > deadline
-        end
-        result
-      end
-
-      # Runs the block with the handler trapping the signal, then restores the previous handler.
-      def with_signal_trap(signal, handler)
-        previous = Signal.trap(signal, handler)
-        yield
-      ensure
-        Signal.trap(signal, previous) if previous
       end
 
       it "keeps the worker thread and the queued entries, writing them in order ahead of new ones" do
