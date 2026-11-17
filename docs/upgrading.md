@@ -157,6 +157,35 @@ SemanticLogger.add_appender(appender: appender)
 The options of `add_appender` itself, such as `async:`, `batch:`, and `max_queue_size:`, still apply
 to an instance. An option given as `nil`, such as `level: nil`, sets nothing, so it is not reported.
 
+#### Give `add_appender` one destination
+
+`add_appender` adds one destination, given as `file_name:`, `io:`, `logger:`, `appender:`, or
+`metric:`. Given more than one of them, it added only the first, in that order, and ignored the
+others without a word, so that `add_appender(file_name: "log/app.log", io: $stdout)` wrote to the
+file, and nothing to `$stdout`. It still does, but now reports a
+[deprecation warning](#seeing-deprecation-warnings) that names the destination it uses and those
+it ignores, and v6 raises `ArgumentError` for them. Call `add_appender` once for each destination:
+
+~~~ruby
+# Before, $stdout was ignored:
+SemanticLogger.add_appender(file_name: "log/app.log", io: $stdout)
+
+# After:
+SemanticLogger.add_appender(file_name: "log/app.log")
+SemanticLogger.add_appender(io: $stdout)
+~~~
+
+An option that only the ignored destination accepts, such as the `url:` of `appender: :http`, went
+to the one that was added, which raised `ArgumentError: unknown keyword`; the warning now comes
+before it, naming the destination that was ignored.
+
+`appender: :wrapper` only worked with `logger:`, which `add_appender` took as the destination
+instead, so it now reports the same warning. Leave out `appender: :wrapper`:
+`add_appender(logger: my_logger)` adds the same appender.
+
+A destination given as `nil`, such as `file_name: options[:log_file]` when no log file is set, is not
+one, so it is not reported.
+
 #### Loki stack traces
 
 The `:loki` formatter now writes the `stack_trace` of a logged exception one frame per line, followed

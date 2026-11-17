@@ -273,6 +273,10 @@ module SemanticLogger
   # of the messages sent to that appender. See "Formatter as a block or Proc" in
   # docs/config.md for more information on custom formatters
   #
+  # Give it one destination: file_name:, io:, appender:, logger:, or metric:. Given more than one, it adds
+  # only the first of file_name:, io:, logger:, appender:, and metric:, and reports a deprecation warning
+  # that names the others, which it ignores; v6 raises ArgumentError. A destination given as nil is not one.
+  #
   # Parameters
   #   file_name: [String]
   #     File name to write log messages to.
@@ -286,7 +290,7 @@ module SemanticLogger
   #   appender: [Symbol|SemanticLogger::Subscriber]
   #     A symbol identifying the appender to create.
   #     For example:
-  #       :bugsnag, :elasticsearch, :graylog, :http, :mongodb, :new_relic, :splunk_http, :syslog, :wrapper
+  #       :bugsnag, :elasticsearch, :graylog, :http, :mongodb, :new_relic, :splunk_http, :syslog
   #          Or,
   #     An instance of an appender derived from SemanticLogger::Subscriber
   #     For example:
