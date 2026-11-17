@@ -24,6 +24,31 @@ module Appender
         assert_equal "/semantic_logger-#{Time.now.strftime('%Y.%m.%d')}/_doc", index
       end
 
+      it "raises an error for an entry that Elasticsearch rejects, that the appender says the entry caused" do
+        rejected = Net::HTTPBadRequest.new("1.1", "400", "Bad Request")
+        rejected.define_singleton_method(:body) { '{"error":{"type":"mapper_parsing_exception"}}' }
+
+        error = appender.http.stub(:request, rejected) do
+          assert_raises(SemanticLogger::Appender::Http::ResponseError) { appender.info(log_message) }
+        end
+
+        assert_includes error.message, "mapper_parsing_exception"
+        assert appender.message_error?(error)
+      end
+
+      it "reports a response other than 2xx when deleting an index, and returns false" do
+        capture         = SemanticLogger::Test::CaptureLogEvents.new
+        appender.logger = capture
+        not_found       = Net::HTTPNotFound.new("1.1", "404", "Not Found")
+        not_found.define_singleton_method(:body) { "no such index" }
+
+        deleted = appender.http.stub(:request, not_found) { appender.delete_all(Date.new(2026, 9, 5)) }
+
+        refute deleted
+        assert_equal 1, capture.events.size
+        assert_includes capture.events.first.message, "code: 404"
+      end
+
       describe "query parameters" do
         let(:appender) do
           stub_http_start do

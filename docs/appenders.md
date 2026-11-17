@@ -482,6 +482,31 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+#### When the server does not accept a request
+
+An entry is written once the server answers its request with a 2xx status. The HTTP appender, and
+those built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:signalfx` metrics
+appender), handle any other answer by its status:
+
+* A 4xx other than 408 and 429, such as `400 Bad Request` or `401 Unauthorized`, rejects the request
+  itself, so sending it again cannot succeed. With `async: true` or `batch: true`, its entries are
+  discarded straight away. A batch, which is sent in one request, is first split up and sent again in
+  parts, so that only the entries in the parts the server rejects are discarded.
+* A 5xx, `408 Request Timeout`, `429 Too Many Requests`, or a redirect is a problem with the
+  destination. With `async: true` or `batch: true`, the entry or batch being sent is discarded, and
+  the worker thread [backs off](operations.html#retry-a-failing-appender) before sending the next one,
+  so that the entries logged meanwhile wait on the queue. It stops for good after `async_max_retries`
+  (default `100`) such failures in a row; pass `async_max_retries: -1` to keep trying through a long
+  outage.
+
+The discarded entries are counted as `failed` in `SemanticLogger.stats`, and reported to the internal
+logger with the status code, the url without its credentials, and the start of the response body.
+Without `async:` or `batch:`, each request that fails is reported in the same way.
+
+When the server rejects every request, for example because the password or the path is wrong, each
+batch is split until every entry has been sent on its own, which takes about two requests for each
+entry in the batch.
+
 ### TCP Appender (+SSL)
 
 The TCP appender sends JSON or other formatted messages to services that accept log messages over TCP,

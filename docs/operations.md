@@ -243,6 +243,8 @@ as `failed` for that appender in `SemanticLogger.stats[:appenders]`.
 A `JSON::ParserError`, such as from a destination that answered with an HTML error page, is a
 problem with the destination, so the thread backs off as for any other error. The appender decides
 which errors are caused by message content; see [Custom appenders](config.html#custom-appenders).
+The HTTP based appenders decide by the status of the response; see
+[When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
 
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
 rather than spinning forever on a persistent failure. From then on new log messages for that

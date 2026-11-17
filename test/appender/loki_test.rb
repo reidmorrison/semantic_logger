@@ -177,6 +177,20 @@ module Appender
           assert_equal "error",  streams[1]["stream"]["level"]
           assert_equal "second", streams[1]["values"].first[1]
         end
+
+        it "raises an error the appender says the destination caused while Loki is unavailable" do
+          log         = SemanticLogger::Log.new("LokiTest", :info)
+          log.message = "first"
+          unavailable = Net::HTTPServiceUnavailable.new("1.1", "503", "Service Unavailable")
+          unavailable.define_singleton_method(:body) { "Ingester is shutting down" }
+
+          error = appender.http.stub(:request, unavailable) do
+            assert_raises(SemanticLogger::Appender::Http::ResponseError) { appender.batch([log]) }
+          end
+
+          assert_equal 503, error.code
+          refute appender.message_error?(error)
+        end
       end
     end
   end

@@ -374,18 +374,17 @@ module Appender
           assert_nil error.cause
         end
 
-        it "does not log credentials when the server rejects a request" do
-          capture         = SemanticLogger::Test::CaptureLogEvents.new
-          appender.logger = capture
-          http_failure    = Net::HTTPServiceUnavailable.new("1.1", "503", "Service Unavailable")
-          body            = "unavailable #{'x' * 1_000}"
+        it "does not include credentials in the error when the server rejects a request" do
+          http_failure = Net::HTTPServiceUnavailable.new("1.1", "503", "Service Unavailable")
+          body         = "unavailable #{'x' * 1_000}"
           http_failure.define_singleton_method(:body) { body }
 
-          appender.http.stub(:request, http_failure) do
-            appender.info(log_message)
+          error = appender.http.stub(:request, http_failure) do
+            assert_raises(SemanticLogger::Appender::Http::ResponseError) { appender.info(log_message) }
           end
 
-          assert message = capture.events.find { |event| event.level == :error }&.message
+          message = error.message
+
           assert_includes message, "https://logs.example.com:9200 "
           assert_includes message, "code: 503"
           refute_includes message, "S3cr3t"
@@ -425,6 +424,153 @@ module Appender
 
         assert_equal 1, starts
         assert_predicate appender.http, :started?
+      end
+
+      describe "a response other than 2xx" do
+        let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+
+        def response(code)
+          response = Net::HTTPResponse::CODE_TO_OBJ.fetch(code.to_s).new("1.1", code.to_s, "Status #{code}")
+          response.define_singleton_method(:body) { "Status #{code}" }
+          response
+        end
+
+        def new_log(message)
+          log         = SemanticLogger::Log.new("User", :info)
+          log.message = message
+          log
+        end
+
+        def error_for(code)
+          appender.http.stub(:request, response(code)) do
+            assert_raises(SemanticLogger::Appender::Http::ResponseError) { appender.info(log_message) }
+          end
+        end
+
+        # Writes the messages as the worker thread of an asynchronous appender does, on this thread.
+        # Answers each request with the status of the first entry in it found in `statuses`, or
+        # 200, and closes the processor once the first request is answered, so that it stops after
+        # the messages are written. Returns the messages of the entries the server took, and each
+        # back-off, recorded instead of sleeping.
+        def process(processor, messages, statuses)
+          delivered = []
+          slept     = []
+          requests  = 0
+          handler   = lambda do |request|
+            requests += 1
+            processor.queue << SemanticLogger::QueueProcessor::Request.new(:close) if requests == 1
+            body     = JSON.parse(request.body)
+            entries  = (body.is_a?(Array) ? body : [body]).map { |entry| entry["message"] }
+            code     = entries.filter_map { |message| statuses[message] }.first || 200
+            delivered.concat(entries) if code == 200
+            response(code)
+          end
+          messages.each { |message| processor.queue << new_log(message) }
+          processor.signal&.set
+          appender.http.stub(:request, handler) do
+            processor.stub(:sleep, ->(seconds) { slept << seconds }) { processor.send(:process) }
+          end
+          [delivered, slept]
+        end
+
+        [400, 401, 403, 404, 413, 422].each do |code|
+          it "raises an error for a #{code} that the appender says the entries caused" do
+            error = error_for(code)
+
+            assert_equal code, error.code
+            assert_predicate error, :rejected?
+            assert appender.message_error?(error)
+          end
+        end
+
+        [500, 502, 503, 504, 408, 429, 301].each do |code|
+          it "raises an error for a #{code} that the appender says the destination caused" do
+            error = error_for(code)
+
+            assert_equal code, error.code
+            refute_predicate error, :rejected?
+            refute appender.message_error?(error)
+          end
+        end
+
+        it "is not a RuntimeError, so the connection is kept" do
+          reopened = false
+          appender.stub(:reopen, -> { reopened = true }) { error_for(503) }
+
+          refute reopened
+        end
+
+        describe "with async: true" do
+          before { appender.logger = internal_logger }
+
+          let(:processor) { SemanticLogger::QueueProcessor.new(appender: appender) }
+
+          it "discards an entry the server rejects, and carries on without backing off" do
+            delivered, slept = process(processor, %w[first rejected last], {"rejected" => 400})
+
+            assert_equal %w[first last], delivered
+            assert_empty slept
+            assert_equal 2, processor.processed_count
+            assert_equal 1, processor.failed_count
+
+            report = internal_logger.events.find { |event| event.message.include?("Discarded") }
+
+            assert_kind_of SemanticLogger::Appender::Http::ResponseError, report.exception
+            assert_includes report.exception.message, "code: 400"
+          end
+
+          it "discards an entry the server cannot take yet, then backs off before the next one" do
+            delivered, slept = process(processor, %w[unavailable last], {"unavailable" => 503})
+
+            assert_equal %w[last], delivered
+            assert_equal [1], slept
+            assert_equal 1, processor.processed_count
+            assert_equal 1, processor.failed_count
+          end
+        end
+
+        describe "with batch: true" do
+          before { appender.logger = internal_logger }
+
+          # Waits only briefly for the close, which comes after the batch.
+          let(:processor) do
+            SemanticLogger::QueueProcessor.new(appender: appender, batch: true, batch_seconds: 0.01)
+          end
+
+          it "discards only the entry the server rejects, by sending the rest of the batch again" do
+            messages         = %w[first rejected third fourth]
+            delivered, slept = process(processor, messages, {"rejected" => 400})
+
+            assert_equal %w[first third fourth], delivered
+            assert_empty slept
+            assert_equal 3, processor.processed_count
+            assert_equal 1, processor.failed_count
+          end
+
+          it "discards a batch the server cannot take yet, and backs off" do
+            delivered, slept = process(processor, %w[first second third], {"second" => 429})
+
+            assert_empty delivered
+            assert_equal [1], slept
+            assert_equal 0, processor.processed_count
+            assert_equal 3, processor.failed_count
+          end
+        end
+
+        it "reports one error for each entry it cannot write, without raising, when not asynchronous" do
+          appenders = SemanticLogger::Appenders.new(internal_logger)
+          appenders << appender
+          appender.http.stub(:request, response(503)) do
+            2.times { appenders.log(new_log("unavailable")) }
+          end
+
+          errors = internal_logger.events.select { |event| event.level == :error }
+
+          assert_equal 2, errors.size
+          assert_includes errors.first.message, "Failed to log to appender"
+          assert_kind_of SemanticLogger::Appender::Http::ResponseError, errors.first.exception
+          assert_includes errors.first.exception.message, "code: 503"
+        end
       end
 
       it "supports http 204 success" do

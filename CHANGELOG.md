@@ -635,6 +635,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `SemanticLogger.reopen` in a signal trap, such as after a log rotation, no longer raises
   `ThreadError` either: reopening the thread that receives the entries logged in other Ractors
   locked a Mutex, even when it had nothing to do.
+- The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
+  metric subscriber, no longer count an entry that the server did not accept as written. They
+  reported a response other than 2xx to the internal logger and carried on, so with `async: true` or
+  `batch: true` such entries were counted as `processed` in `SemanticLogger.stats`, a batch that the
+  server rejected for one entry lost every other entry with it, and while the server was unavailable,
+  such as Loki restarting, the worker thread kept sending, and losing, each entry or batch at once.
+  Now a 4xx other than 408 and 429 discards the entries straight away, and a batch is first split up
+  and sent again in parts, so that the entries in the parts the server accepts are written. A 5xx,
+  408, 429, or redirect discards the entry or batch being sent, and the worker thread backs off before
+  sending the next one, so that the entries logged meanwhile wait on the queue. Either way they are
+  counted as `failed`, and reported with the status code, the url without its credentials, and the
+  start of the response body. See
+  [When the server does not accept a request](https://logger.reidmorrison.com/appenders.html#when-the-server-does-not-accept-a-request)
+  and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ## [5.2.0] 2026-10-30
 
