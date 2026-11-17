@@ -654,6 +654,20 @@ module SemanticLogger
             assert_includes output, ":wörker] DefaultTest -- Café"
           end
 
+          it "shortens a binary thread name that holds UTF-8 by characters, not bytes" do
+            log.thread_name = ("é" * 40).b
+
+            assert_includes output, ":#{'é' * 30}] DefaultTest"
+          end
+
+          it "shortens a binary thread name by characters when escaping, as :syslog does by default" do
+            log.thread_name = ("é" * 40).b
+            formatter       = SemanticLogger::Formatters::Default.new(escape_control_chars: true)
+            formatter.call(log, nil)
+
+            assert_equal "é" * 30, formatter.thread_name
+          end
+
           it "writes a UTF-16 message" do
             log.message = "Hello".encode(Encoding::UTF_16LE)
 
