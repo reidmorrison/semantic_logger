@@ -162,17 +162,34 @@ module SemanticLogger
       end
 
       # Log the message to MongoDB
+      #
+      # BSON stores only valid UTF-8 text, and keys without NUL bytes. A document that holds other
+      # text, such as a binary response body in the payload, or an exception message that quotes
+      # invalid input, is stored as a copy that BSON accepts (see #storable). Only such a document is
+      # copied: BSON checks the text as it serializes the document, before anything is sent.
       def log(log)
-        # Insert log entry into Mongo
-        collection.insert_one(format_log(log))
+        document = format_log(log)
+        begin
+          collection.insert_one(document)
+        rescue *TEXT_ERRORS
+          collection.insert_one(storable(document))
+        end
         true
       end
 
       # Errors raised for a document that cannot be stored, which retrying cannot insert either.
-      # BSON raises BSON::Error, ArgumentError (a key with a NUL byte), or RangeError (an Integer too
-      # large for 64 bits) while the document is serialized, before anything is sent, and the driver
-      # raises Mongo::Error::MaxBSONSize for a document larger than the server accepts.
+      # BSON raises BSON::Error, ArgumentError (a NUL byte in text that it writes as a C string, such
+      # as a Regexp's source; the copy #log stores removes them from keys), or RangeError (an Integer too large
+      # for 64 bits) while the document is serialized, before anything is sent, and the driver raises
+      # Mongo::Error::MaxBSONSize for a document larger than the server accepts. A document whose text
+      # is at fault (TEXT_ERRORS) is first tried again as a copy that BSON accepts.
       DOCUMENT_ERRORS = [BSON::Error, ArgumentError, RangeError, Mongo::Error::MaxBSONSize].freeze
+
+      # Errors BSON raises for text it cannot store: EncodingError for text that is not valid UTF-8 or
+      # cannot be converted to it, and ArgumentError for a NUL byte in text that it writes as a C
+      # string, such as a key. The copy cannot fix every such text, such as a Regexp's source, which
+      # then raises again.
+      TEXT_ERRORS = [EncodingError, ArgumentError].freeze
 
       # Except BSON::Error::BSONDecodeError, which comes from reading the server's reply rather than
       # from the document, so it is treated like any other error from the server: the thread backs
@@ -192,6 +209,44 @@ module SemanticLogger
 
       def default_formatter
         SemanticLogger::Formatters::Raw.new
+      end
+
+      # Returns a copy of the document that BSON can store: every String and Symbol converted to
+      # valid UTF-8 (see Utils.encode_utf8), and the NUL bytes removed from every key, which BSON
+      # writes as a C string. Binary text is read as the UTF-8 it usually holds, and invalid bytes
+      # are dropped, as the JSON formatters write them. Any other value is kept as it is, for BSON
+      # to store in its own type.
+      #
+      # So that the copy is bounded, a Hash or Array nested too deeply, or that holds itself, is
+      # replaced where it is too deep or repeats, as the JSON formatters replace it (see
+      # Utils.bounded_structure). Only a document whose text BSON refuses before it reaches a
+      # structure that holds itself gets here: BSON's own serializer overflows the stack at one.
+      def storable(value, depth = 0, ancestors = nil)
+        return Utils.encode_utf8(value) unless value.is_a?(Hash) || value.is_a?(Array)
+
+        Utils.bounded_structure(value, depth, ancestors) { |level, seen| storable_members(value, level, seen) }
+      end
+
+      # Returns a copy of the members of a Hash or Array, each made storable (see #storable).
+      def storable_members(value, depth, ancestors)
+        if value.is_a?(Hash)
+          value.each_with_object({}) { |(key, val), hash| hash[storable_key(key)] = storable(val, depth, ancestors) }
+        else
+          value.map { |element| storable(element, depth, ancestors) }
+        end
+      end
+
+      # Returns the key, converted to valid UTF-8 and without NUL bytes (see #storable). A key other
+      # than a String or Symbol is kept as it is, for BSON to write as it writes the original key,
+      # such as an Integer as its digits, or to refuse, such as a Hash.
+      def storable_key(key)
+        return key unless key.is_a?(String) || key.is_a?(Symbol)
+
+        key  = Utils.encode_utf8(key)
+        text = key.is_a?(Symbol) ? key.name : key
+        return key unless text.include?("\0")
+
+        key.is_a?(Symbol) ? text.delete("\0").to_sym : text.delete("\0")
       end
     end
   end
