@@ -55,6 +55,15 @@ module SemanticLogger
           formatter
         end
 
+        describe "header names" do
+          it "leaves out the characters outside printable ASCII, and cuts the application name to 32" do
+            logger = SemanticLogger::Appender::IO.new(StringIO.new, host: "café 1", application: "Café #{'a' * 40}")
+            packet = SemanticLogger::Formatters::SyslogCee.new.call(log, logger)
+
+            assert_includes packet, " caf1 Caf#{'a' * 29}: @cee: "
+          end
+        end
+
         describe "name" do
           it "logs name" do
             assert_equal "SyslogCeeTest", formatter.name

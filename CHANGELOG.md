@@ -343,6 +343,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   for those encodings needs the byte order mark, so every formatter that converts text to UTF-8
   wrote it as an empty String. Text tagged with an encoding that names its byte order, such as
   `Encoding::UTF_16LE`, is converted as before.
+- The `:syslog` and `:syslog_cee` formatters, which build the records of the TCP and UDP syslog
+  appenders, no longer lose every entry when the host or application name holds a character
+  outside printable ASCII, such as `"Café"`, a tab, or a space in the host name, or when the
+  application name is over 32 characters. The `syslog_protocol` gem raised for such a header, and
+  the appender reported the error to the internal logger instead of sending the entry. Now those
+  characters are left out of the header, as spaces always were from the application name, the
+  application name is cut to 32 characters, and a name with no character left is written as
+  `localhost` or `SemanticLogger`. Each name is worked out once, and again only when it changes.
 
 ## [5.2.0] 2026-10-30
 

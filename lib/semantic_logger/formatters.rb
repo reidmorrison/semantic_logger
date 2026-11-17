@@ -14,6 +14,7 @@ module SemanticLogger
     autoload :Logfmt,        "semantic_logger/formatters/logfmt"
     autoload :Pattern,       "semantic_logger/formatters/pattern"
     autoload :SyslogCee,     "semantic_logger/formatters/syslog_cee"
+    autoload :SyslogHeader,  "semantic_logger/formatters/syslog_header"
     autoload :NewRelicLogs,  "semantic_logger/formatters/new_relic_logs"
     autoload :Loki,          "semantic_logger/formatters/loki"
 

@@ -240,6 +240,63 @@ module SemanticLogger
           end
         end
 
+        # syslog_protocol raises for a host or application name with any character outside
+        # printable ASCII, or an application name over 32 characters.
+        describe "header names" do
+          def packet_for(host:, application:)
+            logger = SemanticLogger::Appender::IO.new(StringIO.new, host: host, application: application)
+            SemanticLogger::Formatters::Syslog.new.call(log, logger)
+          end
+
+          it "leaves out the characters of the host and application names outside printable ASCII" do
+            packet = packet_for(host: "café.example.com", application: "Café Résumé\tApp")
+
+            assert_includes packet, " caf.example.com CafRsumApp: "
+          end
+
+          it "cuts the application name to 32 characters" do
+            packet = packet_for(host: "app1", application: "#{'a' * 40} b")
+
+            assert_includes packet, " app1 #{'a' * 32}: "
+          end
+
+          it "notices a host that is not a String changed in place" do
+            host = Struct.new(:name) { def to_s = name }.new("web1")
+            formatter = SemanticLogger::Formatters::Syslog.new
+            logger    = SemanticLogger::Appender::IO.new(StringIO.new, host: host, application: "App")
+
+            assert_includes formatter.call(log, logger), " web1 App: "
+            host.name = "web2"
+
+            assert_includes formatter.call(log, logger), " web2 App: "
+          end
+
+          it "writes localhost and SemanticLogger for names with no character left" do
+            packet = packet_for(host: "サーバー", application: "アプリ")
+
+            assert_includes packet, " localhost SemanticLogger: "
+          end
+
+          it "works the names out again only when they change" do
+            formatter   = SemanticLogger::Formatters::Syslog.new
+            application = +"My App"
+            host        = +"web 1"
+            logger      = SemanticLogger::Appender::IO.new(StringIO.new, host: host, application: application)
+
+            assert_includes formatter.call(log, logger), " web1 MyApp: "
+            assert_same formatter.send(:syslog_tag, application), formatter.send(:syslog_tag, application)
+
+            logger.application = +"Other App"
+
+            assert_includes formatter.call(log, logger), " web1 OtherApp: "
+
+            logger.application << " Two"
+            host << "x"
+
+            assert_includes formatter.call(log, logger), " web1x OtherAppTwo: "
+          end
+        end
+
         describe "max_size" do
           it "defaults to 1024 bytes" do
             assert_equal 1024, SemanticLogger::Formatters::Syslog.new.max_size
