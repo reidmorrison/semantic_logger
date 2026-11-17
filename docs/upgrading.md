@@ -259,12 +259,15 @@ agent.
   `dimensions:`, such as `dimensions: {supplier: "acme", user_id: user.id}`. A filter on
   `log.dimensions?`, as above, now applies to it too.
 
-  Empty dimensions, such as `dimensions: {}` or `{supplier: nil}.compact`, now count as none for
-  `:signalfx`, on a log call too: the metric is sent as it would be without them, so a duration is
-  sent as `Application.average` and `Application.counter`, and a count as `Application.counter`,
-  each with the `class` and `action` dimensions taken from the metric name and the named tags listed
-  in the subscriber's `dimensions:` option. Before, either was sent under its own name, without those
-  dimensions, and a duration without a count.
+  Empty dimensions, such as `dimensions: {}` or `{supplier: nil}.compact`, and dimensions whose
+  values are all blank (`nil`, or text that is empty or only whitespace), such as `{supplier: nil}`
+  or `{state: ""}`, now count as none for `:signalfx`, on a log call too: the metric is sent as it
+  would be without them, so a duration is sent as `Application.average` and `Application.counter`,
+  and a count as `Application.counter`, each with the `class` and `action` dimensions taken from the
+  metric name and the named tags listed in the subscriber's `dimensions:` option. Before, either was
+  sent under its own name, without those dimensions, and a duration without a count. A value of only
+  whitespace, which was sent before, is now also left out of dimensions that have other values, and
+  of the named tags it forwards.
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and
