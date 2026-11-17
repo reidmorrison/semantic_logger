@@ -323,6 +323,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   that cannot be joined, such as a UTF-16 line, or a binary line next to a UTF-8 one, in a backtrace
   set by the application, and the SignalFx metrics formatter no longer loses one whose metric name
   is not valid UTF-8; such text is converted to valid UTF-8.
+- `escape_control_chars: true` now also escapes the Unicode characters that control how text is
+  shown, as `\uXXXX`: the C1 control characters (U+0080 to U+009F), which some terminals act on, the
+  line and paragraph separators (U+2028, U+2029), at which editors, browsers, and some log viewers
+  start a new line, and the bidirectional controls (U+202A to U+202E, U+2066 to U+2069), such as the
+  right-to-left override, which can make logged text, such as a forged `user=admin`, read in another
+  order than it was written. It escaped only the ASCII control characters. The `:syslog` formatter,
+  and the syslog appender's own formatter, escape by default, so their output changes too. Text that
+  is all ASCII is checked as quickly as before. See
+  [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53).
 
 ## [5.2.0] 2026-10-30
 

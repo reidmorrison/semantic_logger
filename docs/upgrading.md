@@ -144,6 +144,12 @@ agent.
   UTF-8 it usually holds, without its bytes that are not valid UTF-8, instead of being written
   byte for byte. An application whose log files, or the tools that read them, expect another
   encoding needs to expect UTF-8 instead.
+* `escape_control_chars: true`, which the `:syslog` formatter and the syslog appender use by
+  default, now also escapes the Unicode characters that control how text is shown, as `\uXXXX`: the
+  C1 control characters (U+0080 to U+009F), the line and paragraph separators (U+2028, U+2029), and
+  the bidirectional controls (U+202A to U+202E, U+2066 to U+2069). Searches or parsers that match
+  logged text holding them, such as localized text wrapped in bidirectional isolates, need to match
+  the escaped form instead.
 
 ### Upgrading to Semantic Logger v5.2
 

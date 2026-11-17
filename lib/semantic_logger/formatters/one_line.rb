@@ -8,17 +8,15 @@ module SemanticLogger
     #   returns, and the Unicode next line (U+0085), line separator (U+2028), and paragraph
     #   separator (U+2029), at which editors, browsers, and some log viewers also start a new line.
     #   With `escape_control_chars: true` they are escaped instead, the Unicode ones in the
-    #   `\uXXXX` form, and so are the other ASCII control characters, as the other text
-    #   formatters escape them.
+    #   `\uXXXX` form, and so are the other control characters, as the other text formatters
+    #   escape them: the ASCII ones, and the Unicode ones that control how text is shown, such as
+    #   the bidirectional controls (see Base::UNICODE_CONTROL_CHARS).
     # * Exceptions only include the class and message, the stack trace is not shown.
     # * Exception details, when enabled, are joined onto the same line.
     class OneLine < Default
       # The line breaks that Unicode adds to the line feed and carriage return: next line, line
       # separator, and paragraph separator.
       UNICODE_LINE_BREAKS = "\u0085\u2028\u2029".freeze
-
-      # A Unicode line break.
-      UNICODE_LINE_BREAK = /[#{UNICODE_LINE_BREAKS}]/
 
       # Every line break, as a String#delete character set.
       LINE_BREAKS = "\r\n#{UNICODE_LINE_BREAKS}".freeze
@@ -95,20 +93,19 @@ module SemanticLogger
       end
 
       # Returns [String] the value without line breaks, so that the entry stays on one line.
-      # With `escape_control_chars: true`, the Unicode line breaks are escaped, as in "\u2028",
-      # since #escape_control_characters escapes only the ASCII ones.
+      # With `escape_control_chars: true`, #escape_control_characters has already escaped them, the
+      # Unicode ones as in "\u2028".
       #
       # A String with invalid bytes, such as a request parameter decoded from "%FF", or in another
       # encoding, such as a binary request body, is converted to valid UTF-8 first, since deleting
       # from it, or joining it with UTF-8 text, would raise and lose the entry.
       def one_line(value)
         text = Utils.encode_utf8_string(escape_control_characters(value.to_s))
+        # #escape_control_characters has already escaped every line break.
+        return text if escape_control_chars
         # Most text is ASCII, and deleting two characters is quicker than deleting five.
         return text.delete("\r\n") if text.ascii_only?
 
-        if escape_control_chars && text.match?(UNICODE_LINE_BREAK)
-          text = text.gsub(UNICODE_LINE_BREAK) { |char| format("\\u%04x", char.ord) }
-        end
         text.delete(LINE_BREAKS)
       end
     end
