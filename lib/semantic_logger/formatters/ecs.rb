@@ -129,7 +129,7 @@ module SemanticLogger
         result[:error] = {
           type:        hash[:exception][:name],
           message:     hash[:exception][:message],
-          stack_trace: Array(hash[:exception][:stack_trace]).join("\n")
+          stack_trace: stack_trace(Array(hash[:exception][:stack_trace]))
         }
       end
 

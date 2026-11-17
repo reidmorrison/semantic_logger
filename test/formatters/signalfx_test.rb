@@ -66,6 +66,13 @@ module SemanticLogger
             JSON.parse(formatter.call(log, appender))
           end
 
+          it "sends a metric whose name is not valid UTF-8" do
+            log.metric = (+"/user/log\xFFin").force_encoding(Encoding::UTF_8)
+
+            assert_equal counter_metric_name, result["counter"].first["metric"]
+            assert_equal "login", result["counter"].first["dimensions"]["action"]
+          end
+
           it "send counter metric when there is no duration" do
             hash = result
 

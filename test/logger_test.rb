@@ -41,6 +41,64 @@ class LoggerTest < Minitest::Test
       end
     end
 
+    describe "a Regexp filter" do
+      let(:invalid_name) { (+"Caf\xC3 Orders").force_encoding(Encoding::UTF_8) }
+
+      # Returns the messages that a logger with the name and filter logs in the block.
+      def logged(name, filter)
+        logger = SemanticLogger::Logger.new(name, :trace, filter)
+        events = []
+        logger.stub(:log, ->(log, *) { events << log }) { yield logger }
+        events.map(&:message)
+      end
+
+      it "matches a logger name that is not valid UTF-8, instead of raising" do
+        assert_equal ["Kept"], logged(invalid_name, /Orders/) { |logger| logger.info("Kept") }
+      end
+
+      it "filters out a logger name that is not valid UTF-8 and does not match" do
+        assert_empty logged(invalid_name, /Payments/) { |logger| logger.info("Dropped") }
+      end
+
+      it "matches a logger name that is not ASCII-compatible, such as UTF-16" do
+        name = "Orders".encode(Encoding::UTF_16LE)
+
+        assert_equal ["Kept"], logged(name, /Orders/) { |logger| logger.info("Kept") }
+        assert_empty logged(name, /Payments/) { |logger| logger.info("Dropped") }
+      end
+
+      it "matches a name against a Regexp in another encoding, in that encoding" do
+        filter = Regexp.new("caf\xE9".dup.force_encoding(Encoding::ISO_8859_1))
+
+        assert_equal ["Kept"], logged("café", filter) { |logger| logger.info("Kept") }
+        assert_empty logged("thé", filter) { |logger| logger.info("Dropped") }
+      end
+
+      it "filters out a name that a Regexp in an encoding with no converter cannot match, instead of raising" do
+        filter = Regexp.new((+"caf").force_encoding(Encoding::EMACS_MULE), Regexp::FIXEDENCODING)
+
+        assert_empty logged("café", filter) { |logger| logger.info("Dropped") }
+      end
+
+      it "matches a name against a binary Regexp, as its bytes" do
+        filter = Regexp.new("caf\xC3\xA9".b)
+
+        assert_equal ["Kept"], logged("café", filter) { |logger| logger.info("Kept") }
+        assert_empty logged("thé", filter) { |logger| logger.info("Dropped") }
+      end
+
+      it "filters an appender's entries by a logger name that is not valid UTF-8" do
+        appender = SemanticLogger::Test::CaptureLogEvents.new
+        appender.filter = /Orders/
+        log = SemanticLogger::Log.new(invalid_name, :info)
+
+        assert appender.should_log?(log)
+        appender.filter = /Payments/
+
+        refute appender.should_log?(log)
+      end
+    end
+
     describe "when level is too high" do
       it "does not log" do
         logger.level = :error
