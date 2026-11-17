@@ -115,6 +115,54 @@ module Appender
         end
       end
 
+      describe "#reopen" do
+        # Returns [UDPSocket] a socket whose #connect raises the error that a host name that does not resolve raises,
+        # without asking a resolver.
+        def unresolvable_socket
+          socket = UDPSocket.new
+          socket.define_singleton_method(:connect) do |*|
+            raise(SocketError, "getaddrinfo: nodename nor servname provided, or not known")
+          end
+          socket
+        end
+
+        it "connects a new socket, then closes the one it replaces" do
+          socket = appender.socket
+          appender.reopen
+
+          refute_same socket, appender.socket
+          assert_predicate socket, :closed?
+          refute_predicate appender.socket, :closed?
+        ensure
+          appender.close
+        end
+
+        it "keeps its socket, and raises, when a new one cannot connect, such as to a name that does not resolve" do
+          socket   = appender.socket
+          rejected = unresolvable_socket
+
+          UDPSocket.stub(:new, rejected) do
+            assert_raises(SocketError) { appender.reopen }
+          end
+
+          assert_same socket, appender.socket
+          refute_predicate socket, :closed?
+          assert_predicate rejected, :closed?
+        ensure
+          appender.close
+        end
+
+        it "raises, as before, when the appender is added, closing the socket that cannot connect" do
+          rejected = unresolvable_socket
+
+          UDPSocket.stub(:new, rejected) do
+            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: false) }
+          end
+
+          assert_predicate rejected, :closed?
+        end
+      end
+
       describe "#message_error?" do
         it "is true for a log message too large to send as a datagram" do
           assert appender.message_error?(Errno::EMSGSIZE.new)

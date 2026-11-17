@@ -79,12 +79,14 @@ module SemanticLogger
       # After forking an active process call #reopen to re-open
       # open the handles to resources
       #
-      # Raises ArgumentError for a server that is not "host:port", leaving the socket as it was.
+      # Connects a new socket to the server before closing the one it replaces. When it cannot, it
+      # raises, keeping the socket it has: ArgumentError for a server that is not "host:port", or
+      # the error from connecting, such as SocketError for a host name that does not resolve.
       def reopen
-        family, host, port = server_address
-        close
-        @socket = UDPSocket.new(family)
-        @socket.connect(host, port)
+        socket     = connected_socket
+        old_socket = @socket
+        @socket    = socket
+        old_socket&.close
       end
 
       # Write the log using the specified protocol and server.
@@ -98,7 +100,7 @@ module SemanticLogger
         @socket&.flush
       end
 
-      # Close is called during shutdown, or with reopen
+      # Close is called during shutdown.
       def close
         @socket&.close
       end
@@ -114,6 +116,17 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [UDPSocket] a new socket, connected to the server. When connecting raises, closes the socket first.
+      def connected_socket
+        family, host, port = server_address
+        socket             = UDPSocket.new(family)
+        socket.connect(host, port)
+        socket
+      rescue StandardError
+        socket&.close
+        raise
+      end
 
       # Returns [Array(Integer, String, Integer)] the address family, host, and port of the server. A host in brackets
       # is an IPv6 address. Any other host is an IPv4 address, or a name, which is resolved to its IPv4 address, as
