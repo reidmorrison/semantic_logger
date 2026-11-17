@@ -77,7 +77,7 @@ module Appender
 
         it "does not include a document _type" do
           bulk_index = nil
-          appender.stub(:bulk_write, ->(messages) { bulk_index = messages.first }) do
+          appender.stub(:bulk_write, ->(entries) { bulk_index, = entries.first }) do
             appender.info log_message
           end
 
@@ -101,10 +101,36 @@ module Appender
                        internal.events.map(&:message)
         end
 
+        it "sends again only the entries rejected with status 429" do
+          internal        = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal
+          created         = {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-created",
+                                         "status" => 201}}
+          rejected        = {"index" => {"_index" => "semantic_logger-2026.11.16", "status" => 429,
+                                         "error" => {"type"   => "rejected_execution_exception",
+                                                     "reason" => "rejected execution of primary operation"}}}
+          responses       = [{"took" => 3, "errors" => true, "items" => [created, rejected]},
+                             {"took" => 1, "errors" => false, "items" => [created]}]
+          requests        = []
+          second          = log.dup
+          second.message  = "second"
+          bulk            = lambda do |request|
+            requests << request
+            responses.shift
+          end
+          appender.stub(:sleep, nil) do
+            appender.client.stub(:bulk, bulk) { appender.batch([log, second]) }
+          end
+
+          assert_equal 2, requests.size
+          assert_equal(%w[second], requests.last[:body].each_slice(2).map { |_, line| JSON.parse(line)["message"] })
+          assert_empty internal.events
+        end
+
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil
-            appender.stub(:bulk_write, ->(messages) { bulk_index = messages.first }) do
+            appender.stub(:bulk_write, ->(entries) { bulk_index, = entries.first }) do
               appender.info log_message
             end
             index = bulk_index["index"]["_index"]

@@ -17,7 +17,11 @@ module SemanticLogger
       # The most characters of each reason that the report writes: a reason can repeat a whole value,
       # as the "For input string" of a number that could not be parsed does.
       MAX_REPORTED_REASON = 500
-      private_constant :MAX_REPORTED_FAILURES, :MAX_REPORTED_REASON
+      # The seconds to wait before each time that the entries the server rejected with status 429 are
+      # sent again (see #bulk_write): three times, after 0.2, 0.4, then 0.8 seconds, so at most 1.4
+      # seconds for a request. Kept short, since waiting holds up the thread that writes the entries.
+      RESEND_DELAYS = [0.2, 0.4, 0.8].freeze
+      private_constant :MAX_REPORTED_FAILURES, :MAX_REPORTED_REASON, :RESEND_DELAYS
 
       attr_accessor :url, :index, :date_pattern, :client, :flush_interval, :timeout_interval, :batch_size,
                     :client_args
@@ -185,17 +189,12 @@ module SemanticLogger
 
       # Log to the index for today, or to the data stream.
       def log(log)
-        bulk_write([bulk_index(log), bulk_line(log)])
+        bulk_write([bulk_entry(log)])
         true
       end
 
       def batch(logs)
-        messages = []
-        logs.each do |log|
-          messages << bulk_index(log) << bulk_line(log)
-        end
-
-        bulk_write(messages)
+        bulk_write(logs.map { |log| bulk_entry(log) })
         true
       end
 
@@ -217,6 +216,12 @@ module SemanticLogger
         raise NotImplementedError, "#{self.class} must implement #client_class"
       end
 
+      # Returns [Array] the entry of a bulk request for the log message: its action, and its document
+      # (see #bulk_line).
+      def bulk_entry(log)
+        [bulk_index(log), bulk_line(log)]
+      end
+
       # Returns [String] the log message formatted as a bulk line, serialized by Utils.to_json
       # and handed to the client as a String. The client gem's serializer writes Infinity and NaN
       # as bare words, which is not JSON, and does not repair invalid UTF-8, a structure nested too
@@ -228,33 +233,81 @@ module SemanticLogger
         format_log(log) { |document| document.is_a?(String) ? document : Utils.to_json(document) }
       end
 
-      # Serializes the action lines; the documents already are (see #bulk_line).
-      def bulk_write(messages)
-        body        = messages.map { |message| message.is_a?(String) ? message : message.to_json }
-        bulk_result =
-          if @data_stream
-            @client.bulk(index: index, body: body)
-          else
-            @client.bulk(body: body)
-          end
+      # Sends the entries in one bulk request, then sends again those that the server rejected with
+      # status 429 (see #resend_rejected). The entries still not indexed after that, for this or any
+      # other reason, are reported and discarded (see #report_failures).
+      #
+      # The other entries were indexed, so an error raised while sending the rejected ones again,
+      # such as a timeout, is reported with the failures, rather than raised, which would count every
+      # entry as discarded.
+      def bulk_write(entries)
+        failed = bulk_failures(entries)
+        return if failed.empty?
 
-        report_failures(bulk_result["items"]) if bulk_result["errors"]
+        begin
+          resend_rejected(entries, failed)
+        rescue StandardError => e
+          error = e
+        end
+        report_failures(failed.values, entries.size, error) unless failed.empty?
       end
 
-      # Reports to the internal logger the entries of a bulk request that were not indexed, which
-      # are discarded, since sending the request again would index the others twice. The response
-      # has an item for each entry, under the name of its action, such as
+      # Sends again the entries that the server rejected with status 429, since its write queue was
+      # full, so that they are likely to be indexed a little later. Only those entries are sent again,
+      # so that none is indexed twice. They are sent up to RESEND_DELAYS.size more times, after a
+      # growing wait, which holds up the thread writing the entries: the appender's own thread when it
+      # writes in batches, as it does by default, or else the thread that writes to every appender.
+      #
+      # `failed` holds the result of each entry not indexed, by its position in `entries` (see
+      # #bulk_failures). The result of an entry sent again replaces it, and an entry then indexed is
+      # removed.
+      def resend_rejected(entries, failed)
+        RESEND_DELAYS.each do |delay|
+          resend = failed.keys.select { |position| failed[position]["status"].to_i == 429 }
+          break if resend.empty?
+
+          sleep(delay)
+          again = bulk_failures(resend.map { |position| entries[position] })
+          resend.each_with_index do |position, resent|
+            if again.key?(resent)
+              failed[position] = again[resent]
+            else
+              failed.delete(position)
+            end
+          end
+        end
+      end
+
+      # Sends the entries in one bulk request, serializing their actions; their documents already
+      # are (see #bulk_line).
+      #
+      # Returns [Hash{Integer => Hash}] the result of each entry that was not indexed, by its
+      # position in `entries`. The response has an item for each entry, in order, under the name of
+      # its action, such as
       # `{"index" => {"_index" => ..., "status" => 400, "error" => {"type" => ..., "reason" => ...}}}`,
       # without the document. An entry failed when its result has an error, or a status of 300 or
       # above: an `index` action succeeds with 201 (created) or 200 (updated), and a `create` action
-      # with 201. The failures are grouped by their kind (see #bulk_failure_kind), since the reasons
-      # for one kind differ by each entry's id and value, so that a batch whose entries all fail the
-      # same way is reported in a short line. Only the first MAX_REPORTED_FAILURES groups are listed.
-      def report_failures(items)
-        failed = items.map { |item| item.values.first }
-        failed.select! { |result| result.key?("error") || result["status"].to_i >= 300 }
-        return if failed.empty?
+      # with 201.
+      def bulk_failures(entries)
+        body        = entries.flat_map { |action, document| [action.to_json, document] }
+        bulk_result = @data_stream ? @client.bulk(index: index, body: body) : @client.bulk(body: body)
+        return {} unless bulk_result["errors"]
 
+        failures = {}
+        bulk_result["items"].each_with_index do |item, position|
+          result = item.values.first
+          failures[position] = result if result.key?("error") || result["status"].to_i >= 300
+        end
+        failures
+      end
+
+      # Reports to the internal logger the results of the entries of a bulk request that were not
+      # indexed, of `total` entries, which are discarded (see #bulk_write), with the error that
+      # stopped sending them again, if any. The failures are grouped by their kind (see
+      # #bulk_failure_kind), since the reasons for one kind differ by each entry's id and value, so
+      # that a batch whose entries all fail the same way is reported in a short line. Only the first
+      # MAX_REPORTED_FAILURES groups are listed.
+      def report_failures(failed, total, error = nil)
         groups = failed.group_by { |result| bulk_failure_kind(result) }
         listed = groups.first(MAX_REPORTED_FAILURES).map do |kind, results|
           bulk_failure(kind, results.first["error"], results.size)
@@ -265,9 +318,8 @@ module SemanticLogger
                     "(#{bulk_entries(others.sum(&:size))})"
         end
 
-        logger.error(
-          "#{failed.size} of #{items.size} log entries were not indexed, and are discarded: #{listed.join('; ')}"
-        )
+        message = "#{failed.size} of #{total} log entries were not indexed, and are discarded: #{listed.join('; ')}"
+        error ? logger.error(message, error) : logger.error(message)
       end
 
       # Returns [Array] the kind of failure of an entry, from the result of its action: its status,

@@ -238,10 +238,120 @@ module Appender
           assert_empty internal_logger.events
         end
 
-        # Sends a batch of one entry for each item, to a server that responds with these items.
+        describe "entries rejected with status 429" do
+          let :logs do
+            Array.new(4) do |i|
+              log         = SemanticLogger::Log.new("User", :info)
+              log.message = "entry #{i}"
+              log
+            end
+          end
+
+          it "sends again only those entries, until they are indexed" do
+            requests, slept = serve([created, rejection(1), mapping_error(2), rejection(3)], [created, created]) do
+              appender.batch(logs)
+            end
+
+            assert_equal [["entry 0", "entry 1", "entry 2", "entry 3"], ["entry 1", "entry 3"]], sent(requests)
+            assert_equal [0.2], slept
+            assert_equal 1, internal_logger.events.size
+            assert_match(/\A1 of 4 log entries were not indexed, and are discarded: 400 mapper_parsing_exception /,
+                         internal_logger.events.first.message)
+          end
+
+          it "sends them again 3 times, waiting longer each time, then reports those still rejected" do
+            requests, slept = serve([created, rejection(1)], [rejection(1)], [rejection(1)], [rejection(1)]) do
+              appender.batch(logs.first(2))
+            end
+
+            assert_equal [["entry 0", "entry 1"], ["entry 1"], ["entry 1"], ["entry 1"]], sent(requests)
+            assert_equal [0.2, 0.4, 0.8], slept
+            assert_equal 1, internal_logger.events.size
+            assert_match(/\A1 of 2 log entries were not indexed, and are discarded: 429 es_rejected_execution/,
+                         internal_logger.events.first.message)
+          end
+
+          it "reports an entry sent again that then fails for another reason" do
+            requests, slept = serve([rejection(0), created], [mapping_error(0)]) { appender.batch(logs.first(2)) }
+
+            assert_equal 2, requests.size
+            assert_equal [0.2], slept
+            assert_match(/\A1 of 2 log entries were not indexed, and are discarded: 400 mapper_parsing_exception /,
+                         internal_logger.events.first.message)
+          end
+
+          it "sends again an entry logged on its own" do
+            requests, slept = serve([rejection(0)], [created]) { appender.log(logs.first) }
+
+            assert_equal [["entry 0"], ["entry 0"]], sent(requests)
+            assert_equal [0.2], slept
+            assert_empty internal_logger.events
+          end
+
+          it "reports the failures, with the error, when sending them again raises" do
+            calls = 0
+            bulk  = lambda do |_request|
+              calls += 1
+              raise IOError, "read timeout" if calls > 1
+
+              {"took" => 1, "errors" => true, "items" => [created, rejection(1), mapping_error(2)]}
+            end
+            appender.stub(:sleep, nil) do
+              appender.client.stub(:bulk, bulk) { appender.batch(logs.first(3)) }
+            end
+
+            assert_equal 2, calls
+            assert_equal 1, internal_logger.events.size
+            event = internal_logger.events.first
+
+            assert_match(/\A2 of 3 log entries were not indexed, and are discarded: /, event.message)
+            assert_includes event.message, "429 es_rejected_execution_exception"
+            assert_includes event.message, "400 mapper_parsing_exception"
+            assert_kind_of IOError, event.exception
+          end
+
+          it "does not wait when no entry was rejected with status 429" do
+            requests, slept = serve([created, mapping_error(1)]) { appender.batch(logs.first(2)) }
+
+            assert_equal 1, requests.size
+            assert_empty slept
+            assert_equal 1, internal_logger.events.size
+          end
+
+          # Answers each bulk request with the next of `responses`, the items of its entries, and records
+          # the requests, and each wait instead of sleeping.
+          def serve(*responses, &block)
+            requests = []
+            slept    = []
+            bulk     = lambda do |request|
+              requests << request
+              items  = responses.shift
+              errors = items.any? { |item| item.values.first["status"] >= 300 }
+              {"took" => 1, "errors" => errors, "items" => items}
+            end
+            appender.stub(:sleep, ->(seconds) { slept << seconds }) do
+              appender.client.stub(:bulk, bulk, &block)
+            end
+            [requests, slept]
+          end
+
+          # The messages of the entries of each bulk request.
+          def sent(requests)
+            requests.map do |request|
+              request[:body].each_slice(2).map { |_action, document| JSON.parse(document)["message"] }
+            end
+          end
+        end
+
+        # Sends a batch of one entry for each item, to a server that responds with these items, and that
+        # rejects again those it rejected with status 429 each time they are sent again, without waiting.
         def write(*items, errors: true)
-          response = {"took" => 3, "errors" => errors, "items" => items}
-          appender.client.stub(:bulk, response) { appender.batch(Array.new(items.size, log)) }
+          responses = [{"took" => 3, "errors" => errors, "items" => items}]
+          rejected  = items.select { |item| item.values.first["status"] == 429 }
+          bulk      = ->(_request) { responses.shift || {"took" => 1, "errors" => true, "items" => rejected} }
+          appender.stub(:sleep, nil) do
+            appender.client.stub(:bulk, bulk) { appender.batch(Array.new(items.size, log)) }
+          end
         end
 
         # The item of an entry that failed with this error.
@@ -339,7 +449,7 @@ module Appender
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil
-            appender.stub(:bulk_write, ->(messages) { bulk_index = messages.first }) do
+            appender.stub(:bulk_write, ->(entries) { bulk_index, = entries.first }) do
               appender.info log_message
             end
             index = bulk_index["index"]["_index"]
@@ -497,6 +607,36 @@ module Appender
                        internal.events.map(&:message)
         end
 
+        it "sends again to the data stream only the entries rejected with status 429" do
+          internal        = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal
+          backing_index   = ".ds-semantic_logger-2026.11.16-000001"
+          created         = {"create" => {"_index" => backing_index, "_id" => "id-created", "status" => 201}}
+          rejected        = {"create" => {"_index" => backing_index, "status" => 429,
+                                          "error" => {"type"   => "es_rejected_execution_exception",
+                                                      "reason" => "rejected execution of coordinating operation"}}}
+          responses       = [{"took" => 3, "errors" => true, "items" => [created, rejected]},
+                             {"took" => 1, "errors" => false, "items" => [created]}]
+          requests        = []
+          second          = log.dup
+          second.message  = "second"
+          bulk            = lambda do |request|
+            requests << request
+            responses.shift
+          end
+          appender.stub(:sleep, nil) do
+            appender.client.stub(:bulk, bulk) { appender.batch([log, second]) }
+          end
+
+          assert_equal 2, requests.size
+          assert_equal "semantic_logger", requests.last[:index]
+          action, document = requests.last[:body]
+
+          assert_equal({"create" => {}}, JSON.parse(action))
+          assert_equal "second", JSON.parse(document)["message"]
+          assert_empty internal.events
+        end
+
         describe "synchronous" do
           it "logs to data-stream index without date" do
             request = stub_client { appender.log(log) }
@@ -590,7 +730,7 @@ module Appender
         describe "synchronous" do
           it "logs to daily indexes" do
             bulk_index = nil
-            appender.stub(:bulk_write, ->(messages) { bulk_index = messages.first }) do
+            appender.stub(:bulk_write, ->(entries) { bulk_index, = entries.first }) do
               appender.info log_message
             end
             index = bulk_index["index"]["_index"]

@@ -402,6 +402,14 @@ agent.
   `Failed to log to appender`, with the error and its backtrace. A subclass of
   `SemanticLogger::Appender::Http` that checks the result of `post` or `put` now gets a
   `SemanticLogger::Appender::Http::ResponseError` raised instead of `false`.
+* The `:elasticsearch` and `:opensearch` appenders now send again the entries of a bulk request that
+  the server rejected with status 429, because its write queue was full, up to 3 times, after waiting
+  0.2, 0.4, then 0.8 seconds. Before, they were reported and discarded straight away. While it waits,
+  the thread that writes the entries is held up, at most 1.4 seconds for a request: the appender's
+  own thread when it writes in batches, as it does by default, but with `batch: false`, and without
+  `async: true`, the thread that writes to every appender, or with `SemanticLogger.sync!` the thread
+  that logged. The report of the entries still not indexed now comes after those waits. See
+  [Elasticsearch](appenders.html#elasticsearch).
 
 ### Upgrading to Semantic Logger v5.2
 
