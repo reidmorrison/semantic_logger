@@ -47,6 +47,19 @@ module SemanticLogger
           (defined?(::StringIO) && io.is_a?(::StringIO))
       end
       private_class_method :converts_whole_text?
+
+      # Returns [String] the formatted text of a log entry as the line that .write writes: a new
+      # String of it followed by a line break. A new one, since the formatter's String can be one it
+      # does not own, such as a custom formatter's log.message, the application's own, or frozen. It
+      # keeps the text's encoding. An object that converts to a String implicitly (#to_str) is read
+      # as that String, and anything else, such as nil, a Hash, or a Pathname, raises TypeError.
+      # Interpolation would write any object, and tag US-ASCII text UTF-8.
+      def self.line(text)
+        string = String.try_convert(text)
+        raise(TypeError, "Formatter returned a #{text.class}, not a String") unless string
+
+        string + "\n" # rubocop:disable Style/StringConcatenation
+      end
     end
   end
 end

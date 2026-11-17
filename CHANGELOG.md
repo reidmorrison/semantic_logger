@@ -304,6 +304,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   that converts to UTF-8 still writes text tagged UTF-8 that holds invalid bytes as it is. Text is
   converted only for an IO, a `Tempfile`, or a `StringIO`: an IO appender given another object that
   responds to `#write` still loses an entry that the object refuses.
+- The file and IO appenders no longer change the String that their formatter returns. They added the
+  line break to it in place, so a custom formatter that returns a String it does not own, such as
+  `->(log, _) { log.message }`, appended a line break to the application's own message, and one that
+  returns a frozen String, such as a message from a file with `# frozen_string_literal: true`, raised
+  `FrozenError`, which the appender took for a failing destination: the entry was discarded, and an
+  async appender waited before carrying on. A formatter that returns something that is not a String
+  and does not convert to one (`#to_str`), such as nil, raised `NoMethodError`, taken the same way,
+  and one that returns an Array had it written as an Array; either is now the entry's own error, so
+  it is discarded without waiting.
 
 ## [5.2.0] 2026-10-30
 

@@ -211,11 +211,11 @@ module SemanticLogger
         return refused unless file
 
         # Formatted once, outside the retry below: reopening the file cannot fix the content.
-        message = format_log(log) << "\n"
-        count   = 0
+        line  = format_log(log) { |text| TextOutput.line(text) }
+        count = 0
         begin
           # The number of bytes written, in the file's `encoding`, as IO#write returns it.
-          written     = TextOutput.write(file, message)
+          written     = TextOutput.write(file, line)
           @log_count += 1
           @log_size  += written
         rescue StandardError => e

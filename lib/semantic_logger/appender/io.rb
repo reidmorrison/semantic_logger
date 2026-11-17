@@ -47,10 +47,10 @@ module SemanticLogger
       end
 
       def log(log)
-        # Since only one appender thread will be writing to the file at a time
-        # it is not necessary to protect access to the file with a semaphore
-        # Allow this logger to filter out log levels lower than it's own
-        TextOutput.write(@io, format_log(log) << "\n")
+        # Since only one appender thread writes to the IO at a time, it is not necessary to protect
+        # access to it. The line is made as part of the formatting, so that a formatter's output that
+        # cannot be one, such as nil, is taken for the entry's error.
+        TextOutput.write(@io, format_log(log) { |text| TextOutput.line(text) })
         true
       end
 
