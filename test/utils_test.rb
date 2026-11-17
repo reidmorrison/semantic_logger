@@ -748,6 +748,36 @@ module SemanticLogger
           assert_equal :café, SemanticLogger::Utils.encode_utf8("café".encode(Encoding::UTF_16LE).to_sym)
         end
 
+        it "replaces a structure nested too deeply with a placeholder, converting the rest" do
+          nested = {"leaf" => 1}
+          40.times { nested = {"a" => nested} }
+
+          result = SemanticLogger::Utils.encode_utf8({"body" => "Café".b, "tree" => nested})
+          tree   = result["tree"]
+          31.times { tree = tree["a"] }
+
+          assert_equal "Café", result["body"]
+          assert_equal "#<Hash nested too deeply>", tree
+        end
+
+        it "replaces a structure that holds itself with a placeholder where it repeats" do
+          looped         = {"name" => "Café".b}
+          looped["self"] = looped
+          looped["list"] = [looped]
+
+          result = SemanticLogger::Utils.encode_utf8(looped)
+
+          assert_equal "Café", result["name"]
+          assert_equal "#<Hash nested too deeply>", result["self"]
+          assert_equal ["#<Hash nested too deeply>"], result["list"]
+        end
+
+        it "leaves any other object as it is, without looking inside it" do
+          member = Struct.new(:text).new("Café".b)
+
+          assert_same member, SemanticLogger::Utils.encode_utf8([member]).first
+        end
+
         it "converts Symbol keys" do
           assert_equal({clé: 1}, SemanticLogger::Utils.encode_utf8({"clé".b.to_sym => 1}))
         end

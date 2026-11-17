@@ -56,7 +56,12 @@ module SemanticLogger
 
         # Send error messages as Runtime exceptions
         exception = extract_exception(log)
-        hash      = format_log(log)
+        # Bugsnag replaces each byte of text that is not valid UTF-8 with U+FFFD, including binary
+        # text that holds UTF-8, such as a response body, so the data is sent as a copy with its
+        # text converted to valid UTF-8, as the JSON formatters write it, and a Hash or Array nested
+        # too deeply, or that holds itself, cut off there as they cut it off (see
+        # Utils.encode_utf8). Any other object is sent as it is, for Bugsnag to clean.
+        hash      = format_log(log) { |data| Utils.encode_utf8(data) }
         bugsnag_notify(exception, hash, log_level(log.level))
         true
       end
@@ -82,7 +87,7 @@ module SemanticLogger
           return log.exception
         end
 
-        error = RuntimeError.new(log.message)
+        error = RuntimeError.new(log.message && Utils.encode_utf8_string(log.message.to_s))
         error.set_backtrace(log.backtrace) if log.backtrace
         error
       end

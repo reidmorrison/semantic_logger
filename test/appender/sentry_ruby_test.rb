@@ -51,6 +51,63 @@ module Appender
         end
       end
 
+      # Sentry serializes the event with JSON, which raises for such text with json 3.1, and warns
+      # about it with json 2.8 to 3.0.x.
+      it "sends binary text as UTF-8, keeping its characters" do
+        error_message = scope = nil
+        capture       = lambda { |msg, _h = {}|
+          error_message = msg
+          scope         = ::Sentry.get_current_scope
+        }
+
+        ::Sentry.stub(:capture_message, capture) do
+          appender.error("Café ☕".b, body: "Café \xFF☕".b)
+        end
+
+        assert_equal "Café ☕", error_message
+        assert_equal "Café ☕", scope.extra[:body]
+        assert_equal Encoding::UTF_8, error_message.encoding
+      end
+
+      # Sentry's JSON.generate raises for a structure that holds itself, losing the event.
+      it "sends a payload that holds itself, cut off where it repeats" do
+        payload        = {name: "loop", body: "Café".b}
+        payload[:self] = payload
+        scope          = nil
+        ::Sentry.stub(:capture_message, ->(*) { scope = ::Sentry.get_current_scope }) do
+          appender.error("Looped", payload)
+        end
+
+        assert_equal "Café", scope.extra[:body]
+        assert_equal "#<Hash nested too deeply>", scope.extra[:self][:self]
+      end
+
+      it "converts the text of a payload that also holds a structure nested too deeply" do
+        nested = {leaf: 1}
+        40.times { nested = {a: nested} }
+        scope = nil
+        ::Sentry.stub(:capture_message, ->(*) { scope = ::Sentry.get_current_scope }) do
+          appender.error("Deep", body: "Café".b, tree: nested)
+        end
+
+        assert_equal "Café", scope.extra[:body]
+        assert_includes scope.extra[:tree].inspect, "#<Hash nested too deeply>"
+      end
+
+      # Sentry writes such an object as it writes it; ActiveSupport's #as_json of an object whose
+      # instance variables lead back to itself overflows the stack.
+      it "sends a payload object as it is, without calling its #to_json" do
+        broken = Object.new
+        def broken.to_json(*) = raise(NoMethodError, "undefined method")
+        scope = nil
+        ::Sentry.stub(:capture_message, ->(*) { scope = ::Sentry.get_current_scope }) do
+          appender.error("Failed", broken: broken, body: "Café".b)
+        end
+
+        assert_same broken, scope.extra[:broken]
+        assert_equal "Café", scope.extra[:body]
+      end
+
       describe "with the Sentry user or fingerprint in the payload" do
         # Logs the entry directly, and returns the Sentry scope it was captured with.
         def capture(log)
@@ -66,6 +123,35 @@ module Appender
           log.assign(message: "Webhook rejected", payload: payload)
           log.named_tags = named_tags
           log
+        end
+
+        # As a HashWithIndifferentAccess finds a String key by its Symbol.
+        it "takes the user from a payload whose Hash class finds its keys by Symbol" do
+          indifferent = Class.new(Hash) do
+            def [](key) = super(key.to_s)
+            def delete(key) = super(key.to_s)
+          end
+          payload = indifferent.new.update("user_id" => 7, "amount" => 10)
+          appender.instance_variable_set(:@payload_context_deprecated, true)
+
+          scope = capture(error_log(payload))
+
+          assert_equal({id: 7}, scope.user)
+          assert_equal 10, scope.extra["amount"]
+          assert_equal({"user_id" => 7, "amount" => 10}, payload)
+        end
+
+        it "takes the user and fingerprint from named tags whose Hash class finds their keys by Symbol" do
+          indifferent = Class.new(Hash) do
+            def [](key) = super(key.to_s)
+            def delete(key) = super(key.to_s)
+          end
+          named_tags = indifferent.new.update("user_id" => 9, "fingerprint" => ["f"])
+
+          scope = capture(error_log({}, named_tags))
+
+          assert_equal({id: 9}, scope.user)
+          assert_equal ["f"], scope.fingerprint
         end
 
         it "leaves the log entry and the application's payload unchanged" do

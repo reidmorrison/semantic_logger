@@ -101,9 +101,7 @@ module SemanticLogger
     # Extract the backtrace stripping off the leading semantic logger entries.
     # Leaves all other system and gem path entries in place.
     # Returns a new Array, leaving the supplied stack unchanged since it can belong to the caller.
-    def self.extract_backtrace(stack = caller)
-      stack.drop_while { |path| extract_path?(path) }
-    end
+    def self.extract_backtrace(stack = caller) = stack.drop_while { |path| extract_path?(path) }
 
     # Paths whose entries are stripped from the top of a captured backtrace.
     EXTRACT_PATHS = make_shareable(%w[lib/semantic_logger lib/rails_semantic_logger].freeze)
@@ -111,9 +109,7 @@ module SemanticLogger
     def self.extract_paths = EXTRACT_PATHS
 
     # Whether this path should be excluded from any cleansed backtrace
-    def self.extract_path?(path)
-      extract_paths.any? { |exclude| path.include?(exclude) }
-    end
+    def self.extract_path?(path) = extract_paths.any? { |exclude| path.include?(exclude) }
 
     # Try to strip everything off of the supplied backtrace, until the first application stack entry is at the top.
     # For example all leading gem paths and built-in ruby code paths are removed from the top.
@@ -133,9 +129,7 @@ module SemanticLogger
     end
 
     # Whether this path should be excluded from any cleansed backtrace
-    def self.strip_path?(path)
-      strip_paths.any? { |exclude| path.start_with?(exclude) }
-    end
+    def self.strip_path?(path) = strip_paths.any? { |exclude| path.start_with?(exclude) }
 
     # Returns [String] the exception's message, without raising the error that its #message raises.
     #
@@ -357,8 +351,8 @@ module SemanticLogger
       end
     end
 
-    # Returns a bounded copy of a structure, such as a Hash or Array, for .json_safe, or for an
-    # appender that copies log data for a gem that writes it itself: what the block returns for its
+    # Returns a bounded copy of a structure, such as a Hash or Array, for .json_safe, .encode_utf8,
+    # or an appender that copies log data for a gem that writes it itself: what the block returns for its
     # members, given the next depth and the structures it is inside of, or, for one nested deeper
     # than MAX_JSON_SAFE_DEPTH or that holds itself, a placeholder String naming its class, such
     # as "#<Hash nested too deeply>", in place of the structure.
@@ -430,26 +424,37 @@ module SemanticLogger
     # Recurses through Hash and Array structures, cleansing both keys and values.
     # Strings that are already valid UTF-8 are returned unchanged (the common case),
     # and so are Symbols that are UTF-8 or ASCII, so the fast path allocates nothing. Any
-    # other value (Numeric, Time, nil, ...) is returned as-is.
+    # other value (Numeric, Time, nil, a Struct, ...) is returned as-is, without looking
+    # inside it.
     #
-    # Used by .to_json on the rare failing path, and directly by formatters that
-    # serialize per value or emit to a non-JSON sink (where a single `.to_json`
-    # rescue boundary cannot catch an intermediate failure).
-    def self.encode_utf8(value)
+    # A Hash or Array nested deeper than MAX_JSON_SAFE_DEPTH, or that holds itself, is
+    # replaced where it is too deep or repeats with the placeholder that .json_safe writes,
+    # such as "#<Hash nested too deeply>", so that the copy is bounded, as .json_safe is.
+    #
+    # Used by formatters that serialize per value or emit to a non-JSON sink (where a
+    # single `.to_json` rescue boundary cannot catch an intermediate failure), and by
+    # appenders that hand log data to a gem that writes it itself.
+    def self.encode_utf8(value, depth = 0, ancestors = nil)
       case value
       when String
         encode_utf8_string(value)
       when Symbol then encode_utf8_symbol(value)
-      when Hash
-        value.each_with_object({}) do |(key, val), hash|
-          hash[encode_utf8(key)] = encode_utf8(val)
-        end
-      when Array
-        value.map { |element| encode_utf8(element) }
+      when Hash, Array
+        bounded_structure(value, depth, ancestors) { |level, seen| encode_utf8_members(value, level, seen) }
       else
         value
       end
     end
+
+    # Returns a copy of the members of a Hash or Array, each converted by .encode_utf8.
+    def self.encode_utf8_members(value, depth, ancestors)
+      return value.map { |element| encode_utf8(element, depth, ancestors) } if value.is_a?(Array)
+
+      value.each_with_object({}) do |(key, val), hash|
+        hash[encode_utf8(key, depth, ancestors)] = encode_utf8(val, depth, ancestors)
+      end
+    end
+    private_class_method :encode_utf8_members
 
     # Options used when transcoding a string to UTF-8.
     # Invalid byte sequences and characters that cannot be represented in UTF-8 are
@@ -490,10 +495,7 @@ module SemanticLogger
     end
 
     # Returns [String] a copy of the string's bytes read as UTF-8, without its invalid bytes.
-    def self.read_as_utf8(string)
-      String.new(string, encoding: Encoding::UTF_8).scrub!("")
-    end
-    private_class_method :read_as_utf8
+    private_class_method def self.read_as_utf8(string) = String.new(string, encoding: Encoding::UTF_8).scrub!("")
 
     # Returns [String] the texts joined into a new String, such as a log message and an exception's
     # message, whatever their encodings.

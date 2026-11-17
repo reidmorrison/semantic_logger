@@ -902,6 +902,15 @@ for more.
 > be sent with [`SemanticLogger.sensitive_keys`](security.html#redacting-sensitive-data), and keep
 > sensitive information out of messages and tags, which are sent as they are.
 
+The `:bugsnag`, `:sentry_ruby`, `:honeybadger`, and `:honeybadger_insights` appenders send the text
+of an entry, such as its message, payload, and named tags, converted to valid UTF-8, as the JSON
+formatters write it: binary text, such as a response body, is read as the UTF-8 it usually holds,
+and invalid bytes are dropped. A Hash or Array nested more than 32 levels deep, or that holds itself,
+is cut off there with a placeholder such as `"#<Hash nested too deeply>"`, as the JSON formatters cut
+it off. Any other object in the data is handed over unchanged, for the service to write. When an
+entry has an exception, `:bugsnag`, `:sentry_ruby`, and `:honeybadger` report that exception itself,
+whose message the service's gem cleans.
+
 ### Bugsnag
 
 Forward `:info`, `:warn`, or `:error` entries to Bugsnag (requires the `bugsnag` gem). Configure

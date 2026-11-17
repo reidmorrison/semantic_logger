@@ -62,6 +62,37 @@ module Appender
           end
         end
 
+        # Bugsnag replaces each byte that is not valid UTF-8 with U+FFFD.
+        it "sends binary text as UTF-8, keeping its characters" do
+          exception, hash, _severity = stub_bugsnag do
+            appender.error("Café ☕".b, body: "Café \xFF☕".b)
+          end
+
+          assert_equal "Café ☕", exception.message
+          assert_equal "Café ☕", hash[:payload][:body]
+          assert_equal "Café ☕", hash[:message]
+        end
+
+        it "sends a payload that holds itself, cut off where it repeats" do
+          payload        = {name: "loop", body: "Café".b}
+          payload[:self] = payload
+          _exception, hash, _severity = stub_bugsnag { appender.error("Looped", payload) }
+
+          assert_equal "Café", hash[:payload][:body]
+          assert_equal "#<Hash nested too deeply>", hash[:payload][:self][:self]
+        end
+
+        # Bugsnag cleans any other object itself, writing a Struct as "[OBJECT]".
+        it "sends a payload object, such as a Struct, as it is" do
+          credentials = Struct.new(:user, :api_key).new("bob", "k-123")
+          _exception, hash, _severity = stub_bugsnag do
+            appender.error("Charge failed", creds: credentials, body: "Café".b)
+          end
+
+          assert_same credentials, hash[:payload][:creds]
+          assert_equal "Café", hash[:payload][:body]
+        end
+
         it "does not send metric only notifications" do
           exception, hash, severity = stub_bugsnag do
             appender.debug metric: "my/custom/metric", payload: {hello: :world}

@@ -31,6 +31,28 @@ module Appender
         end
       end
 
+      # Honeybadger replaces each byte that is not valid UTF-8 with "?".
+      it "sends binary text as UTF-8, keeping its characters" do
+        hash = nil
+        Honeybadger.stub(:event, ->(h) { hash = h }) do
+          @appender.info("Café ☕".b, body: "Café \xFF☕".b)
+        end
+
+        assert_equal "Café ☕", hash[:message]
+        assert_equal "Café ☕", hash[:payload][:body]
+        assert_equal "log", hash[:event_type]
+      end
+
+      it "sends a payload that holds itself, cut off where it repeats" do
+        payload        = {name: "loop", body: "Café".b}
+        payload[:self] = payload
+        hash           = nil
+        Honeybadger.stub(:event, ->(h) { hash = h }) { @appender.info("Looped", payload) }
+
+        assert_equal "Café", hash[:payload][:body]
+        assert_equal "#<Hash nested too deeply>", hash[:payload][:self][:self]
+      end
+
       it "send notification to Honeybadger with custom attributes" do
         hash = nil
         Honeybadger.stub(:event, ->(h) { hash = h }) do
