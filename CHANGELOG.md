@@ -290,9 +290,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   nested more than 32 levels deep is cut off there, as the JSON formatters cut it off.
 - The file appender's `reopen_size` counts the bytes written, as documented. It counted characters,
   so a log file of text in Chinese or Japanese, or with emoji, grew to up to four times the size
-  before it was reopened. With an `encoding:` such as `"UTF-16LE"`, an entry whose text cannot be
-  converted to it, such as invalid UTF-8, no longer makes the appender close and reopen the log file
-  before the entry is discarded, since reopening cannot fix the text.
+  before it was reopened. An entry whose text the file refuses even converted (see the next entry) no
+  longer makes the appender close and reopen the log file before the entry is discarded, since
+  reopening cannot fix the text.
+- The file and IO appenders no longer discard an entry whose text the file or IO refuses in its
+  encoding. A file opened with an `encoding:` such as `"UTF-16LE"` converts what it writes, and
+  raised `EncodingError` for invalid UTF-8, for binary text that holds bytes outside ASCII, which a
+  custom formatter can return, or for a character its encoding does not have. An IO that converts to
+  UTF-8, such as one opened after Rails sets `Encoding.default_internal`, raised it for such binary
+  text. Now such an entry is written converted, as the JSON formatters convert text: binary text is
+  read as the UTF-8 it usually holds, invalid bytes are dropped, and a character that the encoding
+  does not have is written as `?`. Only an entry that the file or IO refuses is converted, so an IO
+  that converts to UTF-8 still writes text tagged UTF-8 that holds invalid bytes as it is. Text is
+  converted only for an IO, a `Tempfile`, or a `StringIO`: an IO appender given another object that
+  responds to `#write` still loses an entry that the object refuses.
 
 ## [5.2.0] 2026-10-30
 

@@ -214,13 +214,13 @@ module SemanticLogger
         message = format_log(log) << "\n"
         count   = 0
         begin
-          # IO#write returns the number of bytes written, in the file's `encoding`.
-          written     = file.write(message)
+          # The number of bytes written, in the file's `encoding`, as IO#write returns it.
+          written     = TextOutput.write(file, message)
           @log_count += 1
           @log_size  += written
         rescue StandardError => e
-          # Nor can it fix text that the file cannot take, such as text that cannot be converted to
-          # the `encoding` of the file (see #message_error?).
+          # Nor can it fix text that the file refuses even converted (see TextOutput and
+          # #message_error?).
           raise(e) if count >= retry_count || message_error?(e)
 
           count += 1
