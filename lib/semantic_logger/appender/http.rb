@@ -156,7 +156,8 @@ module SemanticLogger
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
-      #     Default: SemanticLogger.default_level
+      #     Default: none (:trace), so it writes every entry that a logger emits; each logger
+      #     filters by its own level.
       #
       #   formatter: [Object|Proc]
       #     An instance of a class that implements #call, or a Proc to be used to format
