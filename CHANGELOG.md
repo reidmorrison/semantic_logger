@@ -288,6 +288,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   formatters write it: binary text is read as the UTF-8 it usually holds, invalid bytes are dropped,
   and NUL bytes are removed from keys. Only an entry that BSON refuses is copied, and such an entry
   nested more than 32 levels deep is cut off there, as the JSON formatters cut it off.
+- The file appender's `reopen_size` counts the bytes written, as documented. It counted characters,
+  so a log file of text in Chinese or Japanese, or with emoji, grew to up to four times the size
+  before it was reopened. With an `encoding:` such as `"UTF-16LE"`, an entry whose text cannot be
+  converted to it, such as invalid UTF-8, no longer makes the appender close and reopen the log file
+  before the entry is discarded, since reopening cannot fix the text.
 
 ## [5.2.0] 2026-10-30
 
