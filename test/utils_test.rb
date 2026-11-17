@@ -1011,6 +1011,36 @@ module SemanticLogger
           assert_instance_of String, result
         end
       end
+
+      describe ".join_lines" do
+        let(:latin1) { "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1) }
+
+        it "puts each line on a line of its own" do
+          assert_equal "app/a.rb:1\napp/b.rb:2", Utils.join_lines(["app/a.rb:1", "app/b.rb:2"])
+        end
+
+        it "returns an empty String for no lines" do
+          assert_equal "", Utils.join_lines([])
+        end
+
+        it "leaves lines in another encoding as they are when they can be joined" do
+          result = Utils.join_lines([latin1, "app/b.rb:2"])
+
+          assert_equal Encoding::ISO_8859_1, result.encoding
+          assert_equal "Grüße\napp/b.rb:2", result.encode(Encoding::UTF_8)
+        end
+
+        it "converts lines in encodings that cannot be joined to UTF-8" do
+          result = Utils.join_lines(["app/naïve.rb:1", latin1, "app/b.rb:2"])
+
+          assert_equal "app/naïve.rb:1\nGrüße\napp/b.rb:2", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "keeps the UTF-8 characters of a binary line joined with a UTF-8 one" do
+          assert_equal "app/naïve.rb:1\napp/café.rb:2", Utils.join_lines(["app/naïve.rb:1", "app/café.rb:2".b])
+        end
+      end
     end
   end
 end

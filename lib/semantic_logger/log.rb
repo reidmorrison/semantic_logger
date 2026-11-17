@@ -349,6 +349,12 @@ module SemanticLogger
     # last, even when an exception in the chain has no backtrace, so that a caller can put
     # the text on the line after its own.
     #
+    # Never raises because of what it writes: each cause is named by its class's name, or by the
+    # class itself for an anonymous class, which has none, such as `#<Class:0x000...>`; its message
+    # is read as Utils.exception_message reads it, so that a #message that raises, or does not
+    # return a String, cannot make it raise, nor pass the block anything but a String; and the
+    # lines are joined as Utils.join_lines joins them, whatever their encodings.
+    #
     # Example:
     #   log.backtrace_to_s { |text| text.gsub("\n", "\\n") }
     #   log.backtrace_to_s(cleaner: Rails.backtrace_cleaner)
@@ -356,13 +362,13 @@ module SemanticLogger
       lines = []
       each_exception do |exception, i|
         unless i.zero?
-          message = block ? yield(exception.message) : exception.message
-          lines << "Cause: #{exception.class.name}: #{message}"
+          message = block ? yield(message_of(exception)) : message_of(exception)
+          lines << Utils.join_texts("Cause: ", (exception.class.name || exception.class).to_s, ": ", message)
         end
         backtrace = backtrace_of(exception, cleaner: cleaner) || []
         lines.concat(block ? backtrace.map(&block) : backtrace)
       end
-      lines.join("\n")
+      Utils.join_lines(lines)
     end
 
     # Returns [String] duration of the log entry as a string

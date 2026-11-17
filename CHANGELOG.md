@@ -518,6 +518,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   with `Custom/` is still recorded as it is, and an empty prefix still adds nothing. A prefix given
   with a trailing `/`, such as `Custom/`, is added with one `/`. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The formatters that write the backtrace of each exception that caused the logged one (`:default`,
+  `:color`, `:pattern`, `:syslog`, `:loki`, and `:open_telemetry`) no longer lose the entry when the
+  `#message` of a cause raises, such as one that reads a record that is nil, or an abstract one that
+  raises `NotImplementedError`; the error was reported to the internal logger instead. They now
+  write the message the cause was raised with, as `log_exception: :partial` does. A cause of an
+  anonymous class is named as Ruby writes the class, as in `Cause: #<Class:0x000...>: disk full`,
+  rather than `Cause: : disk full`. For custom formatters, `Log#backtrace_to_s`, which these use,
+  always passes its block a String, even for a cause whose `#message` returns nil, and no longer
+  raises `Encoding::CompatibilityError` for lines it cannot join as they are, such as a UTF-8
+  backtrace line and a cause's binary message, which it now joins as UTF-8. `Log#exception_details`
+  returns nil, rather than raising, when the exception's `#message` raises `NotImplementedError`.
 
 ## [5.2.0] 2026-10-30
 

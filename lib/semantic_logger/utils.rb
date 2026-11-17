@@ -524,21 +524,30 @@ module SemanticLogger
     # String is still joined.
     #
     # Plain Strings that are all UTF-8, the usual texts, always join as they are, so they are joined
-    # without those checks, which take several times as long. With an explicit separator, so that a
-    # global `$,` set by another library is not added between them.
+    # without those checks, which take several times as long. With an explicit separator, a new
+    # empty String, so that a global `$,` set by another library is not added between them.
     def self.join_texts(*texts)
-      if texts.all? { |text| text.instance_of?(String) && text.encoding == Encoding::UTF_8 }
-        return texts.join("") # rubocop:disable Style/RedundantArgument
-      end
+      return texts.join(+"") if texts.all? { |text| text.instance_of?(String) && text.encoding == Encoding::UTF_8 }
 
       texts.map { |text| format("%s", text) }.reduce do |joined, text|
         encoding = Encoding.compatible?(joined, text)
-        if encoding && (encoding != Encoding::BINARY || joined.encoding == Encoding::BINARY)
-          "#{joined}#{text}"
-        else
-          "#{encode_utf8_string(joined)}#{encode_utf8_string(text)}"
-        end
+        joinable = encoding && (encoding != Encoding::BINARY || joined.encoding == Encoding::BINARY)
+        joinable ? "#{joined}#{text}" : "#{encode_utf8_string(joined)}#{encode_utf8_string(text)}"
       end
+    end
+
+    # Returns [String] the lines, such as those of a backtrace, joined into a new String with a line
+    # break between each, whatever their encodings: as they are, as Array#join joins them, or, when
+    # that would raise, such as for a UTF-8 line and an ISO-8859-1 one that both hold bytes outside
+    # ASCII, as .join_texts joins texts.
+    #
+    # Only lines that cannot be joined as they are, which is rare, are joined as .join_texts joins
+    # them, since checking each of what can be dozens of lines, as it does, would double the time it
+    # takes to format an exception.
+    def self.join_lines(lines)
+      lines.join("\n")
+    rescue Encoding::CompatibilityError
+      join_texts(*lines.flat_map { |line| [line, "\n"] }[..-2])
     end
   end
 end

@@ -251,7 +251,7 @@ module SemanticLogger
       # input, and a backtrace can be set from untrusted data.
       #
       # Otherwise they are written as they are, unless the text cannot be joined with UTF-8 text,
-      # such as when a cause's message is binary: then each is converted as
+      # such as when a cause's message is ISO-8859-1 text: then each is converted as
       # #escape_control_characters converts the other fields.
       def exception_backtrace
         cleaner = active_backtrace_cleaner
@@ -264,16 +264,13 @@ module SemanticLogger
       end
 
       # Returns [String] the backtrace as Log#backtrace_to_s writes it, or nil when that text
-      # cannot be joined with UTF-8 text (see #escape_control_characters), or holds two texts that
-      # cannot be joined with each other.
+      # cannot be joined with UTF-8 text (see #escape_control_characters).
       #
       # The text is checked once, rather than each of what is usually dozens of lines, which
       # would double the time it takes to format an exception.
       def joinable_backtrace(cleaner)
         text = log.backtrace_to_s(cleaner: cleaner)
         text if text.encoding == Encoding::UTF_8 || text.ascii_only?
-      rescue Encoding::CompatibilityError
-        nil
       end
 
       # Return the Time as a formatted string

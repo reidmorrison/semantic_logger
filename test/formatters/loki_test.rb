@@ -532,6 +532,39 @@ module SemanticLogger
             assert_equal "o1\nCause: ArgumentError: in\\nner\ni1\\e[2J", values[2]["stack_trace"]
           end
 
+          it "writes the stack trace when the #message of an exception that caused it raises" do
+            begin
+              begin
+                raise ExceptionFixtures::BrokenMessageError, "Order 7"
+              rescue ExceptionFixtures::BrokenMessageError => e
+                e.set_backtrace(%w[i1])
+                raise "outer"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[o1])
+              log.exception = e
+            end
+
+            assert_equal "o1\nCause: ExceptionFixtures::BrokenMessageError: Order 7\ni1", values_data[2]["stack_trace"]
+          end
+
+          it "names an exception that caused it of an anonymous class as it names the exception" do
+            cause_class = Class.new(StandardError)
+            begin
+              begin
+                raise cause_class, "inner"
+              rescue cause_class => e
+                e.set_backtrace(%w[i1])
+                raise "outer"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[o1])
+              log.exception = e
+            end
+
+            assert_equal "o1\nCause: #{cause_class}: inner\ni1", values_data[2]["stack_trace"]
+          end
+
           it "writes an empty stack trace for an exception that was never raised" do
             log.exception = RuntimeError.new("Not raised")
 
