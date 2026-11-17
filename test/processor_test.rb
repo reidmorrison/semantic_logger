@@ -45,6 +45,73 @@ module SemanticLogger
             SemanticLogger::Processor.logger = original
           end
         end
+
+        it "restores the default for nil" do
+          original = SemanticLogger::Processor.logger
+          begin
+            SemanticLogger::Processor.logger = nil
+
+            assert_kind_of SemanticLogger::Appender::IO, SemanticLogger::Processor.logger
+          ensure
+            SemanticLogger::Processor.logger = original
+          end
+        end
+
+        describe "with a Ruby Logger" do
+          let(:output) { StringIO.new }
+          let(:ruby_logger) { ::Logger.new(output) }
+
+          before do
+            @original                        = SemanticLogger::Processor.logger
+            SemanticLogger::Processor.logger = ruby_logger
+          end
+
+          after { SemanticLogger::Processor.logger = @original }
+
+          it "wraps it in an appender that writes to it" do
+            assert_kind_of SemanticLogger::Appender::Wrapper, SemanticLogger::Processor.logger
+            assert_same ruby_logger, SemanticLogger::Processor.logger.wrapped_logger
+          end
+
+          it "reports an appender that fails to it, with the exception" do
+            failing = Class.new(SemanticLogger::Subscriber) do
+              def self.name = "FailingAppender"
+
+              def log(_log)
+                raise IOError, "destination unavailable"
+              end
+            end
+            processor.appenders << failing.new
+            processor.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "hello" })
+
+            assert processor.flush, "the worker thread should flush"
+            assert_includes output.string, "ERROR -- : "
+            assert_includes output.string,
+                            "SemanticLogger::Appenders -- Failed to log to appender: FailingAppender " \
+                            "-- Exception: IOError: destination unavailable"
+          end
+
+          it "is the internal logger of the processor" do
+            processor.logger.warn("Something went wrong", RuntimeError.new("boom"))
+
+            assert_includes output.string, "WARN -- : "
+            assert_includes output.string, "Something went wrong -- Exception: RuntimeError: boom"
+          end
+
+          it "flushes the appenders, without writing the trace reports" do
+            processor.appenders.add(io: StringIO.new)
+
+            assert processor.flush, "the worker thread should flush"
+            refute_includes output.string, "Flushing appender"
+          end
+
+          it "is the internal logger of the appenders added from then on, named after each one" do
+            appender = processor.appenders.add(io: StringIO.new)
+            appender.logger.warn("Could not write")
+
+            assert_includes output.string, "SemanticLogger::Appender::IO -- Could not write"
+          end
+        end
       end
 
       describe "#initialize" do

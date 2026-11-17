@@ -277,6 +277,62 @@ class AppenderTest < Minitest::Test
       end
     end
 
+    describe ".internal_logger" do
+      it "returns an appender as it is" do
+        appender = SemanticLogger::Appender::IO.new(StringIO.new)
+
+        assert_same appender, SemanticLogger::Appender.internal_logger(appender)
+      end
+
+      it "returns nil, which restores the default" do
+        assert_nil SemanticLogger::Appender.internal_logger(nil)
+      end
+
+      describe "with a Ruby Logger" do
+        let(:output) { StringIO.new }
+        let(:ruby_logger) { ::Logger.new(output) }
+        let(:internal) { SemanticLogger::Appender.internal_logger(ruby_logger) }
+
+        it "wraps it in an appender that writes to it" do
+          assert_kind_of SemanticLogger::Appender::Wrapper, internal
+          assert_same ruby_logger, internal.wrapped_logger
+        end
+
+        it "takes a name, and an exception after the message" do
+          internal.name = "SemanticLogger::Appenders"
+          internal.error("Failed to log to appender: File", IOError.new("disk full"))
+
+          assert_includes output.string, "ERROR -- : "
+          assert_includes output.string,
+                          "SemanticLogger::Appenders -- Failed to log to appender: File " \
+                          "-- Exception: IOError: disk full"
+        end
+
+        it "writes the reports at its own level and above" do
+          ruby_logger.level = :info
+          internal.debug("Not written")
+          internal.info("Written")
+
+          refute_includes output.string, "Not written"
+          assert_includes output.string, "INFO -- : "
+        end
+
+        it "leaves out the trace reports, which are below its lowest level" do
+          internal.trace("Flushing appender: File")
+          internal.debug("Opened file")
+
+          refute_includes output.string, "Flushing appender"
+          assert_includes output.string, "DEBUG -- : "
+        end
+      end
+
+      it "raises for a logger without the logging methods" do
+        error = assert_raises(ArgumentError) { SemanticLogger::Appender.internal_logger(Object.new) }
+
+        assert_includes error.message, "Supplied logger does not implement:debug"
+      end
+    end
+
     describe ".factory" do
       describe "batching an appender that cannot be batched" do
         let(:block) { ->(log, _logger) { log.message } }

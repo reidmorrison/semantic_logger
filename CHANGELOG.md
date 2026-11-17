@@ -572,6 +572,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   dimensions. Without a `dimensions:` option it no longer reads the named tags, so a named tag whose
   key cannot be turned into a Symbol, such as an Integer, no longer stops the metric being sent. See
   the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- `SemanticLogger::Processor.logger=` accepts a Ruby or Rails Logger, such as `Logger.new($stderr)`,
+  as its comment says, to receive Semantic Logger's reports of its own problems, such as an appender
+  that fails. Before, adding the first appender, or logging the first entry, raised `NoMethodError`
+  (undefined method 'name='), and such a logger could not take the reports, which log at `:trace` and
+  pass the exception after the message. The logger is now wrapped in an appender, which
+  `Processor.logger` returns, and which writes each report to it as text, with the exception. The
+  logger's own level decides which reports it writes, apart from the `:trace` reports, which are
+  below its lowest level, so are left out. The same goes for `SemanticLogger::SyncProcessor.logger=`.
 
 ## [5.2.0] 2026-10-30
 

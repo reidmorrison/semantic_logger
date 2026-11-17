@@ -141,6 +141,23 @@ module SemanticLogger
 
     private_class_method :build
 
+    # Returns [SemanticLogger::Base] the supplied logger, ready to be an internal logger: the one that
+    # Semantic Logger reports its own problems to (see Processor.logger=).
+    #
+    # An internal logger is named after whatever reports to it, logs at :trace, and takes an
+    # exception after the message, as every Semantic Logger appender does. So an appender, such as the
+    # default IO appender, is returned as it is. Any other logger, such as a Ruby or Rails Logger,
+    # does none of that, so it is wrapped in a Wrapper appender, which writes each report to it as
+    # text, with the exception. Its own level then decides which reports it writes, apart from the
+    # :trace reports, which are below its lowest level, :debug, so are left out.
+    #
+    # Returns nil for nil, which restores the default internal logger.
+    def self.internal_logger(logger)
+      return logger if logger.nil? || logger.is_a?(SemanticLogger::Base)
+
+      SemanticLogger::Appender::Wrapper.new(logger: logger, level: :debug)
+    end
+
     # Returns [Subscriber] the appender or metric subscriber supplied as an instance, with the `option` that named it,
     # `:appender` or `:metric`, as it is, since it was created with its own options. The options and block that .build
     # would hand to an appender that it creates are not used, so reports a deprecation warning that names each one,
