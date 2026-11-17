@@ -311,6 +311,82 @@ module SemanticLogger
             end
           end
 
+          # Loki keeps only the last value of a label written twice.
+          describe "when a named tag or context key has the name of another label" do
+            # Raises for a label written twice.
+            let(:labels) do
+              JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]["stream"]
+            end
+
+            it "keeps the names of its own labels, and numbers a named tag with one of them" do
+              log.tags       = %w[a b]
+              log.named_tags = {
+                :pid          => 1,
+                "application" => "other_app",
+                :environment  => "staging",
+                :host         => "other_host",
+                "level"       => "warn",
+                :thread       => "worker",
+                :tags         => "c"
+              }
+
+              assert_equal(
+                [Process.pid, "test_app", "test", "test_host", "debug", thread_name, %w[a b]],
+                labels.values_at("pid", "application", "environment", "host", "level", "thread", "tags")
+              )
+              assert_equal(
+                %w[1 other_app staging other_host warn worker c],
+                labels.values_at(*%w[pid application environment host level thread tags].map { |name| "#{name}_2" })
+              )
+            end
+
+            it "numbers a key of the context with the name of one of its own labels" do
+              log.context = {host: "other_host"}
+
+              assert_equal %w[test_host other_host], labels.values_at("host", "host_2")
+            end
+
+            it "numbers a key of the context with the name of a named tag" do
+              log.named_tags = {request_id: "a"}
+              log.context    = {request_id: "b"}
+
+              assert_equal %w[a b], labels.values_at("request_id", "request_id_2")
+            end
+
+            it "numbers a named tag given both as a Symbol and as a String" do
+              log.named_tags = {request_id: "a", "request_id" => "b"}
+
+              assert_equal %w[a b], labels.values_at("request_id", "request_id_2")
+            end
+
+            it "writes it once when the other label has the same value, as Loki stores it" do
+              log.tags       = %w[a b]
+              log.named_tags = {"host" => "test_host", "level" => :debug, "pid" => Process.pid.to_s, "tags" => %w[a b]}
+              log.context    = {"host" => "test_host", :level => "debug"}
+
+              assert_equal(
+                {
+                  "pid"         => Process.pid,
+                  "application" => "test_app",
+                  "environment" => "test",
+                  "host"        => "test_host",
+                  "level"       => "debug",
+                  "thread"      => thread_name,
+                  "tags"        => %w[a b]
+                },
+                labels
+              )
+            end
+
+            it "writes a value of the context once when a named tag has it" do
+              log.named_tags = {request_id: "abc"}
+              log.context    = {"request_id" => "abc"}
+
+              assert_equal "abc", labels["request_id"]
+              refute labels.key?("request_id_2")
+            end
+          end
+
           describe "when message is nil" do
             it "includes empty string for message" do
               log.message = nil

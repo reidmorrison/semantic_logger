@@ -72,8 +72,14 @@ module SemanticLogger
 
       private
 
+      # The labels are written in this order, so that an earlier label keeps its name: this
+      # formatter's own (pid, application, environment, host, level, thread, and tags), each named
+      # tag, each value of the context, and then each named tag and context key whose name was
+      # replaced (see #add_label). A label whose name an earlier one has is written under another
+      # name, or not at all (see #write_label). Their names are Strings, so that a named tag or
+      # context key, whether a Symbol or a String, is found among them by name, as Loki finds it.
       def build_stream
-        self.stream     = {stream: {pid: pid}, values: [[]]}
+        self.stream     = {stream: {"pid" => pid}, values: [[]]}
         @renamed_labels = nil
 
         application
@@ -97,27 +103,27 @@ module SemanticLogger
       end
 
       def host
-        stream[:stream][:host] = logger.host if log_host && logger&.host
+        stream[:stream]["host"] = logger.host if log_host && logger&.host
       end
 
       def application
-        stream[:stream][:application] = logger.application if log_application && logger&.application
+        stream[:stream]["application"] = logger.application if log_application && logger&.application
       end
 
       def environment
-        stream[:stream][:environment] = logger.environment if log_environment && logger&.environment
+        stream[:stream]["environment"] = logger.environment if log_environment && logger&.environment
       end
 
       def level
-        stream[:stream][:level] = log.level
+        stream[:stream]["level"] = log.level
       end
 
       def thread
-        stream[:stream][:thread] = log.thread_name if log.thread_name
+        stream[:stream]["thread"] = log.thread_name if log.thread_name
       end
 
       def tags
-        stream[:stream][:tags] = log.tags if log.tags.respond_to?(:empty?) && !log.tags.empty?
+        stream[:stream]["tags"] = log.tags if log.tags.respond_to?(:empty?) && !log.tags.empty?
       end
 
       def named_tags
@@ -129,7 +135,7 @@ module SemanticLogger
       def context
         return unless log.context && !log.context.empty?
 
-        log.context.each { |key, value| add_label(key.to_s, value) }
+        log.context.each { |key, value| add_label(key, value) }
       end
 
       # Adds a label from the named tags or the context, with its value as Loki stores it (see
@@ -141,49 +147,50 @@ module SemanticLogger
       def add_label(key, value)
         return if value.nil?
 
+        name  = key.is_a?(Symbol) ? key.name : key.to_s
         value = loki_value(value)
-        if label_name?(key)
-          stream[:stream][key] = value
+        if label_name?(name)
+          write_label(name, value)
         else
-          (@renamed_labels ||= []) << [label_name_for(key), value]
+          (@renamed_labels ||= []) << [label_name_for(name), value]
         end
       end
 
-      # Whether Loki accepts the key as a label name. A name with characters outside ASCII never is,
-      # and matching it could raise, when it holds invalid UTF-8.
-      def label_name?(key)
-        name = key.is_a?(Symbol) ? key.name : key.to_s
+      # Whether Loki accepts the name as a label name. A name with characters outside ASCII never
+      # is, and matching it could raise, when it holds invalid UTF-8.
+      def label_name?(name)
         name.ascii_only? && name.match?(LABEL_NAME)
       end
 
-      # Returns [String] a name that Loki accepts for a label whose key it does not: the name under
+      # Returns [String] a name that Loki accepts for a label whose name it does not: the name under
       # which Loki stores structured metadata of that name (see #loki_name), such as `request_id`
-      # for `request-id`, and `key_1st` for `1st`, or EMPTY_LABEL_NAME for an empty key.
-      def label_name_for(key)
-        name = loki_name(key.to_s)
+      # for `request-id`, and `key_1st` for `1st`, or EMPTY_LABEL_NAME for an empty name.
+      def label_name_for(name)
+        name = loki_name(name)
         name.empty? ? EMPTY_LABEL_NAME : name
       end
 
       # Adds the labels whose names were replaced, after the others, so that a label written under
-      # its own name keeps it. A name that another label already has is written with a number after
-      # it, as in `request_id_2`, so that both values are kept, unless that label has the same
-      # value, once Loki stores it, which is then written once. The value of one of this formatter's
-      # own labels, such as the `level` Symbol or the `pid` Integer, is compared as Loki stores it
-      # too.
+      # its own name keeps it.
       def renamed_labels
-        return unless @renamed_labels
+        @renamed_labels&.each { |name, value| write_label(name, value) }
+      end
 
-        labels = stream[:stream].transform_keys(&:to_s)
-        @renamed_labels.each do |name, value|
-          if labels.key?(name)
-            next if loki_value(labels[name]) == value
+      # Writes a label under its name, unless an earlier label already has that name: then with a
+      # number after it, as in `request_id_2`, so that both values are kept, unless that label has
+      # the same value, once Loki stores it, which is then written once. Loki would keep only one
+      # value of a name written twice. The value of one of this formatter's own labels, such as the
+      # `level` Symbol or the `pid` Integer, is compared as Loki stores it too.
+      def write_label(name, value)
+        labels = stream[:stream]
+        if labels.key?(name)
+          return if loki_value(labels[name]) == value
 
-            number = 2
-            number += 1 while labels.key?("#{name}_#{number}")
-            name = "#{name}_#{number}"
-          end
-          labels[name] = stream[:stream][name] = value
+          number = 2
+          number += 1 while labels.key?("#{name}_#{number}")
+          name = "#{name}_#{number}"
         end
+        labels[name] = value
       end
 
       def time

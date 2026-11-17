@@ -300,6 +300,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Loki stores it, so an empty key as `payload_`, and with the prefix again when another key has that
   name, so that Loki keeps the value of each. A named tag that is nil, and a nil host, are left out,
   instead of being written as the label `null`.
+- The `:loki` formatter keeps both values of a named tag or context key that has the name of another
+  label. Loki keeps one value of a label, so a named tag such as `host`, `level`, or `pid` replaced
+  the formatter's own label, and an `:info` entry tagged `level: "warn"` was stored as `level="warn"`.
+  A context key replaced a named tag of the same name, and so did a named tag given both as a Symbol
+  and as a String. Now the formatter's own labels keep their names, then the named tags, then the
+  context, and a later label whose name is taken is written with a number added, as in `host_2`,
+  unless its value, as Loki stores it, is the same, when it is written once. See
+  [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53)
+  and [Grafana Loki](https://logger.reidmorrison.com/appenders.html#grafana-loki).
 - The `:open_telemetry` appender, and an appender added with `logger:`, work with `async: true`.
   Before, the worker thread stopped as it started, with `NoMethodError` (undefined method 'trace'),
   so the appender wrote nothing, and unless it was added with `non_blocking: true`, every log call

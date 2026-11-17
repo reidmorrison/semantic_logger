@@ -287,6 +287,19 @@ agent.
   # After:
   {application="shop"} | payload_duration="PT5S"
   ```
+* The `:loki` formatter no longer lets a named tag, or a value that an `on_log` subscriber adds to
+  the context, replace a label of the same name. Its own labels (`pid`, `application`,
+  `environment`, `host`, `level`, `thread`, and `tags`) keep their values, a named tag keeps its
+  value over a context key, and the later of the two is written with a number added, as in
+  `host_2`, unless both have the same value. Before, the later value replaced the earlier one. Update
+  any query or alert that selects such a named tag or context value by that name:
+
+  ```
+  # Before, with the named tag host: "db-1":
+  {application="shop", host="db-1"}
+  # After:
+  {application="shop", host_2="db-1"}
+  ```
 * The `#logger` of an appender added with `logger:`, such as the one `add_appender(logger: ...)`
   returns, is now its internal logger, the one it reports its own problems to, as for every other
   appender, and `#logger=` replaces that internal logger. Before, they returned and replaced the
