@@ -155,25 +155,26 @@ module SemanticLogger
         reopen
       end
 
+      # Replaces the client and its producer with new ones, then shuts down the producer it replaced,
+      # which delivers the messages it still holds, and closes the client it replaced. When building
+      # the new ones fails, the appender keeps the client and producer it has.
+      #
+      # After a fork, the child first forgets the client and producer it inherited, without shutting
+      # them down or closing them: they belong to the parent. Shutting the producer down in the child
+      # would start its threads again there, and deliver another copy of each message the parent had not
+      # delivered yet, over the connections that the parent is still using. Ruby closes the child's
+      # copies of those connections when it collects them, which leaves the parent's open.
       def reopen
-        # ruby-kafka puts the seed broker, which can hold credentials, in the error it raises for an
-        # invalid one: URI::InvalidURIError, or Kafka::Error for an unknown scheme.
-        errors = [URI::InvalidURIError, ::Kafka::Error]
-        @kafka = Utils.without_url_in_errors(option: ":seed_brokers", hint: SEED_BROKERS_HINT, errors: errors) do
-          ::Kafka.new(
-            seed_brokers:             seed_brokers,
-            client_id:                client_id,
-            connect_timeout:          connect_timeout,
-            socket_timeout:           socket_timeout,
-            ssl_ca_cert:              ssl_ca_cert,
-            ssl_client_cert:          ssl_client_cert,
-            ssl_client_cert_key:      ssl_client_cert_key,
-            ssl_ca_certs_from_system: ssl_ca_certs_from_system,
-            logger:                   logger
-          )
-        end
-
-        @producer = build_producer
+        forget_inherited
+        kafka        = build_client
+        producer     = build_producer(kafka)
+        old_kafka    = @kafka
+        old_producer = @producer
+        @kafka       = kafka
+        @producer    = producer
+        @pid         = ::Process.pid
+        old_producer&.shutdown
+        old_kafka&.close
       end
 
       def close
@@ -194,10 +195,15 @@ module SemanticLogger
         SemanticLogger::Formatters::Json.new
       end
 
-      # Restart producer thread since there is no other way to flush.
+      # Shuts down the producer, which waits for it to deliver the messages it holds, since ruby-kafka has
+      # no other way to flush one, after replacing it with a new one. When building the new one fails, the
+      # appender keeps the producer it has, still running. Does nothing after #close.
       def flush
-        @producer.shutdown
-        @producer = build_producer
+        return unless @producer
+
+        old_producer = @producer
+        @producer    = build_producer(@kafka)
+        old_producer.shutdown
       end
 
       # Only the topic: the seed brokers can hold credentials, and the options hold the TLS private
@@ -210,15 +216,44 @@ module SemanticLogger
 
       attr_reader :producer
 
-      # Returns [Kafka::AsyncProducer] a producer for the Kafka client, with the delivery and acknowledgement options of
-      # this appender. #reopen and #flush both build their producer here, so that a flush keeps them, rather than
-      # leaving out an option, which ruby-kafka then replaces with its own default.
-      def build_producer
-        @kafka.async_producer(
+      # Returns [Kafka::Client] a new client with the connection options of this appender. ruby-kafka connects to the
+      # brokers only when a producer first delivers messages, so this raises only for invalid options.
+      def build_client
+        # ruby-kafka puts the seed broker, which can hold credentials, in the error it raises for an
+        # invalid one: URI::InvalidURIError, or Kafka::Error for an unknown scheme.
+        errors = [URI::InvalidURIError, ::Kafka::Error]
+        Utils.without_url_in_errors(option: ":seed_brokers", hint: SEED_BROKERS_HINT, errors: errors) do
+          ::Kafka.new(
+            seed_brokers:             seed_brokers,
+            client_id:                client_id,
+            connect_timeout:          connect_timeout,
+            socket_timeout:           socket_timeout,
+            ssl_ca_cert:              ssl_ca_cert,
+            ssl_client_cert:          ssl_client_cert,
+            ssl_client_cert_key:      ssl_client_cert_key,
+            ssl_ca_certs_from_system: ssl_ca_certs_from_system,
+            logger:                   logger
+          )
+        end
+      end
+
+      # Returns [Kafka::AsyncProducer] a producer for the given Kafka client, with the delivery and acknowledgement
+      # options of this appender. #reopen and #flush both build their producer here, so that a flush keeps them, rather
+      # than leaving out an option, which ruby-kafka then replaces with its own default.
+      def build_producer(kafka)
+        kafka.async_producer(
           delivery_threshold: delivery_threshold,
           delivery_interval:  delivery_interval,
           required_acks:      required_acks
         )
+      end
+
+      # In a child process, forgets the client and producer built in the parent before a fork. See #reopen.
+      def forget_inherited
+        return if @pid == ::Process.pid
+
+        @kafka    = nil
+        @producer = nil
       end
     end
   end

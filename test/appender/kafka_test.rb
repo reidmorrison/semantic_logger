@@ -3,12 +3,63 @@ require "open3"
 
 module Appender
   class KafkaTest < Minitest::Test
+    # Stands in for ruby-kafka's clients and producers, recording in #events what a Kafka appender asks of them, such
+    # as "producer 1 shut down". They are numbered in the order that they are built.
+    class FakeKafka
+      attr_reader :events
+
+      def initialize
+        @events = []
+        @built  = Hash.new(0)
+      end
+
+      # Returns [Client] a new client, as ::Kafka.new does.
+      def client
+        Client.new(self, build("client"))
+      end
+
+      # Returns [String] the name of a new client or producer, after recording that it was built.
+      def build(kind)
+        name = "#{kind} #{@built[kind] += 1}"
+        events << "#{name} built"
+        name
+      end
+
+      Client = Struct.new(:kafka, :name) do
+        # Raises ArgumentError for a negative delivery_threshold, as ruby-kafka does.
+        def async_producer(delivery_threshold:, **)
+          raise(ArgumentError, "delivery_threshold: #{delivery_threshold}") if delivery_threshold.negative?
+
+          Producer.new(kafka, kafka.build("producer"))
+        end
+
+        def close
+          kafka.events << "#{name} closed"
+        end
+      end
+
+      Producer = Struct.new(:kafka, :name) do
+        def shutdown
+          kafka.events << "#{name} shut down"
+        end
+      end
+    end
+
     describe SemanticLogger::Appender::Kafka do
       let(:appender) { SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: true) }
       let(:amessage) { "AppenderKafkaTest log message" }
+      let(:fake_kafka) { FakeKafka.new }
 
       after do
         appender&.close
+      end
+
+      # Yields a Kafka appender whose clients and producers, including those it builds while the block runs, are the
+      # stand-ins of fake_kafka.
+      def with_fake_kafka
+        ::Kafka.stub(:new, ->(**) { fake_kafka.client }) do
+          yield(SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: true))
+        end
       end
 
       describe "metrics:" do
@@ -87,6 +138,90 @@ module Appender
           options = producer_options(&:flush)
 
           assert_equal([1, 1], options.map { |producer| producer[:required_acks] })
+        end
+
+        it "shuts down the producer after replacing it" do
+          with_fake_kafka do |kafka|
+            fake_kafka.events.clear
+            kafka.flush
+          end
+
+          assert_equal ["producer 2 built", "producer 1 shut down"], fake_kafka.events
+        end
+
+        it "keeps its producer, still running, when building a new one fails" do
+          with_fake_kafka do |kafka|
+            fake_kafka.events.clear
+            kafka.delivery_threshold = -1
+
+            assert_raises(ArgumentError) { kafka.flush }
+            kafka.close
+          end
+
+          assert_equal ["producer 1 shut down", "client 1 closed"], fake_kafka.events
+        end
+
+        it "does nothing after #close" do
+          with_fake_kafka do |kafka|
+            kafka.close
+            fake_kafka.events.clear
+            kafka.flush
+          end
+
+          assert_empty fake_kafka.events
+        end
+      end
+
+      describe "#reopen" do
+        it "shuts down the producer and closes the client that it replaces, after building new ones" do
+          with_fake_kafka do |kafka|
+            fake_kafka.events.clear
+            kafka.reopen
+            kafka.close
+          end
+
+          expected = [
+            "client 2 built", "producer 2 built", "producer 1 shut down", "client 1 closed",
+            "producer 2 shut down", "client 2 closed"
+          ]
+
+          assert_equal expected, fake_kafka.events
+        end
+
+        it "keeps its client and producer when building new ones fails" do
+          with_fake_kafka do |kafka|
+            fake_kafka.events.clear
+            kafka.delivery_threshold = -1
+
+            assert_raises(ArgumentError) { kafka.reopen }
+            kafka.close
+          end
+
+          assert_equal ["client 2 built", "producer 1 shut down", "client 1 closed"], fake_kafka.events
+        end
+
+        it "leaves the client and producer it inherited to the parent process after a fork" do
+          skip "fork is not supported" unless Process.respond_to?(:fork)
+
+          reader, writer = IO.pipe
+          with_fake_kafka do |kafka|
+            fake_kafka.events.clear
+            pid = fork do
+              reader.close
+              kafka.reopen
+              kafka.close
+              writer.write(fake_kafka.events.join(","))
+              writer.close
+            ensure
+              exit!(0)
+            end
+            writer.close
+            Process.wait(pid)
+          end
+          output = reader.read
+          reader.close
+
+          assert_equal "client 2 built,producer 2 built,producer 2 shut down,client 2 closed", output
         end
       end
 
