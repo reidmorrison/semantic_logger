@@ -50,6 +50,43 @@ module SemanticLogger
       # starts with a digit.
       EMPTY_LABEL_NAME = "key_".freeze
 
+      # The label that Loki adds to a stream that does not have it, and does not count toward
+      # max_label_names_per_series, even when the stream has it.
+      SERVICE_NAME = "service_name".freeze
+
+      # The most labels that Loki accepts for a stream, its `max_label_names_per_series`, the
+      # longest label name, its `max_label_name_length`, and the longest label value, its
+      # `max_label_value_length`, in bytes, unless a Loki tenant's `limits_config` raises them. See
+      # #initialize.
+      attr_reader :max_label_names_per_series, :max_label_name_length, :max_label_value_length
+
+      # Parameters
+      #   max_label_names_per_series: [Integer]
+      #     The most labels that Loki accepts for a stream. Loki rejects the whole push, with every
+      #     entry in it, for a stream with more, so a label past it, in the order they are written
+      #     (see #build_stream), is written to the structured metadata instead.
+      #     Default: 15, as Loki's `max_label_names_per_series`
+      #   max_label_name_length: [Integer]
+      #     The longest label name, in bytes, that Loki accepts. A label with a longer name is
+      #     written to the structured metadata instead.
+      #     Default: 1024, as Loki's `max_label_name_length`
+      #   max_label_value_length: [Integer]
+      #     The longest label value, in bytes, that Loki accepts. A label with a longer value, such as
+      #     many tags, is written to the structured metadata instead.
+      #     Default: 2048, as Loki's `max_label_value_length`
+      #
+      #   Set each to the limit of the same name in the `limits_config` of a Loki tenant that raises
+      #   it.
+      #
+      #   See Formatters::Base for the other options.
+      def initialize(max_label_names_per_series: 15, max_label_name_length: 1024, max_label_value_length: 2048,
+                     **args)
+        super(**args)
+        @max_label_names_per_series = label_limit(:max_label_names_per_series, max_label_names_per_series)
+        @max_label_name_length      = label_limit(:max_label_name_length, max_label_name_length)
+        @max_label_value_length     = label_limit(:max_label_value_length, max_label_value_length)
+      end
+
       # Returns [String] a single JSON log
       def call(log, logger)
         self.logger = logger
@@ -101,10 +138,12 @@ module SemanticLogger
       # own names, and then each named tag and context key whose name another label has, or that
       # Loki does not accept, under another name, or not at all (see #add_label). So every label
       # written under its own name keeps it. Their names are Strings, so that a named tag or context
-      # key, whether a Symbol or a String, is found among them by name, as Loki finds it.
+      # key, whether a Symbol or a String, is found among them by name, as Loki finds it. The labels
+      # past Loki's limits are then written to the structured metadata (see #limit_labels).
       def build_stream
         self.stream     = {stream: {"pid" => pid}, values: [[]]}
         @renamed_labels = nil
+        @moved_labels   = nil
 
         application
         environment
@@ -115,12 +154,14 @@ module SemanticLogger
         named_tags
         context
         renamed_labels
+        limit_labels
         time
         message
         payload
         metric
         duration
         exception
+        moved_labels
 
         stream[:values][0] << payload_value
         stream
@@ -260,23 +301,107 @@ module SemanticLogger
         end
       end
 
-      # Writes a label under its name, unless another label already has that name: then with the
-      # first number after it that no label has, as in `request_id_2`, so that both values are kept,
-      # since Loki keeps one value of a name. When the label of that name, or of any of the numbered
-      # names before that one, has the same value, once Loki stores it, the label is not written
-      # again. The value of one of this formatter's own labels, such as the `level` Symbol or the
-      # `pid` Integer, is compared as Loki stores it too.
+      # Writes a label under its name, unless another label already has that name (see
+      # #free_name).
       def write_label(name, value)
-        labels    = stream[:stream]
+        labels = stream[:stream]
+        name   = free_name(labels, name, value)
+        labels[name] = value if name
+      end
+
+      # Returns [String|nil] the name under which to write a value, among names, a Hash of the names
+      # already written and their values: the name itself when it is free; when another value has
+      # it, the first name with a number after it that is free, as in `request_id_2`, so that both
+      # values are kept, since Loki keeps one value of a name; or nil when the value of that name,
+      # or of a numbered name before it, is the same, once Loki stores it, so that it is written
+      # once. A value that is not a String, such as the `level` Symbol or the `pid` Integer of this
+      # formatter's own labels, is compared as Loki stores it.
+      #
+      # The number is added to the stem, which is the name unless given. For structured metadata it
+      # is the name without a trailing underscore, so that `payload_` is numbered `payload_2`, as
+      # Loki would store `payload__2`.
+      def free_name(names, name, value, stem = name)
         candidate = name
         number    = 1
-        while labels.key?(candidate)
-          return if loki_value(labels[candidate]) == value
+        while names.key?(candidate)
+          return if loki_value(names[candidate]) == value
 
           number   += 1
-          candidate = "#{name}_#{number}"
+          candidate = "#{stem}_#{number}"
         end
-        labels[candidate] = value
+        candidate
+      end
+
+      # Moves each label for which Loki would reject the whole push, with every entry in it, to the
+      # structured metadata (see #moved_labels), so that the push is accepted and the value kept: a
+      # label whose name is longer than max_label_name_length, or whose value, as Loki stores it,
+      # is longer than max_label_value_length, and each label past max_label_names_per_series, in
+      # the order they are written (see #build_stream).
+      #
+      # As Loki 3.7.10 does, the labels with an empty value, which Loki leaves out, and
+      # SERVICE_NAME, are not counted.
+      def limit_labels
+        labels = stream[:stream]
+        return if labels.size <= max_label_names_per_series && labels_fit?(labels)
+
+        count = 0
+        labels.delete_if do |name, value|
+          value = loki_value(value)
+          next false if label_fits?(name, value) &&
+                        (value.empty? || name == SERVICE_NAME || (count += 1) <= max_label_names_per_series)
+
+          (@moved_labels ||= []) << [name, value]
+        end
+      end
+
+      # Whether Loki accepts the length of each label's name and value (see #label_fits?).
+      #
+      # Every entry is checked, so an ASCII String, as most values are, is checked here, without
+      # another method call.
+      def labels_fit?(labels)
+        max_name  = max_label_name_length
+        max_value = max_label_value_length
+        labels.each_pair do |name, value|
+          next if value.is_a?(String) && value.ascii_only? && value.bytesize <= max_value && name.bytesize <= max_name
+          return false unless label_fits?(name, value)
+        end
+        true
+      end
+
+      # Whether Loki accepts the length of the label's name and of its value, as Loki stores it, in
+      # bytes, in UTF-8 without invalid bytes, as Utils.to_json writes them.
+      #
+      # The `level` Symbol and the `pid` Integer of every entry are read as text without asking
+      # #loki_value, which first checks whether a value is a structure.
+      def label_fits?(name, value)
+        return false if name.bytesize > max_label_name_length
+
+        text =
+          case value
+          when String then value
+          when Symbol then value.name
+          when Integer then value.to_s
+          else loki_value(value)
+          end
+        text = Utils.encode_utf8_string(text) unless text.ascii_only?
+        text.bytesize <= max_label_value_length
+      end
+
+      # Adds the labels past Loki's limits (see #limit_labels) to the structured metadata, after
+      # the others, each under its name as Loki stores it, such as `a_b` for the label `a__b`
+      # (see #loki_name), and with PAYLOAD_PREFIX when a payload key with that name would have it,
+      # as for `duration` or `_` (see #prefixed_key?). When the structured metadata already has
+      # that name, as Loki stores it, the label is written with a number after it, or not at all
+      # when it has the same value (see #free_name).
+      def moved_labels
+        return unless @moved_labels
+
+        names = payload_value.transform_keys { |name| loki_name(name.to_s) }
+        @moved_labels.each do |name, value|
+          name = prefixed_key?(name) ? prefixed_name(name) : loki_name(name)
+          name = free_name(names, name, value, name.delete_suffix("_"))
+          names[name] = payload_value[name] = value if name
+        end
       end
 
       def time
@@ -376,20 +501,25 @@ module SemanticLogger
       # A key that is exactly one of OWN_KEYS is named first, so that `payload_metric_value` holds
       # the payload's `metric_value`, whatever the order of the keys, and `metric.value` is
       # prefixed again.
-      #
-      # Joining the prefix with the name as Loki stores it gives the name Loki stores the joined
-      # name as: a key named like one of OWN_KEYS starts with a letter, and one without a letter or
-      # digit is stored as an empty name or as `_`, which Loki would write as one underscore with
-      # the prefix's, so that underscore is left out.
       def add_prefixed(metadata, prefixed)
         taken = Set.new(metadata.each_key) { |name| loki_name(name) }
         exact, lookalikes = prefixed.partition { |name, _value| OWN_KEYS.include?(name) }
         (exact + lookalikes).each do |name, value|
-          name = PAYLOAD_PREFIX + loki_name(name).delete_prefix("_")
+          name = prefixed_name(name)
           name = PAYLOAD_PREFIX + name while taken.include?(name)
           taken << name
           metadata[name] = loki_value(value)
         end
+      end
+
+      # Returns [String] the name with PAYLOAD_PREFIX, as Loki stores it.
+      #
+      # Joining the prefix with the name as Loki stores it gives the name Loki stores the joined
+      # name as: a name like one of OWN_KEYS starts with a letter, and one without a letter or
+      # digit is stored as an empty name or as `_`, which Loki would write as one underscore with
+      # the prefix's, so that underscore is left out.
+      def prefixed_name(name)
+        PAYLOAD_PREFIX + loki_name(name).delete_prefix("_")
       end
 
       # Returns [String] the name that Loki stores structured metadata of the supplied name under:
@@ -433,6 +563,15 @@ module SemanticLogger
         else
           value.to_s
         end
+      end
+
+      # Returns [Integer] the supplied limit (see #initialize).
+      # Raises ArgumentError for any value other than an Integer of 0 or more, so that a mistake
+      # surfaces here rather than on every log entry.
+      def label_limit(option, value)
+        return value if value.is_a?(Integer) && value >= 0
+
+        raise(ArgumentError, "#{option} must be an Integer of 0 or more, not #{value.inspect}")
       end
     end
   end

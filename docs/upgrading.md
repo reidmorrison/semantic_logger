@@ -308,6 +308,21 @@ agent.
   did, is written under its name as a String, and with a number added when a label written before
   it has that name, as a named tag is: `stream[:stream][:level] = "INFO"` after `super` adds
   `level_2="INFO"` rather than replacing `level`.
+* The `:loki` formatter now writes a label past Loki's default limits, the 16th and later label of a
+  stream, or one whose name is longer than 1024 bytes or whose value is longer than 2048 bytes, to
+  the structured metadata instead, since Loki rejected the whole push for it. If your Loki raises
+  these limits in its `limits_config`, set the formatter's options of the same names to match, or
+  those labels can no longer be selected as labels:
+
+  ```ruby
+  SemanticLogger.add_appender(
+    appender:  :loki,
+    url:       "https://logs-prod-001.grafana.net",
+    formatter: {loki: {max_label_names_per_series: 30}}
+  )
+  ```
+
+  See [Loki's label limits](appenders.html#lokis-label-limits).
 * The `#logger` of an appender added with `logger:`, such as the one `add_appender(logger: ...)`
   returns, is now its internal logger, the one it reports its own problems to, as for every other
   appender, and `#logger=` replaces that internal logger. Before, they returned and replaced the

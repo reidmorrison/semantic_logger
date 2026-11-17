@@ -930,6 +930,161 @@ module SemanticLogger
             end
           end
 
+          # Loki rejects the whole push, with every entry in it, for a stream with more than 15 labels, a
+          # label name longer than 1024 bytes, or a label value longer than 2048 bytes.
+          describe "when a label is past one of Loki's limits" do
+            let(:output) { JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0] }
+            let(:labels) { output["stream"] }
+            let(:structured_metadata) { output["values"][0][2] }
+            # With its own 6 labels, 15.
+            let(:nine_named_tags) { (1..9).to_h { |i| ["tag#{i}", "t#{i}"] } }
+
+            it "writes the labels past the 15th to the structured metadata, its own first, then the named tags, " \
+               "then the context" do
+              log.named_tags = nine_named_tags.merge("tag10" => "t10")
+              log.context    = {zone: "a"}
+
+              assert_equal %w[pid application environment host level thread], labels.keys.first(6)
+              assert_equal nine_named_tags, labels.except(*labels.keys.first(6))
+              assert_equal({"tag10" => "t10", "zone" => "a"}, structured_metadata)
+            end
+
+            it "moves a renamed named tag before a key of the context, since it is written after it" do
+              log.named_tags = nine_named_tags.except("tag9").merge("request-id" => "r")
+              log.context    = {zone: "a"}
+
+              assert_equal "a", labels["zone"]
+              assert_equal({"request_id" => "r"}, structured_metadata)
+            end
+
+            it "does not count a label with an empty value, nor service_name, as Loki does not" do
+              log.named_tags = nine_named_tags.merge("blank" => "", :service_name => "checkout")
+
+              assert_equal 17, labels.size
+              assert_empty structured_metadata
+            end
+
+            it "moves a label whose name is longer than 1024 bytes" do
+              log.named_tags = {"a" * 1024 => "x", "b" * 1025 => "y"}
+
+              assert_equal "x", labels["a" * 1024]
+              assert_equal({"b" * 1025 => "y"}, structured_metadata)
+            end
+
+            it "moves a label whose value is longer than 2048 bytes, not characters" do
+              log.named_tags = {fits: "é" * 1024, long: "é" * 1025}
+
+              assert_equal "é" * 1024, labels["fits"]
+              assert_equal({"long" => "é" * 1025}, structured_metadata)
+            end
+
+            it "compares the length of a value without its invalid bytes, as it is written" do
+              log.named_tags = {fits: "#{'a' * 2048}\xFF".b.force_encoding(Encoding::UTF_8)}
+
+              assert_equal "a" * 2048, labels["fits"]
+            end
+
+            it "keeps the tags when their JSON is 2048 bytes long" do
+              log.tags = ["a" * 2044]
+
+              assert_equal ["a" * 2044], labels["tags"]
+            end
+
+            it "moves the tags when their JSON is longer than 2048 bytes" do
+              log.tags = ["a" * 2045]
+
+              refute labels.key?("tags")
+              assert_equal({"tags" => "[\"#{'a' * 2045}\"]"}, structured_metadata)
+            end
+
+            describe "with a lower limit" do
+              let(:formatter) { Loki.new(max_label_names_per_series: 0) }
+
+              it "writes each moved label as a String, as Loki accepts structured metadata" do
+                log.tags       = %w[a b]
+                log.named_tags = {count: 42}
+
+                assert_empty labels
+                assert_equal(
+                  {
+                    "pid"         => Process.pid.to_s,
+                    "application" => "test_app",
+                    "environment" => "test",
+                    "host"        => "test_host",
+                    "level"       => "debug",
+                    "thread"      => thread_name,
+                    "tags"        => "[\"a\",\"b\"]",
+                    "count"       => "42"
+                  },
+                  structured_metadata
+                )
+              end
+
+              it "prefixes a moved label as a payload key with its name" do
+                log.duration   = 1.5
+                log.named_tags = {:duration => "slow", "metric__value" => "1", "_" => "u"}
+
+                assert_equal "1.5", structured_metadata["duration"]
+                assert_equal(
+                  %w[slow 1 u],
+                  structured_metadata.values_at("payload_duration", "payload_metric_value", "payload_")
+                )
+              end
+
+              it "writes a moved label under the name Loki stores it as" do
+                log.named_tags = {"a__b" => "x"}
+
+                assert_equal "x", structured_metadata["a_b"]
+                refute structured_metadata.key?("a__b")
+              end
+
+              it "numbers a moved label whose name a payload key has, unless it has the same value" do
+                log.payload    = {"user.id" => "a", "plan" => "gold"}
+                log.named_tags = {user_id: "b", plan: "gold"}
+
+                assert_equal(
+                  {"user.id" => "a", "plan" => "gold", "user_id_2" => "b"},
+                  structured_metadata.slice("user.id", "plan", "user_id", "user_id_2")
+                )
+              end
+
+              it "numbers a prefixed label after the name Loki stores, without two underscores in a row" do
+                log.payload    = {"" => "a"}
+                log.named_tags = {"_" => "b"}
+
+                assert_equal "a", structured_metadata["payload_"]
+                assert_equal "b", structured_metadata["payload_2"]
+              end
+            end
+
+            it "keeps the labels within the limits of a Loki tenant that raises them" do
+              formatter      = Loki.new(max_label_names_per_series: 30, max_label_name_length: 2048,
+                                        max_label_value_length: 4096)
+              log.named_tags = nine_named_tags.merge("tag10" => "t10", "n" * 1025 => "x", :value => "v" * 2049)
+              output         = JSON.parse(formatter.call(log, logger))["streams"][0]
+
+              assert_equal 18, output["stream"].size
+              assert_empty output["values"][0][2]
+            end
+
+            it "raises for a limit that is not an Integer of 0 or more" do
+              [nil, "15", -1, 1.5].each do |limit|
+                error = assert_raises(ArgumentError) { Loki.new(max_label_value_length: limit) }
+
+                assert_match(/max_label_value_length must be an Integer of 0 or more/, error.message)
+              end
+            end
+
+            it "moves the labels of each entry of a batch on their own" do
+              big            = SemanticLogger::Log.new("LokiTest", :info)
+              big.named_tags = nine_named_tags.merge("tag10" => "t10")
+              streams        = JSON.parse(formatter.batch([big, log], logger))["streams"]
+
+              assert_equal({"tag10" => "t10"}, streams[0]["values"][0][2])
+              assert_empty streams[1]["values"][0][2]
+            end
+          end
+
           # docs/config.md tells users to subclass a formatter and override its methods.
           describe "a subclass" do
             # A label name written twice is refused here, as json 3 refuses to write it.

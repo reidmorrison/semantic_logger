@@ -884,6 +884,40 @@ label keeps the name it was written under. So the named tags `host: "db-1", host
 written as `host_2="db-2"` and `host_3="db-1"`, and so are `host: "db-1", "host-2": "db-2"`, in
 either order.
 
+#### Loki's label limits
+
+By default Loki rejects the whole push, with every entry in it, for a stream with more than 15
+labels, a label name longer than 1024 bytes, or a label value longer than 2048 bytes. So a label past
+these limits is written to the structured metadata instead, where a query can still filter on it, as
+in `{application="shop"} | tenant="acme"`, but a stream selector cannot:
+
+* each label after the 15th, in the order above;
+* a label with a longer name;
+* a label with a longer value, such as many `tags`.
+
+As Loki does, a label with an empty value, which Loki leaves out, and `service_name`, which Loki adds
+to each stream, are not counted. A moved label is written as Loki stores structured metadata: as a
+String, under its name with each run of underscores as one, with the `payload_` prefix when a payload
+key with its name would have it, as in `payload_duration`, and with a number added when the
+structured metadata already has that name with another value, as in `tenant_2`.
+
+When your Loki raises these limits in its `limits_config`, set the formatter's options of the same
+names to match:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :loki,
+  url:       "https://logs-prod-001.grafana.net",
+  formatter: {loki: {max_label_names_per_series: 30, max_label_name_length: 1024, max_label_value_length: 4096}}
+)
+~~~
+
+| Option | Default | Loki's limit |
+|--------|---------|--------------|
+| `max_label_names_per_series` | `15` | The most labels a stream can have. |
+| `max_label_name_length` | `1024` | The longest label name, in bytes. |
+| `max_label_value_length` | `2048` | The longest label value, in bytes. |
+
 ### CloudWatch Logs
 
 Forward all log entries to AWS CloudWatch Logs (requires the `aws-sdk-cloudwatchlogs` gem):

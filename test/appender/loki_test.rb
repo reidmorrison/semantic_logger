@@ -88,6 +88,17 @@ module Appender
           assert_instance_of SemanticLogger::Formatters::Loki, appender.formatter
         end
 
+        it "builds the Loki formatter with the limits of a Loki tenant" do
+          limits = {max_label_names_per_series: 30, max_label_name_length: 2048, max_label_value_length: 4096}
+          raised = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger.add_appender(appender: :loki, url: "http://localhost:3100", formatter: {loki: limits})
+          end
+
+          assert_equal([30, 2048, 4096], limits.keys.map { |limit| raised.formatter.public_send(limit) })
+        ensure
+          SemanticLogger.remove_appender(raised)
+        end
+
         it "sets the JSON content type header" do
           assert_equal "application/json", appender.header["Content-Type"]
         end

@@ -315,6 +315,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   written under its name as a String, numbered when a label written before it has that name. See
   [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53)
   and [Grafana Loki](https://logger.reidmorrison.com/appenders.html#grafana-loki).
+- The `:loki` formatter no longer loses an entry, with every other entry pushed with it, for a stream
+  with more than 15 labels, such as an entry with ten named tags, a label name longer than 1024
+  bytes, or a label value longer than 2048 bytes, such as many tags. Loki rejected the push with
+  `400 Bad Request`. Such a label is now written to the structured metadata instead, as a String,
+  where a query can still filter on it: the labels after the 15th in the order the formatter writes
+  them (its own, then the named tags, then the context), and any label with a longer name or value.
+  The new formatter options `max_label_names_per_series`, `max_label_name_length`, and
+  `max_label_value_length` set these limits for a Loki that raises them, as in
+  `formatter: {loki: {max_label_names_per_series: 30}}`. See
+  [Loki's label limits](https://logger.reidmorrison.com/appenders.html#lokis-label-limits).
 - The `:open_telemetry` appender, and an appender added with `logger:`, work with `async: true`.
   Before, the worker thread stopped as it started, with `NoMethodError` (undefined method 'trace'),
   so the appender wrote nothing, and unless it was added with `non_blocking: true`, every log call
