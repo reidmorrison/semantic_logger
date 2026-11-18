@@ -385,6 +385,69 @@ module SemanticLogger
               assert_equal "abc", labels["request_id"]
               refute labels.key?("request_id_2")
             end
+
+            it "writes it once when a numbered label has the same value" do
+              log.named_tags = {host: "db-1", "request-id": "a"}
+              log.context    = {host: "db-1", request_id: "b", "request.id": "a"}
+
+              assert_equal(
+                {"host" => "test_host", "host_2" => "db-1", "request_id" => "b", "request_id_2" => "a"},
+                labels.slice("host", "host_2", "host_3", "request_id", "request_id_2", "request_id_3")
+              )
+            end
+
+            it "numbers it after the labels written under their own names, so that each keeps its name" do
+              log.named_tags = {:host => "a", "host_2" => "b"}
+              log.context    = {:level => "warn", "level_2" => "c"}
+
+              assert_equal(
+                {"host" => "test_host", "host_2" => "b", "host_3" => "a", "level" => "debug", "level_2" => "c",
+                 "level_3" => "warn"},
+                labels.slice("host", "host_2", "host_3", "level", "level_2", "level_3")
+              )
+              refute labels.key?("host_2_2")
+            end
+
+            it "numbers it after the replaced names that are free, whatever the order of the keys" do
+              [{:host => "a", "host-2" => "b"}, {"host-2" => "b", :host => "a"}].each do |named_tags|
+                log.named_tags = named_tags
+                output         = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)
+
+                assert_equal(
+                  {"host" => "test_host", "host_2" => "b", "host_3" => "a"},
+                  output["streams"][0]["stream"].slice("host", "host_2", "host_3", "host_2_2"),
+                  named_tags.inspect
+                )
+              end
+            end
+
+            it "numbers a named tag after a replaced key of the context that is free" do
+              log.named_tags = {host: "a"}
+              log.context    = {"host-2" => "b"}
+
+              assert_equal(
+                {"host" => "test_host", "host_2" => "b", "host_3" => "a"},
+                labels.slice("host", "host_2", "host_3", "host_2_2")
+              )
+            end
+
+            it "converts the value of the label under the taken name once" do
+              counting = Class.new(SemanticLogger::Formatters::Loki) do
+                attr_reader :level_conversions
+
+                private
+
+                def loki_value(value)
+                  @level_conversions = (@level_conversions || 0) + 1 if value == :debug
+                  super
+                end
+              end.new
+              log.named_tags = {level: "warn"}
+              output         = JSON.parse(counting.call(log, logger))["streams"][0]["stream"]
+
+              assert_equal %w[debug warn], output.values_at("level", "level_2")
+              assert_equal 1, counting.level_conversions
+            end
           end
 
           describe "when message is nil" do
@@ -864,6 +927,156 @@ module SemanticLogger
               log.payload = {"\xFF".b.force_encoding(Encoding::UTF_8) => "a"}
 
               assert_equal({"payload_" => "a"}, structured_metadata)
+            end
+          end
+
+          # docs/config.md tells users to subclass a formatter and override its methods.
+          describe "a subclass" do
+            # A label name written twice is refused here, as json 3 refuses to write it.
+            let(:output) { JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0] }
+
+            describe "that overrides #build_stream without calling super, as in v5.2" do
+              # The #build_stream of v5.2.0, with a label of its own after the context, under a
+              # Symbol, as v5.2 wrote its labels, and so the `{pid: pid}` of v5.2.0.
+              let(:subclass) do
+                Class.new(Loki) do
+                  private
+
+                  def build_stream
+                    self.stream = {stream: {pid: pid}, values: [[]]}
+
+                    application
+                    environment
+                    host
+                    level
+                    thread
+                    tags
+                    named_tags
+                    context
+                    stream[:stream][:region] = "eu"
+                    time
+                    message
+                    payload
+                    metric
+                    duration
+                    exception
+
+                    stream[:values][0] << payload_value
+                    stream
+                  end
+                end
+              end
+              let(:formatter) { subclass.new }
+
+              it "writes the named tags and the context as labels" do
+                log.named_tags = {tenant: "acme"}
+                log.context    = {zone: "a"}
+
+                assert_equal %w[acme a eu], output["stream"].values_at("tenant", "zone", "region")
+              end
+
+              it "writes each named tag and context key whose name is taken or replaced" do
+                log.named_tags = {:host => "db-1", "request-id" => "r1", :level => "warn", :pid => "1"}
+                log.context    = {host: "db-2"}
+
+                assert_equal(
+                  {"pid" => Process.pid, "pid_2" => "1", "host" => "test_host", "host_2" => "db-1",
+                   "host_3" => "db-2", "request_id" => "r1", "level" => "debug", "level_2" => "warn"},
+                  output["stream"].slice("pid", "pid_2", "host", "host_2", "host_3", "request_id", "level", "level_2")
+                )
+              end
+
+              it "numbers its own label written after the context when a named tag has its name" do
+                log.named_tags = {region: "us"}
+
+                assert_equal({"region" => "us", "region_2" => "eu"}, output["stream"].slice("region", "region_2"))
+              end
+
+              it "writes the labels of each entry of a batch, each its own" do
+                log.named_tags   = {tenant: "acme", host: "db-1"}
+                other            = SemanticLogger::Log.new("LokiTest", :info)
+                other.named_tags = {tenant: "other"}
+                streams          = JSON.parse(formatter.batch([log, other], logger))["streams"]
+
+                assert_equal(%w[acme other], streams.map { |stream| stream["stream"]["tenant"] })
+                assert_equal "db-1", streams[0]["stream"]["host_2"]
+                refute streams[1]["stream"].key?("host_2")
+              end
+            end
+
+            describe "that writes a label of its own under a Symbol, as in v5.2" do
+              let(:formatter) do
+                Class.new(Loki) do
+                  private
+
+                  def host
+                    stream[:stream][:host] = "#{logger.host}.example.com"
+                  end
+
+                  def level
+                    stream[:stream][:level] = log.level.to_s.upcase
+                  end
+                end.new
+              end
+
+              it "keeps its name, and numbers a named tag or context key of that name" do
+                log.named_tags = {level: "warn", host: "db-1"}
+                log.context    = {level: "error"}
+
+                assert_equal(
+                  {"host" => "test_host.example.com", "host_2" => "db-1", "level" => "DEBUG", "level_2" => "warn",
+                   "level_3" => "error"},
+                  output["stream"].slice("host", "host_2", "level", "level_2", "level_3")
+                )
+              end
+
+              it "writes a named tag of that name once when it has the same value" do
+                log.named_tags = {level: "DEBUG"}
+
+                assert_equal "DEBUG", output["stream"]["level"]
+                refute output["stream"].key?("level_2")
+              end
+            end
+
+            describe "that writes a label under a Symbol after calling super" do
+              let(:formatter) do
+                Class.new(Loki) do
+                  private
+
+                  def build_stream
+                    super.tap { |stream| stream[:stream][:level] = "DEBUG" }
+                  end
+                end.new
+              end
+
+              it "numbers it when another label has its name" do
+                assert_equal({"level" => "debug", "level_2" => "DEBUG"}, output["stream"].slice("level", "level_2"))
+              end
+            end
+
+            describe "whose #build_stream builds the whole stream under String keys" do
+              let(:formatter) do
+                Class.new(Loki) do
+                  private
+
+                  def build_stream
+                    self.stream = {
+                      "stream" => {"app" => "shop", "level" => log.level.to_s},
+                      "values" => [[format_time(log), log.message]]
+                    }
+                  end
+                end.new
+              end
+
+              it "writes its stream as it is" do
+                log.named_tags = {tenant: "acme"}
+
+                assert_equal(
+                  {"stream" => {"app" => "shop", "level" => "debug"},
+                   "values" => [[log_time.strftime("%s%N"), "initial message"]]},
+                  output
+                )
+              end
             end
           end
 

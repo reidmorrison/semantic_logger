@@ -55,7 +55,7 @@ module SemanticLogger
         self.logger = logger
         self.log = log
 
-        Utils.to_json({streams: [build_stream]})
+        Utils.to_json({streams: [loki_stream]})
       end
 
       # Returns [String] a JSON batch of logs
@@ -64,7 +64,7 @@ module SemanticLogger
 
         streams = logs.map do |log|
           self.log = log
-          build_stream
+          loki_stream
         end
 
         Utils.to_json({streams: streams})
@@ -72,12 +72,36 @@ module SemanticLogger
 
       private
 
-      # The labels are written in this order, so that an earlier label keeps its name: this
-      # formatter's own (pid, application, environment, host, level, thread, and tags), each named
-      # tag, each value of the context, and then each named tag and context key whose name was
-      # replaced (see #add_label). A label whose name an earlier one has is written under another
-      # name, or not at all (see #write_label). Their names are Strings, so that a named tag or
-      # context key, whether a Symbol or a String, is found among them by name, as Loki finds it.
+      # Returns [Hash] the stream of the current log entry, which #build_stream builds.
+      #
+      # A subclass that overrides #build_stream without calling super, as one written for v5.2
+      # may, does not write the named tags and context keys whose names are taken or replaced, so
+      # they are written here (see #renamed_labels) when the stream it returns has the current
+      # stream's labels. After the formatter's own #build_stream, this writes only a label that a
+      # subclass wrote under a Symbol since (see #string_label_names), so a formatter of this
+      # class itself skips it.
+      def loki_stream
+        return build_stream if instance_of?(Loki)
+
+        @renamed_labels = nil
+        built           = build_stream
+        renamed_labels if current_labels?(built)
+        built
+      end
+
+      # Whether the stream that #build_stream returned has the current stream's labels, a Hash,
+      # which a subclass's own stream may not, such as one under String keys.
+      def current_labels?(built)
+        labels = built[:stream] if built.is_a?(Hash)
+        labels.is_a?(Hash) && stream.is_a?(Hash) && labels.equal?(stream[:stream])
+      end
+
+      # The labels are written in this order: this formatter's own (pid, application, environment,
+      # host, level, thread, and tags), each named tag, and each value of the context, under their
+      # own names, and then each named tag and context key whose name another label has, or that
+      # Loki does not accept, under another name, or not at all (see #add_label). So every label
+      # written under its own name keeps it. Their names are Strings, so that a named tag or context
+      # key, whether a Symbol or a String, is found among them by name, as Loki finds it.
       def build_stream
         self.stream     = {stream: {"pid" => pid}, values: [[]]}
         @renamed_labels = nil
@@ -126,15 +150,20 @@ module SemanticLogger
         stream[:stream]["tags"] = log.tags if log.tags.respond_to?(:empty?) && !log.tags.empty?
       end
 
+      # The labels' names are made Strings first (see #string_label_names), so that #add_label
+      # finds each of them by name.
       def named_tags
         return unless log.named_tags.respond_to?(:empty?) && !log.named_tags.empty?
 
+        string_label_names
         log.named_tags.each_pair { |key, value| add_label(key, value) }
       end
 
+      # See #named_tags.
       def context
         return unless log.context && !log.context.empty?
 
+        string_label_names
         log.context.each { |key, value| add_label(key, value) }
       end
 
@@ -142,17 +171,22 @@ module SemanticLogger
       # #loki_value), unless the value is nil, which Loki would store as the text "null".
       #
       # Loki rejects the whole push for a label name it does not accept (see LABEL_NAME), so such a
-      # name is replaced (see #label_name_for), and the label added after the others, by
-      # #renamed_labels.
+      # name is replaced (see #label_name_for). Loki keeps one value of a label name, so a label
+      # whose name another label already has is written once when that label has the same value,
+      # as Loki stores it, and otherwise under another name. Both are added after the others, by
+      # #renamed_labels, so that the name they get is not one that a later label has as its own.
       def add_label(key, value)
         return if value.nil?
 
-        name  = key.is_a?(Symbol) ? key.name : key.to_s
-        value = loki_value(value)
-        if label_name?(name)
-          write_label(name, value)
-        else
+        name   = key.is_a?(Symbol) ? key.name : key.to_s
+        value  = loki_value(value)
+        labels = stream[:stream]
+        if !label_name?(name)
           (@renamed_labels ||= []) << [label_name_for(name), value]
+        elsif !labels.key?(name)
+          labels[name] = value
+        else
+          (@renamed_labels ||= []) << [name, value]
         end
       end
 
@@ -170,27 +204,79 @@ module SemanticLogger
         name.empty? ? EMPTY_LABEL_NAME : name
       end
 
-      # Adds the labels whose names were replaced, after the others, so that a label written under
-      # its own name keeps it.
+      # Adds the labels whose names are taken or were replaced (see #add_label), after the others,
+      # so that a label written under its own name keeps it, in two passes: first each whose name
+      # is free, and then each of the rest, with a number, or not at all when the label of that
+      # name has the same value, as Loki stores it (see #write_label). So the number a label gets is
+      # never the name that another of them is written under, such as `host_2` for a named tag
+      # `host-2`, whatever the order of their keys. Only #write_label compares the values, so that
+      # the value of each label a label is compared with is converted once.
+      #
+      # A label written under a Symbol since the named tags and the context were added, as by a
+      # subclass, is first written under a String (see #string_label_names).
       def renamed_labels
-        @renamed_labels&.each { |name, value| write_label(name, value) }
+        string_label_names
+        return unless @renamed_labels
+
+        labels  = stream[:stream]
+        pending = @renamed_labels.reject do |name, value|
+          next false if labels.key?(name)
+
+          labels[name] = value
+          true
+        end
+        @renamed_labels = nil
+        pending.each { |name, value| write_label(name, value) }
       end
 
-      # Writes a label under its name, unless an earlier label already has that name: then with a
-      # number after it, as in `request_id_2`, so that both values are kept, unless that label has
-      # the same value, once Loki stores it, which is then written once. Loki would keep only one
-      # value of a name written twice. The value of one of this formatter's own labels, such as the
-      # `level` Symbol or the `pid` Integer, is compared as Loki stores it too.
-      def write_label(name, value)
-        labels = stream[:stream]
-        if labels.key?(name)
-          return if loki_value(labels[name]) == value
+      # Writes each label whose name is not a String under its name as a String, in place and in
+      # the same order: a subclass written for v5.2 may still write its own label under a Symbol,
+      # as v5.2 did, such as `:host`, or the `{pid: pid}` of v5.2's #build_stream. Otherwise
+      # #add_label would not find its name among the labels, and would write a named tag of that
+      # name beside it, so the JSON would have the name twice, which json 3 refuses to write. When
+      # a label written before it has its name, the later one is written as a named tag whose name
+      # is taken is (see #renamed_labels), numbered unless it has the same value.
+      #
+      # It is called before the named tags and the context are added, and before the labels whose
+      # names are taken or replaced are written, so that the labels are numbered in the order they
+      # are written in (see #build_stream). This formatter's own methods write every label under a
+      # String, so only a subclass, whose methods may write one under a Symbol, has its label
+      # names checked, which Hash#any? does without allocating.
+      def string_label_names
+        return if instance_of?(Loki)
 
-          number = 2
-          number += 1 while labels.key?("#{name}_#{number}")
-          name = "#{name}_#{number}"
+        labels = stream[:stream]
+        return unless labels.any? { |name, _value| !name.is_a?(String) }
+
+        written = labels.to_a
+        labels.clear
+        written.each do |name, value|
+          name = name.is_a?(Symbol) ? name.name : name.to_s
+          if labels.key?(name)
+            (@renamed_labels ||= []) << [name, loki_value(value)]
+          else
+            labels[name] = value
+          end
         end
-        labels[name] = value
+      end
+
+      # Writes a label under its name, unless another label already has that name: then with the
+      # first number after it that no label has, as in `request_id_2`, so that both values are kept,
+      # since Loki keeps one value of a name. When the label of that name, or of any of the numbered
+      # names before that one, has the same value, once Loki stores it, the label is not written
+      # again. The value of one of this formatter's own labels, such as the `level` Symbol or the
+      # `pid` Integer, is compared as Loki stores it too.
+      def write_label(name, value)
+        labels    = stream[:stream]
+        candidate = name
+        number    = 1
+        while labels.key?(candidate)
+          return if loki_value(labels[candidate]) == value
+
+          number   += 1
+          candidate = "#{name}_#{number}"
+        end
+        labels[candidate] = value
       end
 
       def time

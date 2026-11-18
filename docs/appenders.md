@@ -873,12 +873,16 @@ and underscores. A named tag or context key that it would reject, such as `reque
 written under the name Loki would give it as structured metadata, such as `request_id` or `key_1st`,
 and an empty key as `key_`. A named tag or context value that is nil is left out.
 
-Loki keeps one value of a label name, so a label whose name an earlier label already has, such as a
-named tag `host`, is written with a number added, as in `host_2`, so that both values are kept. When
-the two values are the same, as Loki stores them, it is written once. The labels come in this order:
-the formatter's own (`pid`, `application`, `environment`, `host`, `level`, `thread`, and `tags`),
-the named tags, the context, and then the named tags and context keys whose names were replaced, so
-that a label written under its own name keeps it.
+Loki keeps one value of a label name, so a label whose name another label already has, such as a
+named tag `host`, is written with the first number added that no other label has, as in `host_2`,
+so that both values are kept. When the label of that name, or of a numbered name before it, has the
+same value, as Loki stores them, it is not written again. The labels come in this order: the
+formatter's own (`pid`, `application`, `environment`, `host`, `level`, `thread`, and `tags`), the
+named tags, and the context, each under its own name; then each named tag and context key whose name
+was replaced, under that name when no label has it yet; and then the rest, numbered, so that every
+label keeps the name it was written under. So the named tags `host: "db-1", host_2: "db-2"` are
+written as `host_2="db-2"` and `host_3="db-1"`, and so are `host: "db-1", "host-2": "db-2"`, in
+either order.
 
 ### CloudWatch Logs
 
