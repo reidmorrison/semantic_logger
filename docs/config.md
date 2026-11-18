@@ -930,19 +930,46 @@ def batch_all_or_nothing?
 end
 ~~~
 
-Such a `#batch` works with any formatter, including a formatter block. One that formats the whole
-batch with `format_batch(logs)` instead needs a formatter that implements `#batch(logs, logger)`.
-Return whether it has one from `#batch_formatter?`, so that `add_appender` raises an
-`ArgumentError` for any other formatter when it batches the appender, rather than every batch
-failing and nothing being written:
+Such a `#batch` works with any formatter, including a formatter block. An appender that cannot be
+batched in some configuration says why from `#batch_refusal`, and what to do instead, so that
+`add_appender` raises an `ArgumentError` with it when asked to batch the appender, with
+`batch: true` or by default, rather than add an appender that writes nothing. It returns `nil`, by
+default, when the appender can be batched. For example, a `#batch` that formats the whole batch with
+`format_batch(logs)` needs a formatter that implements `#batch(logs, logger)`, so return
+`format_batch_refusal`, which says whether the appender's formatter can format a batch:
 
 ~~~ruby
 def batch(logs)
   client.send_request(format_batch(logs))
 end
 
-def batch_formatter?
-  formats_batch?(formatter)
+def batch_refusal
+  format_batch_refusal
+end
+~~~
+
+Like `format_log` and `format_batch`, `format_batch_refusal` is a private helper of
+`SemanticLogger::Subscriber`. It returns `nil` when the formatter implements
+`#batch(logs, logger)`, and otherwise why it cannot format a batch, naming the formatter's class,
+and what to do instead. That includes an appender that is its own formatter, since it implements
+`#call`, for which the only advice is `batch: false`.
+
+The error starts with `add_appender cannot batch <class>: `, followed by the reason.
+`SemanticLogger::Appender::Http`, and the appenders derived from it, such as `:loki`, answer for
+their own `#batch`, so a subclass that replaces `#batch` is batched with any formatter, unless its
+own `#batch_refusal` says otherwise. A subclass whose `#batch` calls `super`, or that a prepended
+module wraps, still formats the whole batch with `format_batch`, yet is not refused on its own, so
+define its `#batch_refusal` too:
+
+~~~ruby
+class FilteredHttp < SemanticLogger::Appender::Http
+  def batch(logs)
+    super(logs.reject { |log| log.name == "HealthCheck" })
+  end
+
+  def batch_refusal
+    format_batch_refusal
+  end
 end
 ~~~
 
@@ -983,6 +1010,10 @@ appender = SemanticLogger.add_appender(file_name: "development.log")
 # ... later
 SemanticLogger.remove_appender(appender)
 ~~~
+
+`remove_appender` stops sending log messages to the appender, then waits, as `SemanticLogger.flush`
+does, until the messages already logged are written to the other appenders and those are flushed,
+so that none is still being written to the appender when it closes it.
 
 Other appender management methods:
 

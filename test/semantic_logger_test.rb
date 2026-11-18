@@ -96,6 +96,104 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".remove_appender" do
+      # Records what happens to it, in order, and, once released, finishes writing each log message.
+      let(:appender_class) do
+        Class.new(SemanticLogger::Subscriber) do
+          attr_reader :events, :writing, :release
+
+          def initialize(...)
+            super
+            @events  = Queue.new
+            @writing = Queue.new
+            @release = Queue.new
+          end
+
+          def log(log)
+            writing << log.message
+            release.pop(timeout: 5)
+            events << :written
+          end
+
+          def close
+            events << :closed
+            :closed
+          end
+
+          def recorded = Array.new(events.size) { events.pop }
+        end
+      end
+
+      # Only the log messages of these tests, not those of the test reporter.
+      let(:filter) { /\ARemoveAppenderTest\z/ }
+      let(:appender) { appender_class.new(filter: filter) }
+      let(:logger) { SemanticLogger["RemoveAppenderTest"] }
+
+      after do
+        appender.release << true
+        SemanticLogger.remove_appender(appender) if SemanticLogger.appenders.include?(appender)
+        SemanticLogger::Logger.clear_subscribers
+        # Writes what this test logged, so that it cannot reach the appender of the next test.
+        SemanticLogger.flush
+      end
+
+      it "waits for the log message being written to the appender before closing it" do
+        SemanticLogger.add_appender(appender: appender)
+        writer = Thread.new { logger.info("in flight") }
+
+        assert_equal "in flight", appender.writing.pop(timeout: 5)
+
+        remover = Thread.new { SemanticLogger.remove_appender(appender) }
+        # Without waiting, it would close the appender before the release below.
+        Thread.pass until %w[sleep].include?(remover.status) || !remover.alive?
+        sleep 0.1
+        appender.release << true
+
+        assert remover.join(5), "remove_appender did not return"
+        writer.join(5)
+
+        assert_equal %i[written closed], appender.recorded
+        refute_includes SemanticLogger.appenders, appender
+      end
+
+      it "returns the result of closing the appender" do
+        appender.release << true
+        SemanticLogger.add_appender(appender: appender)
+
+        assert_equal :closed, SemanticLogger.remove_appender(appender)
+      end
+
+      it "closes an appender that removes itself as it writes, without waiting for itself" do
+        remover = Class.new(appender_class) do
+          def log(log)
+            super
+            SemanticLogger.remove_appender(self)
+          end
+        end.new(filter: filter)
+        remover.release << true
+        SemanticLogger.add_appender(appender: remover)
+        logged = Thread.new do
+          logger.info("remove me")
+          SemanticLogger.flush
+        end
+
+        assert logged.join(5), "the appender waited for its own thread"
+        assert_equal %i[written closed], remover.recorded
+        refute_includes SemanticLogger.appenders, remover
+      end
+
+      it "removes an appender from an on_log subscriber" do
+        appender.release << true
+        SemanticLogger.add_appender(appender: appender)
+        SemanticLogger.on_log { |log| SemanticLogger.remove_appender(appender) if log.message == "remove it" }
+        logged = Thread.new { logger.info("remove it") }
+
+        assert logged.join(5), "remove_appender did not return"
+        assert_equal [:closed], appender.recorded
+        refute_includes SemanticLogger.appenders, appender
+      end
+    end
+
     describe ".tagged" do
       it "adds one tag" do
         events = semantic_logger_events do

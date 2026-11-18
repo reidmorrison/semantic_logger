@@ -205,11 +205,43 @@ class SubscriberTest < Minitest::Test
       end
     end
 
-    describe "#batch_formatter?" do
-      it "is true whatever the formatter, since #batch may format each log message with #format_log" do
+    describe "#batch_refusal" do
+      it "is nil whatever the formatter, since #batch may format each log message with #format_log" do
         appender.formatter = ->(log, _logger) { log.message }
 
-        assert_predicate appender, :batch_formatter?
+        assert_nil appender.batch_refusal
+      end
+    end
+
+    describe "#format_batch_refusal" do
+      it "is nil for a formatter that implements #batch" do
+        appender.formatter = :json
+
+        assert_nil appender.send(:format_batch_refusal)
+      end
+
+      it "names the class of a formatter that cannot format a batch, and says what to do instead" do
+        appender.formatter = ->(log, _logger) { log.message }
+
+        assert_equal "its formatter, Proc, cannot format a batch. Give it a formatter that implements " \
+                     "#batch(logs, logger), or add it with batch: false.",
+                     appender.send(:format_batch_refusal)
+
+        appender.formatter = :color
+
+        assert_match(/\Aits formatter, SemanticLogger::Formatters::Color, cannot format a batch\. /,
+                     appender.send(:format_batch_refusal))
+      end
+
+      it "says only to add it with batch: false when the appender is its own formatter" do
+        own = Class.new(SemanticLogger::Subscriber) do
+          def call(log, _logger) = log.message
+
+          def batch(logs) = logs
+        end.new
+
+        assert_equal "it is its own formatter, which cannot format a batch. Add it with batch: false.",
+                     own.send(:format_batch_refusal)
       end
     end
 
@@ -269,6 +301,7 @@ class SubscriberTest < Minitest::Test
         error = assert_raises(ArgumentError) { appender.send(:format_batch, [log]) }
 
         refute appender.message_error?(error)
+        assert_equal "Cannot batch #{appender.class}: #{appender.send(:format_batch_refusal)}", error.message
       end
 
       it "raises ArgumentError for an appender that is its own formatter, whose #batch is its own" do

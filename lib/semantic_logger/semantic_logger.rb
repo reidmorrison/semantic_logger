@@ -359,10 +359,18 @@ module SemanticLogger
 
   # Remove an existing appender
   # Currently only supports appender instances
+  #
+  # Before closing an appender that it removed, waits until the processor has written the log
+  # messages already queued to the other appenders, and flushed them, as .flush does, so that none is
+  # still being written to it when it is closed, such as a request on its connection that the
+  # processor's thread is sending. On the processor's own thread, such as by an appender while it
+  # writes, it closes it at once, since nothing else writes to it then.
+  #
+  # Returns the result of closing the appender.
   def self.remove_appender(appender)
     return unless appender
 
-    appenders.delete(appender)
+    Logger.processor.flush if appenders.delete(appender)
     appender.close
   end
 

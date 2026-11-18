@@ -207,6 +207,14 @@ module SemanticLogger
         @http.start
       end
 
+      # Closes the connection, if it is open, such as when the appender is removed, or add_appender
+      # fails to add it. The next request opens it again, see #process_request.
+      def close
+        @http&.finish
+      rescue IOError
+        nil
+      end
+
       # Forward log messages to HTTP Server
       def log(log)
         message = format_log(log)
@@ -234,10 +242,18 @@ module SemanticLogger
         true
       end
 
-      # The whole batch is formatted by the formatter's #batch, so it can only be batched with a
-      # formatter that implements it, such as the default one, rather than a formatter block.
-      def batch_formatter?
-        formats_batch?(formatter)
+      # The #batch above formats the whole batch with #format_batch, so it needs a formatter that can
+      # format a batch, such as the default one, rather than a formatter block. See
+      # Subscriber#batch_refusal.
+      #
+      # Answers only while that #batch is the one in use (see Subscriber#batch_defined_by?). A
+      # subclass that replaces it answers for its own, as Loki and Signalfx do, and is otherwise
+      # batched with any formatter, as before, such as one whose #batch formats each log message with
+      # #format_log. One whose #batch calls super, or that a prepended module wraps, still formats the
+      # whole batch with #format_batch, so it defines its own #batch_refusal, which returns
+      # #format_batch_refusal, as the Custom appenders section of docs/config.md shows.
+      def batch_refusal
+        format_batch_refusal if batch_defined_by?(Http)
       end
 
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
@@ -317,6 +333,10 @@ module SemanticLogger
           request.body = compress ? compress_data(body) : body
         end
         request.basic_auth(@username, @password) if @username
+        # Net::HTTP sends a request on a connection that is not started, such as one that #close
+        # closed, on a new connection that it closes after the response. Starting it keeps the
+        # connection for the requests that follow, such as once a removed appender is added again.
+        @http.start unless @http.started?
         response = @http.request(request)
         if response.is_a?(Net::HTTPSuccess)
           true

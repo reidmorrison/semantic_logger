@@ -8,7 +8,7 @@ module Appender
       let(:log_message) { "AppenderElasticsearchTest log message" }
 
       let(:appender) do
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           SemanticLogger::Appender::ElasticsearchHttp.new(
             url: "http://localhost:9200"
           )
@@ -26,7 +26,7 @@ module Appender
 
       describe "query parameters" do
         let(:appender) do
-          Net::HTTP.stub_any_instance(:start, true) do
+          stub_http_start do
             SemanticLogger::Appender::ElasticsearchHttp.new(
               url: "http://localhost:9200?refresh=true"
             )

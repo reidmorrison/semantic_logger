@@ -18,7 +18,7 @@ module Appender
       end
 
       let(:appender) do
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           SemanticLogger::Appender::Loki.new(url: "http://localhost:3100")
         end
       end
@@ -30,7 +30,7 @@ module Appender
         end
 
         it "allows a custom ingestion path" do
-          custom = Net::HTTP.stub_any_instance(:start, true) do
+          custom = stub_http_start do
             SemanticLogger::Appender::Loki.new(url: "http://localhost:3100", path: "custom/push")
           end
 
@@ -38,7 +38,7 @@ module Appender
         end
 
         it "appends the ingestion path to the path of the url" do
-          nested = Net::HTTP.stub_any_instance(:start, true) do
+          nested = stub_http_start do
             SemanticLogger::Appender::Loki.new(url: "http://localhost:3100/base/")
           end
 
@@ -46,7 +46,7 @@ module Appender
         end
 
         it "keeps a query string of the url out of the ingestion path" do
-          with_query = Net::HTTP.stub_any_instance(:start, true) do
+          with_query = stub_http_start do
             SemanticLogger::Appender::Loki.new(url: "http://localhost:3100?orgid=ABC")
           end
 
@@ -55,7 +55,7 @@ module Appender
         end
 
         it "sends the query string of the url with every request" do
-          with_query = Net::HTTP.stub_any_instance(:start, true) do
+          with_query = stub_http_start do
             SemanticLogger::Appender::Loki.new(url: "http://localhost:3100?orgid=ABC")
           end
           request = nil
@@ -74,7 +74,7 @@ module Appender
         end
 
         it "uses the Loki formatter when given a nil formatter" do
-          given_nil = Net::HTTP.stub_any_instance(:start, true) do
+          given_nil = stub_http_start do
             SemanticLogger::Appender::Loki.new(url: "http://localhost:3100", formatter: nil)
           end
 

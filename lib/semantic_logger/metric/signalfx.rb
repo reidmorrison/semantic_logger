@@ -107,6 +107,12 @@ module SemanticLogger
         post(message, full_path)
       end
 
+      # The #batch above formats the whole batch with #format_batch, so it answers as
+      # Appender::Http#batch_refusal does for its own #batch: only while it is the one in use.
+      def batch_refusal
+        format_batch_refusal if batch_defined_by?(Signalfx)
+      end
+
       # Only forward log entries that contain metrics.
       def should_log?(log)
         log.metric && meets_log_level?(log) && !filtered?(log)
