@@ -78,6 +78,215 @@ module Appender
         end
       end
 
+      describe "a bulk response with errors" do
+        let :appender do
+          client_class.stub_any_instance(:bulk, true) do
+            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
+          end
+        end
+
+        let :internal_logger do
+          SemanticLogger::Test::CaptureLogEvents.new
+        end
+
+        let :log do
+          log         = SemanticLogger::Log.new("User", :info)
+          log.message = "hello world"
+          log
+        end
+
+        let :created do
+          {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-created", "_version" => 1,
+                       "result" => "created", "_seq_no" => 0, "_primary_term" => 1, "status" => 201}}
+        end
+
+        let :updated do
+          {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-updated", "_version" => 2,
+                       "result" => "updated", "_seq_no" => 1, "_primary_term" => 1, "status" => 200}}
+        end
+
+        before do
+          appender.logger = internal_logger
+        end
+
+        after do
+          appender.close
+        end
+
+        it "reports only the entries that were not indexed" do
+          write(created, mapping_error(1), updated)
+
+          assert_equal 1, internal_logger.events.size
+          event = internal_logger.events.first
+
+          assert_equal :error, event.level
+          assert_equal "1 of 3 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
+                       "in semantic_logger-2026.11.16: \"failed to parse field [payload.amount] of type [long] " \
+                       "in document with id 'id-1'. Preview of field's value: 'abc1'\", caused by " \
+                       'illegal_argument_exception: "For input string: \"abc1\""',
+                       event.message
+        end
+
+        it "reports an entry with a status of 300 or above, even without an error" do
+          unavailable = {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-503", "status" => 503}}
+          write(created, unavailable, created)
+
+          assert_equal ["1 of 3 log entries were not indexed, and are discarded: 503 in semantic_logger-2026.11.16"],
+                       internal_logger.events.map(&:message)
+        end
+
+        it "groups the failures by status, error type, index, and innermost cause, with the reason of the first" do
+          write(*Array.new(300) { |i| mapping_error(i) }, *Array.new(50) { |i| date_error(i) },
+                *Array.new(100) { |i| rejection(i) })
+
+          assert_equal ["450 of 450 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
+                        "in semantic_logger-2026.11.16 (300 entries), e.g.: \"failed to parse field [payload.amount] " \
+                        "of type [long] in document with id 'id-0'. Preview of field's value: 'abc0'\", caused by " \
+                        'illegal_argument_exception: "For input string: \"abc0\""; ' \
+                        "400 mapper_parsing_exception in semantic_logger-2026.11.16 (50 entries), e.g.: \"failed to " \
+                        "parse field [payload.at] of type [date] in document with id 'id-0'. Preview of field's " \
+                        "value: 'yesterday'\", caused by illegal_argument_exception: \"failed to parse date field " \
+                        "[yesterday] with format [strict_date_optional_time||epoch_millis]\", caused by " \
+                        "date_time_parse_exception: \"Failed to parse with all enclosed parsers\"; " \
+                        "429 es_rejected_execution_exception in semantic_logger-2026.11.16 (100 entries), e.g.: " \
+                        "\"rejected execution of coordinating operation [coordinating_and_primary_bytes=104857000, " \
+                        "replica_bytes=0, all_bytes=104857000, coordinating_operation_bytes=1048576, " \
+                        "max_coordinating_and_primary_bytes=105906176]\""],
+                       internal_logger.events.map(&:message)
+        end
+
+        it "writes each error that caused it, with the first line of each reason" do
+          duplicate = failed_item(type: "mapper_parsing_exception", reason: "failed to parse",
+                                  caused_by: {"type"   => "json_parse_exception",
+                                              "reason" => "Duplicate field 'name'\n at [Source: (byte[])" \
+                                                          "\"{\"name\":\"a\",\"name\":\"b\"}\"; line: 1, column: 22]"})
+          write(duplicate)
+
+          assert_equal ["1 of 1 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
+                        "in semantic_logger-2026.11.16: \"failed to parse\", caused by json_parse_exception: " \
+                        "\"Duplicate field 'name'\""],
+                       internal_logger.events.map(&:message)
+        end
+
+        it "writes a cause without a reason as its type alone" do
+          write(failed_item(type: "mapper_parsing_exception", reason: "failed to parse",
+                            caused_by: {"type" => "null_pointer_exception", "reason" => nil}))
+
+          assert_equal ["1 of 1 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
+                        "in semantic_logger-2026.11.16: \"failed to parse\", caused by null_pointer_exception"],
+                       internal_logger.events.map(&:message)
+        end
+
+        it "writes an error that is a String, as from Elasticsearch 1.x, as its reason" do
+          legacy = {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-1", "status" => 400,
+                                "error"  => "MapperParsingException[failed to parse [amount]]; nested: " \
+                                            'NumberFormatException[For input string: "abc"]; '}}
+          write(created, legacy, created)
+
+          assert_equal ["1 of 3 log entries were not indexed, and are discarded: 400 in semantic_logger-2026.11.16: " \
+                        '"MapperParsingException[failed to parse [amount]]; nested: NumberFormatException[For ' \
+                        'input string: \"abc\"]; "'],
+                       internal_logger.events.map(&:message)
+        end
+
+        it "cuts each reason to 500 characters, since it can repeat a whole value" do
+          value = "9" * 100_000
+          write(failed_item(type:      "mapper_parsing_exception",
+                            reason:    "failed to parse field [payload.amount] of type [long] in document with id " \
+                                       "'id-1'. Preview of field's value: '#{value}'",
+                            caused_by: {"type"   => "illegal_argument_exception",
+                                        "reason" => "Value [#{value}] is out of range for a long"}))
+
+          message = internal_logger.events.first.message
+
+          assert_operator message.size, :<, 1_200
+          assert message.end_with?(%(caused by illegal_argument_exception: "Value [#{'9' * 493}"...)), message
+        end
+
+        it "escapes the control characters of a reason, so that a value cannot forge a line of the log" do
+          forged = failed_item(type:   "mapper_parsing_exception",
+                               reason: "failed to parse field [payload.count] of type [long] in document with id " \
+                                       "'id-1'. Preview of field's value: " \
+                                       "'abc\r\e[2K2026-11-16 E [1:main] Forged -- line\n'")
+          write(forged)
+
+          message = internal_logger.events.first.message
+
+          refute_match(/[\r\n\e]/, message)
+          assert message.end_with?(%q(Preview of field's value: 'abc\r\e[2K2026-11-16 E [1:main] Forged -- line")),
+                 message
+        end
+
+        it "lists the first 10 failures, and counts the entries of the others" do
+          write(*Array.new(10) { |i| failed_item(type: "exception_#{i}", reason: "reason #{i}") },
+                *Array.new(100) { |i| rejection(i) })
+          write(*Array.new(13) { |i| failed_item(type: "exception_#{i}", reason: "reason #{i}") })
+
+          first, second = internal_logger.events.map(&:message)
+
+          assert_includes first, "110 of 110 log entries were not indexed"
+          refute_includes first, "es_rejected_execution_exception"
+          last_listed = '400 exception_9 in semantic_logger-2026.11.16: "reason 9"'
+
+          assert_equal "#{last_listed}; and 1 other failure (100 entries)", first[first.index(last_listed)..]
+          assert_equal "#{last_listed}; and 3 other failures (3 entries)", second[second.index(last_listed)..]
+        end
+
+        it "reports nothing when every entry was indexed" do
+          write(created, updated, created, errors: false)
+
+          assert_empty internal_logger.events
+        end
+
+        # Sends a batch of one entry for each item, to a server that responds with these items.
+        def write(*items, errors: true)
+          response = {"took" => 3, "errors" => errors, "items" => items}
+          appender.client.stub(:bulk, response) { appender.batch(Array.new(items.size, log)) }
+        end
+
+        # The item of an entry that failed with this error.
+        def failed_item(type:, reason:, caused_by: nil)
+          error              = {"type" => type, "reason" => reason}
+          error["caused_by"] = caused_by if caused_by
+          {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-#{type}", "status" => 400,
+                       "error" => error}}
+        end
+
+        # The item of an entry whose number Elasticsearch 7 could not map: its reason names the
+        # document's id, and the start of the value.
+        def mapping_error(number)
+          failed_item(type:      "mapper_parsing_exception",
+                      reason:    "failed to parse field [payload.amount] of type [long] in document with id " \
+                                 "'id-#{number}'. Preview of field's value: 'abc#{number}'",
+                      caused_by: {"type"   => "illegal_argument_exception",
+                                  "reason" => %(For input string: "abc#{number}")})
+        end
+
+        # The item of an entry whose date Elasticsearch 7 could not map: the error that caused it names
+        # the expected format, and the innermost error does not.
+        def date_error(number)
+          failed_item(type:      "mapper_parsing_exception",
+                      reason:    "failed to parse field [payload.at] of type [date] in document with id " \
+                                 "'id-#{number}'. Preview of field's value: 'yesterday'",
+                      caused_by: {"type"      => "illegal_argument_exception",
+                                  "reason"    => "failed to parse date field [yesterday] with format " \
+                                                 "[strict_date_optional_time||epoch_millis]",
+                                  "caused_by" => {"type"   => "date_time_parse_exception",
+                                                  "reason" => "Failed to parse with all enclosed parsers"}})
+        end
+
+        # The item of an entry that a node rejected, while it was indexing too much already.
+        def rejection(number)
+          bytes = 104_857_000 + number
+          {"index" => {"_index" => "semantic_logger-2026.11.16", "_id" => "id-rejected-#{number}", "status" => 429,
+                       "error" => {"type"   => "es_rejected_execution_exception",
+                                   "reason" => "rejected execution of coordinating operation " \
+                                               "[coordinating_and_primary_bytes=#{bytes}, replica_bytes=0, " \
+                                               "all_bytes=#{bytes}, coordinating_operation_bytes=1048576, " \
+                                               "max_coordinating_and_primary_bytes=105906176]"}}}
+        end
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["ELASTICSEARCH"]
@@ -270,6 +479,22 @@ module Appender
 
         it "uses @timestamp as time_key" do
           assert_equal "@timestamp", appender.formatter.time_key
+        end
+
+        it "reports only the entries that were not indexed" do
+          internal        = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal
+          backing_index   = ".ds-semantic_logger-2026.11.16-000001"
+          created         = {"create" => {"_index" => backing_index, "_id" => "id-created", "status" => 201}}
+          rejected        = {"create" => {"_index" => backing_index, "_id" => "id-rejected", "status" => 400,
+                                          "error" => {"type"   => "document_parsing_exception",
+                                                      "reason" => "[1:15] failed to parse field [payload.amount]"}}}
+          response        = {"took" => 3, "errors" => true, "items" => [created, rejected]}
+          appender.client.stub(:bulk, response) { appender.batch([log, log]) }
+
+          assert_equal ["1 of 2 log entries were not indexed, and are discarded: 400 document_parsing_exception " \
+                        "in #{backing_index}: \"[1:15] failed to parse field [payload.amount]\""],
+                       internal.events.map(&:message)
         end
 
         describe "synchronous" do

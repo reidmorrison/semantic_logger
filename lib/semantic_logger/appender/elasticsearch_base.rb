@@ -12,6 +12,13 @@ module SemanticLogger
     # `SemanticLogger.add_appender(appender: :elasticsearch, ...)` or
     # `appender: :opensearch`, never by referencing this class directly.
     class ElasticsearchBase < SemanticLogger::Subscriber
+      # The most groups of failures that one report of a bulk request lists (see #report_failures).
+      MAX_REPORTED_FAILURES = 10
+      # The most characters of each reason that the report writes: a reason can repeat a whole value,
+      # as the "For input string" of a number that could not be parsed does.
+      MAX_REPORTED_REASON = 500
+      private_constant :MAX_REPORTED_FAILURES, :MAX_REPORTED_REASON
+
       attr_accessor :url, :index, :date_pattern, :client, :flush_interval, :timeout_interval, :batch_size,
                     :client_args
 
@@ -176,7 +183,7 @@ module SemanticLogger
         @client = Utils.without_url_in_errors(option: ":url or :hosts") { client_class.new(@client_args) }
       end
 
-      # Log to the index for today
+      # Log to the index for today, or to the data stream.
       def log(log)
         bulk_write([bulk_index(log), bulk_line(log)])
         true
@@ -231,17 +238,106 @@ module SemanticLogger
             @client.bulk(body: body)
           end
 
-        return unless bulk_result["errors"]
+        report_failures(bulk_result["items"]) if bulk_result["errors"]
+      end
 
-        failed = bulk_result["items"].reject { |x| x["status"] == 201 }
-        logger.error("#{self.class.name}: Write failed. Messages discarded. : #{failed}")
+      # Reports to the internal logger the entries of a bulk request that were not indexed, which
+      # are discarded, since sending the request again would index the others twice. The response
+      # has an item for each entry, under the name of its action, such as
+      # `{"index" => {"_index" => ..., "status" => 400, "error" => {"type" => ..., "reason" => ...}}}`,
+      # without the document. An entry failed when its result has an error, or a status of 300 or
+      # above: an `index` action succeeds with 201 (created) or 200 (updated), and a `create` action
+      # with 201. The failures are grouped by their kind (see #bulk_failure_kind), since the reasons
+      # for one kind differ by each entry's id and value, so that a batch whose entries all fail the
+      # same way is reported in a short line. Only the first MAX_REPORTED_FAILURES groups are listed.
+      def report_failures(items)
+        failed = items.map { |item| item.values.first }
+        failed.select! { |result| result.key?("error") || result["status"].to_i >= 300 }
+        return if failed.empty?
+
+        groups = failed.group_by { |result| bulk_failure_kind(result) }
+        listed = groups.first(MAX_REPORTED_FAILURES).map do |kind, results|
+          bulk_failure(kind, results.first["error"], results.size)
+        end
+        others = groups.values.drop(MAX_REPORTED_FAILURES)
+        unless others.empty?
+          listed << "and #{others.size} other failure#{'s' unless others.size == 1} " \
+                    "(#{bulk_entries(others.sum(&:size))})"
+        end
+
+        logger.error(
+          "#{failed.size} of #{items.size} log entries were not indexed, and are discarded: #{listed.join('; ')}"
+        )
+      end
+
+      # Returns [Array] the kind of failure of an entry, from the result of its action: its status,
+      # error type, and index, and the type of the innermost error that caused it, so that a number
+      # and a date that could not be parsed, both a mapping error, are told apart. An error that is a
+      # String, as from Elasticsearch 1.x, has no type.
+      def bulk_failure_kind(result)
+        error = result["error"]
+        return [result["status"], nil, result["_index"], nil] unless error.is_a?(Hash)
+
+        [result["status"], error["type"], result["_index"], bulk_causes(error).last&.fetch("type", nil)]
+      end
+
+      # Returns [String] a kind of failure of the given number of entries: its status, error type,
+      # and index, then the error of the first, as an example when there are others.
+      def bulk_failure(kind, error, count)
+        status, type, index = kind
+        failure = [status, type, "in #{index}"].compact.join(" ")
+        failure += " (#{bulk_entries(count)})" if count > 1
+        reason = bulk_error_reason(error)
+        return failure unless reason
+
+        "#{failure}#{', e.g.' if count > 1}: #{reason}"
+      end
+
+      # Returns [String] the reason for an error, followed by each error that caused it, such as the
+      # parser's error under a mapping error's "failed to parse", or nil when it has none. An error
+      # that is a String is its reason. A cause without a reason is written as its type alone.
+      def bulk_error_reason(error)
+        return bulk_reason_text(error) unless error.is_a?(Hash)
+
+        reasons = [bulk_reason_text(error["reason"])]
+        bulk_causes(error).each do |cause|
+          reason = bulk_reason_text(cause["reason"])
+          reasons << (reason ? "caused by #{cause['type']}: #{reason}" : "caused by #{cause['type']}")
+        end
+        reasons.compact!
+        reasons.join(", ") unless reasons.empty?
+      end
+
+      # Returns [Array<Hash>] the errors that caused this one, from the first to the innermost.
+      def bulk_causes(error)
+        causes = []
+        cause  = error
+        causes << cause while (cause = cause["caused_by"]).is_a?(Hash)
+        causes
+      end
+
+      # Returns [String] a reason as the report writes it, or nil when there is none: its first line
+      # only, since the JSON parser adds the error's location on the next, with part of the document;
+      # cut to MAX_REPORTED_REASON characters, followed by "..."; and inspected, since it can repeat a
+      # value of the entry, so that a control character in that value, such as a line break, cannot
+      # forge a line of the log.
+      def bulk_reason_text(reason)
+        text = reason.to_s.partition("\n").first
+        return if text.empty?
+        return text.inspect if text.size <= MAX_REPORTED_REASON
+
+        "#{text[0, MAX_REPORTED_REASON].inspect}..."
+      end
+
+      # Returns [String] the number of entries, such as "1 entry" or "3 entries".
+      def bulk_entries(count)
+        count == 1 ? "1 entry" : "#{count} entries"
       end
 
       def bulk_index(log)
-        expanded_index_name = log.time.strftime("#{index}-#{date_pattern}")
         return {"create" => {}} if @data_stream
 
-        {"index" => {"_index" => expanded_index_name}}
+        {"index" => {"_index" => log.time.strftime("#{index}-#{date_pattern}")}}
       end
 
       def default_formatter

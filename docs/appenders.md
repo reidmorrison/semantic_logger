@@ -630,13 +630,27 @@ Note: `:trace` level messages are mapped to `:debug`.
 ### Elasticsearch
 
 Forward all log entries to Elasticsearch (requires the `elasticsearch` gem). By default entries are
-written to a daily index named `semantic_logger-YYYY.MM.DD`; override it with `index:`:
+written to a daily index named `semantic_logger-YYYY.MM.DD`. `index:` sets the name before the date,
+and `date_pattern:` the date, such as `"%Y.%m"` for a monthly index:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :elasticsearch,
+  url:      "http://localhost:9200",
+  index:    "my-index"
+)
+~~~
+
+With `data_stream: true`, entries are written to the data stream that `index:` names, without a
+date, and the default formatter writes the time under `@timestamp`, which a data stream requires.
+Elasticsearch creates the data stream with the first entry when an index template that enables data
+streams matches its name; otherwise it creates an ordinary index of that name:
 
 ~~~ruby
 SemanticLogger.add_appender(
   appender:    :elasticsearch,
   url:         "http://localhost:9200",
-  index:       "my-index",
+  index:       "my-logs",
   data_stream: true
 )
 ~~~
