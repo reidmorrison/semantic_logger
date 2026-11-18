@@ -96,14 +96,14 @@ module SemanticLogger
 
     # Flush every appender. An appender that fails is reported, and the others are still flushed.
     #
-    # While the process exits, an appender that is skipped (see #process_exiting=) is not flushed,
-    # since its destination failed: it is reported instead, with the number of log messages it has
-    # not been given since it was last reported.
+    # While the process exits, an appender that is skipped (see #process_exiting=) is first reported,
+    # with the number of log messages it has not been given since it was last reported, then flushed
+    # too, so that it delivers the messages it already accepted, such as those that the producer of a
+    # :kafka appender holds.
     def flush
       skipped = skipped_appenders
       each do |appender|
-        next report_skipped(appender, skipped[appender]) if skipped.key?(appender)
-
+        report_skipped(appender, skipped[appender]) if skipped.key?(appender)
         logger.trace "Flushing appender: #{appender.name}"
         appender.flush
       rescue Exception => e
@@ -157,10 +157,13 @@ module SemanticLogger
     # server that does not answer. So while the process exits, once the destination of such an
     # appender fails, other than for the content of a message (see Subscriber#message_error?), it is
     # skipped until the process no longer exits: #log gives it no more messages, counting them, and
-    # #flush reports them instead of flushing it. The other appenders are still given every message.
+    # #flush reports them, then still flushes it, so that it delivers what it already accepted. The
+    # other appenders are still given every message.
+    #
+    # It applies only in the process that exits, not in a child process forked meanwhile.
     def process_exiting=(exiting)
       @skipped = {}.compare_by_identity if exiting
-      @exiting = exiting
+      @exiting = exiting && ::Process.pid
       each do |appender|
         appender.process_exiting = exiting if appender.respond_to?(:process_exiting=)
       rescue Exception => e
@@ -177,16 +180,20 @@ module SemanticLogger
 
     private
 
+    # Whether this process is exiting (see #process_exiting=), rather than a child process forked while
+    # it was.
+    def exiting? = @exiting && @exiting == ::Process.pid
+
     # Returns [Hash] the appenders skipped while the process exits, by appender, or none while it does
     # not. The process can stop exiting while the thread that writes to every appender fails to write
     # to one, so one skipped then is left out until the process exits again, which starts afresh.
-    def skipped_appenders = @exiting ? @skipped : NONE_SKIPPED
+    def skipped_appenders = exiting? ? @skipped : NONE_SKIPPED
 
     # While the process exits, skip an appender without a queue of its own once writing to it failed
     # because of its destination (see #process_exiting=). An appender with a queue of its own is told
     # that the process is exiting, and handles it itself.
     def skip_while_exiting(appender, exception)
-      return unless @exiting
+      return unless exiting?
       return if appender.respond_to?(:process_exiting=)
       return if appender.respond_to?(:message_error?) && appender.message_error?(exception)
 

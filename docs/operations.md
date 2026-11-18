@@ -366,13 +366,16 @@ appender writes each message to it in turn, and carries on with the next one whe
 backing off. So during an outage, the flush at exit would wait while each message queued ahead of
 it failed in turn, up to the `read_timeout` or `open_timeout` of an HTTP based appender whose server
 does not answer. While the process exits, once a write to such an appender fails because of its
-destination, rather than the content of the message, it is neither flushed nor given any more
-messages until the process has exited. The messages it was not given are discarded, and the flush at exit reports
-their number to the internal logger, with the error, as
+destination, rather than the content of the message, it is given no more messages for the rest of
+the flush at exit. The messages it was not given are discarded, and the flush at exit reports their
+number to the internal logger, with the error, as
 `Discarded 29 log message(s) during the flush at exit, after the destination failed, for appender: SemanticLogger::Appender::Http`.
-The other appenders are still given every message. Such an appender has no count of its own in
-`SemanticLogger.stats`, so that report is the only record of them. While the process runs, it is
-given every message, as before.
+The flush at exit then still flushes it, so that it delivers the messages it had already accepted,
+such as those that the producer of a `:kafka` appender holds; for `:http`, `:tcp`, or `:udp` that
+flush does nothing. The other appenders are still given every message. Such an appender has no count
+of its own in `SemanticLogger.stats`, so that report is the only record of them. While the process
+runs, it is given every message, as before, and so is it in a child process forked during the flush
+at exit.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a

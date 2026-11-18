@@ -201,9 +201,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   appender does not back off when it fails, so the flush at exit waited while each queued entry
   failed in turn, up to the `read_timeout` or `open_timeout` of an HTTP based appender each. Now,
   once its write fails because of its destination while the process exits, rather than the content
-  of the entry, it is neither flushed nor given any more entries until the process has exited, and
-  the number it was not given is reported to the internal logger at the flush. The other appenders
-  still get every entry. See
+  of the entry, it is given no more entries for the rest of the flush at exit, and the number it was
+  not given is reported to the internal logger at the flush, which then still flushes it, so that it
+  delivers the entries it already accepted, such as those that the producer of a `:kafka` appender
+  holds. The other appenders still get every entry. See
   [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 

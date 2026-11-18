@@ -51,6 +51,25 @@ class AppendersTest < Minitest::Test
     end
   end
 
+  # Accepts up to 2 messages, which only its flush delivers, then fails each write, as a :kafka
+  # appender does once its producer's buffer is full.
+  class HoldingAppender < SemanticLogger::Subscriber
+    def delivered = @delivered ||= []
+
+    def held = @held ||= []
+
+    def log(log)
+      raise IOError, "buffer full" if held.size >= 2
+
+      held << log.message
+    end
+
+    def flush
+      delivered.concat(held)
+      held.clear
+    end
+  end
+
   describe SemanticLogger::Appenders do
     let(:capture_logger) { SemanticLogger::Test::CaptureLogEvents.new }
     let(:appenders) { SemanticLogger::Appenders.new(capture_logger) }
@@ -343,12 +362,14 @@ class AppendersTest < Minitest::Test
           assert_equal 5, recording.events.size
         end
 
-        it "is reported at the flush, with the messages it was not given, rather than flushed" do
+        it "is reported at the flush, with the messages it was not given, then flushed" do
+          reports = -> { discarded_reports.size }
+          down.define_singleton_method(:flush) { flushes << reports.call }
           appenders.process_exiting = true
           log_entries(5)
           appenders.flush
 
-          assert_empty down.flushes
+          assert_equal [1], down.flushes, "it should be flushed once, after the report"
           report = discarded_reports.first
 
           assert_equal "Discarded 4 log message(s) during the flush at exit, after the destination failed, " \
@@ -389,6 +410,44 @@ class AppendersTest < Minitest::Test
           log_entries(2)
 
           assert_equal ["entry 0", "entry 0"], down.attempts
+        end
+
+        it "delivers at the flush the messages it accepted before it failed" do
+          holding = HoldingAppender.new
+          appenders << holding
+          appenders.process_exiting = true
+          log_entries(5)
+
+          assert_empty holding.delivered
+          appenders.flush
+
+          assert_equal ["entry 0", "entry 1"], holding.delivered
+          assert_includes discarded_reports.map(&:message),
+                          "Discarded 2 log message(s) during the flush at exit, after the destination failed, " \
+                          "for appender: #{holding.name}"
+        end
+
+        it "is given every message in a child process forked while the process exits" do
+          skip "fork is not supported" unless Process.respond_to?(:fork)
+
+          appenders.process_exiting = true
+          reader, writer = IO.pipe
+          pid            = fork do
+            reader.close
+            log_entries(3)
+            appenders.flush
+            writer.write("#{down.attempts.join(',')};#{discarded_reports.size}")
+          ensure
+            writer.close
+            exit!(0)
+          end
+          writer.close
+          Process.wait(pid)
+          attempts, reports = reader.read.split(";")
+          reader.close
+
+          assert_equal "entry 0,entry 1,entry 2", attempts
+          assert_equal "0", reports
         end
 
         it "is given every message while the process is not exiting" do

@@ -557,9 +557,10 @@ agent.
 * During an outage of the destination of an appender added without `async: true`, and not in
   batches, such as a plain `:http`, `:splunk_http`, `:tcp`, or `:udp`, the process now exits within
   seconds too. Once a write to such an appender fails because of its destination while the process
-  exits, it is neither flushed nor given any more of the entries queued ahead of the flush at exit,
-  or logged meanwhile, and the number it was not given is reported to the internal logger, as
-  `Discarded ... log message(s) during the flush at exit, after the destination failed`. Before, the
+  exits, it is given no more of the entries queued ahead of the flush at exit, or logged meanwhile,
+  and the number it was not given is reported to the internal logger, as
+  `Discarded ... log message(s) during the flush at exit, after the destination failed`. The flush
+  at exit still flushes it, so that it delivers the entries it already accepted. Before, the
   flush at exit waited while each one failed in turn, up to the `read_timeout` or `open_timeout` of
   an HTTP based appender each. The other appenders still get every entry, and while the process
   runs, such an appender is still given every entry. See
