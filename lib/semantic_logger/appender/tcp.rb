@@ -47,98 +47,94 @@ module SemanticLogger
       # Create TCP log appender.
       #
       # Net::TCPClient Parameters:
+      #   The appender passes these to Net::TCPClient.new (net_tcp_client v2.2), which raises
+      #   ArgumentError for any other keyword.
+      #
       #   :server [String]
-      #     URL of the server to connect to with port number
-      #     'localhost:2000'
-      #     '192.168.1.10:80'
+      #     The server to connect to, as "host:port", such as 'localhost:2000' or '192.168.1.10:80'.
+      #     Net::TCPClient connects over IPv4 only, so the host must be an IPv4 address or a host name
+      #     that has one.
       #
       #   :servers [Array of String]
-      #     Array of URL's of servers to connect to with port numbers
-      #     ['server1:2000', 'server2:2000']
+      #     The servers to connect to, each as "host:port", such as ['server1:2000', 'server2:2000'].
       #
-      #     The second server will only be attempted once the first server
-      #     cannot be connected to or has timed out on connect
-      #     A read failure or timeout will not result in switching to the second
-      #     server, only a connection failure or during an automatic reconnect
+      #     Each connection tries the servers in the order of :policy, moving on to the next only
+      #     when one cannot be connected to or times out on connect. A host name with several IPv4
+      #     addresses is tried at each of them. A failure while writing does not move on to the next
+      #     server: the appender reconnects, trying the servers again in the order of :policy.
       #
       #   :connect_timeout [Float]
-      #     Time in seconds to timeout when trying to connect to the server
-      #     A value of -1 will cause the connect wait time to be infinite
-      #     Default: Half of the :read_timeout ( 30 seconds )
-      #
-      #   :read_timeout [Float]
-      #     Time in seconds to timeout on read
-      #     Can be overridden by supplying a timeout in the read call
-      #     Default: 60
+      #     Seconds to wait for a connection to a server, and for the SSL handshake unless
+      #     :ssl gives a :handshake_timeout. A value of -1 waits forever.
+      #     Default: 10
       #
       #   :write_timeout [Float]
-      #     Time in seconds to timeout on write
-      #     Can be overridden by supplying a timeout in the write call
+      #     Seconds to wait while writing a log message. A value of -1 waits forever.
       #     Default: 60
       #
-      #   :log_level [Symbol]
-      #     Optional: Set the logging level for the TCPClient
-      #     Any valid SemanticLogger log level:
-      #       :trace, :debug, :info, :warn, :error, :fatal
-      #     Default: SemanticLogger.default_level
+      #   :read_timeout [Float]
+      #     Seconds to wait on a read. The appender only writes, so this applies only to the reads
+      #     of an :on_connect Proc. A value of -1 waits forever.
+      #     Default: 60
       #
       #   :buffered [Boolean]
-      #     Whether to use Nagle's Buffering algorithm (http://en.wikipedia.org/wiki/Nagle's_algorithm)
-      #     Recommend disabling for RPC style invocations where we don't want to wait for an
-      #     ACK from the server before sending the last partial segment
-      #     Buffering is recommended in a browser or file transfer style environment
-      #     where multiple sends are expected during a single response
+      #     Whether to use Nagle's algorithm (https://en.wikipedia.org/wiki/Nagle%27s_algorithm),
+      #     which holds back small writes to send them together. false sends each log message at once.
+      #     Default: true
+      #
+      #   :keepalive [Boolean]
+      #     Whether the operating system checks the connection while it is idle, so that a lost
+      #     connection fails on the next write instead of after a long wait.
       #     Default: true
       #
       #   :connect_retry_count [Integer]
-      #     Number of times to retry connecting when a connection fails
+      #     Number of times to try connecting again when no server can be connected to.
       #     Default: 10
       #
       #   :connect_retry_interval [Float]
-      #     Number of seconds between connection retry attempts after the first failed attempt
+      #     Seconds to wait before each of those retries.
       #     Default: 0.5
       #
       #   :retry_count [Integer]
-      #     Number of times to retry when calling #retry_on_connection_failure
-      #     This is independent of :connect_retry_count which still applies with
-      #     connection failures. This retry controls upto how many times to retry the
-      #     supplied block should a connection failure occurr during the block
+      #     Number of times to reconnect and write a log message again when the connection fails
+      #     while writing it. Each reconnect also retries as set by :connect_retry_count.
       #     Default: 3
       #
       #   :on_connect [Proc]
-      #     Directly after a connection is established and before it is made available
-      #     for use this Block is invoked.
+      #     Called with the Net::TCPClient after each connection is made, including reconnects,
+      #     before any log message is written to it.
       #     Typical Use Cases:
-      #     - Initialize per connection session sequence numbers
       #     - Pass any authentication information to the server
       #     - Perform a handshake with the server
       #
-      #   :policy [Symbol|Proc]
-      #     Specify the policy to use when connecting to servers.
+      #   :policy [:ordered | :random | Proc]
+      #     The order in which to try the servers when connecting.
       #       :ordered
-      #         Select a server in the order supplied in the array, with the first
-      #         having the highest priority. The second server will only be connected
-      #         to if the first server is unreachable
+      #         In the order supplied, so the second server is connected to only when the first
+      #         cannot be.
       #       :random
-      #         Randomly select a server from the list every time a connection
-      #         is established, including during automatic connection recovery.
-      #       :ping_time
-      #         FUTURE - Not implemented yet - Pull request anyone?
-      #         The server with the lowest ping time will be tried first
+      #         In a random order, chosen again for every connection, including reconnects.
       #       Proc:
-      #         When a Proc is supplied, it will be called passing in the list
-      #         of servers. The Proc must return one server name
-      #           Example:
-      #             :policy => Proc.new do |servers|
-      #               servers.last
-      #             end
-      #       Default: :ordered
+      #         Called before each attempt with the Array of Net::TCPClient::Address to try, one for
+      #         each IPv4 address of each server, and the number of the attempt, starting at 1.
+      #         It returns the address to try, or nil to stop: one that never returns nil tries
+      #         forever when no server can be reached.
+      #           Example, the servers in reverse order:
+      #             policy: ->(addresses, count) { addresses.reverse[count - 1] }
+      #     Default: :ordered
       #
-      #   :close_on_error [True|False]
-      #     To prevent the connection from going into an inconsistent state
-      #     automatically close the connection if an error occurs
-      #     This includes a Read Timeout
+      #   :close_on_error [Boolean]
+      #     Whether to close the connection when a write fails or times out, so that the next
+      #     write reconnects instead of using a connection in an unknown state.
       #     Default: true
+      #
+      #   :ssl [true | Hash]
+      #     true: Connect with SSL (TLS), verifying the server's certificate and host name against
+      #       the system's trusted certificates.
+      #     Hash: Connect with SSL, using these OpenSSL::SSL::SSLContext parameters, such as
+      #       ca_file, cert, key, min_version, or verify_mode, and
+      #       handshake_timeout: the seconds to wait for the SSL handshake. Default: :connect_timeout
+      #     Default: nil (no SSL)
       #
       # Appender Parameters:
       #   separator: [String]
@@ -160,16 +156,21 @@ module SemanticLogger
       #     Default: none (:trace), so it writes every entry that a logger emits; each logger
       #     filters by its own level.
       #
-      #   formatter: [Object|Proc]
+      #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call, or a Proc to be used to format
       #     the output from this appender
-      #     Default: Use the built-in formatter (See: #call)
+      #     Default: :json
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
+      #
+      #   metrics: [Boolean]
+      #     Also send metric-only entries: a metric without a message or an exception.
+      #     Default: false
+      #
       # Example:
       #   SemanticLogger.add_appender(
       #     appender: :tcp,
