@@ -963,6 +963,17 @@ def batch_all_or_nothing?
 end
 ~~~
 
+A message error that the destination raises for any batch, whatever messages it holds, such as a
+request refused for its credentials or its url, would be raised again for every part. Return `false`
+from `#split_batch?(exception)` for it, so that the whole batch is discarded at once, rather than
+every message sent again on its own to be refused in turn. By default it returns `true`:
+
+~~~ruby
+def split_batch?(exception)
+  !exception.is_a?(MyClient::Unauthorized)
+end
+~~~
+
 `#batch_all_or_nothing?` says nothing about an error from the destination: a batch formatted before
 any of it is sent can still be stored by a destination whose answer then times out. Answer that from
 `#wrote_nothing?`, for `#log` and `#batch` alike.

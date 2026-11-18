@@ -1832,6 +1832,17 @@ def batch_all_or_nothing?
 end
 ~~~
 
+A message error that the destination raises for any batch, whatever messages it holds, such as a
+request refused for its credentials or its url, would be raised again for every part. Return `false`
+from `#split_batch?(exception)` for it, so that the whole batch is discarded at once, rather than
+every message sent again on its own to be refused in turn. By default it returns `true`:
+
+~~~ruby
+def split_batch?(exception)
+  !exception.is_a?(MyClient::Unauthorized)
+end
+~~~
+
 `#batch_all_or_nothing?` says nothing about an error from the destination: a batch formatted before
 any of it is sent can still be stored by a destination whose answer then times out. Answer that from
 `#wrote_nothing?`, for `#log` and `#batch` alike.
@@ -2483,8 +2494,11 @@ appender), handle any other answer by its status:
 
 * A 4xx other than 408 and 429, such as `400 Bad Request` or `401 Unauthorized`, rejects the request
   itself, so sending it again cannot succeed. With `async: true` or `batch: true`, its entries are
-  discarded straight away. A batch, which is sent in one request, is first split up and sent again in
-  parts, so that only the entries in the parts the server rejects are discarded.
+  discarded straight away. When the server rejects a batch, which is sent in one request, for the
+  entries it holds, with `400 Bad Request`, `413 Content Too Large`, or `422 Unprocessable Content`,
+  the batch is first split up and sent again in parts, so that only the entries in the parts the
+  server rejects are discarded. Any other such 4xx, such as `401 Unauthorized`, `403 Forbidden`, or
+  `404 Not Found`, rejects the request whatever it holds, so the whole batch is discarded at once.
 * `408 Request Timeout`, `429 Too Many Requests`, or `503 Service Unavailable` asks to send the
   request again later, and the server did not store the entries. With `async: true` or
   `batch: true`, the worker thread [backs off](operations.html#retry-a-failing-appender), then sends
@@ -2535,8 +2549,7 @@ SemanticLogger.add_appender(
 ~~~
 
 When the server rejects every request, for example because the password or the path is wrong, each
-batch is split until every entry has been sent on its own, which takes about two requests for each
-entry in the batch.
+batch is discarded with its first request, and reported once.
 
 ### TCP Appender (+SSL)
 
@@ -6386,9 +6399,10 @@ agent.
   queue while the worker thread backs off, rather than being sent, and discarded, one per back-off,
   so with a capped queue (the default) and without `non_blocking`, logging waits once the queue is
   full until the server is back or the thread gives up. Pass `async_max_retries: -1` to keep trying
-  through a long outage. On any other 4xx, a batch is now
+  through a long outage. On a 400, 413, or 422, a batch is now
   split up and sent again in parts, to find the entries the server rejects, so a server that kept
-  some entries of a request it rejected can store them twice. See
+  some entries of a request it rejected can store them twice. On any other 4xx, such as 401 or 404,
+  which the server answers whatever the request holds, the whole batch is discarded at once. See
   [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
 
   While the worker thread backs off, the entries logged meanwhile wait on the appender's queue, as

@@ -158,6 +158,19 @@ module SemanticLogger
       false
     end
 
+    # Whether a batch that #batch failed with the supplied exception, a message error (see
+    # #message_error?), is split up and each part written again, to find the messages at fault.
+    # Asked only when #batch_all_or_nothing? is true.
+    #
+    # True, since an error caused by the content of a message is caused by some of the messages in
+    # the batch. Return false for a message error that the destination raises for any batch,
+    # whatever messages it holds, such as a request refused for its credentials or its url: the
+    # whole batch is then discarded at once, rather than every message sent again on its own to be
+    # refused in turn.
+    def split_batch?(_exception)
+      true
+    end
+
     # Whether #log or #batch, when it raised the supplied exception, wrote none of the log messages
     # it was given, so that writing them again cannot write any of them twice, and writing them
     # again later may succeed. Asked only about an exception that is not a message error (see

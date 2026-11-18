@@ -168,6 +168,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   tried. Before, a flush with 5 entries queued during an outage waited 1 + 2 + 3 + 4 + 5 seconds. See
   [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
+  metric subscriber, with `batch: true`, split up a batch that the server rejects, to find the entries
+  at fault, only when it rejects it for the entries it holds: `400 Bad Request`,
+  `413 Content Too Large`, or `422 Unprocessable Content`. Any other 4xx but 408 and 429, such as
+  `401 Unauthorized`, `403 Forbidden`, or `404 Not Found`, which the server answers whatever the
+  request holds, discards the whole batch at once, with one report. Before, a batch of n entries
+  rejected for a wrong password or url took about 2n requests, each rejected in turn. A custom
+  appender can say which message errors any batch would get from the new `#split_batch?(exception)`,
+  which returns `true` by default. See
+  [When the server does not accept a request](https://logger.reidmorrison.com/appenders.html#when-the-server-does-not-accept-a-request).
 
 ### Deprecated
 

@@ -490,8 +490,11 @@ appender), handle any other answer by its status:
 
 * A 4xx other than 408 and 429, such as `400 Bad Request` or `401 Unauthorized`, rejects the request
   itself, so sending it again cannot succeed. With `async: true` or `batch: true`, its entries are
-  discarded straight away. A batch, which is sent in one request, is first split up and sent again in
-  parts, so that only the entries in the parts the server rejects are discarded.
+  discarded straight away. When the server rejects a batch, which is sent in one request, for the
+  entries it holds, with `400 Bad Request`, `413 Content Too Large`, or `422 Unprocessable Content`,
+  the batch is first split up and sent again in parts, so that only the entries in the parts the
+  server rejects are discarded. Any other such 4xx, such as `401 Unauthorized`, `403 Forbidden`, or
+  `404 Not Found`, rejects the request whatever it holds, so the whole batch is discarded at once.
 * `408 Request Timeout`, `429 Too Many Requests`, or `503 Service Unavailable` asks to send the
   request again later, and the server did not store the entries. With `async: true` or
   `batch: true`, the worker thread [backs off](operations.html#retry-a-failing-appender), then sends
@@ -542,8 +545,7 @@ SemanticLogger.add_appender(
 ~~~
 
 When the server rejects every request, for example because the password or the path is wrong, each
-batch is split until every entry has been sent on its own, which takes about two requests for each
-entry in the batch.
+batch is discarded with its first request, and reported once.
 
 ### TCP Appender (+SSL)
 

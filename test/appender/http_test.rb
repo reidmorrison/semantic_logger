@@ -492,6 +492,28 @@ module Appender
           end
         end
 
+        [400, 413, 422].each do |code|
+          it "splits a batch that a #{code} rejected for the entries it holds" do
+            error = error_for(code)
+
+            assert_predicate error, :content_rejected?
+            assert appender.split_batch?(error)
+          end
+        end
+
+        [401, 403, 404, 405, 409, 410, 415].each do |code|
+          it "does not split a batch that a #{code} rejected whatever it holds" do
+            error = error_for(code)
+
+            refute_predicate error, :content_rejected?
+            refute appender.split_batch?(error)
+          end
+        end
+
+        it "splits a batch that it could not format" do
+          assert appender.split_batch?(SemanticLogger::Subscriber::FormatError.new("Could not format"))
+        end
+
         [500, 502, 503, 504, 408, 429, 301].each do |code|
           it "raises an error for a #{code} that the appender says the destination caused" do
             error = error_for(code)
@@ -729,14 +751,47 @@ module Appender
             SemanticLogger::QueueProcessor.new(appender: appender, batch: true, batch_seconds: 0.01)
           end
 
-          it "discards only the entry the server rejects, by sending the rest of the batch again" do
-            messages         = %w[first rejected third fourth]
-            delivered, slept = process(processor, messages, {"rejected" => 400})
+          # Returns the messages of each batch sent while the block runs.
+          def recording_batches(&)
+            batches   = []
+            original  = appender.method(:batch)
+            recording = lambda do |logs|
+              batches << logs.map(&:message)
+              original.call(logs)
+            end
+            appender.stub(:batch, recording, &)
+            batches
+          end
 
-            assert_equal %w[first third fourth], delivered
-            assert_empty slept
-            assert_equal 3, processor.processed_count
-            assert_equal 1, processor.failed_count
+          [400, 413, 422].each do |code|
+            it "discards only the entry the server rejects with a #{code}, by sending the rest of the batch again" do
+              messages         = %w[first rejected third fourth]
+              delivered, slept = process(processor, messages, {"rejected" => code})
+
+              assert_equal %w[first third fourth], delivered
+              assert_empty slept
+              assert_equal 3, processor.processed_count
+              assert_equal 1, processor.failed_count
+            end
+          end
+
+          [401, 403, 404, 405].each do |code|
+            it "discards a batch the server rejects whatever it holds, with a #{code}, at once, in one request" do
+              delivered = slept = nil
+              batches   = recording_batches do
+                delivered, slept = process(processor, %w[first second third fourth], {"second" => code})
+              end
+
+              assert_equal [%w[first second third fourth]], batches
+              assert_empty delivered
+              assert_empty slept
+              assert_equal 0, processor.processed_count
+              assert_equal 4, processor.failed_count
+              reports = internal_logger.events.select { |event| event.message.include?("Discarded") }
+
+              assert_equal 1, reports.size
+              assert_includes reports.first.message, "Discarded 4 log message(s)"
+            end
           end
 
           it "sends a batch the server cannot take yet again, as it was, once it has backed off" do
