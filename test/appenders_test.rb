@@ -286,18 +286,49 @@ class AppendersTest < Minitest::Test
       end
     end
 
-    describe "#exiting=" do
-      it "tells each appender with a thread of its own, and skips the others" do
-        told  = []
-        async = Object.new
-        async.define_singleton_method(:exiting=) { |exiting| told << exiting }
-        appenders << SemanticLogger::Test::CaptureLogEvents.new
-        appenders << async
+    describe "#process_exiting=" do
+      # Records whether it is told that the process is exiting, as an appender added with async: true is.
+      def told_appender(told)
+        appender = Object.new
+        appender.define_singleton_method(:process_exiting=) { |exiting| told << exiting }
+        appender
+      end
 
-        appenders.exiting = true
-        appenders.exiting = false
+      it "tells each appender with a thread of its own, and skips the others" do
+        told = []
+        appenders << SemanticLogger::Test::CaptureLogEvents.new
+        appenders << told_appender(told)
+
+        appenders.process_exiting = true
+        appenders.process_exiting = false
 
         assert_equal [true, false], told
+      end
+
+      it "does not call an exiting= that a custom appender defines for its own purpose" do
+        custom = Class.new(SemanticLogger::Test::CaptureLogEvents) { attr_accessor :exiting }.new
+        appenders << custom
+
+        appenders.process_exiting = true
+
+        assert_nil custom.exiting
+      end
+
+      # The flush at exit runs after the appenders are told, so it must still run.
+      it "tells the remaining appenders when one raises, and reports it" do
+        told    = []
+        failing = Object.new
+        failing.define_singleton_method(:process_exiting=) { |_exiting| raise "exiting boom" }
+        failing.define_singleton_method(:name) { "Failing" }
+        appenders << failing
+        appenders << told_appender(told)
+
+        appenders.process_exiting = true
+
+        assert_equal [true], told
+        report = capture_logger.events.find { |it| it.message.start_with?("Failed to tell appender") }
+
+        assert_equal "exiting boom", report&.exception&.message
       end
     end
   end

@@ -171,5 +171,14 @@ class BackoffTest < Minitest::Test
 
       assert_nil backoff.gave_up
     end
+
+    # Such as when another thread forks while the parent process flushes at exit.
+    it "forgets that the process was exiting on a restart after a fork" do
+      backoff.exiting = true
+      backoff.restart
+
+      refute_predicate backoff, :waited_on?
+      refute backoff.give_up?(IOError.new("destination unavailable"))
+    end
   end
 end

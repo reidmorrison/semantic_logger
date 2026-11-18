@@ -78,11 +78,11 @@ module SemanticLogger
     #     Maximum number of consecutive times to restart the worker thread after it raises an
     #     exception while processing messages. Each restart first sleeps for `retry_count` seconds
     #     (1s, then 2s, ...) as a back-off, unless a flush or close is waiting (see #flush), or the
-    #     process is exiting (see #exiting=). Once this many consecutive retries are exhausted the
-    #     thread stops instead of restarting. The counter resets to zero whenever a message is
-    #     processed successfully. A message or batch that the destination failed is written again
-    #     after the back-off when the appender says that the write wrote none of it (see
-    #     Subscriber#wrote_nothing?), up to HeldWrite::MAX_RESENDS times after the destination
+    #     process is exiting (see #process_exiting=). Once this many consecutive retries are
+    #     exhausted the thread stops instead of restarting. The counter resets to zero whenever a
+    #     message is processed successfully. A message or batch that the destination failed is
+    #     written again after the back-off when the appender says that the write wrote none of it
+    #     (see Subscriber#wrote_nothing?), up to HeldWrite::MAX_RESENDS times after the destination
     #     answered with a failure, and is otherwise discarded.
     #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour). The back-off
     #         still applies, and still resets after any successful message.
@@ -217,9 +217,10 @@ module SemanticLogger
     # (see Backoff#exiting=). While it is, the worker thread acts as though a flush were waiting
     # (see #flush), already before the flush at exit reaches this queue: it stops backing off and
     # writing again what the destination failed, and once the destination fails, discards the
-    # messages queued, so that the process exits promptly during an outage. Takes no lock, so that it
-    # can be called from any thread, or a signal trap.
-    def exiting=(exiting)
+    # messages queued ahead of the next request, such as the flush at exit, so that the process exits
+    # promptly during an outage. Takes no lock, so that it can be called from any thread, or a signal
+    # trap.
+    def process_exiting=(exiting)
       @backoff.exiting = exiting
     end
 
@@ -332,9 +333,9 @@ module SemanticLogger
     # processor, which then drops new messages, rather than ending the thread and leaving the
     # calling threads blocked on a full queue.
     #
-    # A flush or close that is waiting (see #flush), or the process exiting (see #exiting=), does
-    # not wait out a back-off, so processing then restarts straight away, without counting a retry,
-    # and discards the messages queued ahead of the next request without writing them (see
+    # A flush or close that is waiting (see #flush), or the process exiting (see #process_exiting=),
+    # does not wait out a back-off, so processing then restarts straight away, without counting a
+    # retry, and discards the messages queued ahead of the next request without writing them (see
     # Backoff#give_up?).
     def process
       safe_log(:trace, "Async: Appender thread active")
@@ -377,7 +378,8 @@ module SemanticLogger
       count = 0
       while reopen_appender && (message = queue.pop)
         if message.is_a?(Log)
-          next messages_failed([message], @backoff.gave_up) if @backoff.gave_up
+          gave_up = @backoff.gave_up
+          next messages_failed([message], gave_up) if gave_up
 
           write_message(message)
           return true if @stack_overflow
@@ -402,6 +404,10 @@ module SemanticLogger
 
     # Batching: group up log messages before writing them via the appender's #batch method.
     #
+    # Once the destination failed while the worker thread was waited on (see Backoff#gave_up), the
+    # messages taken off the queue ahead of the first request, such as a flush, are discarded without
+    # being written, and those taken off the queue after it are written as a batch, as usual.
+    #
     # Returns true when processing must carry on in a new thread (see #stack_overflowed).
     def process_messages_in_batches
       loop do
@@ -415,11 +421,15 @@ module SemanticLogger
 
         logs          = []
         commands      = []
+        discarded     = []
+        gave_up       = @backoff.gave_up
         first         = true
         message_count.times do
           # Queue#pop(true) raises an exception when there are no more messages, which is considered expensive.
           message = queue.pop
           if message.is_a?(Log)
+            next discarded << message if gave_up && commands.empty?
+
             logs << message
             if first
               check_lag(message)
@@ -429,6 +439,7 @@ module SemanticLogger
             commands << message
           end
         end
+        messages_failed(discarded, gave_up) unless discarded.empty?
         # Stop processing once a command (e.g. :close) signals the thread to terminate.
         return false unless write_batch_then_run(logs, commands)
         return true if @stack_overflow
@@ -438,9 +449,7 @@ module SemanticLogger
     end
 
     # Write the log messages taken off the queue as a batch, then run the commands taken off the
-    # queue with them. Returns false once a command (:close) stops processing. The messages are
-    # discarded instead, without being written, once the destination failed while the worker thread
-    # was waited on, until a request has run (see Backoff#gave_up).
+    # queue with them. Returns false once a command (:close) stops processing.
     #
     # When the batch cannot be written, for example because the destination is unavailable, the
     # messages not yet written are held to be written again after the back-off, or discarded and
@@ -450,9 +459,7 @@ module SemanticLogger
     # discarded rather than held. A command behind a close is not run, and so no longer waits.
     def write_batch_then_run(logs, commands)
       accounted = processed_count + failed_count
-      if @backoff.gave_up
-        messages_failed(logs, @backoff.gave_up) unless logs.empty?
-      elsif !logs.empty?
+      unless logs.empty?
         write_batch(logs)
         @backoff.reset
       end

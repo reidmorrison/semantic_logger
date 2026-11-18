@@ -112,13 +112,18 @@ module SemanticLogger
     end
 
     # Tell each appender added with async: true or in batches whether the process is exiting: true
-    # before the flush at exit, and false once it has returned (see QueueProcessor#exiting=). Each
-    # one's queue processor is told straight away, rather than through the queue of the thread that
-    # writes to every appender, which can be held up handing an entry to the full queue of an
+    # before the flush at exit, and false once it has returned (see QueueProcessor#process_exiting=).
+    # Each one's queue processor is told straight away, rather than through the queue of the thread
+    # that writes to every appender, which can be held up handing an entry to the full queue of an
     # appender whose worker thread is backing off during an outage. Takes no lock, so that it can be
-    # called from any thread, or a signal trap.
-    def exiting=(exiting)
-      each { |appender| appender.exiting = exiting if appender.respond_to?(:exiting=) }
+    # called from any thread, or a signal trap. An appender that raises is reported, as for #flush,
+    # and the others are still told, so that the flush at exit still runs.
+    def process_exiting=(exiting)
+      each do |appender|
+        appender.process_exiting = exiting if appender.respond_to?(:process_exiting=)
+      rescue Exception => e
+        logger.error "Failed to tell appender that the process is exiting: #{appender.name}", e
+      end
     end
 
     # After a fork, replace the queue and worker thread of each appender added with async: true or

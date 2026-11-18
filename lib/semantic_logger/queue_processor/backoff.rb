@@ -40,12 +40,14 @@ module SemanticLogger
         @retry_count = 0
       end
 
-      # Start afresh for a worker thread new to the process, after a fork: it has not failed yet, and
-      # the requests counted as waiting were on the queue of the parent process, which the child
-      # replaces.
+      # Start afresh for a worker thread new to the process, after a fork: it has not failed yet, the
+      # requests counted as waiting were on the queue of the parent process, which the child
+      # replaces, and the child is not exiting, even when the parent was, such as when another thread
+      # forked while the parent flushed at exit.
       def restart
         reset
         @requests.clear
+        @exiting = false
         @gave_up = nil
       end
 
@@ -105,11 +107,13 @@ module SemanticLogger
       def waited_on? = @exiting || !@requests.empty?
 
       # Called once the destination failed. While the worker thread is waited on, it gives up on the
-      # messages queued ahead of the next request, or all of them while the process exits: it
-      # discards them, without writing them (see #gave_up), since each could take as long to fail,
-      # such as the open_timeout of a server that does not answer. So returns true, having
-      # recorded the exception, for the worker thread to carry on straight away, without backing off
-      # or counting a retry. Otherwise returns false.
+      # messages queued ahead of the next request, such as a flush, and discards them without writing
+      # them (see #gave_up), since each could take as long to fail, such as the open_timeout of a
+      # server that does not answer. While the process exits, it does so as well before the flush at
+      # exit reaches the queue. Once a request has run (see #request_done), it writes the next
+      # message once more, even while the process exits, and gives up again if that fails. So
+      # returns true, having recorded the exception, for the worker thread to carry on straight
+      # away, without backing off or counting a retry. Otherwise returns false.
       def give_up?(exception)
         return false unless waited_on?
 
