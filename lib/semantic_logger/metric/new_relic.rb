@@ -7,8 +7,10 @@ end
 
 # Send Metrics to NewRelic
 #
-# The :error and :fatal log entries will show up under
-# "Applications" > "Application Name" > "Events" > "Errors" in New Relic.
+# Records the metric of each log entry that has one as a New Relic custom metric, through the
+# agent's metric API: with record_metric, in seconds, when the entry has a duration, otherwise with
+# increment_metric, by its metric_amount, or 1. A metric's dimensions are left out, since that API
+# takes none.
 #
 # Example:
 #   SemanticLogger.add_appender(metric: :new_relic)
@@ -17,21 +19,23 @@ module SemanticLogger
     class NewRelic < SemanticLogger::Subscriber
       attr_accessor :prefix
 
-      # Create Appender
+      # Create the New Relic metrics subscriber
       #
       # Parameters
-      #   :prefix [String]
-      #     Prefix to add to every metric before forwarding to NewRelic.
+      #   prefix: [String]
+      #     Prefix to add to every metric name that does not already start with it, before
+      #     forwarding to NewRelic. Only the default formatter, #call, adds it.
       #     Default: 'Custom'
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
-      #     Override the log level for this appender.
-      #     Default: :error
+      #     Override the log level for this subscriber.
+      #     Default: none (:trace), so it records every metric entry that a logger emits; each
+      #     logger filters by its own level.
       #
       #   formatter: [Object|Proc]
-      #     An instance of a class that implements #call, or a Proc to be used to format
-      #     the output from this appender
-      #     Default: Use the built-in formatter (See: #call)
+      #     An instance of a class that implements #call, or a Proc, that returns the name to
+      #     record the metric under.
+      #     Default: #call, which adds the prefix to the name of the entry's metric.
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.

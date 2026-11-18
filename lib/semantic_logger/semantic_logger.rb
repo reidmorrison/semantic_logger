@@ -270,8 +270,8 @@ module SemanticLogger
   # Appenders will be written to in the order that they are added
   #
   # If a block is supplied then it will be used to customize the format
-  # of the messages sent to that appender. See SemanticLogger::Logger.new for
-  # more information on custom formatters
+  # of the messages sent to that appender. See "Formatter as a block or Proc" in
+  # docs/config.md for more information on custom formatters
   #
   # Parameters
   #   file_name: [String]

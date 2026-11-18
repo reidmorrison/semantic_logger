@@ -29,6 +29,12 @@ module SemanticLogger
       #       if you want monthly indexes ('%Y.%m') or weekly ('%Y.%W').
       #     Default: '%Y.%m.%d'
       #
+      #   data_stream: [true|false]
+      #     Write to the data stream named by `index:`, with `create` actions,
+      #     rather than to a daily index: `date_pattern:` is not used, and the
+      #     default formatter writes the time under `@timestamp`.
+      #     Default: false
+      #
       #   type: [String]
       #     Deprecated and ignored. Document `_type` has been unused since
       #     Elasticsearch 7 and is ignored by OpenSearch. Passing it logs a
@@ -40,8 +46,10 @@ module SemanticLogger
       #
       #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call, or a Proc to be used to format
-      #     the output from this appender
-      #     Default: :raw_json (See: #call)
+      #     the output from this appender. It returns the document, as a Hash, or as a
+      #     String of JSON.
+      #     Default: :raw, with an ISO 8601 time under `timestamp`, or `@timestamp` with
+      #     `data_stream: true`.
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
@@ -68,9 +76,13 @@ module SemanticLogger
       #
       #   hosts: [String|Hash|Array]
       #     Single host passed as a String or Hash, or multiple hosts
-      #     passed as an Array; `host` or `url` keys are also valid.
+      #     passed as an Array. A Hash takes the keys `host`, `port`,
+      #     `scheme`, `user`, `password`, and `path`.
       #     Note:
       #       :url above is ignored when supplying this option.
+      #       A `host:` passed to the appender itself, outside the Hash, is
+      #       not a server: it is the host name written in each log entry,
+      #       see `host:` above.
       #
       #   resurrect_after [Float]
       #     After how many seconds a dead connection should be tried again.

@@ -153,8 +153,9 @@ which is built around dimensions:
 SemanticLogger.add_appender(metric: :signalfx, token: "SIGNALFX_ORG_ACCESS_TOKEN")
 ~~~
 
-`application` and `host` are always sent as dimensions. To also forward specific named tags as
-dimensions whenever they are present on a log entry, list them:
+`application` and `host` are always sent as dimensions, and so is `environment` when it is set. To
+also forward specific named tags as dimensions whenever they are present on a log entry that has no
+dimensions of its own, list them:
 
 ~~~ruby
 SemanticLogger.add_appender(

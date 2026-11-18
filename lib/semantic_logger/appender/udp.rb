@@ -19,7 +19,8 @@ module SemanticLogger
       # Create UDP log appender.
       #
       #   server: [String]
-      #     URL of the server to write UDP messages to.
+      #     Host name and port of the server to write UDP messages to, as "host:port".
+      #     Example: "localhost:3300"
       #
       #   udp_flags: [Integer]
       #     Should be a bitwise OR of Socket::MSG_* constants.
@@ -38,10 +39,10 @@ module SemanticLogger
       #     Override the log level for this appender.
       #     Default: SemanticLogger.default_level
       #
-      #   formatter: [Object|Proc]
+      #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call, or a Proc to be used to format
       #     the output from this appender
-      #     Default: Use the built-in formatter (See: #call)
+      #     Default: :json
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
@@ -108,7 +109,7 @@ module SemanticLogger
 
       private
 
-      # Returns [SemanticLogger::Formatters::Default] formatter default for this Appender
+      # Returns [SemanticLogger::Formatters::Json] formatter default for this Appender
       def default_formatter
         SemanticLogger::Formatters::Json.new
       end

@@ -23,7 +23,8 @@ module SemanticLogger
       #     Dimensions to forward to signalfx when they are present in the named tags of any log message
       #     whose metric has no dimensions of its own. A metric logged with `dimensions:` is sent with those
       #     instead, so add the named tags it needs to them.
-      #     By default `application` and `host` are always included as dimensions in all forwarded metrics.
+      #     By default `application`, `host`, and, when it is set, `environment` are always included as
+      #     dimensions in all forwarded metrics.
       #     Example: [:user_id, :state]
       #
       #   filter: [Regexp|Proc]
@@ -41,8 +42,7 @@ module SemanticLogger
       #     Default: SemanticLogger.application
       #
       #   url: [String]
-      #     Override the SignalFx service url.
-      #     For historical data use: https://backfill.signalfx.com/v1/backfill
+      #     Override the SignalFx service url. The metrics are posted to `v2/datapoint` under its path.
       #     Default: https://ingest.signalfx.com
       #
       # Notes:
