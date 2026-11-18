@@ -671,11 +671,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `async_max_retries`: within a second it drops its entry, counted as `dropped`, and carries on. That
   log call is normally made by the thread that writes to every appender, so before, all logging
   stopped, and the flush at exit never finished. A flush of that appender waiting for room on its
-  queue stops waiting the same way. The entries already on the queue are kept, for a reopen to
-  write. With `max_queue_size: -1`, a log call once that thread has given up now queues its entry,
-  rather than raising `ArgumentError`. A thread started again by `SemanticLogger.reopen` once it has
-  given up now backs off and retries up to `async_max_retries` times again; before, it gave up after
-  its first failure, without backing off.
+  queue stops waiting the same way. The entries already on the queue are kept, for
+  `SemanticLogger.reopen(force: true)` to write. The report of dropped entries then says that thread
+  has stopped, rather than advise a larger `max_queue_size`. With `max_queue_size: -1`, a log call
+  once that thread has given up now queues its entry, rather than raising `ArgumentError`. After a
+  fork, that thread in the child process now starts its count of failures afresh, where v5.2.0
+  carried on with the parent's count.
 
 ## [5.2.0] 2026-10-30
 

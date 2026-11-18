@@ -271,9 +271,13 @@ SemanticLogger.add_appender(
 ~~~
 
 Set `async_max_retries: -1` to retry indefinitely. The back-off still applies and still resets after
-a successful message. A `SemanticLogger.reopen` starts a worker thread that gave up again, which
-writes the messages kept on the queue, and backs off and retries up to `async_max_retries` times
-again.
+a successful message. `SemanticLogger.reopen(force: true)` starts a worker thread that gave up again,
+which writes the messages kept on the queue. It carries on with the count of failed retries: one
+that gave up after all `async_max_retries` gives up again at its first failure while the destination
+is still unavailable, rather than hold up logging with a back-off as long again, and one that stopped
+before using them all, such as after a fatal exception, has only the retries it had left. Once a
+message is written, the count starts again. After a fork, the worker thread of the child process
+starts counting afresh.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a

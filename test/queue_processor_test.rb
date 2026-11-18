@@ -938,6 +938,21 @@ class QueueProcessorTest < Minitest::Test
         assert_equal 3, processor.dropped_count
       end
 
+      # A larger queue would not help: nothing empties it.
+      it "reports that the worker thread has stopped, rather than advise a larger queue" do
+        processor = build(max_queue_size: 1, async_max_retries: 0, dropped_message_report_seconds: 0)
+        processor.stub(:process_messages, -> { raise "destination unavailable" }) do
+          processor.send(:process)
+        end
+        processor.log(new_log)
+
+        refute processor.log(new_log)
+        report = internal_logger.events.map(&:message).grep(/\AAsync: Dropped/).last
+
+        assert_match(/worker thread has stopped/, report)
+        refute_match(/max_queue_size/, report)
+      end
+
       it "keeps queueing messages on a queue that is not capped, which is never full" do
         processor = build(max_queue_size: -1, async_max_retries: 0)
         processor.stub(:process_messages, -> { raise "destination unavailable" }) do
@@ -1239,7 +1254,34 @@ class QueueProcessorTest < Minitest::Test
         assert_equal ["queued meanwhile"], appender.events.map(&:message)
       end
 
-      it "backs off and retries as many times again, in a worker thread started once it has stopped" do
+      # Otherwise, while the destination is still unavailable, the new worker thread would back off as
+      # long again, holding up the threads logging to it once its queue is full.
+      it "carries on with the count of failures in a row, in a worker thread started once it has stopped" do
+        processor = start(async_max_retries: 1)
+        slept     = Queue.new
+        processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+          worker = processor.thread
+          2.times { processor.log(new_log(message: "unavailable")) }
+
+          assert worker.join(5), "the worker thread should stop"
+          processor.reopen
+          worker = processor.thread
+          processor.log(new_log(message: "unavailable"))
+
+          assert worker.join(5), "the new worker thread should stop at its first failure"
+          assert_predicate processor, :stopped?
+        end
+
+        assert_equal [1], Array.new(slept.size) { slept.pop }
+        processor.reopen
+        processor.log(new_log(message: "after"))
+
+        assert processor.flush, "the new worker thread should write the next entry"
+        assert_equal ["after"], appender.events.map(&:message)
+        assert_equal 0, processor.retry_count
+      end
+
+      it "starts counting failures afresh in a child process after a fork" do
         processor = start(async_max_retries: 1)
         worker    = processor.thread
         slept     = Queue.new
@@ -1247,7 +1289,11 @@ class QueueProcessorTest < Minitest::Test
           2.times { processor.log(new_log(message: "unavailable")) }
 
           assert worker.join(5), "the worker thread should stop"
+          assert_equal 1, processor.retry_count
+          processor.instance_variable_set(:@pid, -1)
           processor.reopen
+
+          assert_equal 0, processor.retry_count
           processor.log(new_log(message: "unavailable"))
           processor.log(new_log(message: "after"))
 
