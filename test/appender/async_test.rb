@@ -96,6 +96,80 @@ module Appender
         end
       end
 
+      describe "#reopen when the appender cannot be reopened" do
+        # Cannot be reopened, as the :udp appender cannot once its server's name no longer resolves.
+        let :appender do
+          Class.new(SemanticLogger::Test::CaptureLogEvents) do
+            def reopen
+              raise SocketError, "getaddrinfo: nodename nor servname provided, or not known"
+            end
+          end.new
+        end
+
+        let(:added_appender) { SemanticLogger.add_appender(appender: appender, async: true, batch: false) }
+
+        # Records what SemanticLogger.reopen reports about the appenders.
+        let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+
+        before do
+          @appenders_logger               = SemanticLogger.appenders.logger
+          SemanticLogger.appenders.logger = internal_logger
+        end
+
+        # Removed here, rather than left to InMemoryAppenderHelper, which can skip one, since a later
+        # test that forks would then report that it cannot be reopened.
+        after do
+          SemanticLogger.remove_appender(added_appender)
+          SemanticLogger.appenders.logger = @appenders_logger
+        end
+
+        it "starts the worker thread again, then raises the appender's error" do
+          worker = added_appender.thread
+          worker.kill
+          worker.join
+
+          assert_raises(SocketError) { added_appender.reopen }
+          assert_predicate added_appender, :active?
+          logger.info("after the reopen")
+          SemanticLogger.flush
+
+          assert_equal ["after the reopen"], appender.events.map(&:message)
+        end
+
+        it "is reported by SemanticLogger.reopen, which starts the worker thread again" do
+          worker = added_appender.thread
+          worker.kill
+          worker.join
+          SemanticLogger.reopen(force: true)
+          report = internal_logger.events.find { |event| event.message.include?("Failed to re-open appender") }
+
+          assert_kind_of SocketError, report&.exception
+          assert_predicate added_appender, :active?
+        end
+
+        it "has a worker thread in the child process after a fork, which writes the child's entries" do
+          skip "fork is not supported" unless Process.respond_to?(:fork)
+
+          added_appender
+          reader, writer = IO.pipe
+          pid            = fork do
+            reader.close
+            logger.info("in the child")
+            SemanticLogger.flush
+            report = internal_logger.events.find { |event| event.message.include?("Failed to re-open appender") }
+            writer.write([added_appender.active?, appender.events.map(&:message), report&.exception&.class].inspect)
+            writer.close
+            exit!(0)
+          end
+          writer.close
+          Process.wait(pid)
+          from_child = reader.read
+          reader.close
+
+          assert_equal [true, ["in the child"], SocketError].inspect, from_child
+        end
+      end
+
       describe "with uncapped queue" do
         let :added_appender do
           SemanticLogger.add_appender(appender: appender, async: true, max_queue_size: -1)
