@@ -121,6 +121,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `udp://[::1]:8125` is now accepted. Reopening it, such as after a fork, now reconnects its client,
   which closes the socket the client had, instead of leaving it open, and leaves the client as it
   was when the host cannot be resolved.
+- `add_appender(metric: ...)` with a value that is neither a Symbol nor a `SemanticLogger::Subscriber`
+  now names that value in its `ArgumentError`. Before, the message named the `appender:` option
+  in its place, usually as `not: nil`.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
