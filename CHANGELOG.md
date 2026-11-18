@@ -583,8 +583,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   kept as it is. A `SemanticLogger::Logger`, which the comment rules out, now raises `ArgumentError`:
   its reports of an appender that fails went back to that appender, failed again, and were reported
   again, without end. The same goes for `SemanticLogger::SyncProcessor.logger=`.
-- `SemanticLogger.reopen` within the same process, such as `reopen(force: true)` from a signal trap
-  after a log rotation, keeps the log entries that are still queued, and writes them in order, ahead
+- `SemanticLogger.reopen` within the same process, such as `reopen(force: true)` after a log
+  rotation, keeps the log entries that are still queued, and writes them in order, ahead
   of those logged after it. Before, it replaced the queue, so the entries on it were lost, and
   stopped the thread writing them, even in the middle of an entry, which was lost too; a log call
   waiting for room on a full queue raised `ClosedQueueError`. That thread now keeps running, and is
