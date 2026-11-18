@@ -101,6 +101,11 @@ module SemanticLogger
         Warning[:experimental] = experimental
       end
 
+      # Whether the receiving thread waits for a fork to be over (see RactorReceiver.pause).
+      def waiting_for_fork?(receiver)
+        receiver.backtrace.any? { |line| line.include?("wait_for_fork") }
+      end
+
       # Runs the block in a new Ractor, and returns the entries written meanwhile.
       def logs_from_ractor(*args, name: nil, &block)
         in_ractor(*args, name: name, &block)
@@ -337,10 +342,90 @@ module SemanticLogger
         end
       end
 
+      describe "in a signal trap, where Ruby does not allow a Mutex to be locked" do
+        include SignalTrapHelper
+
+        it "forks, and keeps receiving the entries of other Ractors" do
+          skip "fork is not supported" unless Process.respond_to?(:fork)
+          skip "synchronous mode reopens the appenders on the calling thread, which locks" if SemanticLogger.sync?
+
+          receiver       = RactorReceiver.instance_variable_get(:@thread)
+          parent         = Process.pid
+          reader, writer = IO.pipe
+          pid            = in_signal_trap do
+            fork do
+              reader.close
+              # The child runs this block in the trap too, so a new thread starts its receiving thread.
+              deadline = Time.now + 5
+              sleep(0.01) until RactorReceiver.running? || Time.now > deadline
+              logs = logs_from_ractor { SemanticLogger["InRactor"].info("In the child") }
+              writer.write(logs.map(&:message).join(","))
+              writer.close
+            ensure
+              exit!(0)
+            end
+          ensure
+            # A child whose fork hook raised must not go on to run the tests.
+            exit!(1) unless Process.pid == parent
+          end
+          writer.close
+
+          assert_kind_of Integer, pid
+          Process.wait(pid)
+          output = reader.read
+          reader.close
+
+          assert_equal "In the child", output
+          assert_same receiver, RactorReceiver.instance_variable_get(:@thread)
+          logs = logs_from_ractor { SemanticLogger["InRactor"].info("After the fork") }
+
+          assert_equal ["After the fork"], logs.map(&:message)
+        end
+
+        it "pauses the receiving thread while the block forks" do
+          receiver = RactorReceiver.instance_variable_get(:@thread)
+          paused   = in_signal_trap { RactorReceiver.pause { waiting_for_fork?(receiver) } }
+
+          refute_kind_of Exception, paused
+          assert paused, "the receiving thread should wait for the fork to be over"
+          assert_equal ["Resumed"], logs_from_ractor { SemanticLogger["InRactor"].info("Resumed") }.map(&:message)
+        end
+
+        it "flushes, once the entries already sent from other Ractors are written" do
+          in_ractor { 3.times { |i| SemanticLogger["InRactor"].info("Entry #{i}") } }
+          flushed = in_signal_trap { SemanticLogger.flush }
+
+          refute_kind_of Exception, flushed
+          assert_equal ["Entry 0", "Entry 1", "Entry 2"], collector.logs.map(&:message)
+        end
+      end
+
       it "flushes, rather than waiting on the receiving thread, while the process forks" do
         flushed = Timeout.timeout(10) { RactorReceiver.pause { SemanticLogger.flush } }
 
         refute_nil flushed
+      end
+
+      it "replies to each of several threads that flush at the same time" do
+        in_ractor { SemanticLogger["InRactor"].info("Before the flushes") }
+        results = Timeout.timeout(30) do
+          Array.new(8) { Thread.new { Array.new(25) { SemanticLogger.flush } } }.flat_map(&:value)
+        end
+
+        assert_equal 200, results.size
+        assert_equal ["Before the flushes"], collector.logs.map(&:message)
+      end
+
+      it "pauses for each of several threads that fork at the same time" do
+        receiver = RactorReceiver.instance_variable_get(:@thread)
+        started  = Time.now
+        paused   = Timeout.timeout(30) do
+          Array.new(4) { Thread.new { Array.new(10) { RactorReceiver.pause { waiting_for_fork?(receiver) } } } }.
+            flat_map(&:value)
+        end
+
+        assert_equal [true], paused.uniq
+        assert_operator Time.now - started, :<, RactorReceiver::PAUSE_TIMEOUT, "no pause should have timed out"
       end
 
       it "lets Ruby reject a fork in a Ractor" do

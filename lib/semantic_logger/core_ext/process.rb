@@ -5,9 +5,16 @@ module SemanticLogger
     # Prepended onto `Process.singleton_class` when Semantic Logger is loaded.
     # Enabled by default; opt out with `SemanticLogger.reopen_on_fork = false`.
     #
-    # `Process._fork` (Ruby 3.1+) is the single method that every fork path routes
-    # through (`Kernel#fork`, `Process.fork`, `IO.popen`, `Kernel#system`, and
-    # backticks), so overriding it covers them all with one hook.
+    # `Process._fork` (Ruby 3.1+) is the method that every fork of the Ruby process
+    # routes through (`Kernel#fork`, `Process.fork`, and `IO.popen("-")`), so
+    # overriding it covers them all with one hook. `Kernel#system`, backticks,
+    # `spawn`, and `IO.popen` with a command do not call it: they run another
+    # program, which does not inherit Semantic Logger.
+    #
+    # It can also run in a signal trap, such as one that forks, where Ruby does
+    # not allow a Mutex to be locked: pausing the thread that receives the entries
+    # of other Ractors locks none, and neither does reopening in the child, except
+    # in synchronous mode (see SemanticLogger.reopen).
     #
     # Note: both `_fork` and `daemon` must be overridden to reliably restart the
     # appender thread, since `Process.daemon` does not route through `_fork`

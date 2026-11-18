@@ -5340,9 +5340,12 @@ thread, so unless those are re-opened in the child, logging quietly stops.
 ### It is automatic (default)
 
 As of v5 you do not need to do anything. Semantic Logger installs a `Process._fork` hook (Ruby 3.1
-and later) that calls `SemanticLogger.reopen` in the child after `fork`, `Process.daemon`,
-`IO.popen`, `Kernel#system`, and backticks. That covers every forking framework (Puma, Unicorn,
-Resque, Spring, Phusion Passenger, parallel tests, and so on).
+and later) that calls `SemanticLogger.reopen` in the child after `fork`, `Process.fork`,
+`Process.daemon`, and `IO.popen("-")`, the calls that fork the Ruby process. That covers every
+forking framework (Puma, Unicorn, Resque, Spring, Phusion Passenger, parallel tests, and so on).
+`Kernel#system`, backticks, `spawn`, and `IO.popen` with a command start another program instead,
+which has nothing to reopen. The process can also fork in a signal trap, except in synchronous mode
+(see [Reopen manually](#reopen-manually)).
 
 `reopen` runs only once per process after a fork, so it is safe even if something else also calls it.
 

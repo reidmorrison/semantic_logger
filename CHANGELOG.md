@@ -729,6 +729,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `SemanticLogger.reopen` in a signal trap, such as after a log rotation, no longer raises
   `ThreadError` either: reopening the thread that receives the entries logged in other Ractors
   locked a Mutex, even when it had nothing to do.
+- On Ruby 4.0, with an appender added, `fork` in a signal trap no longer raises `ThreadError`
+  ("can't be called from trap context"), and neither does `SemanticLogger.flush` there. Pausing the
+  thread that receives the entries logged in other Ractors while the process forks, and asking it to
+  write the entries already received before a flush, locked a Mutex, which Ruby does not allow in a
+  trap. Neither locks one now.
 - The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
   metric subscriber, no longer count an entry that the server did not accept as written. They
   reported a response other than 2xx to the internal logger and carried on, so with `async: true` or

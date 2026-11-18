@@ -11,22 +11,31 @@ module SemanticLogger
   # receiving thread ever waits on a port: a thread that waits for the receiving thread, such as one
   # flushing, waits on a Queue instead. And the receiving thread itself waits on a Queue while the
   # process forks (see .pause).
+  #
+  # A thread that waits for the receiving thread hands it that Queue without locking a Mutex, so that
+  # it can do so in a signal trap, such as one that forks or flushes, where Ruby does not allow one to
+  # be locked.
   module RactorReceiver
     # Seconds that .pause waits for the receiving thread to finish the entry it is handing over.
     PAUSE_TIMEOUT = 5
 
-    @port    = ::Ractor::Port.new
-    @pid     = ::Process.pid
-    @thread  = nil
+    # The thread variable set on a thread while it pauses the receiving thread (see .pause).
+    PAUSING = :semantic_logger_pausing_ractor_receiver
+
+    @port       = ::Ractor::Port.new
+    @pid        = ::Process.pid
+    @thread     = nil
     # Whether the receiving thread was started, so that .reopen starts it again in a child process.
-    @started = false
+    @started    = false
     # The pid of the process whose receiving thread runs, or nil when none runs.
-    @running = nil
-    @paused  = 0
-    # The Queues that threads of the main Ractor wait on for the receiving thread, by token.
-    @waits   = {}
-    @tokens  = 0
-    @mutex   = Mutex.new
+    @running    = nil
+    # The Queues that threads of the main Ractor wait on for the receiving thread, each with its token,
+    # in the order they were registered. Only the receiving thread takes them off.
+    @waits      = Queue.new
+    # The Queues that the receiving thread took off @waits before it got to their token. Only the
+    # receiving thread, or .reopen in a child process, uses it.
+    @registered = {}
+    @mutex      = Mutex.new
 
     class << self
       # Returns [Ractor::Port] where other Ractors send their log entries and requests. Any Ractor
@@ -70,11 +79,11 @@ module SemanticLogger
 
         locked = TrapSafe.try_synchronize(@mutex) do
           unless @pid == ::Process.pid
-            @port   = ::Ractor::Port.new
-            @pid    = ::Process.pid
-            @thread = nil
-            @paused = 0
-            @waits  = {}
+            @port       = ::Ractor::Port.new
+            @pid        = ::Process.pid
+            @thread     = nil
+            @waits      = Queue.new
+            @registered = {}
           end
         end
         if locked
@@ -90,39 +99,26 @@ module SemanticLogger
       #
       # The receiving thread first finishes handing over the entries sent before, waiting at most
       # PAUSE_TIMEOUT seconds, after which the fork goes ahead anyway.
-      def pause
+      #
+      # Takes no lock, so that it can be called in a signal trap, such as one that forks.
+      def pause(&)
         thread = @thread unless RactorSupport.other_ractor?
         return yield unless thread&.alive? && !Thread.current.equal?(thread)
 
-        paused  = Queue.new
-        resume  = Queue.new
-        counted = false
-        # An exception raised into this thread, such as by Timeout, must not leave the count wrong.
-        token   = Thread.handle_interrupt(Object => :never) do
-          @mutex.synchronize do
-            @paused += 1
-            counted  = true
-            register_locked([paused, resume])
-          end
-        end
-        @port << [:pause, token]
-        paused.pop(timeout: PAUSE_TIMEOUT)
-        yield
-      ensure
-        if counted
-          Thread.handle_interrupt(Object => :never) { @mutex.synchronize { @paused -= 1 } }
-          resume.push(true)
-        end
+        hold_receiving_thread(&)
       end
 
       # Waits until every entry sent to the port before this call has been handed to the processor,
       # then flushes the processor. Returns the result of the processor's flush.
       #
-      # While the process forks (see .pause), it flushes the processor without waiting: the receiving
-      # thread has handed over the entries sent before the fork began, and waits until it is over.
+      # On a thread that pauses the receiving thread (see .pause), such as one that flushes while it
+      # forks, it flushes the processor without waiting: the receiving thread has handed over the
+      # entries sent before the fork began, and waits until it is over.
+      #
+      # Takes no lock, so that it can be called in a signal trap.
       def flush
         thread = @thread
-        return Logger.processor.flush unless thread&.alive? && !Thread.current.equal?(thread) && @paused.zero?
+        return Logger.processor.flush if !thread&.alive? || Thread.current.equal?(thread) || pausing?
 
         done = Queue.new
         @port << [:flush, register(done)]
@@ -135,19 +131,47 @@ module SemanticLogger
 
       private
 
-      # Returns [Integer] the token under which the receiving thread finds the supplied Queue(s).
-      def register(waiting)
-        @mutex.synchronize { register_locked(waiting) }
+      # Whether this thread pauses the receiving thread (see .pause).
+      def pausing?
+        Thread.current.thread_variable_get(PAUSING) == true
       end
 
-      def register_locked(waiting)
-        token         = (@tokens += 1)
-        @waits[token] = waiting
+      # Runs the block while the receiving thread waits on a Queue (see .pause).
+      def hold_receiving_thread
+        pausing = Thread.current.thread_variable_get(PAUSING)
+        resume  = Queue.new
+        begin
+          Thread.current.thread_variable_set(PAUSING, true)
+          paused = Queue.new
+          @port << [:pause, register([paused, resume])]
+          paused.pop(timeout: PAUSE_TIMEOUT)
+          yield
+        ensure
+          resume.push(true)
+          # Restored rather than cleared, for a pause in a signal trap that interrupted another one.
+          Thread.current.thread_variable_set(PAUSING, pausing)
+        end
+      end
+
+      # Returns [Integer] the token under which the receiving thread finds the supplied Queue(s). Takes
+      # no lock: the receiving thread takes them off @waits when it gets to the token.
+      def register(waiting)
+        token = waiting.object_id
+        @waits.push([token, waiting])
         token
       end
 
+      # Returns the Queue(s) registered under the token, or nil. Called only by the receiving thread.
+      # Those registered ahead of the token, whose token it has not got to yet, wait in @registered.
       def registered(token)
-        @mutex.synchronize { @waits.delete(token) }
+        waiting = @registered.delete(token)
+        return waiting if waiting
+
+        while (entry = @waits.pop(timeout: 0))
+          return entry.last if entry.first == token
+
+          @registered.store(*entry)
+        end
       end
 
       # Receives from the port until it is closed.
