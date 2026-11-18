@@ -26,6 +26,16 @@ module Appender
         assert_nil error.cause
       end
 
+      it "indexes metric-only entries with metrics: true" do
+        appender = client_class.stub_any_instance(:bulk, true) do
+          SemanticLogger::Appender::Opensearch.new(url: "http://localhost:9200", metrics: true)
+        end
+        log        = SemanticLogger::Log.new("Test", :info)
+        log.metric = "orders/placed"
+
+        assert appender.should_log?(log)
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["OPENSEARCH"]

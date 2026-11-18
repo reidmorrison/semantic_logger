@@ -73,6 +73,30 @@ module Appender
         refute_match(/deprecated/, stderr)
       end
 
+      describe "metric-only entries" do
+        let :metric_only do
+          log        = SemanticLogger::Log.new("Test", :info)
+          log.metric = "orders/placed"
+          log
+        end
+
+        it "leaves them out by default" do
+          appender = client_class.stub_any_instance(:bulk, true) do
+            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
+          end
+
+          refute appender.should_log?(metric_only)
+        end
+
+        it "indexes them with metrics: true" do
+          appender = client_class.stub_any_instance(:bulk, true) do
+            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200", metrics: true)
+          end
+
+          assert appender.should_log?(metric_only)
+        end
+      end
+
       describe "providing a url" do
         let :appender do
           if ENV["ELASTICSEARCH"]
