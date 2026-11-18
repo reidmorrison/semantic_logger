@@ -411,6 +411,89 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    # Semantic Logger flushes the appenders in an at_exit hook, so these exit another Ruby.
+    describe "the flush at exit" do
+      # Logs 30 entries to an appender added with async: true, whose destination is down, and to
+      # another, then exits once the worker thread of the first backs off, holding its first entry,
+      # its queue is full, and the thread that writes to every appender waits for room on it. Its
+      # back-off is 31 seconds, longer than the test waits. Prints what happened at exit, as JSON,
+      # from a hook that runs after Semantic Logger's.
+      let(:script) do
+        <<~RUBY
+          require "json"
+          state = {}
+          at_exit do
+            puts JSON.generate(
+              seconds:             Process.clock_gettime(Process::CLOCK_MONOTONIC) - state[:exiting_at],
+              attempts_after_exit: state[:down].attempts.size - state[:attempts_before_exit],
+              failed:              state[:proxy].failed_count,
+              written:             state[:healthy].events.size
+            )
+          end
+          require "semantic_logger"
+          require "semantic_logger/test/capture_log_events"
+
+          class Down < SemanticLogger::Subscriber
+            def attempts = @attempts ||= Queue.new
+
+            def log(_log)
+              attempts << true
+              raise IOError, "destination unavailable"
+            end
+
+            def wrote_nothing?(_exception) = true
+          end
+
+          state[:down]        = Down.new
+          state[:down].logger = SemanticLogger::Test::CaptureLogEvents.new
+          state[:proxy]       = SemanticLogger.add_appender(appender: state[:down], async: true, max_queue_size: 2)
+          state[:healthy]     = SemanticLogger::Test::CaptureLogEvents.new
+          SemanticLogger.add_appender(appender: state[:healthy], async: true)
+          state[:proxy].processor.instance_variable_get(:@backoff).instance_variable_set(:@retry_count, 30)
+
+          30.times { |i| SemanticLogger["Exit"].info("entry \#{i}") }
+          deadline = Time.now + 10
+          Thread.pass until (state[:proxy].processor.retry_count == 31 && state[:proxy].queue.num_waiting == 1) ||
+                            Time.now > deadline
+          raise "the appender should be backing off, with the main worker waiting" unless state[:proxy].queue.num_waiting == 1
+
+          state[:attempts_before_exit] = state[:down].attempts.size
+          state[:exiting_at]           = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          exit
+        RUBY
+      end
+
+      # Runs the script in another Ruby, and returns what it printed last, parsed, or fails once it
+      # has not exited within 20 seconds.
+      def exit_after(script)
+        reader, writer = IO.pipe
+        pid            = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script,
+                                       out: writer, err: writer)
+        writer.close
+        waiter = Process.detach(pid)
+        unless waiter.join(20)
+          Process.kill("KILL", pid)
+
+          flunk "the process should exit within seconds"
+        end
+        output = reader.read
+
+        assert_predicate waiter.value, :success?, output
+        JSON.parse(output.lines.last, symbolize_names: true)
+      ensure
+        reader&.close
+      end
+
+      it "exits within seconds during an outage, discarding the queued entries after one more write fails" do
+        result = exit_after(script)
+
+        assert_operator result[:seconds], :<, 5
+        assert_equal 1, result[:attempts_after_exit], "only the entry held should be written again"
+        assert_equal 30, result[:failed]
+        assert_equal 30, result[:written], "the other appender should write every entry"
+      end
+    end
+
     describe ".sync! and .sync?" do
       it "switches the global processor to a SyncProcessor" do
         original = SemanticLogger::Logger.instance_variable_get(:@processor)

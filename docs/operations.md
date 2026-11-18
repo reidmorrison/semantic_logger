@@ -234,7 +234,8 @@ report made just after the trap rather than in it.
 
 Either setting keeps logging calls from blocking; neither makes `SemanticLogger.flush` return sooner.
 A flush, including the one that runs automatically when the process exits, still waits for every
-message already on the queue to be written.
+message already on the queue to be written, unless the destination of an appender added with
+`async: true` or in batches fails meanwhile (see [Retry a failing appender](#retry-a-failing-appender)).
 
 `non_blocking` applies only to a capped queue. An uncapped queue (`max_queue_size: -1`) never blocks
 and never drops, but can grow without bound.
@@ -312,14 +313,28 @@ before using them all, such as after a fatal exception, has only the retries it 
 message is written, the count starts again. After a fork, the worker thread of the child process
 starts counting afresh.
 
-A flush or close does not wait out the back-offs of the worker thread. Submitting one ends the
-back-off under way, and until it has run, a message or batch that the destination fails is
-discarded, and counted as `failed`, rather than written again after a back-off. Those failures do
-not count towards `async_max_retries`. It still waits while each message ahead of it on the queue is
-tried, which during an outage takes as long as the appender takes to fail: for an HTTP based
-appender whose server cannot be reached, up to its `open_timeout` (2 seconds by default) for each
-message, or each batch, and longer for an appender that retries on its own, such as `:tcp` with its
-`connect_retry_count`.
+A flush or close does not wait out the back-offs of the worker thread, nor for each message ahead of
+it to fail in turn. Submitting one ends the back-off under way, and until it has run, a message or
+batch that the destination fails is discarded, and counted as `failed`, rather than written again
+after a back-off. So is every message queued after that one, ahead of the flush or close, without
+being written: during an outage, each would take as long to fail as the first, such as up to the
+`open_timeout` (2 seconds by default) of an HTTP based appender whose server does not answer, or
+longer for an appender that retries on its own, such as `:tcp` with its `connect_retry_count`. Those
+failures do not count towards `async_max_retries`. Once the flush or close has run, the messages
+queued after it are written as usual. A flush still waits while the first message is tried, and
+while a destination that takes the messages writes every one of them.
+
+When the process exits, Semantic Logger flushes every appender. Before that flush, it tells each
+appender added with `async: true` or in batches that the process is exiting, and each one then acts
+as though a flush were already waiting: it stops backing off and writing again what failed, and once
+a write fails because of its destination, discards and counts the rest of its queue, without sending
+it. Each one is told directly, rather than through the queue of the thread that writes to every
+appender, since that thread can be held up handing a message to the full queue of an appender that
+is backing off, and so would reach the flush only once that appender stopped backing off. So during
+an outage the process exits within seconds, the time one write takes to fail, rather than minutes or
+hours, and an appender whose destination takes the messages still writes every one of them. A
+`SemanticLogger.flush` called while the process runs reaches each appender through that thread,
+behind the messages logged before it.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a

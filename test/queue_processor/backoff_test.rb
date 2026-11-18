@@ -45,7 +45,7 @@ class BackoffTest < Minitest::Test
       backoff.request_submitted
 
       assert thread.join(1), "a request should end the back-off"
-      assert_predicate backoff, :requests_waiting?
+      assert_predicate backoff, :waited_on?
     end
 
     it "does not wait while a request is waiting" do
@@ -62,7 +62,7 @@ class BackoffTest < Minitest::Test
       backoff.request_submitted
       backoff.request_done
 
-      refute_predicate backoff, :requests_waiting?
+      refute_predicate backoff, :waited_on?
       refute waiting.join(0.2), "the back-off should wait"
     end
 
@@ -71,7 +71,7 @@ class BackoffTest < Minitest::Test
       backoff.request_submitted
       backoff.restart
 
-      refute_predicate backoff, :requests_waiting?
+      refute_predicate backoff, :waited_on?
       assert_equal 0, backoff.retry_count
     end
 
@@ -82,7 +82,7 @@ class BackoffTest < Minitest::Test
       end
 
       assert_equal 1, backoff.instance_variable_get(:@interrupts).size
-      refute_predicate backoff, :requests_waiting?
+      refute_predicate backoff, :waited_on?
     end
 
     it "submits a request in a signal trap, ending the back-off under way" do
@@ -92,13 +92,84 @@ class BackoffTest < Minitest::Test
 
       refute(results.any?(StandardError))
       assert thread.join(1), "a request submitted in a signal trap should end the back-off"
-      assert_predicate backoff, :requests_waiting?
+      assert_predicate backoff, :waited_on?
     end
 
     it "ignores a request done that was not submitted" do
       backoff.request_done
 
-      refute_predicate backoff, :requests_waiting?
+      refute_predicate backoff, :waited_on?
+    end
+
+    it "ends the back-off under way, and does not wait, while the process exits" do
+      2.times { backoff.retry? }
+      thread          = waiting
+      backoff.exiting = true
+
+      assert thread.join(1), "exiting should end the back-off"
+      assert_predicate backoff, :waited_on?
+      assert waiting.join(0.5), "the back-off should not wait while the process exits"
+    end
+
+    it "waits again once the process no longer exits" do
+      backoff.retry?
+      backoff.exiting = true
+      backoff.exiting = false
+
+      refute_predicate backoff, :waited_on?
+      refute waiting.join(0.2), "the back-off should wait"
+    end
+
+    it "is told that the process exits in a signal trap" do
+      backoff.retry?
+      thread = waiting
+      told   = in_signal_trap do
+        backoff.exiting = true
+        :told
+      end
+
+      assert_equal :told, told
+      assert thread.join(1), "exiting should end the back-off"
+    end
+
+    it "gives up after a failure only while waited on" do
+      error = IOError.new("destination unavailable")
+
+      refute backoff.give_up?(error)
+      assert_nil backoff.gave_up
+      backoff.request_submitted
+
+      assert backoff.give_up?(error)
+      assert_same error, backoff.gave_up
+    end
+
+    it "stops giving up once a request has run" do
+      2.times { backoff.request_submitted }
+      backoff.give_up?(IOError.new("destination unavailable"))
+      backoff.request_done
+
+      assert_predicate backoff, :waited_on?, "the second request should still be waiting"
+      assert_nil backoff.gave_up
+    end
+
+    it "gives up while the process exits, until it no longer does" do
+      backoff.exiting = true
+      error           = IOError.new("destination unavailable")
+
+      assert backoff.give_up?(error)
+      assert_same error, backoff.gave_up
+      backoff.exiting = false
+      backoff.exiting = true
+
+      assert_nil backoff.gave_up, "exiting again should not give up before a failure"
+    end
+
+    it "forgets that it gave up on a restart after a fork" do
+      backoff.exiting = true
+      backoff.give_up?(IOError.new("destination unavailable"))
+      backoff.restart
+
+      assert_nil backoff.gave_up
     end
   end
 end

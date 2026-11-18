@@ -65,6 +65,16 @@ module SemanticLogger
         end
       end
 
+      # Report that the worker thread has fallen behind, when the log message it took off the queue
+      # was logged more than `threshold` seconds ago, with the number of messages still `queued`.
+      def lag(entry, threshold, queued)
+        diff = Time.now - entry.time
+        return unless diff > threshold
+
+        log(:warn, "Async: Appender thread has fallen behind by #{diff} seconds with #{queued} messages " \
+                   "queued up. Consider reducing the log level or changing the appenders")
+      end
+
       # Report the number of log messages queued ahead of a command, such as a flush, that is being
       # submitted: at :warn for more than 1,000, at :info for more than 100, otherwise at :trace, and
       # not at all for none.

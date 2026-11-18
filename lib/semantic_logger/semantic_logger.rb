@@ -390,6 +390,10 @@ module SemanticLogger
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
   #
+  #  Once a write fails because of the destination of an appender added with async: true or in
+  #  batches, the rest of the messages queued for that appender ahead of the flush are discarded and
+  #  counted as failed, rather than each one tried in turn during an outage.
+  #
   #  On Ruby 4.0 and later, in the main Ractor, the entries already sent from other Ractors are
   #  written first. In another Ractor, it waits until the main Ractor has written that Ractor's
   #  entries and flushed the appenders.

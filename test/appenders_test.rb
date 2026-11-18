@@ -285,5 +285,20 @@ class AppendersTest < Minitest::Test
         assert(capture_logger.events.any? { |it| it.message.include?("Failed to re-open appender") })
       end
     end
+
+    describe "#exiting=" do
+      it "tells each appender with a thread of its own, and skips the others" do
+        told  = []
+        async = Object.new
+        async.define_singleton_method(:exiting=) { |exiting| told << exiting }
+        appenders << SemanticLogger::Test::CaptureLogEvents.new
+        appenders << async
+
+        appenders.exiting = true
+        appenders.exiting = false
+
+        assert_equal [true, false], told
+      end
+    end
   end
 end

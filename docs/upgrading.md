@@ -414,15 +414,26 @@ agent.
   back-offs of its worker thread during an outage, which could keep the flush at exit waiting for
   minutes: 1 second for the first entry queued, 2 for the next, and so on. It ends the back-off
   under way, and until it has run, an entry or batch that the destination fails is discarded,
-  counted as `failed`, rather than sent again after a back-off. It still waits while each entry
-  ahead of it is tried, up to the appender's own timeouts. A custom appender can now say that a
-  write that raised wrote nothing, from `#wrote_nothing?(exception)`, so that the worker thread
-  writes it again after the back-off, up to 3 times once the destination answered it, and that the
-  write never reached the destination, from `#not_sent?(exception)`, which is not counted; see
+  counted as `failed`, rather than sent again after a back-off, and so are the entries queued after
+  it, ahead of the flush or close, without being sent (see the next note). A custom appender can now
+  say that a write that raised wrote nothing, from `#wrote_nothing?(exception)`, so that the worker
+  thread writes it again after the back-off, up to 3 times once the destination answered it, and
+  that the write never reached the destination, from `#not_sent?(exception)`, which is not counted;
+  see
   [Custom appenders](config.html#custom-appenders). A subclass of `SemanticLogger::Appender::Http`
   whose `#log` or `#batch` sends more than one request inherits a `#wrote_nothing?` that answers
   `true` for a 503 or a refused connection from any of them, which sends the entries of the earlier
   requests a second time: override it to return `false` for a failure after the first request.
+* During an outage of the destination of an appender added with `async: true` or in batches, a flush
+  or close, including the flush at exit, now discards that appender's entries queued ahead of it once
+  a write fails, counted as `failed` in `SemanticLogger.stats`, rather than send each one in turn.
+  Before, it waited while each one failed, up to the `open_timeout` of an HTTP based appender
+  whose server does not answer, so that a process with 10,000 entries queued could take hours to
+  exit. At exit, each such appender is also told that the process is exiting before the flush, so
+  that it stops backing off even while the thread that writes to every appender is held up handing
+  it an entry. The entries queued after a flush, and every entry to a destination that takes them,
+  are written as before. The entries discarded are reported to the internal logger, as for any entry
+  that could not be written.
 * The `:elasticsearch` and `:opensearch` appenders now send again the entries of a bulk request that
   the server rejected with status 429, because its write queue was full, up to 3 times, after waiting
   0.2, 0.4, then 0.8 seconds. Before, they were reported and discarded straight away. That holds up
