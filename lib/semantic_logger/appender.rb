@@ -83,7 +83,7 @@ module SemanticLogger
         SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &)
       elsif appender
         if appender.is_a?(Symbol)
-          SemanticLogger::Utils.constantize_symbol(appender).new(**args)
+          SemanticLogger::Utils.constantize_symbol(appender).new(**args, &)
         elsif appender.is_a?(Subscriber)
           appender
         else
@@ -93,7 +93,7 @@ module SemanticLogger
         end
       elsif metric
         if metric.is_a?(Symbol)
-          SemanticLogger::Utils.constantize_symbol(metric, "SemanticLogger::Metric").new(**args)
+          SemanticLogger::Utils.constantize_symbol(metric, "SemanticLogger::Metric").new(**args, &)
         elsif metric.is_a?(Subscriber)
           metric
         else
