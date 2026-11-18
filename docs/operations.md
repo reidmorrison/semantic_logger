@@ -96,6 +96,11 @@ did not fork (see [Log rotation](#log-rotation)).
    after `async_max_retries`. After a fork, the child starts with an empty queue, since the parent
    process writes the entries it had queued.
 
+   Within the same process, the appenders close the file or the connection that a reopen replaces.
+   `:syslog` and `:graylog` over TCP, `:udp`, and `:rabbitmq` connect again before they close the
+   connection they had, and keep it when they cannot connect. `:cloudwatch_logs` shuts down the
+   timer that sends its buffered entries, and keeps those entries for the new timer.
+
    `reopen` only asks for the appenders to be reopened: each one is reopened by the thread that
    writes its entries, before it writes the next one, so that a file is never closed, nor a
    connection ended, while an entry is being written to it. So `reopen` returns before the appenders

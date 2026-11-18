@@ -1956,7 +1956,8 @@ SemanticLogger.remove_appender(appender)
 
 `remove_appender` stops sending log messages to the appender, then waits, as `SemanticLogger.flush`
 does, until the messages already logged are written to the other appenders and those are flushed,
-so that none is still being written to the appender when it closes it.
+so that none is still being written to the appender when it closes it. Closing the appender closes
+its log file, or its connections to its server.
 
 Other appender management methods:
 
@@ -5411,6 +5412,11 @@ did not fork (see [Log rotation](#log-rotation)).
    that writes them keeps running. That thread is only started again if it has stopped, such as
    after `async_max_retries`. After a fork, the child starts with an empty queue, since the parent
    process writes the entries it had queued.
+
+   Within the same process, the appenders close the file or the connection that a reopen replaces.
+   `:syslog` and `:graylog` over TCP, `:udp`, and `:rabbitmq` connect again before they close the
+   connection they had, and keep it when they cannot connect. `:cloudwatch_logs` shuts down the
+   timer that sends its buffered entries, and keeps those entries for the new timer.
 
    `reopen` only asks for the appenders to be reopened: each one is reopened by the thread that
    writes its entries, before it writes the next one, so that a file is never closed, nor a

@@ -172,6 +172,109 @@ module Appender
         end
       end
 
+      describe "over TCP, reopened or closed in the same process" do
+        let(:server) { TCPServer.new("127.0.0.1", 0) }
+        let(:tcp_appender) { SemanticLogger::Appender::Graylog.new(url: "tcp://127.0.0.1:#{server.addr[1]}") }
+
+        after do
+          tcp_appender.close
+          server.close
+        end
+
+        def log_with(message)
+          log         = SemanticLogger::Log.new("Test", :info)
+          log.message = message
+          log
+        end
+
+        # Returns [true|false] whether the server sees the given connection end within 2 seconds.
+        def ended?(connection)
+          connection.wait_readable(2) && connection.read_nonblock(1, exception: false).nil?
+        end
+
+        # Returns [String] the short_message of the next GELF message that the given connection reads, within 2
+        # seconds.
+        def short_message(connection)
+          connection.wait_readable(2) && JSON.parse(connection.gets("\0").chomp("\0"))["short_message"]
+        end
+
+        it "closes the connection of the notifier that a reopen replaced, and sends on the new one" do
+          tcp_appender
+          replaced = server.accept
+          tcp_appender.reopen
+          current = server.accept
+          tcp_appender.log(log_with("after"))
+
+          assert ended?(replaced), "The server did not see the replaced connection end"
+          assert_equal "after", short_message(current)
+        ensure
+          [replaced, current].each { |connection| connection&.close }
+        end
+
+        it "keeps the notifier it has when a reopen cannot connect" do
+          notifier   = tcp_appender.notifier
+          connection = server.accept
+
+          GELF::Notifier.stub(:new, ->(*) { raise Errno::ECONNREFUSED }) do
+            assert_raises(Errno::ECONNREFUSED) { tcp_appender.reopen }
+          end
+          tcp_appender.log(log_with("after"))
+
+          assert_same notifier, tcp_appender.notifier
+          assert_equal "after", short_message(connection)
+        ensure
+          connection&.close
+        end
+
+        it "reports an error closing the connection that a reopen replaced, rather than raising it" do
+          internal_logger     = SemanticLogger::Test::CaptureLogEvents.new
+          tcp_appender.logger = internal_logger
+          replaced            = tcp_appender.notifier
+          replaced.stub(:addresses=, ->(_) { raise Errno::ECONNRESET }) { tcp_appender.reopen }
+          report = internal_logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not close the connection to the Graylog server that a reopen replaced", report.message
+          assert_instance_of Errno::ECONNRESET, report.exception
+        ensure
+          replaced&.addresses = []
+        end
+
+        it "closes its connection, and connects again for the next write" do
+          tcp_appender
+          closed = server.accept
+          tcp_appender.close
+
+          assert ended?(closed), "The server did not see the connection end"
+
+          tcp_appender.log(log_with("after"))
+          current = server.accept
+
+          assert_equal "after", short_message(current)
+        ensure
+          [closed, current].each { |connection| connection&.close }
+        end
+      end
+
+      describe "over UDP" do
+        it "leaves GELF's UDP socket open for the other UDP appenders when it is reopened or closed" do
+          server = UDPSocket.new
+          server.bind("127.0.0.1", 0)
+          url    = "udp://127.0.0.1:#{server.addr[1]}"
+          closed = SemanticLogger::Appender::Graylog.new(url: url)
+          other  = SemanticLogger::Appender::Graylog.new(url: url)
+          closed.reopen
+          closed.close
+          other.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "other" })
+
+          assert server.wait_readable(2), "The server did not receive the message"
+          # GELF compresses each datagram with zlib.
+          assert_equal "other", JSON.parse(Zlib::Inflate.inflate(server.recv(65_536)))["short_message"]
+        ensure
+          server&.close
+        end
+      end
+
       describe "#message_error?" do
         it "is true for a log message that GELF cannot send" do
           error = ArgumentError.new("Data too big (456404 bytes), would create more than 128 chunks!")

@@ -101,6 +101,10 @@ module SemanticLogger
 
       # Re-open after process fork
       #
+      # Builds a new notifier, which connects to the server over TCP, and then closes the connections of
+      # the notifier it replaces, such as after a log rotation. When connecting fails, it raises, and
+      # keeps the notifier it has.
+      #
       # A child process first forgets the notifier it inherited, without closing it: over TCP, its
       # connection belongs to the parent. So when connecting fails in the child, such as while the server
       # cannot be reached, the appender connects again on its next write, rather than writing through the
@@ -121,7 +125,18 @@ module SemanticLogger
           raise(ArgumentError, "Invalid protocol value: #{@protocol}. Must be :udp or :tcp")
         end
 
+        replaced = @notifier
         build_notifier
+        close_notifier(replaced, replaced: true)
+      end
+
+      # Closes the notifier's TCP connections, such as when the appender is removed, and forgets it, so
+      # that the next write builds a new one. An error closing them is reported to the internal logger,
+      # rather than raised.
+      def close
+        close_notifier(@notifier)
+      ensure
+        @notifier = nil
       end
 
       # Returns [Hash] of parameters to send
@@ -177,6 +192,19 @@ module SemanticLogger
       # In a child process, forgets the notifier built in the parent before a fork. See #reopen.
       def forget_inherited
         @notifier = nil unless @pid == ::Process.pid
+      end
+
+      # Closes the TCP connections of the given notifier, if any: the one that a reopen replaced, when
+      # replaced: is true. Reports an error to the internal logger as a warning, rather than raising it.
+      #
+      # GELF::Notifier#close cannot: over TCP it raises NoMethodError, since GELF's TCP transport has no
+      # #close, and over UDP it closes the socket that GELF shares among every UDP notifier that sends on
+      # the calling thread, where the next one to send fails with IOError. Giving the notifier no address
+      # to send to closes the sockets of its TCP transport, and leaves that UDP socket open.
+      def close_notifier(notifier, replaced: false)
+        notifier&.addresses = []
+      rescue StandardError => e
+        logger.warn("Could not close the connection to the Graylog server#{' that a reopen replaced' if replaced}", e)
       end
 
       # Returns [Hash] a copy of the gelf_options (see Subscriber#copy_options), with the protocol of the url

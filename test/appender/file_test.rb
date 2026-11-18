@@ -487,6 +487,32 @@ module Appender
         end
       end
 
+      describe "#close" do
+        it "closes the log file, and opens it again for a write after it" do
+          file = appender.instance_variable_get(:@file)
+          appender.close
+
+          assert_predicate file, :closed?
+          assert appender.log(log)
+          assert_equal 1, File.read(file_name).lines.count
+        ensure
+          appender.close
+        end
+
+        it "reports an error closing the log file, rather than raising it" do
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          file            = appender.instance_variable_get(:@file)
+          file.stub(:close, -> { raise Errno::EIO }) { appender.close }
+          report = appender.logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not close the log file #{file_name}", report.message
+          assert_instance_of Errno::EIO, report.exception
+        ensure
+          file&.close
+        end
+      end
+
       describe "#flush" do
         it "flushes the file opened on creation" do
           assert appender.flush

@@ -172,6 +172,108 @@ module Appender
         end
       end
 
+      describe "over TCP, reopened or closed in the same process" do
+        let(:server) { TCPServer.new("127.0.0.1", 0) }
+        let(:tcp_appender) do
+          SemanticLogger::Appender::Syslog.new(
+            url:       "tcp://127.0.0.1:#{server.addr[1]}",
+            formatter: ->(log, _logger) { log.message }
+          )
+        end
+
+        after do
+          tcp_appender.close
+          server.close
+        end
+
+        def log_with(message)
+          log         = SemanticLogger::Log.new("Test", :info)
+          log.message = message
+          log
+        end
+
+        # Returns [true|false] whether the server sees the given connection end within 2 seconds.
+        def ended?(connection)
+          connection.wait_readable(2) && connection.read_nonblock(1, exception: false).nil?
+        end
+
+        # Returns [String] the next record that the given connection reads, within 2 seconds.
+        def record(connection)
+          connection.wait_readable(2) && connection.gets("\r\n")
+        end
+
+        it "closes the connection that a reopen replaced, and writes on the new one" do
+          tcp_appender
+          replaced = server.accept
+          tcp_appender.reopen
+          current = server.accept
+          tcp_appender.log(log_with("after"))
+
+          assert ended?(replaced), "The server did not see the replaced connection end"
+          assert_equal "after\r\n", record(current)
+        ensure
+          [replaced, current].each { |connection| connection&.close }
+        end
+
+        it "keeps the connection it has when a reopen cannot connect" do
+          tcp_appender
+          connection = server.accept
+
+          Net::TCPClient.stub(:new, ->(**) { raise Errno::ECONNREFUSED }) do
+            assert_raises(Errno::ECONNREFUSED) { tcp_appender.reopen }
+          end
+          tcp_appender.log(log_with("after"))
+
+          assert_equal "after\r\n", record(connection)
+        ensure
+          connection&.close
+        end
+
+        it "reports an error closing the connection that a reopen replaced, rather than raising it" do
+          internal_logger       = SemanticLogger::Test::CaptureLogEvents.new
+          tcp_appender.logger   = internal_logger
+          replaced              = tcp_appender.remote_syslog
+          replaced.stub(:close, -> { raise Errno::ECONNRESET }) { tcp_appender.reopen }
+          report = internal_logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not close the connection to the syslog server that a reopen replaced", report.message
+          assert_instance_of Errno::ECONNRESET, report.exception
+        ensure
+          replaced&.close
+        end
+
+        it "closes its connection, and connects again for the next write" do
+          tcp_appender
+          closed = server.accept
+          tcp_appender.close
+
+          assert ended?(closed), "The server did not see the connection end"
+
+          tcp_appender.log(log_with("after"))
+          current = server.accept
+
+          assert_equal "after\r\n", record(current)
+        ensure
+          [closed, current].each { |connection| connection&.close }
+        end
+      end
+
+      describe "over UDP" do
+        it "closes the socket that a reopen replaced, and its socket when it is closed" do
+          appender = SemanticLogger::Appender::Syslog.new(url: "udp://127.0.0.1:514")
+          replaced = appender.remote_syslog
+          appender.reopen
+
+          assert_predicate replaced, :closed?
+          refute_predicate appender.remote_syslog, :closed?
+
+          appender.close
+
+          assert_predicate appender.remote_syslog, :closed?
+        end
+      end
+
       describe "#message_error?" do
         it "is true over UDP for a log message too large to send as a datagram" do
           appender = SemanticLogger::Appender::Syslog.new(url: "udp://localhost:88888")

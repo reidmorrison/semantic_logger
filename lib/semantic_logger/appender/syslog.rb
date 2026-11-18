@@ -190,6 +190,10 @@ module SemanticLogger
       # After forking an active process call #reopen to re-open
       # open the handles to resources
       #
+      # Over TCP, it connects again, and then closes the connection it replaces, such as after a log rotation.
+      # When connecting fails, it raises, and keeps the connection it has. Over UDP, it closes the socket it
+      # replaces, which in a forked child is only the child's copy.
+      #
       # Over TCP, a child process first forgets the client it inherited, without closing its connection, which
       # belongs to the parent. The child closes only its own copy of the socket's file descriptor, which sends
       # the server nothing, so that the server sees the connection end once the parent closes it, rather than
@@ -204,12 +208,23 @@ module SemanticLogger
           ::Syslog.send(method, application, options, facility)
         when :tcp
           forget_inherited
+          replaced = @remote_syslog
           connect_tcp
+          close_remote_syslog(replaced, replaced: true)
         when :udp
+          replaced       = @remote_syslog
           @remote_syslog = UDPSocket.new
+          close_remote_syslog(replaced, replaced: true)
         else
           raise "Unsupported protocol: #{@protocol}"
         end
+      end
+
+      # Closes the connection to a remote syslog server, such as when the appender is removed. Over TCP, the next
+      # write connects again. The local syslog is left open, since ::Syslog is shared by the whole process. An
+      # error closing it is reported to the internal logger, rather than raised.
+      def close
+        close_remote_syslog(@remote_syslog)
       end
 
       # Write the log using the specified protocol and server.
@@ -287,6 +302,14 @@ module SemanticLogger
         @remote_syslog = nil
         socket         = inherited&.socket&.to_io
         socket.close unless socket.nil? || socket.closed?
+      end
+
+      # Closes the given TCP client or UDP socket, if any: the one that a reopen replaced, when replaced: is true.
+      # Reports an error to the internal logger as a warning, rather than raising it.
+      def close_remote_syslog(remote_syslog, replaced: false)
+        remote_syslog&.close
+      rescue StandardError => e
+        logger.warn("Could not close the connection to the syslog server#{' that a reopen replaced' if replaced}", e)
       end
 
       # Returns [Hash] a copy of the options given as tcp_client: (see Subscriber#copy_options), with the server

@@ -128,8 +128,24 @@ module SemanticLogger
 
       # After forking an active process call #reopen to re-open
       # open the handles to resources
+      #
+      # Connects the client again after #close, since the MongoDB driver refuses to use a closed client.
       def reopen
+        if @closed
+          client.reconnect
+          @closed = false
+        end
         @collection = client[@collection_name, @options]
+      end
+
+      # Closes the client's connections, and stops its monitoring threads, such as when the appender is
+      # removed. An error closing it is reported to the internal logger, rather than raised. A reopen
+      # connects it again.
+      def close
+        @closed = true
+        client.close
+      rescue StandardError => e
+        logger.warn("Could not close the MongoDB client", e)
       end
 
       # Create the required capped collection.

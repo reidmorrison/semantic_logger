@@ -872,6 +872,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   its channel, such as after it restarted, rather than raising `Bunny::ChannelAlreadyClosed` and
   leaving the connection open. See
   [RabbitMQ](https://logger.reidmorrison.com/appenders.html#rabbitmq-amqp).
+- Reopening the `:syslog` or `:graylog` appender over TCP in the same process, such as with
+  `SemanticLogger.reopen(force: true)` after a log rotation, closes the connection it replaced, which
+  it left open, so that each reopen left one more connection to the server open. `:syslog` over UDP
+  closes the socket it replaced. When they cannot connect again, they keep the connection they have.
+  Reopening the `:cloudwatch_logs` appender shuts down the timer it replaced, which kept sending the
+  buffered entries every `force_flush_interval_seconds` alongside the new one, and keeps the entries
+  it had buffered, which it dropped. An error closing what a reopen replaced is reported to the
+  internal logger as a warning, rather than raised. In a forked child, they still leave what they
+  inherited to the parent. Closing the `:syslog`, `:graylog`, file, or `:mongodb` appender, such as
+  with `SemanticLogger.remove_appender` or `SemanticLogger.close`, now closes its connection, log
+  file, or MongoDB client, which it left open, with the client's monitoring threads. `:syslog` and
+  `:graylog` over TCP, and the file appender, open them again for a later write, and the `:mongodb`
+  appender when it is reopened. An error closing them is reported to the internal logger as a
+  warning. See [Reopen manually](https://logger.reidmorrison.com/operations.html#reopen-manually).
 
 ## [5.2.0] 2026-10-30
 

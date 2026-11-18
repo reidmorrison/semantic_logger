@@ -239,6 +239,15 @@ module SemanticLogger
         @file&.flush
       end
 
+      # Closes the log file, such as when the appender is removed. A write after it opens the file again,
+      # as after a write that fails (see retry_count). An error closing it is reported to the internal
+      # logger, rather than raised.
+      def close
+        @file&.close
+      rescue StandardError => e
+        logger.warn("Could not close the log file #{current_file_name}", e)
+      end
+
       # See Subscriber#inspect.
       def inspect_details
         "file_name=#{file_name.inspect}"

@@ -142,6 +142,31 @@ module Appender
         end
       end
 
+      describe "#close" do
+        it "closes the client, and a reopen connects it again" do
+          appender.close
+
+          assert_predicate appender.client, :closed?
+
+          appender.reopen
+          appender.info("after reopen")
+
+          refute_predicate appender.client, :closed?
+          assert_equal "after reopen", appender.collection.find.first["message"]
+        end
+
+        it "reports an error closing the client, rather than raising it" do
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          appender.client.stub(:close, -> { raise Mongo::Error::OperationFailure, "closing" }) { appender.close }
+          report = appender.logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not close the MongoDB client", report.message
+          assert_equal "closing", report.exception.message
+          appender.reopen
+        end
+      end
+
       describe "format logs into documents" do
         it "handle no arguments" do
           appender.debug

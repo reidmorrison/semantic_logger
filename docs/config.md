@@ -1087,7 +1087,8 @@ SemanticLogger.remove_appender(appender)
 
 `remove_appender` stops sending log messages to the appender, then waits, as `SemanticLogger.flush`
 does, until the messages already logged are written to the other appenders and those are flushed,
-so that none is still being written to the appender when it closes it.
+so that none is still being written to the appender when it closes it. Closing the appender closes
+its log file, or its connections to its server.
 
 Other appender management methods:
 
