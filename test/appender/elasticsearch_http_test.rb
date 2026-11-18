@@ -19,6 +19,14 @@ module Appender
         assert_includes appender.batch_refusal, "Use appender: :elasticsearch to send the entries in batches"
       end
 
+      it "does not refuse a subclass that replaces the #batch it inherits" do
+        bulk = Class.new(SemanticLogger::Appender::ElasticsearchHttp) do
+          def batch(logs) = logs
+        end
+
+        assert_nil stub_http_start { bulk.new(url: "http://localhost:9200") }.batch_refusal
+      end
+
       it "logs to daily indexes" do
         index = nil
         appender.stub(:post, ->(_json, ind) { index = ind }) do

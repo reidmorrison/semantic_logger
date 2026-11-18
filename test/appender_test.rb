@@ -575,7 +575,7 @@ class AppenderTest < Minitest::Test
       describe "batching an appender that says it cannot be batched" do
         # Creates the appender without connecting to its server.
         def factory(**, &)
-          Net::HTTP.stub_any_instance(:start, true) { SemanticLogger::Appender.factory(**, &) }
+          stub_http_start { SemanticLogger::Appender.factory(**, &) }
         end
 
         it "raises ArgumentError for :elasticsearch_http with batch: true, and says to use :elasticsearch" do
@@ -588,6 +588,21 @@ class AppenderTest < Minitest::Test
                        "Use appender: :elasticsearch to send the entries in batches, or add this appender " \
                        "without batch: true.",
                        error.message
+        end
+
+        it "finishes the connection of the :elasticsearch_http appender it created, once, but not a caller's own" do
+          instance = factory(appender: :elasticsearch_http, url: "http://localhost:9200")
+          finished = []
+
+          Net::HTTP.stub_any_instance(:finish, -> { finished << self }) do
+            assert_raises(ArgumentError) do
+              factory(appender: :elasticsearch_http, url: "http://localhost:9200", batch: true)
+            end
+            assert_raises(ArgumentError) { factory(appender: instance, batch: true) }
+          end
+
+          assert_equal 1, finished.size
+          refute_same instance.http, finished.first
         end
 
         it "adds :elasticsearch_http without batching it" do
