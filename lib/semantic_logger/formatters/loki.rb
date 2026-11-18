@@ -28,12 +28,27 @@ module SemanticLogger
       # own name, and nearly every payload key is checked against it.
       OWN_NAME = /\A(?:#{OWN_KEYS.map { |key| key.gsub('_', LOKI_SEPARATOR.source) }.join('|')})\z/
 
-      # The prefix of a payload key named like one of OWN_KEYS. The :logfmt and :open_telemetry
-      # formatters write `payload.`, which Loki would store as `payload_`.
+      # Matches a name that holds an ASCII letter or digit. Loki rejects the whole push for a
+      # structured metadata name without one, such as an empty name, `-`, or `_`, since it would
+      # store it as an empty name or as `_`.
+      LETTER_OR_DIGIT = /[A-Za-z0-9]/
+
+      # The prefix of a payload key named like one of OWN_KEYS, or without a letter or digit. The
+      # :logfmt and :open_telemetry formatters write `payload.`, which Loki would store as
+      # `payload_`.
       PAYLOAD_PREFIX = "payload_".freeze
 
       # A name that starts with a digit, which Loki stores with `key_` before it.
       LEADING_DIGIT = /\A[0-9]/
+
+      # Matches a label name that Loki accepts: an ASCII letter or an underscore, followed by ASCII
+      # letters, digits, and underscores. Loki rejects the whole push for any other, such as
+      # `request-id`, `1st`, or an empty name, with "couldn't parse labels".
+      LABEL_NAME = /\A[A-Za-z_][A-Za-z0-9_]*\z/
+
+      # The name of a label whose key is empty, with the prefix that Loki puts before a name that
+      # starts with a digit.
+      EMPTY_LABEL_NAME = "key_".freeze
 
       # Returns [String] a single JSON log
       def call(log, logger)
@@ -58,7 +73,8 @@ module SemanticLogger
       private
 
       def build_stream
-        self.stream = {stream: {pid: pid}, values: [[]]}
+        self.stream     = {stream: {pid: pid}, values: [[]]}
+        @renamed_labels = nil
 
         application
         environment
@@ -68,6 +84,7 @@ module SemanticLogger
         tags
         named_tags
         context
+        renamed_labels
         time
         message
         payload
@@ -80,7 +97,7 @@ module SemanticLogger
       end
 
       def host
-        stream[:stream][:host] = logger.host if log_host && logger.host.to_s
+        stream[:stream][:host] = logger.host if log_host && logger&.host
       end
 
       def application
@@ -104,14 +121,68 @@ module SemanticLogger
       end
 
       def named_tags
-        stream[:stream].merge!(log.named_tags) if log.named_tags.respond_to?(:empty?) && !log.named_tags.empty?
+        return unless log.named_tags.respond_to?(:empty?) && !log.named_tags.empty?
+
+        log.named_tags.each_pair { |key, value| add_label(key, value) }
       end
 
       def context
         return unless log.context && !log.context.empty?
 
-        log.context.each do |key, value|
-          stream[:stream].merge!(key.to_s => loki_value(value))
+        log.context.each { |key, value| add_label(key.to_s, value) }
+      end
+
+      # Adds a label from the named tags or the context, with its value as Loki stores it (see
+      # #loki_value), unless the value is nil, which Loki would store as the text "null".
+      #
+      # Loki rejects the whole push for a label name it does not accept (see LABEL_NAME), so such a
+      # name is replaced (see #label_name_for), and the label added after the others, by
+      # #renamed_labels.
+      def add_label(key, value)
+        return if value.nil?
+
+        value = loki_value(value)
+        if label_name?(key)
+          stream[:stream][key] = value
+        else
+          (@renamed_labels ||= []) << [label_name_for(key), value]
+        end
+      end
+
+      # Whether Loki accepts the key as a label name. A name with characters outside ASCII never is,
+      # and matching it could raise, when it holds invalid UTF-8.
+      def label_name?(key)
+        name = key.is_a?(Symbol) ? key.name : key.to_s
+        name.ascii_only? && name.match?(LABEL_NAME)
+      end
+
+      # Returns [String] a name that Loki accepts for a label whose key it does not: the name under
+      # which Loki stores structured metadata of that name (see #loki_name), such as `request_id`
+      # for `request-id`, and `key_1st` for `1st`, or EMPTY_LABEL_NAME for an empty key.
+      def label_name_for(key)
+        name = loki_name(key.to_s)
+        name.empty? ? EMPTY_LABEL_NAME : name
+      end
+
+      # Adds the labels whose names were replaced, after the others, so that a label written under
+      # its own name keeps it. A name that another label already has is written with a number after
+      # it, as in `request_id_2`, so that both values are kept, unless that label has the same
+      # value, once Loki stores it, which is then written once. The value of one of this formatter's
+      # own labels, such as the `level` Symbol or the `pid` Integer, is compared as Loki stores it
+      # too.
+      def renamed_labels
+        return unless @renamed_labels
+
+        labels = stream[:stream].transform_keys(&:to_s)
+        @renamed_labels.each do |name, value|
+          if labels.key?(name)
+            next if loki_value(labels[name]) == value
+
+            number = 2
+            number += 1 while labels.key?("#{name}_#{number}")
+            name = "#{name}_#{number}"
+          end
+          labels[name] = stream[:stream][name] = value
         end
       end
 
@@ -184,41 +255,44 @@ module SemanticLogger
       # Returns [Hash] the payload as structured metadata, with String keys and values, since Loki
       # only accepts Strings.
       #
-      # A key that Loki would store as one of this formatter's own names (see OWN_KEYS) is written
-      # with PAYLOAD_PREFIX, after the other keys (see #add_prefixed).
+      # A key that Loki would store as one of this formatter's own names (see OWN_KEYS), or that it
+      # would reject (see LETTER_OR_DIGIT), is written with PAYLOAD_PREFIX, after the other keys (see
+      # #add_prefixed).
       def payload_metadata(hash)
         metadata = {}
-        own      = nil
+        prefixed = nil
         hash.each_pair do |key, value|
           name = key.to_s
-          if own_key?(name)
-            (own ||= []) << [name, value]
+          if prefixed_key?(name)
+            (prefixed ||= []) << [name, value]
           else
             metadata[name] = loki_value(value)
           end
         end
-        add_prefixed(metadata, own) if own
+        add_prefixed(metadata, prefixed) if prefixed
         metadata
       end
 
-      # Adds each of the payload's keys named like this formatter's own with PAYLOAD_PREFIX, under
-      # the name Loki stores it as (see #loki_name), such as `payload_metric_value` for
-      # `metric.value`, and with the prefix again while another key has that name once Loki has
-      # stored it. Loki keeps only one value of the names that it stores alike, so this keeps the
-      # value of each of these keys. Other payload keys that Loki stores alike, such as `a.b` and
-      # `a_b`, still keep only one.
+      # Adds each of the payload's keys named like this formatter's own, or without an ASCII letter
+      # or digit, with PAYLOAD_PREFIX, under the name Loki stores it as (see #loki_name), such as
+      # `payload_metric_value` for `metric.value`, and `payload_` for an empty key or `-`, and with
+      # the prefix again while another key has that name once Loki has stored it. Loki keeps only
+      # one value of the names that it stores alike, so this keeps the value of each of these keys.
+      # Other payload keys that Loki stores alike, such as `a.b` and `a_b`, still keep only one.
       #
       # A key that is exactly one of OWN_KEYS is named first, so that `payload_metric_value` holds
       # the payload's `metric_value`, whatever the order of the keys, and `metric.value` is
       # prefixed again.
       #
       # Joining the prefix with the name as Loki stores it gives the name Loki stores the joined
-      # name as, since such a key starts with a letter.
-      def add_prefixed(metadata, own)
+      # name as: a key named like one of OWN_KEYS starts with a letter, and one without a letter or
+      # digit is stored as an empty name or as `_`, which Loki would write as one underscore with
+      # the prefix's, so that underscore is left out.
+      def add_prefixed(metadata, prefixed)
         taken = Set.new(metadata.each_key) { |name| loki_name(name) }
-        exact, lookalikes = own.partition { |name, _value| OWN_KEYS.include?(name) }
+        exact, lookalikes = prefixed.partition { |name, _value| OWN_KEYS.include?(name) }
         (exact + lookalikes).each do |name, value|
-          name = PAYLOAD_PREFIX + loki_name(name)
+          name = PAYLOAD_PREFIX + loki_name(name).delete_prefix("_")
           name = PAYLOAD_PREFIX + name while taken.include?(name)
           taken << name
           metadata[name] = loki_value(value)
@@ -239,13 +313,16 @@ module SemanticLogger
         name.match?(LEADING_DIGIT) ? "key_#{name}" : name
       end
 
-      # Whether Loki would store the name as one of this formatter's own names (see OWN_NAME).
+      # Whether the payload key is written with PAYLOAD_PREFIX: Loki would store it as one of this
+      # formatter's own names (see OWN_NAME), or it has no ASCII letter or digit (see
+      # LETTER_OR_DIGIT).
       #
       # A name with characters outside ASCII is matched as Utils.to_json writes it: in UTF-8,
-      # without invalid bytes, which matching it as it is could raise for.
-      def own_key?(name)
+      # without invalid bytes, which matching it as it is could raise for. So a key of invalid
+      # bytes alone is prefixed, since it is written as an empty name.
+      def prefixed_key?(name)
         name = Utils.encode_utf8_string(name) unless name.ascii_only?
-        name.match?(OWN_NAME)
+        name.match?(OWN_NAME) || !name.match?(LETTER_OR_DIGIT)
       end
 
       # Returns [String] the value as Loki accepts it.
