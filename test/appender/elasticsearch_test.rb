@@ -12,19 +12,6 @@ module Appender
         end
       end
 
-      def capture_deprecations
-        original             = Warning[:deprecated]
-        Warning[:deprecated] = true
-        io                   = StringIO.new
-        original_stderr      = $stderr
-        $stderr              = io
-        yield
-        io.string
-      ensure
-        $stderr              = original_stderr
-        Warning[:deprecated] = original
-      end
-
       it "does not show the password in #inspect" do
         appender = client_class.stub_any_instance(:bulk, true) do
           SemanticLogger::Appender::Elasticsearch.new(url: "https://elastic:es-s3cr3t@es.example.com:9200")
@@ -52,25 +39,19 @@ module Appender
       end
 
       it "warns that the type: parameter is deprecated" do
-        stderr =
-          client_class.stub_any_instance(:bulk, true) do
-            capture_deprecations do
-              SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200", type: "log")
-            end
+        client_class.stub_any_instance(:bulk, true) do
+          assert_deprecated(/SemanticLogger: .*`type:`.*deprecated/m) do
+            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200", type: "log")
           end
-
-        assert_match(/`type:`.*deprecated/m, stderr)
+        end
       end
 
       it "does not warn when type: is omitted" do
-        stderr =
-          client_class.stub_any_instance(:bulk, true) do
-            capture_deprecations do
-              SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
-            end
+        client_class.stub_any_instance(:bulk, true) do
+          refute_deprecated do
+            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
           end
-
-        refute_match(/deprecated/, stderr)
+        end
       end
 
       describe "metric-only entries" do

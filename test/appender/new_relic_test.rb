@@ -6,17 +6,16 @@ add_mocks_to_load_path
 module Appender
   class NewRelicTest < Minitest::Test
     describe SemanticLogger::Appender::NewRelic do
+      allow_deprecation(/Appender::NewRelic \(appender: :new_relic\) is deprecated/)
+
       let(:appender) { SemanticLogger::Appender::NewRelic.new }
       let(:amessage) { "AppenderNewRelicTest log message" }
 
       it "warns that the appender is deprecated" do
-        original             = Warning[:deprecated]
-        Warning[:deprecated] = true
-        assert_output(nil, /deprecated.*new_relic_logs/m) do
+        line = __LINE__ + 2
+        assert_deprecated(/new_relic_test\.rb:#{line}: warning: SemanticLogger: .*deprecated.*new_relic_logs/m) do
           SemanticLogger::Appender::NewRelic.new
         end
-      ensure
-        Warning[:deprecated] = original
       end
 
       (SemanticLogger::LEVELS - %i[error fatal]).each do |level|

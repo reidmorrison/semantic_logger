@@ -94,10 +94,9 @@ module SemanticLogger
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
       def initialize(index: "main", source_type: nil, **args, &)
-        Kernel.warn(
+        Deprecation.warn(
           "SemanticLogger::Appender::Splunk (appender: :splunk) is deprecated and will be removed in v6. " \
-          "Its splunk-sdk-ruby gem does not verify TLS certificates. Use appender: :splunk_http instead.",
-          category: :deprecated
+          "Its splunk-sdk-ruby gem does not verify TLS certificates. Use appender: :splunk_http instead."
         )
         @index       = index
         @source_type = source_type
