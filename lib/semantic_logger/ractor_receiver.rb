@@ -19,7 +19,14 @@ module SemanticLogger
     # Seconds that .pause waits for the receiving thread to finish the entry it is handing over.
     PAUSE_TIMEOUT = 5
 
-    # The thread variable set on a thread while it pauses the receiving thread (see .pause).
+    # Seconds that .pause waits at a time for the receiving thread to get to the pause, before it checks
+    # again. Ruby does not end a wait on a Queue that a signal trap interrupted when the Queue is closed
+    # while the trap runs, until the wait times out; the receiving thread does that when it gets to a
+    # pause that a pause in the trap shares.
+    PAUSE_CHECK_SECONDS = 0.1
+
+    # The thread variable that holds, while a thread pauses the receiving thread, the Queue that the
+    # receiving thread closes once it waits for the fork to be over (see .pause).
     PAUSING = :semantic_logger_pausing_ractor_receiver
 
     @port       = ::Ractor::Port.new
@@ -100,10 +107,21 @@ module SemanticLogger
       # The receiving thread first finishes handing over the entries sent before, waiting at most
       # PAUSE_TIMEOUT seconds, after which the fork goes ahead anyway.
       #
+      # A pause in a signal trap that interrupted another one on the same thread shares it, rather than
+      # asking the receiving thread to pause again: it would only get to the request once the other
+      # pause is over, which cannot be before the trap is.
+      #
       # Takes no lock, so that it can be called in a signal trap, such as one that forks.
       def pause(&)
         thread = @thread unless RactorSupport.other_ractor?
         return yield unless thread&.alive? && !Thread.current.equal?(thread)
+
+        paused = Thread.current.thread_variable_get(PAUSING)
+        if paused
+          wait_until_paused(paused)
+          # Unless the other pause ended meanwhile, which another Fiber of this thread can do.
+          return yield if Thread.current.thread_variable_get(PAUSING).equal?(paused)
+        end
 
         hold_receiving_thread(&)
       end
@@ -111,14 +129,16 @@ module SemanticLogger
       # Waits until every entry sent to the port before this call has been handed to the processor,
       # then flushes the processor. Returns the result of the processor's flush.
       #
-      # On a thread that pauses the receiving thread (see .pause), such as one that flushes while it
-      # forks, it flushes the processor without waiting: the receiving thread has handed over the
-      # entries sent before the fork began, and waits until it is over.
+      # It flushes the processor without waiting on a thread that pauses the receiving thread (see
+      # .pause), such as one that flushes while it forks: the receiving thread has handed over the
+      # entries sent before the fork began, and waits until it is over. And on a thread inside the
+      # processor, such as in a signal trap that interrupted a log call in synchronous mode: the
+      # receiving thread would wait for that call to return before it could hand over another entry.
       #
       # Takes no lock, so that it can be called in a signal trap.
       def flush
         thread = @thread
-        return Logger.processor.flush if !thread&.alive? || Thread.current.equal?(thread) || pausing?
+        return Logger.processor.flush unless waits_for_receiving_thread?(thread)
 
         done = Queue.new
         @port << [:flush, register(done)]
@@ -131,25 +151,47 @@ module SemanticLogger
 
       private
 
+      # Whether a flush on this thread waits for the receiving thread (see .flush).
+      def waits_for_receiving_thread?(thread)
+        thread&.alive? && !Thread.current.equal?(thread) && !pausing? && !Logger.processor.current_thread_inside?
+      end
+
       # Whether this thread pauses the receiving thread (see .pause).
       def pausing?
-        Thread.current.thread_variable_get(PAUSING) == true
+        !Thread.current.thread_variable_get(PAUSING).nil?
       end
 
       # Runs the block while the receiving thread waits on a Queue (see .pause).
+      #
+      # The thread variable is set only once the request is sent, so that a pause in a signal trap
+      # that interrupted this one before then asks for its own; and cleared before the receiving
+      # thread resumes, so that one in a trap after then does too. Both wait for the receiving thread
+      # to get to their request, at most PAUSE_TIMEOUT seconds, rather than fork while it waits on the
+      # port.
       def hold_receiving_thread
-        pausing = Thread.current.thread_variable_get(PAUSING)
-        resume  = Queue.new
+        paused = Queue.new
+        resume = Queue.new
         begin
-          Thread.current.thread_variable_set(PAUSING, true)
-          paused = Queue.new
           @port << [:pause, register([paused, resume])]
-          paused.pop(timeout: PAUSE_TIMEOUT)
+          Thread.current.thread_variable_set(PAUSING, paused)
+          wait_until_paused(paused)
           yield
         ensure
+          # Only if it is this pause's, which a pause in another Fiber of this thread may have replaced.
+          Thread.current.thread_variable_set(PAUSING, nil) if Thread.current.thread_variable_get(PAUSING).equal?(paused)
           resume.push(true)
-          # Restored rather than cleared, for a pause in a signal trap that interrupted another one.
-          Thread.current.thread_variable_set(PAUSING, pausing)
+        end
+      end
+
+      # Waits until the receiving thread closes the Queue, once it waits for the fork to be over, at
+      # most PAUSE_TIMEOUT seconds, checking every PAUSE_CHECK_SECONDS.
+      def wait_until_paused(paused)
+        deadline = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) + PAUSE_TIMEOUT
+        until paused.closed?
+          remaining = deadline - ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+          break unless remaining.positive?
+
+          paused.pop(timeout: [remaining, PAUSE_CHECK_SECONDS].min)
         end
       end
 
@@ -218,12 +260,15 @@ module SemanticLogger
         # The Ractor that asked has stopped waiting.
       end
 
-      # Acknowledges a pause request (see .pause), then waits until the fork is over.
+      # Acknowledges a pause request (see .pause), then waits until the fork is over. It acknowledges by
+      # closing the Queue, rather than pushing onto it, so that every wait on it ends, including that of
+      # a pause in a signal trap that shares this one, whether or not the pause that the trap
+      # interrupted has had the acknowledgement yet.
       def wait_for_fork(token)
         paused, resume = registered(token)
         return unless paused
 
-        paused.push(true)
+        paused.close
         resume.pop
       end
 

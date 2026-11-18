@@ -45,6 +45,12 @@ module SemanticLogger
       super
     end
 
+    # Returns [false]: another thread never waits for the calling thread to return from a call to this
+    # processor before it can use it, since it holds no lock while it queues an entry.
+    def current_thread_inside?
+      false
+    end
+
     # Start the appender thread
     def start
       return false if active?

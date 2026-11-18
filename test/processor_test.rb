@@ -318,6 +318,21 @@ module SemanticLogger
         end
       end
 
+      describe "#current_thread_inside?" do
+        it "is false, even on its worker thread while it writes" do
+          async    = processor
+          inside   = []
+          appender = SemanticLogger::Test::CaptureLogEvents.new
+          appender.define_singleton_method(:log) { |_log| inside << async.current_thread_inside? }
+          async.appenders << appender
+          async.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "hello" })
+          async.flush
+
+          assert_equal [false], inside
+          refute_predicate async, :current_thread_inside?
+        end
+      end
+
       describe "#start" do
         it "returns false when the worker thread is already active" do
           assert_predicate processor, :active?

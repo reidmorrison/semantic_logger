@@ -26,6 +26,15 @@ class MinitestHelpersTest < Minitest::Test
       assert_equal ["User enabled"], events.map(&:message)
     end
 
+    it "lets the code under test flush" do
+      events = semantic_logger_events do
+        User.new.enable!
+        SemanticLogger.flush
+      end
+
+      assert_equal ["User enabled"], events.map(&:message)
+    end
+
     it "captures only the supplied class's events" do
       events = semantic_logger_events(User) { User.new.enable! }
 

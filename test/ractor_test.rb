@@ -25,6 +25,27 @@ module SemanticLogger
       end
     end
 
+    # Writes nothing, and each flush waits until its gate, a Queue, is closed, at most 5 seconds.
+    class GatedFlush < SemanticLogger::Subscriber
+      # Returns [Queue] that gets an entry as each flush begins.
+      attr_reader :flushing
+
+      def initialize(gate)
+        super()
+        @gate     = gate
+        @flushing = Queue.new
+      end
+
+      def log(_log)
+        true
+      end
+
+      def flush
+        @flushing << true
+        @gate.pop(timeout: 5)
+      end
+    end
+
     # A shareable on_log subscriber.
     module MarkInRactor
       def self.call(log)
@@ -85,9 +106,12 @@ module SemanticLogger
 
         SemanticLogger.default_level = :trace
         SemanticLogger.add_appender(appender: collector)
+        # The threads started by #holding_back?.
+        @flushes = Queue.new
       end
 
       after do
+        @flushes&.size&.times { @flushes.pop.join(10) }
         SemanticLogger.remove_appender(collector)
       end
 
@@ -101,9 +125,13 @@ module SemanticLogger
         Warning[:experimental] = experimental
       end
 
-      # Whether the receiving thread waits for a fork to be over (see RactorReceiver.pause).
-      def waiting_for_fork?(receiver)
-        receiver.backtrace.any? { |line| line.include?("wait_for_fork") }
+      # Whether the receiving thread holds back the requests sent to its port, as it does while it waits
+      # for a fork to be over (see RactorReceiver.pause): a flush on another thread is still waiting for
+      # it after a while. That flush returns once the receiving thread gets to it.
+      def holding_back?
+        flushing = Thread.new { SemanticLogger.flush }
+        @flushes << flushing
+        flushing.join(0.05).nil?
       end
 
       # Runs the block in a new Ractor, and returns the entries written meanwhile.
@@ -383,12 +411,61 @@ module SemanticLogger
         end
 
         it "pauses the receiving thread while the block forks" do
-          receiver = RactorReceiver.instance_variable_get(:@thread)
-          paused   = in_signal_trap { RactorReceiver.pause { waiting_for_fork?(receiver) } }
+          paused = in_signal_trap { RactorReceiver.pause { holding_back? } }
 
           refute_kind_of Exception, paused
           assert paused, "the receiving thread should wait for the fork to be over"
           assert_equal ["Resumed"], logs_from_ractor { SemanticLogger["InRactor"].info("Resumed") }.map(&:message)
+        end
+
+        it "shares a pause under way on the same thread, rather than waiting for it to be over" do
+          started = Time.now
+          paused  = RactorReceiver.pause { in_signal_trap { RactorReceiver.pause { holding_back? } } }
+
+          refute_kind_of Exception, paused
+          assert paused, "the receiving thread should wait for the fork to be over"
+          assert_operator Time.now - started, :<, RactorReceiver::PAUSE_TIMEOUT, "the pause should not have timed out"
+          assert_equal ["Resumed"], logs_from_ractor { SemanticLogger["InRactor"].info("Resumed") }.map(&:message)
+        end
+
+        it "shares a pause on the same thread that waits for the receiving thread, rather than asking it again" do
+          skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+
+          gate     = Queue.new
+          gated    = GatedFlush.new(gate)
+          main     = Thread.current
+          trapped  = Queue.new
+          paused   = nil
+          previous = Signal.trap("USR1") do
+            trapped << true
+            paused = RactorReceiver.pause { holding_back? }
+          rescue StandardError => e
+            paused = e
+          end
+          begin
+            SemanticLogger.add_appender(appender: gated)
+            # The receiving thread flushes the processor, until the gate opens.
+            @flushes << Thread.new { SemanticLogger.flush }
+            gated.flushing.pop(timeout: 5)
+            Thread.new do
+              # Once this thread waits for the receiving thread to get to its pause, which it cannot
+              # before the gate opens.
+              sleep(0.01) until main.status == "sleep"
+              Process.kill("USR1", Process.pid)
+              trapped.pop(timeout: 5)
+              gate.close
+            end
+            started = Time.now
+            RactorReceiver.pause { :forked }
+
+            refute_kind_of Exception, paused
+            assert paused, "the receiving thread should wait for the fork to be over"
+            assert_operator Time.now - started, :<, RactorReceiver::PAUSE_TIMEOUT, "the pause should not have timed out"
+          ensure
+            gate.close
+            Signal.trap("USR1", previous) if previous
+            SemanticLogger.remove_appender(gated)
+          end
         end
 
         it "flushes, once the entries already sent from other Ractors are written" do
@@ -397,6 +474,30 @@ module SemanticLogger
 
           refute_kind_of Exception, flushed
           assert_equal ["Entry 0", "Entry 1", "Entry 2"], collector.logs.map(&:message)
+        end
+
+        it "flushes when it interrupted a log call in synchronous mode, rather than waiting for the call" do
+          skip "only the synchronous processor holds a lock while it logs" unless SemanticLogger.sync?
+          skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+
+          test    = self
+          flushed = nil
+          inside  = Class.new(SemanticLogger::Subscriber) do
+            # In the trap, the receiving thread cannot hand over an entry until this call returns.
+            define_method(:log) do |_log|
+              flushed = Timeout.timeout(5) { test.in_signal_trap { SemanticLogger.flush } }
+              true
+            end
+          end.new(filter: /\AInsideTheProcessor\z/)
+          begin
+            SemanticLogger.add_appender(appender: inside)
+            SemanticLogger["InsideTheProcessor"].info("Inside")
+
+            refute_nil flushed, "the flush in the trap should have returned"
+            refute_kind_of Exception, flushed
+          ensure
+            SemanticLogger.remove_appender(inside)
+          end
         end
       end
 
@@ -417,11 +518,9 @@ module SemanticLogger
       end
 
       it "pauses for each of several threads that fork at the same time" do
-        receiver = RactorReceiver.instance_variable_get(:@thread)
-        started  = Time.now
-        paused   = Timeout.timeout(30) do
-          Array.new(4) { Thread.new { Array.new(10) { RactorReceiver.pause { waiting_for_fork?(receiver) } } } }.
-            flat_map(&:value)
+        started = Time.now
+        paused  = Timeout.timeout(30) do
+          Array.new(4) { Thread.new { Array.new(10) { RactorReceiver.pause { holding_back? } } } }.flat_map(&:value)
         end
 
         assert_equal [true], paused.uniq

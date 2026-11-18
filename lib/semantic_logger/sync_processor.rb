@@ -50,6 +50,13 @@ module SemanticLogger
       @monitor.synchronize { @appenders.reopen(*args) }
     end
 
+    # Returns [true|false] whether the calling thread is inside a call to this processor, such as in
+    # a signal trap that interrupted a log call. Another thread then waits for that call to return
+    # before it can use this processor, so the calling thread must not wait for one that does.
+    def current_thread_inside?
+      @monitor.mon_owned?
+    end
+
     # Allow the internal logger to be overridden from its default of $stderr
     #   Can be replaced with another Ruby logger or Rails logger, but never to
     #   SemanticLogger::Logger itself since it is for reporting problems

@@ -122,6 +122,21 @@ module SemanticLogger
         end
       end
 
+      describe "#current_thread_inside?" do
+        it "is true only on the thread inside a call to it" do
+          sync   = processor
+          inside = []
+          appender.define_singleton_method(:log) do |_log|
+            inside << sync.current_thread_inside?
+            inside << Thread.new { sync.current_thread_inside? }.value
+          end
+          sync.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "hello" })
+
+          assert_equal [true, false], inside
+          refute_predicate sync, :current_thread_inside?
+        end
+      end
+
       describe "#start" do
         it "is a no-op" do
           assert_nil processor.start
