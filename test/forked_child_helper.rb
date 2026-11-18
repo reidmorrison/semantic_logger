@@ -38,4 +38,30 @@ module ForkedChildHelper
     assert_predicate status, :success?, output
     output
   end
+
+  # Returns [Object] what the block returned, run in this process while a forked child process is still
+  # running, once the given Proc has run in the child, such as to close a connection that the child
+  # inherited too. The child waits for the block to return, for up to 5 seconds, before it exits. Fails and
+  # skips the test as #in_forked_child does.
+  def while_forked_child_runs(child)
+    ready_reader, ready_writer = IO.pipe
+    done_reader, done_writer   = IO.pipe
+    parent                     = Thread.new do
+      ready_reader.wait_readable(5)
+      yield
+    ensure
+      done_writer.close
+    end
+    in_forked_child do
+      done_writer.close
+      child.call
+      ready_writer.write("ready")
+      done_reader.wait_readable(5)
+      ""
+    end
+    parent.value
+  ensure
+    parent&.kill&.join
+    [ready_reader, ready_writer, done_reader, done_writer].each { |io| io.close unless io.closed? }
+  end
 end

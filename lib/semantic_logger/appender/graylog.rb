@@ -105,8 +105,13 @@ module SemanticLogger
       # connection belongs to the parent. So when connecting fails in the child, such as while the server
       # cannot be reached, the appender connects again on its next write, rather than writing through the
       # parent's connection. Over TLS, both processes would then carry on the same TLS session, so that
-      # the server could not decrypt what the parent writes next.
+      # the server could not decrypt what the parent writes next. Ruby closes the child's copy of the
+      # socket when it collects the notifier. GELF keeps its sockets to itself, so until then the child
+      # holds that copy open, and over plain TCP the server does not see the connection end when the
+      # parent closes it.
       def reopen
+        forget_inherited
+
         uri       = Utils.parse_url(@url)
         @server   = uri.host
         @port     = uri.port
@@ -116,7 +121,6 @@ module SemanticLogger
           raise(ArgumentError, "Invalid protocol value: #{@protocol}. Must be :udp or :tcp")
         end
 
-        forget_inherited
         build_notifier
       end
 

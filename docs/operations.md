@@ -50,6 +50,15 @@ child, such as while its server cannot be reached, it connects before it writes 
 (`:kafka` connects only when it delivers; when it cannot build a new producer in the child, such as
 for invalid options, logging to it raises `IOError` until it is reopened.)
 
+`:cloudwatch_logs` and `:mongodb` cannot do the same, since their gems keep their connections, and
+still act on the parent's in the child. The AWS SDK keeps one pool of connections for all its
+clients with the same options, so in the child it can reuse a connection the parent left idle in the
+pool, and before each request it finishes those idle for longer than its `http_idle_timeout` (5
+seconds by default), including the parent's. The MongoDB driver closes the parent's connections in the child, when the
+child uses its client, and when the child collects the client's connection pool, or exits. Over TLS,
+finishing or closing a connection sends the server a `close_notify`, which ends the connection for
+the parent too.
+
 An appender that cannot be reopened, such as `:udp` once its server's name no longer resolves, or
 `:http` while its server cannot be reached, is reported to the internal logger, as
 `Failed to re-open appender`, or `Async: Failed to reopen the appender` for one added with

@@ -157,6 +157,19 @@ module Appender
           assert_equal %w[before after], short_messages(1, 2)
           assert_equal ["child", :closed], short_messages(2, 2)
         end
+
+        it "forgets the notifier it inherited when a reopen in the child raises before it connects" do
+          tls_appender
+          output = in_forked_child do
+            tls_appender.url = "http://127.0.0.1:#{server.port}"
+            tls_appender.reopen
+            "reopened"
+          rescue ArgumentError
+            tls_appender.notifier.inspect
+          end
+
+          assert_equal "nil", output
+        end
       end
 
       describe "#message_error?" do

@@ -190,11 +190,13 @@ module SemanticLogger
       # After forking an active process call #reopen to re-open
       # open the handles to resources
       #
-      # Over TCP, a child process first forgets the client it inherited, without closing it: its connection
-      # belongs to the parent. So when connecting fails in the child, such as while the server cannot be
-      # reached, the appender connects again on its next write, rather than writing through the parent's
-      # connection. Over TLS, both processes would then carry on the same TLS session, so that the server
-      # could not decrypt what the parent writes next.
+      # Over TCP, a child process first forgets the client it inherited, without closing its connection, which
+      # belongs to the parent. The child closes only its own copy of the socket's file descriptor, which sends
+      # the server nothing, so that the server sees the connection end once the parent closes it, rather than
+      # once the child exits, or collects the client. When connecting fails in the child, such as while the
+      # server cannot be reached, the appender connects again on its next write, rather than writing through
+      # the parent's connection. Over TLS, both processes would then carry on the same TLS session, so that the
+      # server could not decrypt what the parent writes next.
       def reopen
         case @protocol
         when :syslog
@@ -275,9 +277,16 @@ module SemanticLogger
         @remote_syslog
       end
 
-      # In a child process, forgets the TCP client built in the parent before a fork. See #reopen.
+      # In a child process, forgets the TCP client built in the parent before a fork, and then closes the child's
+      # copy of its socket's file descriptor, without a TLS shutdown: SSLSocket#to_io is the TCPSocket under it.
+      # See #reopen.
       def forget_inherited
-        @remote_syslog = nil unless @pid == ::Process.pid
+        return if @pid == ::Process.pid
+
+        inherited      = @remote_syslog
+        @remote_syslog = nil
+        socket         = inherited&.socket&.to_io
+        socket.close unless socket.nil? || socket.closed?
       end
 
       # Returns [Hash] a copy of the options given as tcp_client: (see Subscriber#copy_options), with the server

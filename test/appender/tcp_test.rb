@@ -154,6 +154,30 @@ module Appender
           assert_equal ["child", :closed], server.received(2, 2)
         end
       end
+
+      describe "over TCP, after a fork" do
+        include ForkedChildHelper
+
+        let(:server) { TCPServer.new("127.0.0.1", 0) }
+        let(:tcp_appender) { SemanticLogger::Appender::Tcp.new(server: "127.0.0.1:#{server.addr[1]}") }
+
+        after do
+          server.close
+        end
+
+        it "closes its copy of the connection it inherited, so the server sees it end once the parent closes it" do
+          tcp_appender
+          inherited = server.accept
+          ended     = while_forked_child_runs(-> { tcp_appender.reopen }) do
+            tcp_appender.close
+            inherited.wait_readable(2) && inherited.read_nonblock(1, exception: false).nil?
+          end
+
+          assert ended, "The server did not see the connection end while the child process was running"
+        ensure
+          inherited&.close
+        end
+      end
     end
   end
 end

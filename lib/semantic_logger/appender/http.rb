@@ -250,7 +250,9 @@ module SemanticLogger
       # After a fork, the child first forgets the connection it inherited, without finishing it: it
       # belongs to the parent. Finishing an https connection sends the server a TLS close_notify, which
       # ends the connection for the parent too. Ruby closes the child's copy of the socket when it
-      # collects it, which leaves the parent's open.
+      # collects it, which leaves the parent's open. Net::HTTP keeps its socket to itself, so until then
+      # the child holds that copy open, and over plain http the server does not see the connection end
+      # when the parent closes it.
       def reopen
         forget_inherited
         # Close open connection if any

@@ -148,6 +148,30 @@ module Appender
         end
       end
 
+      describe "over TCP, after a fork" do
+        include ForkedChildHelper
+
+        let(:server) { TCPServer.new("127.0.0.1", 0) }
+        let(:tcp_appender) { SemanticLogger::Appender::Syslog.new(url: "tcp://127.0.0.1:#{server.addr[1]}") }
+
+        after do
+          server.close
+        end
+
+        it "closes its copy of the connection it inherited, so the server sees it end once the parent closes it" do
+          tcp_appender
+          inherited = server.accept
+          ended     = while_forked_child_runs(-> { tcp_appender.reopen }) do
+            tcp_appender.remote_syslog.close
+            inherited.wait_readable(2) && inherited.read_nonblock(1, exception: false).nil?
+          end
+
+          assert ended, "The server did not see the connection end while the child process was running"
+        ensure
+          inherited&.close
+        end
+      end
+
       describe "#message_error?" do
         it "is true over UDP for a log message too large to send as a datagram" do
           appender = SemanticLogger::Appender::Syslog.new(url: "udp://localhost:88888")
