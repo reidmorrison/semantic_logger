@@ -13,14 +13,18 @@ module SemanticLogger
     #     metrics:  false
     #   )
     class Udp < SemanticLogger::Subscriber
+      # The host and port of a server, with an IPv6 address in brackets, as a URL writes it.
+      SERVER = /\A(?:\[(?<ipv6>[^\[\]]+)\]|(?<host>[^:\[\]]+)):(?<port>\d+)\z/
+      private_constant :SERVER
+
       attr_accessor :server, :udp_flags
       attr_reader :socket
 
       # Create UDP log appender.
       #
       #   server: [String]
-      #     Host name and port of the server to write UDP messages to, as "host:port".
-      #     Example: "localhost:3300"
+      #     The server to write UDP messages to, as "host:port", such as "localhost:8088", with an IPv6
+      #     address in brackets, as a URL writes it, such as "[::1]:8088".
       #
       #   udp_flags: [Integer]
       #     Should be a bitwise OR of Socket::MSG_* constants.
@@ -74,11 +78,13 @@ module SemanticLogger
 
       # After forking an active process call #reopen to re-open
       # open the handles to resources
+      #
+      # Raises ArgumentError for a server that is not "host:port", leaving the socket as it was.
       def reopen
+        family, host, port = server_address
         close
-        @socket    = UDPSocket.new
-        host, port = server.split(":")
-        @socket.connect(host, port.to_i)
+        @socket = UDPSocket.new(family)
+        @socket.connect(host, port)
       end
 
       # Write the log using the specified protocol and server.
@@ -108,6 +114,21 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Array(Integer, String, Integer)] the address family, host, and port of the server. A host in brackets
+      # is an IPv6 address. Any other host is an IPv4 address, or a name, which is resolved to its IPv4 address, as
+      # before. Whitespace around the server, such as the newline at the end of an environment variable, is ignored.
+      def server_address
+        match = SERVER.match(server.to_s.strip)
+        unless match
+          raise(ArgumentError,
+                "Invalid :server #{server.inspect}, it must be \"host:port\", such as \"localhost:8088\", " \
+                "with an IPv6 address in brackets, such as \"[::1]:8088\".")
+        end
+
+        port = match[:port].to_i
+        match[:ipv6] ? [Socket::AF_INET6, match[:ipv6], port] : [Socket::AF_INET, match[:host], port]
+      end
 
       # Returns [SemanticLogger::Formatters::Json] formatter default for this Appender
       def default_formatter

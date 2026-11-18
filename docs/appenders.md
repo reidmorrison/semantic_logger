@@ -531,6 +531,9 @@ The UDP appender sends JSON or other formatted messages over UDP:
 SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", metrics: false)
 ~~~
 
+The `server:` is `"host:port"`. Write an IPv6 address in brackets, as a URL does, such as
+`server: "[::1]:8088"`. A host name is resolved to its IPv4 address.
+
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it sends them and reports a
 [deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.

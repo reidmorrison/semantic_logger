@@ -254,6 +254,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   delivery, replaced the appender's default of `1`, or the value given.
 - The `LoadError` raised when the `:kafka` appender is added without the `ruby-kafka` gem names
   Kafka. It said that the gem is required for logging to Elasticsearch.
+- The `:udp` appender sends to an IPv6 address written in brackets, as a URL writes it, such as
+  `server: "[::1]:8088"`. Before, it split the server at every colon, and its socket was IPv4 only,
+  so it could not be given an IPv6 address. A host name is still resolved to its IPv4 address. A
+  `server:` that is not `"host:port"`, such as one without a port, or an IPv6 address without
+  brackets, now raises `ArgumentError`, which names the form to use, as the appender is added.
+  Before, a missing port was taken as port 0.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
