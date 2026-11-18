@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require_relative "signal_trap_helper"
 
 class AppendersTest < Minitest::Test
   class RaisingLogAppender < SemanticLogger::Test::CaptureLogEvents
@@ -30,6 +31,23 @@ class AppendersTest < Minitest::Test
   class RaisingReopenAppender < SemanticLogger::Test::CaptureLogEvents
     def reopen
       raise "reopen boom"
+    end
+  end
+
+  # Fails each write because of its destination, as one that cannot be reached does, and records each
+  # write and flush.
+  class DownAppender < SemanticLogger::Subscriber
+    def attempts = @attempts ||= []
+
+    def flushes = @flushes ||= []
+
+    def log(log)
+      attempts << log.message
+      raise IOError, "destination unavailable"
+    end
+
+    def flush
+      flushes << true
     end
   end
 
@@ -291,7 +309,146 @@ class AppendersTest < Minitest::Test
       def told_appender(told)
         appender = Object.new
         appender.define_singleton_method(:process_exiting=) { |exiting| told << exiting }
+        appender.define_singleton_method(:should_log?) { |_log| false }
         appender
+      end
+
+      # Logs the entries to the appenders, as the thread that writes to every appender does.
+      def log_entries(count)
+        count.times do |i|
+          log         = SemanticLogger::Log.new("Test", :info)
+          log.message = "entry #{i}"
+          appenders.log(log)
+        end
+      end
+
+      def discarded_reports
+        capture_logger.events.select { |it| it.message.start_with?("Discarded") }
+      end
+
+      describe "an appender without a queue of its own, while the process exits" do
+        let(:down) { DownAppender.new }
+        let(:recording) { SemanticLogger::Test::CaptureLogEvents.new }
+
+        before do
+          appenders << down
+          appenders << recording
+        end
+
+        it "is given no more messages once its destination fails, while the others are given every one" do
+          appenders.process_exiting = true
+          log_entries(5)
+
+          assert_equal ["entry 0"], down.attempts
+          assert_equal 5, recording.events.size
+        end
+
+        it "is reported at the flush, with the messages it was not given, rather than flushed" do
+          appenders.process_exiting = true
+          log_entries(5)
+          appenders.flush
+
+          assert_empty down.flushes
+          report = discarded_reports.first
+
+          assert_equal "Discarded 4 log message(s) during the flush at exit, after the destination failed, " \
+                       "for appender: #{down.name}", report&.message
+          assert_equal "destination unavailable", report.exception.message
+        end
+
+        it "is reported again only for the messages it was not given since" do
+          appenders.process_exiting = true
+          log_entries(3)
+          appenders.flush
+          appenders.flush
+          log_entries(1)
+          appenders.flush
+
+          counts = discarded_reports.map { |it| it.message[/Discarded (\d+)/, 1].to_i }
+
+          assert_equal [2, 1], counts
+        end
+
+        it "is written to again once the process no longer exits" do
+          appenders.process_exiting = true
+          log_entries(2)
+          appenders.process_exiting = false
+          log_entries(2)
+          appenders.flush
+
+          assert_equal ["entry 0", "entry 0", "entry 1"], down.attempts
+          assert_equal [true], down.flushes
+          assert_empty discarded_reports
+        end
+
+        it "is written to again the next time the process exits, until its destination fails again" do
+          appenders.process_exiting = true
+          log_entries(2)
+          appenders.process_exiting = false
+          appenders.process_exiting = true
+          log_entries(2)
+
+          assert_equal ["entry 0", "entry 0"], down.attempts
+        end
+
+        it "is given every message while the process is not exiting" do
+          log_entries(3)
+
+          assert_equal ["entry 0", "entry 1", "entry 2"], down.attempts
+        end
+
+        it "is given every message when the content of a message failed" do
+          down.define_singleton_method(:message_error?) { |_exception| true }
+          appenders.process_exiting = true
+          log_entries(3)
+
+          assert_equal ["entry 0", "entry 1", "entry 2"], down.attempts
+        end
+
+        it "is given every message when its filter raised, rather than its destination failing" do
+          written  = []
+          filtered = Class.new(SemanticLogger::Subscriber) { define_method(:log) { |log| written << log.message } }.
+                     new(filter: ->(log) { log.message == "entry 0" ? raise("filter boom") : true })
+          appenders << filtered
+          appenders.process_exiting = true
+          log_entries(3)
+
+          assert_equal ["entry 1", "entry 2"], written
+        end
+      end
+
+      it "gives every message to an appender with a queue of its own, which is told itself" do
+        attempts = []
+        queued   = Object.new
+        queued.define_singleton_method(:process_exiting=) { |_exiting| nil }
+        queued.define_singleton_method(:name) { "Queued" }
+        queued.define_singleton_method(:should_log?) { |_log| true }
+        queued.define_singleton_method(:log) do |log|
+          attempts << log.message
+          raise IOError, "queue closed"
+        end
+        appenders << queued
+        appenders.process_exiting = true
+        log_entries(3)
+
+        assert_equal ["entry 0", "entry 1", "entry 2"], attempts
+      end
+
+      describe "in a signal trap" do
+        include SignalTrapHelper
+
+        it "tells the appenders, and skips one whose destination fails" do
+          told = []
+          down = DownAppender.new
+          appenders << told_appender(told)
+          appenders << down
+          in_signal_trap { appenders.process_exiting = true }
+          log_entries(2)
+          in_signal_trap { appenders.process_exiting = false }
+
+          assert_equal [true, false], told
+          assert_equal ["entry 0"], down.attempts
+        end
       end
 
       it "tells each appender with a thread of its own, and skips the others" do

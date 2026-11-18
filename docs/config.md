@@ -1143,7 +1143,9 @@ Or remove it with `SemanticLogger.remove_appender(console)` and then add the new
 Semantic Logger automatically flushes all appenders (log files, etc.) when a process exits. During
 an outage of the destination of an appender added with `async: true` or in batches, the flush
 discards that appender's queued messages once a write fails, rather than wait for each one to fail
-in turn; see [Retry a failing appender](operations.html#retry-a-failing-appender). The `flush` method
+in turn. At exit, any other appender whose destination fails a write is given no more messages
+until the process has exited; see
+[Retry a failing appender](operations.html#retry-a-failing-appender). The `flush` method
 is not defined on individual logger instances, since there may be many of them. To perform a global
 flush of all appenders and wait for any queued messages to be written:
 

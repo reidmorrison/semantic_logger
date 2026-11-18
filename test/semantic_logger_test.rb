@@ -519,6 +519,67 @@ class SemanticLoggerTest < Minitest::Test
         assert_equal 30, result[:failed]
         assert_equal 30, result[:written], "the other appender should write every entry"
       end
+
+      # Logs 30 entries to a plain :http appender, without a queue of its own, whose server accepts
+      # connections but never answers, and to another appender, then exits once the first request is
+      # in flight. Each request would wait out the read_timeout of 1 second, so 30 seconds in all.
+      # Prints what happened at exit, as JSON, from a hook that runs after Semantic Logger's.
+      let(:synchronous_script) do
+        <<~RUBY
+          require "json"
+          require "socket"
+          state = {}
+          at_exit do
+            puts JSON.generate(
+              seconds:  Process.clock_gettime(Process::CLOCK_MONOTONIC) - state[:exiting_at],
+              requests: state[:requests].size,
+              written:  state[:healthy].events.size,
+              reports:  state[:internal].events.map(&:message)
+            )
+          end
+          require "semantic_logger"
+          require "semantic_logger/test/capture_log_events"
+
+          # Accepts connections, and reads the requests, without ever answering one.
+          server           = TCPServer.new("127.0.0.1", 0)
+          state[:requests] = Queue.new
+          Thread.new do
+            loop do
+              client = server.accept
+              Thread.new(client) do |socket|
+                loop { state[:requests] << true if socket.readpartial(65_536).include?("POST ") }
+              rescue IOError, SystemCallError
+                nil
+              end
+            end
+          end
+
+          state[:internal]                = SemanticLogger::Test::CaptureLogEvents.new
+          SemanticLogger.appenders.logger = state[:internal]
+          SemanticLogger.add_appender(appender: :http, url: "http://127.0.0.1:\#{server.addr[1]}/log", read_timeout: 1)
+          state[:healthy] = SemanticLogger::Test::CaptureLogEvents.new
+          SemanticLogger.add_appender(appender: state[:healthy])
+
+          30.times { |i| SemanticLogger["Exit"].info("entry \#{i}") }
+          deadline = Time.now + 10
+          sleep(0.01) until !state[:requests].empty? || Time.now > deadline
+          raise "the first request should be in flight" if state[:requests].empty?
+
+          state[:exiting_at] = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          exit
+        RUBY
+      end
+
+      it "exits within seconds during an outage of an appender without a queue of its own, skipping it once it fails" do
+        result = JSON.parse(run_ruby(synchronous_script).lines.last, symbolize_names: true)
+
+        assert_operator result[:seconds], :<, 5
+        assert_equal 1, result[:requests], "no request should be sent after the one that failed"
+        assert_equal 30, result[:written], "the other appender should write every entry"
+        assert_includes result[:reports],
+                        "Discarded 29 log message(s) during the flush at exit, after the destination failed, " \
+                        "for appender: SemanticLogger::Appender::Http"
+      end
     end
 
     # The first log call of a process builds the processor, and its internal logger, so these log in

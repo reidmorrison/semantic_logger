@@ -54,8 +54,10 @@ Warning.singleton_class.prepend(SemanticLogger::CoreExt::Warning) if SemanticLog
 # that writes to every appender can be held up handing a message to that appender's full queue while
 # it backs off, and so would hand it the flush only once it stopped backing off. Each one then stops
 # backing off and writing again what failed, and once its destination fails a write, discards the
-# rest of its queue (see SemanticLogger::Appenders#process_exiting=). They are told again once the
-# flush has returned, since a test framework can run its tests in a later at_exit hook.
+# rest of its queue. An appender without a queue of its own, such as a plain :http, would make that
+# thread wait while each message failed in turn instead, so once its destination fails a write, it is
+# given no more messages (see SemanticLogger::Appenders#process_exiting=). They are told again once
+# the flush has returned, since a test framework can run its tests in a later at_exit hook.
 at_exit do
   appenders = SemanticLogger.appenders
   appenders.process_exiting = true
