@@ -713,7 +713,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   by the thread that writes its entries, before it writes the next one, so `reopen` returns before
   the appenders have reopened, and can be called from a signal trap. An appender that cannot be
   reopened is reported by that thread, and carries on with what it had. `SemanticLogger.sync!` still
-  reopens each appender on the calling thread. See
+  reopens on the calling thread each appender without a thread of its own (added without `async:`
+  or batching). See
   [Process forking](https://logger.reidmorrison.com/operations.html#process-forking) and the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 

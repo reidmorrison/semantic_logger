@@ -31,6 +31,20 @@ module SemanticLogger
       super(appender: @appenders, max_queue_size: max_queue_size)
     end
 
+    # Reopen the appenders, after a fork or within the same process, each on the thread that writes
+    # to it, between writes (see Appender::Async#reopen): the worker thread of this processor reopens
+    # the appenders (see Appenders#reopen).
+    #
+    # After a fork, the queue and worker thread of each appender added with async: true or in batches
+    # are first replaced on the calling thread, rather than once this processor's worker thread gets
+    # to the reopen, so that they are running when this returns, such as for SemanticLogger.stats.
+    # That worker thread still asks each of them to reopen its appender, ahead of the entries it
+    # hands them. Takes no lock, so that it can be called from a signal trap.
+    def reopen
+      appenders.renew_after_fork
+      super
+    end
+
     # Start the appender thread
     def start
       return false if active?

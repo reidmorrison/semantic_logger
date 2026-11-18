@@ -417,8 +417,10 @@ module SemanticLogger
   #
   # Each appender is reopened by the thread that writes its entries, before it writes the next one,
   # so that it is never reopened while it is writing, and so this returns before the appenders have
-  # reopened: a flush after it returns once they have. That also lets it be called from a signal
-  # trap. With sync!, the appenders are reopened on the calling thread instead.
+  # reopened: a flush after it returns once they have. One added with async: true or in batches has
+  # a thread of its own; a batching one reopens at its next batch, or flush. That also lets this be
+  # called from a signal trap. With sync!, the appenders without a thread of their own are reopened
+  # on the calling thread instead, so that it then cannot be called from a signal trap.
   #
   # Note:
   #   Not all appender's implement reopen.

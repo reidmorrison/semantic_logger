@@ -152,16 +152,17 @@ class QueueProcessorTest < Minitest::Test
       @threads ||= []
     end
 
+    # Records the thread first, so that once a test sees the entry in `history`, the thread is there.
     def log(log)
       super
-      history << log.message
       threads << Thread.current
+      history << log.message
     end
 
     def reopen
       Mutex.new.synchronize { nil }
-      history << "reopen"
       threads << Thread.current
+      history << "reopen"
       raise reopen_error if reopen_error
     end
   end
@@ -964,6 +965,26 @@ class QueueProcessorTest < Minitest::Test
         assert_equal 0, processor.failed_count
       end
 
+      # A reopen is not a flush or close waiting on the batch. #reopen adds :reopen to the queue only
+      # to wake up a streaming worker thread, so the batch is taken off the queue alone.
+      it "writes the batch again when a reopen was asked for with it" do
+        processor = start(batch: true, batch_seconds: 60)
+        stub_back_off(processor) do
+          processor.log(new_log(message: "unavailable"))
+          processor.reopen
+
+          assert_equal 1, processor.queue.size, "a reopen should add nothing to the queue of a batching worker thread"
+          processor.signal.set
+          deadline = Time.now + 5
+          Thread.pass until appender.batches || Time.now > deadline
+
+          assert processor.flush, "the worker thread should answer the flush"
+        end
+
+        assert_equal([%w[unavailable]], Array(appender.batches).map { |logs| logs.map(&:message) })
+        assert_equal 0, processor.failed_count
+      end
+
       describe "until it gives up" do
         let(:failures_before_written) { 10 }
 
@@ -1718,6 +1739,41 @@ class QueueProcessorTest < Minitest::Test
         assert_predicate processor, :active?
       end
 
+      # Such as a LoadError from a library loaded when it connects, or a NotImplementedError.
+      it "reports a reopen that raises an exception that is not a StandardError, and carries on writing" do
+        appender.reopen_error = NotImplementedError.new("flock() function is unimplemented on this machine")
+        processor             = start
+        processor.reopen
+        processor.log(new_log(message: "after"))
+
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal %w[reopen after], appender.history
+        report = internal_logger.events.find { |event| event.message == "Async: Failed to reopen the appender" }
+
+        assert_kind_of NotImplementedError, report&.exception
+        refute_predicate processor, :stopped?
+      end
+
+      it "hands over to a new thread when reopening overflows the stack, without discarding an entry" do
+        appender.reopen_error = SystemStackError.new("stack level too deep")
+        processor             = start
+
+        assert processor.flush, "the worker thread should be waiting for the next entry"
+        worker = processor.thread
+        processor.reopen
+        processor.log(new_log(message: "after"))
+
+        assert worker.join(5), "the worker thread should end once its stack overflowed"
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal %w[reopen after], appender.history
+        assert_equal [worker, processor.thread], appender.threads
+        refute_same worker, processor.thread
+        assert_equal 0, processor.failed_count
+        report = internal_logger.events.find { |event| event.message == "Async: Failed to reopen the appender" }
+
+        assert_kind_of SystemStackError, report&.exception
+      end
+
       it "reopens the appender once for the reopens asked for meanwhile" do
         processor = start
         hold_worker(processor)
@@ -1745,6 +1801,7 @@ class QueueProcessorTest < Minitest::Test
         processor = start
         hold_worker(processor)
         reader, writer = IO.pipe
+        # The child exits whatever happens, so that a failure there does not run the tests again in it.
         pid            = fork do
           reader.close
           processor.reopen
@@ -1752,6 +1809,7 @@ class QueueProcessorTest < Minitest::Test
           processor.flush
           writer.write(appender.history.join(","))
           writer.close
+        ensure
           exit!(0)
         end
         writer.close
@@ -1761,6 +1819,35 @@ class QueueProcessorTest < Minitest::Test
         appender.gate << true
 
         assert_equal "reopen,in the child", written_in_child
+      end
+
+      # Otherwise the child's worker thread could write an entry that another thread of the child
+      # queued at once, before the reopen.
+      it "asks for the reopen in a child process before it starts the child's worker thread" do
+        skip "fork is not supported" unless Process.respond_to?(:fork)
+
+        processor = start
+        reader, writer = IO.pipe
+        pid            = fork do
+          reader.close
+          worker_running_when_asked = []
+          reopener                  = processor.instance_variable_get(:@reopener)
+          reopener.define_singleton_method(:ask) do
+            worker_running_when_asked << processor.active?
+            super()
+          end
+          processor.reopen
+          writer.write(worker_running_when_asked.inspect)
+          writer.close
+        ensure
+          exit!(0)
+        end
+        writer.close
+        Process.wait(pid)
+        result = reader.read
+        reader.close
+
+        assert_equal "[false]", result
       end
 
       # Logs a message that holds the worker thread once it has taken it off the queue.

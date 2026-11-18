@@ -25,7 +25,7 @@ module SemanticLogger
       # read back are re-exposed here. lag_* and non_blocking= back the public
       # SemanticLogger.lag_* and SemanticLogger.non_blocking= API on the main Processor.
       def_delegators :@processor,
-                     :log, :flush, :close, :thread, :active?, :queue, :max_queue_size,
+                     :log, :flush, :close, :renew_after_fork, :thread, :active?, :queue, :max_queue_size,
                      :capped?, :non_blocking?, :non_blocking=, :batch?,
                      :lag_check_interval, :lag_check_interval=,
                      :lag_threshold_s, :lag_threshold_s=,

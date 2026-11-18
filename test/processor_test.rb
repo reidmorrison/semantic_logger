@@ -233,6 +233,39 @@ module SemanticLogger
           assert_equal :reopened, reopened
           assert_equal processor.thread, reopening.reopened_on.pop(timeout: 5)
         end
+
+        it "starts the worker thread of an appender added with async: true at once in a child process" do
+          skip "fork is not supported" unless Process.respond_to?(:fork)
+
+          gate = Queue.new
+          # Holds the worker thread of the processor while it reopens the appenders, ahead of the async one.
+          processor.appenders.unshift(
+            Class.new(SemanticLogger::Test::CaptureLogEvents) { define_method(:reopen) { gate.pop } }.new
+          )
+          wrapped = reopening.class.new
+          async   = SemanticLogger::Appender::Async.new(appender: wrapped)
+          processor.appenders << async
+          reader, writer = IO.pipe
+          # The child exits whatever happens, so that a failure there does not run the tests again in it.
+          pid            = fork do
+            reader.close
+            processor.reopen
+            active = async.active?
+            gate << true
+            processor.flush
+            writer.write([active, wrapped.reopened_on.pop(timeout: 5).equal?(async.thread)].inspect)
+            writer.close
+          ensure
+            exit!(0)
+          end
+          writer.close
+          Process.wait(pid)
+          result = reader.read
+          reader.close
+          async.close
+
+          assert_equal "[true, true]", result
+        end
       end
 
       describe "#start" do

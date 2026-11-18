@@ -46,6 +46,22 @@ class ReopenerTest < Minitest::Test
       assert_same appender.reopen_error, internal.events.first.exception
     end
 
+    it "reports a reopen that raises an exception that is not a StandardError, rather than raising it" do
+      appender.reopen_error = LoadError.new("cannot load such file -- missing_client")
+      reopener.ask
+
+      assert_nil reopener.reopen_if_asked
+      assert_same appender.reopen_error, internal.events.first&.exception
+    end
+
+    it "reports a reopen that overflows the stack, and returns the error for the worker thread to hand over" do
+      appender.reopen_error = SystemStackError.new("stack level too deep")
+      reopener.ask
+
+      assert_same appender.reopen_error, reopener.reopen_if_asked
+      assert_same appender.reopen_error, internal.events.first&.exception
+    end
+
     it "does nothing for an appender that cannot be reopened" do
       reopener = SemanticLogger::QueueProcessor::Reopener.new(SemanticLogger::Test::CaptureLogEvents.new, reporter)
       reopener.ask

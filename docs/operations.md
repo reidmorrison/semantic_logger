@@ -76,12 +76,14 @@ did not fork (see [Log rotation](#log-rotation)).
    `reopen` only asks for the appenders to be reopened: each one is reopened by the thread that
    writes its entries, before it writes the next one, so that a file is never closed, nor a
    connection ended, while an entry is being written to it. So `reopen` returns before the appenders
-   have reopened; a `SemanticLogger.flush` after it returns once they have. An entry still queued
-   when `reopen` is called can be written after the reopen, such as to the new log file. That also
-   lets `reopen` be called from a signal trap, such as one that a log rotation tool signals, since no
-   appender connects or locks anything there. In synchronous mode (see
-   [Synchronous operation](#synchronous-operation)), `reopen` reopens each appender on the calling
-   thread instead, so it cannot be called from a signal trap.
+   have reopened; a `SemanticLogger.flush` after it returns once they have. An appender added in
+   batches reopens before its next batch, which it writes at most `batch_seconds` later, or when it
+   is flushed. An entry still queued when `reopen` is called can be written after the reopen, such
+   as to the new log file. That also lets `reopen` be called from a signal trap, such as one that a
+   log rotation tool signals, since no appender connects or locks anything there. In synchronous mode
+   (see [Synchronous operation](#synchronous-operation)), `reopen` reopens on the calling thread each
+   appender that has no thread of its own, so it cannot be called from a signal trap; an appender
+   added with `async: true` or in batches is still reopened by its own thread.
 
 You might opt out if another library forks in ways you do not want to trigger a reopen, or you need
 to control exactly when the appender thread restarts.

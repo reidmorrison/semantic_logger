@@ -95,7 +95,10 @@ module SemanticLogger
       logger.trace "All appenders closed and removed from appender list"
     end
 
-    # After a fork reopen each appender.
+    # After a fork, or a log rotation, reopen each appender. Called on the thread that writes to the
+    # appenders: the worker thread of the main Processor, or the calling thread with sync!. An
+    # appender added with async: true or in batches is asked to reopen, by its own worker thread
+    # (see Appender::Async#reopen).
     def reopen
       each do |appender|
         next unless appender.respond_to?(:reopen)
@@ -106,6 +109,13 @@ module SemanticLogger
         logger.error "Failed to re-open appender: #{appender.name}", e
       end
       logger.trace "All appenders re-opened"
+    end
+
+    # After a fork, replace the queue and worker thread of each appender added with async: true or
+    # in batches with the child's own, on the calling thread (see QueueProcessor#renew_after_fork).
+    # Takes no lock, so that it can be called from a signal trap.
+    def renew_after_fork
+      each { |appender| appender.renew_after_fork if appender.respond_to?(:renew_after_fork) }
     end
   end
 end

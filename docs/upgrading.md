@@ -433,7 +433,9 @@ agent.
   other thread that logs waits for it. The report of the entries still not indexed now comes after
   those waits. See [Elasticsearch](appenders.html#elasticsearch).
 * `SemanticLogger.reopen` now only asks for the appenders to be reopened, each by the thread that
-  writes its entries, before it writes the next one, unless `SemanticLogger.sync!` is on. Before, it
+  writes its entries, before it writes the next one. With `SemanticLogger.sync!` on, that is still
+  the calling thread for every appender without a thread of its own (added without `async: true` or
+  batching). Before, it
   reopened them on the calling thread, often a signal trap after a log rotation, while the thread
   that writes the entries could be writing to them: the file appender could close its file under an
   entry being written, and the HTTP appenders could end a connection under a request, or, with some
