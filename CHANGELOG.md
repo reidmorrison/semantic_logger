@@ -742,8 +742,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   problem in the trap, such as an `on_log` subscriber that raised. Neither does
   `SemanticLogger[SomeClass]`, or the `logger` of a `Loggable` class, raise the first time it is
   called in a trap with `SemanticLogger.cache_loggers` on, nor a log call there with
-  `SemanticLogger.call_site_level` set: adding to their caches locked a Mutex. In a trap, the logger
-  is cached just after it, and the call site is captured without remembering its path.
+  `SemanticLogger.call_site_level` set: adding to their caches locked a Mutex. In a trap, a new
+  thread caches the logger before the trap returns, or just after it when the trap interrupted a
+  thread adding to the cache, and the call site is captured without remembering its path.
 - The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
   metric subscriber, no longer count an entry that the server did not accept as written. They
   reported a response other than 2xx to the internal logger and carried on, so with `async: true` or

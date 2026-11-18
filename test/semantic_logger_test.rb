@@ -71,15 +71,11 @@ class SemanticLoggerTest < Minitest::Test
         describe "in a signal trap, where adding to the cache would lock a Mutex" do
           include SignalTrapHelper
 
-          it "returns a logger, which is cached just after the trap" do
+          it "returns a logger, which is cached by the time the trap returns" do
             SemanticLogger.clear_logger_cache
             logger = in_signal_trap { SemanticLogger[CachedSample] }
 
             assert_instance_of SemanticLogger::Logger, logger
-            cache    = SemanticLogger.send(:logger_cache)
-            deadline = Time.now + 5
-            sleep(0.01) until cache.key?(CachedSample) || Time.now > deadline
-
             assert_same logger, SemanticLogger[CachedSample]
           end
 
@@ -439,6 +435,30 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    # Runs the script in another Ruby, with this Semantic Logger, and returns what it printed, or fails
+    # once it has not exited within 20 seconds. Its output is read as it is printed, so that it cannot
+    # fill the pipe and block.
+    def run_ruby(script)
+      reader, writer = IO.pipe
+      pid            = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script,
+                                     out: writer, err: writer)
+      writer.close
+      output = Thread.new { reader.read }
+      waiter = Process.detach(pid)
+      unless waiter.join(20)
+        Process.kill("KILL", pid)
+
+        flunk "the process should exit within 20 seconds"
+      end
+
+      assert_predicate waiter.value, :success?, output.value
+      output.value
+    ensure
+      # Once the process has exited, the pipe is at its end.
+      output&.join(5)
+      reader&.close
+    end
+
     # Semantic Logger flushes the appenders in an at_exit hook, so these exit another Ruby.
     describe "the flush at exit" do
       # Logs 30 entries to an appender added with async: true, whose destination is down, and to
@@ -491,29 +511,8 @@ class SemanticLoggerTest < Minitest::Test
         RUBY
       end
 
-      # Runs the script in another Ruby, and returns what it printed last, parsed, or fails once it
-      # has not exited within 20 seconds.
-      def exit_after(script)
-        reader, writer = IO.pipe
-        pid            = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script,
-                                       out: writer, err: writer)
-        writer.close
-        waiter = Process.detach(pid)
-        unless waiter.join(20)
-          Process.kill("KILL", pid)
-
-          flunk "the process should exit within seconds"
-        end
-        output = reader.read
-
-        assert_predicate waiter.value, :success?, output
-        JSON.parse(output.lines.last, symbolize_names: true)
-      ensure
-        reader&.close
-      end
-
       it "exits within seconds during an outage, discarding the queued entries after one more write fails" do
-        result = exit_after(script)
+        result = JSON.parse(run_ruby(script).lines.last, symbolize_names: true)
 
         assert_operator result[:seconds], :<, 5
         assert_equal 1, result[:attempts_after_exit], "only the entry held should be written again"
@@ -552,27 +551,6 @@ class SemanticLoggerTest < Minitest::Test
           SemanticLogger.flush
           puts JSON.generate(result: result, processed: processed, written: events.events.map(&:message))
         RUBY
-      end
-
-      # Runs the script in another Ruby, and returns what it printed, or fails once it has not exited
-      # within 20 seconds.
-      def run_ruby(script)
-        reader, writer = IO.pipe
-        pid            = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script,
-                                       out: writer, err: writer)
-        writer.close
-        waiter = Process.detach(pid)
-        unless waiter.join(20)
-          Process.kill("KILL", pid)
-
-          flunk "the process should exit"
-        end
-        output = reader.read
-
-        assert_predicate waiter.value, :success?, output
-        output
-      ensure
-        reader&.close
       end
 
       it "logs, rather than raise building the processor" do

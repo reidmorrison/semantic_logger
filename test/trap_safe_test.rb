@@ -74,8 +74,22 @@ class TrapSafeTest < Minitest::Test
         refute ran
       end
 
-      it "returns the block's value in a signal trap, and adds it just after the trap" do
+      it "returns the block's value in a signal trap, added by the time the trap returns" do
         value = in_signal_trap { SemanticLogger::TrapSafe.compute_if_absent(map, :key) { :added } }
+
+        assert_equal :added, value
+        assert_equal :added, map[:key]
+      end
+
+      it "adds the block's value just after a signal trap that interrupted a write to the map" do
+        value = nil
+        # The map holds its lock while it runs the block, here a trap.
+        map.compute_if_absent(:other) do
+          value = in_signal_trap { SemanticLogger::TrapSafe.compute_if_absent(map, :key) { :added } }
+
+          refute map.key?(:key), "the value cannot be added before the write is over"
+          :other
+        end
 
         assert_equal :added, value
         deadline = Time.now + 5
