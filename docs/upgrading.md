@@ -391,6 +391,13 @@ agent.
   some entries of a request it rejected can store them twice. See
   [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
 
+  While the worker thread backs off, the entries logged meanwhile wait on the appender's queue, as
+  they already did while the server could not be reached. Once that queue, and then the main queue,
+  are full, logging calls block until the server accepts requests again. Add an HTTP appender that
+  uses `async: true` or `batch: true` with `non_blocking: true` as well, so that its entries are
+  dropped once its queue is full instead; see
+  [Drop messages instead of blocking](operations.html#drop-messages-instead-of-blocking).
+
   Without `async:` or `batch:`, each failure is still reported to the internal logger, now as
   `Failed to log to appender`, with the error and its backtrace. A subclass of
   `SemanticLogger::Appender::Http` that checks the result of `post` or `put` now gets a

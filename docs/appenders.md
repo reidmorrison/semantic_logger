@@ -503,6 +503,24 @@ The discarded entries are counted as `failed` in `SemanticLogger.stats`, and rep
 logger with the status code, the url without its credentials, and the start of the response body.
 Without `async:` or `batch:`, each request that fails is reported in the same way.
 
+While the worker thread backs off, the entries logged meanwhile wait on the appender's own queue, as
+they already did while the server could not be reached. Once that queue is full (`max_queue_size`,
+default `10,000`), the thread that writes to every appender waits for room in it, so the other
+appenders stop receiving entries as well, and once the main queue is full too, so does every logging
+call, until the server accepts requests again. To keep logging while the server is unavailable, add
+the appender with `non_blocking: true` as well, so that once its queue is full, its entries are
+dropped and counted instead (see
+[Drop messages instead of blocking](operations.html#drop-messages-instead-of-blocking)):
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:     :http,
+  url:          "http://localhost:8088/path",
+  batch:        true,
+  non_blocking: true
+)
+~~~
+
 When the server rejects every request, for example because the password or the path is wrong, each
 batch is split until every entry has been sent on its own, which takes about two requests for each
 entry in the batch.
