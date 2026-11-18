@@ -23,6 +23,10 @@ module SemanticLogger
     attr_reader :appender, :queue, :max_queue_size, :signal,
                 :processed_count, :async_max_retries, :retry_count
 
+    # How often, in seconds, a thread waiting for room on the full queue checks whether the worker
+    # thread has stopped for good (see #stopped?), so that it does not wait for ever.
+    STOPPED_CHECK_SECONDS = 1
+
     # Create a new processor and start its worker thread.
     def self.start(**args)
       processor = new(**args)
@@ -82,6 +86,7 @@ module SemanticLogger
     #     processed successfully.
     #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour). The back-off
     #         still applies, and still resets after any successful message.
+    #     A worker thread started again once it has stopped, by #reopen, starts counting afresh.
     #     Default: 100
     def initialize(appender:,
                    max_queue_size: 10_000,
@@ -121,10 +126,13 @@ module SemanticLogger
 
     # Returns [Thread] the worker thread.
     #
-    # Starts the worker thread if it is not currently running.
+    # Starts the worker thread if it is not currently running. A new worker thread has not failed
+    # yet, so that one replacing a worker thread that stopped after async_max_retries backs off and
+    # retries as many times again.
     def thread
       return @thread if @thread&.alive?
 
+      @retry_count = 0
       spawn_worker
     end
 
@@ -158,19 +166,12 @@ module SemanticLogger
     # calling thread, and the count of dropped messages is reported periodically.
     #
     # Once the worker thread has stopped for good (see async_max_retries), nothing will empty the
-    # queue, so messages are also dropped instead of blocking the calling thread forever.
+    # queue, so messages are also dropped instead of blocking the calling thread forever. That
+    # includes a message already waiting for room on the full queue when the worker thread stops.
     def log(log)
-      enqueued = true
-      if non_blocking? || stopped?
-        begin
-          queue.push(log, true)
-        rescue ThreadError
-          message_dropped
-          enqueued = false
-        end
-      else
-        queue << log
-      end
+      wait     = !(non_blocking? || stopped?)
+      enqueued = wait ? push_waiting(log) { !stopped? } : push_now(log)
+      message_dropped unless enqueued
 
       # For batches wake up the processing thread once the number of queued messages has been
       # exceeded. Also wake it on a drop so it drains the full queue rather than waiting out the
@@ -219,12 +220,14 @@ module SemanticLogger
       create_queue
 
       @thread&.kill if @thread&.alive?
-      spawn_worker
+      @thread = nil
+      thread
     end
 
     private
 
-    # Start a new worker thread, as @thread.
+    # Start a new worker thread, as @thread. A thread that overflowed its stack hands over to a new
+    # one with this (see #process), which carries on with the count of failures in a row.
     #
     # The new thread waits until it has been assigned to @thread before it takes anything off the
     # queue. Otherwise it could overflow its stack and hand over to another new thread before then,
@@ -247,11 +250,13 @@ module SemanticLogger
     # Start the worker thread again within the same process, unless it is running (see #reopen).
     #
     # A worker thread that has stopped (see #stopped?) may still be reporting that it stopped, so it
-    # is given a moment to end first. Then a new one is started, whether it has ended or not.
+    # is given a moment to end first. Then a new one is started, whether it has ended or not, which
+    # has not failed yet (see #thread).
     def restart_worker
       return thread unless stopped?
 
       @thread&.join(STOPPED_WORKER_WAIT_SECONDS)
+      @retry_count = 0
       spawn_worker
     end
 
@@ -280,6 +285,32 @@ module SemanticLogger
     # Whether this is a child of the process that created the queue, whose copy of the queue then
     # holds that process's entries.
     def forked? = @pid != ::Process.pid
+
+    # Add to the queue without waiting for room. Returns false when the queue is full. A queue that
+    # is not capped is never full, and its #push takes no non_block argument.
+    def push_now(item)
+      return queue.push(item) && true unless capped?
+
+      queue.push(item, true)
+      true
+    rescue ThreadError
+      false
+    end
+
+    # Add to the `target` queue, the current one by default, waiting for room on a full queue while the
+    # block returns true, which it is asked every STOPPED_CHECK_SECONDS. Returns false, without
+    # adding, once it returns false, such as once the worker thread has stopped for good, since then
+    # nothing makes room.
+    #
+    # Also called from a signal trap, where Ruby allows a Queue to wait.
+    def push_waiting(item, target = queue)
+      return target.push(item) && true unless capped?
+
+      loop do
+        return true if target.push(item, timeout: STOPPED_CHECK_SECONDS)
+        return false unless yield
+      end
+    end
 
     # Separate thread for processing log messages.
     #
@@ -520,7 +551,8 @@ module SemanticLogger
 
       submitted_to = queue
       request      = Request.new(command)
-      submitted_to << request
+      return false unless push_waiting(request, submitted_to) { active? && !stopped? }
+
       # A reply can come while the request is on the current queue, which #reopen replaces, and a
       # worker thread is running it, which may be a new one after a stack overflow.
       request.wait { queue.equal?(submitted_to) && active? }

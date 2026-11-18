@@ -255,7 +255,11 @@ The HTTP based appenders decide by the status of the response; see
 
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
 rather than spinning forever on a persistent failure. From then on new log messages for that
-appender are dropped once its queue is full, instead of blocking the application:
+appender are dropped once its queue is full, instead of blocking the application. So is a message
+already waiting for room on the full queue when the thread gives up, within a second, which lets the
+thread that logged it carry on: normally the thread that writes to every appender. The messages
+already on the queue are kept, and the dropped ones are counted as `dropped` for that appender in
+`SemanticLogger.stats[:appenders]`:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -267,7 +271,9 @@ SemanticLogger.add_appender(
 ~~~
 
 Set `async_max_retries: -1` to retry indefinitely. The back-off still applies and still resets after
-a successful message.
+a successful message. A `SemanticLogger.reopen` starts a worker thread that gave up again, which
+writes the messages kept on the queue, and backs off and retries up to `async_max_retries` times
+again.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a

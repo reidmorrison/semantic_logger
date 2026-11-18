@@ -666,6 +666,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   ever, and once that queue was full every log call blocked. The thread is now started, and the error
   is still reported to the internal logger, as `Failed to re-open appender`. The same goes for
   `SemanticLogger.reopen(force: true)` within the same process, once that thread has stopped.
+- A log call waiting for room on the full queue of an appender added with `async: true` or in
+  batches no longer waits for ever once the thread that writes its entries gives up after
+  `async_max_retries`: within a second it drops its entry, counted as `dropped`, and carries on. That
+  log call is normally made by the thread that writes to every appender, so before, all logging
+  stopped, and the flush at exit never finished. A flush of that appender waiting for room on its
+  queue stops waiting the same way. The entries already on the queue are kept, for a reopen to
+  write. With `max_queue_size: -1`, a log call once that thread has given up now queues its entry,
+  rather than raising `ArgumentError`. A thread started again by `SemanticLogger.reopen` once it has
+  given up now backs off and retries up to `async_max_retries` times again; before, it gave up after
+  its first failure, without backing off.
 
 ## [5.2.0] 2026-10-30
 
