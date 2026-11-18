@@ -220,14 +220,24 @@ module SemanticLogger
         end
       end
 
-      # Closes the connection to a remote syslog server, such as when the appender is removed. Over TCP, the next
-      # write connects again. The local syslog is left open, since ::Syslog is shared by the whole process. An
-      # error closing it is reported to the internal logger, rather than raised.
+      # Closes the connection to a remote syslog server, such as when the appender is removed, and forgets it, so
+      # that the next write connects again over TCP, or opens a new socket over UDP. The local syslog is left
+      # open, since ::Syslog is shared by the whole process. An error closing it is reported to the internal
+      # logger, rather than raised.
+      #
+      # Over TCP, in a forked child that has not reopened, such as one that removes the appender before its
+      # reopen has run, it forgets the client it inherited instead, without closing its connection, which
+      # belongs to the parent (see #reopen).
       def close
+        forget_inherited if @protocol == :tcp
         close_remote_syslog(@remote_syslog)
+      ensure
+        @remote_syslog = nil
       end
 
-      # Write the log using the specified protocol and server.
+      # Write the log using the specified protocol and server. Connects over TCP, or opens a socket over UDP,
+      # first when the appender has none: after #close, or over TCP when connecting failed as it was reopened
+      # after a fork.
       def log(log)
         case @protocol
         when :syslog
@@ -238,7 +248,7 @@ module SemanticLogger
           client = @remote_syslog || connect_tcp
           client.retry_on_connection_failure { client.write("#{format_log(log)}\r\n") }
         when :udp
-          @remote_syslog.send(format_log(log), 0, @server, @port)
+          (@remote_syslog ||= UDPSocket.new).send(format_log(log), 0, @server, @port)
         else
           raise "Unsupported protocol: #{protocol}"
         end

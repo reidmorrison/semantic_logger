@@ -281,6 +281,8 @@ module Appender
         include ForkedChildHelper
 
         after do
+          # The mock client answers no request to send them.
+          appender.buffered_logs.clear
           appender.close
         end
 
@@ -346,11 +348,42 @@ module Appender
       end
 
       describe "#close" do
+        include ForkedChildHelper
+
         it "shuts down the timer task" do
           assert_predicate appender.task, :running?
           appender.close
 
           refute_predicate appender.task, :running?
+        end
+
+        it "sends the buffered log messages, since removing the appender does not flush it" do
+          mock_client.expect(:put_log_events, Aws::CloudWatchLogs::Types::PutLogEventsResponse.new) do |**params|
+            params[:log_events].size == 1
+          end
+          appender.log(log_event)
+          appender.close
+
+          assert_mock mock_client
+          assert_empty appender.buffered_logs
+          refute_predicate appender.task, :running?
+        end
+
+        it "leaves the buffered log messages it inherited to the parent process in a child that has not reopened" do
+          appender.log(log_event)
+          output = in_forked_child do
+            internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+            appender.logger = internal_logger
+            appender.close
+            JSON.generate(buffered: appender.buffered_logs.size, reports: internal_logger.events.map(&:message))
+          end
+
+          assert_equal({"buffered" => 0, "reports" => []}, JSON.parse(output))
+          assert_equal 1, appender.buffered_logs.size
+          assert_predicate appender.task, :running?
+        ensure
+          appender.buffered_logs.clear
+          appender.close
         end
       end
     end

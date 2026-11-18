@@ -193,7 +193,14 @@ module SemanticLogger
         @generation += 1
       end
 
+      # Shuts down the producer, which delivers the messages it holds, and closes the client, and those
+      # that a reopen replaced, such as when the appender is removed.
+      #
+      # In a forked child that has not reopened, such as one that removes the appender before its reopen
+      # has run, it first forgets the clients and producers it inherited, without shutting them down or
+      # closing them, since they belong to the parent (see #reopen).
       def close
+        forget_inherited
         shut_down_retired
         @producer&.shutdown
         @producer = nil

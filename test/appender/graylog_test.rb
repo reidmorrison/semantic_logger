@@ -158,6 +158,19 @@ module Appender
           assert_equal ["child", :closed], short_messages(2, 2)
         end
 
+        it "leaves the connection it inherited to the parent when it is closed in a child that has not reopened" do
+          tls_appender.log(log_with("before"))
+          in_forked_child do
+            tls_appender.close
+            tls_appender.log(log_with("child"))
+            ""
+          end
+          tls_appender.log(log_with("after"))
+
+          assert_equal %w[before after], short_messages(1, 2)
+          assert_equal ["child", :closed], short_messages(2, 2)
+        end
+
         it "forgets the notifier it inherited when a reopen in the child raises before it connects" do
           tls_appender
           output = in_forked_child do

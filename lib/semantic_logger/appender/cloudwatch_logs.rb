@@ -102,9 +102,17 @@ module SemanticLogger
         put_log_events while buffered_logs.size.positive?
       end
 
-      # Shuts down the timer. It has none when building the client failed as it was reopened after a fork.
+      # Shuts down the timer, and sends the buffered log events, such as when the appender is removed,
+      # which does not flush it first. It has no timer when building the client failed as it was reopened
+      # after a fork.
+      #
+      # In a forked child that has not reopened, such as one that removes the appender before its reopen
+      # has run, it first forgets the timer and the buffered log events it inherited, which the parent
+      # sends (see #reopen), so that it sends only its own.
       def close
+        forget_inherited
         task&.shutdown
+        flush
       end
 
       # Builds a new client, starts a new timer that sends the buffered log events every

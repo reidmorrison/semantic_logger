@@ -133,7 +133,12 @@ module SemanticLogger
       # Closes the notifier's TCP connections, such as when the appender is removed, and forgets it, so
       # that the next write builds a new one. An error closing them is reported to the internal logger,
       # rather than raised.
+      #
+      # In a forked child that has not reopened, such as one that removes the appender before its reopen
+      # has run, it forgets the notifier it inherited instead, without closing it: over TCP, its
+      # connection belongs to the parent (see #reopen).
       def close
+        forget_inherited
         close_notifier(@notifier)
       ensure
         @notifier = nil
@@ -159,8 +164,8 @@ module SemanticLogger
       # structure nested too deeply, and writes a Struct through its #inspect, so such a Hash is
       # handed over as a copy that JSON can represent (see Utils.json_ready).
       #
-      # Builds a notifier first when the appender has none, since building one failed when it was
-      # reopened after a fork.
+      # Builds a notifier first when the appender has none: after #close, or when building one failed as
+      # it was reopened after a fork.
       def log(log)
         (notifier || build_notifier).notify!(format_log(log) { |hash| Utils.json_ready(hash) })
         true

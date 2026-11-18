@@ -119,7 +119,12 @@ module SemanticLogger
       # even when closing raises, so that the next entry connects again (see #queue). Only the connection
       # is closed: Bunny's Session#close closes each channel that is still open, while Channel#close
       # raises Bunny::ChannelAlreadyClosed for one that RabbitMQ closed, such as after it restarted.
+      #
+      # In a forked child that has not reopened, such as one that removes the appender before its reopen
+      # has run, it forgets the connection and channel it inherited instead, without closing them, since
+      # they belong to the parent (see #reopen).
       def close
+        forget_inherited
         @connection&.close
       ensure
         @queue      = nil

@@ -499,7 +499,39 @@ module Appender
           appender.close
         end
 
-        it "reports an error closing the log file, rather than raising it" do
+        it "opens the log file again to write after it, and flushes, when retry is disabled" do
+          appender.retry_count = 0
+          appender.close
+          appender.flush
+
+          assert appender.log(log)
+          assert_equal 1, File.read(file_name).lines.count
+        ensure
+          appender.close
+        end
+
+        it "opens the log file again to write after it, without waiting to retry a refused one" do
+          Dir.mktmpdir do |dir|
+            link = File.join(dir, "production.log")
+            File.symlink(File.join(dir, "target.log"), link)
+            appender             = SemanticLogger::Appender::File.new(link)
+            appender.logger      = SemanticLogger::Test::CaptureLogEvents.new
+            appender.permissions = 0o600
+            appender.reopen
+
+            refute appender.log(log)
+
+            File.unlink(link)
+            appender.close
+
+            assert appender.log(log)
+            assert_includes File.read(link), log_message
+          ensure
+            appender&.close
+          end
+        end
+
+        it "reports an error closing the log file, rather than raising it, and forgets the file" do
           appender.logger = SemanticLogger::Test::CaptureLogEvents.new
           file            = appender.instance_variable_get(:@file)
           file.stub(:close, -> { raise Errno::EIO }) { appender.close }
@@ -508,6 +540,7 @@ module Appender
           assert_equal :warn, report.level
           assert_equal "Could not close the log file #{file_name}", report.message
           assert_instance_of Errno::EIO, report.exception
+          assert_nil appender.instance_variable_get(:@file)
         ensure
           file&.close
         end

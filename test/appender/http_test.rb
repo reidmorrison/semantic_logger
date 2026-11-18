@@ -517,6 +517,19 @@ module Appender
           assert_equal %w[before after], server.received(1, 2)
           assert_equal ["child", :closed], server.received(2, 2)
         end
+
+        it "leaves the connection it inherited to the parent when it is closed in a child that has not reopened" do
+          https_appender.log(log_with("before"))
+          in_forked_child do
+            https_appender.close
+            https_appender.log(log_with("child"))
+            ""
+          end
+          https_appender.log(log_with("after"))
+
+          assert_equal %w[before after], server.received(1, 2)
+          assert_equal ["child", :closed], server.received(2, 2)
+        end
       end
 
       describe "a response other than 2xx" do

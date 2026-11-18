@@ -146,6 +146,19 @@ module Appender
           assert_equal %w[before after], server.received(1, 2)
           assert_equal ["child", :closed], server.received(2, 2)
         end
+
+        it "leaves the connection it inherited to the parent when it is closed in a child that has not reopened" do
+          tls_appender.log(log_with("before"))
+          in_forked_child do
+            tls_appender.close
+            tls_appender.log(log_with("child"))
+            ""
+          end
+          tls_appender.log(log_with("after"))
+
+          assert_equal %w[before after], server.received(1, 2)
+          assert_equal ["child", :closed], server.received(2, 2)
+        end
       end
 
       describe "over TCP, after a fork" do
@@ -266,11 +279,31 @@ module Appender
           appender.reopen
 
           assert_predicate replaced, :closed?
-          refute_predicate appender.remote_syslog, :closed?
+          current = appender.remote_syslog
+
+          refute_predicate current, :closed?
 
           appender.close
 
-          assert_predicate appender.remote_syslog, :closed?
+          assert_predicate current, :closed?
+        end
+
+        it "opens a new socket to write after it is closed" do
+          server = UDPSocket.new
+          server.bind("127.0.0.1", 0)
+          appender = SemanticLogger::Appender::Syslog.new(
+            url:       "udp://127.0.0.1:#{server.addr[1]}",
+            formatter: ->(log, _logger) { log.message }
+          )
+          appender.close
+          appender.flush
+          appender.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "after" })
+
+          assert server.wait_readable(2), "The server did not receive the message"
+          assert_equal "after", server.recv(65_536)
+        ensure
+          appender&.close
+          server&.close
         end
       end
 

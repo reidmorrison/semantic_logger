@@ -139,7 +139,8 @@ module SemanticLogger
       end
 
       # Write the log using the specified protocol and server. Connects first when the appender has no
-      # client, since connecting failed when it was reopened after a fork.
+      # client, since connecting failed when it was reopened after a fork, or it was closed in a forked
+      # child.
       def log(log)
         message    = format_log(log)
         tcp_client = @tcp_client || connect
@@ -155,7 +156,12 @@ module SemanticLogger
       end
 
       # Close is called during shutdown, or with reopen
+      #
+      # In a forked child that has not reopened, such as one that removes the appender before its reopen has
+      # run, it forgets the client it inherited instead, without closing its connection, which belongs to the
+      # parent, and the next write connects again (see #reopen).
       def close
+        forget_inherited
         @tcp_client&.close
       end
 

@@ -254,41 +254,18 @@ module SemanticLogger
       # the child holds that copy open, and over plain http the server does not see the connection end
       # when the parent closes it.
       def reopen
-        forget_inherited
-        # Close open connection if any
-        begin
-          @http&.finish
-        rescue IOError
-          nil
-        end
-
-        @http = if @proxy_uri
-                  Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
-                else
-                  Net::HTTP.new(server, port, @proxy_url)
-                end
-
-        if @ssl_options
-          @http.methods.grep(/\A(\w+)=\z/) do |meth|
-            key = Regexp.last_match(1).to_sym
-            @ssl_options.key?(key) || next
-            @http.__send__(meth, @ssl_options[key])
-          end
-        end
-
-        @http.open_timeout     = @open_timeout
-        @http.read_timeout     = @read_timeout
-        @http.continue_timeout = @continue_timeout
-        @pid                   = ::Process.pid
-        @http.start
+        finish_connection
+        build_http.start
       end
 
       # Closes the connection, if it is open, such as when the appender is removed, or add_appender
       # fails to add it. The next request opens it again, see #process_request.
+      #
+      # In a forked child that has not reopened, such as one that removes the appender before its
+      # reopen has run, it forgets the connection it inherited instead, without finishing it, since it
+      # belongs to the parent (see #reopen), and the next request starts a new one.
       def close
-        @http&.finish
-      rescue IOError
-        nil
+        finish_connection
       end
 
       # Forward log messages to HTTP Server
@@ -394,6 +371,42 @@ module SemanticLogger
 
       private
 
+      # Returns [Net::HTTP] a new connection, not yet started, after making it the appender's. Records
+      # the process that built it, which owns its connection (see #reopen).
+      def build_http
+        @http = if @proxy_uri
+                  Net::HTTP.new(server, port, @proxy_uri.host, @proxy_uri.port, @proxy_uri.user, @proxy_uri.password)
+                else
+                  Net::HTTP.new(server, port, @proxy_url)
+                end
+
+        if @ssl_options
+          @http.methods.grep(/\A(\w+)=\z/) do |meth|
+            key = Regexp.last_match(1).to_sym
+            @ssl_options.key?(key) || next
+            @http.__send__(meth, @ssl_options[key])
+          end
+        end
+
+        @http.open_timeout     = @open_timeout
+        @http.read_timeout     = @read_timeout
+        @http.continue_timeout = @continue_timeout
+        @pid                   = ::Process.pid
+        @http
+      end
+
+      # Finishes the connection, if it is open. In a child process, first forgets the connection
+      # started in the parent before a fork, without finishing it. See #reopen.
+      #
+      # Used by #reopen as well as #close, rather than #reopen calling #close, so that a subclass's
+      # #close is not run by a reopen.
+      def finish_connection
+        forget_inherited
+        @http&.finish
+      rescue IOError
+        nil
+      end
+
       # In a child process, forgets the connection started in the parent before a fork. See #reopen.
       def forget_inherited
         @http = nil unless @pid == ::Process.pid
@@ -483,8 +496,11 @@ module SemanticLogger
         # Net::HTTP sends a request on a connection that is not started, such as one that #close
         # closed, on a new connection that it closes after the response. Starting it keeps the
         # connection for the requests that follow, such as once a removed appender is added again.
-        @http.start unless @http.started?
-        response = @http.request(request)
+        # A new one is built first when the appender has none, since #close forgot the one it
+        # inherited in a forked child.
+        http = @http || build_http
+        http.start unless http.started?
+        response = http.request(request)
         return true if response.is_a?(Net::HTTPSuccess)
 
         raise ResponseError.new(

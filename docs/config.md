@@ -1088,7 +1088,9 @@ SemanticLogger.remove_appender(appender)
 `remove_appender` stops sending log messages to the appender, then waits, as `SemanticLogger.flush`
 does, until the messages already logged are written to the other appenders and those are flushed,
 so that none is still being written to the appender when it closes it. Closing the appender closes
-its log file, or its connections to its server.
+its log file, or its connections to its server, and `:cloudwatch_logs` sends the entries it has
+buffered. In a forked child, closing an appender leaves the connections it inherited to the parent
+process (see [Process forking](operations.html#process-forking)).
 
 Other appender management methods:
 
