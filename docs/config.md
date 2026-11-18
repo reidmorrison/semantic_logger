@@ -873,6 +873,15 @@ Register the appender by passing an instance to `add_appender`:
 SemanticLogger.add_appender(appender: SimpleAppender.new(url: "https://logs.example.com"))
 ~~~
 
+Give the instance its own options, such as `level:` and `formatter:`, and a formatter block, when
+creating it, since `add_appender` adds it as it is. Only the options of `add_appender` itself, such as
+`async:` and `batch:`, apply to an instance:
+
+~~~ruby
+appender = SimpleAppender.new(url: "https://logs.example.com", level: :warn, formatter: :json)
+SemanticLogger.add_appender(appender: appender, async: true)
+~~~
+
 Look at the
 [existing appenders](https://github.com/reidmorrison/semantic_logger/tree/main/lib/semantic_logger/appender)
 for good examples. To have a custom appender included in the standard list, submit it with complete
