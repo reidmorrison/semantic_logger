@@ -87,15 +87,15 @@ logger.info(message: "Called supplier", metric: "supplier/add_user", duration: 1
 ## Step 3: Break a metric down with dimensions
 
 Dimensions are key/value labels attached to a metric, so a backend that supports them (such as
-SignalFx) can slice it, for example by user, action, or state. Add them with the `:dimensions`
-option:
+SignalFx) can break it down, for example by region, plan, or status. Add them with the
+`:dimensions` option:
 
 ~~~ruby
-# A counter, broken down by user:
-logger.info(metric: "filters.count", dimensions: {user: "jbloggs"})
+# A counter, broken down by plan:
+logger.info(metric: "filters.count", dimensions: {plan: "premium"})
 
-# An amount, broken down by user:
-logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbloggs"})
+# An amount, broken down by region:
+logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {region: "eu-west"})
 
 # A duration, broken down by supplier:
 logger.measure_info("Called supplier", metric: "supplier/add_user", dimensions: {supplier: "acme"}) do
@@ -109,6 +109,38 @@ dimensions under its name alone, leaving out the dimensions, which their clients
 out of Statsd or New Relic, for example when they also go to SignalFx, add the subscriber with
 `filter: ->(log) { !log.dimensions? }`. The formatters that write structured data also write the
 dimensions with the entry, see [Metrics in log appenders](#metrics-in-log-appenders).
+
+### Keep the values of each dimension bounded
+
+Give each dimension a small, fixed set of values, such as a status, a region, a plan, an HTTP
+method, or the route of a request (`/users/:id`, not `/users/42`). Never use a value that grows
+with your data or your traffic, such as a user id, an email address, an order or request id, an IP
+address, a session, a timestamp, or a URL with ids in it.
+
+A metrics backend keeps a separate time series for every combination of dimension values that it
+receives under one metric name, and most count each one as a metric of its own:
+
+* [Datadog](https://docs.datadoghq.com/account_management/billing/custom_metrics/) identifies a
+  custom metric by its name together with its tag values, so each combination is billed as a
+  custom metric.
+* [SignalFx](https://help.splunk.com/en/splunk-observability-cloud/manage-data/metrics-metadata-and-events/metrics-in-splunk-observability-cloud/get-started-with-metrics)
+  (Splunk Observability Cloud) keeps a metric time series (MTS) for each combination of a metric
+  and its dimensions. The active ones count toward the
+  [limit](https://help.splunk.com/en/splunk-observability-cloud/administer/org-reference-info/per-product-system-limits-in-splunk-observability-cloud/infrastructure-system-limits)
+  that your subscription sets, beyond which data can be dropped.
+* [Google Cloud Monitoring](https://docs.cloud.google.com/monitoring/api/v3/metric-model#cardinality)
+  keeps a time series for each combination of label values, and asks that the values of every
+  label be constrained: no unique identifiers, user ids, IP addresses, timestamps, or URLs that
+  are not parameterized.
+
+The combinations multiply: a metric with a `status` of 5 values, a `region` of 4, and a `plan` of 3
+can make up to 60 time series. Add a `user_id` dimension for 10,000 users, and the same metric can
+make up to 600,000, each one billed or counted against a limit.
+
+To find what happened to one user, order, or request, log its id with the entry instead, in the
+[payload](api.html#step-3-add-structured-data) or the
+[named tags](api.html#step-7-tag-related-entries), where a log appender stores it with that entry
+rather than as a metric of its own.
 
 ## Send metrics to a backend
 
@@ -164,9 +196,13 @@ entry that has no dimensions of its own, list them:
 SemanticLogger.add_appender(
   metric:     :signalfx,
   token:      "SIGNALFX_ORG_ACCESS_TOKEN",
-  dimensions: [:user_id, :state]
+  dimensions: [:region, :plan]
 )
 ~~~
+
+List only named tags whose values are bounded (see
+[Keep the values of each dimension bounded](#keep-the-values-of-each-dimension-bounded)): a named
+tag such as a request or user id would make a new metric time series for every request or user.
 
 When a duration metric has no dimensions, SignalFx receives both its value and a count, so you can
 chart both the timing and the number of occurrences. The value is the duration and the count is 1,

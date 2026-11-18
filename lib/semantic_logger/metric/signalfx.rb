@@ -25,7 +25,9 @@ module SemanticLogger
       #     is sent with those instead, so add the named tags it needs to them.
       #     By default `application`, `host`, and, when it is set, `environment` are always included as
       #     dimensions in all forwarded metrics.
-      #     Example: [:user_id, :state]
+      #     Each value of a dimension makes a new metric time series, so list only named tags whose
+      #     values are bounded, never a user or request id (see docs/metrics.md).
+      #     Example: [:region, :plan]
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied
@@ -58,10 +60,10 @@ module SemanticLogger
       # blank, such as `{state: ""}`, count as none.
       #
       # Example, Counter metric:
-      #   logger.info(metric: 'Filters.count', dimensions: {user: 'jbloggs'})
+      #   logger.info(metric: 'Filters.count', dimensions: {plan: 'premium'})
       #
       # Example, Counter metric with a count other than 1:
-      #   logger.info(metric: 'Filters.count', metric_amount: 23, dimensions: {user: 'jbloggs'})
+      #   logger.info(metric: 'Filters.count', metric_amount: 23, dimensions: {plan: 'premium'})
       #
       # When a duration is supplied and no dimensions are supplied:
       #   logger.info(metric: 'Common/User/authorize', duration: 1.4)

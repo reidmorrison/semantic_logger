@@ -256,7 +256,7 @@ agent.
   `Application.counter`, with `class` and `action` dimensions taken from the metric name. It also
   no longer adds the named tags listed in the subscriber's own `dimensions:` option, which it only
   adds to a metric without dimensions, so put any of those values the metric needs in its
-  `dimensions:`, such as `dimensions: {supplier: "acme", user_id: user.id}`. A filter on
+  `dimensions:`, such as `dimensions: {supplier: "acme", region: "eu-west"}`. A filter on
   `log.dimensions?`, as above, now applies to it too.
 
   Empty dimensions, such as `dimensions: {}` or `{supplier: nil}.compact`, and dimensions whose
