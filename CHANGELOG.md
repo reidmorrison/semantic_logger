@@ -125,6 +125,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   custom formatter for this appender must do the same. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html). Resolves #428.
 
+### Deprecated
+
+- Adding the `:kafka`, `:rabbitmq`, or `:udp` appender without `metrics:`. They still send
+  metric-only entries by default, which have a metric but no message and no exception, but v6 leaves
+  them out by default, as the other log appenders do, so they now report a deprecation warning. Pass
+  `metrics: true` to keep sending them, or `metrics: false` to leave them out. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+
 ### Removed
 
 - `logger_measure_method`, an experiment that `SemanticLogger::Loggable` added to each class, and

@@ -3,11 +3,40 @@ require_relative "../test_helper"
 module Appender
   class KafkaTest < Minitest::Test
     describe SemanticLogger::Appender::Kafka do
-      let(:appender) { SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"]) }
+      let(:appender) { SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: true) }
       let(:amessage) { "AppenderKafkaTest log message" }
 
       after do
         appender&.close
+      end
+
+      describe "metrics:" do
+        let(:metric_only) do
+          log        = SemanticLogger::Log.new("Test", :info)
+          log.metric = "users/signup"
+          log
+        end
+
+        it "warns that the default changes in v6, and sends metric-only entries, when it is not supplied" do
+          line  = __LINE__ + 2
+          kafka = assert_deprecated(/kafka_test\.rb:#{line}: warning: SemanticLogger: The :kafka appender sends/) do
+            SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"])
+          end
+
+          assert kafka.should_log?(metric_only)
+        ensure
+          kafka&.close
+        end
+
+        it "leaves metric-only entries out with metrics: false, without a warning" do
+          kafka = refute_deprecated do
+            SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: false)
+          end
+
+          refute kafka.should_log?(metric_only)
+        ensure
+          kafka&.close
+        end
       end
 
       it "does not show the TLS private key or SASL password in #inspect" do
@@ -21,7 +50,7 @@ module Appender
       it "does not include credentials in the error for a seed broker that cannot be parsed" do
         ["kafka://user:s3cr3t@kafka host:9092", "https://user:s3cr3t@kafka1:9092"].each do |seed_broker|
           error = assert_raises(URI::InvalidURIError, ::Kafka::Error) do
-            SemanticLogger::Appender::Kafka.new(seed_brokers: [seed_broker])
+            SemanticLogger::Appender::Kafka.new(seed_brokers: [seed_broker], metrics: true)
           end
 
           refute_includes error.message, "s3cr3t"

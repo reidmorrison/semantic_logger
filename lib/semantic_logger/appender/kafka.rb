@@ -19,6 +19,9 @@ require "date"
 #
 #     # Set an optional client id in order to identify the client to Kafka:
 #     client_id: "my-application",
+#
+#     # Leave out metric-only entries, as v6 does by default:
+#     metrics: false
 #   )
 module SemanticLogger
   module Appender
@@ -125,12 +128,12 @@ module SemanticLogger
       #
       #   metrics: [Boolean]
       #     Send metrics only events to kafka.
-      #     Default: true
+      #     Default: true, with a deprecation warning when it is not supplied, since v6 changes it to false.
       def initialize(seed_brokers:, client_id: "semantic-logger", connect_timeout: nil, socket_timeout: nil,
                      ssl_ca_cert: nil, ssl_client_cert: nil, ssl_client_cert_key: nil, ssl_ca_certs_from_system: false,
                      topic: "log_messages", partition: nil, partition_key: nil, key: nil,
                      delivery_threshold: 100, delivery_interval: 10, required_acks: 1,
-                     metrics: true, **args, &)
+                     metrics: METRICS_NOT_SUPPLIED, **args, &)
         @seed_brokers             = seed_brokers
         @client_id                = client_id
         @connect_timeout          = connect_timeout
@@ -147,7 +150,7 @@ module SemanticLogger
         @delivery_interval        = delivery_interval
         @required_acks            = required_acks
 
-        super(metrics: metrics, **args, &)
+        super(metrics: deprecated_metrics_default(metrics, :kafka), **args, &)
         reopen
       end
 

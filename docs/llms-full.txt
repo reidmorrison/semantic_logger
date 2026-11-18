@@ -1878,7 +1878,7 @@ destination can keep a different subset of the logs in a different format:
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
-| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
+| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`, which default to `true` until v6, and warn when it is not supplied. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
 
 For example, write only warnings and above to a file, formatted as JSON:
 
@@ -2351,8 +2351,12 @@ SemanticLogger.add_appender(
 The UDP appender sends JSON or other formatted messages over UDP:
 
 ~~~ruby
-SemanticLogger.add_appender(appender: :udp, server: "localhost:8088")
+SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", metrics: false)
 ~~~
+
+Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
+exception. Without `metrics:`, it sends them and reports a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
 
 Customize the message with a formatter:
 
@@ -2363,7 +2367,7 @@ formatter = Proc.new do |log, logger|
   h.to_json
 end
 
-SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", formatter: formatter)
+SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", formatter: formatter, metrics: false)
 ~~~
 
 ### Syslog
@@ -2908,9 +2912,14 @@ Publish log entries to an Apache Kafka broker (requires the `ruby-kafka` gem):
 ~~~ruby
 SemanticLogger.add_appender(
   appender:     :kafka,
-  seed_brokers: ["kafka1:9092", "kafka2:9092"]
+  seed_brokers: ["kafka1:9092", "kafka2:9092"],
+  metrics:      false
 )
 ~~~
+
+Pass `metrics: true` to also publish metric-only entries, which have a metric but no message and no
+exception. Without `metrics:`, it publishes them and reports a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
 
 ### RabbitMQ (AMQP)
 
@@ -2922,9 +2931,14 @@ SemanticLogger.add_appender(
   queue_name:    "semantic_logger",
   rabbitmq_host: "localhost",
   username:      "the-username",
-  password:      "the-password"
+  password:      "the-password",
+  metrics:       false
 )
 ~~~
+
+Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
+exception. Without `metrics:`, it sends them and reports a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
 
 ## Logging to several destinations at once
 
@@ -3099,7 +3113,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`payload?`|`true`/`false`|Whether the event carries a non-empty payload.|
 |`dimensions?`|`true`/`false`|Whether the event has a metric with dimensions, a `Hash` that is not empty. The formatters write the dimensions only then.|
 |`payload_to_s`|`String` or `nil`|The payload rendered with `inspect`, or `nil` when absent.|
-|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
+|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp` until v6. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
 |`duration_to_s`|`String` or `nil`|The duration in milliseconds as a short string, for example `"12ms"`. `nil` when there is no duration.|
 |`duration_human`|`String` or `nil`|The duration in human readable form, scaling up to seconds, minutes, hours, or days as needed.|
 |`level_to_s`|`String`|The level as a single upper-case character, for example `"I"` for `:info`.|
@@ -3305,8 +3319,10 @@ as part of the log entry that carries it:
   SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200", metrics: true)
   ~~~
 
-  The `:kafka`, `:rabbitmq`, and `:udp` appenders send them by default. Pass
-  `metrics: false` to leave them out.
+  Until v6, the `:kafka`, `:rabbitmq`, and `:udp` appenders send them by default, and report a
+  [deprecation warning](upgrading.html#seeing-deprecation-warnings) when they are added without
+  `metrics:`. Pass `metrics: false` to leave them out, as v6 does by default, or `metrics: true` to
+  keep sending them.
 
 What each formatter writes for a metric on an entry with a message:
 
@@ -5665,6 +5681,23 @@ To keep sending them as log records, add the appender with `metrics: true`:
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :open_telemetry, metrics: true)
+~~~
+
+#### Choose `metrics:` for the `:kafka`, `:rabbitmq`, and `:udp` appenders
+
+Unlike the other log appenders, `:kafka`, `:rabbitmq`, and `:udp` send metric-only entries by
+default: entries such as `logger.info(metric: "users/signup")`, which have a metric but no message and
+no exception, and are meant for the [metric subscribers](metrics.html#send-metrics-to-a-backend). v6
+leaves them out by default, as the other log appenders do. Until then, adding one of these appenders
+without `metrics:` still sends them, and reports a
+[deprecation warning](#seeing-deprecation-warnings). Pass `metrics:` to choose:
+
+~~~ruby
+# Keep sending metric-only entries:
+SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: true)
+
+# Leave them out, as v6 does by default:
+SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: false)
 ~~~
 
 #### Loki stack traces

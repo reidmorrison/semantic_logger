@@ -182,8 +182,10 @@ as part of the log entry that carries it:
   SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200", metrics: true)
   ~~~
 
-  The `:kafka`, `:rabbitmq`, and `:udp` appenders send them by default. Pass
-  `metrics: false` to leave them out.
+  Until v6, the `:kafka`, `:rabbitmq`, and `:udp` appenders send them by default, and report a
+  [deprecation warning](upgrading.html#seeing-deprecation-warnings) when they are added without
+  `metrics:`. Pass `metrics: false` to leave them out, as v6 does by default, or `metrics: true` to
+  keep sending them.
 
 What each formatter writes for a metric on an entry with a message:
 

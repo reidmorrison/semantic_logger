@@ -116,7 +116,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`payload?`|`true`/`false`|Whether the event carries a non-empty payload.|
 |`dimensions?`|`true`/`false`|Whether the event has a metric with dimensions, a `Hash` that is not empty. The formatters write the dimensions only then.|
 |`payload_to_s`|`String` or `nil`|The payload rendered with `inspect`, or `nil` when absent.|
-|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
+|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp` until v6. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
 |`duration_to_s`|`String` or `nil`|The duration in milliseconds as a short string, for example `"12ms"`. `nil` when there is no duration.|
 |`duration_human`|`String` or `nil`|The duration in human readable form, scaling up to seconds, minutes, hours, or days as needed.|
 |`level_to_s`|`String`|The level as a single upper-case character, for example `"I"` for `:info`.|
