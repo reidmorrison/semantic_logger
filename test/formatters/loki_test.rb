@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require "bigdecimal"
 require "json"
 
 module SemanticLogger
@@ -283,7 +284,34 @@ module SemanticLogger
             payload_obj = values_data[2]
 
             assert_equal "my_metric", payload_obj["metric"]
-            assert_equal 100, payload_obj["metric_value"]
+            assert_equal "100", payload_obj["metric_value"]
+          end
+
+          # Loki rejects the whole push, with every entry in it, for a value that is not a String.
+          it "writes the metric's amount as a String" do
+            log.metric        = :my_metric
+            log.metric_amount = 1.5
+
+            assert_equal "my_metric", values_data[2]["metric"]
+            assert_equal "1.5", values_data[2]["metric_value"]
+          end
+
+          # LogQL cannot read a Rational's own text, `3/2`, so every query that unwraps it would fail.
+          it "writes a Rational or BigDecimal amount as a decimal number" do
+            log.metric        = "my_metric"
+            log.metric_amount = Rational(3, 2)
+
+            assert_equal "1.5", values_data[2]["metric_value"]
+
+            log.metric_amount = BigDecimal("2.5")
+
+            assert_equal "2.5", JSON.parse(formatter.call(log, logger))["streams"][0]["values"][0][2]["metric_value"]
+          end
+
+          it "omits metric_value for a metric without an amount" do
+            log.metric = "my_metric"
+
+            assert_equal({"metric" => "my_metric"}, values_data[2])
           end
 
           it "includes the metric's dimensions as a single JSON value" do
@@ -308,7 +336,7 @@ module SemanticLogger
 
             assert_equal "sample", payload_obj["data"]
             assert_equal "my_metric", payload_obj["metric"]
-            assert_equal 100, payload_obj["metric_value"]
+            assert_equal "100", payload_obj["metric_value"]
           end
 
           describe "when duration is present" do
@@ -320,6 +348,15 @@ module SemanticLogger
                 assert_equal "123.456", payload_obj["duration"]
                 assert_equal "123.46ms", payload_obj["duration_human"]
               end
+            end
+
+            it "writes an Integer as it is, and a Rational or BigDecimal as a decimal number" do
+              durations = [5, Rational(5, 2), BigDecimal("0.5")].map do |duration|
+                log.duration = duration
+                JSON.parse(formatter.call(log, logger))["streams"][0]["values"][0][2]["duration"]
+              end
+
+              assert_equal %w[5 2.5 0.5], durations
             end
           end
 
@@ -400,8 +437,42 @@ module SemanticLogger
 
             assert_equal "sample", payload_obj["data"]
             assert_equal "my_metric", payload_obj["metric"]
-            assert_equal 100, payload_obj["metric_value"]
+            assert_equal "100", payload_obj["metric_value"]
             assert_equal "RuntimeError", payload_obj["exception_name"]
+          end
+
+          it "names an exception by its class's name, as :json does, rather than the class's #to_s" do
+            error_class = Class.new(StandardError) do
+              def self.name = "Payments::Declined"
+              def self.to_s = "custom"
+            end
+            log.exception = error_class.new("Declined")
+
+            assert_equal "Payments::Declined", values_data[2]["exception_name"]
+          end
+
+          it "names an exception of an anonymous class as the text formatters do" do
+            log.exception = Class.new(StandardError).new("Oh no")
+
+            assert_match(/\A#<Class:0x\h+>\z/, values_data[2]["exception_name"])
+            assert_equal "Oh no", values_data[2]["exception_message"]
+          end
+
+          it "writes an empty message for an exception whose message is nil" do
+            log.exception = Class.new(StandardError) { def message = nil }.new
+
+            assert_equal "", values_data[2]["exception_message"]
+          end
+
+          it "writes every value of the structured metadata as a String" do
+            log.payload       = {data: nil, number: 1, flag: true}
+            log.metric        = :my_metric
+            log.metric_amount = 3
+            log.dimensions    = {tier: 2}
+            log.duration      = 1.5
+            log.exception     = Class.new(StandardError) { def message = nil }.new
+
+            assert_empty(values_data[2].values.reject { |value| value.is_a?(String) })
           end
 
           # Issue #180: .to_json raises Encoding::UndefinedConversionError on non UTF-8 data.
