@@ -66,6 +66,25 @@ module Appender
         end
       end
 
+      describe "metric-only entries" do
+        let(:metric_only) do
+          log        = SemanticLogger::Log.new("Test", :info)
+          log.metric = "users/signup"
+          log
+        end
+
+        it "leaves them out by default" do
+          refute appender.should_log?(metric_only)
+        end
+
+        it "sends them with metrics: true" do
+          ::OpenTelemetry.logger_provider = provider
+          with_metrics = SemanticLogger::Appender::OpenTelemetry.new(metrics: true)
+
+          assert with_metrics.should_log?(metric_only)
+        end
+      end
+
       describe "log" do
         SemanticLogger::Levels::LEVELS.each do |level|
           it "emits a #{level} record" do

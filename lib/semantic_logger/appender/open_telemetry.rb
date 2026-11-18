@@ -23,20 +23,20 @@ module SemanticLogger
       # arguments for `Logger#on_emit` other than `context:`.
       # Default: SemanticLogger::Formatters::OpenTelemetry
       #
-      # A metric-only entry, a metric without a message or an exception, is sent as a log record
-      # with no body, its metric in the attributes. To leave them out, set `metrics: false`.
+      # A metric-only entry, a metric without a message or an exception, is left out, since it is
+      # meant for the metric subscribers. To send them as log records with no body, their metric in
+      # the attributes, set `metrics: true`.
       #
       # Example
       #    SemanticLogger.add_appender(appender: :open_telemetry)
       def initialize(name: "SemanticLogger",
                      version: SemanticLogger::VERSION,
                      formatter: nil,
-                     metrics: true,
                      **args,
                      &)
         # Base#initialize (via Subscriber) overwrites @name with the class name,
         # so call super first and then assign our own attributes.
-        super(formatter: formatter, metrics: metrics, **args, &)
+        super(formatter: formatter, **args, &)
 
         @name      = name
         @version   = version

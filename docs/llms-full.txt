@@ -1878,7 +1878,7 @@ destination can keep a different subset of the logs in a different format:
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
-| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, `:udp`, and `:open_telemetry`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
+| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
 
 For example, write only warnings and above to a file, formatted as JSON:
 
@@ -2652,7 +2652,7 @@ OpenTelemetry, which is wrong for a worker forked from it, for example by Puma o
 |--------|-------------|
 | `name` | Instrumentation scope name reported to OpenTelemetry. Defaults to `"SemanticLogger"`. |
 | `version` | Instrumentation scope version. Defaults to the Semantic Logger gem version. |
-| `metrics` | Whether to forward metric-only log entries. Defaults to `true`. |
+| `metrics` | Whether to also send metric-only entries, as log records with no body. Defaults to `false`. |
 
 ### Logstash
 
@@ -3099,7 +3099,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`payload?`|`true`/`false`|Whether the event carries a non-empty payload.|
 |`dimensions?`|`true`/`false`|Whether the event has a metric with dimensions, a `Hash` that is not empty. The formatters write the dimensions only then.|
 |`payload_to_s`|`String` or `nil`|The payload rendered with `inspect`, or `nil` when absent.|
-|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, `:udp`, and `:open_telemetry`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
+|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
 |`duration_to_s`|`String` or `nil`|The duration in milliseconds as a short string, for example `"12ms"`. `nil` when there is no duration.|
 |`duration_human`|`String` or `nil`|The duration in human readable form, scaling up to seconds, minutes, hours, or days as needed.|
 |`level_to_s`|`String`|The level as a single upper-case character, for example `"I"` for `:info`.|
@@ -3305,7 +3305,7 @@ as part of the log entry that carries it:
   SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200", metrics: true)
   ~~~
 
-  The `:kafka`, `:rabbitmq`, `:udp`, and `:open_telemetry` appenders send them by default. Pass
+  The `:kafka`, `:rabbitmq`, and `:udp` appenders send them by default. Pass
   `metrics: false` to leave them out.
 
 What each formatter writes for a metric on an entry with a message:
@@ -5609,6 +5609,16 @@ A custom formatter given to this appender with `formatter:` must now return the 
 the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `timestamp:`, `body:`, and
 `attributes:`), as `SemanticLogger::Formatters::OpenTelemetry` does, instead of a Hash shaped like the
 `:raw` formatter's.
+
+The appender no longer sends metric-only entries, such as `logger.info(metric: "users/signup")`,
+which have a metric but no message and no exception. It sent each one as a log record with no body,
+its metric in the attributes, never as an OpenTelemetry metric. Metric-only entries are meant for the
+[metric subscribers](metrics.html#send-metrics-to-a-backend), and most log appenders leave them out.
+To keep sending them as log records, add the appender with `metrics: true`:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :open_telemetry, metrics: true)
+~~~
 
 #### Loki stack traces
 
