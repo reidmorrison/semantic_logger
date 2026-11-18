@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../signal_trap_helper"
 require "open3"
 
 module Appender
@@ -8,9 +9,16 @@ module Appender
     class FakeKafka
       attr_reader :events
 
+      # [Thread::Queue] when set, each producer's #shutdown waits for a value from it, or for it to be closed.
+      attr_accessor :shutdown_gate
+
+      # [Array<String>] the names of the producers whose #shutdown raises IOError, such as "producer 1".
+      attr_reader :failing_shutdowns
+
       def initialize
-        @events = []
-        @built  = Hash.new(0)
+        @events            = []
+        @built             = Hash.new(0)
+        @failing_shutdowns = []
       end
 
       # Returns [Client] a new client, as ::Kafka.new does.
@@ -39,13 +47,25 @@ module Appender
       end
 
       Producer = Struct.new(:kafka, :name) do
+        def produce(_value, **)
+          kafka.events << "#{name} produced"
+        end
+
         def shutdown
+          kafka.shutdown_gate&.pop
+          raise(IOError, "#{name} could not shut down") if kafka.failing_shutdowns.include?(name)
+
           kafka.events << "#{name} shut down"
         end
       end
     end
 
+    # The exit status of a forked child in which the block given to #in_forked_child skipped the test.
+    SKIPPED_IN_CHILD = 2
+
     describe SemanticLogger::Appender::Kafka do
+      include SignalTrapHelper
+
       let(:appender) { SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: true) }
       let(:amessage) { "AppenderKafkaTest log message" }
       let(:fake_kafka) { FakeKafka.new }
@@ -60,6 +80,47 @@ module Appender
         ::Kafka.stub(:new, ->(**) { fake_kafka.client }) do
           yield(SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: true))
         end
+      end
+
+      # Returns [String] what the block returned, run in a forked child process. Fails the test with the exception,
+      # such as a failed assertion, that the block raised in the child, and skips it when the block skipped it there.
+      # Skips the test where fork is not supported.
+      def in_forked_child
+        skip "fork is not supported" unless Process.respond_to?(:fork)
+
+        reader, writer = IO.pipe
+        pid            = fork do
+          status = 1
+          reader.close
+          begin
+            writer.write(yield)
+            status = 0
+          rescue Minitest::Skip => e
+            writer.write(e.message)
+            status = SKIPPED_IN_CHILD
+          rescue StandardError, Minitest::Assertion => e
+            writer.write("#{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}")
+          end
+          writer.close
+        ensure
+          # Skips the at_exit hooks, such as the one that runs the tests, in the child.
+          exit!(status)
+        end
+        writer.close
+        output    = reader.read
+        _, status = Process.wait2(pid)
+        reader.close
+
+        skip(output) if status.exitstatus == SKIPPED_IN_CHILD
+
+        assert_predicate status, :success?, output
+        output
+      end
+
+      def new_log
+        log         = SemanticLogger::Log.new("Test", :info)
+        log.message = amessage
+        log
       end
 
       describe "metrics:" do
@@ -161,6 +222,30 @@ module Appender
           assert_equal ["producer 1 shut down", "client 1 closed"], fake_kafka.events
         end
 
+        it "keeps the producer of a reopen that runs while it builds a new one, such as in a signal trap" do
+          with_fake_kafka do |kafka|
+            reopened = false
+            kafka.define_singleton_method(:build_producer) do |client|
+              unless reopened
+                reopened = true
+                reopen
+              end
+              super(client)
+            end
+            fake_kafka.events.clear
+            kafka.flush
+            kafka.log(new_log)
+            kafka.close
+          end
+
+          expected = [
+            "client 2 built", "producer 2 built", "producer 3 built", "producer 1 shut down", "client 1 closed",
+            "producer 2 produced", "producer 2 shut down", "client 2 closed"
+          ]
+
+          assert_equal expected, fake_kafka.events
+        end
+
         it "does nothing after #close" do
           with_fake_kafka do |kafka|
             kafka.close
@@ -173,19 +258,126 @@ module Appender
       end
 
       describe "#reopen" do
-        it "shuts down the producer and closes the client that it replaces, after building new ones" do
+        # A producer that cannot reach Kafka can take a long time to shut down, and the thread that logs writes to
+        # every appender.
+        it "leaves the producer and client it replaces to a thread that the next log starts, which flush waits for" do
+          gate = Thread::Queue.new
           with_fake_kafka do |kafka|
             fake_kafka.events.clear
             kafka.reopen
+
+            assert_equal ["client 2 built", "producer 2 built"], fake_kafka.events
+
+            fake_kafka.events.clear
+            fake_kafka.shutdown_gate = gate
+            logged = Thread.new { kafka.log(new_log) }
+
+            assert logged.join(5), "#log waited for the producer that the reopen replaced to shut down"
+            assert_equal ["producer 2 produced"], fake_kafka.events
+
+            flushed = Thread.new { kafka.flush }
+
+            refute flushed.join(0.2), "#flush did not wait for the producer that the reopen replaced to shut down"
+
+            gate.close
+
+            assert flushed.join(5), "#flush did not return once that producer had shut down"
+          end
+
+          expected = [
+            "producer 2 produced", "producer 1 shut down", "client 1 closed", "producer 3 built", "producer 2 shut down"
+          ]
+
+          assert_equal expected, fake_kafka.events
+        ensure
+          gate.close
+        end
+
+        it "leaves the producers and clients that it replaces for the next flush, oldest first" do
+          with_fake_kafka do |kafka|
+            kafka.reopen
+            kafka.reopen
+            fake_kafka.events.clear
+            kafka.flush
+          end
+
+          expected = [
+            "producer 1 shut down", "client 1 closed", "producer 2 shut down", "client 2 closed", "producer 4 built",
+            "producer 3 shut down"
+          ]
+
+          assert_equal expected, fake_kafka.events
+        end
+
+        it "reports an error shutting down a replaced producer on its thread, rather than raising it from each flush" do
+          capture = SemanticLogger::Test::CaptureLogEvents.new
+          gate    = Thread::Queue.new
+          with_fake_kafka do |kafka|
+            kafka.logger = capture
+            fake_kafka.failing_shutdowns << "producer 1"
+            fake_kafka.shutdown_gate = gate
+            kafka.reopen
+            fake_kafka.events.clear
+            kafka.log(new_log)
+            gate.close
+            kafka.flush
+            kafka.flush
             kafka.close
           end
 
           expected = [
-            "client 2 built", "producer 2 built", "producer 1 shut down", "client 1 closed",
-            "producer 2 shut down", "client 2 closed"
+            "producer 2 produced", "client 1 closed", "producer 3 built", "producer 2 shut down", "producer 4 built",
+            "producer 3 shut down", "producer 4 shut down", "client 2 closed"
           ]
 
           assert_equal expected, fake_kafka.events
+          assert_equal ["Could not shut down a Kafka producer that a reopen replaced"], capture.events.map(&:message)
+          assert_equal([IOError], capture.events.map { |event| event.exception.class })
+        ensure
+          gate.close
+        end
+
+        it "reports an error shutting down a replaced producer on flush, rather than raising it" do
+          capture = SemanticLogger::Test::CaptureLogEvents.new
+          with_fake_kafka do |kafka|
+            kafka.logger = capture
+            fake_kafka.failing_shutdowns << "producer 1"
+            kafka.reopen
+            fake_kafka.events.clear
+            kafka.flush
+            kafka.close
+          end
+
+          expected = [
+            "client 1 closed", "producer 3 built", "producer 2 shut down", "producer 3 shut down", "client 2 closed"
+          ]
+
+          assert_equal expected, fake_kafka.events
+          assert_equal ["Could not shut down a Kafka producer that a reopen replaced"], capture.events.map(&:message)
+        end
+
+        it "leaves the producer and client that it replaces for close to shut down and close" do
+          with_fake_kafka do |kafka|
+            kafka.reopen
+            fake_kafka.events.clear
+            kafka.close
+          end
+
+          expected = ["producer 1 shut down", "client 1 closed", "producer 2 shut down", "client 2 closed"]
+
+          assert_equal expected, fake_kafka.events
+        end
+
+        # A real ruby-kafka producer, whose #shutdown locks a Mutex when its threads have not started.
+        it "reopens in a signal trap" do
+          producer = appender.send(:producer)
+          reopened = in_signal_trap do
+            appender.reopen
+            :reopened
+          end
+
+          assert_equal :reopened, reopened
+          refute_same producer, appender.send(:producer)
         end
 
         it "keeps its client and producer when building new ones fails" do
@@ -200,28 +392,57 @@ module Appender
           assert_equal ["client 2 built", "producer 1 shut down", "client 1 closed"], fake_kafka.events
         end
 
-        it "leaves the client and producer it inherited to the parent process after a fork" do
-          skip "fork is not supported" unless Process.respond_to?(:fork)
-
-          reader, writer = IO.pipe
-          with_fake_kafka do |kafka|
+        it "leaves the clients and producers that the parent built, even those it replaced, to it after a fork" do
+          output = with_fake_kafka do |kafka|
+            kafka.reopen
             fake_kafka.events.clear
-            pid = fork do
-              reader.close
+            in_forked_child do
               kafka.reopen
               kafka.close
-              writer.write(fake_kafka.events.join(","))
-              writer.close
-            ensure
-              exit!(0)
+              fake_kafka.events.join(",")
             end
-            writer.close
-            Process.wait(pid)
           end
-          output = reader.read
-          reader.close
 
-          assert_equal "client 2 built,producer 2 built,producer 2 shut down,client 2 closed", output
+          assert_equal "client 3 built,producer 3 built,producer 3 shut down,client 3 closed", output
+        end
+
+        it "has no producer after a fork when building one fails, so that logging raises IOError" do
+          output = with_fake_kafka do |kafka|
+            kafka.delivery_threshold = -1
+            in_forked_child do
+              errors = []
+              [-> { kafka.reopen }, -> { kafka.log(new_log) }].each do |call|
+                call.call
+              rescue StandardError => e
+                errors << "#{e.class}: #{e.message}"
+              end
+              errors.join("\n")
+            end
+          end
+
+          expected = [
+            "ArgumentError: delivery_threshold: -1",
+            "IOError: The Kafka appender has no producer, since it was closed, " \
+            "or reopening it after a fork could not build one"
+          ]
+
+          assert_equal expected, output.split("\n")
+        end
+
+        it "skips the test that forks when the block skips it in the child" do
+          skip "fork is not supported" unless Process.respond_to?(:fork)
+
+          error = assert_raises(Minitest::Skip) { in_forked_child { skip "skipped in the child" } }
+
+          assert_equal "skipped in the child", error.message
+        end
+
+        it "raises IOError from log after close" do
+          with_fake_kafka do |kafka|
+            kafka.close
+
+            assert_raises(IOError) { kafka.log(new_log) }
+          end
         end
       end
 
