@@ -895,20 +895,24 @@ in `{application="shop"} | tenant="acme"`, but a stream selector cannot:
 * a label with a longer name;
 * a label with a longer value, such as many `tags`.
 
-As Loki does, a label with an empty value, which Loki leaves out, and `service_name`, which Loki adds
-to each stream, are not counted. A moved label is written as Loki stores structured metadata: as a
-String, under its name with each run of underscores as one, with the `payload_` prefix when a payload
-key with its name would have it, as in `payload_duration`, and with a number added when the
-structured metadata already has that name with another value, as in `tenant_2`.
+A label with an empty value, which Loki leaves out, is never moved, whatever the length of its name.
+As Loki does, it is not counted, nor is `service_name`, which Loki adds to each stream.
+A moved label is written as Loki stores structured metadata: as a String, under its name with each
+run of underscores as one, and with the `payload_` prefix when a payload key with its name would
+have it, as in `payload_duration`. When the structured metadata already has that name, a number is
+added, as in `tenant_2`, unless the only payload key that Loki stores under that name, such as
+`a.b` for `a_b`, has the same value, when the label is written once. So a moved label is numbered,
+as a label is, while a payload key whose prefixed name is taken gets the prefix again, as in
+`payload_payload_duration`.
 
 When your Loki raises these limits in its `limits_config`, set the formatter's options of the same
-names to match:
+names to match, each an Integer of 1 or more:
 
 ~~~ruby
 SemanticLogger.add_appender(
   appender:  :loki,
   url:       "https://logs-prod-001.grafana.net",
-  formatter: {loki: {max_label_names_per_series: 30, max_label_name_length: 1024, max_label_value_length: 4096}}
+  formatter: {loki: {max_label_names_per_series: 30, max_label_name_length: 2048, max_label_value_length: 4096}}
 )
 ~~~
 

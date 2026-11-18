@@ -320,7 +320,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   bytes, or a label value longer than 2048 bytes, such as many tags. Loki rejected the push with
   `400 Bad Request`. Such a label is now written to the structured metadata instead, as a String,
   where a query can still filter on it: the labels after the 15th in the order the formatter writes
-  them (its own, then the named tags, then the context), and any label with a longer name or value.
+  them (its own, then the named tags and the context under their own names, then those whose names
+  were taken or replaced), and any label with a longer name or value.
   The new formatter options `max_label_names_per_series`, `max_label_name_length`, and
   `max_label_value_length` set these limits for a Loki that raises them, as in
   `formatter: {loki: {max_label_names_per_series: 30}}`. See

@@ -308,6 +308,15 @@ agent.
   did, is written under its name as a String, and with a number added when a label written before
   it has that name, as a named tag is: `stream[:stream][:level] = "INFO"` after `super` adds
   `level_2="INFO"` rather than replacing `level`.
+
+  A subclass that overrides both `#build_stream` and `#call` (or `#batch`), calling `super` in
+  neither, leaves out each named tag and context value whose name another label has, or that Loki
+  does not accept, such as `request-id`. The formatter writes those labels last, once the labels
+  that keep their names are written: from its own `#build_stream`, or, for a subclass whose
+  `#build_stream` does not call `super`, from its own `#call` and `#batch`. Such a subclass calls
+  neither. To keep them, call `super` from the subclass's `#build_stream` and add or change its own
+  labels in the stream it returns, or remove its `#call` and `#batch` when they repeat the
+  formatter's own, as a copy of v5.2's does.
 * The `:loki` formatter now writes a label past Loki's default limits, the 16th and later label of a
   stream, or one whose name is longer than 1024 bytes or whose value is longer than 2048 bytes, to
   the structured metadata instead, since Loki rejected the whole push for it. If your Loki raises

@@ -997,17 +997,65 @@ module SemanticLogger
               assert_equal({"tags" => "[\"#{'a' * 2045}\"]"}, structured_metadata)
             end
 
+            it "moves tags whose JSON is longer than 2048 bytes once each control character is escaped" do
+              log.tags = ["\u0001" * 341]
+
+              refute labels.key?("tags")
+              assert_equal 2050, structured_metadata["tags"].bytesize
+            end
+
+            it "does not write short tags as JSON to measure them, only once in the output" do
+              log.tags = %w[a b]
+              to_json  = Utils.method(:to_json)
+              calls    = 0
+              json     = Utils.stub(:to_json, lambda { |value|
+                calls += 1
+                to_json.call(value)
+              }) { formatter.call(log, logger) }
+
+              assert_equal %w[a b], JSON.parse(json)["streams"][0]["stream"]["tags"]
+              assert_equal 1, calls
+            end
+
+            it "does not write the tags as JSON to measure them when other labels are past the limits" do
+              log.tags       = %w[a b]
+              log.named_tags = nine_named_tags.merge("tag10" => "t10", "n" * 1025 => "")
+              to_json        = Utils.method(:to_json)
+              calls          = 0
+              json           = Utils.stub(:to_json, lambda { |value|
+                calls += 1
+                to_json.call(value)
+              }) { formatter.call(log, logger) }
+
+              assert_equal %w[a b], JSON.parse(json)["streams"][0]["stream"]["tags"]
+              assert_equal 1, calls
+            end
+
+            it "leaves a label with an empty value, whatever the length of its name, which Loki leaves out" do
+              log.tags       = %w[a b]
+              log.named_tags = {"n" * 1025 => ""}
+              to_json        = Utils.method(:to_json)
+              calls          = 0
+              Utils.stub(:to_json, lambda { |value|
+                calls += 1
+                to_json.call(value)
+              }) { labels }
+
+              assert_equal "", labels["n" * 1025]
+              assert_empty structured_metadata
+              assert_equal 1, calls, "checks the lengths of the labels once, without the tags as JSON"
+            end
+
             describe "with a lower limit" do
-              let(:formatter) { Loki.new(max_label_names_per_series: 0) }
+              let(:formatter) { Loki.new(max_label_names_per_series: 1) }
 
               it "writes each moved label as a String, as Loki accepts structured metadata" do
                 log.tags       = %w[a b]
                 log.named_tags = {count: 42}
 
-                assert_empty labels
+                assert_equal({"pid" => Process.pid}, labels)
                 assert_equal(
                   {
-                    "pid"         => Process.pid.to_s,
                     "application" => "test_app",
                     "environment" => "test",
                     "host"        => "test_host",
@@ -1048,6 +1096,20 @@ module SemanticLogger
                 )
               end
 
+              it "numbers a moved label whose name a payload key has, when Loki keeps another key's value" do
+                log.payload    = {"a.b" => "1", "a_b" => "2"}
+                log.named_tags = {a_b: "2"}
+
+                assert_equal "2", structured_metadata["a_b_2"]
+              end
+
+              it "writes a moved label once when the only payload key Loki stores under its name has its value" do
+                log.payload    = {"a.b" => "2"}
+                log.named_tags = {a_b: "2"}
+
+                assert_equal({"a.b" => "2"}, structured_metadata.slice("a.b", "a_b", "a_b_2"))
+              end
+
               it "numbers a prefixed label after the name Loki stores, without two underscores in a row" do
                 log.payload    = {"" => "a"}
                 log.named_tags = {"_" => "b"}
@@ -1067,11 +1129,11 @@ module SemanticLogger
               assert_empty output["values"][0][2]
             end
 
-            it "raises for a limit that is not an Integer of 0 or more" do
-              [nil, "15", -1, 1.5].each do |limit|
+            it "raises for a limit that is not an Integer of 1 or more" do
+              [nil, "15", -1, 0, 1.5].each do |limit|
                 error = assert_raises(ArgumentError) { Loki.new(max_label_value_length: limit) }
 
-                assert_match(/max_label_value_length must be an Integer of 0 or more/, error.message)
+                assert_match(/max_label_value_length must be an Integer of 1 or more/, error.message)
               end
             end
 
@@ -1089,6 +1151,38 @@ module SemanticLogger
           describe "a subclass" do
             # A label name written twice is refused here, as json 3 refuses to write it.
             let(:output) { JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0] }
+
+            describe "that overrides #loki_value" do
+              let(:formatter) do
+                Class.new(Loki) do
+                  private
+
+                  def loki_value(value)
+                    Utils.structure?(value) ? "[REDACTED]" : super
+                  end
+                end.new(max_label_names_per_series: 7)
+              end
+
+              it "converts the values of the labels and of the structured metadata with it" do
+                log.named_tags = {user: {email: "a@b.c"}}
+                log.context    = {session: {id: "s"}, "user" => "u"}
+                log.payload    = {user: {email: "a@b.c"}}
+
+                assert_equal "[REDACTED]", output["stream"]["user"]
+                assert_equal(
+                  {"session" => "[REDACTED]", "user_2" => "u", "user" => "[REDACTED]"},
+                  output["values"][0][2]
+                )
+              end
+
+              it "compares the values of the labels with it" do
+                log.named_tags = {user: {email: "a@b.c"}, "user-id" => {id: 1}, :user_id => "[REDACTED]"}
+
+                assert_equal "[REDACTED]", output["stream"]["user"]
+                assert_equal "[REDACTED]", output["values"][0][2]["user_id"]
+                refute output["values"][0][2].key?("user_id_2")
+              end
+            end
 
             describe "that overrides #build_stream without calling super, as in v5.2" do
               # The #build_stream of v5.2.0, with a label of its own after the context, under a
@@ -1147,6 +1241,26 @@ module SemanticLogger
                 assert_equal({"region" => "us", "region_2" => "eu"}, output["stream"].slice("region", "region_2"))
               end
 
+              it "moves the labels past Loki's limits to its structured metadata, its own label too" do
+                formatter      = subclass.new(max_label_names_per_series: 7)
+                log.named_tags = {tenant: "acme"}
+                log.context    = {zone: "a"}
+                log.payload    = {user: "u"}
+                output         = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
+
+                assert_equal "acme", output["stream"]["tenant"]
+                assert_equal({"user" => "u", "zone" => "a", "region" => "eu"}, output["values"][0][2])
+              end
+
+              it "moves a named tag whose name its own label under a Symbol has, numbered, past the limits" do
+                formatter      = subclass.new(max_label_names_per_series: 7)
+                log.named_tags = {pid: "1", tenant: "acme"}
+                output         = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
+
+                assert_equal Process.pid, output["stream"]["pid"]
+                assert_equal({"region" => "eu", "pid_2" => "1"}, output["values"][0][2])
+              end
+
               it "writes the labels of each entry of a batch, each its own" do
                 log.named_tags   = {tenant: "acme", host: "db-1"}
                 other            = SemanticLogger::Log.new("LokiTest", :info)
@@ -1159,8 +1273,58 @@ module SemanticLogger
               end
             end
 
-            describe "that writes a label of its own under a Symbol, as in v5.2" do
+            describe "whose #build_stream writes no structured metadata" do
               let(:formatter) do
+                Class.new(Loki) do
+                  private
+
+                  def build_stream
+                    self.stream = {stream: {pid: pid}, values: [[]]}
+                    level
+                    named_tags
+                    time
+                    message
+                    stream
+                  end
+                end.new(max_label_names_per_series: 3)
+              end
+
+              it "leaves out the labels past Loki's limits, which it has nowhere to write" do
+                log.named_tags = {tenant: "acme", level: "warn", zone: "a"}
+
+                assert_equal({"pid" => Process.pid, "level" => "debug", "tenant" => "acme"}, output["stream"])
+                assert_equal [log_time.strftime("%s%N"), "initial message"], output["values"][0]
+              end
+            end
+
+            describe "whose #build_stream writes a copy of payload_value" do
+              let(:formatter) do
+                Class.new(Loki) do
+                  private
+
+                  def build_stream
+                    self.stream = {stream: {pid: pid}, values: [[]]}
+                    level
+                    named_tags
+                    time
+                    message
+                    payload
+                    stream[:values][0] << payload_value.merge("team" => "core")
+                    stream
+                  end
+                end.new(max_label_names_per_series: 3)
+              end
+
+              it "writes the labels past Loki's limits to the copy, which the entry has" do
+                log.named_tags = {tenant: "acme", zone: "a"}
+
+                assert_equal({"pid" => Process.pid, "level" => "debug", "tenant" => "acme"}, output["stream"])
+                assert_equal({"team" => "core", "zone" => "a"}, output["values"][0][2])
+              end
+            end
+
+            describe "that writes a label of its own under a Symbol, as in v5.2" do
+              let(:subclass) do
                 Class.new(Loki) do
                   private
 
@@ -1171,8 +1335,9 @@ module SemanticLogger
                   def level
                     stream[:stream][:level] = log.level.to_s.upcase
                   end
-                end.new
+                end
               end
+              let(:formatter) { subclass.new }
 
               it "keeps its name, and numbers a named tag or context key of that name" do
                 log.named_tags = {level: "warn", host: "db-1"}
@@ -1191,21 +1356,69 @@ module SemanticLogger
                 assert_equal "DEBUG", output["stream"]["level"]
                 refute output["stream"].key?("level_2")
               end
+
+              it "counts it toward Loki's limits, and moves it under its name" do
+                formatter = subclass.new(max_label_names_per_series: 4)
+                output    = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
+
+                assert_equal %w[pid application environment host], output["stream"].keys
+                assert_equal({"level" => "DEBUG", "thread" => thread_name}, output["values"][0][2])
+              end
             end
 
             describe "that writes a label under a Symbol after calling super" do
-              let(:formatter) do
+              let(:subclass) do
                 Class.new(Loki) do
                   private
 
                   def build_stream
                     super.tap { |stream| stream[:stream][:level] = "DEBUG" }
                   end
-                end.new
+                end
               end
+              let(:formatter) { subclass.new }
 
               it "numbers it when another label has its name" do
                 assert_equal({"level" => "debug", "level_2" => "DEBUG"}, output["stream"].slice("level", "level_2"))
+              end
+
+              it "counts it toward Loki's limits" do
+                formatter = subclass.new(max_label_names_per_series: 6)
+                output    = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
+
+                assert_equal %w[pid application environment host level thread], output["stream"].keys
+                assert_equal({"level_2" => "DEBUG"}, output["values"][0][2])
+              end
+            end
+
+            describe "with a #labels method and a @labels variable of its own" do
+              let(:formatter) do
+                Class.new(Loki) do
+                  def initialize(labels: {"team" => "core"}, **args)
+                    super(**args)
+                    @labels = labels
+                  end
+
+                  private
+
+                  def build_stream
+                    super.tap { |stream| stream[:stream].merge!(@labels, labels) }
+                  end
+
+                  def labels
+                    {"site" => "eu"}
+                  end
+                end.new
+              end
+
+              it "writes the named tags and the context, and its own labels" do
+                log.named_tags = {tenant: "acme", host: "db-1"}
+                log.context    = {zone: "a"}
+
+                assert_equal(
+                  %w[acme db-1 a core eu],
+                  output["stream"].values_at("tenant", "host_2", "zone", "team", "site")
+                )
               end
             end
 
@@ -1220,7 +1433,7 @@ module SemanticLogger
                       "values" => [[format_time(log), log.message]]
                     }
                   end
-                end.new
+                end.new(max_label_names_per_series: 1)
               end
 
               it "writes its stream as it is" do
@@ -1231,6 +1444,12 @@ module SemanticLogger
                    "values" => [[log_time.strftime("%s%N"), "initial message"]]},
                   output
                 )
+              end
+
+              it "writes each entry of a batch as it is" do
+                streams = JSON.parse(formatter.batch([log, log], logger))["streams"]
+
+                assert_equal([{"app" => "shop", "level" => "debug"}] * 2, streams.map { |stream| stream["stream"] })
               end
             end
           end

@@ -2914,20 +2914,24 @@ in `{application="shop"} | tenant="acme"`, but a stream selector cannot:
 * a label with a longer name;
 * a label with a longer value, such as many `tags`.
 
-As Loki does, a label with an empty value, which Loki leaves out, and `service_name`, which Loki adds
-to each stream, are not counted. A moved label is written as Loki stores structured metadata: as a
-String, under its name with each run of underscores as one, with the `payload_` prefix when a payload
-key with its name would have it, as in `payload_duration`, and with a number added when the
-structured metadata already has that name with another value, as in `tenant_2`.
+A label with an empty value, which Loki leaves out, is never moved, whatever the length of its name.
+As Loki does, it is not counted, nor is `service_name`, which Loki adds to each stream.
+A moved label is written as Loki stores structured metadata: as a String, under its name with each
+run of underscores as one, and with the `payload_` prefix when a payload key with its name would
+have it, as in `payload_duration`. When the structured metadata already has that name, a number is
+added, as in `tenant_2`, unless the only payload key that Loki stores under that name, such as
+`a.b` for `a_b`, has the same value, when the label is written once. So a moved label is numbered,
+as a label is, while a payload key whose prefixed name is taken gets the prefix again, as in
+`payload_payload_duration`.
 
 When your Loki raises these limits in its `limits_config`, set the formatter's options of the same
-names to match:
+names to match, each an Integer of 1 or more:
 
 ~~~ruby
 SemanticLogger.add_appender(
   appender:  :loki,
   url:       "https://logs-prod-001.grafana.net",
-  formatter: {loki: {max_label_names_per_series: 30, max_label_name_length: 1024, max_label_value_length: 4096}}
+  formatter: {loki: {max_label_names_per_series: 30, max_label_name_length: 2048, max_label_value_length: 4096}}
 )
 ~~~
 
@@ -6412,6 +6416,15 @@ agent.
   did, is written under its name as a String, and with a number added when a label written before
   it has that name, as a named tag is: `stream[:stream][:level] = "INFO"` after `super` adds
   `level_2="INFO"` rather than replacing `level`.
+
+  A subclass that overrides both `#build_stream` and `#call` (or `#batch`), calling `super` in
+  neither, leaves out each named tag and context value whose name another label has, or that Loki
+  does not accept, such as `request-id`. The formatter writes those labels last, once the labels
+  that keep their names are written: from its own `#build_stream`, or, for a subclass whose
+  `#build_stream` does not call `super`, from its own `#call` and `#batch`. Such a subclass calls
+  neither. To keep them, call `super` from the subclass's `#build_stream` and add or change its own
+  labels in the stream it returns, or remove its `#call` and `#batch` when they repeat the
+  formatter's own, as a copy of v5.2's does.
 * The `:loki` formatter now writes a label past Loki's default limits, the 16th and later label of a
   stream, or one whose name is longer than 1024 bytes or whose value is longer than 2048 bytes, to
   the structured metadata instead, since Loki rejected the whole push for it. If your Loki raises
