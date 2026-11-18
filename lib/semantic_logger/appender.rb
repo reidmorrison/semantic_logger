@@ -78,6 +78,7 @@ module SemanticLogger
     # It adds one destination, the first of file_name:, io:, logger:, appender:, and metric: that is given, in that
     # order, and ignores any other, see .report_ignored_destinations.
     def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &)
+      # Named in the order of the if / elsif chain below, which adds the first one given: keep the two in step.
       report_ignored_destinations(file_name: file_name, io: io, logger: logger, appender: appender, metric: metric)
 
       if file_name
@@ -140,8 +141,8 @@ module SemanticLogger
     # Reports a deprecation warning when .build is given more than one of the destinations, in the order in which it
     # takes the first one, naming the one that it uses and the others, which it ignores, since v6 raises ArgumentError
     # for them. A destination given as nil, or false, is not one, as .build has always taken it, so that a caller can
-    # pass on its optional settings, such as `file_name: options[:file_name], io: $stdout`, and v6 must not raise for
-    # it either. Remove in v6, raising ArgumentError in its place.
+    # pass on settings of which only one is set, such as `file_name: options[:file_name], io: options[:io]`, and v6
+    # must not raise for it either. Remove in v6, raising ArgumentError in its place.
     def self.report_ignored_destinations(**destinations)
       used, *ignored = destinations.filter_map { |name, value| "#{name}:" if value }
       return if ignored.empty?

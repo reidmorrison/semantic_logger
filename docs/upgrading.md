@@ -176,8 +176,9 @@ SemanticLogger.add_appender(io: $stdout)
 ~~~
 
 An option that only the ignored destination accepts, such as the `url:` of `appender: :http`, went
-to the one that was added, which raised `ArgumentError: unknown keyword`; the warning now comes
-before it, naming the destination that was ignored.
+to the one that was added, which raised `ArgumentError: unknown keyword`. While
+[deprecation warnings are shown](#seeing-deprecation-warnings), the warning now comes before it,
+naming the destination that was ignored.
 
 `appender: :wrapper` only worked with `logger:`, which `add_appender` took as the destination
 instead, so it now reports the same warning. Leave out `appender: :wrapper`:
