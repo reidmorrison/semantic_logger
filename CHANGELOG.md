@@ -314,7 +314,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   socket was IPv4 only, so adding it raised `SocketError`, since the name has no IPv4 address. A
   name with both is still sent to over IPv4, whichever address the resolver returns first, unless
   it cannot connect over IPv4, such as on a host with no IPv4 route, when it now uses IPv6 instead
-  of raising. A name that does not resolve raises `SocketError` as before.
+  of raising. It looks up a name's IPv6 addresses only when the resolver answers that the name has
+  no IPv4 address, or when it cannot connect to any of them, so that a resolver that does not answer
+  for them does not delay it otherwise. When looking up the IPv4 addresses fails for another reason,
+  such as a resolver that does not answer in time, it raises that `SocketError` at once, as before,
+  rather than sending over IPv6 to a name that may have IPv4 addresses. On Ruby 3.2 and JRuby, whose
+  `SocketError` does not say why a lookup failed, it looks up the IPv6 addresses after any failure.
+  When it cannot connect to any address, it raises the error from the first one it tried, an IPv4
+  address when the name has one. A name that does not resolve raises `SocketError` as before.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
