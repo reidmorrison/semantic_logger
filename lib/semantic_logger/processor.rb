@@ -1,3 +1,7 @@
+# Loaded now rather than autoloaded, since .logger builds one on first use, which can be the first log
+# call of the process, made in a signal trap, where Ruby does not allow a require.
+require "semantic_logger/appender/io"
+
 module SemanticLogger
   # Thread that submits and processes log requests
   class Processor < Appender::Async

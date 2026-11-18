@@ -813,13 +813,16 @@ module SemanticLogger
   #
   # A Ractor other than the main one cannot use the main Ractor's cache, or its loggers, so it has a
   # cache of its own (experimental, Ruby 4.0 and later).
+  #
+  # In a signal trap, the Logger is added to the cache just after the trap (see
+  # TrapSafe.compute_if_absent).
   def self.cached_logger(klass)
     if RactorSupport.other_ractor?
       cache = ::Ractor.store_if_absent(:semantic_logger_logger_cache) { {} }
       return cache[klass] ||= Logger.new(klass)
     end
 
-    logger_cache.compute_if_absent(klass) { Logger.new(klass) }
+    TrapSafe.compute_if_absent(logger_cache, klass) { Logger.new(klass) }
   end
   private_class_method :cached_logger
 

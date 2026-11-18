@@ -1,3 +1,8 @@
+# Loaded now rather than autoloaded, since #default_formatter builds one, such as for the internal
+# logger that the processor builds on first use, which can be in a signal trap, where Ruby does not
+# allow a require.
+require "semantic_logger/formatters/default"
+
 # Abstract Subscriber
 #
 #   Abstract base class for all appenders.
