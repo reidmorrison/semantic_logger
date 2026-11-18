@@ -64,10 +64,8 @@ module SemanticLogger
   # #redact).
   class Log
     # Keys passed in without a payload that will be extracted and the remainder passed into the payload.
-    NON_PAYLOAD_KEYS = %i[message exception backtrace call_site exception
-                          duration min_duration
-                          log_exception on_exception_level
-                          metric metric_amount dimensions].freeze
+    NON_PAYLOAD_KEYS = %i[message exception backtrace call_site duration min_duration
+                          log_exception on_exception_level metric metric_amount dimensions].freeze
 
     # Values accepted for the :log_exception argument.
     LOG_EXCEPTION_OPTIONS = %i[full partial none].freeze
@@ -452,6 +450,9 @@ module SemanticLogger
 
     # Returns [true|false] whether the log entry has a payload
     def payload? = !(payload.nil? || (payload.respond_to?(:empty?) && payload.empty?))
+
+    # Returns [true|false] whether the log entry has a metric with dimensions: a Hash that is not empty.
+    def dimensions? = metric ? dimensions.is_a?(Hash) && !dimensions.empty? : false
 
     def to_h(host = SemanticLogger.host, application = SemanticLogger.application,
              environment = SemanticLogger.environment)

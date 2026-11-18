@@ -243,6 +243,7 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
   "duration_ms": "Duration in milliseconds",
   "metric": "Name of the metric",
   "metric_amount": "Size of the metric, usually 1",
+  "dimensions": {"region": "The metric's dimensions, when it has any"},
 
   "named_tags": {
     "tag1": "any named tags will be inside this named_tags tag",
@@ -332,10 +333,10 @@ Semantic Logger fields map to ECS as follows:
 | `duration` | `event.duration` (nanoseconds) |
 | `tags` | `tags` |
 | `named_tags` | `labels.*` |
-| `payload`, `metric`, `metric_amount` | nested under a custom namespace (see below) |
+| `payload`, `metric`, `metric_amount`, `dimensions` | nested under a custom namespace (see below) |
 
 ECS reserves the top-level field names it defines, so Semantic Logger data with no native ECS home
-(`payload`, `metric`, and `metric_amount`) is nested under a custom top-level namespace,
+(`payload`, `metric`, `metric_amount`, and `dimensions`) is nested under a custom top-level namespace,
 `semantic_logger` by default. A proper-noun namespace is
 [the approach ECS recommends](https://www.elastic.co/docs/reference/ecs/ecs-custom-fields-in-ecs) for
 custom fields, since it never collides with a current or future ECS field. Rename it with
@@ -800,6 +801,7 @@ body. Semantic Logger adds these attributes when the entry has the value:
 | `semantic_logger.tags` | The tags, as an array. |
 | `semantic_logger.duration_ms` | The duration in milliseconds, from the `measure_*` methods. |
 | `semantic_logger.metric`, `semantic_logger.metric_amount` | The metric name and amount. |
+| `semantic_logger.dimensions.<key>` | Each of the metric's dimensions, such as `semantic_logger.dimensions.region`. |
 
 The first six rows use the names from the
 [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/). A named tag or

@@ -99,7 +99,9 @@ logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbl
 ~~~
 
 Not every backend supports dimensions. **Statsd** and **New Relic** ignore any metric that carries
-dimensions; **SignalFx** is built around them. See each subscriber below.
+dimensions; **SignalFx** is built around them. See each subscriber below. The formatters that write
+structured data also write the dimensions with the entry, see
+[Metrics in log appenders](#metrics-in-log-appenders).
 
 ## Send metrics to a backend
 
@@ -183,10 +185,10 @@ What each formatter writes for a metric on an entry with a message:
 
 | Formatter | Metric fields written |
 |-----------|-----------------------|
-| `:json`, `:raw`, `:fluentd`, `:syslog_cee`, `:new_relic_logs` | `metric` and `metric_amount` |
-| `:ecs` | `metric` and `metric_amount`, under its namespace, `semantic_logger` by default, or in `labels` when it has none |
-| `:loki` | `metric` and `metric_value`, in the structured metadata |
-| `:open_telemetry` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes |
+| `:json`, `:raw`, `:fluentd`, `:syslog_cee`, `:new_relic_logs` | `metric`, `metric_amount`, and `dimensions` |
+| `:ecs` | `metric`, `metric_amount`, and `dimensions`, under its namespace, `semantic_logger` by default, or in `labels` when it has none |
+| `:loki` | `metric`, `metric_value`, and `dimensions` (as JSON), in the structured metadata |
+| `:open_telemetry` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes, and a `semantic_logger.dimensions.<key>` attribute for each dimension |
 | `:default`, `:color`, `:one_line`, `:pattern`, `:syslog`, `:logfmt` | None; only the duration is shown |
 
 An appender writes what its formatter writes. For example `:elasticsearch`, `:opensearch`,

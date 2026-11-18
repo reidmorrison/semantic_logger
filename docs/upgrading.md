@@ -42,8 +42,10 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
   backends recognize it, and so do `code.file.path`, `code.line.number`, `thread.name`, and
   `process.pid`. The logger name, tags, duration, and metric are `semantic_logger.name`,
   `semantic_logger.tags`, `semantic_logger.duration_ms`, `semantic_logger.metric`, and
-  `semantic_logger.metric_amount`. A named tag or payload key with one of these names is prefixed with
-  its source, as in `payload.exception.type`.
+  `semantic_logger.metric_amount`, and each of a metric's dimensions is a
+  `semantic_logger.dimensions.<key>` attribute. A named tag or payload key with one of these names, or
+  starting with `semantic_logger.dimensions.`, is prefixed with its source, as in
+  `payload.exception.type`.
 * The host, application, and environment are no longer sent. Set them in the OpenTelemetry resource
   instead, which is sent once per export, with `OTEL_SERVICE_NAME=my_app` and
   `OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,host.name=web-1`.

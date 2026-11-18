@@ -2066,6 +2066,7 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
   "duration_ms": "Duration in milliseconds",
   "metric": "Name of the metric",
   "metric_amount": "Size of the metric, usually 1",
+  "dimensions": {"region": "The metric's dimensions, when it has any"},
 
   "named_tags": {
     "tag1": "any named tags will be inside this named_tags tag",
@@ -2155,10 +2156,10 @@ Semantic Logger fields map to ECS as follows:
 | `duration` | `event.duration` (nanoseconds) |
 | `tags` | `tags` |
 | `named_tags` | `labels.*` |
-| `payload`, `metric`, `metric_amount` | nested under a custom namespace (see below) |
+| `payload`, `metric`, `metric_amount`, `dimensions` | nested under a custom namespace (see below) |
 
 ECS reserves the top-level field names it defines, so Semantic Logger data with no native ECS home
-(`payload`, `metric`, and `metric_amount`) is nested under a custom top-level namespace,
+(`payload`, `metric`, `metric_amount`, and `dimensions`) is nested under a custom top-level namespace,
 `semantic_logger` by default. A proper-noun namespace is
 [the approach ECS recommends](https://www.elastic.co/docs/reference/ecs/ecs-custom-fields-in-ecs) for
 custom fields, since it never collides with a current or future ECS field. Rename it with
@@ -2623,6 +2624,7 @@ body. Semantic Logger adds these attributes when the entry has the value:
 | `semantic_logger.tags` | The tags, as an array. |
 | `semantic_logger.duration_ms` | The duration in milliseconds, from the `measure_*` methods. |
 | `semantic_logger.metric`, `semantic_logger.metric_amount` | The metric name and amount. |
+| `semantic_logger.dimensions.<key>` | Each of the metric's dimensions, such as `semantic_logger.dimensions.region`. |
 
 The first six rows use the names from the
 [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/). A named tag or
@@ -3095,6 +3097,7 @@ These read-only helpers derive convenient values from the attributes above:
 |Method|Returns|Description|
 |------|-------|-----------|
 |`payload?`|`true`/`false`|Whether the event carries a non-empty payload.|
+|`dimensions?`|`true`/`false`|Whether the event has a metric with dimensions, a `Hash` that is not empty. The formatters write the dimensions only then.|
 |`payload_to_s`|`String` or `nil`|The payload rendered with `inspect`, or `nil` when absent.|
 |`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, `:udp`, and `:open_telemetry`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
 |`duration_to_s`|`String` or `nil`|The duration in milliseconds as a short string, for example `"12ms"`. `nil` when there is no duration.|
@@ -3219,7 +3222,9 @@ logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbl
 ~~~
 
 Not every backend supports dimensions. **Statsd** and **New Relic** ignore any metric that carries
-dimensions; **SignalFx** is built around them. See each subscriber below.
+dimensions; **SignalFx** is built around them. See each subscriber below. The formatters that write
+structured data also write the dimensions with the entry, see
+[Metrics in log appenders](#metrics-in-log-appenders).
 
 ## Send metrics to a backend
 
@@ -3303,10 +3308,10 @@ What each formatter writes for a metric on an entry with a message:
 
 | Formatter | Metric fields written |
 |-----------|-----------------------|
-| `:json`, `:raw`, `:fluentd`, `:syslog_cee`, `:new_relic_logs` | `metric` and `metric_amount` |
-| `:ecs` | `metric` and `metric_amount`, under its namespace, `semantic_logger` by default, or in `labels` when it has none |
-| `:loki` | `metric` and `metric_value`, in the structured metadata |
-| `:open_telemetry` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes |
+| `:json`, `:raw`, `:fluentd`, `:syslog_cee`, `:new_relic_logs` | `metric`, `metric_amount`, and `dimensions` |
+| `:ecs` | `metric`, `metric_amount`, and `dimensions`, under its namespace, `semantic_logger` by default, or in `labels` when it has none |
+| `:loki` | `metric`, `metric_value`, and `dimensions` (as JSON), in the structured metadata |
+| `:open_telemetry` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes, and a `semantic_logger.dimensions.<key>` attribute for each dimension |
 | `:default`, `:color`, `:one_line`, `:pattern`, `:syslog`, `:logfmt` | None; only the duration is shown |
 
 An appender writes what its formatter writes. For example `:elasticsearch`, `:opensearch`,
@@ -5582,8 +5587,10 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
   backends recognize it, and so do `code.file.path`, `code.line.number`, `thread.name`, and
   `process.pid`. The logger name, tags, duration, and metric are `semantic_logger.name`,
   `semantic_logger.tags`, `semantic_logger.duration_ms`, `semantic_logger.metric`, and
-  `semantic_logger.metric_amount`. A named tag or payload key with one of these names is prefixed with
-  its source, as in `payload.exception.type`.
+  `semantic_logger.metric_amount`, and each of a metric's dimensions is a
+  `semantic_logger.dimensions.<key>` attribute. A named tag or payload key with one of these names, or
+  starting with `semantic_logger.dimensions.`, is prefixed with its source, as in
+  `payload.exception.type`.
 * The host, application, and environment are no longer sent. Set them in the OpenTelemetry resource
   instead, which is sent once per export, with `OTEL_SERVICE_NAME=my_app` and
   `OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,host.name=web-1`.

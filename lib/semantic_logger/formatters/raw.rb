@@ -109,10 +109,11 @@ module SemanticLogger
         end
       end
 
-      # Metric
+      # Metric, its amount, and its dimensions
       def metric
         hash[:metric]        = log.metric if log.metric
         hash[:metric_amount] = log.metric_amount if log.metric_amount
+        hash[:dimensions]    = log.dimensions if log.dimensions?
       end
 
       # Returns log messages in Hash format

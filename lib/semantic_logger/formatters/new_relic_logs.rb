@@ -52,6 +52,7 @@ module SemanticLogger
           tags:          hash[:tags],
           metric:        hash[:metric],
           metric_amount: hash[:metric_amount],
+          dimensions:    hash[:dimensions],
           environment:   hash[:environment],
           application:   hash[:application],
           payload:       hash[:payload],

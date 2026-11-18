@@ -151,6 +151,13 @@ module SemanticLogger
             assert_equal 3, result.dig(:semantic_logger, :metric_amount)
           end
 
+          it "nests the metric's dimensions under the namespace" do
+            log.metric     = "users/registered"
+            log.dimensions = {region: "us"}
+
+            assert_equal({region: "us"}, result.dig(:semantic_logger, :dimensions))
+          end
+
           it "uses a custom namespace" do
             formatter = SemanticLogger::Formatters::Ecs.new(namespace: "my_app")
             log.payload = {first: 1}

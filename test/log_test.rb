@@ -1189,6 +1189,40 @@ module SemanticLogger
         end
       end
 
+      describe "#dimensions?" do
+        it "is true for a metric with dimensions" do
+          log.metric     = "user/login"
+          log.dimensions = {region: "us"}
+
+          assert_predicate log, :dimensions?
+        end
+
+        it "is false for a metric without dimensions, or with empty ones" do
+          log.metric = "user/login"
+
+          refute_predicate log, :dimensions?
+          log.dimensions = {}
+
+          refute_predicate log, :dimensions?
+        end
+
+        it "is false for dimensions without a metric" do
+          log.dimensions = {region: "us"}
+
+          refute_predicate log, :dimensions?
+          log.metric = false
+
+          refute_predicate log, :dimensions?
+        end
+
+        it "is false for dimensions that are not a Hash" do
+          log.metric     = "user/login"
+          log.dimensions = "region"
+
+          refute_predicate log, :dimensions?
+        end
+      end
+
       describe "#to_h" do
         it "returns a raw hash including the supplied host, application, and environment" do
           log.message = "Hello"

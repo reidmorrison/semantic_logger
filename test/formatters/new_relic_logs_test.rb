@@ -117,6 +117,25 @@ module SemanticLogger
           end
         end
 
+        describe "metric" do
+          it "logs the metric, its amount, and its dimensions" do
+            log.metric        = "user/login"
+            log.metric_amount = 3
+            log.dimensions    = {region: "us"}
+            result = formatted_log
+
+            assert_equal "user/login", result[:metric]
+            assert_equal 3, result[:metric_amount]
+            assert_equal({region: "us"}, result[:dimensions])
+          end
+
+          it "omits the dimensions without any" do
+            log.metric = "user/login"
+
+            refute formatted_log.key?(:dimensions)
+          end
+        end
+
         describe "tags and named_tags" do
           it "logs tags" do
             log.tags = %w[first second third]

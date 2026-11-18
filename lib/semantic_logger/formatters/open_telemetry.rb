@@ -20,6 +20,7 @@ module SemanticLogger
     #   thread.name, process.pid
     #   semantic_logger.name, semantic_logger.tags, semantic_logger.duration_ms,
     #   semantic_logger.metric, semantic_logger.metric_amount
+    #   semantic_logger.dimensions.<key>, one for each dimension of a metric
     # A named tag or payload key named like one of these is prefixed with its source, as in
     # "payload.exception.type", so that logged data cannot replace or forge the entry's own fields.
     #
@@ -46,6 +47,7 @@ module SemanticLogger
       DURATION_MS          = "semantic_logger.duration_ms".freeze
       METRIC               = "semantic_logger.metric".freeze
       METRIC_AMOUNT        = "semantic_logger.metric_amount".freeze
+      DIMENSIONS_PREFIX    = "semantic_logger.dimensions.".freeze
 
       ENTRY_ATTRIBUTES = [
         EXCEPTION_TYPE, EXCEPTION_MESSAGE, EXCEPTION_STACKTRACE, CODE_FILE_PATH, CODE_LINE_NUMBER,
@@ -104,7 +106,7 @@ module SemanticLogger
       def add_logged(attributes, prefix, hash)
         hash.each_pair do |key, value|
           name = Utils.encode_utf8_string(key.to_s)
-          name = prefix + name if ENTRY_ATTRIBUTES.key?(name)
+          name = prefix + name if ENTRY_ATTRIBUTES.key?(name) || name.start_with?(DIMENSIONS_PREFIX)
           add(attributes, name, value)
         end
       end
@@ -120,6 +122,16 @@ module SemanticLogger
         add(attributes, DURATION_MS, log.duration)
         add(attributes, METRIC, log.metric)
         add(attributes, METRIC_AMOUNT, log.metric_amount)
+        add_dimensions(attributes)
+      end
+
+      # Each dimension of a metric is an attribute of its own, so that it can be queried.
+      def add_dimensions(attributes)
+        return unless log.dimensions?
+
+        log.dimensions.each_pair do |key, value|
+          add(attributes, DIMENSIONS_PREFIX + Utils.encode_utf8_string(key.to_s), value)
+        end
       end
 
       # Where the entry was logged: its call site, or else the first line of the backtrace it captured.

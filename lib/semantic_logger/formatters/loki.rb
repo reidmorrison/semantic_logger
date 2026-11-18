@@ -109,11 +109,13 @@ module SemanticLogger
                              end
       end
 
+      # The dimensions are a single value, as JSON, since structured metadata only holds Strings.
       def metric
         return unless log.metric
 
         payload_value[:metric] = log.metric
         payload_value[:metric_value] = log.metric_amount
+        payload_value[:dimensions] = loki_value(log.dimensions) if log.dimensions?
       end
 
       def duration
