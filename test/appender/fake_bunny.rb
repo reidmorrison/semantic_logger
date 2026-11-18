@@ -31,10 +31,22 @@ class FakeBunny
     @published = []
   end
 
+  # Makes #start raise, as Bunny does when it cannot connect to RabbitMQ.
+  def refuse_connections
+    @refuse_connections = true
+    self
+  end
+
   def start
+    raise Bunny::TCPConnectionFailedForAllHosts if @refuse_connections
   end
 
   def close
+    @closed = true
+  end
+
+  def closed?
+    @closed == true
   end
 
   def create_channel

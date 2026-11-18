@@ -1380,6 +1380,11 @@ Pass `metrics: true` to also send metric-only entries, which have a metric but n
 exception. Without `metrics:`, it sends them and reports a
 [deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
 
+When it is reopened, such as with `SemanticLogger.reopen(force: true)`, it connects to RabbitMQ again,
+publishes the next entries on a new channel, and closes the connection it replaced. When it cannot
+connect, it keeps the connection it has. In a forked child, it leaves the connection it inherited to
+the parent (see [Process forking](operations.html#process-forking)).
+
 ## Logging to several destinations at once
 
 Add as many appenders as you like; every entry is written to all of them. Use a per-appender `level`

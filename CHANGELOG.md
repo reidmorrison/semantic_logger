@@ -828,6 +828,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   writing to it, as the `:kafka` appender does, and connects again in the child; when it cannot, it
   connects before it writes the next entry. See
   [Process forking](https://logger.reidmorrison.com/operations.html#process-forking).
+- The `:rabbitmq` appender publishes on its new channel once it is reopened, such as in the child
+  process after a fork, or with `SemanticLogger.reopen(force: true)`. Before, it kept publishing
+  through the queue it had first published to, on the first channel it opened, so a forked child
+  published on the parent's connection, between the parent's own frames, and in the same process the
+  new connection went unused. When the reopen could not connect in the child, the appender also kept
+  the parent's channel. Now a reopen connects again, publishes the next entries on the new channel,
+  and closes the connection it replaced, which it left open before; when it cannot connect, it keeps
+  the connection it has. In a forked child, it first leaves the connection and channel it inherited
+  to the parent, without closing them, and when it cannot connect there, it connects before it
+  publishes the next entry. An error closing the replaced connection is reported to the internal
+  logger, rather than raised. Publishing after `close` connects again, rather than publishing on the
+  closed channel. See [RabbitMQ](https://logger.reidmorrison.com/appenders.html#rabbitmq-amqp).
 
 ## [5.2.0] 2026-10-30
 

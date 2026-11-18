@@ -97,13 +97,26 @@ module SemanticLogger
         reopen
       end
 
+      # Connects to RabbitMQ again, with a new channel, and then closes the connection it replaces, with
+      # its channel, such as after a log rotation. The next entry is published on the new channel. When
+      # connecting fails, it raises, and the appender keeps the connection and channel it has.
+      #
+      # After a fork, the child first forgets the connection and channel it inherited, without closing
+      # them: they belong to the parent. Closing them would send RabbitMQ a channel.close and a
+      # connection.close on the parent's connection, which ends it for the parent too, and publishing on
+      # the parent's channel would put the child's frames on it, between the parent's. Ruby closes the
+      # child's copy of the socket when it collects it, which leaves the parent's open. When connecting
+      # fails in the child, the appender has no channel, and connects before it publishes the next entry
+      # (see #queue).
       def reopen
-        @connection = Bunny.new(@rabbitmq_args)
-        @connection.start
-        @channel = @connection.create_channel
+        forget_inherited
+        replaced = @connection
+        connect
+        close_replaced(replaced)
       end
 
       def close
+        @queue = nil
         @channel&.close
         @channel = nil
         @connection&.close
@@ -123,13 +136,50 @@ module SemanticLogger
         SemanticLogger::Formatters::Json.new
       end
 
+      # Returns [Bunny::Queue] the queue to publish to, on the appender's channel. Connects first when the
+      # appender has no channel: after #close, or when connecting failed as it was reopened after a fork.
       def queue
-        @queue ||= @channel.queue(@queue_name)
+        @queue ||= (@channel || connect).queue(@queue_name)
       end
 
       # Only the queue name: the connection options hold the password. See Subscriber#inspect.
       def inspect_details
         "queue_name=#{@queue_name.inspect}"
+      end
+
+      private
+
+      # Returns [Bunny::Channel] a new channel, on a new connection to RabbitMQ, after making them the
+      # appender's, in place of the connection, channel, and queue it had. Records the process that built
+      # them, which owns their connection (see #reopen). When connecting raises, the appender keeps what
+      # it had.
+      def connect
+        connection = Bunny.new(@rabbitmq_args)
+        connection.start
+        channel     = connection.create_channel
+        @connection = connection
+        @channel    = channel
+        @queue      = nil
+        @pid        = ::Process.pid
+        channel
+      end
+
+      # Closes the connection that a reopen replaced, which closes its channel. Reports an error to the
+      # internal logger rather than raising it, since the appender already publishes on the new one.
+      def close_replaced(connection)
+        connection&.close
+      rescue StandardError => e
+        logger.warn("Could not close the RabbitMQ connection that a reopen replaced", e)
+      end
+
+      # In a child process, forgets the connection and channel built in the parent before a fork, and the
+      # queue on that channel. See #reopen.
+      def forget_inherited
+        return if @pid == ::Process.pid
+
+        @connection = nil
+        @channel    = nil
+        @queue      = nil
       end
     end
   end
