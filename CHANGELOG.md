@@ -511,6 +511,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   of entries and the reason of its first, followed by each error that caused it. A reason is quoted,
   with its control characters escaped, without the lines after its first, where the server can add
   part of the document, and cut to 500 characters.
+- The `:new_relic` metric subscriber adds its prefix, `Custom` by default, and a `/` to a metric name
+  that starts with the prefix but not with the prefix and a `/`, such as `Customers/signup` or
+  `CustomerSignup`. Before, it recorded such a name as it was, since it only checked that the name
+  started with `Custom`, and New Relic charts custom metrics only under `Custom/`. A name that starts
+  with `Custom/` is still recorded as it is, and an empty prefix still adds nothing. A prefix given
+  with a trailing `/`, such as `Custom/`, is added with one `/`. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ## [5.2.0] 2026-10-30
 
