@@ -404,12 +404,13 @@ agent.
   `SemanticLogger::Appender::Http::ResponseError` raised instead of `false`.
 * The `:elasticsearch` and `:opensearch` appenders now send again the entries of a bulk request that
   the server rejected with status 429, because its write queue was full, up to 3 times, after waiting
-  0.2, 0.4, then 0.8 seconds. Before, they were reported and discarded straight away. While it waits,
-  the thread that writes the entries is held up, at most 1.4 seconds for a request: the appender's
-  own thread when it writes in batches, as it does by default, but with `batch: false`, and without
-  `async: true`, the thread that writes to every appender, or with `SemanticLogger.sync!` the thread
-  that logged. The report of the entries still not indexed now comes after those waits. See
-  [Elasticsearch](appenders.html#elasticsearch).
+  0.2, 0.4, then 0.8 seconds. Before, they were reported and discarded straight away. That holds up
+  the thread that writes the entries for waits of at most 1.4 seconds for a request, plus up to 3
+  more bulk requests. It is the appender's own thread when it writes in batches, as it does by
+  default, or with `async: true`. With `batch: false`, and without `async: true`, it is the thread
+  that writes to every appender, or with `SemanticLogger.sync!`, the thread that logged, and every
+  other thread that logs waits for it. The report of the entries still not indexed now comes after
+  those waits. See [Elasticsearch](appenders.html#elasticsearch).
 
 ### Upgrading to Semantic Logger v5.2
 

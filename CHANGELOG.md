@@ -145,9 +145,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   server rejected with status 429 because its write queue was full, which are likely to be indexed a
   little later. Before, they were reported to the internal logger and discarded with the entries that
   failed for any other reason. Only those entries are sent again, so that none is indexed twice, up to
-  3 times, after waiting 0.2, 0.4, then 0.8 seconds. The waits hold up the thread that writes the
-  entries, at most 1.4 seconds for a request. The entries still not indexed are reported and
-  discarded, as before. See
+  3 times, after waiting 0.2, 0.4, then 0.8 seconds. That holds up the thread that writes the entries
+  for waits of at most 1.4 seconds for a request, plus up to 3 more bulk requests. The entries still
+  not indexed are reported and discarded, as before. See
   [Elasticsearch](https://logger.reidmorrison.com/appenders.html#elasticsearch) and the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 

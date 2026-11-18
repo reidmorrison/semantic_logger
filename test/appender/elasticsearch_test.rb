@@ -120,6 +120,8 @@ module Appender
           event = internal_logger.events.first
 
           assert_equal :error, event.level
+          assert_nil event.exception
+          assert_nil event.payload
           assert_equal "1 of 3 log entries were not indexed, and are discarded: 400 mapper_parsing_exception " \
                        "in semantic_logger-2026.11.16: \"failed to parse field [payload.amount] of type [long] " \
                        "in document with id 'id-1'. Preview of field's value: 'abc1'\", caused by " \

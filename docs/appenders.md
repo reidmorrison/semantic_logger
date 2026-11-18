@@ -718,11 +718,14 @@ SemanticLogger.add_appender(
 ~~~
 
 The appender sends its entries in bulk requests, a batch at a time by default. When Elasticsearch
-indexes only some of the entries of a request, the others are kept. It rejects an entry with status
-429 when its write queue is full, so those entries alone are sent again, up to 3 times, after waiting
-0.2, 0.4, then 0.8 seconds. The waits hold up the thread that writes the entries, at most 1.4 seconds
-for a request: the appender's own thread when it writes in batches, or else the thread that writes to
-every appender. The entries still not indexed are discarded, and reported to the internal logger.
+indexes only some of the entries of a request, the entries it indexed are not sent again. It rejects
+an entry with status 429 when its write queue is full, so those entries alone are sent again, up to 3
+times, after waiting 0.2, 0.4, then 0.8 seconds. That holds up the thread that writes the entries for
+waits of at most 1.4 seconds for a request, plus up to 3 more bulk requests. It is the appender's own
+thread when it writes in batches, as it does by default, or with `async: true`. With `batch: false`,
+and without `async: true`, it is the thread that writes to every appender, so the other appenders
+wait too; with `SemanticLogger.sync!`, that is the thread that logged, and every other thread that
+logs waits for it. The entries still not indexed are discarded, and reported to the internal logger.
 
 For an end-to-end walkthrough with Kibana, see [Centralized Logging](operations.html#centralized-logging).
 

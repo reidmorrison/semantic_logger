@@ -18,8 +18,9 @@ module SemanticLogger
       # as the "For input string" of a number that could not be parsed does.
       MAX_REPORTED_REASON = 500
       # The seconds to wait before each time that the entries the server rejected with status 429 are
-      # sent again (see #bulk_write): three times, after 0.2, 0.4, then 0.8 seconds, so at most 1.4
-      # seconds for a request. Kept short, since waiting holds up the thread that writes the entries.
+      # sent again (see #bulk_write): three times, after 0.2, 0.4, then 0.8 seconds, so waits of at
+      # most 1.4 seconds for a request, plus up to 3 more bulk requests. Kept short, since waiting
+      # holds up the thread that writes the entries.
       RESEND_DELAYS = [0.2, 0.4, 0.8].freeze
       private_constant :MAX_REPORTED_FAILURES, :MAX_REPORTED_REASON, :RESEND_DELAYS
 
@@ -256,7 +257,9 @@ module SemanticLogger
       # full, so that they are likely to be indexed a little later. Only those entries are sent again,
       # so that none is indexed twice. They are sent up to RESEND_DELAYS.size more times, after a
       # growing wait, which holds up the thread writing the entries: the appender's own thread when it
-      # writes in batches, as it does by default, or else the thread that writes to every appender.
+      # writes in batches, as it does by default, or with `async: true`. Otherwise it is the thread
+      # that writes to every appender, or with SemanticLogger.sync!, the thread that logged, and every
+      # other thread that logs waits for it.
       #
       # `failed` holds the result of each entry not indexed, by its position in `entries` (see
       # #bulk_failures). The result of an entry sent again replaces it, and an entry then indexed is
@@ -319,7 +322,7 @@ module SemanticLogger
         end
 
         message = "#{failed.size} of #{total} log entries were not indexed, and are discarded: #{listed.join('; ')}"
-        error ? logger.error(message, error) : logger.error(message)
+        logger.error(message, error)
       end
 
       # Returns [Array] the kind of failure of an entry, from the result of its action: its status,
