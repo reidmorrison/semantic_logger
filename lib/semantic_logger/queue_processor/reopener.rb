@@ -24,8 +24,10 @@ module SemanticLogger
 
       # Returns [true|false] whether a reopen has been asked for and the worker thread has not yet
       # finished it, including one that it is running. Reads only a Queue and a flag, so that it can
-      # be called from any thread, or a signal trap.
-      def pending? = @reopening || !@asked.empty?
+      # be called from any thread, or a signal trap. Reads them in the opposite order to the worker
+      # thread, which marks the reopen as running before it takes the request, so that a reopen
+      # starting between the two reads is still seen.
+      def pending? = !@asked.empty? || @reopening
 
       # Reopen the appender, if asked to since it was last reopened. Called by the worker thread,
       # between writes. A reopen that fails is reported rather than raised, whatever the exception,

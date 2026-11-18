@@ -57,20 +57,20 @@ module SemanticLogger
     # written to it when it is closed, such as a request on its connection that the worker thread is
     # sending.
     #
-    # First, when the appenders are to be reopened (see #reopen) and the worker thread has not yet
-    # reopened them, such as in a forked child that has not logged since the fork, waits until it has
-    # (see QueueProcessor#await_reopen), so that the appender is reopened before it is removed. Its
-    # #close then closes only what it built in this process, rather than what it inherited from the
-    # parent, which over TLS would end the parent's connection too, for an appender whose #reopen
-    # forgets what the parent built, but whose #close does not. An appender added with async: true or
-    # in batches is asked to reopen by that reopen, and its own worker thread reopens it before it runs
-    # the close.
+    # First, when the appender is one of them, and the appenders are to be reopened (see #reopen) but
+    # the worker thread has not yet reopened them, such as in a forked child that has not logged
+    # since the fork, waits until it has (see QueueProcessor#await_reopen), so that the appender is
+    # reopened before it is removed. Its #close then closes only what it built in this process,
+    # rather than what it inherited from the parent, which over TLS would end the parent's connection
+    # too, for an appender whose #reopen forgets what the parent built, but whose #close does not. An
+    # appender added with async: true or in batches is asked to reopen by that reopen, and its own
+    # worker thread reopens it before it runs the close.
     #
     # Called on the worker thread itself, such as by an appender as it writes, it closes the appender
     # at once, without waiting, since nothing else writes to it then. Takes no lock, so that it can be
     # called from a signal trap.
     def remove(appender)
-      processor.await_reopen
+      processor.await_reopen if appenders.include?(appender)
       flush if appenders.delete(appender)
       appender.close
     end

@@ -890,18 +890,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   file, or MongoDB client, which it left open, with the client's monitoring threads. `:syslog`,
   `:graylog`, and the file appender open them again for a later write, and the `:mongodb` appender
   connects a new client when it is reopened. An error closing a connection, log file, or client is
-  reported to the internal logger as a warning. Closing the `:cloudwatch_logs` appender sends the entries it has
-  buffered, which `SemanticLogger.remove_appender` dropped. See
+  reported to the internal logger as a warning. Closing the `:cloudwatch_logs` appender sends the
+  entries it has buffered, which `SemanticLogger.remove_appender` dropped. See
   [Reopen manually](https://logger.reidmorrison.com/operations.html#reopen-manually).
 - Closing an appender in a forked child before it has reopened, such as with
-  `SemanticLogger.reopen_on_fork = false`, closed the connection it inherited from the parent. Over TLS, that sent the server a
-  `close_notify`, which ended the connection for the parent too. Now the `:http` appender and those
-  built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and `metric: :signalfx`), `:tcp`,
-  `:syslog` and `:graylog` over TCP, `:kafka`, and `:rabbitmq` leave it to the parent, as a reopen in
-  the child does. `:kafka` no longer delivers again, from the child, the messages that the parent's
-  producer held. `:cloudwatch_logs` leaves the entries it inherited to the parent, which sends them,
-  and `:mongodb`, even once it has reopened in the child, forgets the client it inherited without
-  closing it, since closing it would end the parent's sessions on the server. See
+  `SemanticLogger.reopen_on_fork = false`, closed the connection it inherited from the parent. Over
+  TLS, that sent the server a `close_notify`, which ended the connection for the parent too. Now the
+  `:http` appender and those built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and
+  `metric: :signalfx`), `:tcp`, `:syslog` and `:graylog` over TCP, `:kafka`, and `:rabbitmq` leave
+  it to the parent, as a reopen in the child does. `:kafka` no longer delivers again, from the
+  child, the messages that the parent's producer held. `:cloudwatch_logs` leaves the entries it
+  inherited to the parent, which sends them, and `:mongodb`, even once it has reopened in the child,
+  forgets the client it inherited without closing it, since closing it would end the parent's
+  sessions on the server. See
   [Process forking](https://logger.reidmorrison.com/operations.html#process-forking).
 
 ## [5.2.0] 2026-10-30

@@ -52,7 +52,7 @@ module SemanticLogger
     # The appenders are reopened on the calling thread (see #reopen), so none is ever waiting to be
     # reopened when it is removed.
     def remove(appender)
-      flush if appenders.delete(appender)
+      flush if @monitor.synchronize { @appenders.delete(appender) }
       appender.close
     end
 
