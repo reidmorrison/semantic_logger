@@ -117,15 +117,16 @@ module SemanticLogger
 
       private
 
-      # Returns [UDPSocket] a new socket, connected to the server. When connecting raises, closes the socket first.
+      # Returns [UDPSocket] a new socket, connected to the server. Closes the socket when it does not return it, such as
+      # when connecting raises, or the thread is interrupted.
       def connected_socket
         family, host, port = server_address
         socket             = UDPSocket.new(family)
         socket.connect(host, port)
+        connected = true
         socket
-      rescue StandardError
-        socket&.close
-        raise
+      ensure
+        socket&.close unless connected
       end
 
       # Returns [Array(Integer, String, Integer)] the address family, host, and port of the server. A host in brackets

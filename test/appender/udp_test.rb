@@ -127,12 +127,36 @@ module Appender
         end
 
         it "connects a new socket, then closes the one it replaces" do
-          socket = appender.socket
-          appender.reopen
+          socket          = appender.socket
+          new_socket      = UDPSocket.new
+          connect         = new_socket.method(:connect)
+          open_at_connect = nil
+          new_socket.define_singleton_method(:connect) do |*args|
+            open_at_connect = !socket.closed?
+            connect.call(*args)
+          end
 
-          refute_same socket, appender.socket
+          UDPSocket.stub(:new, new_socket) { appender.reopen }
+
+          assert open_at_connect, "the socket it replaces should still be open while the new one connects"
+          assert_same new_socket, appender.socket
+          assert_equal 8088, appender.socket.remote_address.ip_port
           assert_predicate socket, :closed?
-          refute_predicate appender.socket, :closed?
+        ensure
+          appender.close
+        end
+
+        it "closes the new socket when connecting is interrupted by an exception that is not a StandardError" do
+          socket      = appender.socket
+          interrupted = UDPSocket.new
+          interrupted.define_singleton_method(:connect) { |*| raise(Interrupt) }
+
+          UDPSocket.stub(:new, interrupted) do
+            assert_raises(Interrupt) { appender.reopen }
+          end
+
+          assert_same socket, appender.socket
+          assert_predicate interrupted, :closed?
         ensure
           appender.close
         end
