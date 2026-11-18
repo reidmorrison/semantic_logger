@@ -467,7 +467,7 @@ module SemanticLogger
     # that only the offending message is discarded rather than every message in the batch.
     # Otherwise the batch is discarded, since writing it again could duplicate the messages that
     # the appender had already written. So it is, at once, when the appender says that the error is
-    # one that any batch would get, whatever messages it holds (see #split_batch?). A stack overflow
+    # one that would fail any batch, whatever messages it holds (see #fails_any_batch?). A stack overflow
     # discards the batch, and the rest of the batch being split, without splitting it further (see
     # #stack_overflowed).
     def write_batch(logs)
@@ -479,7 +479,7 @@ module SemanticLogger
       stack_overflowed(logs, e)
     rescue StandardError => e
       raise unless message_error?(e)
-      return messages_failed(logs, e) if logs.size == 1 || !appender.batch_all_or_nothing? || !split_batch?(e)
+      return messages_failed(logs, e) if logs.size == 1 || !appender.batch_all_or_nothing? || fails_any_batch?(e)
 
       logs.each_slice((logs.size + 1) / 2) { |half| write_batch(half) }
     end
@@ -512,10 +512,10 @@ module SemanticLogger
     # towards HeldWrite::MAX_RESENDS.
     def not_sent?(exception) = appender.respond_to?(:not_sent?) && appender.not_sent?(exception)
 
-    # Whether the appender says that a batch that failed with the exception, a message error, is to be
-    # split up to find the messages at fault. An appender that does not implement #split_batch? has
-    # every all or nothing batch split, as before it could say.
-    def split_batch?(exception) = !appender.respond_to?(:split_batch?) || appender.split_batch?(exception)
+    # Whether the appender says that the exception, a message error, would fail any batch, whatever
+    # messages it holds, so that splitting the batch cannot find messages at fault. An appender that
+    # does not implement #fails_any_batch? has every all or nothing batch split, as before it could say.
+    def fails_any_batch?(exception) = appender.respond_to?(:fails_any_batch?) && appender.fails_any_batch?(exception)
 
     # Log messages that the destination kept from being written. They are held to be written again
     # once the thread has backed off (see #process), when the appender says that the write wrote

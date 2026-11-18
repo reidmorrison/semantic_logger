@@ -33,7 +33,7 @@ require "openssl"
 # discards the entries straight away, counted as failed. A batch rejected for what it holds (400,
 # 413, or 422) is first split up and each part sent again, to find the entries at fault; any other
 # such 4xx, such as 401 or 404, would reject any part too, so the whole batch is discarded at once
-# (see #split_batch?). Any other status is a problem with the destination, so an asynchronous
+# (see #fails_any_batch?). Any other status is a problem with the destination, so an asynchronous
 # appender backs off. After a 408, 429, or 503, which ask to send the request again later, it then
 # sends the entries again, up to QueueProcessor::HeldWrite::MAX_RESENDS times, since the server did
 # not store them (see #wrote_nothing?). After any other, such as a 500, 502, 504, or a redirect, it
@@ -59,7 +59,9 @@ module SemanticLogger
         RETRY_LATER_CODES = [408, 429, 503].freeze
 
         # The 4xx statuses that reject the request for the entries it holds: 400 Bad Request,
-        # 413 Content Too Large, and 422 Unprocessable Content.
+        # 413 Content Too Large, and 422 Unprocessable Content. A server can answer 400 for its own
+        # configuration too, such as Splunk's HTTP Event Collector for an index it does not know, which
+        # then rejects every part of a batch split up to find the entries at fault.
         CONTENT_CODES = [400, 413, 422].freeze
 
         # Returns [Integer] the status code of the response.
@@ -327,13 +329,14 @@ module SemanticLogger
         (exception.is_a?(ResponseError) && exception.rejected?) || super
       end
 
-      # Whether a batch that the exception, a message error, rejected is split up and each part sent
-      # again, to find the entries at fault (see Subscriber#split_batch?): only when the server
-      # rejected it for the entries it holds (see ResponseError#content_rejected?), or it could not
-      # be formatted. A server that rejects the request whatever it holds, such as for its
-      # credentials or its url, would reject every part too.
-      def split_batch?(exception)
-        !exception.is_a?(ResponseError) || exception.content_rejected?
+      # Whether the exception, a message error, would fail any batch, whatever entries it holds (see
+      # Subscriber#fails_any_batch?): the server rejected the request (see ResponseError#rejected?)
+      # other than for the entries it holds (see ResponseError#content_rejected?), such as for its
+      # credentials or its url, and would reject every part of the batch too. So the batch is
+      # discarded at once, rather than split up. A batch that could not be formatted, or that the
+      # server rejected for its entries, is split up to find the entries at fault.
+      def fails_any_batch?(exception)
+        exception.is_a?(ResponseError) && exception.rejected? && !exception.content_rejected?
       end
 
       # Whether the request that raised the exception from #log or #batch stored none of its

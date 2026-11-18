@@ -254,6 +254,12 @@ Loki, Splunk HTTP, Elasticsearch, and OpenSearch appenders, only that message is
 rest of the batch is still written. With an appender that may have written part
 of the batch before failing, the whole batch is discarded, so that no message is written twice.
 
+A message that fails with an error that writing it again cannot fix, such as a request the
+destination refuses for its credentials or its url, is discarded straight away too, without backing
+off, as one that fails because of its content. When the appender says that such an error would fail
+any batch, whatever it holds, as the HTTP based appenders do for a `401`, `403`, or `404`, the whole
+batch is discarded at once, rather than split up to find the messages at fault.
+
 Whether its content or the destination was at fault, the first discarded message is reported to the
 internal logger straight away, with its error. After that, the number discarded is reported, with the
 latest error, at most once every `dropped_message_report_seconds` (default `30`). The total appears

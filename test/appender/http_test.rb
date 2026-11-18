@@ -493,25 +493,32 @@ module Appender
         end
 
         [400, 413, 422].each do |code|
-          it "splits a batch that a #{code} rejected for the entries it holds" do
+          it "says that a #{code}, which rejects the request for the entries it holds, does not fail any batch" do
             error = error_for(code)
 
             assert_predicate error, :content_rejected?
-            assert appender.split_batch?(error)
+            refute appender.fails_any_batch?(error)
           end
         end
 
         [401, 403, 404, 405, 409, 410, 415].each do |code|
-          it "does not split a batch that a #{code} rejected whatever it holds" do
+          it "says that a #{code}, which rejects the request whatever it holds, fails any batch" do
             error = error_for(code)
 
             refute_predicate error, :content_rejected?
-            refute appender.split_batch?(error)
+            assert appender.message_error?(error)
+            assert appender.fails_any_batch?(error)
           end
         end
 
-        it "splits a batch that it could not format" do
-          assert appender.split_batch?(SemanticLogger::Subscriber::FormatError.new("Could not format"))
+        it "says that a batch it could not format does not fail any batch" do
+          refute appender.fails_any_batch?(SemanticLogger::Subscriber::FormatError.new("Could not format"))
+        end
+
+        [408, 429, 500, 503].each do |code|
+          it "says that a #{code}, which is not a message error, does not fail any batch" do
+            refute appender.fails_any_batch?(error_for(code))
+          end
         end
 
         [500, 502, 503, 504, 408, 429, 301].each do |code|

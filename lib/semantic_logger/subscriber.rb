@@ -134,7 +134,8 @@ module SemanticLogger
     MESSAGE_ERRORS = [FormatError, JSON::GeneratorError, JSON::NestingError, EncodingError, FloatDomainError].freeze
 
     # Whether the supplied exception, raised by #log or #batch, was caused by the content of a
-    # log message, rather than by the destination, for example being unavailable.
+    # log message, or is one that writing the message again cannot fix, such as a request the
+    # destination refuses outright, rather than by the destination being unavailable for now.
     #
     # Waiting cannot write such a message, so an asynchronous appender discards it and carries on
     # straight away. On any other exception it backs off before carrying on, since the destination
@@ -158,17 +159,17 @@ module SemanticLogger
       false
     end
 
-    # Whether a batch that #batch failed with the supplied exception, a message error (see
-    # #message_error?), is split up and each part written again, to find the messages at fault.
-    # Asked only when #batch_all_or_nothing? is true.
+    # Whether the supplied exception, a message error (see #message_error?) that #batch raised,
+    # would fail any batch, whatever messages it holds, such as a request the destination refuses
+    # for its credentials or its url. Asked only about a message error, and only when
+    # #batch_all_or_nothing? is true.
     #
-    # True, since an error caused by the content of a message is caused by some of the messages in
-    # the batch. Return false for a message error that the destination raises for any batch,
-    # whatever messages it holds, such as a request refused for its credentials or its url: the
-    # whole batch is then discarded at once, rather than every message sent again on its own to be
-    # refused in turn.
-    def split_batch?(_exception)
-      true
+    # When true, the whole batch is discarded at once, rather than split up and each part written
+    # again to find the messages at fault, which would be refused in turn, about two writes for each
+    # message. False, since an error caused by the content of a message is caused by some of the
+    # messages in the batch.
+    def fails_any_batch?(_exception)
+      false
     end
 
     # Whether #log or #batch, when it raised the supplied exception, wrote none of the log messages

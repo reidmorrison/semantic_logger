@@ -749,8 +749,8 @@ class QueueProcessorTest < Minitest::Test
           assert_predicate processor, :active?
         end
 
-        it "discards the whole batch at once, when the appender says that any batch gets the error" do
-          appender.define_singleton_method(:split_batch?) { |_exception| false }
+        it "discards the whole batch at once, when the appender says that the error fails any batch" do
+          appender.define_singleton_method(:fails_any_batch?) { |_exception| true }
           calls    = 0
           original = appender.method(:batch)
           appender.define_singleton_method(:batch) do |logs|

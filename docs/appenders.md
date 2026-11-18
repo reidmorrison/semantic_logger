@@ -544,8 +544,11 @@ SemanticLogger.add_appender(
 )
 ~~~
 
-When the server rejects every request, for example because the password or the path is wrong, each
-batch is discarded with its first request, and reported once.
+When the server rejects every request with a `401`, `403`, or `404`, for example because the
+password or the path is wrong, each batch is discarded with its first request, and reported once. A
+server that answers `400` for a problem with its own configuration, as Splunk's HTTP Event Collector
+does for an index it does not know, rejects every part of each batch too, which takes about two
+requests for each entry in the batch.
 
 ### TCP Appender (+SSL)
 
