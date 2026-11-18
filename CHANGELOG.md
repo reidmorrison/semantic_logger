@@ -541,7 +541,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   blank value is `nil`, or text that is empty or only whitespace; a value of only whitespace, which it
   sent before, is now also left out of dimensions that have other values, and of the named tags it
   forwards. `Log#dimensions?`, which the formatters that write an entry's data ask, still counts such
-  dimensions. See the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+  dimensions. Without a `dimensions:` option it no longer reads the named tags, so a named tag whose
+  key cannot be turned into a Symbol, such as an Integer, no longer stops the metric being sent. See
+  the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ## [5.2.0] 2026-10-30
 

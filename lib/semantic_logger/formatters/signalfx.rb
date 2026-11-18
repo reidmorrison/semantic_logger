@@ -2,6 +2,10 @@ require "json"
 module SemanticLogger
   module Formatters
     class Signalfx < Base
+      # Text of a dimension value that is blank (see #blank_value?).
+      BLANK_VALUE = /\A[[:space:]]*\z/
+      private_constant :BLANK_VALUE
+
       attr_accessor :token, :dimensions, :hash, :gauge_name, :counter_name
 
       def initialize(token:,
@@ -64,13 +68,13 @@ module SemanticLogger
         h = (hash[:dimensions] ||= {})
         if metric_dimensions
           h.merge!(metric_dimensions)
-        else
+        elsif dimensions
           log.named_tags.each_pair do |name, value|
-            name  = name.to_sym
-            value = value.to_s
-            next if blank_value?(value)
+            name = name.to_sym
+            next unless dimensions.include?(name)
 
-            h[name] = value if dimensions&.include?(name)
+            value   = value.to_s
+            h[name] = value unless blank_value?(value)
           end
         end
         h[:host]        = logger.host if log_host && logger.host
@@ -173,8 +177,11 @@ module SemanticLogger
       end
 
       # Returns [true|false] whether the text of a dimension value is blank: empty, as for nil, or only
-      # whitespace. Text that is not valid UTF-8, which String#strip raises for, is converted first.
-      def blank_value?(text) = Utils.encode_utf8_string(text).strip.empty?
+      # whitespace, which includes Unicode whitespace such as a no-break space, but not NUL. The text is
+      # converted to valid UTF-8 first (see Utils.encode_utf8_string): matching raises for UTF-8 text
+      # with invalid bytes, or text that is not ASCII-compatible, such as UTF-16, and would not find the
+      # Unicode whitespace in text in an encoding such as binary or Shift_JIS.
+      def blank_value?(text) = BLANK_VALUE.match?(Utils.encode_utf8_string(text))
 
       def add_gauge(gauges, metric)
         gauges << metric

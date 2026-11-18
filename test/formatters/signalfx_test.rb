@@ -122,6 +122,16 @@ module SemanticLogger
             )
           end
 
+          it "sends no named tags without the dimensions option, even ones whose keys are not Symbol names" do
+            log.named_tags = {1 => "one", "us\xFFer" => "two", user_id: 47}
+
+            assert_equal(
+              {"class" => "user", "action" => "login", "environment" => "test",
+               "host" => SemanticLogger.host, "application" => SemanticLogger.application},
+              result["counter"].first["dimensions"]
+            )
+          end
+
           it "raises exception with both a whitelist and blacklist" do
             assert_raises ArgumentError do
               SemanticLogger::Formatters::Signalfx.new(token: "TEST", dimensions: [:user_id],
@@ -298,7 +308,11 @@ module SemanticLogger
             assert_equal(2, hash["counter"].sum { |point| point["value"] })
           end
 
-          [{state: ""}, {state: nil}, {state: "  "}, {state: "\t\n"}, {"state" => "", user: nil}].each do |blank|
+          ideographic_space = 0x3000.chr(Encoding::UTF_8)
+          [
+            {state: ""}, {state: nil}, {state: "  "}, {state: "\t\n"}, {state: ideographic_space},
+            {"state" => "", user: nil}
+          ].each do |blank|
             it "sends a duration with the dimensions #{blank.inspect} as the gauge and the counter" do
               log  = logged { |logger| logger.info(metric: "/user/login", dimensions: blank, duration: 12.5) }.first
               hash = JSON.parse(formatter.call(log, appender))
@@ -369,6 +383,29 @@ module SemanticLogger
 
             assert_equal [gauge], points(hash, "gauge")
             assert_empty points(hash, "counter")
+          end
+
+          it "leaves out a dimension whose value is only Unicode whitespace, in any encoding" do
+            no_break_space = 0xA0.chr(Encoding::UTF_8)
+            dimensions     = {
+              user:   "jbloggs",
+              state:  no_break_space,
+              region: "#{0x3000.chr(Encoding::UTF_8)} ",
+              plan:   no_break_space.encode(Encoding::ISO_8859_1)
+            }
+            log            = logged { |logger| logger.info(metric: "/user/login", dimensions: dimensions) }.first
+            point          = JSON.parse(formatter.call(log, appender))["counter"].first
+
+            assert_equal "user.login", point["metric"]
+            assert_equal %w[user host application environment], point["dimensions"].keys
+          end
+
+          it "keeps a dimension whose value is NUL, which is not whitespace" do
+            log   = logged { |logger| logger.info(metric: "/user/login", dimensions: {state: "\0"}) }.first
+            point = JSON.parse(formatter.call(log, appender))["counter"].first
+
+            assert_equal "user.login", point["metric"]
+            assert_equal "\0", point["dimensions"]["state"]
           end
 
           it "leaves out a dimension whose value is not valid UTF-8 and holds nothing else" do

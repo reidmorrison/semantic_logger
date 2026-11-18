@@ -267,7 +267,9 @@ agent.
   metric name and the named tags listed in the subscriber's `dimensions:` option. Before, either was
   sent under its own name, without those dimensions, and a duration without a count. A value of only
   whitespace, which was sent before, is now also left out of dimensions that have other values, and
-  of the named tags it forwards.
+  of the named tags it forwards. `log.dimensions?`, and so a filter on it, as above, still counts
+  dimensions whose values are all blank, such as `{state: ""}`, as dimensions; only empty ones, such
+  as `{}`, count as none.
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and
