@@ -154,6 +154,25 @@ module SemanticLogger
         refute_empty log.exception.backtrace
       end
 
+      it "names the anonymous class of an exception whose message needs what cannot be copied" do
+        log = logs_from_ractor do
+          error_class = Class.new(StandardError) do
+            def initialize(message = "needs its callback")
+              super
+              @callback = -> { "code 7" }
+            end
+
+            def message = "#{super} (#{@callback.call})"
+          end
+          raise error_class
+        rescue StandardError => e
+          SemanticLogger["InRactor"].error("Failed", e)
+        end.first
+
+        assert_instance_of RuntimeError, log.exception
+        assert_match(/\A#<Class:0x\h+>: needs its callback \(code 7\)\z/, log.exception.message)
+      end
+
       it "keeps the instance variables that the message of an exception that cannot be copied needs" do
         log = logs_from_ractor do
           raise SemanticLogger::RactorTest::CodedError

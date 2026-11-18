@@ -272,6 +272,46 @@ module SemanticLogger
             assert_equal Encoding::UTF_8, text.encoding
           end
 
+          it "writes the message each exception was raised with when its #message raises" do
+            begin
+              begin
+                raise ExceptionFixtures::AbstractMessageError, "Order 7"
+              rescue ExceptionFixtures::AbstractMessageError
+                raise ExceptionFixtures::BrokenMessageError, "Could not save"
+              end
+            rescue ExceptionFixtures::BrokenMessageError => e
+              log.exception = e
+            end
+            exception = formatter.hash[:exception]
+
+            assert_equal "Could not save", exception[:message]
+            assert_equal "Order 7", exception[:cause][:message]
+          end
+
+          it "writes a #message that does not return a String as a String" do
+            log.exception = RuntimeError.new("disk full")
+            log.exception.define_singleton_method(:message) { :disk_full }
+
+            assert_equal "disk_full", formatter.hash[:exception][:message]
+          end
+
+          it "names an exception, and a cause, of an anonymous class as Ruby writes the class" do
+            outer = Class.new(StandardError)
+            inner = Class.new(StandardError)
+            begin
+              begin
+                raise inner, "the cause"
+              rescue inner
+                raise outer, "the effect"
+              end
+            rescue outer => e
+              log.exception = e
+            end
+
+            assert_equal outer.to_s, formatter.hash[:exception][:name]
+            assert_equal inner.to_s, formatter.hash[:exception][:cause][:name]
+          end
+
           it "is omitted without an exception" do
             refute formatter.hash.key?(:exception)
           end

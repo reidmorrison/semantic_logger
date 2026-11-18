@@ -134,12 +134,12 @@ module SemanticLogger
 
       # Class of the logged exception, e.g. "RuntimeError".
       def exception_class
-        log.exception&.class
+        Utils.exception_name(log.exception) if log.exception
       end
 
       # Message of the logged exception.
       def exception_message
-        escape_control_characters(log.exception&.message)
+        escape_control_characters(Utils.exception_message(log.exception)) if log.exception
       end
 
       # Backtrace of the logged exception.

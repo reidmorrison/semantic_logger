@@ -108,6 +108,19 @@ module SemanticLogger
             assert_equal "Oh no", formatted("%{exception_message}", log_with_exception)
           end
 
+          it "interpolates the message the exception was raised with when its #message raises" do
+            log.exception = ExceptionFixtures::BrokenMessageError.new("Order 7")
+
+            assert_equal "ExceptionFixtures::BrokenMessageError: Order 7",
+                         formatted("%{exception_class}: %{exception_message}")
+          end
+
+          it "interpolates the class of an exception without a constant as it names itself" do
+            log.exception = Class.new(StandardError) { def self.name = "PaymentError" }.new("declined")
+
+            assert_equal "PaymentError", formatted("%{exception_class}")
+          end
+
           it "interpolates the exception backtrace" do
             assert_includes formatted("%{backtrace}", log_with_exception), "pattern_test.rb"
           end

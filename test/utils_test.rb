@@ -154,6 +154,25 @@ module SemanticLogger
         end
       end
 
+      describe ".exception_name" do
+        it "returns the name of the exception's class" do
+          assert_equal "ExceptionFixtures::BrokenMessageError", SemanticLogger::Utils.exception_name(BrokenMessageError.new)
+        end
+
+        it "returns the class as Ruby writes it for an anonymous class, which has no name" do
+          error_class = Class.new(StandardError)
+
+          assert_equal error_class.to_s, SemanticLogger::Utils.exception_name(error_class.new)
+          assert_match(/\A#<Class:0x\h+>\z/, SemanticLogger::Utils.exception_name(error_class.new))
+        end
+
+        it "returns the name that a class without a constant gives itself" do
+          error_class = Class.new(StandardError) { def self.name = "PaymentError" }
+
+          assert_equal "PaymentError", SemanticLogger::Utils.exception_name(error_class.new)
+        end
+      end
+
       describe ".exception_message" do
         it "returns the exception's message" do
           assert_equal "disk full", SemanticLogger::Utils.exception_message(IOError.new("disk full"))

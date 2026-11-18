@@ -770,6 +770,23 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   or batching). See
   [Process forking](https://logger.reidmorrison.com/operations.html#process-forking) and the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The formatters no longer lose an entry when the `#message` of its exception raises, such as one
+  that reads a record that is nil, or an abstract one that raises `NotImplementedError`: `:raw`, and
+  so `Log#to_h` and the formatters built on it (`:json`, `:logfmt`, `:fluentd`, `:ecs`,
+  `:syslog_cee`, and `:new_relic_logs`), which also read each cause's message, and `:default`,
+  `:color`, `:one_line`, `:pattern`, `:syslog`, `:open_telemetry`, and the `:graylog` appender. The
+  error was reported to the internal logger instead, and the error service appenders that use
+  `:raw`, such as `:bugsnag`, `:honeybadger`, and `:sentry_ruby`, did not send the exception at all.
+  They now write the message the exception, or the cause, was raised with, and `:raw` writes a
+  `#message` that returns something other than a String, such as nil or a Symbol, as a String.
+  `:raw` and `:open_telemetry` name an exception of an anonymous class as Ruby writes the class, such
+  as `#<Class:0x000...>`, rather than writing no name. The text formatters and
+  `log_exception: :partial` name a class without a constant that gives itself a name, with
+  `def self.name`, by that name, as the others did. `:graylog` also no longer loses an entry logged
+  with only an exception whose message holds bytes that are not valid UTF-8. A formatter that raises
+  a `ScriptError`, such as `NotImplementedError`, now loses only that entry, as for any other error.
+  Before, it stopped an appender added with `async: true` or `batch: true`, which then dropped every
+  entry after it.
 
 ## [5.2.0] 2026-10-30
 

@@ -104,6 +104,14 @@ module Appender
         end
       end
 
+      it "sends an exception whose #message raises" do
+        error = ExceptionFixtures::BrokenMessageError.new("Order 7")
+        exception, hash, _severity = stub_bugsnag { appender.error("Could not save", error) }
+
+        assert_same error, exception
+        assert_equal "Could not save", hash[:message]
+      end
+
       def stub_bugsnag(&block)
         exception = hash = level = nil
         appender.stub(:bugsnag_notify, lambda { |exc, h, l|

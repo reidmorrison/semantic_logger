@@ -150,6 +150,14 @@ module SemanticLogger
             assert formatter.call(log, nil).end_with?(clear), "Expected no trailing newline"
           end
 
+          it "writes the message the exception was raised with when its #message raises" do
+            log.exception = ExceptionFixtures::AbstractMessageError.new("Order 7")
+
+            assert formatter.call(log, nil).end_with?(
+              "-- Exception: #{color}ExceptionFixtures::AbstractMessageError: Order 7#{clear}"
+            )
+          end
+
           it "skips nil exception" do
             refute formatter.exception
           end

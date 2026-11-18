@@ -92,7 +92,7 @@ module SemanticLogger
       walk(value, {}.compare_by_identity, 0)
     rescue StandardError => e
       report(e)
-      {redaction_failed: e.class.name || e.class.inspect}
+      {redaction_failed: Utils.exception_name(e)}
     end
 
     # Returns the value that replaces the value of a sensitive key, or nil when the key is not

@@ -529,6 +529,20 @@ module SemanticLogger
             assert_equal "-- Exception: RuntimeError: outer\nCause: ArgumentError: inner\nc1", formatter.exception
           end
 
+          it "writes the message the exception was raised with when its #message raises" do
+            [ExceptionFixtures::BrokenMessageError, ExceptionFixtures::AbstractMessageError].each do |error_class|
+              log.exception = error_class.new("Order 7")
+
+              assert formatter.call(log, nil).end_with?(" DefaultTest -- Exception: #{error_class.name}: Order 7")
+            end
+          end
+
+          it "names a class without a constant as it names itself, as the other formatters do" do
+            log.exception = Class.new(StandardError) { def self.name = "PaymentError" }.new("declined")
+
+            assert formatter.call(log, nil).end_with?(" DefaultTest -- Exception: PaymentError: declined")
+          end
+
           it "skips nil exception" do
             refute formatter.exception
           end

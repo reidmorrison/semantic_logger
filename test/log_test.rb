@@ -136,6 +136,16 @@ module SemanticLogger
               assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: IOError: disk full", log.message
             end
 
+            it "names a class without a constant as it names itself, as the formatters do" do
+              error_class = Class.new(StandardError) { def self.name = "PaymentError" }
+              exception   = raise_with_cause(error_class.new("declined"))
+              exception   = raise_with_cause(exception, error_class.new("card failed"))
+              log.assign(message: "Boom", exception: exception, log_exception: :partial)
+
+              assert_equal "Boom -- Exception: PaymentError: card failed -- Cause: RuntimeError: save failed " \
+                           "-- Cause: PaymentError: declined", log.message
+            end
+
             it "folds the causes in order" do
               inner = raise_with_cause(IOError.new("disk full"), "write failed")
               log.assign(message: "Boom", exception: raise_with_cause(inner), log_exception: :partial)

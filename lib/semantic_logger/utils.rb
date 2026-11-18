@@ -131,6 +131,13 @@ module SemanticLogger
     # Whether this path should be excluded from any cleansed backtrace
     def self.strip_path?(path) = strip_paths.any? { |exclude| path.start_with?(exclude) }
 
+    # Returns [String] the name to write for the exception's class: the class's name, which a class
+    # without a constant can give itself with `def self.name`, or, for an anonymous class, which has
+    # none, the class as Ruby writes it, such as `#<Class:0x000...>`. Every place that writes an
+    # exception's class asks this, as it asks .exception_message for its message, so that they all
+    # name it alike.
+    def self.exception_name(exception) = (exception.class.name || exception.class).to_s
+
     # Returns [String] the exception's message, without raising the error that its #message raises.
     #
     # An exception class can override #message or #to_s with code that raises, such as code that
@@ -152,7 +159,7 @@ module SemanticLogger
     def self.raised_message(exception)
       Exception.instance_method(:to_s).bind_call(exception)
     rescue StandardError, ScriptError
-      exception.class.to_s
+      exception_name(exception)
     end
 
     # Serializes the value to JSON, repairing the data only when necessary.

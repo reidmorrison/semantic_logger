@@ -275,7 +275,9 @@ class SubscriberTest < Minitest::Test
 
       it "raises any error from the formatter as a FormatError, with the error as its cause" do
         [NoMethodError.new("undefined method 'each' for an instance of String"),
-         ArgumentError.new("invalid byte sequence in UTF-8")].each do |error|
+         ArgumentError.new("invalid byte sequence in UTF-8"),
+         NotImplementedError.new("ExceptionFixtures::AbstractMessageError must define #message"),
+         LoadError.new("cannot load such file -- amazing_print")].each do |error|
           appender.instance_variable_set(:@formatter, formatter_raising(error))
 
           [-> { appender.send(:format_log, log) }, -> { appender.send(:format_batch, [log]) }].each do |format|

@@ -151,6 +151,16 @@ class BacktraceCleaningTest < Minitest::Test
           assert_includes io.string, "raised #{error_class.inspect}: broken"
         end
 
+        it "reports the message the error was raised with when its #message raises" do
+          cleaner = ->(_lines) { raise ExceptionFixtures::AbstractMessageError, "broken" }
+          cleaned = SemanticLogger::Logger.stub(:processor, internal_processor) do
+            SemanticLogger::BacktraceCleaning.clean(backtrace, cleaner)
+          end
+
+          assert_equal backtrace, cleaned
+          assert_includes io.string, "Backtrace cleaner raised ExceptionFixtures::AbstractMessageError: broken"
+        end
+
         describe "for a line that cannot be written as text" do
           let(:clean_from) do
             line = Object.new

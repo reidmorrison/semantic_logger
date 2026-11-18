@@ -89,7 +89,7 @@ module SemanticLogger
       copy.message
       copy
     rescue StandardError
-      plain = RuntimeError.new("#{exception.class.name}: #{Utils.exception_message(exception)}")
+      plain = RuntimeError.new("#{Utils.exception_name(exception)}: #{Utils.exception_message(exception)}")
       plain.set_backtrace(exception.backtrace || [])
       with_cause(plain, exception.cause, depth)
     end

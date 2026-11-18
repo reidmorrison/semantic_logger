@@ -218,6 +218,8 @@ module SemanticLogger
     # Any StandardError the formatter raises is raised as a FormatError, with the formatter's
     # error as its cause, so that #message_error? recognizes it: an asynchronous appender then
     # discards the message instead of backing off. Appenders call this rather than formatter.call.
+    # So is a ScriptError, such as the NotImplementedError of an abstract method, which would
+    # otherwise stop an asynchronous appender's thread, since that rescues only a StandardError.
     #
     # A SystemStackError is raised as it is, so that rescuing StandardError does not swallow it:
     # the thread that overflowed must not keep writing (see Appenders#log).
@@ -227,7 +229,7 @@ module SemanticLogger
     def format_log(log)
       formatted = formatter.call(log, self)
       block_given? ? yield(formatted) : formatted
-    rescue StandardError => e
+    rescue StandardError, ScriptError => e
       raise FormatError, "Could not format the log message (#{e.class})"
     end
 
@@ -248,7 +250,7 @@ module SemanticLogger
 
       begin
         batch_formatter.batch(logs, self)
-      rescue StandardError => e
+      rescue StandardError, ScriptError => e
         raise FormatError, "Could not format the batch of log messages (#{e.class})"
       end
     end

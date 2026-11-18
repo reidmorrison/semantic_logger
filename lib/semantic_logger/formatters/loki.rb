@@ -411,7 +411,7 @@ module SemanticLogger
         return unless log.exception
 
         payload_value.merge!(
-          exception_name:    (log.exception.class.name || log.exception.class).to_s,
+          exception_name:    Utils.exception_name(log.exception),
           exception_message: Utils.exception_message(log.exception),
           stack_trace:       exception_backtrace
         )

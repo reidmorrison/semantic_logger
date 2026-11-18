@@ -88,6 +88,24 @@ module SemanticLogger
           assert_equal "Oh no",        parsed["exception"]["message"]
         end
 
+        it "serializes an exception whose #message raises, with a cause of an anonymous class" do
+          cause_class = Class.new(StandardError)
+          begin
+            begin
+              raise cause_class, "disk full"
+            rescue cause_class
+              raise ExceptionFixtures::AbstractMessageError, "Order 7"
+            end
+          rescue ExceptionFixtures::AbstractMessageError => e
+            log.exception = e
+          end
+
+          assert_equal "ExceptionFixtures::AbstractMessageError", parsed["exception"]["name"]
+          assert_equal "Order 7", parsed["exception"]["message"]
+          assert_equal cause_class.to_s, parsed["exception"]["cause"]["name"]
+          assert_equal "disk full", parsed["exception"]["cause"]["message"]
+        end
+
         # Issue #180: previously `.to_json` raised on non UTF-8 data (the exact class
         # varies by json gem version) and the log entry was dropped. Every field that
         # can carry caller-supplied strings must now serialize without raising.

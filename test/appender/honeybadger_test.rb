@@ -28,6 +28,20 @@ module Appender
         assert_equal "#<Hash nested too deeply>", hash[:context][:payload][:self][:self]
       end
 
+      it "sends an exception whose #message raises" do
+        error     = ExceptionFixtures::AbstractMessageError.new("Order 7")
+        exception = hash = nil
+        Honeybadger.stub(:notify, lambda { |exc, h|
+          exception = exc
+          hash      = h
+        }) do
+          appender.error("Could not save", error)
+        end
+
+        assert_same error, exception
+        assert_equal "Could not save", hash[:message]
+      end
+
       it "sends the binary text of an exception's entry as UTF-8" do
         hash = nil
         Honeybadger.stub(:notify, ->(_exception, h) { hash = h }) do

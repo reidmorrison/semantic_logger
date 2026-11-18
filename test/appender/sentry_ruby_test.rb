@@ -51,6 +51,19 @@ module Appender
         end
       end
 
+      it "sends an exception whose #message raises" do
+        error     = ExceptionFixtures::BrokenMessageError.new("Order 7")
+        exception = scope = nil
+        capture   = lambda { |exc, _h = {}|
+          exception = exc
+          scope     = ::Sentry.get_current_scope
+        }
+        ::Sentry.stub(:capture_exception, capture) { appender.error("Could not save", error) }
+
+        assert_same error, exception
+        assert_equal "Could not save", scope.extra[:message]
+      end
+
       # Sentry serializes the event with JSON, which raises for such text with json 3.1, and warns
       # about it with json 2.8 to 3.0.x.
       it "sends binary text as UTF-8, keeping its characters" do
