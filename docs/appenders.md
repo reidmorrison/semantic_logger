@@ -57,7 +57,7 @@ destination can keep a different subset of the logs in a different format:
 
 | Option | Description |
 |--------|-------------|
-| `level` | Only write entries at this level or higher to this appender. Without it, an appender writes every entry it receives; those that send errors to a service, such as Bugsnag and Sentry, default to `:error` instead. Each logger only emits entries at or above its own level, which defaults to `SemanticLogger.default_level`, so set an appender's `level` to keep fewer entries than the loggers emit. |
+| `level` | Only write entries at this level or higher to this appender; for what it defaults to, and how it works with each logger's own level, see [Per-appender settings](config.html#per-appender-settings). |
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. A [block given to `add_appender`](config.html#formatter-as-a-block-or-proc) takes its place. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
@@ -1239,7 +1239,7 @@ Forward errors to Honeybadger (requires the `honeybadger` gem):
 SemanticLogger.add_appender(appender: :honeybadger)
 ~~~
 
-Or forward all log entries to Honeybadger Insights as events:
+Or forward log entries at `:info` and above, its default level, to Honeybadger Insights as events:
 
 ~~~ruby
 SemanticLogger.add_appender(appender: :honeybadger_insights)

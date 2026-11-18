@@ -15,9 +15,8 @@ module SemanticLogger
     #   the log level in any logging instance or the default log level
     #   SemanticLogger.default_level
     #
-    # Must be one of the values in SemanticLogger::LEVELS, or nil to use the level this instance
-    # falls back to (see #fallback_level): the global default level for a logger, and :trace for an
-    # appender, which then writes every entry that a logger emits.
+    # Must be one of the values in SemanticLogger::LEVELS, or nil to use this instance's fallback
+    # level (see #fallback_level).
     def level=(level)
       if level.nil?
         # Use the fallback level for this instance (see #fallback_level)
@@ -30,8 +29,7 @@ module SemanticLogger
     end
 
     # Returns the level set by an enclosing `#with_level` block on the current fiber,
-    # otherwise the level set for this instance, otherwise its fallback level (see #fallback_level):
-    # the global default level for a logger, and :trace for an appender.
+    # otherwise the level set for this instance, otherwise its fallback level (see #fallback_level).
     def level
       index = @with_level_used && with_level_index
       return Levels.level(index) if index
