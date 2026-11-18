@@ -527,8 +527,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   rather than `Cause: : disk full`. For custom formatters, `Log#backtrace_to_s`, which these use,
   always passes its block a String, even for a cause whose `#message` returns nil, and no longer
   raises `Encoding::CompatibilityError` for lines it cannot join as they are, such as a UTF-8
-  backtrace line and a cause's binary message, which it now joins as UTF-8. `Log#exception_details`
-  returns nil, rather than raising, when the exception's `#message` raises `NotImplementedError`.
+  backtrace line and a cause's binary message, which it now joins as UTF-8. It also joins as UTF-8
+  binary or US-ASCII backtrace lines that hold bytes outside ASCII, such as Ruby's own where no
+  locale is set in a directory such as `café`, rather than returning the whole text as binary or
+  as invalid US-ASCII. `Log#exception_details` returns nil, rather than raising, when the
+  exception's `#message` raises `NotImplementedError`.
 
 ## [5.2.0] 2026-10-30
 

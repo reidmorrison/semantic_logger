@@ -876,6 +876,23 @@ module SemanticLogger
             assert_equal Encoding::UTF_8, text.encoding
           end
 
+          it "joins a binary backtrace line with ASCII ones as UTF-8" do
+            log.exception = chained("top", ["/app/a.rb:2", "/app/café.rb:7".b])
+            text          = log.backtrace_to_s
+
+            assert_equal "/app/a.rb:2\n/app/café.rb:7", text
+            assert_equal Encoding::UTF_8, text.encoding
+          end
+
+          it "joins a US-ASCII backtrace that holds bytes outside ASCII, as Ruby's own can, as UTF-8" do
+            backtrace     = ["/srv/café/a.rb:2", "/srv/café/a.rb:7"].map { |line| line.dup.force_encoding(Encoding::US_ASCII) }
+            log.exception = chained("top", backtrace)
+            text          = log.backtrace_to_s
+
+            assert_equal "/srv/café/a.rb:2\n/srv/café/a.rb:7", text
+            assert_equal Encoding::UTF_8, text.encoding
+          end
+
           it "leaves a backtrace in another encoding as it is when its lines can be joined" do
             latin1        = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
             log.exception = chained("top", ["/app/#{latin1}.rb:2"], chained(latin1, nil))

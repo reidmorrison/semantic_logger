@@ -259,6 +259,19 @@ module SemanticLogger
             assert_equal "the cause", formatter.hash[:exception][:cause][:message]
           end
 
+          it "joins the stack trace for a subclass that writes it as text, a binary line as UTF-8" do
+            text_formatter = Class.new(Raw) do
+              def call(log, logger) = stack_trace(super[:exception][:stack_trace])
+            end
+            exception = RuntimeError.new("Oh no")
+            exception.set_backtrace(["app/a.rb:1", "app/café.rb:2".b])
+            log.exception = exception
+            text          = text_formatter.new.call(log, appender)
+
+            assert_equal "app/a.rb:1\napp/café.rb:2", text
+            assert_equal Encoding::UTF_8, text.encoding
+          end
+
           it "is omitted without an exception" do
             refute formatter.hash.key?(:exception)
           end
