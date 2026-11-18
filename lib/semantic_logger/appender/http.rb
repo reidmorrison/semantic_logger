@@ -192,7 +192,8 @@ module SemanticLogger
                      &)
         @url              = url
         @proxy_url        = proxy_url
-        @ssl_options      = ssl
+        # A copy, to which an https url adds use_ssl: and verify_mode: (see Subscriber#copy_options).
+        @ssl_options      = ssl && copy_options(ssl)
         @username         = username
         @password         = password
         @compress         = compress

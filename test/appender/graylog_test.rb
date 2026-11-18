@@ -69,6 +69,34 @@ module Appender
         assert_equal "Hello", hash[:short_message]
       end
 
+      describe "gelf_options:" do
+        it "leaves the Hash given as it is, and sends with the protocol of the url and the application" do
+          gelf_options = {_team: "billing"}
+          appender     = SemanticLogger::Appender::Graylog.new(gelf_options: gelf_options, application: "Shop")
+
+          assert_equal({_team: "billing"}, gelf_options)
+          assert_equal GELF::Protocol::UDP, appender.notifier.default_options["protocol"]
+          assert_equal "Shop", appender.notifier.default_options["facility"]
+          assert_equal "billing", appender.notifier.default_options["_team"]
+        end
+
+        it "accepts a frozen Hash" do
+          appender = SemanticLogger::Appender::Graylog.new(gelf_options: {facility: "payments"}.freeze)
+
+          assert_equal "payments", appender.notifier.default_options["facility"]
+        end
+
+        it "sends over TCP for a tcp url given a Hash that another appender uses for a udp url" do
+          gelf_options = {}
+          SemanticLogger::Appender::Graylog.new(url: "udp://localhost:12201", gelf_options: gelf_options)
+          appender = GELF::Transport::TCP.stub_any_instance(:addresses=, nil) do
+            SemanticLogger::Appender::Graylog.new(url: "tcp://localhost:12201", gelf_options: gelf_options)
+          end
+
+          assert_equal GELF::Protocol::TCP, appender.notifier.default_options["protocol"]
+        end
+      end
+
       describe "#message_error?" do
         it "is true for a log message that GELF cannot send" do
           error = ArgumentError.new("Data too big (456404 bytes), would create more than 128 chunks!")

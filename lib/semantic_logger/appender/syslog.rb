@@ -259,12 +259,12 @@ module SemanticLogger
 
       private
 
-      # Returns [Hash] the options given as tcp_client:, with the server from the url, for a new
-      # Net::TCPClient. Leaves the caller's Hash as it is, and copies each Hash in it, such as ssl:,
-      # since Net::TCPClient takes handshake_timeout: out of the ssl: Hash it is given.
+      # Returns [Hash] a copy of the options given as tcp_client: (see Subscriber#copy_options), with the server
+      # from the url, for a new Net::TCPClient, since it takes handshake_timeout: out of the ssl: Hash it is
+      # given: each client gets a copy of its own, which keeps the timeout for the next one, such as after a
+      # reopen.
       def tcp_client_options
-        options = @tcp_client_options.transform_values { |value| value.is_a?(Hash) ? value.dup : value }
-        options.merge(server: "#{@server}:#{@port}")
+        copy_options(@tcp_client_options).merge(server: "#{@server}:#{@port}")
       end
 
       # Returns the supplied formatter, with this appender's facility, level map, and

@@ -110,10 +110,7 @@ module SemanticLogger
           raise(ArgumentError, "Invalid protocol value: #{@protocol}. Must be :udp or :tcp")
         end
 
-        gelf_options[:protocol] ||= (@protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP)
-        gelf_options[:facility] ||= application
-
-        @notifier                       = GELF::Notifier.new(server, port, max_size, gelf_options)
+        @notifier                       = GELF::Notifier.new(server, port, max_size, notifier_options)
         @notifier.collect_file_and_line = false
       end
 
@@ -154,6 +151,15 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Hash] a copy of the gelf_options (see Subscriber#copy_options), with the protocol of the url
+      # and the application as the facility, unless they name their own, for a new GELF::Notifier.
+      def notifier_options
+        options = copy_options(gelf_options)
+        options[:protocol] ||= (@protocol == :tcp ? GELF::Protocol::TCP : GELF::Protocol::UDP)
+        options[:facility] ||= application
+        options
+      end
 
       def default_formatter
         SemanticLogger::Formatters::Raw.new(time_format: :seconds, time_key: :timestamp)
