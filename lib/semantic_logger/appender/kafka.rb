@@ -2,7 +2,7 @@ begin
   require "kafka"
 rescue LoadError
   raise LoadError,
-        'Gem ruby-kafka is required for logging to Elasticsearch. Please add the gem "ruby-kafka" to your Gemfile.'
+        'Gem ruby-kafka is required for logging to Kafka. Please add the gem "ruby-kafka" to your Gemfile.'
 end
 
 require "date"
@@ -173,11 +173,7 @@ module SemanticLogger
           )
         end
 
-        @producer = @kafka.async_producer(
-          delivery_threshold: delivery_threshold,
-          delivery_interval:  delivery_interval,
-          required_acks:      required_acks
-        )
+        @producer = build_producer
       end
 
       def close
@@ -201,10 +197,7 @@ module SemanticLogger
       # Restart producer thread since there is no other way to flush.
       def flush
         @producer.shutdown
-        @producer = @kafka.async_producer(
-          delivery_threshold: delivery_threshold,
-          delivery_interval:  delivery_interval
-        )
+        @producer = build_producer
       end
 
       # Only the topic: the seed brokers can hold credentials, and the options hold the TLS private
@@ -216,6 +209,17 @@ module SemanticLogger
       private
 
       attr_reader :producer
+
+      # Returns [Kafka::AsyncProducer] a producer for the Kafka client, with the delivery and acknowledgement options of
+      # this appender. #reopen and #flush both build their producer here, so that a flush keeps them, rather than
+      # leaving out an option, which ruby-kafka then replaces with its own default.
+      def build_producer
+        @kafka.async_producer(
+          delivery_threshold: delivery_threshold,
+          delivery_interval:  delivery_interval,
+          required_acks:      required_acks
+        )
+      end
     end
   end
 end
