@@ -491,6 +491,17 @@ logger.measure_info("Called external interface", metric: "Supplier/inquiry") do
 end
 ~~~
 
+Add `dimensions` to break the metric down, such as by supplier. See
+[Break a metric down with dimensions](metrics.html#step-3-break-a-metric-down-with-dimensions):
+
+~~~ruby
+logger.measure_info("Called external interface",
+                    metric:     "Supplier/inquiry",
+                    dimensions: {supplier: "acme"}) do
+  # ...
+end
+~~~
+
 ### Supply the duration yourself
 
 When you already have a duration, log it without a block. This keeps the duration as structured data
@@ -510,6 +521,7 @@ The second argument to a measure call is a Hash of options:
 - `:min_duration` [Float]: only log if the block takes longer than this many milliseconds. Default
   `0.0` (always log).
 - `:metric` [String]: notify metric subscribers with this metric name.
+- `:dimensions` [Hash]: key/value labels that break the metric down, such as `{supplier: "acme"}`.
 - `:payload` [Hash]: an optional payload to log with the entry.
 - `:exception` [Exception]: an exception to log along with the duration.
 - `:duration` [Float]: the duration in ms, used when no block is supplied (then it is mandatory; with
@@ -3233,6 +3245,11 @@ logger.info(metric: "filters.count", dimensions: {user: "jbloggs"})
 
 # An amount, broken down by user:
 logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbloggs"})
+
+# A duration, broken down by supplier:
+logger.measure_info("Called supplier", metric: "supplier/add_user", dimensions: {supplier: "acme"}) do
+  # Code to call the external service ...
+end
 ~~~
 
 Not every subscriber supports dimensions. **Statsd** and **New Relic** record a metric with
@@ -3298,8 +3315,16 @@ SemanticLogger.add_appender(
 
 When a duration metric has no dimensions, SignalFx receives both its value and a count, so you can
 chart both the timing and the number of occurrences. The value is the duration and the count is 1,
-unless a `metric_amount` is given, which is sent as both. When dimensions are present, the metric is
-sent as-is.
+unless a `metric_amount` is given, which is sent as both. They are sent as `Application.average` and
+`Application.counter`, with `class` and `action` dimensions taken from the metric name, such as
+`class: "supplier"` and `action: "add_user"` for `supplier/add_user`. A count without dimensions is
+sent as `Application.counter` alone, with the same `class` and `action` dimensions.
+
+When dimensions are present, the metric is sent as-is: under its own name, without its leading `/`
+characters and with each other `/` replaced by `.`, with its value (the `metric_amount` when given,
+otherwise the duration, or 1 for a count), and, for a duration, without a count. Its dimensions are sent in place of the named tags
+listed in `dimensions:` above, so add any of those values it needs to its own dimensions. Empty
+dimensions, such as `{}`, count as none.
 
 ## Metrics in log appenders
 
@@ -5765,6 +5790,22 @@ agent.
   SemanticLogger.add_appender(metric: :statsd, filter: ->(log) { !log.dimensions? })
   SemanticLogger.add_appender(metric: :new_relic, filter: ->(log) { !log.dimensions? })
   ~~~
+* A `measure_*` call now keeps its `dimensions:` option, which it used to drop. So the `:signalfx`
+  metric subscriber sends a metric measured with dimensions as it sends any metric with dimensions:
+  under its own name, such as `supplier.add_user` for `metric: "supplier/add_user"`, with those
+  dimensions, and without a count. Before, it sent it as `Application.average` and
+  `Application.counter`, with `class` and `action` dimensions taken from the metric name. It also
+  no longer adds the named tags listed in the subscriber's own `dimensions:` option, which it only
+  adds to a metric without dimensions, so put any of those values the metric needs in its
+  `dimensions:`, such as `dimensions: {supplier: "acme", user_id: user.id}`. A filter on
+  `log.dimensions?`, as above, now applies to it too.
+
+  Empty dimensions, such as `dimensions: {}` or `{supplier: nil}.compact`, now count as none for
+  `:signalfx`, on a log call too: the metric is sent as it would be without them, so a duration is
+  sent as `Application.average` and `Application.counter`, and a count as `Application.counter`,
+  each with the `class` and `action` dimensions taken from the metric name and the named tags listed
+  in the subscriber's `dimensions:` option. Before, either was sent under its own name, without those
+  dimensions, and a duration without a count.
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and

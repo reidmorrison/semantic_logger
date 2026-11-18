@@ -141,6 +141,24 @@ module SemanticLogger
             assert_equal (log.time.to_i * 1_000).to_i, counter["timestamp"], counter
             assert_equal all_dimensions, counter["dimensions"]
           end
+
+          it "sends a duration with dimensions under its own name, without the listed named tags or a count" do
+            formatter.dimensions = %i[user_id]
+            log.named_tags       = {user_id: 47}
+            log.dimensions       = {user: "jbloggs"}
+            log.duration         = 12.5
+            hash                 = result
+
+            assert gauges = hash["gauge"], hash
+            assert_equal 1, gauges.size, hash
+            gauge = gauges.first
+
+            assert_equal "user.login", gauge["metric"], gauge
+            assert_in_delta 12.5, gauge["value"]
+            assert_equal "jbloggs", gauge["dimensions"]["user"], gauge
+            refute gauge["dimensions"].key?("user_id"), gauge
+            refute hash.key?("counter"), hash
+          end
         end
 
         describe "format batch logs" do
@@ -206,6 +224,77 @@ module SemanticLogger
             assert_equal 1, counters.size
             assert_equal counter_metric_name, counters[0]["metric"]
             assert_equal 3, counters[0]["value"]
+          end
+        end
+
+        # Empty dimensions, such as those of `{supplier: nil}.compact`, are none (see Log#dimensions?): the
+        # metric keeps the class and action from its name, the count, and the named tags listed in the
+        # formatter's dimensions.
+        describe "with empty dimensions" do
+          let(:capture) { SemanticLogger::Test::CaptureLogEvents.new }
+
+          let :expected_dimensions do
+            {"class" => "user", "action" => "login", "user_id" => "47", "host" => SemanticLogger.host,
+             "application" => SemanticLogger.application, "environment" => "test"}
+          end
+
+          let(:counter) { {"metric" => counter_metric_name, "value" => 1, "dimensions" => expected_dimensions} }
+
+          before { formatter.dimensions = %i[user_id] }
+
+          # Returns the entries that the block logs to the capturing logger, with the named tag user_id.
+          def logged
+            SemanticLogger.named_tagged(user_id: 47) { yield capture }
+            capture.events
+          end
+
+          # Returns the points of the type in the formatted Hash, with only the keys named.
+          def points(hash, type, keys = %w[metric value dimensions])
+            hash.fetch(type, []).map { |point| point.slice(*keys) }
+          end
+
+          it "sends a duration from logger.info as the gauge and the counter" do
+            log  = logged { |logger| logger.info(metric: "/user/login", dimensions: {}, duration: 12.5) }.first
+            hash = JSON.parse(formatter.call(log, appender))
+
+            gauge = {"metric" => average_metric_name, "value" => 12.5, "dimensions" => expected_dimensions}
+
+            assert_equal [gauge], points(hash, "gauge")
+            assert_equal [counter], points(hash, "counter")
+          end
+
+          it "sends a count from logger.info as the counter" do
+            log  = logged { |logger| logger.info(metric: "/user/login", dimensions: {}) }.first
+            hash = JSON.parse(formatter.call(log, appender))
+
+            assert_empty points(hash, "gauge")
+            assert_equal [counter], points(hash, "counter")
+          end
+
+          it "sends a measure_ duration as the gauge and the counter" do
+            log  = logged { |logger| logger.measure_info("Login", metric: "/user/login", dimensions: {}) { nil } }.first
+            hash = JSON.parse(formatter.call(log, appender))
+
+            gauge = {"metric" => average_metric_name, "dimensions" => expected_dimensions}
+
+            assert_equal [gauge], points(hash, "gauge", %w[metric dimensions])
+            assert_equal [counter], points(hash, "counter")
+          end
+
+          it "sends each measure_ duration of a batch as the gauge and the counter" do
+            logs = logged do |logger|
+              2.times { logger.measure_info("Login", metric: "/user/login", dimensions: {}) { nil } }
+            end
+            hash = JSON.parse(formatter.batch(logs, appender))
+
+            gauge = {"metric" => average_metric_name, "dimensions" => expected_dimensions}
+
+            assert_equal [gauge] * 2, points(hash, "gauge", %w[metric dimensions])
+            # One counter of 2, or one of 1 for each when the entries were logged in different seconds.
+            counters = points(hash, "counter", %w[metric dimensions])
+
+            assert_equal [counter.except("value")], counters.uniq
+            assert_equal(2, hash["counter"].sum { |point| point["value"] })
           end
         end
       end

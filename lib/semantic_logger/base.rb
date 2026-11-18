@@ -537,6 +537,7 @@ module SemanticLogger
           exception:          exception,
           metric:             measure_option(params, :metric),
           metric_amount:      measure_option(params, :metric_amount),
+          dimensions:         measure_option(params, :dimensions),
           duration:           duration,
           log_exception:      measure_option(params, :log_exception) || :partial,
           on_exception_level: measure_option(params, :on_exception_level),

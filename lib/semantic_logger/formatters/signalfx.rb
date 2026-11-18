@@ -23,9 +23,12 @@ module SemanticLogger
       #   Convert remaining '/' to '.'
       # A name that is not valid UTF-8, such as one with invalid bytes or in UTF-16, which matching
       # it raises for, is converted to valid UTF-8 first (see Utils.encode_utf8_string).
+      #
+      # A metric with dimensions, as Log#dimensions? tells, is sent under its own name. Any other is sent as
+      # the gauge or the counter, with the class and action taken from its name.
       def metric
         name = Utils.encode_utf8_string(log.metric.to_s).sub(%r{\A/+}, "")
-        if log.dimensions
+        if log.dimensions?
           name.tr!("/", ".")
           hash[:metric] = name
         else
@@ -55,10 +58,11 @@ module SemanticLogger
         hash[:value] = log.metric_amount || log.duration || 1
       end
 
-      # Dimensions for this metric
+      # Dimensions for this metric: those of the log entry, or when it has none, the named tags listed in
+      # the dimensions option.
       def format_dimensions
         h = (hash[:dimensions] ||= {})
-        if log.dimensions
+        if log.dimensions?
           log.dimensions.each_pair do |name, value|
             value   = value.to_s
             h[name] = value unless value.empty?
@@ -93,7 +97,7 @@ module SemanticLogger
         if log.duration
           data[:gauge] = [hash]
           # Also send a count metric whenever it is a gauge so that it can be counted.
-          unless log.dimensions
+          unless log.dimensions?
             count_hash          = hash.dup
             count_hash[:value]  = log.metric_amount || 1
             count_hash[:metric] = counter_name
@@ -127,7 +131,7 @@ module SemanticLogger
             add_gauge(gauges, hash)
 
             # Also send a count metric whenever it is a gauge so that it can be counted.
-            unless log.dimensions
+            unless log.dimensions?
               count_hash          = hash.dup
               count_hash[:value]  = log.metric_amount || 1
               count_hash[:metric] = counter_name

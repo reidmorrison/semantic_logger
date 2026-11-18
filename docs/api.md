@@ -272,6 +272,17 @@ logger.measure_info("Called external interface", metric: "Supplier/inquiry") do
 end
 ~~~
 
+Add `dimensions` to break the metric down, such as by supplier. See
+[Break a metric down with dimensions](metrics.html#step-3-break-a-metric-down-with-dimensions):
+
+~~~ruby
+logger.measure_info("Called external interface",
+                    metric:     "Supplier/inquiry",
+                    dimensions: {supplier: "acme"}) do
+  # ...
+end
+~~~
+
 ### Supply the duration yourself
 
 When you already have a duration, log it without a block. This keeps the duration as structured data
@@ -291,6 +302,7 @@ The second argument to a measure call is a Hash of options:
 - `:min_duration` [Float]: only log if the block takes longer than this many milliseconds. Default
   `0.0` (always log).
 - `:metric` [String]: notify metric subscribers with this metric name.
+- `:dimensions` [Hash]: key/value labels that break the metric down, such as `{supplier: "acme"}`.
 - `:payload` [Hash]: an optional payload to log with the entry.
 - `:exception` [Exception]: an exception to log along with the duration.
 - `:duration` [Float]: the duration in ms, used when no block is supplied (then it is mandatory; with

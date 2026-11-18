@@ -20,7 +20,9 @@ module SemanticLogger
       #     Obtain the Signalfx token via the Signalfx Web UI under `Organization` -> `Access Tokens`.
       #
       #   dimensions: [Array<String>]
-      #     Dimensions to forward to signalfx when they are present in the named tags of any log message.
+      #     Dimensions to forward to signalfx when they are present in the named tags of any log message
+      #     whose metric has no dimensions of its own. A metric logged with `dimensions:` is sent with those
+      #     instead, so add the named tags it needs to them.
       #     By default `application` and `host` are always included as dimensions in all forwarded metrics.
       #     Example: [:user_id, :state]
       #
@@ -51,7 +53,7 @@ module SemanticLogger
       # Using a `count` of a `gauge` in a chart will significantly under-count the number of occurrences.
       #
       # If dimensions are added to the metric, then the metric will be sent as-is and
-      # the above logic will _not_ be applied.
+      # the above logic will _not_ be applied. Empty dimensions, such as `{}`, count as none.
       #
       # Example, Counter metric:
       #   logger.info(metric: 'Filters.count', dimensions: {user: 'jbloggs'})
