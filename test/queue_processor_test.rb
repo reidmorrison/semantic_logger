@@ -327,6 +327,19 @@ class QueueProcessorTest < Minitest::Test
         assert(messages.any? { |m| m.include?("Stopping after 2 failed retries") })
       end
 
+      it "reports that the worker thread is active once, not again on each restart" do
+        processor = build(async_max_retries: 2)
+        processor.stub(:sleep, nil) do
+          processor.stub(:process_messages, -> { raise "boom" }) do
+            processor.send(:process)
+          end
+        end
+
+        actives = internal_logger.events.count { |event| event.message == "Async: Appender thread active" }
+
+        assert_equal 1, actives
+      end
+
       it "retries indefinitely when async_max_retries is -1" do
         processor = build(async_max_retries: -1)
         attempts  = 0
@@ -828,7 +841,7 @@ class QueueProcessorTest < Minitest::Test
       end
 
       it "warns and continues on an unknown command" do
-        assert request(:nope).run(appender)
+        assert build.send(:run_command, request(:nope))
         assert(internal_logger.events.any? { |e| e.message.include?("Ignoring unknown command: nope") })
       end
     end
@@ -863,6 +876,139 @@ class QueueProcessorTest < Minitest::Test
 
         assert processor.flush
         assert_predicate appender, :flushed
+      end
+    end
+
+    # A custom appender may return any object from its own #logger. Reporting to one that cannot
+    # take the reports must neither stop the worker thread nor raise into the calling thread.
+    describe "an internal logger without the logging methods" do
+      before { appender.logger = Object.new }
+
+      it "does not stop the worker thread" do
+        processor = start
+        processor.log(new_log)
+
+        assert processor.flush, "the worker thread did not reply to #flush"
+        assert_equal 1, appender.events.count
+      end
+
+      it "stops processing once the queue is closed" do
+        processor = build
+        processor.queue.close
+
+        refute processor.send(:process_messages)
+      end
+
+      it "drops messages when non_blocking and the queue is full" do
+        processor = build(max_queue_size: 1, non_blocking: true, dropped_message_report_seconds: 0)
+        processor.log(new_log)
+
+        refute processor.log(new_log)
+        assert_equal 1, processor.dropped_count
+      end
+
+      it "checks the lag" do
+        assert_nil build(lag_threshold_s: 30).send(:check_lag, new_log(time: Time.now - 40))
+      end
+
+      it "submits a command while messages are queued" do
+        processor = build
+        processor.queue << new_log
+        # Takes the message and runs the command once both are on the queue, so that #flush first
+        # reports the message it found queued.
+        worker = Thread.new do
+          Thread.pass until processor.queue.size == 2
+          processor.queue.pop
+          processor.queue.pop.run(appender)
+        end
+        processor.instance_variable_set(:@thread, worker)
+
+        assert processor.flush
+        assert_predicate appender, :flushed
+      ensure
+        worker&.kill
+      end
+
+      it "answers a command it does not know" do
+        assert build.send(:run_command, request(:nope))
+      end
+    end
+
+    describe "an internal logger that takes only the message, such as a Ruby Logger" do
+      let(:output) { StringIO.new }
+
+      before { appender.logger = ::Logger.new(output) }
+
+      it "is reported to" do
+        build(lag_threshold_s: 30).send(:check_lag, new_log(time: Time.now - 40))
+
+        assert_includes output.string, "fallen behind"
+      end
+
+      it "is reported to with the exception added to the message" do
+        processor = build(async_max_retries: 0)
+        processor.stub(:process_messages, -> { raise IOError, "destination unavailable" }) do
+          processor.send(:process)
+        end
+
+        assert_predicate processor, :stopped?
+        assert_includes output.string, "Async: Stopping after 0 failed retries, dropping new messages " \
+                                       "-- IOError: destination unavailable"
+      end
+    end
+
+    describe "#reopen" do
+      it "keeps the new worker thread once the one it replaced has ended" do
+        processor = start
+        replaced  = processor.thread
+
+        assert processor.flush, "the worker thread to replace should be processing messages"
+
+        processor.reopen
+        replaced.join
+
+        assert_predicate processor, :active?
+        processor.log(new_log)
+
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal 1, appender.events.count
+      end
+
+      # Ruby does not allow a Mutex to be locked in a signal trap.
+      it "works in a signal trap, such as one that reopens the log files after a rotation" do
+        skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+
+        processor = start
+
+        assert processor.flush, "the worker thread to replace should be processing messages"
+
+        result = nil
+        reopen = proc do
+          processor.reopen
+          result = :reopened
+        rescue StandardError => e
+          result = e
+        end
+        with_signal_trap("USR1", reopen) do
+          Process.kill("USR1", Process.pid)
+          deadline = Time.now + 5
+          sleep(0.01) until result || Time.now > deadline
+        end
+
+        assert_equal :reopened, result
+        assert_predicate processor, :active?
+        processor.log(new_log)
+
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal 1, appender.events.count
+      end
+
+      # Runs the block with the handler trapping the signal, then restores the previous handler.
+      def with_signal_trap(signal, handler)
+        previous = Signal.trap(signal, handler)
+        yield
+      ensure
+        Signal.trap(signal, previous) if previous
       end
     end
 

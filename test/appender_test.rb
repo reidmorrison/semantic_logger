@@ -170,5 +170,40 @@ class AppenderTest < Minitest::Test
         end
       end
     end
+
+    describe ".factory" do
+      describe "with async: true" do
+        # A custom appender may define its own #logger, as the appender contract allows. The worker
+        # thread reports to it, starting with a trace, so one that cannot take that must not stop it.
+        it "writes every entry of an appender whose own #logger has no #trace, and logging does not block" do
+          appender = Class.new(SemanticLogger::Subscriber) do
+            def written
+              @written ||= []
+            end
+
+            def log(log)
+              written << log.message
+              true
+            end
+
+            def logger
+              @logger ||= ::Logger.new(File::NULL)
+            end
+          end.new
+          proxy   = SemanticLogger::Appender.factory(appender: appender, async: true, max_queue_size: 2)
+          entries = Array.new(5) do |i|
+            SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "entry #{i}" }
+          end
+          logging = Thread.new { entries.each { |log| proxy.log(log) } }
+
+          assert logging.join(5), "logging blocked once the queue was full"
+          assert proxy.flush, "the worker thread should be running to flush"
+          assert_equal entries.map(&:message), appender.written
+        ensure
+          logging&.kill
+          proxy&.close
+        end
+      end
+    end
   end
 end

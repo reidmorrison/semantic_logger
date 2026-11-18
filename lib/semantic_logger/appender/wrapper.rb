@@ -4,7 +4,9 @@
 module SemanticLogger
   module Appender
     class Wrapper < SemanticLogger::Subscriber
-      attr_reader :logger
+      # The logger this appender writes to. Not #logger, which is the internal logger that this
+      # appender reports its own problems to, as every appender does (see Subscriber#logger).
+      attr_reader :wrapped_logger
 
       # Forward all logging calls to the supplied logging instance.
       #
@@ -39,10 +41,10 @@ module SemanticLogger
       #
       # Install the `rails_semantic_logger` gem to replace the Rails logger with Semantic Logger.
       def initialize(logger:, **args, &)
-        @logger = logger
+        @wrapped_logger = logger
 
         # Check if the custom appender responds to all the log levels. For example Ruby ::Logger
-        does_not_implement = LEVELS[1..].find { |i| !@logger.respond_to?(i) }
+        does_not_implement = LEVELS[1..].find { |i| !@wrapped_logger.respond_to?(i) }
         if does_not_implement
           raise(ArgumentError,
                 "Supplied logger does not implement:#{does_not_implement}. " \
@@ -57,20 +59,20 @@ module SemanticLogger
       #  Ruby or Rails Loggers
       def log(log)
         level = log.level == :trace ? :debug : log.level
-        @logger.send(level, format_log(log))
+        @wrapped_logger.send(level, format_log(log))
         true
       end
 
       # Flush all pending logs to disk.
       #  Waits for all queued log messages to be written to disk.
       def flush
-        @logger.flush if @logger.respond_to?(:flush)
+        @wrapped_logger.flush if @wrapped_logger.respond_to?(:flush)
       end
 
       # Close underlying log
       #  Waits for all queued log messages to be written to disk.
       def close
-        @logger.close if @logger.respond_to?(:close)
+        @wrapped_logger.close if @wrapped_logger.respond_to?(:close)
       end
     end
   end

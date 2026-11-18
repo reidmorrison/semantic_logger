@@ -226,6 +226,20 @@ agent.
   # After:
   {application="shop"} | payload_duration="PT5S"
   ```
+* The `#logger` of an appender added with `logger:`, such as the one `add_appender(logger: ...)`
+  returns, is now its internal logger, the one it reports its own problems to, as for every other
+  appender, and `#logger=` replaces that internal logger. Before, they returned and replaced the
+  logger the appender writes to, which is now `#wrapped_logger`: `appender.logger = other` sent the
+  entries to `other`, and `appender.logger.level = ::Logger::DEBUG` changed the level of the logger
+  written to. To write to another logger, add an appender for it with
+  `SemanticLogger.add_appender(logger: other)`, and remove the old one with
+  `SemanticLogger.remove_appender(appender)`. The `:open_telemetry` appender's `#logger` and
+  `#logger=` likewise no longer return or replace the OpenTelemetry logger.
+
+  A subclass of `SemanticLogger::Appender::Wrapper` that writes through `logger` or `@logger` needs
+  to use `wrapped_logger` instead. `logger` is now the internal logger, which by default writes only
+  warnings and errors, to standard error, so the subclass's entries would be left out, and `@logger`
+  is not set until `logger` is first called.
 * The `:statsd` and `:new_relic` metric subscribers now record a metric that has `dimensions` under
   its name alone, leaving out the dimensions, which their clients do not accept. Before, they left
   such a metric out, so a counter or timer logged with dimensions can now show higher counts there.

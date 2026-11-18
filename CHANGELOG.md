@@ -93,6 +93,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   subscriber now also takes the options of every subscriber, such as `level:` and `filter:`, as the
   other metric subscribers do. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The `#logger` of an appender added with `logger:` or `appender: :open_telemetry` returns its
+  internal logger, the one it reports its own problems to, as for every other appender, and
+  `#logger=` replaces that internal logger. Before, they returned and replaced the logger that the
+  appender writes to; a `logger:` appender's is now `#wrapped_logger`. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - `log_exception: :partial`, the default for `measure_*` blocks, now also adds each exception that
   caused the logged one to the message, as ` -- Cause: Class: message`, so that it names the same
   exceptions as `log_exception: :full`. A cause's message is left out when it is empty, is its class
@@ -222,6 +227,27 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Loki stores it, so an empty key as `payload_`, and with the prefix again when another key has that
   name, so that Loki keeps the value of each. A named tag that is nil, and a nil host, are left out,
   instead of being written as the label `null`.
+- The `:open_telemetry` appender, and an appender added with `logger:`, work with `async: true`.
+  Before, the worker thread stopped as it started, with `NoMethodError` (undefined method 'trace'),
+  so the appender wrote nothing, and unless it was added with `non_blocking: true`, every log call
+  blocked once its queue was full. With a `logger:` that has a `trace` method, the worker thread
+  wrote its own messages to that logger instead. Their `#logger` returned the logger they write to,
+  rather than the internal logger that every appender reports its own problems to, which the worker
+  thread uses; it now returns the internal logger (see Changed). The `:open_telemetry` appender also
+  reports a failure to flush or shut down to its internal logger, as the other appenders do, rather
+  than to `SemanticLogger::Processor.logger`, so that the report names the appender. The worker
+  thread of any appender run with `async: true` or in batches now also keeps running when the
+  appender's internal logger cannot take the thread's own messages, such as a Ruby Logger returned
+  by a custom appender's own `#logger`, which has no `trace` method and takes no exception. Such a
+  logger now gets each of those reports that it can take, with the exception, if there is one, added
+  to the message. Before, it got none of the reports with an exception, such as a discarded message,
+  a restart, or the thread stopping. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- `SemanticLogger.reopen(force: true)` in a process that has not forked, such as after a log
+  rotation, no longer loses track of the thread that writes the log entries, or of the thread of
+  an appender added with `async: true` or in batches. Before, the thread it replaced, as it ended,
+  cleared the new one, so that `SemanticLogger.flush` returned `false` without waiting for the
+  queued entries, and entries still queued at exit could be lost.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message

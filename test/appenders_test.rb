@@ -84,7 +84,7 @@ class AppendersTest < Minitest::Test
         appender = appenders.add(logger: ::Logger.new($stdout))
 
         assert_kind_of SemanticLogger::Appender::Wrapper, appender
-        assert_kind_of ::Logger, appender.logger
+        assert_kind_of ::Logger, appender.wrapped_logger
         assert_includes appenders, appender
         assert_kind_of SemanticLogger::Formatters::Default, appender.formatter
       end
@@ -93,7 +93,7 @@ class AppendersTest < Minitest::Test
         appender = appenders.add(logger: ::Logger.new($stdout), formatter: :color)
 
         assert_kind_of SemanticLogger::Appender::Wrapper, appender
-        assert_kind_of ::Logger, appender.logger
+        assert_kind_of ::Logger, appender.wrapped_logger
         assert_includes appenders, appender
         assert_kind_of SemanticLogger::Formatters::Color, appender.formatter
       end

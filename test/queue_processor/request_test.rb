@@ -29,6 +29,15 @@ class RequestTest < Minitest::Test
       assert(request.wait { worker.alive? })
     end
 
+    it "yields a command it does not know, for the caller to report, then replies and carries on" do
+      unknown = SemanticLogger::QueueProcessor::Request.new(:nope)
+      yielded = nil
+
+      assert(unknown.run(Object.new) { |command| yielded = command })
+      assert_equal :nope, yielded
+      assert(unknown.wait { finished_thread.alive? })
+    end
+
     it "returns false once the worker thread ends without replying" do
       refute(request.wait { finished_thread.alive? })
     end

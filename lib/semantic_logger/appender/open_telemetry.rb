@@ -13,7 +13,7 @@ end
 module SemanticLogger
   module Appender
     class OpenTelemetry < SemanticLogger::Subscriber
-      attr_reader :name, :version, :provider, :logger
+      attr_reader :name, :version, :provider
 
       CAPTURE_CONTEXT = ->(log) { log.capture(:open_telemetry, ::OpenTelemetry::Context.current) }
 
@@ -51,7 +51,9 @@ module SemanticLogger
         @name      = name
         @version   = version
         @provider  = ::OpenTelemetry.logger_provider
-        @logger    = @provider.logger(name: @name, version: @version)
+        # Not @logger, which holds the internal logger that this appender reports its own problems
+        # to, as every appender does (see Subscriber#logger).
+        @open_telemetry_logger = @provider.logger(name: @name, version: @version)
 
         # Capture the current Open Telemetry context when a log entry is captured.
         # Prevents duplicate subscribers as long as it is from a constant.
@@ -62,7 +64,7 @@ module SemanticLogger
       # entry was logged, so that the record is correlated with the trace and span active then.
       def log(log)
         context = log.captured(:open_telemetry) || ::OpenTelemetry::Context.current
-        @logger.on_emit(**format_log(log), context: context)
+        @open_telemetry_logger.on_emit(**format_log(log), context: context)
         true
       end
 
@@ -73,7 +75,7 @@ module SemanticLogger
         @provider.force_flush if @provider.respond_to?(:force_flush)
       rescue StandardError => e
         # Swallow to avoid noisy shutdown exceptions.
-        SemanticLogger::Processor.logger.warn("Flush failed: #{e.class}: #{e.message}")
+        logger.warn("Flush failed", e)
       end
 
       # Close the appender and release resources.
@@ -82,7 +84,7 @@ module SemanticLogger
 
         @provider.shutdown if @provider.respond_to?(:shutdown)
       rescue StandardError => e
-        SemanticLogger::Processor.logger.warn("Shutdown failed: #{e.class}: #{e.message}")
+        logger.warn("Shutdown failed", e)
       ensure
         @provider = nil
       end
