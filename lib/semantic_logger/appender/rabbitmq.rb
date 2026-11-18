@@ -112,14 +112,18 @@ module SemanticLogger
         forget_inherited
         replaced = @connection
         connect
-        close_replaced(replaced)
+        close_unused(replaced, "that a reopen replaced")
       end
 
+      # Closes the connection, which closes its channel, and forgets them, and the queue on that channel,
+      # even when closing raises, so that the next entry connects again (see #queue). Only the connection
+      # is closed: Bunny's Session#close closes each channel that is still open, while Channel#close
+      # raises Bunny::ChannelAlreadyClosed for one that RabbitMQ closed, such as after it restarted.
       def close
-        @queue = nil
-        @channel&.close
-        @channel = nil
         @connection&.close
+      ensure
+        @queue      = nil
+        @channel    = nil
         @connection = nil
       end
 
@@ -156,7 +160,7 @@ module SemanticLogger
       def connect
         connection = Bunny.new(@rabbitmq_args)
         connection.start
-        channel     = connection.create_channel
+        channel     = create_channel(connection)
         @connection = connection
         @channel    = channel
         @queue      = nil
@@ -164,12 +168,24 @@ module SemanticLogger
         channel
       end
 
-      # Closes the connection that a reopen replaced, which closes its channel. Reports an error to the
-      # internal logger rather than raising it, since the appender already publishes on the new one.
-      def close_replaced(connection)
+      # Returns [Bunny::Channel] a new channel on the given connection, which has started. When creating it
+      # raises, such as Bunny::ClientTimeout from a broker too busy to answer, closes the connection before
+      # raising: its reader and heartbeat threads would otherwise keep it open, and recovering, unused.
+      def create_channel(connection)
+        connection.create_channel
+      rescue StandardError
+        close_unused(connection, "whose channel could not be created")
+        raise
+      end
+
+      # Closes a connection that the appender does not publish on, which closes its channel. Reports an
+      # error to the internal logger, with the given description of the connection, rather than raising it:
+      # after a reopen, the appender already publishes on the new connection, and when creating a channel
+      # failed, that is the error to raise.
+      def close_unused(connection, description)
         connection&.close
       rescue StandardError => e
-        logger.warn("Could not close the RabbitMQ connection that a reopen replaced", e)
+        logger.warn("Could not close the RabbitMQ connection #{description}", e)
       end
 
       # In a child process, forgets the connection and channel built in the parent before a fork, and the

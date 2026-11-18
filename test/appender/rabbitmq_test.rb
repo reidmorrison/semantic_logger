@@ -92,6 +92,7 @@ module Appender
           lambda do |*args|
             bunny = FakeBunny.new(args)
             bunny.refuse_connections if @refused
+            bunny.time_out_channels if @channels_time_out
             bunnies << bunny
             bunny
           end
@@ -116,6 +117,15 @@ module Appender
           yield
         ensure
           @refused = false
+        end
+
+        # Runs the block while the connections that the appender builds start, but time out creating a channel, as
+        # when RabbitMQ is overloaded.
+        def while_channels_time_out
+          @channels_time_out = true
+          yield
+        ensure
+          @channels_time_out = false
         end
 
         def log_with(message)
@@ -147,7 +157,7 @@ module Appender
           internal_logger = SemanticLogger::Test::CaptureLogEvents.new
           output          = with_appender do |appender|
             appender.logger = internal_logger
-            bunnies.first.stub(:close, -> { raise IOError, "closing" }) { appender.reopen }
+            bunnies.first.stub(:close, -> { raise Bunny::ClientTimeout }) { appender.reopen }
             appender.log(log_with("two"))
             connections_json
           end
@@ -157,7 +167,51 @@ module Appender
 
           assert_equal :warn, report.level
           assert_equal "Could not close the RabbitMQ connection that a reopen replaced", report.message
-          assert_instance_of IOError, report.exception
+          assert_instance_of Bunny::ClientTimeout, report.exception
+        end
+
+        it "closes a connection that started when creating its channel raises, and keeps the one it has" do
+          output = with_appender do |appender|
+            appender.log(log_with("one"))
+
+            while_channels_time_out do
+              assert_raises(Bunny::ClientTimeout) { appender.reopen }
+            end
+            appender.log(log_with("two"))
+            connections_json
+          end
+
+          assert_equal({"published" => [%w[one two], []], "closed" => [false, true]}, JSON.parse(output))
+        end
+
+        it "raises the error creating the channel when closing that connection raises too" do
+          internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+          with_appender do |appender|
+            appender.logger = internal_logger
+            FakeBunny.stub_any_instance(:close, -> { raise Bunny::ClientTimeout, "closing" }) do
+              while_channels_time_out do
+                error = assert_raises(Bunny::ClientTimeout) { appender.reopen }
+
+                refute_equal "closing", error.message
+              end
+            end
+          end
+          report = internal_logger.events.last
+
+          assert_equal "Could not close the RabbitMQ connection whose channel could not be created", report.message
+          assert_equal "closing", report.exception.message
+        end
+
+        it "closes its connection, and connects again to publish, once RabbitMQ has closed its channel" do
+          output = with_appender do |appender|
+            appender.log(log_with("one"))
+            bunnies.first.channels.first.close
+            appender.close
+            appender.log(log_with("two"))
+            connections_json
+          end
+
+          assert_equal({"published" => [["one"], ["two"]], "closed" => [true, false]}, JSON.parse(output))
         end
 
         it "keeps its connection and channel when it cannot connect" do
