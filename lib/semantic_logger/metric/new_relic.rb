@@ -64,8 +64,8 @@ module SemanticLogger
 
       # Only forward log entries that contain metrics.
       def should_log?(log)
-        # Does not support metrics with dimensions.
-        log.metric && !log.dimensions && meets_log_level?(log) && !filtered?(log)
+        # Records a metric that has dimensions under its name alone, since the agent's metric API has none.
+        log.metric && meets_log_level?(log) && !filtered?(log)
       end
     end
   end

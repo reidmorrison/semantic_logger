@@ -3221,10 +3221,12 @@ logger.info(metric: "filters.count", dimensions: {user: "jbloggs"})
 logger.info(metric: "filters.applied", metric_amount: 3, dimensions: {user: "jbloggs"})
 ~~~
 
-Not every backend supports dimensions. **Statsd** and **New Relic** ignore any metric that carries
-dimensions; **SignalFx** is built around them. See each subscriber below. The formatters that write
-structured data also write the dimensions with the entry, see
-[Metrics in log appenders](#metrics-in-log-appenders).
+Not every subscriber supports dimensions. **Statsd** and **New Relic** record a metric with
+dimensions under its name alone, leaving out the dimensions, which their clients do not accept;
+**SignalFx** is built around them. See each subscriber below. To keep the metrics with dimensions
+out of Statsd or New Relic, for example when they also go to SignalFx, add the subscriber with
+`filter: ->(log) { !log.dimensions? }`. The formatters that write structured data also write the
+dimensions with the entry, see [Metrics in log appenders](#metrics-in-log-appenders).
 
 ## Send metrics to a backend
 
@@ -3245,7 +3247,8 @@ SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
 The `url:` must be `udp://`, and its host must resolve when the subscriber is added, or `add_appender`
 raises. A path in the url, as in `udp://localhost:8125/my_app`, is the namespace of every metric.
 
-Counters are integers (float amounts are rounded). Does not support dimensions.
+Counters are integers (float amounts are rounded). A metric is sent under its name alone, leaving out
+its dimensions, since the `statsd-ruby` client has no tags.
 
 ### New Relic
 
@@ -3256,7 +3259,8 @@ Forward metrics to New Relic so they can be displayed on custom dashboards (requ
 SemanticLogger.add_appender(metric: :new_relic)
 ~~~
 
-Does not support dimensions.
+A metric is sent under its name alone, leaving out its dimensions, since the agent's metric API takes
+none.
 
 ### SignalFx
 
@@ -5662,6 +5666,15 @@ agent.
 
 #### Other behaviour changes
 
+* The `:statsd` and `:new_relic` metric subscribers now record a metric that has `dimensions` under
+  its name alone, leaving out the dimensions, which their clients do not accept. Before, they left
+  such a metric out, so a counter or timer logged with dimensions can now show higher counts there.
+  To leave them out again, add either subscriber with a filter:
+
+  ~~~ruby
+  SemanticLogger.add_appender(metric: :statsd, filter: ->(log) { !log.dimensions? })
+  SemanticLogger.add_appender(metric: :new_relic, filter: ->(log) { !log.dimensions? })
+  ~~~
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and

@@ -77,6 +77,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- The `:statsd` and `:new_relic` metric subscribers record a metric that has `dimensions` under its
+  name alone, leaving out the dimensions, which neither the `statsd-ruby` client nor the New Relic
+  agent's metric API accepts. Before, they left such a metric out altogether. The `:statsd`
+  subscriber now also takes the options of every subscriber, such as `level:` and `filter:`, as the
+  other metric subscribers do. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - `log_exception: :partial`, the default for `measure_*` blocks, now also adds each exception that
   caused the logged one to the message, as ` -- Cause: Class: message`, so that it names the same
   exceptions as `log_exception: :full`. A cause's message is left out when it is empty, is its class
