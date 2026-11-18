@@ -68,9 +68,7 @@ module SemanticLogger
       def reopen
         return if @pid == ::Process.pid && (!@started || @thread&.alive?)
 
-        locked = false
-        @mutex.synchronize do
-          locked = true
+        locked = TrapSafe.try_synchronize(@mutex) do
           unless @pid == ::Process.pid
             @port   = ::Ractor::Port.new
             @pid    = ::Process.pid
@@ -79,12 +77,12 @@ module SemanticLogger
             @waits  = {}
           end
         end
-        start if @started
-      rescue ThreadError
-        raise if locked
-
-        Thread.new { reopen }
-        nil
+        if locked
+          start if @started
+        else
+          Thread.new { reopen }
+          nil
+        end
       end
 
       # Runs the block, which forks the process, while the receiving thread waits on a Queue rather

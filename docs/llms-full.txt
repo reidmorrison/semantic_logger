@@ -5083,10 +5083,9 @@ did not fork (see [Log rotation](#log-rotation)).
    it. That thread is only started again if it has stopped, such as after `async_max_retries`.
    After a fork, the child starts with an empty queue, since the parent process writes the entries
    it had queued. `reopen` can be called from a signal trap, except in synchronous mode (see
-   [Synchronous operation](#synchronous-operation)), and on Ruby 4.0, where it raises `ThreadError`
-   there once the appenders have been reopened. In a trap, an appender that connects to its server
-   when reopened, such as `:http` and the appenders built on it, cannot connect, so it reports that
-   it failed to reopen, while the other appenders are reopened.
+   [Synchronous operation](#synchronous-operation)). In a trap, an appender that connects to its
+   server when reopened, such as `:http` and the appenders built on it, cannot connect, so it
+   reports that it failed to reopen, while the other appenders are reopened.
 
 You might opt out if another library forks in ways you do not want to trigger a reopen, or you need
 to control exactly when the appender thread restarts.
@@ -5231,9 +5230,9 @@ the internal logger at most once every 30 seconds, and the count is available fr
 `SemanticLogger.stats[:dropped]`. It is not supported in synchronous mode (`SemanticLogger.sync!`),
 which has no queue.
 
-A message logged in a signal trap, such as by the handlers of
-[`add_signal_handler`](#linux-signals), is dropped and counted the same way, and reported with the
-next messages dropped outside a trap.
+When the queue is full, a message logged in a signal trap, such as by the handlers of
+[`add_signal_handler`](#linux-signals), is dropped, counted, and reported the same way, with the
+report made just after the trap rather than in it.
 
 Either setting keeps logging calls from blocking; neither makes `SemanticLogger.flush` return sooner.
 A flush, including the one that runs automatically when the process exits, still waits for every

@@ -314,16 +314,16 @@ class QueueProcessorTest < Minitest::Test
         assert_equal 2, processor.dropped_count
       end
 
-      it "reports the messages dropped in a signal trap with the next ones dropped" do
+      it "reports the messages dropped in a signal trap just after it" do
         processor = build(max_queue_size: 1, non_blocking: true, dropped_message_report_seconds: 0)
         processor.log(new_log)
         in_signal_trap { 2.times { processor.log(new_log) } }
+        reported = -> { internal_logger.events.sum { |event| event.message[/\AAsync: Dropped (\d+)/, 1].to_i } }
+        deadline = Time.now + 5
+        sleep(0.01) until reported.call == 2 || Time.now > deadline
 
-        refute processor.log(new_log)
-        assert_equal 3, processor.dropped_count
-        reports = internal_logger.events.map { |event| event.message[/\AAsync: Dropped \d+ log messages/] }
-
-        assert_equal ["Async: Dropped 3 log messages"], reports
+        assert_equal 2, reported.call
+        assert_equal 2, processor.dropped_count
       end
 
       it "drops messages in a signal trap once the worker thread has stopped" do

@@ -9,6 +9,30 @@ class ThrottledCounterTest < Minitest::Test
       counter.record(count, interval: interval) { |unreported, seconds| reports << [unreported, seconds] }
     end
 
+    # Runs the block while another thread holds the counter's lock, so that the occurrences recorded
+    # in a signal trap meanwhile stay waiting, then releases it.
+    def while_locked_elsewhere(counter)
+      holding = Queue.new
+      release = Queue.new
+      holder  = Thread.new do
+        counter.instance_variable_get(:@mutex).synchronize do
+          holding << true
+          release.pop
+        end
+      end
+      holding.pop
+      yield
+    ensure
+      release << true
+      holder.join
+    end
+
+    # Waits until the condition holds, for 5 seconds at most.
+    def wait_until
+      deadline = Time.now + 5
+      sleep(0.01) until yield || Time.now > deadline
+    end
+
     it "counts every occurrence in the total" do
       counter = SemanticLogger::QueueProcessor::ThrottledCounter.new
       record(counter)
@@ -90,23 +114,49 @@ class ThrottledCounterTest < Minitest::Test
         assert_equal 2, counter.total
       end
 
-      it "reports the occurrences with the next report outside the trap" do
+      it "reports the occurrences just after the trap, from a thread started for them" do
         counter = SemanticLogger::QueueProcessor::ThrottledCounter.new(reported_at: nil)
         in_signal_trap { record(counter, 2, interval: 0) }
+        wait_until { reports.any? }
 
-        assert_empty reports, "a report is not made in the trap"
+        assert_equal [[2, nil]], reports
+        assert_equal 2, counter.total
+      end
+
+      it "starts one thread for all the occurrences recorded in a trap" do
+        counter = SemanticLogger::QueueProcessor::ThrottledCounter.new(reported_at: nil)
+        create  = Thread.method(:new)
+        created = 0
+        count   = lambda do |*args, &block|
+          created += 1
+          create.call(*args, &block)
+        end
+        while_locked_elsewhere(counter) do
+          Thread.stub(:new, count) { in_signal_trap { 3.times { record(counter, interval: 0) } } }
+        end
+        wait_until { reports.any? }
+
+        assert_equal 1, created
+        assert_equal [[3, nil]], reports
+      end
+
+      it "leaves the occurrences to the next report when none is due just after the trap" do
+        counter = SemanticLogger::QueueProcessor::ThrottledCounter.new
+        in_signal_trap { record(counter, 2) }
         record(counter, interval: 0)
 
         assert_equal [3], reports.map(&:first)
         assert_equal 3, counter.total
       end
 
-      it "leaves the occurrences recorded in a trap out of the total read in a trap" do
+      it "leaves the occurrences not yet added in out of the total read in a trap" do
         counter = SemanticLogger::QueueProcessor::ThrottledCounter.new
         record(counter)
-        total_in_trap = in_signal_trap do
-          record(counter)
-          counter.total
+        total_in_trap = while_locked_elsewhere(counter) do
+          in_signal_trap do
+            record(counter)
+            counter.total
+          end
         end
 
         assert_equal 1, total_in_trap
