@@ -243,8 +243,16 @@ module SemanticLogger
         reopen
       end
 
-      # Re-open after process fork
+      # Closes the connection, if it is open, and starts a new one, such as after a log rotation, or a
+      # fork. When starting it fails, such as while the server cannot be reached, it raises, and the
+      # next request starts it (see #process_request).
+      #
+      # After a fork, the child first forgets the connection it inherited, without finishing it: it
+      # belongs to the parent. Finishing an https connection sends the server a TLS close_notify, which
+      # ends the connection for the parent too. Ruby closes the child's copy of the socket when it
+      # collects it, which leaves the parent's open.
       def reopen
+        forget_inherited
         # Close open connection if any
         begin
           @http&.finish
@@ -269,6 +277,7 @@ module SemanticLogger
         @http.open_timeout     = @open_timeout
         @http.read_timeout     = @read_timeout
         @http.continue_timeout = @continue_timeout
+        @pid                   = ::Process.pid
         @http.start
       end
 
@@ -382,6 +391,11 @@ module SemanticLogger
       end
 
       private
+
+      # In a child process, forgets the connection started in the parent before a fork. See #reopen.
+      def forget_inherited
+        @http = nil unless @pid == ::Process.pid
+      end
 
       # Returns [URI] the parsed url, without the url in the error raised for an invalid one.
       def parse_url(url)

@@ -5345,14 +5345,24 @@ Each appender is reopened by the thread that writes its entries, before it write
 that an appender is never reopened while it is writing (see [Reopen manually](#reopen-manually)).
 After a fork, that is the child's own thread, which reopens the appender before it writes anything.
 
+In the child, the appenders that keep a connection open to their server leave the one they inherited
+to the parent, without closing it or writing to it, and connect again: `:http` and the appenders
+built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and `metric: :signalfx`), `:tcp`,
+`:syslog` and `:graylog` over TCP, and `:kafka`. Closing a TLS connection sends the server a
+`close_notify`, which ends the connection for the parent too, and over TLS the server cannot read
+what the parent writes after the child has written to it. When one of them cannot connect in the
+child, such as while its server cannot be reached, it connects before it writes the next entry.
+(`:kafka` connects only when it delivers; when it cannot build a new producer in the child, such as
+for invalid options, logging to it raises `IOError` until it is reopened.)
+
 An appender that cannot be reopened, such as `:udp` once its server's name no longer resolves, or
 `:http` while its server cannot be reached, is reported to the internal logger, as
 `Failed to re-open appender`, or `Async: Failed to reopen the appender` for one added with
-`async: true` or in batches, and carries on with what it had. The other appenders are still
-reopened, and the thread that writes the entries of an appender added with `async: true` or in
-batches is still started in the child, so its entries are written, or discarded and counted like any
-other entry it cannot write (see [Retry a failing appender](#retry-a-failing-appender)), rather than
-left on its queue.
+`async: true` or in batches, and carries on with what it had, apart from a connection inherited from
+the parent (see above). The other appenders are still reopened, and the thread that writes the
+entries of an appender added with `async: true` or in batches is still started in the child, so its
+entries are written, or discarded and counted like any other entry it cannot write (see
+[Retry a failing appender](#retry-a-failing-appender)), rather than left on its queue.
 
 ### Reopen manually
 

@@ -817,6 +817,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   appender for an `http` url given the same Hash used TLS. The `:graylog` appender added `protocol:`
   and `facility:` to its `gelf_options:` Hash, so a frozen one raised `FrozenError`, and an appender
   for a `tcp` url given the same Hash as one for a `udp` url sent over UDP.
+- After a fork, the `:http` appender and those built on it (`:elasticsearch_http`, `:splunk_http`,
+  `:loki`, and `metric: :signalfx`), and the `:tcp` appender, no longer close in the child the
+  connection they inherited from the parent. Over TLS, closing it sent the server a `close_notify`,
+  which ended the connection for the parent too, so the parent's next request or write on it failed,
+  or timed out. The `:syslog` and `:graylog` appenders over TCP, when they could not connect in the
+  child, such as while the server could not be reached, kept writing to the parent's connection, so
+  that the server got the entries of both processes on it, and over TLS could not read the parent's
+  next ones. Now each of them leaves the connection it inherited to the parent, without closing it or
+  writing to it, as the `:kafka` appender does, and connects again in the child; when it cannot, it
+  connects before it writes the next entry. See
+  [Process forking](https://logger.reidmorrison.com/operations.html#process-forking).
 
 ## [5.2.0] 2026-10-30
 
