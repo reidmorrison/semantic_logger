@@ -138,6 +138,34 @@ class QueueProcessorTest < Minitest::Test
     end
   end
 
+  # Records each message it writes, and each reopen, as "reopen", in `history`, with the thread
+  # it was called on in `threads`. A reopen locks a Mutex, as connecting with a timeout does, which
+  # Ruby does not allow in a signal trap, and raises the `reopen_error` when one is given.
+  class ReopeningAppender < GatedAppender
+    attr_accessor :reopen_error
+
+    def history
+      @history ||= []
+    end
+
+    def threads
+      @threads ||= []
+    end
+
+    def log(log)
+      super
+      history << log.message
+      threads << Thread.current
+    end
+
+    def reopen
+      Mutex.new.synchronize { nil }
+      history << "reopen"
+      threads << Thread.current
+      raise reopen_error if reopen_error
+    end
+  end
+
   # Cannot reach its destination for a message containing "unavailable" the first `failures` times
   # it is written, alone or in a batch, and says that such a write wrote nothing.
   class ResendingAppender < BatchAppender
@@ -1639,9 +1667,100 @@ class QueueProcessorTest < Minitest::Test
 
     describe "#reopen" do
       let(:appender) do
-        a        = GatedAppender.new
+        a        = ReopeningAppender.new
         a.logger = internal_logger
         a
+      end
+
+      # Waits until the appender has been reopened.
+      def wait_for_reopen
+        deadline = Time.now + 5
+        Thread.pass until appender.history.include?("reopen") || Time.now > deadline
+
+        assert_includes appender.history, "reopen"
+      end
+
+      it "reopens the appender on the worker thread, once it has written the entry it is writing" do
+        processor = start
+        hold_worker(processor)
+        processor.log(new_log(message: "second"))
+        processor.reopen
+
+        assert_empty appender.history, "the appender should not be reopened while it is writing"
+        appender.gate << true
+
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal ["wait first", "reopen", "second"], appender.history
+        assert_equal [processor.thread], appender.threads.uniq
+      end
+
+      it "wakes up a worker thread waiting for the next entry to reopen the appender" do
+        processor = start
+
+        assert processor.flush, "the worker thread should be waiting for the next entry"
+        processor.reopen
+        wait_for_reopen
+
+        assert_equal [processor.thread], appender.threads
+      end
+
+      it "reports a reopen that fails, and carries on writing" do
+        appender.reopen_error = SocketError.new("getaddrinfo: nodename nor servname provided, or not known")
+        processor             = start
+        processor.reopen
+        processor.log(new_log(message: "after"))
+
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal %w[reopen after], appender.history
+        report = internal_logger.events.find { |event| event.message == "Async: Failed to reopen the appender" }
+
+        assert_kind_of SocketError, report&.exception
+        assert_predicate processor, :active?
+      end
+
+      it "reopens the appender once for the reopens asked for meanwhile" do
+        processor = start
+        hold_worker(processor)
+        3.times { processor.reopen }
+        appender.gate << true
+
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal ["wait first", "reopen"], appender.history
+      end
+
+      it "reopens the appender outside a signal trap, where it could not lock a Mutex" do
+        processor = start
+
+        assert processor.flush, "the worker thread should be waiting for the next entry"
+        assert_equal :reopened, reopen_in_signal_trap(processor)
+        wait_for_reopen
+
+        assert_equal [processor.thread], appender.threads
+        assert_empty(internal_logger.events.select { |event| event.message.include?("Failed to reopen") })
+      end
+
+      it "reopens the appender in a child process after a fork, before writing anything" do
+        skip "fork is not supported" unless Process.respond_to?(:fork)
+
+        processor = start
+        hold_worker(processor)
+        reader, writer = IO.pipe
+        pid            = fork do
+          reader.close
+          processor.reopen
+          processor.log(new_log(message: "in the child"))
+          processor.flush
+          writer.write(appender.history.join(","))
+          writer.close
+          exit!(0)
+        end
+        writer.close
+        Process.wait(pid)
+        written_in_child = reader.read
+        reader.close
+        appender.gate << true
+
+        assert_equal "reopen,in the child", written_in_child
       end
 
       # Logs a message that holds the worker thread once it has taken it off the queue.

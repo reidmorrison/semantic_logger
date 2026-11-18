@@ -6,6 +6,15 @@ class ReporterTest < Minitest::Test
     let(:reporter) { SemanticLogger::QueueProcessor::Reporter.new(appender) }
     let(:error) { IOError.new("destination unavailable") }
 
+    it "reports the log messages queued ahead of a command at a level that grows with their number" do
+      internal        = SemanticLogger::Test::CaptureLogEvents.new
+      appender.logger = internal
+      [0, 1, 101, 1_001].each { |count| reporter.queued(count, :flush) }
+
+      assert_equal(%i[trace info warn], internal.events.map(&:level))
+      assert_equal "Async: Queued log messages: 1001, running command: flush", internal.events.last.message
+    end
+
     it "reports to the internal logger of the appender, with the exception" do
       internal        = SemanticLogger::Test::CaptureLogEvents.new
       appender.logger = internal

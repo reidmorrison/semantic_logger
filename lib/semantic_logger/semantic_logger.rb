@@ -415,6 +415,11 @@ module SemanticLogger
   # this guard and reopen unconditionally, for example when re-opening file handles
   # in the same process after an external log rotation.
   #
+  # Each appender is reopened by the thread that writes its entries, before it writes the next one,
+  # so that it is never reopened while it is writing, and so this returns before the appenders have
+  # reopened: a flush after it returns once they have. That also lets it be called from a signal
+  # trap. With sync!, the appenders are reopened on the calling thread instead.
+  #
   # Note:
   #   Not all appender's implement reopen.
   #   Check the code for each appender you are using before relying on this behavior.

@@ -704,6 +704,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   once that thread has given up now queues its entry, rather than raising `ArgumentError`. After a
   fork, that thread in the child process now starts its count of failures afresh, where v5.2.0
   carried on with the parent's count.
+- `SemanticLogger.reopen`, often called from a signal trap after a log rotation, no longer reopens an
+  appender while it is writing. It reopened each appender on the calling thread, while the thread
+  that writes the entries could be writing to it: the file appender could close its file under an
+  entry being written, which it then wrote again, to the new file, and the HTTP appenders could end a
+  connection under a request, and, with some versions of the timeout gem, fail in a signal trap with
+  `ThreadError` when the timeout of the new connection locked a Mutex. Now each appender is reopened
+  by the thread that writes its entries, before it writes the next one, so `reopen` returns before
+  the appenders have reopened, and can be called from a signal trap. An appender that cannot be
+  reopened is reported by that thread, and carries on with what it had. `SemanticLogger.sync!` still
+  reopens each appender on the calling thread. See
+  [Process forking](https://logger.reidmorrison.com/operations.html#process-forking) and the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ## [5.2.0] 2026-10-30
 

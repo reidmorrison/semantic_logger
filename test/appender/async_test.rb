@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../signal_trap_helper"
 
 module Appender
   class AsyncTest < Minitest::Test
@@ -96,54 +97,111 @@ module Appender
         end
       end
 
-      describe "#reopen when the appender cannot be reopened" do
-        # Cannot be reopened, as the :udp appender cannot once its server's name no longer resolves.
-        let :appender do
-          Class.new(SemanticLogger::Test::CaptureLogEvents) do
+      describe "#reopen" do
+        include SignalTrapHelper
+
+        # Holds the worker thread while it writes a message, until the test opens the gate, and
+        # records each message written and each reopen in `history`. A reopen locks a Mutex, as
+        # connecting with a timeout does, which Ruby does not allow in a signal trap.
+        let(:gated) do
+          Class.new(SemanticLogger::Subscriber) do
+            def gate = @gate ||= Queue.new
+            def writing = @writing ||= Queue.new
+            def history = @history ||= []
+
+            def log(log)
+              writing << true
+              gate.pop
+              history << log.message
+            end
+
             def reopen
-              raise SocketError, "getaddrinfo: nodename nor servname provided, or not known"
+              Mutex.new.synchronize { nil }
+              history << "reopen"
             end
           end.new
         end
 
-        let(:added_appender) { SemanticLogger.add_appender(appender: appender, async: true, batch: false) }
+        let(:proxy) { SemanticLogger::Appender::Async.new(appender: gated) }
 
-        # Records what SemanticLogger.reopen reports about the appenders.
+        after do
+          gated.gate << true
+          proxy.close
+        end
+
+        it "does not reopen the appender while the worker thread is writing to it" do
+          proxy.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "writing" })
+
+          assert gated.writing.pop(timeout: 5), "the worker thread should be writing"
+          proxy.reopen
+
+          assert_empty gated.history, "the appender should not be reopened while it is writing"
+          gated.gate << true
+
+          assert proxy.flush
+          assert_equal %w[writing reopen], gated.history
+        end
+
+        it "can be called in a signal trap, from which it does not reopen the appender" do
+          reopened = in_signal_trap do
+            proxy.reopen
+            :reopened
+          end
+
+          assert_equal :reopened, reopened
+          assert proxy.flush
+          assert_equal %w[reopen], gated.history
+        end
+      end
+
+      describe "#reopen when the appender cannot be reopened" do
+        # Records what the worker thread reports about the appender.
         let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
-        before do
-          @appenders_logger               = SemanticLogger.appenders.logger
-          SemanticLogger.appenders.logger = internal_logger
+        # Cannot be reopened, as the :udp appender cannot once its server's name no longer resolves.
+        let :appender do
+          appender = Class.new(SemanticLogger::Test::CaptureLogEvents) do
+            def reopen
+              raise SocketError, "getaddrinfo: nodename nor servname provided, or not known"
+            end
+          end.new
+          appender.logger = internal_logger
+          appender
         end
+
+        let(:added_appender) { SemanticLogger.add_appender(appender: appender, async: true, batch: false) }
 
         # Removed here, rather than left to InMemoryAppenderHelper, which can skip one, since a later
         # test that forks would then report that it cannot be reopened.
-        after do
-          SemanticLogger.remove_appender(added_appender)
-          SemanticLogger.appenders.logger = @appenders_logger
+        after { SemanticLogger.remove_appender(added_appender) }
+
+        def reopen_report
+          internal_logger.events.find { |event| event.message.include?("Failed to reopen the appender") }
         end
 
-        it "starts the worker thread again, then raises the appender's error" do
+        it "starts the worker thread again, which reports the appender's error and carries on" do
           worker = added_appender.thread
           worker.kill
           worker.join
+          added_appender.reopen
 
-          assert_raises(SocketError) { added_appender.reopen }
           assert_predicate added_appender, :active?
           logger.info("after the reopen")
           SemanticLogger.flush
 
           assert_equal ["after the reopen"], appender.events.map(&:message)
+          assert_kind_of SocketError, reopen_report&.exception
         end
 
-        it "is reported by SemanticLogger.reopen, which starts the worker thread again" do
+        it "is reported by the worker thread, which SemanticLogger.reopen starts again" do
           worker = added_appender.thread
           worker.kill
           worker.join
           SemanticLogger.reopen(force: true)
-          report = internal_logger.events.find { |event| event.message.include?("Failed to re-open appender") }
+          # Returns once the appender has been reopened, which comes ahead of the flush.
+          SemanticLogger.flush
 
-          assert_kind_of SocketError, report&.exception
+          assert_kind_of SocketError, reopen_report&.exception
           assert_predicate added_appender, :active?
         end
 
@@ -156,8 +214,8 @@ module Appender
             reader.close
             logger.info("in the child")
             SemanticLogger.flush
-            report = internal_logger.events.find { |event| event.message.include?("Failed to re-open appender") }
-            writer.write([added_appender.active?, appender.events.map(&:message), report&.exception&.class].inspect)
+            result = [added_appender.active?, appender.events.map(&:message), reopen_report&.exception&.class]
+            writer.write(result.inspect)
             writer.close
             exit!(0)
           end

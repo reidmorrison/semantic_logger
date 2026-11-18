@@ -432,6 +432,17 @@ agent.
   that writes to every appender, or with `SemanticLogger.sync!`, the thread that logged, and every
   other thread that logs waits for it. The report of the entries still not indexed now comes after
   those waits. See [Elasticsearch](appenders.html#elasticsearch).
+* `SemanticLogger.reopen` now only asks for the appenders to be reopened, each by the thread that
+  writes its entries, before it writes the next one, unless `SemanticLogger.sync!` is on. Before, it
+  reopened them on the calling thread, often a signal trap after a log rotation, while the thread
+  that writes the entries could be writing to them: the file appender could close its file under an
+  entry being written, and the HTTP appenders could end a connection under a request, or, with some
+  versions of the timeout gem, fail with `ThreadError` in a trap. So `reopen` now returns before the
+  appenders have reopened; call `SemanticLogger.flush` after it to wait until they have, for example
+  in a test. An entry still queued when `reopen` is called can now be written to the new file. The
+  error from an appender that cannot be reopened is reported by that thread, rather than raised from
+  the proxy of an appender added with `async: true` or in batches, which now reports it to the
+  appender's own internal logger, as `Async: Failed to reopen the appender`.
 
 ### Upgrading to Semantic Logger v5.2
 

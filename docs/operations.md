@@ -36,12 +36,18 @@ Resque, Spring, Phusion Passenger, parallel tests, and so on).
 
 `reopen` runs only once per process after a fork, so it is safe even if something else also calls it.
 
+Each appender is reopened by the thread that writes its entries, before it writes the next one, so
+that an appender is never reopened while it is writing (see [Reopen manually](#reopen-manually)).
+After a fork, that is the child's own thread, which reopens the appender before it writes anything.
+
 An appender that cannot be reopened, such as `:udp` once its server's name no longer resolves, or
-`:http` while its server cannot be reached, is reported to the internal logger as
-`Failed to re-open appender`, and the other appenders are still reopened. When it runs on a thread of
-its own (`async: true` or in batches), that thread is still started in the child, so its entries are
-written, or discarded and counted like any other entry it cannot write (see
-[Retry a failing appender](#retry-a-failing-appender)), rather than left on its queue.
+`:http` while its server cannot be reached, is reported to the internal logger, as
+`Failed to re-open appender`, or `Async: Failed to reopen the appender` for one added with
+`async: true` or in batches, and carries on with what it had. The other appenders are still
+reopened, and the thread that writes the entries of an appender added with `async: true` or in
+batches is still started in the child, so its entries are written, or discarded and counted like any
+other entry it cannot write (see [Retry a failing appender](#retry-a-failing-appender)), rather than
+left on its queue.
 
 ### Reopen manually
 
@@ -63,13 +69,19 @@ did not fork (see [Log rotation](#log-rotation)).
    ~~~
 
    Within the same process, `reopen` keeps the log entries that are still queued, and the thread
-   that writes them keeps running, so they are written in order, ahead of the entries logged after
-   it. That thread is only started again if it has stopped, such as after `async_max_retries`.
-   After a fork, the child starts with an empty queue, since the parent process writes the entries
-   it had queued. `reopen` can be called from a signal trap, except in synchronous mode (see
-   [Synchronous operation](#synchronous-operation)). In a trap, an appender that connects to its
-   server when reopened, such as `:http` and the appenders built on it, cannot connect, so it
-   reports that it failed to reopen, while the other appenders are reopened.
+   that writes them keeps running. That thread is only started again if it has stopped, such as
+   after `async_max_retries`. After a fork, the child starts with an empty queue, since the parent
+   process writes the entries it had queued.
+
+   `reopen` only asks for the appenders to be reopened: each one is reopened by the thread that
+   writes its entries, before it writes the next one, so that a file is never closed, nor a
+   connection ended, while an entry is being written to it. So `reopen` returns before the appenders
+   have reopened; a `SemanticLogger.flush` after it returns once they have. An entry still queued
+   when `reopen` is called can be written after the reopen, such as to the new log file. That also
+   lets `reopen` be called from a signal trap, such as one that a log rotation tool signals, since no
+   appender connects or locks anything there. In synchronous mode (see
+   [Synchronous operation](#synchronous-operation)), `reopen` reopens each appender on the calling
+   thread instead, so it cannot be called from a signal trap.
 
 You might opt out if another library forks in ways you do not want to trigger a reopen, or you need
 to control exactly when the appender thread restarts.

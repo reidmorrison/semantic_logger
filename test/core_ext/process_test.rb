@@ -132,7 +132,9 @@ module CoreExt
         appender = SemanticLogger.add_appender(appender: ReopenRecorder.new(marker))
         begin
           pid = Process.fork do
-            # The _fork hook should have already reopened appenders in this child.
+            # The _fork hook should have already asked for the appenders to be reopened in this child.
+            # In asynchronous mode the thread that writes the entries reopens them, ahead of a flush.
+            SemanticLogger.flush
             exit!(0)
           end
           Process.wait(pid)

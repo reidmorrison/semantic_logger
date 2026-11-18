@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require_relative "signal_trap_helper"
 
 module SemanticLogger
   class ProcessorTest < Minitest::Test
@@ -192,6 +193,45 @@ module SemanticLogger
           assert_equal 2, processor.stats[:dropped]
         ensure
           processor&.queue&.clear
+        end
+      end
+
+      describe "#reopen" do
+        include SignalTrapHelper
+
+        # Records the thread it is reopened on. Its reopen locks a Mutex, as connecting with a timeout
+        # does, which Ruby does not allow in a signal trap.
+        let(:reopening) do
+          Class.new(SemanticLogger::Test::CaptureLogEvents) do
+            def reopened_on
+              @reopened_on ||= Queue.new
+            end
+
+            def reopen
+              Mutex.new.synchronize { nil }
+              reopened_on << Thread.current
+            end
+          end.new
+        end
+
+        before { processor.appenders << reopening }
+
+        it "reopens the appenders on the thread that writes to them, ahead of the next entry" do
+          processor.reopen
+
+          assert processor.flush, "the worker thread should answer the flush"
+          assert_equal processor.thread, reopening.reopened_on.pop(timeout: 0)
+        end
+
+        it "can be called in a signal trap, from which it does not reopen the appenders" do
+          assert processor.flush, "the worker thread should be waiting for the next entry"
+          reopened = in_signal_trap do
+            processor.reopen
+            :reopened
+          end
+
+          assert_equal :reopened, reopened
+          assert_equal processor.thread, reopening.reopened_on.pop(timeout: 5)
         end
       end
 
