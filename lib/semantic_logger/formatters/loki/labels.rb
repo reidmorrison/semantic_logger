@@ -7,13 +7,14 @@ module SemanticLogger
       #
       # It knows the labels written so far, a Hash of their names, as Strings, and their values, to
       # which the formatter has written its own labels first (see Loki#build_stream), whether a
-      # name may still be a Symbol, the labels still to be written under another name, Loki's
-      # limits, and how many labels there were when it finished them. It writes each name as a
-      # String (see #string_names), adds the named tags and the context to the labels (see #add),
-      # and then writes those that need another name and takes out those past Loki's limits (see
-      # #finish), which the formatter writes to the structured metadata instead. It names them by
-      # the formatter's rules (see Loki.loki_name and Loki.free_name), and converts their values
-      # with the converter the formatter gives it.
+      # name may still be a Symbol, the names that the formatter writes to the structured metadata
+      # instead of as labels, the labels still to be written under another name, Loki's limits,
+      # and how many labels there were when it finished them. It writes each name as a String (see
+      # #string_names), adds the named tags and the context to the labels (see #add), and then
+      # writes those that need another name and takes out those past Loki's limits (see #finish),
+      # which the formatter writes to the structured metadata instead. It names them by the
+      # formatter's rules (see Loki.loki_name and Loki.free_name), and converts their values with
+      # the converter the formatter gives it.
       class Labels
         # Matches a label name that Loki accepts: an ASCII letter or an underscore, followed by
         # ASCII letters, digits, and underscores. Loki rejects the whole push for any other, such
@@ -37,18 +38,24 @@ module SemanticLogger
         #     subclass of the formatter may override.
         #   max_names, max_name_length, max_value_length: [Integer]
         #     Loki's limits, see Loki#initialize.
+        #   reserved: [Array<String>]
+        #     The names that the formatter writes to the structured metadata instead of as labels,
+        #     such as `thread` (see Loki#initialize). A label of that name is written under another
+        #     name, since Loki would show the structured metadata as `thread_extracted` beside it.
         #   symbols: [true|false]
         #     Whether a label may have a name that is not a String, such as a Symbol that a
         #     subclass of the formatter written for v5.2 writes its own label under, as v5.2 did.
         #     The names are then written as Strings (see #string_names) before the first label is
         #     added, and as the labels are finished.
         #     Default: false, as the formatter's own methods write every label under a String.
-        def initialize(labels, loki_value, max_names, max_name_length, max_value_length, symbols: false)
+        def initialize(labels, loki_value, max_names, max_name_length, max_value_length, reserved:,
+                       symbols: false)
           @labels           = labels
           @loki_value       = loki_value
           @max_names        = max_names
           @max_name_length  = max_name_length
           @max_value_length = max_value_length
+          @reserved         = reserved
           @symbols          = symbols
           @unchecked        = symbols
           @renamed          = nil
@@ -74,8 +81,9 @@ module SemanticLogger
         # Loki rejects the whole push for a label name it does not accept (see LABEL_NAME), so such
         # a name is replaced (see #label_name_for). Loki keeps one value of a label name, so a label
         # whose name another label already has is written once when that label has the same value,
-        # as Loki stores it, and otherwise under another name. Both are written after the others,
-        # by #finish, so that the name they get is not one that a later label has as its own.
+        # as Loki stores it, and otherwise under another name, as is a label of a reserved name.
+        # These are written after the others, by #finish, so that the name they get is not one that
+        # a later label has as its own.
         def add(key, value)
           return if value.nil?
 
@@ -84,17 +92,18 @@ module SemanticLogger
           value = @loki_value.call(value)
           if !label_name?(name)
             (@renamed ||= []) << [label_name_for(name), value]
-          elsif !@labels.key?(name)
-            @labels[name] = value
-          else
+          elsif @labels.key?(name) || @reserved.include?(name)
             (@renamed ||= []) << [name, value]
+          else
+            @labels[name] = value
           end
         end
 
-        # Writes the labels whose names are taken or were replaced (see #add), after the others, so
-        # that a label written under its own name keeps it (see #write_renamed), and then takes out
-        # the labels past Loki's limits (see #limit). A label written under a Symbol since, as by a
-        # subclass of the formatter, is first written under a String (see #string_names).
+        # Writes the labels whose names are taken, reserved, or were replaced (see #add), after the
+        # others, so that a label written under its own name keeps it (see #write_renamed), and
+        # then takes out the labels past Loki's limits (see #limit). A label written under a
+        # Symbol since, as by a subclass of the formatter, is first written under a String (see
+        # #string_names).
         #
         # It can finish them again, after more labels were added (see #finished?).
         #
@@ -139,23 +148,24 @@ module SemanticLogger
           end
         end
 
-        # Writes the labels whose names are taken or were replaced (see #add) in two passes: first
-        # each whose name is free, and then each of the rest, under the name that Loki.free_name
-        # gives it, or not at all when the label of that name, or of a numbered name before it, has
-        # the same value (see #same_value?). So the number a label gets is never the name that
-        # another of them is written under, such as `host_2` for a named tag `host-2`, whatever the
-        # order of their keys. Only Loki.free_name compares the values, so that the value of each
-        # label a label is compared with is converted once.
+        # Writes the labels whose names are taken, reserved, or were replaced (see #add) in two
+        # passes: first each whose name is free, and then each of the rest, under the name that
+        # Loki.free_name gives it, which is never a reserved name, or not at all when the label of
+        # that name, or of a numbered name before it, has the same value (see #same_value?). So the
+        # number a label gets is never the name that another of them is written under, such as
+        # `host_2` for a named tag `host-2`, whatever the order of their keys. Only Loki.free_name
+        # compares the values, so that the value of each label a label is compared with is
+        # converted once.
         def write_renamed
           pending = @renamed.reject do |name, value|
-            next false if @labels.key?(name)
+            next false if @labels.key?(name) || @reserved.include?(name)
 
             @labels[name] = value
             true
           end
           @renamed = nil
           pending.each do |name, value|
-            name = Loki.free_name(@labels, name) { |held| same_value?(held, value) }
+            name = Loki.free_name(@labels, name, reserved: @reserved) { |held| same_value?(held, value) }
             @labels[name] = value if name
           end
         end

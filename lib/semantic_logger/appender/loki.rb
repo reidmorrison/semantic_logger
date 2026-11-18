@@ -6,8 +6,12 @@
 #     url: "https://logs-prod-001.grafana.net",
 #     username: "grafana_username",
 #     password: "grafana_token_here",
-#     compress: true
+#     compress: true,
+#     formatter: {loki: {structured_metadata: [:pid, :thread]}}
 #   )
+#
+# structured_metadata: needs a Loki that accepts structured metadata (see
+# SemanticLogger::Formatters::Loki#initialize).
 module SemanticLogger
   module Appender
     class Loki < SemanticLogger::Appender::Http
@@ -49,10 +53,12 @@ module SemanticLogger
       #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call and #batch, or a Proc, to be used to
       #     format the output from this appender.
-      #     A Hash sets the options of the Loki formatter, such as the label limits of a Loki that
-      #     raises them (see SemanticLogger::Formatters::Loki#initialize).
-      #     Example: {loki: {max_label_names_per_series: 30}}
-      #     Default: SemanticLogger::Formatters::Loki
+      #     A Hash sets the options of the Loki formatter, such as the labels to write as structured
+      #     metadata, or the label limits of a Loki that raises them (see
+      #     SemanticLogger::Formatters::Loki#initialize).
+      #     Example: {loki: {structured_metadata: [:pid, :thread]}}
+      #     Default: SemanticLogger::Formatters::Loki, which reports a deprecation warning without
+      #     structured_metadata:, since v6 writes pid and thread as structured metadata by default.
       def initialize(url: nil,
                      formatter: nil,
                      header: {"Content-Type" => "application/json"},

@@ -33,6 +33,9 @@ module SemanticLogger
       NOT_CLEANING = [Raw, Ecs, Logfmt, NewRelicLogs, SyslogCee, Loki, OpenTelemetry].freeze
 
       describe "backtrace_cleaner" do
+        # Loki is built without structured_metadata:, which keeps pid and thread as labels.
+        allow_deprecation(/The :loki formatter writes pid and thread as stream labels by default/)
+
         let(:logger) { MOCK_LOGGER.new("host", "app", "test", "BacktraceCleanerTest") }
 
         let(:exception) do

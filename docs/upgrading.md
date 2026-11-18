@@ -139,22 +139,28 @@ SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], met
 
 The `:loki` formatter writes the process id and the thread name as the stream labels `pid` and
 `thread`, so every process restart, and every thread, adds a Loki stream. Its new
-`pid_and_thread_labels: false` option writes them as structured metadata instead, as Loki advises,
-and v6 makes that the default. Nothing changes in v5.3 unless the option is set. To move them now,
-or to keep them as labels after v6:
+`structured_metadata:` option writes either or both as structured metadata instead, as Loki advises,
+and v6 writes both there by default. Until then, adding the `:loki` appender, or building its
+formatter, without `structured_metadata:` still writes them as labels, and reports a
+[deprecation warning](#seeing-deprecation-warnings). Pass it to choose:
 
 ~~~ruby
 # Write them as structured metadata, as v6 does by default:
 SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
-                            formatter: {loki: {pid_and_thread_labels: false}})
+                            formatter: {loki: {structured_metadata: [:pid, :thread]}})
 
 # Keep them as labels:
 SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
-                            formatter: {loki: {pid_and_thread_labels: true}})
+                            formatter: {loki: {structured_metadata: []}})
 ~~~
 
-As structured metadata, a query filters on them after the stream selector, and a payload key named
-`pid` or `thread` is written as `payload_pid` or `payload_thread`:
+Structured metadata needs a Loki with schema v13 and `allow_structured_metadata`, which is on by
+default since Loki 3.0. Any other Loki rejects every entry once `pid` is structured metadata, so
+keep them as labels until your Loki accepts it.
+
+As structured metadata, a query filters on them after the stream selector, a payload key named `pid`
+or `thread` is written as `payload_pid` or `payload_thread`, and a named tag or context key of that
+name as the label `pid_2` or `thread_2`:
 
 ```
 # Labels:
@@ -357,7 +363,7 @@ agent.
   SemanticLogger.add_appender(
     appender:  :loki,
     url:       "https://logs-prod-001.grafana.net",
-    formatter: {loki: {max_label_names_per_series: 30}}
+    formatter: {loki: {structured_metadata: [:pid, :thread], max_label_names_per_series: 30}}
   )
   ```
 

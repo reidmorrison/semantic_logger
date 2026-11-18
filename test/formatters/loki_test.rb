@@ -8,6 +8,10 @@ module SemanticLogger
       MOCK_LOGGER = Struct.new(:host, :application, :name, :environment)
 
       describe SemanticLogger::Formatters::Loki do
+        # The formatter is built without structured_metadata: in most tests, which keeps pid and
+        # thread as labels, with a deprecation warning that "structured_metadata:" asserts.
+        allow_deprecation(/The :loki formatter writes pid and thread as stream labels by default/)
+
         let(:log_time) { Time.utc(2017, 1, 14, 8, 32, 5.375276) }
         let(:level) { :debug }
         let(:thread_name) { "thread-#{Thread.current.object_id}" }
@@ -1271,6 +1275,25 @@ module SemanticLogger
                 assert_equal "db-1", streams[0]["stream"]["host_2"]
                 refute streams[1]["stream"].key?("host_2")
               end
+
+              # Its own #build_stream still writes the label pid, as v5.2's does.
+              it "writes the pid and the thread to the structured metadata of each entry that structured_metadata " \
+                 "names them for" do
+                formatter         = subclass.new(structured_metadata: %i[pid thread])
+                log.named_tags    = {:host => "db-1", "request-id" => "r1", :level => "warn", :thread => "named"}
+                other             = SemanticLogger::Log.new("LokiTest", :info)
+                other.thread_name = "worker-2"
+                output            = formatter.batch([log, other], logger)
+                streams           = JSON.parse(output, allow_duplicate_key: false)["streams"]
+
+                assert_equal(
+                  {"host_2" => "db-1", "request_id" => "r1", "level_2" => "warn", "thread_2" => "named"},
+                  streams[0]["stream"].slice("host_2", "request_id", "level_2", "thread", "thread_2")
+                )
+                refute streams[1]["stream"].key?("thread")
+                assert_equal({"pid" => Process.pid.to_s, "thread" => thread_name}, streams[0]["values"][0][2])
+                assert_equal({"pid" => Process.pid.to_s, "thread" => "worker-2"}, streams[1]["values"][0][2])
+              end
             end
 
             describe "whose #build_stream writes no structured metadata" do
@@ -1298,7 +1321,7 @@ module SemanticLogger
             end
 
             describe "whose #build_stream writes a copy of payload_value" do
-              let(:formatter) do
+              let(:subclass) do
                 Class.new(Loki) do
                   private
 
@@ -1312,14 +1335,23 @@ module SemanticLogger
                     stream[:values][0] << payload_value.merge("team" => "core")
                     stream
                   end
-                end.new(max_label_names_per_series: 3)
+                end
               end
+              let(:formatter) { subclass.new(max_label_names_per_series: 3) }
 
               it "writes the labels past Loki's limits to the copy, which the entry has" do
                 log.named_tags = {tenant: "acme", zone: "a"}
 
                 assert_equal({"pid" => Process.pid, "level" => "debug", "tenant" => "acme"}, output["stream"])
                 assert_equal({"team" => "core", "zone" => "a"}, output["values"][0][2])
+              end
+
+              it "writes the thread to the copy when structured_metadata names it" do
+                formatter = subclass.new(structured_metadata: [:thread])
+                output    = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
+
+                assert_equal({"team" => "core", "thread" => thread_name}, output["values"][0][2])
+                refute output["stream"].key?("thread")
               end
             end
 
@@ -1454,11 +1486,14 @@ module SemanticLogger
             end
           end
 
-          describe "with pid_and_thread_labels: false" do
-            let(:formatter) { Loki.new(pid_and_thread_labels: false) }
+          describe "structured_metadata:" do
+            let(:formatter) { Loki.new(structured_metadata: %i[pid thread]) }
             let(:output) { JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0] }
             let(:labels) { output["stream"] }
             let(:structured_metadata) { output["values"][0][2] }
+            let(:warning) do
+              "The :loki formatter writes pid and thread as stream labels by default, which changes in v6."
+            end
 
             it "writes the pid and the thread as structured metadata, as Strings, instead of as labels" do
               assert_equal %w[application environment host level], labels.keys
@@ -1469,6 +1504,68 @@ module SemanticLogger
               log.thread_name = nil
 
               assert_equal({"pid" => Process.pid.to_s}, structured_metadata)
+            end
+
+            it "writes only the pid as structured metadata with [:pid]" do
+              formatter = Loki.new(structured_metadata: [:pid])
+              output    = JSON.parse(formatter.call(log, logger))["streams"][0]
+
+              assert_equal thread_name, output["stream"]["thread"]
+              refute output["stream"].key?("pid")
+              assert_equal({"pid" => Process.pid.to_s}, output["values"][0][2])
+            end
+
+            it "writes only the thread as structured metadata with [:thread]" do
+              formatter = Loki.new(structured_metadata: [:thread])
+              output    = JSON.parse(formatter.call(log, logger))["streams"][0]
+
+              assert_equal Process.pid, output["stream"]["pid"]
+              refute output["stream"].key?("thread")
+              assert_equal({"thread" => thread_name}, output["values"][0][2])
+            end
+
+            it "keeps both as labels with [], without a warning" do
+              formatter = refute_deprecated { Loki.new(structured_metadata: []) }
+              output    = JSON.parse(formatter.call(log, logger))["streams"][0]
+
+              assert_equal [Process.pid, thread_name], output["stream"].values_at("pid", "thread")
+              assert_empty output["values"][0][2]
+            end
+
+            it "does not warn when it names them" do
+              formatter = refute_deprecated { Loki.new(structured_metadata: %i[thread pid pid]) }
+
+              assert_equal %i[pid thread], formatter.structured_metadata.sort
+            end
+
+            it "warns that v6 writes them as structured metadata when it is not supplied, and keeps them as labels" do
+              line      = __LINE__ + 2
+              pattern   = /loki_test\.rb:#{line}: warning: SemanticLogger: #{Regexp.escape(warning)} /
+              formatter = assert_deprecated(pattern) { Loki.new }
+
+              assert_empty formatter.structured_metadata
+              assert_equal Process.pid, JSON.parse(formatter.call(log, logger))["streams"][0]["stream"]["pid"]
+            end
+
+            it "warns when it is nil, as when it is not supplied" do
+              assert_deprecated(/#{Regexp.escape(warning)}/) { Loki.new(structured_metadata: nil) }
+            end
+
+            it "says in the warning that structured metadata needs a Loki that accepts it" do
+              requirement = "needs a Loki that accepts it (schema v13 with allow_structured_metadata, the default " \
+                            "since Loki 3.0)"
+              docs        = "appenders.html#pid-and-thread-as-structured-metadata"
+
+              assert_deprecated(/#{Regexp.escape(requirement)}.*#{Regexp.escape(docs)}/) { Loki.new }
+            end
+
+            it "raises ArgumentError, naming :pid and :thread, for anything else" do
+              [[:host], [:pid, "thread"], :pid, "pid", {pid: true}, [nil], true].each do |value|
+                error = assert_raises(ArgumentError) { Loki.new(structured_metadata: value) }
+
+                assert_equal "structured_metadata must be a list of :pid and :thread, not #{value.inspect}",
+                             error.message
+              end
             end
 
             it "prefixes a payload key named pid or thread, as the other keys named like its own" do
@@ -1486,6 +1583,16 @@ module SemanticLogger
               )
             end
 
+            it "prefixes a payload key named like pid only when the pid is structured metadata" do
+              formatter   = Loki.new(structured_metadata: [:thread])
+              log.payload = {"pid" => "1", "thread" => "worker"}
+
+              assert_equal(
+                {"pid" => "1", "payload_thread" => "worker", "thread" => thread_name},
+                JSON.parse(formatter.call(log, logger))["streams"][0]["values"][0][2]
+              )
+            end
+
             it "names every field that the formatter writes itself" do
               log.metric        = "my_metric"
               log.metric_amount = 3
@@ -1493,7 +1600,7 @@ module SemanticLogger
               log.duration      = 1.5
               set_exception
 
-              assert_equal (Loki::OWN_KEYS + Loki::PID_AND_THREAD_KEYS).sort, structured_metadata.keys.sort
+              assert_equal (Loki::OWN_KEYS + %w[pid thread]).sort, structured_metadata.keys.sort
             end
 
             it "leaves room for two more labels within Loki's limit" do
@@ -1501,6 +1608,39 @@ module SemanticLogger
 
               assert_equal 15, labels.size
               refute structured_metadata.key?("tag11")
+            end
+
+            # Loki would show the structured metadata as pid_extracted and thread_extracted beside a
+            # label of the same name.
+            it "numbers a named tag or context key named pid or thread, so that no label has that name" do
+              log.named_tags = {:thread => "named", "pid" => "1"}
+              log.context    = {:thread => "context", "thread_2" => "other"}
+
+              assert_equal(
+                {"thread_2" => "other", "thread_3" => "named", "pid_2" => "1", "thread_4" => "context"},
+                labels.slice("thread", "pid", "thread_2", "thread_3", "pid_2", "thread_4")
+              )
+              assert_equal({"pid" => Process.pid.to_s, "thread" => thread_name}, structured_metadata)
+            end
+
+            it "numbers a named tag named pid or thread even when it has the value of the structured metadata" do
+              log.named_tags = {"thread" => thread_name}
+
+              assert_equal thread_name, labels["thread_2"]
+              refute labels.key?("thread")
+            end
+
+            it "numbers a named tag whose name is replaced with pid or thread" do
+              log.named_tags = {
+                "\xFFthread".b.force_encoding(Encoding::UTF_8) => "a",
+                "\xFFpid".b.force_encoding(Encoding::UTF_8)    => "b",
+                "pid-"                                         => "c"
+              }
+
+              assert_equal(
+                {"thread_2" => "a", "pid_2" => "b", "pid_" => "c"},
+                labels.slice("thread", "thread_2", "pid", "pid_2", "pid_")
+              )
             end
           end
 
