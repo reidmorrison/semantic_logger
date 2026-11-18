@@ -55,6 +55,7 @@ destination can keep a different subset of the logs in a different format:
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
+| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, `:udp`, and `:open_telemetry`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
 
 For example, write only warnings and above to a file, formatted as JSON:
 
