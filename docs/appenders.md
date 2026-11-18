@@ -727,6 +727,29 @@ Set the URL, username, and password to match your Loki instance. Set `compress: 
 log messages. The ingestion path is appended to the url, so a query string on the url is kept and sent
 with every push.
 
+Each entry is a stream whose labels are `pid`, `host`, `application`, `environment`, `level`,
+`thread`, `tags` (as JSON), each named tag, and each value an `on_log` subscriber adds to the context.
+Its line is the message. Its structured metadata holds each payload key, and these fields when the
+entry has the value:
+
+| Field | Value |
+|-------|-------|
+| `metric`, `metric_value`, `dimensions` | The metric's name, its amount, and its dimensions as JSON. |
+| `duration`, `duration_human` | The duration in milliseconds, from the `measure_*` methods, and as text. |
+| `exception_name`, `exception_message` | The class and message of the logged exception. |
+| `stack_trace` | Its backtrace, followed by each exception that caused it. |
+
+Structured metadata holds only Strings, so a nested value in the payload is written as JSON, and any
+other value as its text. A payload key named like one of these fields is written with a `payload_`
+prefix, as in `payload_duration`, whether or not the entry has that field, so that logged data cannot
+replace them. Loki stores a name with characters other than ASCII letters and digits with each run of
+them replaced by `_`, so a key that it would store under one of these names, such as `metric.value`,
+is prefixed too, and written as Loki stores it: `payload_metric_value`. When another payload key has
+that name once Loki has stored it, the prefix is added again, as in `payload_payload_metric_value`,
+so that Loki keeps the value of each prefixed key. A key that is exactly one of these names gets the
+name with one prefix, so `payload_metric_value` always holds the payload's `metric_value`. Loki keeps
+only one value of other payload keys that it stores alike, such as `a.b` and `a_b`.
+
 ### CloudWatch Logs
 
 Forward all log entries to AWS CloudWatch Logs (requires the `aws-sdk-cloudwatchlogs` gem):

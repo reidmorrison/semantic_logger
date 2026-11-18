@@ -213,6 +213,19 @@ agent.
 
 #### Other behaviour changes
 
+* The `:loki` formatter now writes a payload key named like one of its own structured metadata
+  fields (`metric`, `metric_value`, `dimensions`, `duration`, `duration_human`, `exception_name`,
+  `exception_message`, and `stack_trace`), or that Loki stores under one of those names, such as
+  `metric.value`, with a `payload_` prefix, also in an entry without that field, and under the name
+  Loki stores it as, such as `payload_metric_value`. Before, Loki kept either the payload's value or
+  the formatter's. Update any query or alert on such a payload key:
+
+  ```
+  # Before:
+  {application="shop"} | duration="PT5S"
+  # After:
+  {application="shop"} | payload_duration="PT5S"
+  ```
 * The `:statsd` and `:new_relic` metric subscribers now record a metric that has `dimensions` under
   its name alone, leaving out the dimensions, which their clients do not accept. Before, they left
   such a metric out, so a counter or timer logged with dimensions can now show higher counts there.
