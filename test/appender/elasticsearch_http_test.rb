@@ -15,6 +15,10 @@ module Appender
         end
       end
 
+      it "refuses to be batched, and says to use the :elasticsearch appender" do
+        assert_includes appender.batch_refusal, "Use appender: :elasticsearch to send the entries in batches"
+      end
+
       it "logs to daily indexes" do
         index = nil
         appender.stub(:post, ->(_json, ind) { index = ind }) do

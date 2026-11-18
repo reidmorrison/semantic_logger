@@ -475,6 +475,11 @@ The formatter formats the whole batch with its `#batch(logs, logger)`, as the de
 formatter does. `add_appender` raises an `ArgumentError` for a formatter that cannot, such as a
 [formatter block](config.html#formatter-as-a-block-or-proc), given with `batch: true`.
 
+`:elasticsearch_http` cannot be batched, since Elasticsearch indexes a batch of entries only through
+its bulk API, and rejects a JSON array: `add_appender` raises an `ArgumentError` for it with
+`batch: true`. To send the entries in batches, use the [Elasticsearch appender](#elasticsearch),
+which sends them in bulk requests.
+
 With batching the appender runs on its own thread and flushes once `batch_size` entries have
 accumulated (default 300) or `batch_seconds` have elapsed (default 5), whichever comes first:
 

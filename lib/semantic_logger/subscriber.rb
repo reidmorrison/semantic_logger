@@ -117,7 +117,8 @@ module SemanticLogger
     # that a subclass that replaces it is batched as before. Appender::Http does, since its #batch
     # formats the whole batch with #format_batch, which needs a formatter that can, see
     # #format_batch_refusal. A subclass whose #batch calls super keeps that need, so it answers too,
-    # usually with #format_batch_refusal.
+    # usually with #format_batch_refusal. One that inherits a #batch that its destination rejects,
+    # whatever the formatter, such as Appender::ElasticsearchHttp, says why, and what to use instead.
     def batch_refusal
       nil
     end

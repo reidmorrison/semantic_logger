@@ -254,6 +254,25 @@ whole batch with `format_batch`, can now say why from `#batch_refusal`, so that 
 raises instead. So can a subclass of `SemanticLogger::Appender::Http` whose `#batch` calls `super`,
 which is not refused on its own. See [Custom appenders](config.html#custom-appenders).
 
+#### Batch Elasticsearch with the `:elasticsearch` appender
+
+`add_appender(appender: :elasticsearch_http, batch: true)` now raises `ArgumentError`. Batching it
+never wrote anything: it posted each batch as a JSON array to the url's own path, such as `/`, which
+Elasticsearch rejects, since it indexes a batch of entries only through its bulk API. Use the
+`:elasticsearch` appender, which sends its entries in bulk requests, a batch at a time by default,
+or add `:elasticsearch_http` without `batch: true`, to send each entry in its own request:
+
+~~~ruby
+# Before, nothing was ever indexed:
+SemanticLogger.add_appender(appender: :elasticsearch_http, url: "http://localhost:9200", batch: true)
+
+# After, in batches, through the bulk API (requires the elasticsearch gem):
+SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200")
+
+# Or one request for each entry:
+SemanticLogger.add_appender(appender: :elasticsearch_http, url: "http://localhost:9200")
+~~~
+
 #### Loki stack traces
 
 The `:loki` formatter now writes the `stack_trace` of a logged exception one frame per line, followed

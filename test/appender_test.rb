@@ -572,6 +572,31 @@ class AppenderTest < Minitest::Test
         end
       end
 
+      describe "batching an appender that says it cannot be batched" do
+        # Creates the appender without connecting to its server.
+        def factory(**, &)
+          Net::HTTP.stub_any_instance(:start, true) { SemanticLogger::Appender.factory(**, &) }
+        end
+
+        it "raises ArgumentError for :elasticsearch_http with batch: true, and says to use :elasticsearch" do
+          error = assert_raises(ArgumentError) do
+            factory(appender: :elasticsearch_http, url: "http://localhost:9200", batch: true)
+          end
+
+          assert_equal "add_appender cannot batch SemanticLogger::Appender::ElasticsearchHttp: Elasticsearch " \
+                       "indexes a batch of entries only through its bulk API, which this appender does not use. " \
+                       "Use appender: :elasticsearch to send the entries in batches, or add this appender " \
+                       "without batch: true.",
+                       error.message
+        end
+
+        it "adds :elasticsearch_http without batching it" do
+          added = factory(appender: :elasticsearch_http, url: "http://localhost:9200")
+
+          assert_instance_of SemanticLogger::Appender::ElasticsearchHttp, added
+        end
+      end
+
       describe "with async: true" do
         # A custom appender may define its own #logger, as the appender contract allows. The worker
         # thread reports to it, starting with a trace, so one that cannot take that must not stop it.

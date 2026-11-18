@@ -1907,6 +1907,15 @@ class FilteredHttp < SemanticLogger::Appender::Http
 end
 ~~~
 
+An appender that inherits a `#batch` that its destination rejects, whatever the formatter, returns a
+reason of its own from `#batch_refusal`:
+
+~~~ruby
+def batch_refusal
+  "the server takes one entry per request. Add it without batch: true."
+end
+~~~
+
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby
@@ -2498,6 +2507,11 @@ SemanticLogger.add_appender(appender: :http, url: "http://localhost:8088/path", 
 The formatter formats the whole batch with its `#batch(logs, logger)`, as the default `:json`
 formatter does. `add_appender` raises an `ArgumentError` for a formatter that cannot, such as a
 [formatter block](config.html#formatter-as-a-block-or-proc), given with `batch: true`.
+
+`:elasticsearch_http` cannot be batched, since Elasticsearch indexes a batch of entries only through
+its bulk API, and rejects a JSON array: `add_appender` raises an `ArgumentError` for it with
+`batch: true`. To send the entries in batches, use the [Elasticsearch appender](#elasticsearch),
+which sends them in bulk requests.
 
 With batching the appender runs on its own thread and flushes once `batch_size` entries have
 accumulated (default 300) or `batch_seconds` have elapsed (default 5), whichever comes first:
@@ -6429,6 +6443,25 @@ custom appender that cannot be batched in some configuration, such as one whose 
 whole batch with `format_batch`, can now say why from `#batch_refusal`, so that `add_appender`
 raises instead. So can a subclass of `SemanticLogger::Appender::Http` whose `#batch` calls `super`,
 which is not refused on its own. See [Custom appenders](config.html#custom-appenders).
+
+#### Batch Elasticsearch with the `:elasticsearch` appender
+
+`add_appender(appender: :elasticsearch_http, batch: true)` now raises `ArgumentError`. Batching it
+never wrote anything: it posted each batch as a JSON array to the url's own path, such as `/`, which
+Elasticsearch rejects, since it indexes a batch of entries only through its bulk API. Use the
+`:elasticsearch` appender, which sends its entries in bulk requests, a batch at a time by default,
+or add `:elasticsearch_http` without `batch: true`, to send each entry in its own request:
+
+~~~ruby
+# Before, nothing was ever indexed:
+SemanticLogger.add_appender(appender: :elasticsearch_http, url: "http://localhost:9200", batch: true)
+
+# After, in batches, through the bulk API (requires the elasticsearch gem):
+SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:9200")
+
+# Or one request for each entry:
+SemanticLogger.add_appender(appender: :elasticsearch_http, url: "http://localhost:9200")
+~~~
 
 #### Loki stack traces
 
