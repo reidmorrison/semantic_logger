@@ -579,7 +579,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   pass the exception after the message. The logger is now wrapped in an appender, which
   `Processor.logger` returns, and which writes each report to it as text, with the exception. The
   logger's own level decides which reports it writes, apart from the `:trace` reports, which are
-  below its lowest level, so are left out. The same goes for `SemanticLogger::SyncProcessor.logger=`.
+  below its lowest level, so are left out. A logger that logs at `:trace`, such as an appender, is
+  kept as it is. A `SemanticLogger::Logger`, which the comment rules out, now raises `ArgumentError`:
+  its reports of an appender that fails went back to that appender, failed again, and were reported
+  again, without end. The same goes for `SemanticLogger::SyncProcessor.logger=`.
 
 ## [5.2.0] 2026-10-30
 

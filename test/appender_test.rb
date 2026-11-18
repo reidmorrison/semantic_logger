@@ -288,6 +288,28 @@ class AppenderTest < Minitest::Test
         assert_nil SemanticLogger::Appender.internal_logger(nil)
       end
 
+      it "returns nil for false" do
+        assert_nil SemanticLogger::Appender.internal_logger(false)
+      end
+
+      it "raises for a SemanticLogger::Logger, which would log its reports back to the failing appender" do
+        error = assert_raises(ArgumentError) { SemanticLogger::Appender.internal_logger(SemanticLogger["Internal"]) }
+
+        assert_includes error.message, "A SemanticLogger::Logger cannot be the internal logger"
+      end
+
+      it "returns as it is a logger that logs at trace and takes an exception" do
+        custom = Class.new do
+          attr_accessor :name, :reports
+
+          SemanticLogger::LEVELS.each do |level|
+            define_method(level) { |message, exception = nil| (@reports ||= []) << [level, message, exception] }
+          end
+        end.new
+
+        assert_same custom, SemanticLogger::Appender.internal_logger(custom)
+      end
+
       describe "with a Ruby Logger" do
         let(:output) { StringIO.new }
         let(:ruby_logger) { ::Logger.new(output) }

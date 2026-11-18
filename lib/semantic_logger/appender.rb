@@ -146,14 +146,26 @@ module SemanticLogger
     #
     # An internal logger is named after whatever reports to it, logs at :trace, and takes an
     # exception after the message, as every Semantic Logger appender does. So an appender, such as the
-    # default IO appender, is returned as it is. Any other logger, such as a Ruby or Rails Logger,
-    # does none of that, so it is wrapped in a Wrapper appender, which writes each report to it as
-    # text, with the exception. Its own level then decides which reports it writes, apart from the
-    # :trace reports, which are below its lowest level, :debug, so are left out.
+    # default IO appender, or any other logger that logs at :trace, is returned as it is. Any other
+    # logger, such as a Ruby or Rails Logger, does none of that, so it is wrapped in a Wrapper
+    # appender, which writes each report to it as text, with the exception. Its own level then decides
+    # which reports it writes, apart from the :trace reports, which are below its lowest level, :debug,
+    # so are left out.
     #
-    # Returns nil for nil, which restores the default internal logger.
+    # Returns nil for nil or false, which restores the default internal logger.
+    #
+    # Raises ArgumentError for a SemanticLogger::Logger: it logs back into the processor, so the
+    # report of an appender that fails would go to that appender, fail again, and be reported again.
     def self.internal_logger(logger)
-      return logger if logger.nil? || logger.is_a?(SemanticLogger::Base)
+      return unless logger
+
+      if logger.is_a?(SemanticLogger::Logger)
+        raise(ArgumentError,
+              "A SemanticLogger::Logger cannot be the internal logger, since its reports of a failing " \
+              "appender would be logged to that appender. Use an appender, such as " \
+              "SemanticLogger::Appender::IO.new($stderr), or a Ruby Logger.")
+      end
+      return logger if logger.respond_to?(:trace)
 
       SemanticLogger::Appender::Wrapper.new(logger: logger, level: :debug)
     end

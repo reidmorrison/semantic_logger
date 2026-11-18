@@ -57,6 +57,24 @@ module SemanticLogger
           end
         end
 
+        it "restores the default for false" do
+          original = SemanticLogger::Processor.logger
+          begin
+            SemanticLogger::Processor.logger = false
+
+            assert_kind_of SemanticLogger::Appender::IO, SemanticLogger::Processor.logger
+          ensure
+            SemanticLogger::Processor.logger = original
+          end
+        end
+
+        it "refuses a SemanticLogger::Logger, keeping the internal logger" do
+          original = SemanticLogger::Processor.logger
+
+          assert_raises(ArgumentError) { SemanticLogger::Processor.logger = SemanticLogger["Internal"] }
+          assert_same original, SemanticLogger::Processor.logger
+        end
+
         describe "with a Ruby Logger" do
           let(:output) { StringIO.new }
           let(:ruby_logger) { ::Logger.new(output) }
