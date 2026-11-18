@@ -19,7 +19,7 @@ module SemanticLogger
       #     Access Token to use for sending metrics.
       #     Obtain the Signalfx token via the Signalfx Web UI under `Organization` -> `Access Tokens`.
       #
-      #   dimensions: [Array<String>]
+      #   dimensions: [Array<Symbol|String>]
       #     Dimensions to forward to signalfx when they are present, and not blank, in the named tags of
       #     any log message whose metric has no dimensions of its own. A metric logged with `dimensions:`
       #     is sent with those instead, so add the named tags it needs to them.

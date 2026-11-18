@@ -3382,11 +3382,12 @@ receives under one metric name, and most count each one as a metric of its own:
 * [Datadog](https://docs.datadoghq.com/account_management/billing/custom_metrics/) identifies a
   custom metric by its name together with its tag values, so each combination is billed as a
   custom metric.
-* [SignalFx](https://help.splunk.com/en/splunk-observability-cloud/manage-data/metrics-metadata-and-events/metrics-in-splunk-observability-cloud/get-started-with-metrics)
+* [SignalFx](https://help.splunk.com/en/splunk-observability-cloud/manage-data/metrics-metadata-and-events/metrics-events-and-metadata/get-started-with-metrics)
   (Splunk Observability Cloud) keeps a metric time series (MTS) for each combination of a metric
-  and its dimensions. The active ones count toward the
-  [limit](https://help.splunk.com/en/splunk-observability-cloud/administer/org-reference-info/per-product-system-limits-in-splunk-observability-cloud/infrastructure-system-limits)
-  that your subscription sets, beyond which data can be dropped.
+  and its dimensions. The active ones count toward a
+  [limit](https://help.splunk.com/en/splunk-observability-cloud/administer/org-reference-info/per-product-system-limits-in-splunk-observability-cloud/infrastructure-system-limits-details)
+  that your subscription sets, beyond which it refuses new time series without an error, so new
+  values stop being recorded.
 * [Google Cloud Monitoring](https://docs.cloud.google.com/monitoring/api/v3/metric-model#cardinality)
   keeps a time series for each combination of label values, and asks that the values of every
   label be constrained: no unique identifiers, user ids, IP addresses, timestamps, or URLs that
@@ -3396,10 +3397,15 @@ The combinations multiply: a metric with a `status` of 5 values, a `region` of 4
 can make up to 60 time series. Add a `user_id` dimension for 10,000 users, and the same metric can
 make up to 600,000, each one billed or counted against a limit.
 
-To find what happened to one user, order, or request, log its id with the entry instead, in the
-[payload](api.html#step-3-add-structured-data) or the
-[named tags](api.html#step-7-tag-related-entries), where a log appender stores it with that entry
-rather than as a metric of its own.
+The same holds for the metric name: never build it from an id, as in `"users/#{user.id}/fetch"`.
+Statsd and New Relic then record a new metric for every user, and SignalFx turns the parts of the
+name into `class` and `action` dimensions, a new time series for every user.
+
+To find what happened to one user, order, or request, log its id in the
+[payload](api.html#step-3-add-structured-data) of the entry instead, where a log appender stores
+it with that entry rather than as a metric of its own. Named tags are written with the entry too,
+except by the `:loki` appender, which makes each named tag a stream label: Loki keeps a stream for
+every combination of label values, so an id there has the same effect as an id in a dimension.
 
 ## Send metrics to a backend
 
