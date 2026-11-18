@@ -802,7 +802,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   the appenders have reopened, and can be called from a signal trap. An appender that cannot be
   reopened is reported by that thread, and carries on with what it had. `SemanticLogger.sync!` still
   reopens on the calling thread each appender without a thread of its own (added without `async:`
-  or batching). See
+  or batching). In a forked child, `SemanticLogger.remove_appender` first waits until that thread
+  has reopened the appenders, when it has not yet, so that the appender it removes is reopened before
+  it is closed, and closes only what the child built, as it did when the child reopened them in the
+  fork. Otherwise an appender of your own whose `#reopen` leaves the connection it inherited to the
+  parent, but whose `#close` does not, would close the parent's connection, which over TLS ends it
+  for the parent too. See
   [Process forking](https://logger.reidmorrison.com/operations.html#process-forking) and the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - The formatters no longer lose an entry when the `#message` of its exception raises, such as one
@@ -888,9 +893,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   reported to the internal logger as a warning. Closing the `:cloudwatch_logs` appender sends the entries it has
   buffered, which `SemanticLogger.remove_appender` dropped. See
   [Reopen manually](https://logger.reidmorrison.com/operations.html#reopen-manually).
-- Closing an appender in a forked child before it has reopened, such as when the child removes it
-  with `SemanticLogger.remove_appender` before the thread that writes its entries has reopened it,
-  closed the connection it inherited from the parent. Over TLS, that sent the server a
+- Closing an appender in a forked child before it has reopened, such as with
+  `SemanticLogger.reopen_on_fork = false`, closed the connection it inherited from the parent. Over TLS, that sent the server a
   `close_notify`, which ended the connection for the parent too. Now the `:http` appender and those
   built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and `metric: :signalfx`), `:tcp`,
   `:syslog` and `:graylog` over TCP, `:kafka`, and `:rabbitmq` leave it to the parent, as a reopen in

@@ -2427,6 +2427,62 @@ class QueueProcessorTest < Minitest::Test
         assert processor.flush, "the new worker thread should answer the flush"
         assert_equal 1, appender.events.count
       end
+
+      describe "#await_reopen" do
+        it "waits until the worker thread has reopened the appender, once asked to" do
+          processor = start
+          hold_worker(processor)
+          processor.reopen
+          waiter = Thread.new { processor.await_reopen }
+          Thread.pass until %w[sleep].include?(waiter.status) || !waiter.alive?
+          sleep 0.1
+
+          assert_predicate waiter, :alive?, "it should wait while the worker thread writes"
+          appender.gate << true
+
+          assert waiter.value, "the worker thread should answer"
+          assert_equal ["wait first", "reopen"], appender.history
+        end
+
+        it "returns at once, submitting nothing, when no reopen is pending" do
+          processor = start
+          processor.reopen
+          wait_for_reopen
+
+          processor.stub(:flush, -> { flunk "it should not submit a request" }) do
+            assert processor.await_reopen
+          end
+        end
+
+        describe "on the worker thread itself" do
+          # As it writes "wait first", once released, asks to wait for a reopen asked for meanwhile.
+          let(:appender) do
+            a = Class.new(ReopeningAppender) do
+              attr_accessor :processor, :awaited
+
+              def log(log)
+                super
+                self.awaited = processor.await_reopen if log.message == "wait first"
+              end
+            end.new
+            a.logger = internal_logger
+            a
+          end
+
+          it "returns false at once, rather than wait for itself" do
+            processor          = start
+            appender.processor = processor
+            hold_worker(processor)
+            processor.reopen
+            appender.gate << true
+
+            assert processor.flush, "the worker thread should answer the flush"
+            refute_nil appender.awaited, "it should have asked"
+            refute appender.awaited, "it should return false"
+            assert_equal ["wait first", "reopen"], appender.history
+          end
+        end
+      end
     end
 
     describe "batch processing" do

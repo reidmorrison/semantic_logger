@@ -46,6 +46,16 @@ module SemanticLogger
       @monitor.synchronize { @appenders.close }
     end
 
+    # Remove the appender from those that this processor writes to, and close it, once any log call
+    # writing to it has returned. Returns the result of closing it.
+    #
+    # The appenders are reopened on the calling thread (see #reopen), so none is ever waiting to be
+    # reopened when it is removed.
+    def remove(appender)
+      flush if appenders.delete(appender)
+      appender.close
+    end
+
     def reopen(*args)
       @monitor.synchronize { @appenders.reopen(*args) }
     end

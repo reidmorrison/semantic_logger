@@ -366,14 +366,15 @@ module SemanticLogger
   # messages already queued to the other appenders, and flushed them, as .flush does, so that none is
   # still being written to it when it is closed, such as a request on its connection that the
   # processor's thread is sending. On the processor's own thread, such as by an appender while it
-  # writes, it closes it at once, since nothing else writes to it then.
+  # writes, it closes it at once, since nothing else writes to it then. In a forked child, the
+  # appender is reopened first, when that has not happened yet, so that closing it closes only what
+  # the child built (see Processor#remove).
   #
   # Returns the result of closing the appender.
   def self.remove_appender(appender)
     return unless appender
 
-    Logger.processor.flush if appenders.delete(appender)
-    appender.close
+    Logger.processor.remove(appender)
   end
 
   # Clear out all previously registered appenders

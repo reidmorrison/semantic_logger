@@ -258,6 +258,20 @@ module SemanticLogger
       restart_worker
     end
 
+    # Wait until the worker thread has reopened the appender, when a reopen has been asked for (see
+    # #reopen) and it has not yet finished it, such as in a forked child whose worker thread has not
+    # yet written anything. Returns at once when none is pending, so that it costs nothing otherwise.
+    #
+    # The worker thread reopens the appender before it takes anything off the queue, so a flush
+    # submitted now runs after the reopen, and returns once it has (see #flush). Like #flush, it
+    # returns without waiting when called on the worker thread itself, or once that thread has
+    # stopped. Takes no lock, as #flush takes none, so that it can be called from a signal trap.
+    def await_reopen
+      return true unless @reopener.pending?
+
+      flush
+    end
+
     # After a fork, the queue holds the entries that the parent process had queued, which the
     # parent's worker thread writes, so the child starts again with an empty queue and a worker
     # thread of its own, rather than write them a second time. Does nothing in the process that
@@ -638,7 +652,7 @@ module SemanticLogger
     #
     # Returns false, without submitting it, when called on the worker thread itself, such as by an
     # appender that, as it writes, removes an appender, which flushes the processor first (see
-    # SemanticLogger.remove_appender): the worker thread cannot run the command while it waits for
+    # Processor#remove): the worker thread cannot run the command while it waits for
     # the reply, so it would wait forever.
     def submit_request(command)
       return false if !active? || @thread.equal?(Thread.current)

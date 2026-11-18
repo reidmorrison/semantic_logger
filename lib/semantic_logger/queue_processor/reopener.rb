@@ -11,15 +11,21 @@ module SemanticLogger
     # logger. Asked from any thread, and from a signal trap, so it records that on a Queue.
     class Reopener
       def initialize(appender, reporter)
-        @appender = appender
-        @reporter = reporter
-        @asked    = Queue.new
+        @appender  = appender
+        @reporter  = reporter
+        @asked     = Queue.new
+        @reopening = false
       end
 
       # Ask for the appender to be reopened before the worker thread writes again.
       def ask
         @asked << true
       end
+
+      # Returns [true|false] whether a reopen has been asked for and the worker thread has not yet
+      # finished it, including one that it is running. Reads only a Queue and a flag, so that it can
+      # be called from any thread, or a signal trap.
+      def pending? = @reopening || !@asked.empty?
 
       # Reopen the appender, if asked to since it was last reopened. Called by the worker thread,
       # between writes. A reopen that fails is reported rather than raised, whatever the exception,
@@ -33,12 +39,15 @@ module SemanticLogger
       def reopen_if_asked
         return if @asked.empty?
 
+        @reopening = true
         @asked.clear
         @appender.reopen if @appender.respond_to?(:reopen)
         nil
       rescue Exception => e
         @reporter.log(:error, "Async: Failed to reopen the appender", e)
         e if e.is_a?(SystemStackError)
+      ensure
+        @reopening = false
       end
     end
   end

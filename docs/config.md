@@ -1090,7 +1090,8 @@ does, until the messages already logged are written to the other appenders and t
 so that none is still being written to the appender when it closes it. Closing the appender closes
 its log file, or its connections to its server, and `:cloudwatch_logs` sends the entries it has
 buffered. In a forked child, closing an appender leaves the connections it inherited to the parent
-process (see [Process forking](operations.html#process-forking)).
+process, and `remove_appender` first lets the appenders reopen, when they have not yet, so that the
+appender closes only what the child built (see [Process forking](operations.html#process-forking)).
 
 Other appender management methods:
 
