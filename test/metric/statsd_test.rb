@@ -47,27 +47,88 @@ module Metric
         end
 
         it "accepts a custom url" do
-          assert_equal "udp://example.com:9125", SemanticLogger::Metric::Statsd.new(url: "udp://example.com:9125").url
+          assert_equal "udp://127.0.0.1:9125", SemanticLogger::Metric::Statsd.new(url: "udp://127.0.0.1:9125").url
         end
-      end
 
-      describe "#reopen" do
         it "raises when the scheme is not udp" do
-          subscriber = SemanticLogger::Metric::Statsd.new(url: "tcp://localhost:8125")
-          assert_raises(RuntimeError) { subscriber.reopen }
+          assert_raises(RuntimeError) { SemanticLogger::Metric::Statsd.new(url: "tcp://127.0.0.1:8125") }
+        end
+
+        it "connects to an IPv6 address without its brackets" do
+          hosts = []
+          ::Statsd.stub(:new, lambda { |host, _port|
+            hosts << host
+            FakeStatsd.new
+          }) do
+            SemanticLogger::Metric::Statsd.new(url: "udp://[::1]:8125")
+          end
+
+          assert_equal ["::1"], hosts
+        end
+
+        it "connects, so that it records metrics without a reopen" do
+          counts = []
+          ::Statsd.stub_any_instance(:count, ->(metric, amount) { counts << [metric, amount] }) do
+            subscriber = SemanticLogger::Metric::Statsd.new
+            subscriber.info(metric: "user/login")
+          end
+
+          assert_equal [["user/login", 1]], counts
         end
 
         it "sets the namespace from the url path" do
-          subscriber = SemanticLogger::Metric::Statsd.new(url: "udp://localhost:8125/my_app")
-          subscriber.reopen
+          subscriber = SemanticLogger::Metric::Statsd.new(url: "udp://127.0.0.1:8125/my_app")
 
           assert_equal "my_app", subscriber.instance_variable_get(:@statsd).namespace
         end
 
         it "leaves the namespace unset when no path is supplied" do
           subscriber = SemanticLogger::Metric::Statsd.new
+
+          assert_nil subscriber.instance_variable_get(:@statsd).namespace
+        end
+      end
+
+      describe "#reopen" do
+        let(:subscriber) { SemanticLogger::Metric::Statsd.new(url: "udp://127.0.0.1:8125/my_app") }
+        let(:client) { subscriber.instance_variable_get(:@statsd) }
+
+        it "reconnects the client, which closes the socket it had" do
+          connected = false
+          client.stub(:connect, -> { connected = true }) { subscriber.reopen }
+
+          assert connected
+          assert_same client, subscriber.instance_variable_get(:@statsd)
+        end
+
+        it "reconnects the client to a new host and port, and namespace" do
+          old_client     = client
+          subscriber.url = "udp://127.0.0.2:9999/other_app"
           subscriber.reopen
 
+          assert_same old_client, subscriber.instance_variable_get(:@statsd)
+          assert_equal "127.0.0.2", old_client.host
+          assert_equal 9999, old_client.port
+          assert_equal "other_app", old_client.namespace
+        end
+
+        it "leaves the client connected when the host cannot be resolved" do
+          connected = false
+          client.stub(:connect, -> { connected = true }) do
+            Addrinfo.stub(:ip, ->(_host) { raise SocketError, "getaddrinfo: no such host" }) do
+              assert_raises(SocketError) { subscriber.reopen }
+            end
+          end
+
+          refute connected
+        end
+
+        it "creates a new client when the url drops the namespace" do
+          old_client     = client
+          subscriber.url = "udp://127.0.0.1:8125"
+          subscriber.reopen
+
+          refute_same old_client, subscriber.instance_variable_get(:@statsd)
           assert_nil subscriber.instance_variable_get(:@statsd).namespace
         end
       end

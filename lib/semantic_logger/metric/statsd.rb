@@ -29,15 +29,31 @@ module SemanticLogger
       def initialize(url: "udp://localhost:8125")
         @url = url
         super()
+        reopen
       end
 
+      # Creates the Statsd client, or reconnects it, such as in a forked process, which closes the socket that the
+      # client had, rather than leaving it open. The host is resolved first, so that a failure to resolve it leaves the
+      # client connected as it was. Only a url that drops the namespace creates a new client, since a client cannot be
+      # given back no namespace, which leaves the old client's socket for garbage collection to close.
       def reopen
         uri = Utils.parse_url(@url)
         raise('Statsd only supports udp. Example: "udp://localhost:8125"') if uri.scheme != "udp"
 
-        @statsd           = ::Statsd.new(uri.host, uri.port)
-        path              = uri.path.chomp("/")
-        @statsd.namespace = path.sub("/", "") if path != ""
+        # The host without the brackets of an IPv6 address.
+        host      = uri.hostname
+        path      = uri.path.chomp("/")
+        namespace = path.sub("/", "") unless path == ""
+        if @statsd && (namespace || @statsd.namespace.nil?)
+          Addrinfo.ip(host)
+          @statsd.host      = host
+          @statsd.port      = uri.port
+          @statsd.namespace = namespace if namespace
+          @statsd.connect
+        else
+          @statsd           = ::Statsd.new(host, uri.port)
+          @statsd.namespace = namespace if namespace
+        end
       end
 
       def log(log)
