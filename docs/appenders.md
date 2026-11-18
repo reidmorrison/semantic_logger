@@ -279,10 +279,12 @@ Notes:
 * The layout above is formatted for readability. The real output is a single line terminated by one
   newline, with no embedded newlines.
 * A field with a `nil` value is excluded from the output.
-* An exception, and each exception that caused it, is named by its class's `name`, or for an
-  anonymous class by the class as Ruby writes it, such as `#<Class:0x000...>`, as every formatter
-  names it. Its `message` is always a String: when the exception's `#message` raises, such as one
-  that reads a record that is nil, the message it was raised with is written instead.
+* An exception, and each exception that caused it, is named as Ruby names its class in
+  `Exception#inspect`, as every formatter names it: by the constant the class was assigned to, even
+  when the class overrides `self.name`, or for an anonymous class by the class as Ruby writes it,
+  such as `#<Class:0x000...>`. Its `message` is always a String: when the exception's `#message`
+  raises, such as one that reads a record that is nil, the message it was raised with is written
+  instead.
 * To also log the detail Ruby adds to an exception's message, such as did_you_mean suggestions, as
   `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
   See [Exception details](config.html#exception-details).

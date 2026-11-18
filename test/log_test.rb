@@ -4,6 +4,10 @@ module SemanticLogger
   class LogTest < Minitest::Test
     include ExceptionFixtures
 
+    # An exception class named outside ASCII, in UTF-8: Ruby names a class by the constant it is
+    # assigned to, in that constant's encoding (see ExceptionFixtures::ISO_8859_1_NAMED_ERROR).
+    UTF8_NAMED_ERROR = const_set("Größe", Class.new(StandardError))
+
     describe SemanticLogger::Log do
       let(:log) do
         SemanticLogger::Log.new("LogTest", :info)
@@ -136,14 +140,31 @@ module SemanticLogger
               assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: IOError: disk full", log.message
             end
 
-            it "names a class without a constant as it names itself, as the formatters do" do
-              error_class = Class.new(StandardError) { def self.name = "PaymentError" }
-              exception   = raise_with_cause(error_class.new("declined"))
-              exception   = raise_with_cause(exception, error_class.new("card failed"))
+            it "names a class that names itself otherwise as Ruby names it, as the formatters do" do
+              exception = raise_with_cause(OtherwiseNamedError.new("declined"))
+              exception = raise_with_cause(exception, OtherwiseNamedError.new("card failed"))
               log.assign(message: "Boom", exception: exception, log_exception: :partial)
 
-              assert_equal "Boom -- Exception: PaymentError: card failed -- Cause: RuntimeError: save failed " \
-                           "-- Cause: PaymentError: declined", log.message
+              assert_equal "Boom -- Exception: ExceptionFixtures::OtherwiseNamedError: card failed -- Cause: " \
+                           "RuntimeError: save failed -- Cause: ExceptionFixtures::OtherwiseNamedError: declined",
+                           log.message
+            end
+
+            it "leaves out the message of a cause raised without one, when its class names itself otherwise" do
+              log.assign(message: "Boom", exception: raise_with_cause(OtherwiseNamedError), log_exception: :partial)
+
+              assert_equal "Boom -- Exception: RuntimeError: save failed -- Cause: ExceptionFixtures::OtherwiseNamedError",
+                           log.message
+            end
+
+            it "names an exception, and a cause, whose class raises when asked for its name" do
+              exception = raise_with_cause(UnnameableError.new("declined"))
+              exception = raise_with_cause(exception, UnnameableError.new("card failed"))
+
+              assert log.assign(message: "Boom", exception: exception, log_exception: :partial)
+              assert_equal "Boom -- Exception: ExceptionFixtures::UnnameableError: card failed -- Cause: " \
+                           "RuntimeError: save failed -- Cause: ExceptionFixtures::UnnameableError: declined",
+                           log.message
             end
 
             it "folds the causes in order" do
@@ -298,11 +319,9 @@ module SemanticLogger
           end
 
           it "folds an exception class name in another encoding into a UTF-8 message when log_exception is :partial" do
-            klass = Class.new(StandardError)
-            klass.define_singleton_method(:to_s) { "Fehl\xC4r".dup.force_encoding(Encoding::ISO_8859_1) }
-            log.assign(message: "Grüße", exception: klass.new("kaputt"), log_exception: :partial)
+            log.assign(message: "Grüße", exception: ISO_8859_1_NAMED_ERROR.new("kaputt"), log_exception: :partial)
 
-            assert_equal "Grüße -- Exception: FehlÄr: kaputt", log.message
+            assert_equal "Grüße -- Exception: ExceptionFixtures::FehlÄr: kaputt", log.message
           end
 
           it "ignores the exception when log_exception is :none" do
@@ -872,10 +891,9 @@ module SemanticLogger
           end
 
           it "joins a cause's binary message with its class's UTF-8 name" do
-            named         = Class.new(StandardError) { def self.name = "Bestellung::Größe" }
-            log.exception = chained("top", %w[t1], named.new("Grüße ☕".b))
+            log.exception = chained("top", %w[t1], UTF8_NAMED_ERROR.new("Grüße ☕".b))
 
-            assert_equal "t1\nCause: Bestellung::Größe: Grüße ☕", log.backtrace_to_s
+            assert_equal "t1\nCause: SemanticLogger::LogTest::Größe: Grüße ☕", log.backtrace_to_s
           end
 
           it "joins backtrace lines in encodings that cannot be joined as they are" do

@@ -166,10 +166,25 @@ module SemanticLogger
           assert_match(/\A#<Class:0x\h+>\z/, SemanticLogger::Utils.exception_name(error_class.new))
         end
 
-        it "returns the name that a class without a constant gives itself" do
-          error_class = Class.new(StandardError) { def self.name = "PaymentError" }
+        it "names a class that names itself otherwise as Ruby names it, as Exception#inspect does" do
+          [OtherwiseNamedError, Class.new(StandardError) { def self.name = "PaymentError" }].each do |error_class|
+            error = error_class.new("declined")
 
-          assert_equal "PaymentError", SemanticLogger::Utils.exception_name(error_class.new)
+            assert_equal "#<#{SemanticLogger::Utils.exception_name(error)}: declined>", error.inspect
+          end
+
+          assert_equal "ExceptionFixtures::OtherwiseNamedError", SemanticLogger::Utils.exception_name(OtherwiseNamedError.new)
+        end
+
+        it "does not ask a class for its name, which can raise" do
+          assert_equal "ExceptionFixtures::UnnameableError", SemanticLogger::Utils.exception_name(UnnameableError.new)
+        end
+
+        it "returns the name in UTF-8, whatever the encoding of the class's constant" do
+          name = SemanticLogger::Utils.exception_name(ISO_8859_1_NAMED_ERROR.new)
+
+          assert_equal "ExceptionFixtures::FehlÄr", name
+          assert_equal Encoding::UTF_8, name.encoding
         end
       end
 

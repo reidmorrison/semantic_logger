@@ -131,12 +131,16 @@ module SemanticLogger
     # Whether this path should be excluded from any cleansed backtrace
     def self.strip_path?(path) = strip_paths.any? { |exclude| path.start_with?(exclude) }
 
-    # Returns [String] the name to write for the exception's class: the class's name, which a class
-    # without a constant can give itself with `def self.name`, or, for an anonymous class, which has
-    # none, the class as Ruby writes it, such as `#<Class:0x000...>`. Every place that writes an
-    # exception's class asks this, as it asks .exception_message for its message, so that they all
-    # name it alike.
-    def self.exception_name(exception) = (exception.class.name || exception.class).to_s
+    # Returns [String] the name of the exception's class as Ruby names it, as in Exception#inspect and
+    # #full_message: the constant it was assigned to, such as "Net::ReadTimeout", or, for an
+    # anonymous class, which has none, the class as Ruby writes it, such as `#<Class:0x000...>`. It is
+    # in UTF-8, whatever the constant's encoding, such as ISO-8859-1, so that it joins with UTF-8 text.
+    # Every place that writes an exception's class asks this, so that they all name it alike.
+    #
+    # Never runs the class's own code, which can override self.name, self.to_s, or self.inspect with
+    # code that raises, or that names the class otherwise. Module's own #to_s, bound to the class,
+    # returns what Module#name returns when the class has a name, and the class written out when not.
+    def self.exception_name(exception) = encode_utf8_string(Module.instance_method(:to_s).bind_call(exception.class))
 
     # Returns [String] the exception's message, without raising the error that its #message raises.
     #
@@ -193,9 +197,7 @@ module SemanticLogger
     #
     # The retry is attempted only once: if it still fails (for example an object whose
     # own #to_json raises), the error propagates unchanged rather than being swallowed.
-    def self.to_json(value)
-      clean_json(value) || json_safe(value).to_json
-    end
+    def self.to_json(value) = clean_json(value) || json_safe(value).to_json
 
     # Returns the value when JSON writes it as it is, otherwise a .json_safe copy, for a writer
     # that serializes the value itself, such as GELF. The check costs one #to_json; only the

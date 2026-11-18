@@ -230,7 +230,7 @@ module SemanticLogger
       formatted = formatter.call(log, self)
       block_given? ? yield(formatted) : formatted
     rescue StandardError, ScriptError => e
-      raise FormatError, "Could not format the log message (#{e.class})"
+      raise FormatError, "Could not format the log message (#{Utils.exception_name(e)})"
     end
 
     # Returns the log messages formatted by the formatter's #batch, as for #format_log.
@@ -251,7 +251,7 @@ module SemanticLogger
       begin
         batch_formatter.batch(logs, self)
       rescue StandardError, ScriptError => e
-        raise FormatError, "Could not format the batch of log messages (#{e.class})"
+        raise FormatError, "Could not format the batch of log messages (#{Utils.exception_name(e)})"
       end
     end
 

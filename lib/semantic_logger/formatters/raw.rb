@@ -95,9 +95,9 @@ module SemanticLogger
       # Exception, with the stack trace of each exception cleaned by the backtrace cleaner (see
       # Base#initialize).
       #
-      # Each exception is named as Utils.exception_name names it, as every formatter does: by its
-      # class's name, or by the class itself for an anonymous class, which has none, such as
-      # `#<Class:0x000...>`. Its message is read with Utils.exception_message, so that a #message
+      # Each exception is named as Utils.exception_name names it, as every formatter does: as Ruby
+      # names its class, without asking the class, such as `#<Class:0x000...>` for an anonymous class,
+      # which has no name. Its message is read with Utils.exception_message, so that a #message
       # that raises, or does not return a String, cannot lose the entry.
       def exception
         return unless log.exception

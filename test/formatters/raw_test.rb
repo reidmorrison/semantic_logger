@@ -312,6 +312,21 @@ module SemanticLogger
             assert_equal inner.to_s, formatter.hash[:exception][:cause][:name]
           end
 
+          it "names an exception, and a cause, whose class names itself otherwise, or raises, as Ruby names it" do
+            begin
+              begin
+                raise ExceptionFixtures::UnnameableError, "the cause"
+              rescue ExceptionFixtures::UnnameableError
+                raise ExceptionFixtures::OtherwiseNamedError, "the effect"
+              end
+            rescue ExceptionFixtures::OtherwiseNamedError => e
+              log.exception = e
+            end
+
+            assert_equal "ExceptionFixtures::OtherwiseNamedError", formatter.hash[:exception][:name]
+            assert_equal "ExceptionFixtures::UnnameableError", formatter.hash[:exception][:cause][:name]
+          end
+
           it "is omitted without an exception" do
             refute formatter.hash.key?(:exception)
           end

@@ -89,7 +89,9 @@ module SemanticLogger
       copy.message
       copy
     rescue StandardError
-      plain = RuntimeError.new("#{Utils.exception_name(exception)}: #{Utils.exception_message(exception)}")
+      # Joined whatever their encodings, such as a UTF-8 class name and an ISO-8859-1 message.
+      message = Utils.join_texts(Utils.exception_name(exception), ": ", Utils.exception_message(exception))
+      plain   = RuntimeError.new(message)
       plain.set_backtrace(exception.backtrace || [])
       with_cause(plain, exception.cause, depth)
     end

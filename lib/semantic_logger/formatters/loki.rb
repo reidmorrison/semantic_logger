@@ -404,9 +404,10 @@ module SemanticLogger
       # The stack trace is one line per frame, followed by each exception that caused it, as the
       # text formatters write it.
       #
-      # The name and message are Strings too: the class's name, or, for an anonymous class, which
-      # has none, the class as the text formatters write it, such as `#<Class:0x000...>`. A
-      # #message that returns nil, or raises, is replaced as Utils.exception_message replaces it.
+      # The exception is named as Utils.exception_name names it, as every formatter does: as Ruby
+      # names its class, without asking the class, such as `#<Class:0x000...>` for an anonymous class,
+      # which has no name. Its message is read with Utils.exception_message, so that a #message that
+      # raises, or does not return a String, cannot lose the entry.
       def exception
         return unless log.exception
 

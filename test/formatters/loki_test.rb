@@ -728,14 +728,16 @@ module SemanticLogger
             assert_equal "RuntimeError", payload_obj["exception_name"]
           end
 
-          it "names an exception by its class's name, as :json does, rather than the class's #to_s" do
-            error_class = Class.new(StandardError) do
-              def self.name = "Payments::Declined"
-              def self.to_s = "custom"
-            end
-            log.exception = error_class.new("Declined")
+          it "names an exception as Ruby names its class, as :json does, without asking the class" do
+            {
+              ExceptionFixtures::OtherwiseNamedError => "ExceptionFixtures::OtherwiseNamedError",
+              ExceptionFixtures::UnnameableError     => "ExceptionFixtures::UnnameableError"
+            }.each_pair do |error_class, name|
+              log.exception = error_class.new("Declined")
+              metadata      = JSON.parse(formatter.call(log, logger))["streams"].first["values"].first[2]
 
-            assert_equal "Payments::Declined", values_data[2]["exception_name"]
+              assert_equal name, metadata["exception_name"]
+            end
           end
 
           it "names an exception of an anonymous class as the text formatters do" do

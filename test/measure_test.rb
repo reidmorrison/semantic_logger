@@ -144,6 +144,17 @@ class MeasureTest < Minitest::Test
                          "-- Cause: ExceptionFixtures::BrokenMessageError: Order 7", log.message
           end
 
+          it ":partial re-raises an exception whose class raises when asked for its name" do
+            assert_raises UnnameableError do
+              appender.send(measure_level, "hello world", log_exception: :partial) do
+                raise UnnameableError, "Order 7"
+              end
+            end
+
+            assert log = appender.events.first
+            assert_equal "hello world -- Exception: ExceptionFixtures::UnnameableError: Order 7", log.message
+          end
+
           it ":none" do
             assert_raises RuntimeError do
               appender.send(measure_level, "hello world", log_exception: :none) { raise "Test" }

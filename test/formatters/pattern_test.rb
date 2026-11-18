@@ -115,10 +115,14 @@ module SemanticLogger
                          formatted("%{exception_class}: %{exception_message}")
           end
 
-          it "interpolates the class of an exception without a constant as it names itself" do
-            log.exception = Class.new(StandardError) { def self.name = "PaymentError" }.new("declined")
+          it "interpolates the class of an exception that names itself otherwise, or raises, as Ruby names it" do
+            log.exception = ExceptionFixtures::OtherwiseNamedError.new("declined")
 
-            assert_equal "PaymentError", formatted("%{exception_class}")
+            assert_equal "ExceptionFixtures::OtherwiseNamedError", formatted("%{exception_class}")
+
+            log.exception = ExceptionFixtures::UnnameableError.new("declined")
+
+            assert_equal "ExceptionFixtures::UnnameableError", formatted("%{exception_class}")
           end
 
           it "interpolates the exception backtrace" do
@@ -442,6 +446,14 @@ module SemanticLogger
             assert_utf8 output
             assert_equal "Café -- ArgumentError: Grüße ☕", output.lines.first.chomp
             assert_includes output, "\nCause: RuntimeError: Grüße ☕\n"
+          end
+
+          it "writes the ISO-8859-1 name of an exception's class with its UTF-8 message" do
+            log.exception = ExceptionFixtures::ISO_8859_1_NAMED_ERROR.new("Größe ungültig")
+            output        = formatted("%{exception_class}: %{exception_message}")
+
+            assert_utf8 output
+            assert_equal "ExceptionFixtures::FehlÄr: Größe ungültig", output
           end
 
           it "writes a pattern in another encoding with a message in that encoding" do

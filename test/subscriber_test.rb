@@ -289,6 +289,20 @@ class SubscriberTest < Minitest::Test
         end
       end
 
+      it "names the formatter's error by its class as Ruby names it, even one that names itself otherwise, or raises" do
+        {
+          ExceptionFixtures::OtherwiseNamedError => "ExceptionFixtures::OtherwiseNamedError",
+          ExceptionFixtures::UnnameableError     => "ExceptionFixtures::UnnameableError"
+        }.each_pair do |error_class, name|
+          appender.instance_variable_set(:@formatter, formatter_raising(error_class.new("declined")))
+          one   = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.send(:format_log, log) }
+          batch = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.send(:format_batch, [log]) }
+
+          assert_equal "Could not format the log message (#{name})", one.message
+          assert_equal "Could not format the batch of log messages (#{name})", batch.message
+        end
+      end
+
       it "raises a stack overflow as it is, so that rescuing StandardError cannot swallow it" do
         error = SystemStackError.new("stack level too deep")
         appender.instance_variable_set(:@formatter, formatter_raising(error))

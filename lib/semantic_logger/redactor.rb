@@ -300,7 +300,7 @@ module SemanticLogger
     def report(exception)
       where = exception.backtrace&.first
       Logger.processor.logger.warn(
-        "Redacting sensitive keys raised #{exception.class.inspect}" \
+        "Redacting sensitive keys raised #{Utils.exception_name(exception)}" \
         "#{" (#{where})" if where}, so the value was replaced with :redaction_failed"
       )
     rescue StandardError

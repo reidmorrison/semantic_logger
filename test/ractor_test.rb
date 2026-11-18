@@ -64,6 +64,18 @@ module SemanticLogger
       end
     end
 
+    # An exception that cannot be copied to another Ractor, whose message needs its other data, and
+    # whose class is named outside ASCII, in UTF-8, by the constant it is assigned to first.
+    UTF8_NAMED_ERROR = const_set("FehlerGröße", Class.new(StandardError))
+    UTF8_NAMED_ERROR.class_eval do
+      def initialize(message)
+        super
+        @callback = -> { "code 7" }
+      end
+
+      def message = "#{super} (#{@callback.call})"
+    end
+
     describe "Logging from a Ractor" do
       # Only the entries from the tests' loggers, not those of the test reporter.
       let(:collector) { Collector.new(level: :trace, filter: /\A(InRactor|SemanticLogger::RactorTest)/) }
@@ -171,6 +183,17 @@ module SemanticLogger
 
         assert_instance_of RuntimeError, log.exception
         assert_match(/\A#<Class:0x\h+>: needs its callback \(code 7\)\z/, log.exception.message)
+      end
+
+      it "names a class outside ASCII with a message in another encoding, for an exception that cannot be copied" do
+        log = logs_from_ractor do
+          raise SemanticLogger::RactorTest::UTF8_NAMED_ERROR, "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+        rescue SemanticLogger::RactorTest::UTF8_NAMED_ERROR => e
+          SemanticLogger["InRactor"].error("Failed", e)
+        end.first
+
+        assert_instance_of RuntimeError, log.exception
+        assert_equal "SemanticLogger::RactorTest::FehlerGröße: Grüße (code 7)", log.exception.message
       end
 
       it "keeps the instance variables that the message of an exception that cannot be copied needs" do

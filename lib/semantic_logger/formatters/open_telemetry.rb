@@ -150,8 +150,8 @@ module SemanticLogger
       # With `log_exception_details`, the message is followed by the detail Ruby adds to it, on a
       # line of its own, as in Exception#detailed_message.
       #
-      # The type is the class as Utils.exception_name names it, as every formatter does: its name, or
-      # the class itself for an anonymous class, which has none, such as `#<Class:0x000...>`. The
+      # The type is the class as Utils.exception_name names it, as every formatter does: as Ruby names
+      # it, without asking the class, such as `#<Class:0x000...>` for an anonymous class. The
       # message is read with Utils.exception_message, so that a #message that raises, or does not
       # return a String, cannot lose the entry.
       def add_exception(attributes)

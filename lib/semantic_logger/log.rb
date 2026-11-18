@@ -155,7 +155,7 @@ module SemanticLogger
         when :partial
           # The class and message of the exception, then of each exception that caused it: the same
           # exceptions that :full writes (see #backtrace_to_s).
-          self.message = Utils.join_texts(with_class(" -- Exception: ", exception), ": ", message_of(exception))
+          self.message = with_class(" -- Exception: ", exception, ": ", message_of(exception))
           each_exception(exception) { |ex, depth| self.message = with_cause(ex) unless depth.zero? }
         when nil, :none
           # Log the message without the exception that was raised
@@ -350,11 +350,11 @@ module SemanticLogger
     # the text on the line after its own.
     #
     # Never raises because of what it writes: each cause is named as Utils.exception_name names it,
-    # by its class's name, or by the class itself for an anonymous class, which has none, such as
-    # `#<Class:0x000...>`; its message is read as Utils.exception_message reads it, so that a
-    # #message that raises, or does not return a String, cannot make it raise, nor pass the block
-    # anything but a String; and the lines are joined as Utils.join_lines joins them, whatever their
-    # encodings.
+    # as Ruby names its class, without asking the class, such as `#<Class:0x000...>` for an anonymous
+    # class, which has no name; its message is read as Utils.exception_message reads it, so
+    # that a #message that raises, or does not return a String, cannot make it raise, nor pass the
+    # block anything but a String; and the lines are joined as Utils.join_lines joins them, whatever
+    # their encodings.
     #
     # Example:
     #   log.backtrace_to_s { |text| text.gsub("\n", "\\n") }
@@ -561,8 +561,9 @@ module SemanticLogger
     def message_of(exception) = Utils.exception_message(exception)
 
     # Returns [String] this entry's message, as log_exception: :partial writes it, followed by the
-    # label and the class of the exception, named as Utils.exception_name names it.
-    def with_class(label, exception) = Utils.join_texts(message, label, Utils.exception_name(exception))
+    # label, the class of the exception, named as Utils.exception_name names it, and any more texts,
+    # joined once.
+    def with_class(label, exception, *more) = Utils.join_texts(message, label, Utils.exception_name(exception), *more)
 
     # Returns [String] this entry's message, as log_exception: :partial writes it, followed by the
     # class of an exception that caused the logged one, then its message (see #with_cause_message).
