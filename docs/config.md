@@ -910,6 +910,22 @@ def message_error?(exception)
 end
 ~~~
 
+Any other error is the destination's, and discards the message (or the batch) by default, since
+the write may have stored some or all of it. When the write that raised it cannot have stored any of
+the messages, such as when the appender could not connect, or the destination answered that it did
+not accept them, return `true` from `#wrote_nothing?(exception)`. The worker thread then writes the
+same message, or batch, again once it has backed off, until it is written or the thread gives up
+after `async_max_retries`. Keep the default, `false`, whenever the destination may have stored them,
+such as when its answer timed out, since writing them again would store them twice. While a flush or
+close is waiting, the message or batch is discarded either way, so that the flush does not wait out
+the back-offs:
+
+~~~ruby
+def wrote_nothing?(exception)
+  exception.is_a?(MyClient::ConnectionRefused) || exception.is_a?(MyClient::ServiceUnavailable)
+end
+~~~
+
 A `SystemStackError` is handled separately: the message is discarded, and since a thread must not
 overflow its stack twice (on macOS that crashes Ruby), the worker carries on in a new thread. Do not
 rescue it in `#log` or `#batch`.
@@ -929,6 +945,10 @@ def batch_all_or_nothing?
   true
 end
 ~~~
+
+`#batch_all_or_nothing?` says nothing about an error from the destination: a batch formatted before
+any of it is sent can still be stored by a destination whose answer then times out. Answer that from
+`#wrote_nothing?`, for `#log` and `#batch` alike.
 
 Such a `#batch` works with any formatter, including a formatter block. An appender that cannot be
 batched in some configuration says why from `#batch_refusal`, and what to do instead, so that

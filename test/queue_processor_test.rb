@@ -116,7 +116,7 @@ class QueueProcessorTest < Minitest::Test
 
   # Holds the worker thread before it writes a message containing "wait", once it has taken that
   # message off the queue, until the test opens the gate. Cannot reach its destination for a
-  # message containing "unavailable".
+  # message containing "unavailable", and fails with a FatalError for one containing "fatal".
   class GatedAppender < SimpleAppender
     attr_reader :gate, :waiting
 
@@ -132,8 +132,41 @@ class QueueProcessorTest < Minitest::Test
         gate.pop
       end
       raise IOError, "destination unavailable" if log.message.include?("unavailable")
+      raise FatalError, "fatal" if log.message.include?("fatal")
 
       super
+    end
+  end
+
+  # Cannot reach its destination for a message containing "unavailable" the first `failures` times
+  # it is written, alone or in a batch, and says that such a write wrote nothing.
+  class ResendingAppender < BatchAppender
+    def initialize(failures: 1, **)
+      super(**)
+      @failures = failures
+    end
+
+    def log(log)
+      unavailable([log])
+      super
+    end
+
+    def batch(logs)
+      unavailable(logs)
+      super
+    end
+
+    def wrote_nothing?(exception)
+      exception.is_a?(IOError)
+    end
+
+    private
+
+    def unavailable(logs)
+      return unless @failures.positive? && logs.any? { |log| log.message.include?("unavailable") }
+
+      @failures -= 1
+      raise IOError, "destination unavailable"
     end
   end
 
@@ -172,6 +205,13 @@ class QueueProcessorTest < Minitest::Test
 
     def request(command)
       SemanticLogger::QueueProcessor::Request.new(command)
+    end
+
+    # Runs the block with the back-offs of the processor's worker thread stubbed, so that they do not
+    # wait: each one calls `on_wait`, when given, with the seconds it would have waited instead.
+    def stub_back_off(processor, on_wait = nil, &)
+      backoff = processor.instance_variable_get(:@backoff)
+      backoff.stub(:wait, -> { on_wait&.call(backoff.retry_count) }, &)
     end
 
     include SignalTrapHelper
@@ -371,7 +411,7 @@ class QueueProcessorTest < Minitest::Test
           raise "boom"
         end
 
-        processor.stub(:sleep, nil) do
+        stub_back_off(processor, nil) do
           processor.stub(:process_messages, boom) do
             processor.send(:process)
           end
@@ -389,7 +429,7 @@ class QueueProcessorTest < Minitest::Test
 
       it "reports that the worker thread is active once, not again on each restart" do
         processor = build(async_max_retries: 2)
-        processor.stub(:sleep, nil) do
+        stub_back_off(processor, nil) do
           processor.stub(:process_messages, -> { raise "boom" }) do
             processor.send(:process)
           end
@@ -409,7 +449,7 @@ class QueueProcessorTest < Minitest::Test
           raise "boom" if attempts <= 5
         end
 
-        processor.stub(:sleep, nil) do
+        stub_back_off(processor, nil) do
           processor.stub(:process_messages, flaky) do
             processor.send(:process)
           end
@@ -425,7 +465,7 @@ class QueueProcessorTest < Minitest::Test
         processor = build(async_max_retries: 3)
         slept     = []
 
-        processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+        stub_back_off(processor, ->(seconds) { slept << seconds }) do
           processor.stub(:process_messages, -> { raise "boom" }) do
             processor.send(:process)
           end
@@ -436,7 +476,7 @@ class QueueProcessorTest < Minitest::Test
 
       it "resets the retry count after a message is processed successfully" do
         processor = build(async_max_retries: 5)
-        processor.instance_variable_set(:@retry_count, 3)
+        3.times { processor.instance_variable_get(:@backoff).retry? }
         processor.queue << new_log
         processor.queue << request(:close)
 
@@ -453,7 +493,7 @@ class QueueProcessorTest < Minitest::Test
           raise FatalError, "fatal"
         end
 
-        processor.stub(:sleep, nil) do
+        stub_back_off(processor, nil) do
           processor.stub(:process_messages, fatal) do
             processor.send(:process)
           end
@@ -480,7 +520,7 @@ class QueueProcessorTest < Minitest::Test
           processor.queue << new_log(message: "last")
           processor.queue << request(:close)
 
-          processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+          stub_back_off(processor, ->(_) { flunk "must not back off for a message error" }) do
             processor.send(:process)
           end
 
@@ -654,7 +694,7 @@ class QueueProcessorTest < Minitest::Test
             processor.queue << new_log(message: "last")
             processor.queue << request(:close)
 
-            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+            stub_back_off(processor, ->(_) { flunk "must not back off for a message error" }) do
               processor.send(:process)
             end
 
@@ -678,7 +718,7 @@ class QueueProcessorTest < Minitest::Test
 
           original = appender.method(:log)
           appender.stub(:log, ->(log) { log.message == "rejected" ? raise(rejected) : original.call(log) }) do
-            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+            stub_back_off(processor, ->(_) { flunk "must not back off for a message error" }) do
               processor.send(:process)
             end
           end
@@ -749,7 +789,7 @@ class QueueProcessorTest < Minitest::Test
           processor.queue << request(:close)
           slept = []
           appender.stub(:log, down) do
-            processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+            stub_back_off(processor, ->(seconds) { slept << seconds }) do
               processor.send(:process)
             end
           end
@@ -775,7 +815,7 @@ class QueueProcessorTest < Minitest::Test
         def write_batch_of(processor, messages)
           messages.each { |message| processor.queue << new_log(message: message) }
           processor.signal.set
-          processor.stub(:sleep, nil) { processor.send(:process) }
+          stub_back_off(processor, nil) { processor.send(:process) }
         end
 
         it "discards and reports the whole batch, then backs off" do
@@ -832,6 +872,166 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    describe "a message the destination cannot take, when the appender says that the write wrote nothing" do
+      let(:failures_before_written) { 1 }
+
+      let(:appender) do
+        a        = ResendingAppender.new(failures: failures_before_written)
+        a.logger = internal_logger
+        a
+      end
+
+      # Processes the messages on this thread, then closes, once the first back-off has queued the
+      # close. Returns the back-offs, recorded instead of waiting.
+      def process_all(processor, messages)
+        messages.each { |message| processor.queue << new_log(message: message) }
+        processor.signal&.set
+        slept    = []
+        back_off = lambda do |seconds|
+          processor.queue << request(:close) if slept.empty?
+          slept << seconds
+        end
+        stub_back_off(processor, back_off) { processor.send(:process) }
+        slept
+      end
+
+      it "writes the message again once it has backed off, ahead of the next one" do
+        processor = build(async_max_retries: 1)
+        slept     = process_all(processor, %w[unavailable next])
+
+        assert_equal %w[unavailable next], appender.events.map(&:message)
+        assert_equal [1], slept
+        assert_equal 2, processor.processed_count
+        assert_equal 0, processor.failed_count
+        assert_equal 0, processor.retry_count
+      end
+
+      it "writes the batch again, as it was, once it has backed off" do
+        processor = build(batch: true, batch_seconds: 60, async_max_retries: 1)
+        slept     = process_all(processor, %w[first unavailable third])
+
+        assert_equal([%w[first unavailable third]], appender.batches.map { |logs| logs.map(&:message) })
+        assert_equal [1], slept
+        assert_equal 3, processor.processed_count
+        assert_equal 0, processor.failed_count
+      end
+
+      describe "until it gives up" do
+        let(:failures_before_written) { 10 }
+
+        it "discards and reports the message once it has retried async_max_retries times" do
+          processor = build(async_max_retries: 2)
+          slept     = process_all(processor, %w[unavailable next])
+
+          assert_equal [1, 2], slept
+          assert_predicate processor, :stopped?
+          assert_empty appender.events
+          assert_equal 1, processor.failed_count
+          messages = internal_logger.events.map(&:message)
+
+          assert(messages.any? { |message| message.include?("Discarded 1 log message(s)") })
+          assert(messages.any? { |message| message.include?("Stopping after 2 failed retries") })
+        end
+      end
+
+      it "is written only once, by the parent process, after a fork" do
+        skip "fork is not supported" unless Process.respond_to?(:fork)
+
+        processor = start
+
+        assert processor.flush, "the worker thread should be waiting for the next message"
+        processor.instance_variable_set(:@held, [new_log(message: "held by the parent")])
+        reader, writer = IO.pipe
+        pid            = fork do
+          reader.close
+          processor.reopen
+          processor.log(new_log(message: "in the child"))
+          processor.flush
+          writer.write(appender.events.map(&:message).join(","))
+          writer.close
+          exit!(0)
+        end
+        writer.close
+        Process.wait(pid)
+        written_in_child = reader.read
+        reader.close
+
+        assert_equal "in the child", written_in_child
+      end
+    end
+
+    # During an outage, each message the destination cannot take would otherwise wait out a longer
+    # back-off than the one before.
+    describe "a flush or close during an outage" do
+      let(:failures_before_written) { 1_000 }
+
+      let(:appender) do
+        a        = ResendingAppender.new(failures: failures_before_written)
+        a.logger = internal_logger
+        a
+      end
+
+      # Submits the command on another thread, and returns its result and how long it took.
+      def timed(processor, command)
+        started  = Time.now
+        thread   = Thread.new { processor.public_send(command) }
+
+        assert thread.join(5), "the #{command} should not wait out the back-offs"
+        [thread.value, Time.now - started]
+      end
+
+      it "ends the back-off under way, and discards the messages it cannot write instead of backing off" do
+        processor = start
+        5.times { |i| processor.log(new_log(message: "unavailable #{i}")) }
+        deadline = Time.now + 5
+        Thread.pass until processor.retry_count.positive? || Time.now > deadline
+
+        assert_equal 1, processor.retry_count, "the worker thread should be backing off"
+        flushed, seconds = timed(processor, :flush)
+
+        assert flushed
+        assert_operator seconds, :<, 0.5
+        assert_equal 5, processor.failed_count
+        assert_equal 1, processor.retry_count, "a failure while the flush waits should not count as a retry"
+        refute_predicate processor, :stopped?
+      end
+
+      it "writes the messages the destination takes again, ahead of the flush" do
+        appender.instance_variable_set(:@failures, 1)
+        processor = start
+        processor.log(new_log(message: "unavailable"))
+        deadline = Time.now + 5
+        Thread.pass until processor.retry_count.positive? || Time.now > deadline
+        processor.log(new_log(message: "next"))
+
+        assert_equal [true], timed(processor, :flush).first(1)
+        # Sent again straight away, rather than after the back-off, which the flush ended.
+        assert_equal %w[unavailable next], appender.events.map(&:message)
+      end
+
+      it "does not wait out the back-offs for an appender that does not say that its writes wrote nothing" do
+        appender.define_singleton_method(:wrote_nothing?) { |_exception| false }
+        processor = start
+        5.times { |i| processor.log(new_log(message: "unavailable #{i}")) }
+        flushed, seconds = timed(processor, :flush)
+
+        assert flushed
+        assert_operator seconds, :<, 0.5
+        assert_equal 5, processor.failed_count
+      end
+
+      it "closes without waiting out the back-offs" do
+        processor = start(batch: true, batch_size: 2, batch_seconds: 60)
+        4.times { |i| processor.log(new_log(message: "unavailable #{i}")) }
+        closed, seconds = timed(processor, :close)
+
+        assert closed
+        assert_operator seconds, :<, 0.5
+        assert_equal 4, processor.failed_count
+        assert_predicate appender, :closed
+      end
+    end
+
     describe "a command taken off the queue with a batch that cannot be written" do
       let(:appender) do
         a        = UnavailableBatchAppender.new
@@ -859,7 +1059,7 @@ class QueueProcessorTest < Minitest::Test
       it "closes the appender and stops, instead of backing off" do
         processor = build(batch: true, batch_seconds: 60, async_max_retries: 5)
         close     = queue_batch_with(processor, request(:close))
-        processor.stub(:sleep, ->(_) { flunk "must not back off after closing" }) do
+        stub_back_off(processor, ->(_) { flunk "must not back off after closing" }) do
           processor.send(:process)
         end
 
@@ -1016,14 +1216,36 @@ class QueueProcessorTest < Minitest::Test
         logging&.kill
       end
 
+      # A flush that is waiting keeps the worker thread from backing off, and so from giving up after
+      # async_max_retries, but not from stopping on a fatal error.
       it "lets a flush carry on, which returns false" do
+        processor = start(max_queue_size: 1)
+        processor.log(new_log(message: "wait fatal"))
+
+        assert appender.waiting.pop(timeout: 5), "the worker thread should take the entry off the queue"
+        processor.log(new_log(message: "queued"))
+        flusher = Thread.new { processor.flush }
+        wait_for_waiting(processor)
+        appender.gate << true
+
+        assert flusher.join(5), "the flush should not wait for ever"
+        refute flusher.value
+        assert_predicate processor, :stopped?
+      ensure
+        flusher&.kill
+      end
+
+      it "lets a flush carry on, which writes the queued entries, rather than wait for the worker thread to give up" do
         processor = start_full
         flusher   = Thread.new { processor.flush }
         wait_for_waiting(processor)
         appender.gate << true
 
         assert flusher.join(5), "the flush should not wait for ever"
-        refute flusher.value
+        assert flusher.value
+        assert_equal ["queued"], appender.events.map(&:message)
+        assert_equal 1, processor.failed_count
+        refute_predicate processor, :stopped?
       ensure
         flusher&.kill
       end
@@ -1259,7 +1481,7 @@ class QueueProcessorTest < Minitest::Test
       it "carries on with the count of failures in a row, in a worker thread started once it has stopped" do
         processor = start(async_max_retries: 1)
         slept     = Queue.new
-        processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+        stub_back_off(processor, ->(seconds) { slept << seconds }) do
           worker = processor.thread
           2.times { processor.log(new_log(message: "unavailable")) }
 
@@ -1285,22 +1507,25 @@ class QueueProcessorTest < Minitest::Test
         processor = start(async_max_retries: 1)
         worker    = processor.thread
         slept     = Queue.new
-        processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+        stub_back_off(processor, ->(seconds) { slept << seconds }) do
           2.times { processor.log(new_log(message: "unavailable")) }
 
           assert worker.join(5), "the worker thread should stop"
+          assert_equal 1, slept.pop(timeout: 5)
           assert_equal 1, processor.retry_count
-          processor.instance_variable_set(:@pid, -1)
+          processor.instance_variable_get(:@inbox).instance_variable_set(:@pid, -1)
           processor.reopen
 
           assert_equal 0, processor.retry_count
           processor.log(new_log(message: "unavailable"))
+
+          # A flush that is waiting would keep it from backing off.
+          assert_equal 1, slept.pop(timeout: 5), "the new worker thread should back off"
           processor.log(new_log(message: "after"))
 
-          assert processor.flush, "the new worker thread should back off and carry on"
+          assert processor.flush, "the new worker thread should carry on"
         end
 
-        assert_equal [1, 1], Array.new(slept.size) { slept.pop }
         refute_predicate processor, :stopped?
         assert_equal ["after"], appender.events.map(&:message)
       end
@@ -1460,7 +1685,7 @@ class QueueProcessorTest < Minitest::Test
         skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
 
         processor = start
-        processor.instance_variable_set(:@pid, -1)
+        processor.instance_variable_get(:@inbox).instance_variable_set(:@pid, -1)
         queue = processor.queue
 
         assert_equal :reopened, reopen_in_signal_trap(processor)

@@ -137,8 +137,10 @@ module SemanticLogger
     # log message, rather than by the destination, for example being unavailable.
     #
     # Waiting cannot write such a message, so an asynchronous appender discards it and carries on
-    # straight away. On any other exception it also discards the message (or the batch), but then
-    # backs off before carrying on, since the destination may be briefly unavailable.
+    # straight away. On any other exception it backs off before carrying on, since the destination
+    # may be briefly unavailable, then writes the message (or the batch) again when #wrote_nothing?
+    # says that the write wrote none of it, or otherwise carries on with the next one, having
+    # discarded it.
     #
     # Every error raised by the formatter is one (see #format_log). An appender whose client
     # raises its own errors for bad content can override this to recognize them.
@@ -153,6 +155,23 @@ module SemanticLogger
     # so that only the offending message is discarded. When false, retrying could write some
     # messages twice, so the whole batch is discarded instead.
     def batch_all_or_nothing?
+      false
+    end
+
+    # Whether #log or #batch, when it raised the supplied exception, wrote none of the log messages
+    # it was given, so that writing them again cannot write any of them twice. Asked only about an
+    # exception that is not a message error (see #message_error?), such as one raised because the
+    # destination is unavailable.
+    #
+    # When true, an asynchronous appender writes the same message, or batch, again once it has
+    # backed off, until it is written or the appender gives up after async_max_retries. When false,
+    # since the write may have written some or all of them, such as a request whose answer timed
+    # out after the destination stored it, or a batch written a message at a time, they are
+    # discarded instead. A flush or close does not wait for them: while one is waiting, they are
+    # discarded either way.
+    #
+    # False, since only the appender can tell. Appender::Http answers it from the error.
+    def wrote_nothing?(_exception)
       false
     end
 

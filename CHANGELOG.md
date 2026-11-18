@@ -150,6 +150,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   not indexed are reported and discarded, as before. See
   [Elasticsearch](https://logger.reidmorrison.com/appenders.html#elasticsearch) and the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- An appender added with `async: true` or in batches sends an entry or batch that its destination
+  could not take again once it has backed off, rather than discarding it, when the appender says that
+  the write wrote nothing, until it is written or the thread gives up after `async_max_retries`. The
+  `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx` metric
+  subscriber, say so for a response other than 2xx, such as a 503 while Loki restarts, and for a
+  request they could not send because they could not connect. A request that failed once it was sent,
+  such as one whose answer timed out, is still discarded, since the server may have stored it. A
+  custom appender says so from the new `#wrote_nothing?(exception)`, which returns `false` by default.
+  A flush or close, including the flush at exit, no longer waits out the back-offs during an outage:
+  submitting one ends the back-off under way, and until it has run, an entry or batch that fails is
+  discarded, counted as `failed`, without backing off. Before, a flush with 5 entries queued during
+  an outage waited 1 + 2 + 3 + 4 + 5 seconds. See
+  [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
+  and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ### Deprecated
 

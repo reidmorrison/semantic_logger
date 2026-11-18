@@ -30,10 +30,10 @@ require "openssl"
 # Responses:
 # A response other than 2xx raises ResponseError from #log and #batch. A 4xx other than 408 and
 # 429 rejects the request itself, so #message_error? recognizes it, and an asynchronous appender
-# discards the entries straight away. Any other status, such as a 5xx, 408, or 429, which ask to
-# send the request again later, is a problem with the destination, so an asynchronous appender
-# discards the entries and backs off before carrying on. Either way they are counted as failed. An
-# appender that is not asynchronous reports the error.
+# discards the entries straight away, counted as failed. Any other status, such as a 5xx, 408, or
+# 429, which ask to send the request again later, is a problem with the destination, so an
+# asynchronous appender backs off, then sends the entries again, since the server did not accept
+# them (see #wrote_nothing?). An appender that is not asynchronous reports the error.
 module SemanticLogger
   module Appender
     class Http < SemanticLogger::Subscriber
@@ -70,6 +70,15 @@ module SemanticLogger
 
       # Describes a valid url in the error raised for an invalid one.
       URL_FORMAT_HINT = "Should be similar to: 'http://hostname:port/path'".freeze
+
+      # The errors raised when the appender cannot connect to the server, so that the request was
+      # never sent: the server's name does not resolve, it cannot be reached, or it does not accept
+      # the connection, refusing it or within the open_timeout. Once connected, an error such as a
+      # read timeout or a reset connection may come after the server took the request.
+      NOT_SENT_ERRORS = [
+        SocketError, Net::OpenTimeout, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
+        Errno::EADDRNOTAVAIL
+      ].freeze
 
       # Create HTTP(S) log appender
       #
@@ -296,6 +305,20 @@ module SemanticLogger
       # server rejected (see ResponseError#rejected?), since sending it again cannot succeed.
       def message_error?(exception)
         (exception.is_a?(ResponseError) && exception.rejected?) || super
+      end
+
+      # Whether the request that raised the exception from #log or #batch stored none of its
+      # entries (see Subscriber#wrote_nothing?): the server answered it with a status other than
+      # 2xx (see ResponseError), or it was never sent, because the appender could not connect (see
+      # NOT_SENT_ERRORS). So an asynchronous appender sends the entries again once it has backed off.
+      #
+      # A connection error raised while reconnecting after another error, such as a read timeout,
+      # has that error as its cause, after which the server may have stored the entries.
+      def wrote_nothing?(exception)
+        return true if exception.is_a?(ResponseError)
+
+        NOT_SENT_ERRORS.any? { |error_class| exception.is_a?(error_class) } &&
+          (exception.cause.nil? || wrote_nothing?(exception.cause))
       end
 
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.

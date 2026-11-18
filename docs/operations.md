@@ -230,9 +230,16 @@ and never drops, but can grow without bound.
 If an appender raises while the worker thread is writing, the thread logs the error and restarts, so
 a transient failure (such as a brief network blip to a remote appender) does not permanently stop
 logging. Each restart sleeps with an increasing back-off (1 second, then 2, ...), reset as soon as a
-message is processed successfully. The message being written when the destination failed (or, when
-batching, the batch) is discarded; the messages logged meanwhile wait on the queue, and are written
-once the thread carries on.
+message is processed successfully. The messages logged meanwhile wait on the queue.
+
+When the appender says that the write that failed wrote none of the message (or, when batching, of
+the batch), the thread writes the same message or batch again after the back-off, ahead of the
+messages on the queue, until it is written or the thread gives up. The HTTP based appenders say so
+for a response other than 2xx, and for a request they could not send because they could not connect
+to the server; see
+[When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
+Otherwise the message or batch is discarded, since writing it again could write some of it twice, and
+the thread carries on with the next one once it has backed off.
 
 A message that fails because of its own content, rather than the destination, is discarded and the
 thread carries on straight away, without backing off: for example a value the formatter cannot
@@ -254,7 +261,8 @@ The HTTP based appenders decide by the status of the response; see
 [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
 
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
-rather than spinning forever on a persistent failure. From then on new log messages for that
+rather than spinning forever on a persistent failure, and discards the message or batch it was
+writing again. From then on new log messages for that
 appender are dropped once its queue is full, instead of blocking the application. So is a message
 already waiting for room on the full queue when the thread gives up, within a second, which lets the
 thread that logged it carry on: normally the thread that writes to every appender. The messages
@@ -278,6 +286,11 @@ is still unavailable, rather than hold up logging with a back-off as long again,
 before using them all, such as after a fatal exception, has only the retries it had left. Once a
 message is written, the count starts again. After a fork, the worker thread of the child process
 starts counting afresh.
+
+A flush or close does not wait out back-offs, so that `SemanticLogger.flush`, including the flush at
+exit, returns promptly during an outage. Submitting one ends the back-off under way, and until it
+has run, a message or batch that the destination fails is discarded, and counted as `failed`, rather
+than written again after a back-off. Those failures do not count towards `async_max_retries`.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a

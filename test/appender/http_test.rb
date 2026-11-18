@@ -450,8 +450,9 @@ module Appender
         # Writes the messages as the worker thread of an asynchronous appender does, on this thread.
         # Answers each request with the status of the first entry in it found in `statuses`, or
         # 200, and closes the processor once the first request is answered, so that it stops after
-        # the messages are written. Returns the messages of the entries the server took, and each
-        # back-off, recorded instead of sleeping.
+        # the messages are written. A status given as an Array answers the requests for that entry
+        # in turn, then 200, and an exception class in it is raised instead. Returns the messages of
+        # the entries the server took, and each back-off, recorded instead of waiting.
         def process(processor, messages, statuses)
           delivered = []
           slept     = []
@@ -461,16 +462,24 @@ module Appender
             processor.queue << SemanticLogger::QueueProcessor::Request.new(:close) if requests == 1
             body     = JSON.parse(request.body)
             entries  = (body.is_a?(Array) ? body : [body]).map { |entry| entry["message"] }
-            code     = entries.filter_map { |message| statuses[message] }.first || 200
+            code     = entries.filter_map { |message| status_for(statuses, message) }.first || 200
+            raise code, "failed" if code.is_a?(Class)
+
             delivered.concat(entries) if code == 200
             response(code)
           end
           messages.each { |message| processor.queue << new_log(message) }
           processor.signal&.set
+          backoff = processor.instance_variable_get(:@backoff)
           appender.http.stub(:request, handler) do
-            processor.stub(:sleep, ->(seconds) { slept << seconds }) { processor.send(:process) }
+            backoff.stub(:wait, -> { slept << backoff.retry_count }) { processor.send(:process) }
           end
           [delivered, slept]
+        end
+
+        def status_for(statuses, message)
+          status = statuses[message]
+          status.is_a?(Array) ? status.shift : status
         end
 
         [400, 401, 403, 404, 413, 422].each do |code|
@@ -490,6 +499,40 @@ module Appender
             assert_equal code, error.code
             refute_predicate error, :rejected?
             refute appender.message_error?(error)
+          end
+        end
+
+        describe "#wrote_nothing?" do
+          it "is true for any response other than 2xx, since the server did not take the entries" do
+            [400, 503, 429, 301].each { |code| assert appender.wrote_nothing?(error_for(code)), code }
+          end
+
+          [SocketError, Net::OpenTimeout, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
+           Errno::EADDRNOTAVAIL].each do |error_class|
+            it "is true for #{error_class}, raised before the request was sent" do
+              assert appender.wrote_nothing?(error_class.new)
+            end
+          end
+
+          [Net::ReadTimeout, Net::WriteTimeout, Errno::ECONNRESET, Errno::EPIPE, EOFError, IOError,
+           OpenSSL::SSL::SSLError].each do |error_class|
+            it "is false for #{error_class}, after which the server may have stored the entries" do
+              refute appender.wrote_nothing?(error_class.new)
+            end
+          end
+
+          it "is false for an error connecting again after one raised once the request was sent" do
+            error = begin
+              begin
+                raise Net::ReadTimeout
+              rescue Net::ReadTimeout
+                raise Errno::ECONNREFUSED
+              end
+            rescue Errno::ECONNREFUSED => e
+              e
+            end
+
+            refute appender.wrote_nothing?(error)
           end
         end
 
@@ -519,8 +562,25 @@ module Appender
             assert_includes report.exception.message, "code: 400"
           end
 
-          it "discards an entry the server cannot take yet, then backs off before the next one" do
-            delivered, slept = process(processor, %w[unavailable last], {"unavailable" => 503})
+          it "sends an entry the server cannot take yet again, once it has backed off" do
+            delivered, slept = process(processor, %w[unavailable last], {"unavailable" => [503, 503]})
+
+            assert_equal %w[unavailable last], delivered
+            assert_equal [1, 2], slept
+            assert_equal 2, processor.processed_count
+            assert_equal 0, processor.failed_count
+          end
+
+          it "sends an entry again when it could not connect" do
+            delivered, slept = process(processor, %w[refused last], {"refused" => [Errno::ECONNREFUSED]})
+
+            assert_equal %w[refused last], delivered
+            assert_equal [1], slept
+            assert_equal 0, processor.failed_count
+          end
+
+          it "discards an entry whose connection was reset, after the server may have stored it, then backs off" do
+            delivered, slept = process(processor, %w[reset last], {"reset" => [Errno::ECONNRESET]})
 
             assert_equal %w[last], delivered
             assert_equal [1], slept
@@ -547,13 +607,23 @@ module Appender
             assert_equal 1, processor.failed_count
           end
 
-          it "discards a batch the server cannot take yet, and backs off" do
-            delivered, slept = process(processor, %w[first second third], {"second" => 429})
+          it "sends a batch the server cannot take yet again, as it was, once it has backed off" do
+            batches  = []
+            original = appender.method(:batch)
+            recording = lambda do |logs|
+              batches << logs.map(&:message)
+              original.call(logs)
+            end
+            appender.stub(:batch, recording) do
+              delivered, slept = process(processor, %w[first second third], {"second" => [429]})
 
-            assert_empty delivered
-            assert_equal [1], slept
-            assert_equal 0, processor.processed_count
-            assert_equal 3, processor.failed_count
+              assert_equal %w[first second third], delivered
+              assert_equal [1], slept
+            end
+
+            assert_equal [%w[first second third]] * 2, batches
+            assert_equal 3, processor.processed_count
+            assert_equal 0, processor.failed_count
           end
         end
 
