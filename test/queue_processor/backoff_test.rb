@@ -1,7 +1,10 @@
 require_relative "../test_helper"
+require_relative "../signal_trap_helper"
 
 class BackoffTest < Minitest::Test
   describe SemanticLogger::QueueProcessor::Backoff do
+    include SignalTrapHelper
+
     let(:backoff) { SemanticLogger::QueueProcessor::Backoff.new(2) }
 
     # Runs #wait on another thread, and returns that thread.
@@ -63,13 +66,33 @@ class BackoffTest < Minitest::Test
       refute waiting.join(0.2), "the back-off should wait"
     end
 
-    it "forgets the requests that an earlier worker thread never ran, and counts afresh, on a restart" do
+    it "forgets the requests counted as waiting, and counts afresh, on a restart after a fork" do
       2.times { backoff.retry? }
       backoff.request_submitted
       backoff.restart
 
       refute_predicate backoff, :requests_waiting?
       assert_equal 0, backoff.retry_count
+    end
+
+    it "keeps at most one interruption, however many requests are submitted without a back-off" do
+      1_000.times do
+        backoff.request_submitted
+        backoff.request_done
+      end
+
+      assert_equal 1, backoff.instance_variable_get(:@interrupts).size
+      refute_predicate backoff, :requests_waiting?
+    end
+
+    it "submits a request in a signal trap, ending the back-off under way" do
+      backoff.retry?
+      thread  = waiting
+      results = Array.new(2) { in_signal_trap { backoff.request_submitted } }
+
+      refute(results.any?(StandardError))
+      assert thread.join(1), "a request submitted in a signal trap should end the back-off"
+      assert_predicate backoff, :requests_waiting?
     end
 
     it "ignores a request done that was not submitted" do

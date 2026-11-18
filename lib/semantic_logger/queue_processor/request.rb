@@ -3,24 +3,45 @@ module SemanticLogger
     # Internal: a command, such as :flush or :close, submitted on the queue for the worker thread
     # to run, while the submitting thread waits for the reply.
     #
-    # It knows its command and how its reply gets back to the submitting thread, and makes sure
-    # that the submitting thread is never left waiting on a reply that cannot come.
+    # It knows its command, whether it has run, and how its reply gets back to the submitting
+    # thread, and makes sure that the submitting thread is never left waiting on a reply that cannot
+    # come. It also tells whoever counts the requests waiting, once, when it is no longer waiting.
     class Request
       attr_reader :command
 
-      def initialize(command)
+      # The block, if any, is called once the request is no longer waiting (see #done).
+      def initialize(command, &on_done)
         @command = command
         @replies = Queue.new
+        @on_done = on_done
+        @ran     = false
+        # A single token, which the first call to #done takes.
+        @waiting = Queue.new
+        @waiting << true
+      end
+
+      # Whether the worker thread has run this request (see #reply).
+      def ran? = @ran
+
+      # Called once the request has run, or will not: one that could not be added to the queue, or
+      # that the worker thread took off the queue but skipped, such as one behind a close. Calls the
+      # block given to #initialize the first time only, whichever thread calls it, so that the request
+      # is counted out once. Also called in a signal trap, where Ruby allows a Queue to be used, but
+      # not a Mutex to be locked.
+      def done
+        @on_done&.call if @waiting.pop(timeout: 0)
       end
 
       # Called by the worker thread: run the block for this request, then reply with true, or
       # with false when the block raised. Replies either way.
       def reply
-        done = false
+        succeeded = false
         yield
-        done = true
+        succeeded = true
       ensure
-        @replies.push(done)
+        @ran = true
+        done
+        @replies.push(succeeded)
       end
 
       # Called by the worker thread: run this command on the appender, then reply. Returns false

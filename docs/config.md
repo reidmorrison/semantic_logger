@@ -912,19 +912,36 @@ end
 
 Any other error is the destination's, and discards the message (or the batch) by default, since
 the write may have stored some or all of it. When the write that raised it cannot have stored any of
-the messages, such as when the appender could not connect, or the destination answered that it did
-not accept them, return `true` from `#wrote_nothing?(exception)`. The worker thread then writes the
-same message, or batch, again once it has backed off, until it is written or the thread gives up
-after `async_max_retries`. Keep the default, `false`, whenever the destination may have stored them,
-such as when its answer timed out, since writing them again would store them twice. While a flush or
-close is waiting, the message or batch is discarded either way, so that the flush does not wait out
-the back-offs:
+the messages, and writing them again later may succeed, such as when the appender could not connect,
+or the destination answered that it is unavailable for now, return `true` from
+`#wrote_nothing?(exception)`. The worker thread then writes the same message, or batch, again once
+it has backed off. Once the destination has answered it with a failure after it was written again 3
+times, the worker thread discards it and carries on with the next one. Keep the default, `false`,
+whenever the destination may have stored them, such as when its answer timed out, since writing
+them again would store them twice, and when writing them again is bound to fail the same way. While
+a flush or close is waiting, the message or batch is discarded either way, so that the flush does
+not wait out the back-offs.
+
+When the write never reached the destination, such as when the appender could not connect, also
+return `true` from `#not_sent?(exception)`, which is asked only once `#wrote_nothing?` has returned
+`true`. Writing it again after such a failure does not count towards the 3 times, since the
+destination has said nothing about the message, so that an outage loses no messages until the
+worker thread gives up after `async_max_retries`:
 
 ~~~ruby
 def wrote_nothing?(exception)
-  exception.is_a?(MyClient::ConnectionRefused) || exception.is_a?(MyClient::ServiceUnavailable)
+  not_sent?(exception) || exception.is_a?(MyClient::ServiceUnavailable)
+end
+
+def not_sent?(exception)
+  exception.is_a?(MyClient::ConnectionRefused)
 end
 ~~~
+
+When `#log` or `#batch` writes the messages in more than one request, return `false` for an error
+from any request after the first: the destination stored the messages of the earlier ones, which
+would otherwise be written again. That includes a subclass of `SemanticLogger::Appender::Http`
+whose `#log` or `#batch` calls `post` more than once.
 
 A `SystemStackError` is handled separately: the message is discarded, and since a thread must not
 overflow its stack twice (on macOS that crashes Ruby), the worker carries on in a new thread. Do not

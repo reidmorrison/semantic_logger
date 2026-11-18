@@ -25,7 +25,9 @@ module SemanticLogger
         @retry_count = 0
         # One entry for each request waiting.
         @requests    = Queue.new
-        @interrupts  = Queue.new
+        # Holds an entry once a request has been submitted since the back-off under way began. One is
+        # enough to end it, so that submitting many requests without a failure does not add up.
+        @interrupts  = SizedQueue.new(1)
       end
 
       # Start counting afresh, once writing succeeds.
@@ -33,16 +35,11 @@ module SemanticLogger
         @retry_count = 0
       end
 
-      # Start afresh for a worker thread new to the process, after a fork, which has not failed yet.
+      # Start afresh for a worker thread new to the process, after a fork: it has not failed yet, and
+      # the requests counted as waiting were on the queue of the parent process, which the child
+      # replaces.
       def restart
         reset
-        forget_requests
-      end
-
-      # Forget the requests that an earlier worker thread took off the queue but never ran, such as
-      # one taken with a close, so that they do not keep a new worker thread from ever backing off. A
-      # request still on the queue is then waited for as any other message.
-      def forget_requests
         @requests.clear
       end
 
@@ -68,13 +65,13 @@ module SemanticLogger
       end
 
       # Called before a request is added to the queue: it is waiting until #request_done, and ends the
-      # back-off under way.
+      # back-off under way. Never waits, since an interruption already queued ends it as well.
       def request_submitted
         @requests << true
-        @interrupts << true
+        @interrupts.push(true, timeout: 0)
       end
 
-      # Called once a request has run, or could not be added to the queue.
+      # Called once for each request submitted, once it has run or will not (see Request#done).
       def request_done
         @requests.pop(timeout: 0)
       end

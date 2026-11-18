@@ -139,8 +139,8 @@ module SemanticLogger
     # Waiting cannot write such a message, so an asynchronous appender discards it and carries on
     # straight away. On any other exception it backs off before carrying on, since the destination
     # may be briefly unavailable, then writes the message (or the batch) again when #wrote_nothing?
-    # says that the write wrote none of it, or otherwise carries on with the next one, having
-    # discarded it.
+    # says that the write wrote none of it (see QueueProcessor::HeldWrite::MAX_RESENDS), or
+    # otherwise carries on with the next one, having discarded it.
     #
     # Every error raised by the formatter is one (see #format_log). An appender whose client
     # raises its own errors for bad content can override this to recognize them.
@@ -159,19 +159,41 @@ module SemanticLogger
     end
 
     # Whether #log or #batch, when it raised the supplied exception, wrote none of the log messages
-    # it was given, so that writing them again cannot write any of them twice. Asked only about an
-    # exception that is not a message error (see #message_error?), such as one raised because the
-    # destination is unavailable.
+    # it was given, so that writing them again cannot write any of them twice, and writing them
+    # again later may succeed. Asked only about an exception that is not a message error (see
+    # #message_error?), such as one raised because the destination is unavailable.
     #
     # When true, an asynchronous appender writes the same message, or batch, again once it has
-    # backed off, until it is written or the appender gives up after async_max_retries. When false,
-    # since the write may have written some or all of them, such as a request whose answer timed
-    # out after the destination stored it, or a batch written a message at a time, they are
-    # discarded instead. A flush or close does not wait for them: while one is waiting, they are
-    # discarded either way.
+    # backed off. Once the destination has answered it with a failure after it was written again
+    # QueueProcessor::HeldWrite::MAX_RESENDS times, the appender discards it and carries on with the
+    # next one, unless it gives up after async_max_retries first. A write that never reached the
+    # destination (see #not_sent?) is not counted. When false, since the write may have written
+    # some or all of them, such as a request whose answer timed out after the destination stored
+    # it, or a batch written a message at a time, or since writing them again is bound to fail the
+    # same way, they are discarded instead. A flush or close does not wait for them: while one is
+    # waiting, they are discarded either way.
+    #
+    # A #log or #batch that writes the messages in more than one request must return false for an
+    # error from any request after the first, which the destination may follow having stored the
+    # messages of the earlier ones.
     #
     # False, since only the appender can tell. Appender::Http answers it from the error.
     def wrote_nothing?(_exception)
+      false
+    end
+
+    # Whether #log or #batch, when it raised the supplied exception, sent nothing to the destination,
+    # such as when it could not connect to it, so that the destination has not answered the write.
+    # Asked only once #wrote_nothing? has returned true for the exception.
+    #
+    # When true, writing the message, or batch, again after such a failure does not count towards
+    # QueueProcessor::HeldWrite::MAX_RESENDS: the limit is for a message the destination answers
+    # with a failure every time, such as a request it answers with a 429 that never clears, while
+    # one that cannot reach the destination during an outage is still written once it is back, as
+    # long as the worker thread keeps trying (async_max_retries). When false, every failure counts.
+    #
+    # False, since only the appender can tell. Appender::Http answers it from the error.
+    def not_sent?(_exception)
       false
     end
 

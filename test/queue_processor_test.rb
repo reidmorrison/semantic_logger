@@ -932,6 +932,100 @@ class QueueProcessorTest < Minitest::Test
           assert(messages.any? { |message| message.include?("Discarded 1 log message(s)") })
           assert(messages.any? { |message| message.include?("Stopping after 2 failed retries") })
         end
+
+        # A report raising an exception that is not a StandardError ends the worker thread.
+        it "is stopped before it reports the message it discards, so that waiting threads carry on" do
+          internal_logger.define_singleton_method(:error) do |message, exception = nil|
+            raise FatalError, "cannot report" if message.include?("Discarded")
+
+            super(message, exception)
+          end
+          processor = build(async_max_retries: 0)
+          processor.queue << new_log(message: "unavailable")
+          processor.send(:process)
+
+          assert_predicate processor, :stopped?
+          assert_nil processor.instance_variable_get(:@held).release
+        end
+      end
+
+      # Otherwise a message that the destination fails every time, such as one it answers with a 429
+      # that never clears, would hold up the messages behind it until the thread gave up.
+      describe "that the destination fails every time" do
+        let(:failures_before_written) { 1_000 }
+
+        it "discards the message once written again 3 times, and carries on with the next one" do
+          processor = build(async_max_retries: 10)
+          slept     = process_all(processor, %w[unavailable next])
+
+          assert_equal [1, 2, 3, 4], slept
+          assert_equal %w[next], appender.events.map(&:message)
+          assert_equal 1, processor.failed_count
+          assert_equal 0, processor.retry_count
+          refute_predicate processor, :stopped?
+        end
+
+        it "discards the batch once written again 3 times, and carries on with the next one" do
+          processor = build(batch: true, batch_seconds: 60, async_max_retries: 10)
+          slept     = process_all(processor, %w[first unavailable third])
+          processor.queue << new_log(message: "next")
+          processor.queue << request(:close)
+          processor.signal.set
+          processor.send(:process)
+
+          assert_equal [1, 2, 3, 4], slept
+          assert_equal([%w[next]], appender.batches.map { |logs| logs.map(&:message) })
+          assert_equal 3, processor.failed_count
+          assert_equal 0, processor.retry_count
+        end
+
+        it "counts the times written again afresh for the next message held" do
+          appender.instance_variable_set(:@failures, 5)
+          processor = build(async_max_retries: 10)
+          slept     = process_all(processor, %w[unavailable-first unavailable-second])
+
+          # The first is discarded once written again 3 times. The second, held afresh, is written the
+          # first time it is written again.
+          assert_equal [1, 2, 3, 4, 5], slept
+          assert_equal %w[unavailable-second], appender.events.map(&:message)
+          assert_equal 1, processor.failed_count
+        end
+      end
+
+      # An outage, during which the destination cannot be reached, then loses nothing until the worker
+      # thread gives up after async_max_retries.
+      describe "that never reached the destination" do
+        let(:failures_before_written) { 6 }
+
+        before { appender.define_singleton_method(:not_sent?) { |exception| exception.is_a?(IOError) } }
+
+        it "writes the message again until written, without counting towards MAX_RESENDS" do
+          processor = build(async_max_retries: 10)
+          slept     = process_all(processor, %w[unavailable next])
+
+          assert_equal [1, 2, 3, 4, 5, 6], slept
+          assert_equal %w[unavailable next], appender.events.map(&:message)
+          assert_equal 0, processor.failed_count
+        end
+
+        it "writes the batch again until written, without counting towards MAX_RESENDS" do
+          processor = build(batch: true, batch_seconds: 60, async_max_retries: 10)
+          slept     = process_all(processor, %w[first unavailable third])
+
+          assert_equal [1, 2, 3, 4, 5, 6], slept
+          assert_equal([%w[first unavailable third]], appender.batches.map { |logs| logs.map(&:message) })
+          assert_equal 0, processor.failed_count
+        end
+
+        it "still discards and reports the message once it has retried async_max_retries times" do
+          processor = build(async_max_retries: 4)
+          slept     = process_all(processor, %w[unavailable next])
+
+          assert_equal [1, 2, 3, 4], slept
+          assert_predicate processor, :stopped?
+          assert_empty appender.events
+          assert_equal 1, processor.failed_count
+        end
       end
 
       it "is written only once, by the parent process, after a fork" do
@@ -940,7 +1034,7 @@ class QueueProcessorTest < Minitest::Test
         processor = start
 
         assert processor.flush, "the worker thread should be waiting for the next message"
-        processor.instance_variable_set(:@held, [new_log(message: "held by the parent")])
+        processor.instance_variable_get(:@held).hold([new_log(message: "held by the parent")], answered: true)
         reader, writer = IO.pipe
         pid            = fork do
           reader.close
@@ -1069,6 +1163,47 @@ class QueueProcessorTest < Minitest::Test
         assert_equal 3, processor.failed_count
         assert(internal_logger.events.any? { |event| event.message.include?("Closed without writing 3 log messages") })
       end
+    end
+
+    describe "a command taken off the queue with a batch, that raises" do
+      let(:appender) do
+        a        = BatchAppender.new
+        a.logger = internal_logger
+        a
+      end
+
+      def process_batch_with(processor, *commands)
+        processor.queue << new_log
+        commands.each { |command| processor.queue << command }
+        processor.signal.set
+        processor.send(:process)
+      end
+
+      it "reports a close that failed, and stops" do
+        processor = build(batch: true, batch_seconds: 60)
+        appender.define_singleton_method(:close) { raise IOError, "cannot close" }
+        process_batch_with(processor, request(:close))
+
+        report = internal_logger.events.find { |event| event.message.include?("Failed to close the appender") }
+
+        assert report, "the failed close should be reported"
+        assert_kind_of IOError, report.exception
+        refute(internal_logger.events.any? { |event| event.message.include?("Closed without writing") })
+        assert_equal 1, processor.processed_count
+      end
+
+      it "reports a flush that failed before a close stopped it" do
+        processor = build(batch: true, batch_seconds: 60)
+        appender.define_singleton_method(:flush) { raise IOError, "cannot flush" }
+        process_batch_with(processor, request(:flush), request(:close))
+
+        report = internal_logger.events.find { |event| event.message.include?("Failed to flush the appender") }
+
+        assert report, "the failed flush should be reported"
+        assert_kind_of IOError, report.exception
+        assert_predicate appender, :closed
+        refute(internal_logger.events.any? { |event| event.message.include?("Closed without writing") })
+      end
 
       it "returns from #flush" do
         processor = start(batch: true, batch_size: 100, batch_seconds: 60)
@@ -1077,6 +1212,89 @@ class QueueProcessorTest < Minitest::Test
 
         assert flusher.join(5), "flush blocked after the batch could not be written"
         assert_predicate appender, :flushed
+      end
+    end
+
+    # A request counted as waiting keeps the worker thread from backing off, so each must be counted
+    # out exactly once, when it has run or will not.
+    describe "the requests counted as waiting" do
+      let(:appender) do
+        a        = BatchAppender.new
+        a.logger = internal_logger
+        a
+      end
+
+      let(:backoff) { @processor.instance_variable_get(:@backoff) }
+
+      # Returns a request counted as waiting, as #flush and #close submit one.
+      def submitted(command)
+        backoff.request_submitted
+        SemanticLogger::QueueProcessor::Request.new(command) { backoff.request_done }
+      end
+
+      it "runs a flush that raised once, after a batch, and counts it out once" do
+        @processor = build(batch: true, batch_seconds: 60)
+        flushes    = []
+        appender.define_singleton_method(:flush) do
+          flushes << true
+          raise IOError, "flush failed"
+        end
+        flush = submitted(:flush)
+        submitted(:flush) # still on the queue
+
+        assert_raises(IOError) { @processor.send(:write_batch_then_run, [new_log], [flush]) }
+        assert_equal 1, flushes.size
+        refute(flush.wait { false })
+        assert_equal 1, backoff.instance_variable_get(:@requests).size
+      end
+
+      it "counts out a request skipped behind a close, which never runs" do
+        @processor = build(batch: true, batch_seconds: 60)
+        close      = submitted(:close)
+        flush      = submitted(:flush)
+
+        refute @processor.send(:write_batch_then_run, [new_log], [close, flush])
+        refute_predicate flush, :ran?
+        refute_predicate backoff, :requests_waiting?
+      end
+
+      # A request waiting keeps the worker thread from giving up after async_max_retries, so it stops
+      # with a fatal error here.
+      it "keeps counting a request still on the queue when the worker thread starts again" do
+        appender        = GatedAppender.new
+        appender.logger = internal_logger
+        @processor      = SemanticLogger::QueueProcessor.start(appender: appender)
+        started << @processor
+        @processor.log(new_log(message: "wait fatal"))
+
+        assert appender.waiting.pop(timeout: 5), "the worker thread should take the message off the queue"
+        @processor.log(new_log(message: "wait second"))
+        flusher = Thread.new { @processor.flush }
+        Thread.pass until @processor.queue.size == 2
+        worker = @processor.thread
+        appender.gate << true
+
+        assert worker.join(5), "the worker thread should stop"
+        refute flusher.value, "the flush should stop waiting once the worker thread has stopped"
+        @processor.reopen
+
+        assert appender.waiting.pop(timeout: 5), "the new worker thread should take the next message"
+        assert_predicate backoff, :requests_waiting?, "the flush on the queue should still be waiting"
+        appender.gate << true
+
+        assert @processor.flush
+        refute_predicate backoff, :requests_waiting?
+      ensure
+        flusher&.kill
+      end
+
+      it "forgets the requests counted as waiting after a fork, with the queue of the parent process" do
+        @processor = start
+        submitted(:flush)
+        @processor.instance_variable_get(:@inbox).instance_variable_set(:@pid, -1)
+        @processor.reopen
+
+        refute_predicate backoff, :requests_waiting?
       end
     end
 

@@ -1781,19 +1781,36 @@ end
 
 Any other error is the destination's, and discards the message (or the batch) by default, since
 the write may have stored some or all of it. When the write that raised it cannot have stored any of
-the messages, such as when the appender could not connect, or the destination answered that it did
-not accept them, return `true` from `#wrote_nothing?(exception)`. The worker thread then writes the
-same message, or batch, again once it has backed off, until it is written or the thread gives up
-after `async_max_retries`. Keep the default, `false`, whenever the destination may have stored them,
-such as when its answer timed out, since writing them again would store them twice. While a flush or
-close is waiting, the message or batch is discarded either way, so that the flush does not wait out
-the back-offs:
+the messages, and writing them again later may succeed, such as when the appender could not connect,
+or the destination answered that it is unavailable for now, return `true` from
+`#wrote_nothing?(exception)`. The worker thread then writes the same message, or batch, again once
+it has backed off. Once the destination has answered it with a failure after it was written again 3
+times, the worker thread discards it and carries on with the next one. Keep the default, `false`,
+whenever the destination may have stored them, such as when its answer timed out, since writing
+them again would store them twice, and when writing them again is bound to fail the same way. While
+a flush or close is waiting, the message or batch is discarded either way, so that the flush does
+not wait out the back-offs.
+
+When the write never reached the destination, such as when the appender could not connect, also
+return `true` from `#not_sent?(exception)`, which is asked only once `#wrote_nothing?` has returned
+`true`. Writing it again after such a failure does not count towards the 3 times, since the
+destination has said nothing about the message, so that an outage loses no messages until the
+worker thread gives up after `async_max_retries`:
 
 ~~~ruby
 def wrote_nothing?(exception)
-  exception.is_a?(MyClient::ConnectionRefused) || exception.is_a?(MyClient::ServiceUnavailable)
+  not_sent?(exception) || exception.is_a?(MyClient::ServiceUnavailable)
+end
+
+def not_sent?(exception)
+  exception.is_a?(MyClient::ConnectionRefused)
 end
 ~~~
+
+When `#log` or `#batch` writes the messages in more than one request, return `false` for an error
+from any request after the first: the destination stored the messages of the earlier ones, which
+would otherwise be written again. That includes a subclass of `SemanticLogger::Appender::Http`
+whose `#log` or `#batch` calls `post` more than once.
 
 A `SystemStackError` is handled separately: the message is discarded, and since a thread must not
 overflow its stack twice (on macOS that crashes Ruby), the worker carries on in a new thread. Do not
@@ -2468,20 +2485,32 @@ appender), handle any other answer by its status:
   itself, so sending it again cannot succeed. With `async: true` or `batch: true`, its entries are
   discarded straight away. A batch, which is sent in one request, is first split up and sent again in
   parts, so that only the entries in the parts the server rejects are discarded.
-* A 5xx, `408 Request Timeout`, `429 Too Many Requests`, or a redirect is a problem with the
-  destination, which did not store the entries. With `async: true` or `batch: true`, the worker
-  thread [backs off](operations.html#retry-a-failing-appender), then sends the same entry or batch
-  again, so that it is written once the server is back, ahead of the entries logged meanwhile, which
-  wait on the queue. It stops for good after `async_max_retries` (default `100`) such failures in a
-  row, discarding the entry or batch; pass `async_max_retries: -1` to keep trying through a long
-  outage.
+* `408 Request Timeout`, `429 Too Many Requests`, or `503 Service Unavailable` asks to send the
+  request again later, and the server did not store the entries. With `async: true` or
+  `batch: true`, the worker thread [backs off](operations.html#retry-a-failing-appender), then sends
+  the same entry or batch again, so that it is written once the server is back, ahead of the entries
+  logged meanwhile, which wait on the queue. Once the server has answered it in this way after it
+  was sent again 3 times, it is discarded, and the worker thread carries on with the next one once
+  it has backed off, so that a request the server keeps turning away, such as one it answers with a
+  `429` that never clears, does not hold up the others.
+* Any other status, such as `500 Internal Server Error`, `502 Bad Gateway`, `504 Gateway Timeout`,
+  or a redirect, is a problem with the destination too, but the entry or batch is not sent again: a
+  `500` often comes again for the same request, and a proxy can answer a `502` or `504` once the
+  server behind it has stored it. With `async: true` or `batch: true`, it is discarded straight
+  away, and the worker thread backs off before sending the next one.
 
 A request that the appender could not send, since it could not connect to the server (the name does
 not resolve, the server cannot be reached, or it refuses the connection or does not accept it within
-`open_timeout`), is sent again in the same way. A request that failed once it was sent, such as one
-whose answer did not come within `read_timeout`, or whose connection was reset, is discarded instead,
-after the same back-off, since the server may have stored its entries. While a flush is waiting, such
-as the one at exit, a request that fails is discarded rather than sent again.
+`open_timeout`), is sent again in the same way as a `503`, but without counting towards the 3 times:
+the server has not answered it, so an outage loses no entries until the worker thread gives up. A
+request that failed once it was sent, such as one whose answer did not come within `read_timeout`,
+or whose connection was reset, is discarded instead, after the same back-off, since the server may
+have stored its entries. While a flush is waiting, such as the one at exit, a request that fails is
+discarded rather than sent again.
+
+The worker thread stops for good after `async_max_retries` (default `100`) failures in a row,
+discarding the entry or batch it was sending; pass `async_max_retries: -1` to keep trying through a
+long outage.
 
 The discarded entries are counted as `failed` in `SemanticLogger.stats`, and reported to the internal
 logger with the status code, the url without its credentials, and the start of the response body.
@@ -5347,13 +5376,18 @@ logging. Each restart sleeps with an increasing back-off (1 second, then 2, ...)
 message is processed successfully. The messages logged meanwhile wait on the queue.
 
 When the appender says that the write that failed wrote none of the message (or, when batching, of
-the batch), the thread writes the same message or batch again after the back-off, ahead of the
-messages on the queue, until it is written or the thread gives up. The HTTP based appenders say so
-for a response other than 2xx, and for a request they could not send because they could not connect
-to the server; see
+the batch), and is worth trying again, the thread writes the same message or batch again after the
+back-off, ahead of the messages on the queue. Once the destination has answered it with a failure
+after it was written again 3 times, it is discarded, and the thread carries on with the next one
+once it has backed off, so that a message the destination fails every time does not hold up the
+others until the thread gives up. A write that never reached the destination, such as one that
+could not connect, is not counted, so an outage loses no messages until the thread gives up. The
+HTTP based appenders say so for a `408`, `429`, or `503` response, and for a request they could not
+send because they could not connect to the server; see
 [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
-Otherwise the message or batch is discarded, since writing it again could write some of it twice, and
-the thread carries on with the next one once it has backed off.
+Otherwise the message or batch is discarded straight away, since writing it again could write some
+of it twice, or would fail the same way, and the thread carries on with the next one once it has
+backed off.
 
 A message that fails because of its own content, rather than the destination, is discarded and the
 thread carries on straight away, without backing off: for example a value the formatter cannot
@@ -5401,10 +5435,14 @@ before using them all, such as after a fatal exception, has only the retries it 
 message is written, the count starts again. After a fork, the worker thread of the child process
 starts counting afresh.
 
-A flush or close does not wait out back-offs, so that `SemanticLogger.flush`, including the flush at
-exit, returns promptly during an outage. Submitting one ends the back-off under way, and until it
-has run, a message or batch that the destination fails is discarded, and counted as `failed`, rather
-than written again after a back-off. Those failures do not count towards `async_max_retries`.
+A flush or close does not wait out the back-offs of the worker thread. Submitting one ends the
+back-off under way, and until it has run, a message or batch that the destination fails is
+discarded, and counted as `failed`, rather than written again after a back-off. Those failures do
+not count towards `async_max_retries`. It still waits while each message ahead of it on the queue is
+tried, which during an outage takes as long as the appender takes to fail: for an HTTP based
+appender whose server cannot be reached, up to its `open_timeout` (2 seconds by default) for each
+message, or each batch, and longer for an appender that retries on its own, such as `:tcp` with its
+`connect_retry_count`.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a
@@ -6338,14 +6376,17 @@ agent.
   metric subscriber, now raise an error from `#log` and `#batch` when the server answers with a status
   other than 2xx, instead of reporting it and carrying on. With `async: true` or `batch: true`, the
   entries the server did not accept are now counted as `failed` in `SemanticLogger.stats`, rather
-  than `processed`. On a 5xx, 408, 429, or a redirect, the worker thread now backs off (1 second, then
-  2, ...), then sends the same entry or batch again, and stops for good after `async_max_retries`
-  (default `100`) such failures in a row, discarding it. So does a request it could not send because
-  it could not connect, which was discarded before. During an outage the entries logged meanwhile
-  now wait on the queue rather than being sent, and discarded, one per back-off, so with a capped
-  queue (the default) and without `non_blocking`, logging waits once the queue is full until the
-  server is back or the thread gives up. Pass `async_max_retries: -1` to keep trying through a long
-  outage. On any other 4xx, a batch is now
+  than `processed`. On a 408, 429, or 503, the worker thread now backs off (1 second, then 2, ...),
+  then sends the same entry or batch again, up to 3 times, before it discards it and carries on with
+  the next one. So does a request it could not send because it could not connect, which was
+  discarded before, except that such a failure does not count towards the 3 times, since the server
+  never answered. On any other 5xx, such as a 500, 502, or 504, or a redirect, it discards the entry
+  or batch, then backs off before sending the next one. It stops for good after `async_max_retries`
+  (default `100`) failures in a row. During an outage the entries logged meanwhile now wait on the
+  queue while the worker thread backs off, rather than being sent, and discarded, one per back-off,
+  so with a capped queue (the default) and without `non_blocking`, logging waits once the queue is
+  full until the server is back or the thread gives up. Pass `async_max_retries: -1` to keep trying
+  through a long outage. On any other 4xx, a batch is now
   split up and sent again in parts, to find the entries the server rejects, so a server that kept
   some entries of a request it rejected can store them twice. See
   [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
@@ -6365,9 +6406,15 @@ agent.
   back-offs of its worker thread during an outage, which could keep the flush at exit waiting for
   minutes: 1 second for the first entry queued, 2 for the next, and so on. It ends the back-off
   under way, and until it has run, an entry or batch that the destination fails is discarded,
-  counted as `failed`, rather than sent again after a back-off. A custom appender can now say that
-  a write that raised wrote nothing, from `#wrote_nothing?(exception)`, so that the worker thread
-  writes it again after the back-off; see [Custom appenders](config.html#custom-appenders).
+  counted as `failed`, rather than sent again after a back-off. It still waits while each entry
+  ahead of it is tried, up to the appender's own timeouts. A custom appender can now say that a
+  write that raised wrote nothing, from `#wrote_nothing?(exception)`, so that the worker thread
+  writes it again after the back-off, up to 3 times once the destination answered it, and that the
+  write never reached the destination, from `#not_sent?(exception)`, which is not counted; see
+  [Custom appenders](config.html#custom-appenders). A subclass of `SemanticLogger::Appender::Http`
+  whose `#log` or `#batch` sends more than one request inherits a `#wrote_nothing?` that answers
+  `true` for a 503 or a refused connection from any of them, which sends the entries of the earlier
+  requests a second time: override it to return `false` for a failure after the first request.
 * The `:elasticsearch` and `:opensearch` appenders now send again the entries of a bulk request that
   the server rejected with status 429, because its write queue was full, up to 3 times, after waiting
   0.2, 0.4, then 0.8 seconds. Before, they were reported and discarded straight away. That holds up

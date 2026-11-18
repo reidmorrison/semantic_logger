@@ -503,8 +503,24 @@ module Appender
         end
 
         describe "#wrote_nothing?" do
-          it "is true for any response other than 2xx, since the server did not take the entries" do
-            [400, 503, 429, 301].each { |code| assert appender.wrote_nothing?(error_for(code)), code }
+          [408, 429, 503].each do |code|
+            it "is true for a #{code}, which asks to send the request again later" do
+              error = error_for(code)
+
+              assert_predicate error, :retry_later?
+              assert appender.wrote_nothing?(error)
+            end
+          end
+
+          # A 500 often comes again for the same request, and a proxy can answer a 502 or 504 once the
+          # server behind it has stored the request.
+          [500, 502, 504, 501, 301, 400].each do |code|
+            it "is false for a #{code}, which is not worth sending again" do
+              error = error_for(code)
+
+              refute_predicate error, :retry_later?
+              refute appender.wrote_nothing?(error)
+            end
           end
 
           [SocketError, Net::OpenTimeout, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
@@ -521,19 +537,97 @@ module Appender
             end
           end
 
-          it "is false for an error connecting again after one raised once the request was sent" do
+          # Ruby sets the cause of an error to the one being handled when it is raised, which says
+          # nothing about the request.
+          it "is true for an error connecting raised while handling another, such as a format error" do
             error = begin
               begin
-                raise Net::ReadTimeout
-              rescue Net::ReadTimeout
+                raise SemanticLogger::Subscriber::FormatError, "cannot format"
+              rescue SemanticLogger::Subscriber::FormatError
                 raise Errno::ECONNREFUSED
               end
             rescue Errno::ECONNREFUSED => e
               e
             end
 
-            refute appender.wrote_nothing?(error)
+            assert_kind_of SemanticLogger::Subscriber::FormatError, error.cause
+            assert appender.wrote_nothing?(error)
           end
+
+          # As Net::HTTP raises it on Ruby 4.0.
+          it "is true for an open timeout raised while handling an IO::TimeoutError" do
+            error = begin
+              begin
+                raise IO::TimeoutError, "Blocking operation timed out!"
+              rescue IO::TimeoutError
+                raise Net::OpenTimeout, "Failed to open TCP connection"
+              end
+            rescue Net::OpenTimeout => e
+              e
+            end
+
+            assert appender.wrote_nothing?(error)
+          end
+
+          it "is true for the error Net::HTTP raises when the server refuses the connection" do
+            server = TCPServer.new("127.0.0.1", 0)
+            port   = server.addr[1]
+            server.close
+            error = assert_raises(Errno::ECONNREFUSED) do
+              Net::HTTP.new("127.0.0.1", port).request(Net::HTTP::Post.new("/"))
+            end
+
+            assert appender.wrote_nothing?(error)
+          end
+        end
+
+        describe "#not_sent?" do
+          [SocketError, Net::OpenTimeout, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
+           Errno::EADDRNOTAVAIL].each do |error_class|
+            it "is true for #{error_class}, raised before the request was sent" do
+              assert appender.not_sent?(error_class.new)
+            end
+          end
+
+          it "is false for a response, which the server sent" do
+            refute appender.not_sent?(error_for(503))
+          end
+
+          [Net::ReadTimeout, Errno::ECONNRESET, EOFError].each do |error_class|
+            it "is false for #{error_class}, raised once the request was sent" do
+              refute appender.not_sent?(error_class.new)
+            end
+          end
+        end
+
+        it "raises the error of a request whose answer timed out, rather than one from connecting again" do
+          appender.logger = internal_logger
+          refused         = -> { raise Errno::ECONNREFUSED }
+          error           = appender.stub(:reopen, refused) do
+            appender.http.stub(:request, ->(_request) { raise Net::ReadTimeout }) do
+              assert_raises(Net::ReadTimeout) { appender.info(log_message) }
+            end
+          end
+
+          refute appender.wrote_nothing?(error)
+          report = internal_logger.events.find { |event| event.message.include?("Could not connect again") }
+
+          assert report, "the failure to connect again should be reported"
+          assert_equal :warn, report.level
+          assert_kind_of Errno::ECONNREFUSED, report.exception
+        end
+
+        # Connecting again straight away would fail the same way, so that a server that cannot be
+        # reached would hold up each request for twice the open_timeout.
+        it "does not connect again after a request it could not send" do
+          reopened = false
+          appender.stub(:reopen, -> { reopened = true }) do
+            appender.http.stub(:request, ->(_request) { raise Net::OpenTimeout }) do
+              assert_raises(Net::OpenTimeout) { appender.info(log_message) }
+            end
+          end
+
+          refute reopened
         end
 
         it "is not a RuntimeError, so the connection is kept" do
@@ -577,6 +671,44 @@ module Appender
             assert_equal %w[refused last], delivered
             assert_equal [1], slept
             assert_equal 0, processor.failed_count
+          end
+
+          it "discards an entry the server answers with a 503 every time, once sent again 3 times" do
+            delivered, slept = process(processor, %w[unavailable last], {"unavailable" => [503] * 10})
+
+            assert_equal %w[last], delivered
+            assert_equal [1, 2, 3, 4], slept
+            assert_equal 1, processor.processed_count
+            assert_equal 1, processor.failed_count
+          end
+
+          it "sends an entry again for as long as it cannot connect, without counting it towards the 3 times" do
+            refused          = [Errno::ECONNREFUSED] * 6
+            delivered, slept = process(processor, %w[refused last], {"refused" => refused})
+
+            assert_equal %w[refused last], delivered
+            assert_equal [1, 2, 3, 4, 5, 6], slept
+            assert_equal 0, processor.failed_count
+          end
+
+          it "counts only the server's answers towards the 3 times an entry is sent again" do
+            statuses         = [503, Errno::ECONNREFUSED, 503, Net::OpenTimeout, 503, 503]
+            delivered, slept = process(processor, %w[unavailable last], {"unavailable" => statuses})
+
+            assert_equal %w[last], delivered
+            assert_equal [1, 2, 3, 4, 5, 6], slept
+            assert_equal 1, processor.failed_count
+          end
+
+          [500, 502, 504].each do |code|
+            it "discards an entry the server answers with a #{code} at once, then backs off" do
+              delivered, slept = process(processor, %w[failed last], {"failed" => [code]})
+
+              assert_equal %w[last], delivered
+              assert_equal [1], slept
+              assert_equal 1, processor.processed_count
+              assert_equal 1, processor.failed_count
+            end
           end
 
           it "discards an entry whose connection was reset, after the server may have stored it, then backs off" do

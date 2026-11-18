@@ -233,13 +233,18 @@ logging. Each restart sleeps with an increasing back-off (1 second, then 2, ...)
 message is processed successfully. The messages logged meanwhile wait on the queue.
 
 When the appender says that the write that failed wrote none of the message (or, when batching, of
-the batch), the thread writes the same message or batch again after the back-off, ahead of the
-messages on the queue, until it is written or the thread gives up. The HTTP based appenders say so
-for a response other than 2xx, and for a request they could not send because they could not connect
-to the server; see
+the batch), and is worth trying again, the thread writes the same message or batch again after the
+back-off, ahead of the messages on the queue. Once the destination has answered it with a failure
+after it was written again 3 times, it is discarded, and the thread carries on with the next one
+once it has backed off, so that a message the destination fails every time does not hold up the
+others until the thread gives up. A write that never reached the destination, such as one that
+could not connect, is not counted, so an outage loses no messages until the thread gives up. The
+HTTP based appenders say so for a `408`, `429`, or `503` response, and for a request they could not
+send because they could not connect to the server; see
 [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
-Otherwise the message or batch is discarded, since writing it again could write some of it twice, and
-the thread carries on with the next one once it has backed off.
+Otherwise the message or batch is discarded straight away, since writing it again could write some
+of it twice, or would fail the same way, and the thread carries on with the next one once it has
+backed off.
 
 A message that fails because of its own content, rather than the destination, is discarded and the
 thread carries on straight away, without backing off: for example a value the formatter cannot
@@ -287,10 +292,14 @@ before using them all, such as after a fatal exception, has only the retries it 
 message is written, the count starts again. After a fork, the worker thread of the child process
 starts counting afresh.
 
-A flush or close does not wait out back-offs, so that `SemanticLogger.flush`, including the flush at
-exit, returns promptly during an outage. Submitting one ends the back-off under way, and until it
-has run, a message or batch that the destination fails is discarded, and counted as `failed`, rather
-than written again after a back-off. Those failures do not count towards `async_max_retries`.
+A flush or close does not wait out the back-offs of the worker thread. Submitting one ends the
+back-off under way, and until it has run, a message or batch that the destination fails is
+discarded, and counted as `failed`, rather than written again after a back-off. Those failures do
+not count towards `async_max_retries`. It still waits while each message ahead of it on the queue is
+tried, which during an outage takes as long as the appender takes to fail: for an HTTP based
+appender whose server cannot be reached, up to its `open_timeout` (2 seconds by default) for each
+message, or each batch, and longer for an appender that retries on its own, such as `:tcp` with its
+`connect_retry_count`.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a
