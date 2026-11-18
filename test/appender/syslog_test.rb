@@ -54,6 +54,43 @@ module Appender
         assert_match(/<14>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message/, message)
       end
 
+      describe "tcp_client:" do
+        # Returns [SemanticLogger::Appender::Syslog] an appender over TCP built with the given tcp_client: option,
+        # which connects to nothing.
+        def appender_with(tcp_client)
+          Net::TCPClient.stub_any_instance(:connect, nil) do
+            SemanticLogger::Appender::Syslog.new(url: "tcp://localhost:8514", tcp_client: tcp_client)
+          end
+        end
+
+        it "keeps the ssl: handshake_timeout after a reopen, and leaves the Hashes given as they are" do
+          ssl        = {handshake_timeout: 2}
+          tcp_client = {connect_timeout: 3, ssl: ssl}
+          appender   = appender_with(tcp_client)
+
+          assert_in_delta 2.0, appender.remote_syslog.ssl_handshake_timeout
+
+          Net::TCPClient.stub_any_instance(:connect, nil) { appender.reopen }
+
+          assert_in_delta 2.0, appender.remote_syslog.ssl_handshake_timeout
+          assert_equal ["localhost:8514"], appender.remote_syslog.servers
+          assert_equal({connect_timeout: 3, ssl: {handshake_timeout: 2}}, tcp_client)
+        end
+
+        it "accepts frozen Hashes" do
+          appender = appender_with({connect_timeout: 3, ssl: {handshake_timeout: 2}.freeze}.freeze)
+
+          assert_in_delta 2.0, appender.remote_syslog.ssl_handshake_timeout
+          assert_equal ["localhost:8514"], appender.remote_syslog.servers
+        end
+
+        it "connects to the server in the url, rather than one given in tcp_client:" do
+          appender = appender_with({server: "otherhost:514"})
+
+          assert_equal ["localhost:8514"], appender.remote_syslog.servers
+        end
+      end
+
       describe "#message_error?" do
         it "is true over UDP for a log message too large to send as a datagram" do
           appender = SemanticLogger::Appender::Syslog.new(url: "udp://localhost:88888")

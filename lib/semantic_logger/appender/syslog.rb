@@ -195,8 +195,7 @@ module SemanticLogger
           method = ::Syslog.opened? ? :reopen : :open
           ::Syslog.send(method, application, options, facility)
         when :tcp
-          @tcp_client_options[:server] = "#{@server}:#{@port}"
-          @remote_syslog               = Net::TCPClient.new(**@tcp_client_options)
+          @remote_syslog = Net::TCPClient.new(**tcp_client_options)
           # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
           @remote_syslog.logger = logger
         when :udp
@@ -259,6 +258,14 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Hash] the options given as tcp_client:, with the server from the url, for a new
+      # Net::TCPClient. Leaves the caller's Hash as it is, and copies each Hash in it, such as ssl:,
+      # since Net::TCPClient takes handshake_timeout: out of the ssl: Hash it is given.
+      def tcp_client_options
+        options = @tcp_client_options.transform_values { |value| value.is_a?(Hash) ? value.dup : value }
+        options.merge(server: "#{@server}:#{@port}")
+      end
 
       # Returns the supplied formatter, with this appender's facility, level map, and
       # maximum packet size added when it names one of the PACKET_FORMATTERS, so that they are not

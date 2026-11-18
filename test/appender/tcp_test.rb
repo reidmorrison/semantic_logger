@@ -19,6 +19,36 @@ module Appender
 
       let(:amessage) { "AppenderTcpTest log message" }
 
+      describe "ssl:" do
+        # Returns [SemanticLogger::Appender::Tcp] an appender built with the given ssl: option, which connects to
+        # nothing.
+        def appender_with(ssl)
+          Net::TCPClient.stub_any_instance(:connect, true) do
+            SemanticLogger::Appender::Tcp.new(server: "localhost:8088", ssl: ssl)
+          end
+        end
+
+        it "keeps the handshake_timeout after a reopen, and leaves the Hash given as it is" do
+          ssl      = {handshake_timeout: 2, ca_file: "ca.pem"}
+          appender = appender_with(ssl)
+
+          assert_in_delta 2.0, appender.tcp_client.ssl_handshake_timeout
+
+          Net::TCPClient.stub_any_instance(:connect, true) { appender.reopen }
+
+          assert_in_delta 2.0, appender.tcp_client.ssl_handshake_timeout
+          assert_equal({handshake_timeout: 2, ca_file: "ca.pem"}, ssl)
+        end
+
+        it "accepts a frozen Hash" do
+          [{handshake_timeout: 2}.freeze, {ca_file: "ca.pem"}.freeze].each do |ssl|
+            appender = appender_with(ssl)
+
+            assert_in_delta ssl.fetch(:handshake_timeout, 10.0), appender.tcp_client.ssl_handshake_timeout
+          end
+        end
+      end
+
       SemanticLogger::LEVELS.each do |level|
         it "send #{level}" do
           data = nil
