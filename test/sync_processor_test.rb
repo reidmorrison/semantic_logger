@@ -28,6 +28,31 @@ module SemanticLogger
             SemanticLogger::SyncProcessor.logger = original
           end
         end
+
+        it "reports to a Ruby Logger, with the exception" do
+          original = SemanticLogger::SyncProcessor.logger
+          output   = StringIO.new
+          begin
+            SemanticLogger::SyncProcessor.logger = ::Logger.new(output)
+            processor = SemanticLogger::SyncProcessor.new
+            processor.appenders << Class.new(SemanticLogger::Subscriber) do
+              def self.name = "FailingAppender"
+
+              def log(_log)
+                raise IOError, "destination unavailable"
+              end
+            end.new
+            processor.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "hello" })
+            processor.flush
+
+            assert_includes output.string,
+                            "SemanticLogger::Appenders -- Failed to log to appender: FailingAppender " \
+                            "-- Exception: IOError: destination unavailable"
+            refute_includes output.string, "Flushing appender"
+          ensure
+            SemanticLogger::SyncProcessor.logger = original
+          end
+        end
       end
 
       describe "#initialize" do

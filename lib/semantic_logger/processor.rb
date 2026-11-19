@@ -4,9 +4,12 @@ module SemanticLogger
     # Allow the internal logger to be overridden from its default of $stderr
     #   Can be replaced with another Ruby logger or Rails logger, but never to
     #   SemanticLogger::Logger itself since it is for reporting problems
-    #   while trying to log to the various appenders
-    class << self
-      attr_writer :logger
+    #   while trying to log to the various appenders (raises ArgumentError)
+    #
+    # A Ruby or Rails logger is wrapped in an appender (see Appender.internal_logger), so .logger
+    # returns that appender. The appenders added from then on report to it.
+    def self.logger=(logger)
+      @logger = Appender.internal_logger(logger)
     end
 
     # Internal logger for SemanticLogger
