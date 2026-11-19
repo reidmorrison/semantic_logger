@@ -98,20 +98,28 @@ module SemanticLogger
         old_socket&.close
       end
 
-      # Write the log using the specified protocol and server.
+      # Write the log using the specified protocol and server. Opens a new socket, connected to the server, first
+      # when the appender has none, after #close.
       def log(log)
-        @socket.send(format_log(log), udp_flags)
+        (@socket ||= connected_socket).send(format_log(log), udp_flags)
         true
       end
 
-      # Flush is called by the semantic_logger during shutdown.
+      # Flush is called by the semantic_logger during shutdown. Does nothing after #close, which left no socket.
       def flush
         @socket&.flush
       end
 
-      # Close is called during shutdown.
+      # Closes the socket, such as when the appender is removed, and forgets it, so that the next write opens a new
+      # one. An error closing it is reported to the internal logger as a warning, rather than raised.
+      #
+      # In a forked child, the socket is the child's own copy of the parent's, so closing it leaves the parent's open.
       def close
-        @socket&.close
+        socket  = @socket
+        @socket = nil
+        socket&.close
+      rescue StandardError => e
+        logger.warn("Could not close the socket to the UDP server", e)
       end
 
       # A log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.
