@@ -100,7 +100,18 @@ module SemanticLogger
       end
 
       # Re-open after process fork
+      #
+      # A child process first forgets the notifier it inherited, without closing it: over TCP, its
+      # connection belongs to the parent. So when connecting fails in the child, such as while the server
+      # cannot be reached, the appender connects again on its next write, rather than writing through the
+      # parent's connection. Over TLS, both processes would then carry on the same TLS session, so that
+      # the server could not decrypt what the parent writes next. Ruby closes the child's copy of the
+      # socket when it collects the notifier. GELF keeps its sockets to itself, so until then the child
+      # holds that copy open, and over plain TCP the server does not see the connection end when the
+      # parent closes it.
       def reopen
+        forget_inherited
+
         uri       = Utils.parse_url(@url)
         @server   = uri.host
         @port     = uri.port
@@ -110,8 +121,7 @@ module SemanticLogger
           raise(ArgumentError, "Invalid protocol value: #{@protocol}. Must be :udp or :tcp")
         end
 
-        @notifier                       = GELF::Notifier.new(server, port, max_size, notifier_options)
-        @notifier.collect_file_and_line = false
+        build_notifier
       end
 
       # Returns [Hash] of parameters to send
@@ -133,8 +143,11 @@ module SemanticLogger
       # GELF serializes the Hash with #to_json, which raises for Infinity, NaN, invalid UTF-8, or a
       # structure nested too deeply, and writes a Struct through its #inspect, so such a Hash is
       # handed over as a copy that JSON can represent (see Utils.json_ready).
+      #
+      # Builds a notifier first when the appender has none, since building one failed when it was
+      # reopened after a fork.
       def log(log)
-        notifier.notify!(format_log(log) { |hash| Utils.json_ready(hash) })
+        (notifier || build_notifier).notify!(format_log(log) { |hash| Utils.json_ready(hash) })
         true
       end
 
@@ -151,6 +164,20 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [GELF::Notifier] a new notifier, which connects to the server over TCP, after making it
+      # the appender's. Records the process that built it, which owns its connection (see #reopen).
+      def build_notifier
+        @notifier                       = GELF::Notifier.new(server, port, max_size, notifier_options)
+        @notifier.collect_file_and_line = false
+        @pid                            = ::Process.pid
+        @notifier
+      end
+
+      # In a child process, forgets the notifier built in the parent before a fork. See #reopen.
+      def forget_inherited
+        @notifier = nil unless @pid == ::Process.pid
+      end
 
       # Returns [Hash] a copy of the gelf_options (see Subscriber#copy_options), with the protocol of the url
       # and the application as the facility, unless they name their own, for a new GELF::Notifier.

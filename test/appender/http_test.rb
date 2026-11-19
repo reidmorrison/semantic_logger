@@ -1,4 +1,6 @@
 require_relative "../test_helper"
+require_relative "../forked_child_helper"
+require_relative "../tls_server"
 
 # Unit Test for SemanticLogger::Appender::Http
 module Appender
@@ -457,6 +459,64 @@ module Appender
 
         assert_equal 1, starts
         assert_predicate appender.http, :started?
+      end
+
+      describe "over https, after a fork" do
+        include ForkedChildHelper
+
+        let(:server) { TlsServer.new(http: true) }
+        let(:https_appender) do
+          appender = SemanticLogger::Appender::Http.new(
+            url:       "https://127.0.0.1:#{server.port}/",
+            ssl:       {verify_mode: OpenSSL::SSL::VERIFY_NONE},
+            formatter: ->(log, _logger) { log.message }
+          )
+          # Keeps Net::HTTP from starting a new connection when the test takes longer than its default of 2 seconds.
+          appender.http.keep_alive_timeout = 60
+          appender
+        end
+
+        after do
+          https_appender.close
+          server.close
+        end
+
+        def log_with(message)
+          log         = SemanticLogger::Log.new("Test", :info)
+          log.message = message
+          log
+        end
+
+        it "leaves the connection it inherited to the parent process, and connects again in the child" do
+          https_appender.log(log_with("before"))
+          in_forked_child do
+            https_appender.reopen
+            https_appender.log(log_with("child"))
+            ""
+          end
+          https_appender.log(log_with("after"))
+
+          assert_equal %w[before after], server.received(1, 2)
+          assert_equal ["child", :closed], server.received(2, 2)
+        end
+
+        it "starts a connection of its own for the next request in the child when a reopen there cannot" do
+          https_appender.log(log_with("before"))
+          output = in_forked_child do
+            error = Net::HTTP.stub_any_instance(:start, -> { raise Errno::ECONNREFUSED }) do
+              https_appender.reopen
+            rescue Errno::ECONNREFUSED => e
+              e
+            end
+            https_appender.log(log_with("child"))
+            error.class.name
+          end
+          https_appender.log(log_with("after"))
+
+          assert_equal "Errno::ECONNREFUSED", output
+          assert_equal %w[before after], server.received(1, 2)
+          assert_equal ["child", :closed], server.received(2, 2)
+        end
       end
 
       describe "a response other than 2xx" do

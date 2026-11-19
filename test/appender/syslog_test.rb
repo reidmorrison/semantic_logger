@@ -1,5 +1,7 @@
 require_relative "../test_helper"
 require "net/tcp_client"
+require_relative "../forked_child_helper"
+require_relative "../tls_server"
 require "syslog"
 
 # Unit Test for SemanticLogger::Appender::Syslog
@@ -88,6 +90,85 @@ module Appender
           appender = appender_with({server: "otherhost:514"})
 
           assert_equal ["localhost:8514"], appender.remote_syslog.servers
+        end
+      end
+
+      describe "over TCP with TLS, after a fork" do
+        include ForkedChildHelper
+
+        let(:server) { TlsServer.new(separator: "\r\n") }
+        let(:tls_appender) do
+          SemanticLogger::Appender::Syslog.new(
+            url:        "tcp://127.0.0.1:#{server.port}",
+            tcp_client: {ssl: {verify_mode: OpenSSL::SSL::VERIFY_NONE}},
+            formatter:  ->(log, _logger) { log.message }
+          )
+        end
+
+        after do
+          tls_appender.remote_syslog&.close
+          server.close
+        end
+
+        def log_with(message)
+          log         = SemanticLogger::Log.new("Test", :info)
+          log.message = message
+          log
+        end
+
+        it "leaves the connection it inherited to the parent process, and connects again in the child" do
+          tls_appender.log(log_with("before"))
+          in_forked_child do
+            tls_appender.reopen
+            tls_appender.log(log_with("child"))
+            ""
+          end
+          tls_appender.log(log_with("after"))
+
+          assert_equal %w[before after], server.received(1, 2)
+          assert_equal ["child", :closed], server.received(2, 2)
+        end
+
+        it "connects in the child when a reopen there cannot, rather than writing through the parent's connection" do
+          tls_appender.log(log_with("before"))
+          output = in_forked_child do
+            error = Net::TCPClient.stub(:new, ->(**) { raise Errno::ECONNREFUSED }) do
+              tls_appender.reopen
+            rescue Errno::ECONNREFUSED => e
+              e
+            end
+            tls_appender.log(log_with("child"))
+            error.class.name
+          end
+          tls_appender.log(log_with("after"))
+
+          assert_equal "Errno::ECONNREFUSED", output
+          assert_equal %w[before after], server.received(1, 2)
+          assert_equal ["child", :closed], server.received(2, 2)
+        end
+      end
+
+      describe "over TCP, after a fork" do
+        include ForkedChildHelper
+
+        let(:server) { TCPServer.new("127.0.0.1", 0) }
+        let(:tcp_appender) { SemanticLogger::Appender::Syslog.new(url: "tcp://127.0.0.1:#{server.addr[1]}") }
+
+        after do
+          server.close
+        end
+
+        it "closes its copy of the connection it inherited, so the server sees it end once the parent closes it" do
+          tcp_appender
+          inherited = server.accept
+          ended     = while_forked_child_runs(-> { tcp_appender.reopen }) do
+            tcp_appender.remote_syslog.close
+            inherited.wait_readable(2) && inherited.read_nonblock(1, exception: false).nil?
+          end
+
+          assert ended, "The server did not see the connection end while the child process was running"
+        ensure
+          inherited&.close
         end
       end
 

@@ -124,17 +124,27 @@ module SemanticLogger
         reopen
       end
 
-      # After forking an active process call #reopen to re-open the handles to resources.
+      # Closes the connection, and connects to the server again, such as after a log rotation, or a fork.
+      #
+      # After a fork, the child first forgets the client it inherited, without closing its connection, which
+      # belongs to the parent: closing a TLS connection sends the server a close_notify, which ends it for the
+      # parent too. The child closes only its own copy of the socket's file descriptor, which sends the server
+      # nothing, so that the server sees the connection end once the parent closes it, rather than once the
+      # child exits, or collects the client. When connecting fails in the child, the appender has no client
+      # until the next write connects again (see #log), rather than writing through the parent's connection.
       def reopen
+        forget_inherited
         close
-        @tcp_client = Net::TCPClient.new(**tcp_client_options)
+        connect
       end
 
-      # Write the log using the specified protocol and server.
+      # Write the log using the specified protocol and server. Connects first when the appender has no
+      # client, since connecting failed when it was reopened after a fork.
       def log(log)
-        message = format_log(log)
-        @tcp_client.retry_on_connection_failure do
-          @tcp_client.write("#{message}#{separator}")
+        message    = format_log(log)
+        tcp_client = @tcp_client || connect
+        tcp_client.retry_on_connection_failure do
+          tcp_client.write("#{message}#{separator}")
         end
         true
       end
@@ -155,6 +165,26 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Net::TCPClient] a new client, connected to the server, after making it the appender's.
+      # Records the process that built it, which owns its connection (see #reopen).
+      def connect
+        @tcp_client = Net::TCPClient.new(**tcp_client_options)
+        @pid        = ::Process.pid
+        @tcp_client
+      end
+
+      # In a child process, forgets the client built in the parent before a fork, and then closes the child's
+      # copy of its socket's file descriptor, without a TLS shutdown: SSLSocket#to_io is the TCPSocket under
+      # it. See #reopen.
+      def forget_inherited
+        return if @pid == ::Process.pid
+
+        inherited   = @tcp_client
+        @tcp_client = nil
+        socket      = inherited&.socket&.to_io
+        socket.close unless socket.nil? || socket.closed?
+      end
 
       # Returns [Hash] a copy of the options for a new Net::TCPClient (see Subscriber#copy_options), since it
       # takes handshake_timeout: out of the ssl: Hash it is given: each client gets a copy of its own, which

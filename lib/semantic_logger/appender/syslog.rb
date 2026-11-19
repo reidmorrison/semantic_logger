@@ -189,15 +189,22 @@ module SemanticLogger
 
       # After forking an active process call #reopen to re-open
       # open the handles to resources
+      #
+      # Over TCP, a child process first forgets the client it inherited, without closing its connection, which
+      # belongs to the parent. The child closes only its own copy of the socket's file descriptor, which sends
+      # the server nothing, so that the server sees the connection end once the parent closes it, rather than
+      # once the child exits, or collects the client. When connecting fails in the child, such as while the
+      # server cannot be reached, the appender connects again on its next write, rather than writing through
+      # the parent's connection. Over TLS, both processes would then carry on the same TLS session, so that the
+      # server could not decrypt what the parent writes next.
       def reopen
         case @protocol
         when :syslog
           method = ::Syslog.opened? ? :reopen : :open
           ::Syslog.send(method, application, options, facility)
         when :tcp
-          @remote_syslog = Net::TCPClient.new(**tcp_client_options)
-          # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
-          @remote_syslog.logger = logger
+          forget_inherited
+          connect_tcp
         when :udp
           @remote_syslog = UDPSocket.new
         else
@@ -213,7 +220,8 @@ module SemanticLogger
           message = format_log(log).gsub "%", "%%"
           ::Syslog.log @level_map[log.level], message
         when :tcp
-          @remote_syslog.retry_on_connection_failure { @remote_syslog.write("#{format_log(log)}\r\n") }
+          client = @remote_syslog || connect_tcp
+          client.retry_on_connection_failure { client.write("#{format_log(log)}\r\n") }
         when :udp
           @remote_syslog.send(format_log(log), 0, @server, @port)
         else
@@ -258,6 +266,28 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Net::TCPClient] a new client, connected to the server, after making it the appender's. Records
+      # the process that built it, which owns its connection (see #reopen).
+      def connect_tcp
+        @remote_syslog = Net::TCPClient.new(**tcp_client_options)
+        # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
+        @remote_syslog.logger = logger
+        @pid                  = ::Process.pid
+        @remote_syslog
+      end
+
+      # In a child process, forgets the TCP client built in the parent before a fork, and then closes the child's
+      # copy of its socket's file descriptor, without a TLS shutdown: SSLSocket#to_io is the TCPSocket under it.
+      # See #reopen.
+      def forget_inherited
+        return if @pid == ::Process.pid
+
+        inherited      = @remote_syslog
+        @remote_syslog = nil
+        socket         = inherited&.socket&.to_io
+        socket.close unless socket.nil? || socket.closed?
+      end
 
       # Returns [Hash] a copy of the options given as tcp_client: (see Subscriber#copy_options), with the server
       # from the url, for a new Net::TCPClient, since it takes handshake_timeout: out of the ssl: Hash it is
