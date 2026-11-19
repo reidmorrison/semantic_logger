@@ -1,5 +1,6 @@
 require_relative "test_helper"
 require_relative "signal_trap_helper"
+require_relative "forked_child_helper"
 
 # A named class used as a logger cache key in the ".[]" tests.
 class CachedSample
@@ -212,6 +213,113 @@ class SemanticLoggerTest < Minitest::Test
         assert logged.join(5), "remove_appender did not return"
         assert_equal [:closed], appender.recorded
         refute_includes SemanticLogger.appenders, appender
+      end
+    end
+
+    describe ".remove_appender in a forked child" do
+      include ForkedChildHelper
+
+      # Holds a connection built in the process it names, such as a TLS connection. Its #reopen is
+      # fork-aware: in a forked child, it forgets the connection the parent built, without closing
+      # it, and builds its own. Its #close is not: it closes whatever connection it holds.
+      let(:fork_aware_class) do
+        Class.new(SemanticLogger::Subscriber) do
+          attr_reader :connection, :closed
+
+          def initialize(...)
+            super
+            @connection = "built by #{Process.pid}"
+          end
+
+          def log(_log) = true
+
+          def batch(_logs) = true
+
+          def reopen
+            @connection = "built by #{Process.pid}" unless @connection == "built by #{Process.pid}"
+          end
+
+          def close
+            @closed     = @connection
+            @connection = nil
+          end
+        end
+      end
+
+      # In a forked child, its #reopen waits until released, so that the processor's worker thread is
+      # still reopening the appenders when the child removes another one.
+      let(:gate_class) do
+        Class.new(SemanticLogger::Subscriber) do
+          attr_reader :gate
+
+          def initialize(...)
+            super
+            @parent = Process.pid
+            @gate   = Queue.new
+          end
+
+          def log(_log) = true
+
+          def reopen
+            gate.pop(timeout: 5) unless Process.pid == @parent
+          end
+        end
+      end
+
+      # Only a processor with a worker thread reopens on that thread, after the fork, so only it has
+      # a reopen pending; the synchronous one reopens in the fork itself, so it needs no gate, and
+      # would wait for it there.
+      let(:gate) do
+        next unless SemanticLogger::Logger.processor.is_a?(SemanticLogger::Processor)
+
+        SemanticLogger.add_appender(appender: gate_class.new)
+      end
+      let(:fork_aware) { fork_aware_class.new }
+
+      before do
+        skip "fork is not supported" unless Process.respond_to?(:fork) && Process.respond_to?(:_fork)
+      end
+
+      after do
+        [@added, gate].each { |appender| SemanticLogger.remove_appender(appender) }
+      end
+
+      # Removes the appender in a forked child, while the processor's worker thread is still reopening
+      # the appenders, and returns the connection that its #close closed there.
+      def remove_in_child(added)
+        gate
+        in_forked_child do
+          remover = Thread.new { SemanticLogger.remove_appender(added) }
+          Thread.pass until %w[sleep].include?(remover.status) || !remover.alive?
+          sleep 0.1
+          gate&.gate&.push(true)
+
+          assert remover.join(5), "remove_appender did not return"
+          refute_includes SemanticLogger.appenders, added
+          assert_equal "built by #{Process.pid}", fork_aware.closed, "it should close only what the child built"
+          ""
+        end
+      end
+
+      it "reopens the appender before closing it, so that it closes only what the child built" do
+        @added = SemanticLogger.add_appender(appender: fork_aware)
+        remove_in_child(@added)
+
+        assert_equal "built by #{Process.pid}", fork_aware.connection, "the parent keeps its connection"
+      end
+
+      it "reopens an appender added with async: true before closing it" do
+        @added = SemanticLogger.add_appender(appender: fork_aware, async: true)
+        remove_in_child(@added)
+
+        assert_equal "built by #{Process.pid}", fork_aware.connection, "the parent keeps its connection"
+      end
+
+      it "reopens an appender added in batches before closing it" do
+        @added = SemanticLogger.add_appender(appender: fork_aware, batch: true)
+        remove_in_child(@added)
+
+        assert_equal "built by #{Process.pid}", fork_aware.connection, "the parent keeps its connection"
       end
     end
 
