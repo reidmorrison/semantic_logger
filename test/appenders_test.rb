@@ -210,6 +210,28 @@ class AppendersTest < Minitest::Test
         assert_equal(0, capture_logger.events.count { |it| it.message.match?(/failed/i) })
         assert_equal 0, appenders.size
       end
+
+      # On macOS a second stack overflow on the same thread crashes Ruby, so nothing more is closed on it.
+      it "raises a stack overflow at once, removing only the appenders already closed" do
+        closed     = []
+        closing    = lambda do |raising|
+          appender = SemanticLogger::Test::CaptureLogEvents.new
+          appender.define_singleton_method(:close) do
+            raise SystemStackError, "stack level too deep" if raising
+
+            closed << self
+          end
+          appender
+        end
+        first      = closing.call(false)
+        overflowed = closing.call(true)
+        last       = closing.call(false)
+        [first, overflowed, last].each { |appender| appenders << appender }
+
+        assert_raises(SystemStackError) { appenders.close }
+        assert_equal [first], closed
+        assert_equal [overflowed, last], appenders.to_a
+      end
     end
 
     describe "#log" do

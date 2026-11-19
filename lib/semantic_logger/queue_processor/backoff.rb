@@ -104,7 +104,12 @@ module SemanticLogger
       # Whether the worker thread is waited on: a request, such as a flush or close, is waiting for
       # it to run it, or the process is exiting. It then neither waits out back-offs nor writes again
       # what the destination failed.
-      def waited_on? = @exiting || !@requests.empty?
+      def waited_on? = @exiting || request_waiting?
+
+      # Whether a request, such as a flush or close, is waiting for the worker thread to run it. The
+      # thread that submitted it may be the worker thread of the queue processor that writes to this
+      # one's appender, which then waits for this worker thread (see QueueProcessor#holding_up?).
+      def request_waiting? = !@requests.empty?
 
       # Called once the destination failed. While the worker thread is waited on, it gives up on the
       # messages queued ahead of the next request, such as a flush, and discards them without writing

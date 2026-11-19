@@ -372,9 +372,10 @@ module SemanticLogger
   #
   # On the thread of an appender added with async: true or in batches, such as by that appender as it
   # writes, removing itself or another appender, it cannot wait for the processor's thread, which may
-  # be waiting for it. It removes the appender at once, and the processor's thread closes it, between
-  # writes, once it has written the log messages queued ahead, without this call waiting for it. An
-  # appender that removes itself is closed once its current write has returned.
+  # be waiting for it. The processor's thread, once it has written the log messages queued ahead,
+  # closes the appender, between writes, then removes it, without this call waiting for it. Until
+  # then, .appenders still lists it. An appender that removes itself is closed once its current write
+  # has returned.
   #
   # Returns the result of closing the appender, or true on the thread of an appender added with
   # async: true or in batches, before the appender is closed.

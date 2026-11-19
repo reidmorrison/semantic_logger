@@ -63,6 +63,19 @@ module SemanticLogger
         true
       end
 
+      # Called once no worker thread will run this request, such as one passed on to the next worker
+      # thread when none is running (see QueueProcessor#pass_on). A task runs on a new thread, since
+      # nothing then writes to the appender, and returns that thread. A command is not run:
+      # it replies false, so that the submitting thread does not wait for it.
+      def abandon
+        # A handed-over task runs on a thread of its own, so that one that raises, even SystemStackError,
+        # never keeps the requests released with it from being released.
+        return Thread.new(&command) if command.is_a?(Proc)
+
+        done
+        @replies.push(false)
+      end
+
       # Called by the submitting thread: wait for the reply from the worker thread.
       #
       # The block returns whether a worker thread that can still reply is running. Returns the

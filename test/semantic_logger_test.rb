@@ -259,10 +259,27 @@ class SemanticLoggerTest < Minitest::Test
         SemanticLogger["OnAppenderThreadTest"].info("remove now")
 
         assert results.pop(timeout: 5), "remove_appender did not return"
-        refute_includes SemanticLogger.appenders, @removed
         SemanticLogger.flush
 
+        refute_includes SemanticLogger.appenders, @removed
         assert closed.pop(timeout: 5), "the appender was not closed"
+      end
+
+      it "removes itself, then flushes, without waiting forever" do
+        caller_appender.on_write do
+          SemanticLogger.remove_appender(@caller)
+          # Gives the processor's thread time to start closing the appender.
+          sleep 0.1
+          results << [SemanticLogger.flush]
+        end
+        @caller = SemanticLogger.add_appender(appender: caller_appender, async: true)
+        SemanticLogger["OnAppenderThreadTest"].info("remove me")
+
+        refute_nil results.pop(timeout: 5), "SemanticLogger.flush did not return"
+        flushing = Thread.new { SemanticLogger.flush }
+
+        assert flushing.join(5), "SemanticLogger.flush no longer returns"
+        refute_includes SemanticLogger.appenders, @caller
       end
 
       it "flushes, returning without waiting forever" do

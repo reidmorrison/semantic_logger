@@ -148,9 +148,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   thread, such as by an appender as it writes, it still closes the appender at once. Called on the
   thread of an appender added with `async: true` or in batches, such as by that appender as it
   writes, removing itself or another appender, it does not wait, since the processor's thread may be
-  waiting for that thread: it stops sending log messages to the appender at once and returns `true`,
-  and the processor's thread closes the appender between writes, once it has written the messages
-  logged before. See
+  waiting for that thread: it returns `true` at once, and the processor's thread, once it has written
+  the messages logged before, closes the appender between writes, then removes it. See
   [Adding and removing appenders](https://logger.reidmorrison.com/config.html#adding-and-removing-appenders).
 
 - `Log#each_exception` accepts the exception to start from, for custom formatters and appenders that
@@ -279,6 +278,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   reported to the internal logger. Before, they waited forever, since the processor's thread waited
   for that thread to flush its appender, and once the processor's queue was full, so did every
   thread that logged. See [Flushing](https://logger.reidmorrison.com/config.html#flushing).
+- A message logged on the thread of an appender added with `async: true` or in batches, such as by a
+  library that the appender calls as it writes, is dropped at once, and counted as dropped, when it
+  finds the processor's queue full while that appender's own queue is full too, or a flush or close
+  of that appender is waiting, whoever asked for it. Before, it could wait forever: the processor's
+  thread, which makes room, can itself be waiting for room on that appender's full queue, or for that
+  appender to flush, and then so did every thread that logged.
 - `add_appender` raises `ArgumentError` when it would batch an appender whose formatter cannot
   format a batch, such as a formatter block given to `:http`, `:loki`, or `metric: :signalfx` with
   `batch: true`, and says what to do instead. Before, it added the appender, but every batch failed

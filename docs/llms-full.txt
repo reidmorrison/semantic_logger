@@ -1979,10 +1979,19 @@ appender closes only what the child built (see [Process forking](operations.html
 An appender added with `async: true` or in batches writes on a thread of its own, which the thread
 that writes to every appender may be waiting for. So when `remove_appender` is called on that
 thread, such as by an appender of your own as it writes, removing itself or another appender, it
-does not wait: it stops sending log messages to the appender at once, and returns `true`. The thread
-that writes to every appender then closes the appender between writes, once it has written the
-messages logged before, never while it is writing to it. An appender that removes itself is closed
-once its current write has returned.
+does not wait: it returns `true` at once. The thread that writes to every appender then, once it
+has written the messages logged before, closes the appender between writes, never while it is
+writing to it, and removes it from the list. Until then, `SemanticLogger.appenders` still lists the
+appender, and it is still given the messages logged before. An appender that removes itself is
+closed once its current write has returned. When the process forks before that, the child still
+removes the appender, once it has reopened it, so that it closes only what the child built.
+
+A message logged on that thread, such as by a library that your appender calls as it writes, is
+dropped at once when it finds the queue of the thread that writes to every appender full while your
+appender's own queue is full too, or a flush or close of your appender is waiting, since that thread
+may then be waiting for room on your appender's queue, or for your appender to flush. That holds
+whoever asked for the flush or close, so such a message can be dropped even when it could safely
+have waited: a dropped message is the price of never waiting forever.
 
 Other appender management methods:
 
