@@ -113,6 +113,29 @@ class QueueProcessorTest < Minitest::Test
     end
   end
 
+  # Holds the worker thread before it writes a message containing "wait", once it has taken that
+  # message off the queue, until the test opens the gate. Cannot reach its destination for a
+  # message containing "unavailable".
+  class GatedAppender < SimpleAppender
+    attr_reader :gate, :waiting
+
+    def initialize(**)
+      super
+      @gate    = Queue.new
+      @waiting = Queue.new
+    end
+
+    def log(log)
+      if log.message.include?("wait")
+        waiting << log.message
+        gate.pop
+      end
+      raise IOError, "destination unavailable" if log.message.include?("unavailable")
+
+      super
+    end
+  end
+
   # A non-StandardError exception, used to exercise the fatal (non-retryable) path in #process.
   class FatalError < Exception; end # rubocop:disable Lint/InheritException
 
@@ -495,6 +518,43 @@ class QueueProcessorTest < Minitest::Test
 
             refute_same overflowed, appender.threads[2]
             refute_predicate overflowed, :alive?
+          end
+
+          # The thread that hands over assigns the new one to @thread after creating it. The new one must
+          # not run before then: were it to overflow and hand over too, the thread it handed over to
+          # would run unseen, beside the next one that #thread starts.
+          it "carries on in one new thread after two overflows in a row" do
+            processor = start
+
+            assert processor.flush, "the worker thread should be processing messages"
+            create       = Thread.method(:new)
+            handing_over = nil
+            # Delays the first hand-over between creating the new thread and assigning it.
+            delay_assignment = lambda do |*args, &block|
+              thread = create.call(*args, &block)
+              unless handing_over
+                handing_over = Thread.current
+                sleep 0.2
+              end
+              thread
+            end
+            Thread.stub(:new, delay_assignment) do
+              processor.log(new_log(message: "deep 1"))
+              processor.log(new_log(message: "deep 2"))
+              deadline = Time.now + 5
+              sleep(0.01) until processor.failed_count == 2 || Time.now > deadline
+            end
+
+            assert_equal 2, processor.failed_count
+            assert handing_over.join(5), "the first thread that overflowed should end once it has handed over"
+            assert processor.flush, "the last new thread should be the worker thread"
+            processor.thread
+            messages = (1..10).map { |i| "m#{i}" }
+            messages.each { |message| processor.log(new_log(message: message)) }
+
+            assert processor.flush
+            assert_equal messages, appender.events.map(&:message)
+            assert_equal 1, appender.threads.last(10).uniq.size, "only one worker thread should write"
           end
 
           it "discards a batch that overflows, without splitting it on the same thread, then carries on" do
@@ -975,30 +1035,30 @@ class QueueProcessorTest < Minitest::Test
     end
 
     describe "#reopen" do
-      it "keeps the new worker thread once the one it replaced has ended" do
-        processor = start
-        replaced  = processor.thread
-
-        assert processor.flush, "the worker thread to replace should be processing messages"
-
-        processor.reopen
-        replaced.join
-
-        assert_predicate processor, :active?
-        processor.log(new_log)
-
-        assert processor.flush, "the new worker thread should answer the flush"
-        assert_equal 1, appender.events.count
+      let(:appender) do
+        a        = GatedAppender.new
+        a.logger = internal_logger
+        a
       end
 
-      # Ruby does not allow a Mutex to be locked in a signal trap.
-      it "works in a signal trap, such as one that reopens the log files after a rotation" do
-        skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+      # Logs a message that holds the worker thread once it has taken it off the queue.
+      def hold_worker(processor)
+        processor.log(new_log(message: "wait first"))
 
-        processor = start
+        assert appender.waiting.pop(timeout: 5), "the worker thread should take the message off the queue"
+      end
 
-        assert processor.flush, "the worker thread to replace should be processing messages"
+      # Stops the worker thread, which cannot reach the destination, and waits for it to end.
+      def stop_worker(processor)
+        worker = processor.thread
+        processor.log(new_log(message: "unavailable"))
 
+        assert worker.join(5), "the worker thread should stop"
+        assert_predicate processor, :stopped?
+      end
+
+      # Calls #reopen in a handler trapping USR1, and returns what it returned or raised.
+      def reopen_in_signal_trap(processor)
         result = nil
         reopen = proc do
           processor.reopen
@@ -1011,13 +1071,7 @@ class QueueProcessorTest < Minitest::Test
           deadline = Time.now + 5
           sleep(0.01) until result || Time.now > deadline
         end
-
-        assert_equal :reopened, result
-        assert_predicate processor, :active?
-        processor.log(new_log)
-
-        assert processor.flush, "the new worker thread should answer the flush"
-        assert_equal 1, appender.events.count
+        result
       end
 
       # Runs the block with the handler trapping the signal, then restores the previous handler.
@@ -1026,6 +1080,219 @@ class QueueProcessorTest < Minitest::Test
         yield
       ensure
         Signal.trap(signal, previous) if previous
+      end
+
+      it "keeps the worker thread and the queued entries, writing them in order ahead of new ones" do
+        processor = start
+        worker    = processor.thread
+        hold_worker(processor)
+        processor.log(new_log(message: "second"))
+        processor.log(new_log(message: "third"))
+
+        processor.reopen
+        processor.log(new_log(message: "fourth"))
+        appender.gate << true
+
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal ["wait first", "second", "third", "fourth"], appender.events.map(&:message)
+        assert_same worker, processor.thread
+      end
+
+      it "lets a log call waiting for room on the full queue carry on" do
+        processor = start(max_queue_size: 1)
+        hold_worker(processor)
+        processor.log(new_log(message: "second"))
+        logging = Thread.new { processor.log(new_log(message: "third")) }
+        Thread.pass until logging.status == "sleep" || !logging.alive?
+
+        processor.reopen
+        appender.gate << true
+
+        assert logging.value, "the log call should add its entry to the queue"
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal ["wait first", "second", "third"], appender.events.map(&:message)
+      ensure
+        logging&.kill
+      end
+
+      it "starts the worker thread again once it has stopped, which writes the entries queued meanwhile" do
+        processor = start(async_max_retries: 0)
+        stop_worker(processor)
+        processor.log(new_log(message: "queued meanwhile"))
+
+        processor.reopen
+
+        refute_predicate processor, :stopped?
+        assert_predicate processor, :active?
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal ["queued meanwhile"], appender.events.map(&:message)
+      end
+
+      # An internal logger that holds the worker thread while it reports that it stopped: it pushes
+      # the report to `reporting`, then waits for `resume`, for 5 seconds at most.
+      def holding_internal_logger(reporting, resume)
+        internal = SemanticLogger::Test::CaptureLogEvents.new
+        internal.define_singleton_method(:error) do |message, exception = nil|
+          if message.include?("Stopping")
+            reporting << message
+            resume.pop(timeout: 5)
+          end
+          super(message, exception)
+        end
+        internal
+      end
+
+      # A worker thread that has stopped no longer changes the state of the processor, so a new one
+      # can start while it still reports that it stopped.
+      it "starts the worker thread again while the one that stopped is still reporting it" do
+        reporting       = Queue.new
+        resume          = Queue.new
+        appender.logger = holding_internal_logger(reporting, resume)
+        processor       = start(async_max_retries: 0)
+        worker          = processor.thread
+        processor.log(new_log(message: "unavailable"))
+
+        assert_match(/Stopping/, reporting.pop(timeout: 5))
+        processor.log(new_log(message: "queued meanwhile"))
+        processor.reopen
+
+        refute_same worker, processor.thread
+        refute_predicate processor, :stopped?
+        assert_predicate worker, :alive?
+        resume << true
+
+        assert worker.join(5), "the worker thread that stopped should end once it has reported"
+        refute_predicate processor, :stopped?
+        processor.log(new_log(message: "after"))
+
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal ["queued meanwhile", "after"], appender.events.map(&:message)
+      ensure
+        resume << true
+      end
+
+      it "waits for the worker thread that stopped to end, so that its report comes first" do
+        reporting       = Queue.new
+        resume          = Queue.new
+        appender.logger = holding_internal_logger(reporting, resume)
+        processor       = start(async_max_retries: 0)
+        worker          = processor.thread
+        processor.log(new_log(message: "unavailable"))
+
+        assert_match(/Stopping/, reporting.pop(timeout: 5))
+        # Lets the worker thread finish its report once this thread waits for it in #reopen.
+        reopening = Thread.current
+        resumer   = Thread.new do
+          Thread.pass until reopening.status == "sleep"
+          resume << true
+        end
+        processor.reopen
+
+        refute_predicate worker, :alive?
+        assert processor.flush, "the new worker thread should answer the flush"
+        reports = appender.logger.events.map(&:message).grep(/Stopping|Thread has stopped|thread active/)
+
+        assert_match(/Stopping/, reports[-3])
+        assert_equal ["Async: Thread has stopped", "Async: Appender thread active"], reports.last(2)
+      ensure
+        resume << true
+        resumer&.join(5)
+      end
+
+      it "drops the entries that the parent process queued, in a child process after a fork" do
+        skip "fork is not supported" unless Process.respond_to?(:fork)
+
+        processor = start
+        hold_worker(processor)
+        processor.log(new_log(message: "second"))
+
+        reader, writer = IO.pipe
+        pid            = fork do
+          reader.close
+          processor.reopen
+          processor.log(new_log(message: "in the child"))
+          processor.flush
+          writer.write(appender.events.map(&:message).join(","))
+          writer.close
+          exit!(0)
+        end
+        writer.close
+        Process.wait(pid)
+        written_in_child = reader.read
+        reader.close
+        appender.gate << true
+
+        assert_equal "in the child", written_in_child
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal ["wait first", "second"], appender.events.map(&:message)
+      end
+
+      # Ruby does not allow a Mutex to be locked in a signal trap.
+      it "works in a signal trap, such as one that reopens the log files after a rotation" do
+        skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+
+        processor = start
+
+        assert processor.flush, "the worker thread should be processing messages"
+        assert_equal :reopened, reopen_in_signal_trap(processor)
+        assert_predicate processor, :active?
+        processor.log(new_log)
+
+        assert processor.flush, "the worker thread should answer the flush"
+        assert_equal 1, appender.events.count
+      end
+
+      it "starts the worker thread again in a signal trap while the one that stopped is still reporting it" do
+        skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+
+        reporting       = Queue.new
+        resume          = Queue.new
+        appender.logger = holding_internal_logger(reporting, resume)
+        processor       = start(async_max_retries: 0)
+        worker          = processor.thread
+        processor.log(new_log(message: "unavailable"))
+
+        assert_match(/Stopping/, reporting.pop(timeout: 5))
+        processor.log(new_log(message: "queued meanwhile"))
+        reopened   = reopen_in_signal_trap(processor)
+        new_worker = processor.thread
+        resume << true
+
+        assert_equal :reopened, reopened
+        refute_same worker, new_worker
+        refute_predicate processor, :stopped?
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal ["queued meanwhile"], appender.events.map(&:message)
+      end
+
+      it "starts the worker thread again in a signal trap, which writes the entries queued meanwhile" do
+        skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+
+        processor = start(async_max_retries: 0)
+        stop_worker(processor)
+        processor.log(new_log(message: "queued meanwhile"))
+
+        assert_equal :reopened, reopen_in_signal_trap(processor)
+        refute_predicate processor, :stopped?
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal ["queued meanwhile"], appender.events.map(&:message)
+      end
+
+      # The queue of a child process after a fork is created again, which must work in a trap too.
+      it "creates the queue again in a signal trap after a fork" do
+        skip "the USR1 signal is not available" unless Signal.list.key?("USR1")
+
+        processor = start
+        processor.instance_variable_set(:@pid, -1)
+        queue = processor.queue
+
+        assert_equal :reopened, reopen_in_signal_trap(processor)
+        refute_same queue, processor.queue
+        assert_predicate queue, :closed?
+        processor.log(new_log)
+
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal 1, appender.events.count
       end
     end
 

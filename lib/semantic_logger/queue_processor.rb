@@ -15,6 +15,9 @@ module SemanticLogger
   #                               method, either once batch_size messages have accumulated, or
   #                               batch_seconds have elapsed since the previous batch.
   class QueueProcessor
+    # Internal: seconds that #reopen waits for a worker thread that has stopped to end.
+    STOPPED_WORKER_WAIT_SECONDS = 0.1
+
     attr_accessor :lag_check_interval, :lag_threshold_s, :dropped_message_report_seconds,
                   :batch_size, :batch_seconds, :non_blocking
     attr_reader :appender, :queue, :max_queue_size, :signal,
@@ -122,7 +125,7 @@ module SemanticLogger
     def thread
       return @thread if @thread&.alive?
 
-      @thread = spawn_worker
+      spawn_worker
     end
 
     # Returns [true|false] whether the worker thread is running.
@@ -188,30 +191,68 @@ module SemanticLogger
       submit_request(:close)
     end
 
-    # Re-open the queue and worker thread after a fork.
+    # Re-open the queue and worker thread after a fork, or start the worker thread again within the
+    # same process once it has ended or stopped.
+    #
+    # After a fork, the queue holds the entries that the parent process had queued, which the
+    # parent's worker thread writes, so the child starts again with an empty queue and a worker
+    # thread of its own, rather than write them a second time.
+    #
+    # Within the same process, such as after a log rotation, the queue and its entries are kept, and
+    # so is the worker thread while it runs (see #thread). It writes the queued entries in order,
+    # starting with one it has already taken off the queue, and no other thread writes to the
+    # appender meanwhile. A worker thread that has ended is replaced by one that carries on with the
+    # queued entries. So is one that has stopped (see #stopped?), which may still be reporting that
+    # it stopped: it is given a moment to end first, so that its report comes before the new
+    # thread's. A worker thread that has stopped no longer writes to the appender, nor changes the
+    # state of this processor, so none that was replaced can change it once a new one has started.
     #
     # Also called from a signal trap, such as one that reopens the log files after a rotation, where
-    # Ruby does not allow a Mutex to be locked, so it takes none.
+    # Ruby does not allow a Mutex to be locked, so it takes none: it uses only Queue and Thread
+    # methods, which Ruby allows there.
     def reopen
+      return restart_worker unless forked?
+
       # Workaround CRuby crash on fork by recreating queue on reopen
       #   https://github.com/reidmorrison/semantic_logger/issues/103
       @queue&.close
       create_queue
 
       @thread&.kill if @thread&.alive?
-      @thread = spawn_worker
+      spawn_worker
     end
 
     private
 
-    # Start the worker thread.
+    # Start a new worker thread, as @thread.
+    #
+    # The new thread waits until it has been assigned to @thread before it takes anything off the
+    # queue. Otherwise it could overflow its stack and hand over to another new thread before then,
+    # and the thread that started it would then assign it, after it has ended, leaving the one it
+    # handed over to running unseen beside the next one that #thread starts. It waits on a Queue,
+    # whose #push Ruby allows in a signal trap (see #reopen).
     def spawn_worker
       @stopped        = false
       @stack_overflow = nil
-      Thread.new do
+      assigned        = Queue.new
+      @thread         = Thread.new do
+        assigned.pop
         name_worker
         process
       end
+      assigned << true
+      @thread
+    end
+
+    # Start the worker thread again within the same process, unless it is running (see #reopen).
+    #
+    # A worker thread that has stopped (see #stopped?) may still be reporting that it stopped, so it
+    # is given a moment to end first. Then a new one is started, whether it has ended or not.
+    def restart_worker
+      return thread unless stopped?
+
+      @thread&.join(STOPPED_WORKER_WAIT_SECONDS)
+      spawn_worker
     end
 
     # Name the worker thread after its appender, such as "SL File", short enough for tools that
@@ -224,7 +265,9 @@ module SemanticLogger
       nil
     end
 
+    # Creates the queue, which belongs to this process: see #forked?.
     def create_queue
+      @pid = ::Process.pid
       if max_queue_size == -1
         @queue  = Queue.new
         @capped = false
@@ -233,6 +276,10 @@ module SemanticLogger
         @capped = true
       end
     end
+
+    # Whether this is a child of the process that created the queue, whose copy of the queue then
+    # holds that process's entries.
+    def forked? = @pid != ::Process.pid
 
     # Separate thread for processing log messages.
     #
@@ -262,10 +309,11 @@ module SemanticLogger
       @stopped = true
       safe_log(:error, "Async: Stopping due to fatal exception", e)
     ensure
-      # A thread that overflowed its stack hands the queue over to a new one (see #stack_overflowed),
-      # unless #reopen has already replaced it. Any other thread leaves @thread as it is, since one
-      # that has ended reads as inactive, and #reopen may already have replaced it with a new one.
-      @thread = spawn_worker if carry_on && @thread.equal?(Thread.current)
+      # A thread that overflowed its stack hands the queue over to a new one (see #stack_overflowed).
+      # It is still the worker thread, since #reopen replaces only one that has ended or stopped, and
+      # one that overflowed has neither. Any other thread leaves @thread as it is, since one that has
+      # ended reads as inactive.
+      spawn_worker if carry_on
       safe_log(:trace, "Async: Thread has stopped") unless carry_on
     end
 
