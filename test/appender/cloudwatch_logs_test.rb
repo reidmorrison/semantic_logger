@@ -12,32 +12,37 @@ module Appender
       let(:appender) do
         Aws::CloudWatchLogs::Client.stub :new, mock_client do
           SemanticLogger::Appender::CloudwatchLogs.new(
-            group:         log_group,
-            stream:        log_stream,
-            create_group:  true,
-            create_stream: true
+            group:                        log_group,
+            stream:                       log_stream,
+            create_group:                 true,
+            create_stream:                true,
+            # Long enough that the timer never sends the buffered log messages during a test, to the
+            # mock client, which answers no request to send them.
+            force_flush_interval_seconds: 3_600
           )
         end
       end
 
-      # Shuts down the timer of every appender a test builds, which otherwise sends the buffered log
-      # messages force_flush_interval_seconds later, during another test. The mock client answers no
-      # request to send them.
+      # Shuts down the timer of the `appender` that the tests build, which otherwise keeps running
+      # into later tests. A test that builds another appender closes it itself.
       after do
         appender.buffered_logs.clear
         appender.close
       end
 
-      it "does not show the AWS credentials in #inspect" do
-        credentials = {secret_access_key: "aws-s3cr3t"}
-        appender    = Aws::CloudWatchLogs::Client.stub :new, mock_client do
-          SemanticLogger::Appender::CloudwatchLogs.new(group: log_group, client_kwargs: credentials)
+      describe "#inspect" do
+        let(:appender) do
+          Aws::CloudWatchLogs::Client.stub :new, mock_client do
+            SemanticLogger::Appender::CloudwatchLogs.new(
+              group: log_group, client_kwargs: {secret_access_key: "aws-s3cr3t"}
+            )
+          end
         end
 
-        refute_includes appender.inspect, "aws-s3cr3t"
-        assert_includes appender.inspect, %( group="/test/log/group")
-      ensure
-        appender&.close
+        it "does not show the AWS credentials" do
+          refute_includes appender.inspect, "aws-s3cr3t"
+          assert_includes appender.inspect, %( group="/test/log/group")
+        end
       end
 
       describe "sending the buffered log messages" do
