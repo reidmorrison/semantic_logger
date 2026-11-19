@@ -391,7 +391,8 @@ agent.
 * The `#logger` of an appender added with `logger:`, such as the one `add_appender(logger: ...)`
   returns, is now its internal logger, the one it reports its own problems to, as for every other
   appender, and `#logger=` replaces that internal logger. Before, they returned and replaced the
-  logger the appender writes to, which is now `#wrapped_logger`: `appender.logger = other` sent the
+  logger the appender writes to, which is now `#wrapped_logger`, also on the appender that
+  `add_appender(logger: ..., async: true)` returns: `appender.logger = other` sent the
   entries to `other`, and `appender.logger.level = ::Logger::DEBUG` changed the level of the logger
   written to. To write to another logger, add an appender for it with
   `SemanticLogger.add_appender(logger: other)`, and remove the old one with

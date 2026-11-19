@@ -19,6 +19,11 @@ module SemanticLogger
                      :level, :level=, :formatter, :formatter=, :logger, :logger=, :console_stream,
                      :console_output?
 
+      # The logger that an appender added with `logger:` writes to (see Wrapper#wrapped_logger), so
+      # that it is found the same way whether or not the appender was added with async: true or in
+      # batches. #logger is the internal logger, as for every appender.
+      def_delegators :@appender, :wrapped_logger
+
       # Methods forwarded to the queue processor that owns the thread and queue.
       # Tuning options (max_queue_size, batch_size, non_blocking, ...) are set once at
       # construction via SemanticLogger.add_appender, so only the values that callers actually
