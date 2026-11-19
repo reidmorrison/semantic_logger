@@ -1107,6 +1107,14 @@ buffered. In a forked child, closing an appender leaves the connections it inher
 process, and `remove_appender` first lets the appenders reopen, when they have not yet, so that the
 appender closes only what the child built (see [Process forking](operations.html#process-forking)).
 
+An appender added with `async: true` or in batches writes on a thread of its own, which the thread
+that writes to every appender may be waiting for. So when `remove_appender` is called on that
+thread, such as by an appender of your own as it writes, removing itself or another appender, it
+does not wait: it stops sending log messages to the appender at once, and returns `true`. The thread
+that writes to every appender then closes the appender between writes, once it has written the
+messages logged before, never while it is writing to it. An appender that removes itself is closed
+once its current write has returned.
+
 Other appender management methods:
 
 ~~~ruby
@@ -1170,6 +1178,12 @@ flush of all appenders and wait for any queued messages to be written:
 ~~~ruby
 SemanticLogger.flush
 ~~~
+
+Called on the thread of an appender added with `async: true` or in batches, such as by an appender
+of your own as it writes, `SemanticLogger.flush` returns `false` at once without flushing, since the
+thread that writes to every appender waits for that thread to flush its appender, and so would wait
+forever. So do `SemanticLogger.close` and `SemanticLogger.clear_appenders!`. The first such call is
+reported to the internal logger.
 
 ### Capturing context with `on_log`
 

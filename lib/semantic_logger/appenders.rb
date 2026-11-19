@@ -178,6 +178,14 @@ module SemanticLogger
       each { |appender| appender.renew_after_fork if appender.respond_to?(:renew_after_fork) }
     end
 
+    # Returns [true|false] whether the thread is the worker thread of one of the appenders: one added
+    # with async: true or in batches, which writes to it (see QueueProcessor#worker_thread?). The thread
+    # that writes to every appender may be waiting for it, so it must not wait for that thread. Takes
+    # no lock, so that it can be called from a signal trap.
+    def worker_thread?(thread = Thread.current)
+      any? { |appender| appender.respond_to?(:worker_thread?) && appender.worker_thread?(thread) }
+    end
+
     private
 
     # Whether this process is exiting (see #process_exiting=), rather than a child process forked while

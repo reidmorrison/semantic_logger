@@ -139,14 +139,14 @@ module SemanticLogger
     #
     # Starts the worker thread if it is not currently running. It carries on with the count of
     # failures in a row (see async_max_retries).
-    def thread
-      return @thread if @thread&.alive?
-
-      spawn_worker
-    end
+    def thread = active? ? @thread : spawn_worker
 
     # Returns [true|false] whether the worker thread is running.
     def active? = @thread&.alive?
+
+    # Returns [true|false] whether the thread is the worker thread, the one that writes to the
+    # appender. Takes no lock, so that it can be called from a signal trap.
+    def worker_thread?(thread = Thread.current) = @thread.equal?(thread)
 
     # Returns [Queue|SizedQueue] the queue of log messages and requests waiting for the worker thread.
     def queue = @inbox.queue
@@ -209,6 +209,22 @@ module SemanticLogger
 
     # Flush any outstanding messages and close the appender.
     def close = submit_request(:close)
+
+    # Hand the block over to the worker thread, which runs it between writes, after the entries
+    # already queued, without waiting for it to run. The block reports its own errors: one that it
+    # raises is handled as a failure of the appender.
+    #
+    # Never waits, so that it can be called on a thread that the worker thread may itself be
+    # waiting for, such as the worker thread of an appender that it hands entries to, whose full
+    # queue it waits on. When the queue is full, a new thread adds the block to the queue, waiting for
+    # room, rather than the calling thread: once the calling thread returns, the worker thread can
+    # make room (see Inbox#push_aside). When the worker thread is not running, or has stopped (see
+    # #stopped?), or stops while that thread waits, a new thread runs the block instead, since nothing
+    # then writes to the appender. Takes no lock, so that it can be called from a signal trap.
+    #
+    # A batching worker thread is not woken up, since that would write a partial batch: it runs the
+    # block at its next batch, at most batch_seconds later.
+    def hand_over(&task) = @inbox.push_aside(Request.new(task), task) { active? && !stopped? }
 
     # Tell the worker thread whether the process is exiting, before and after the flush at exit
     # (see Backoff#exiting=). While it is, the worker thread acts as though a flush were waiting

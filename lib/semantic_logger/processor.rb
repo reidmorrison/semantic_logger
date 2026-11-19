@@ -50,7 +50,7 @@ module SemanticLogger
     end
 
     # Remove the appender from those that this processor writes to, and close it. Returns the result
-    # of closing it.
+    # of closing it, or true when it hands the close over to the worker thread (see below).
     #
     # Before closing an appender that it removed, waits until the log messages already queued are
     # written to the other appenders, and those flushed (see #flush), so that none is still being
@@ -67,18 +67,56 @@ module SemanticLogger
     # worker thread reopens it before it runs the close.
     #
     # Called on the worker thread itself, such as by an appender as it writes, it closes the appender
-    # at once, without waiting, since nothing else writes to it then. Takes no lock, so that it can be
-    # called from a signal trap.
+    # at once, without waiting, since nothing else writes to it then.
+    #
+    # Called on the worker thread of an appender added with async: true or in batches, such as by
+    # that appender as it writes, removing itself or another one, it must not wait for the worker
+    # thread of this processor, which may be waiting for it: to flush that appender, or for room on
+    # its full queue. So it removes the appender at once, and hands the close over to the worker
+    # thread of this processor without waiting (see QueueProcessor#hand_over), which closes it between
+    # writes, never while it writes to it, once it has written the log messages queued ahead. Returns
+    # true then, before the appender is closed. An appender that removed itself is closed once its
+    # current write has returned, after the log messages queued for it.
+    #
+    # Takes no lock, so that it can be called from a signal trap.
     def remove(appender)
+      return hand_over_close(appender) if appenders.worker_thread?
+
       processor.await_reopen if appenders.include?(appender)
       flush if appenders.delete(appender)
       appender.close
     end
 
-    # Returns [false]: another thread never waits for the calling thread to return from a call to this
-    # processor before it can use it, since it holds no lock while it queues an entry.
+    # Write the log messages already queued to the appenders, then flush them (see
+    # QueueProcessor#flush).
+    #
+    # Returns false at once on the worker thread of an appender added with async: true or in batches,
+    # such as by that appender as it writes, rather than wait forever: the worker thread of this
+    # processor waits for that thread to flush the appender. Reported once to the internal logger.
+    def flush
+      return super unless appenders.worker_thread?
+
+      refuse_on_appender_thread(:flush)
+    end
+
+    # Flush and close the appenders, then remove them (see Appenders#close).
+    #
+    # Returns false at once on the worker thread of an appender added with async: true or in batches,
+    # as #flush does.
+    def close
+      return super unless appenders.worker_thread?
+
+      refuse_on_appender_thread(:close)
+    end
+
+    # Returns [true|false] whether the calling thread must not wait for a thread that uses this
+    # processor, since that thread may be waiting for it: the calling thread is the worker thread of
+    # an appender added with async: true or in batches, for which the worker thread of this processor
+    # waits, to flush it, or for room on its full queue. Otherwise false: holding no lock while it
+    # queues an entry, this processor never has another thread wait for the calling thread to return
+    # from a call to it, even on its own worker thread.
     def current_thread_inside?
-      false
+      appenders.worker_thread?
     end
 
     # Start the appender thread
@@ -108,6 +146,36 @@ module SemanticLogger
         dropped:        dropped_count,
         appenders:      appenders.stats
       }
+    end
+
+    private
+
+    # Remove the appender, and hand its close over to the worker thread (see #remove).
+    def hand_over_close(appender)
+      appenders.delete(appender)
+      processor.hand_over { close_removed(appender) }
+      true
+    end
+
+    # Close an appender that was removed, on the worker thread, reporting an error rather than raise
+    # it to the worker thread, as Appenders#close does.
+    def close_removed(appender)
+      appender.close
+    rescue StandardError => e
+      appenders.logger.error "Failed to close appender: #{appender.name}", e
+    end
+
+    # Refuse to flush or close on the worker thread of an appender (see #flush), and report it the first
+    # time. Returns false.
+    def refuse_on_appender_thread(command)
+      unless @refused_on_appender_thread
+        @refused_on_appender_thread = true
+        appenders.logger.warn "SemanticLogger.#{command} was called on the worker thread of an appender " \
+                              "added with async: true or in batches, such as by that appender as it writes. " \
+                              "It returns false there, without waiting, since the processor's thread waits " \
+                              "for that thread. Reported only once."
+      end
+      false
     end
   end
 end

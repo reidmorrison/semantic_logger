@@ -318,6 +318,153 @@ module SemanticLogger
         end
       end
 
+      # Calls into the processor from the worker thread of an appender added with async: true, as it
+      # writes: the worker thread of the processor may be waiting for that thread, so it must not wait.
+      describe "on the worker thread of an appender added with async: true" do
+        # Runs the block given to #on_write, with the message, on its worker thread as it writes.
+        let(:caller_class) do
+          Class.new(SemanticLogger::Subscriber) do
+            attr_reader :events
+
+            def initialize(...)
+              super
+              @events = Queue.new
+            end
+
+            def on_write(&block)
+              @on_write = block
+            end
+
+            def log(log)
+              @on_write&.call(log.message)
+              true
+            end
+
+            def close
+              events << [:closed, Thread.current]
+              true
+            end
+          end
+        end
+
+        # Records what happens to it, and writes "slow" only once released.
+        let(:victim_class) do
+          Class.new(SemanticLogger::Subscriber) do
+            attr_reader :events, :release
+
+            def initialize(...)
+              super
+              @events  = Queue.new
+              @release = Queue.new
+            end
+
+            def log(log)
+              return true unless log.message == "slow"
+
+              events << :writing
+              release.pop(timeout: 5)
+              events << :written
+            end
+
+            def close
+              events << [:closed, Thread.current]
+              true
+            end
+          end
+        end
+
+        let(:caller_appender) { caller_class.new }
+        let(:async) { processor.appenders.add(appender: caller_appender, async: true) }
+        let(:victim) { victim_class.new }
+        let(:results) { Queue.new }
+        let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+
+        before do
+          processor.appenders.logger = internal_logger
+        end
+
+        after do
+          victim.release << true
+          async.processor.instance_variable_get(:@thread)&.kill
+        end
+
+        def log(message)
+          processor.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = message })
+        end
+
+        def drain(queue) = Array.new(queue.size) { queue.pop }
+
+        it "removes another appender, and the worker thread of the processor closes it, after it returns" do
+          processor.appenders << victim
+          caller_appender.on_write { |_message| results << processor.remove(victim) }
+          async
+          log("remove")
+
+          assert results.pop(timeout: 5), "remove did not return"
+          refute_includes processor.appenders, victim
+          assert processor.flush
+
+          assert_equal [[:closed, processor.thread]], drain(victim.events)
+        end
+
+        it "does not close the appender while the worker thread of the processor writes to it" do
+          async
+          processor.appenders << victim
+          caller_appender.on_write { |message| results << processor.remove(victim) if message == "slow" }
+          log("slow")
+
+          assert results.pop(timeout: 5), "remove did not return"
+          assert_equal :writing, victim.events.pop(timeout: 5)
+          sleep 0.1
+
+          assert_predicate victim.events, :empty?, "it closed the appender while it was being written to"
+
+          victim.release << true
+
+          assert processor.flush
+          assert_equal [:written, [:closed, processor.thread]], drain(victim.events)
+        end
+
+        it "closes the appender that removes itself, once its write has returned" do
+          caller_appender.on_write { |_message| results << [processor.remove(async), Thread.current] }
+          async
+          log("remove me")
+
+          removed, worker = results.pop(timeout: 5)
+
+          assert removed, "remove did not return"
+          refute_includes processor.appenders, async
+          assert processor.flush
+          assert_equal [[:closed, worker]], drain(caller_appender.events)
+          assert worker.join(5), "the worker thread of the appender should end once it is closed"
+        end
+
+        it "returns false from #flush and #close at once, reported once to the internal logger" do
+          caller_appender.on_write { |_message| results << [processor.flush, processor.close] }
+          async
+          log("first")
+          log("second")
+
+          assert_equal [false, false], results.pop(timeout: 5), "flush or close did not return"
+          assert_equal [false, false], results.pop(timeout: 5), "flush or close did not return"
+          assert processor.flush
+
+          reports = internal_logger.events.select { |event| event.message.include?("worker thread of an appender") }
+
+          assert_equal 1, reports.size
+          assert_equal :warn, reports.first.level
+          assert_includes processor.appenders, async
+        end
+
+        it "tells the calling thread not to wait for a thread that uses the processor" do
+          caller_appender.on_write { |_message| results << processor.current_thread_inside? }
+          async
+          log("inside")
+
+          assert results.pop(timeout: 5)
+        end
+      end
+
       describe "#current_thread_inside?" do
         it "is false, even on its worker thread while it writes" do
           async    = processor

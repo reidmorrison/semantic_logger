@@ -1,7 +1,8 @@
 module SemanticLogger
   class QueueProcessor
     # Internal: a command, such as :flush or :close, submitted on the queue for the worker thread
-    # to run, while the submitting thread waits for the reply.
+    # to run, while the submitting thread waits for the reply. Or a task, a Proc, handed over for the
+    # worker thread to run without waiting for it (see QueueProcessor#hand_over), which nobody waits on.
     #
     # It knows its command, whether it has run, and how its reply gets back to the submitting
     # thread, and makes sure that the submitting thread is never left waiting on a reply that cannot
@@ -44,11 +45,13 @@ module SemanticLogger
         @replies.push(succeeded)
       end
 
-      # Called by the worker thread: run this command on the appender, then reply. Returns false
-      # once message processing must stop (:close). A command it does not know is yielded to the
-      # block, for the caller to report, and otherwise ignored.
+      # Called by the worker thread: run this command on the appender, or this task, then reply.
+      # Returns false once message processing must stop (:close). A command it does not know is
+      # yielded to the block, for the caller to report, and otherwise ignored.
       def run(appender)
         case command
+        when Proc
+          reply { command.call }
         when :flush
           reply { appender.flush }
         when :close

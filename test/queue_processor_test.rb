@@ -1707,6 +1707,75 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    describe "#worker_thread?" do
+      it "is true only for the worker thread" do
+        results   = Queue.new
+        processor = nil
+        appender.define_singleton_method(:log) { |_log| results << processor.worker_thread?(Thread.current) }
+        processor = start
+        processor.log(new_log)
+
+        assert results.pop(timeout: 5)
+        refute processor.worker_thread?(Thread.current)
+        refute build.worker_thread?(Thread.current)
+      end
+    end
+
+    describe "#hand_over" do
+      # Each log message waits until released.
+      let(:writing) { Queue.new }
+      let(:release) { Queue.new }
+
+      before do
+        gate = [writing, release]
+        appender.define_singleton_method(:log) do |log|
+          gate.first << log.message
+          gate.last.pop(timeout: 5)
+          events << log
+        end
+      end
+
+      it "runs the block on the worker thread, after the entries queued, without waiting for it" do
+        processor = start
+        ran       = Queue.new
+        processor.log(new_log(message: "first"))
+
+        assert_equal "first", writing.pop(timeout: 5)
+        processor.hand_over { ran << [Thread.current, appender.events.map(&:message)] }
+
+        assert_predicate ran, :empty?, "it should not run while the worker thread writes"
+
+        release << true
+
+        assert_equal [processor.thread, ["first"]], ran.pop(timeout: 5)
+      end
+
+      it "does not wait for room on the full queue, and the worker thread still runs the block" do
+        processor = start(max_queue_size: 1)
+        ran       = Queue.new
+        processor.log(new_log(message: "first"))
+
+        assert_equal "first", writing.pop(timeout: 5)
+        processor.log(new_log(message: "second"))
+        handing = Thread.new { processor.hand_over { ran << [Thread.current, appender.events.map(&:message)] } }
+
+        assert handing.join(5), "hand_over waited for room on the full queue"
+        2.times { release << true }
+
+        assert_equal [processor.thread, %w[first second]], ran.pop(timeout: 5)
+      end
+
+      it "runs the block on another thread when the worker thread is not running" do
+        ran = Queue.new
+        build.hand_over { ran << Thread.current }
+
+        thread = ran.pop(timeout: 5)
+
+        refute_nil thread
+        refute_equal Thread.current, thread
+      end
+    end
+
     describe "after the worker thread stops" do
       it "stops waiting on #flush when the worker thread ends without replying" do
         processor = build

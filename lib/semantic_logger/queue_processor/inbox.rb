@@ -52,6 +52,17 @@ module SemanticLogger
         end
       end
 
+      # Add the item without making the calling thread wait for room on a full queue, while the block
+      # returns true. When the queue is full, a new thread adds it, waiting for room while the block
+      # returns true. When the block returns false, at once or while that thread waits, the item is
+      # not added, and `otherwise` is called instead, on a new thread. Takes no lock, so that it can be
+      # called from a signal trap.
+      def push_aside(item, otherwise, &adding)
+        return if adding.call && push(item, wait: false)
+
+        Thread.new { otherwise.call unless adding.call && push(item, wait: true, &adding) }
+      end
+
       private
 
       def create

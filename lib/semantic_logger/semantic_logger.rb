@@ -370,7 +370,14 @@ module SemanticLogger
   # appender is reopened first, when that has not happened yet, so that closing it closes only what
   # the child built (see Processor#remove).
   #
-  # Returns the result of closing the appender.
+  # On the thread of an appender added with async: true or in batches, such as by that appender as it
+  # writes, removing itself or another appender, it cannot wait for the processor's thread, which may
+  # be waiting for it. It removes the appender at once, and the processor's thread closes it, between
+  # writes, once it has written the log messages queued ahead, without this call waiting for it. An
+  # appender that removes itself is closed once its current write has returned.
+  #
+  # Returns the result of closing the appender, or true on the thread of an appender added with
+  # async: true or in batches, before the appender is closed.
   def self.remove_appender(appender)
     return unless appender
 
@@ -378,6 +385,9 @@ module SemanticLogger
   end
 
   # Clear out all previously registered appenders
+  #
+  # Like .close, returns false at once, without closing them, on the thread of an appender added with
+  # async: true or in batches.
   def self.clear_appenders!
     Logger.processor.close
   end
@@ -400,6 +410,10 @@ module SemanticLogger
   #  On Ruby 4.0 and later, in the main Ractor, the entries already sent from other Ractors are
   #  written first. In another Ractor, it waits until the main Ractor has written that Ractor's
   #  entries and flushed the appenders.
+  #
+  #  Returns false at once, without flushing, on the thread of an appender added with async: true or
+  #  in batches, such as by that appender as it writes, since the processor's thread waits for that
+  #  thread to flush the appender. The first such call is reported to the internal logger.
   def self.flush
     return Logger.processor.flush if !RactorSupport.enabled? || RactorSupport.other_ractor?
 
@@ -407,6 +421,9 @@ module SemanticLogger
   end
 
   # Close all appenders and flush any outstanding messages.
+  #
+  # Like .flush, returns false at once, without closing them, on the thread of an appender added with
+  # async: true or in batches.
   def self.close
     Logger.processor.close
   end
