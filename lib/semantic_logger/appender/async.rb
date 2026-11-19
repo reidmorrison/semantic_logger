@@ -74,15 +74,17 @@ module SemanticLogger
       #     Default: false
       #
       #   dropped_message_report_seconds: [Integer]
-      #     When non_blocking is enabled, log the count of dropped messages to the internal logger
-      #     at most once every this number of seconds. Also limits how often messages discarded
-      #     because they could not be written are reported, after the first.
+      #     Log the count of messages dropped because the queue was full, with non_blocking or once
+      #     the worker thread has stopped (see async_max_retries), to the internal logger at most
+      #     once every this number of seconds. Also limits how often messages discarded because
+      #     they could not be written are reported, after the first.
       #     Default: 30
       #
       #   async_max_retries: [Integer]
       #     Maximum number of consecutive times to restart the worker thread (with a back-off)
       #     after it raises an exception while processing messages, before giving up and stopping
       #     the thread. The counter resets after any message is processed successfully.
+      #     Once stopped, messages are dropped when the queue is full, rather than block.
       #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour).
       #     Default: 100
       def initialize(appender:, **args)
@@ -122,7 +124,8 @@ module SemanticLogger
       #   max_queue_size: [Integer] Maximum queue size, or nil when uncapped.
       #   processed:      [Integer] Cumulative number of log messages written since startup.
       #   dropped:        [Integer] Cumulative number of log messages dropped because the queue
-      #                             was full (only possible when non_blocking is enabled).
+      #                             was full: with non_blocking enabled, or once the worker
+      #                             thread has stopped (see async_max_retries).
       #   failed:         [Integer] Cumulative number of log messages discarded because they
       #                             could not be written, whether their content or the
       #                             destination was at fault (see Subscriber#message_error?).

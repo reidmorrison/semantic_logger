@@ -938,8 +938,114 @@ class QueueProcessorTest < Minitest::Test
         assert_equal 3, processor.dropped_count
       end
 
+      # A larger queue would not help: nothing empties it.
+      it "reports that the worker thread has stopped, rather than advise a larger queue" do
+        processor = build(max_queue_size: 1, async_max_retries: 0, dropped_message_report_seconds: 0)
+        processor.stub(:process_messages, -> { raise "destination unavailable" }) do
+          processor.send(:process)
+        end
+        processor.log(new_log)
+
+        refute processor.log(new_log)
+        report = internal_logger.events.map(&:message).grep(/\AAsync: Dropped/).last
+
+        assert_match(/worker thread has stopped/, report)
+        refute_match(/max_queue_size/, report)
+      end
+
+      it "keeps queueing messages on a queue that is not capped, which is never full" do
+        processor = build(max_queue_size: -1, async_max_retries: 0)
+        processor.stub(:process_messages, -> { raise "destination unavailable" }) do
+          processor.send(:process)
+        end
+
+        assert_predicate processor, :stopped?
+        assert_equal [true, true, true], Array.new(3) { processor.log(new_log) }
+        assert_equal 3, processor.queue.size
+        assert_equal 0, processor.dropped_count
+      end
+
       it "is not stopped while the worker thread is running" do
         refute_predicate start, :stopped?
+      end
+    end
+
+    describe "a thread waiting for room on the full queue when the worker thread stops for good" do
+      let(:appender) do
+        a        = GatedAppender.new
+        a.logger = internal_logger
+        a
+      end
+
+      # Starts a processor whose worker thread holds an entry it cannot write until the test opens the
+      # gate, then stops for good, leaving behind it a full queue.
+      def start_full
+        processor = start(max_queue_size: 1, async_max_retries: 0)
+        processor.log(new_log(message: "wait unavailable"))
+
+        assert appender.waiting.pop(timeout: 5), "the worker thread should take the entry off the queue"
+        processor.log(new_log(message: "queued"))
+        processor
+      end
+
+      # Waits until a thread is waiting for room on the queue.
+      def wait_for_waiting(processor)
+        deadline = Time.now + 5
+        Thread.pass until processor.queue.num_waiting == 1 || Time.now > deadline
+
+        assert_equal 1, processor.queue.num_waiting, "a thread should be waiting for room on the queue"
+      end
+
+      it "lets a log call carry on, dropping its entry, and keeps the queued entries" do
+        processor = start_full
+        worker    = processor.thread
+        logging   = Thread.new { processor.log(new_log(message: "waiting")) }
+        wait_for_waiting(processor)
+        appender.gate << true
+
+        assert logging.join(5), "the log call should not wait for ever"
+        refute logging.value
+        assert worker.join(5), "the worker thread should stop"
+        assert_predicate processor, :stopped?
+        assert_equal 1, processor.dropped_count
+        processor.reopen
+
+        assert processor.flush, "the new worker thread should answer the flush"
+        assert_equal ["queued"], appender.events.map(&:message)
+      ensure
+        logging&.kill
+      end
+
+      it "lets a flush carry on, which returns false" do
+        processor = start_full
+        flusher   = Thread.new { processor.flush }
+        wait_for_waiting(processor)
+        appender.gate << true
+
+        assert flusher.join(5), "the flush should not wait for ever"
+        refute flusher.value
+      ensure
+        flusher&.kill
+      end
+
+      # Ruby allows a Queue to wait in a signal trap, unlike a Mutex.
+      it "lets a log call in a signal trap carry on, dropping its entry" do
+        processor = start_full
+        returned  = Queue.new
+        opener    = Thread.new do
+          deadline = Time.now + 5
+          Thread.pass until processor.queue.num_waiting == 1 || Time.now > deadline
+          appender.gate << true
+          # Should the log call wait for ever, make room for it, so that the test fails rather than hang.
+          processor.queue.pop unless returned.pop(timeout: 5)
+        end
+        logged = in_signal_trap { processor.log(new_log(message: "in the trap")) }
+        returned << true
+
+        refute logged, "the log call should drop its entry"
+        assert_equal 1, processor.dropped_count
+      ensure
+        opener&.kill
       end
     end
 
@@ -1146,6 +1252,57 @@ class QueueProcessorTest < Minitest::Test
         assert_predicate processor, :active?
         assert processor.flush, "the new worker thread should answer the flush"
         assert_equal ["queued meanwhile"], appender.events.map(&:message)
+      end
+
+      # Otherwise, while the destination is still unavailable, the new worker thread would back off as
+      # long again, holding up the threads logging to it once its queue is full.
+      it "carries on with the count of failures in a row, in a worker thread started once it has stopped" do
+        processor = start(async_max_retries: 1)
+        slept     = Queue.new
+        processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+          worker = processor.thread
+          2.times { processor.log(new_log(message: "unavailable")) }
+
+          assert worker.join(5), "the worker thread should stop"
+          processor.reopen
+          worker = processor.thread
+          processor.log(new_log(message: "unavailable"))
+
+          assert worker.join(5), "the new worker thread should stop at its first failure"
+          assert_predicate processor, :stopped?
+        end
+
+        assert_equal [1], Array.new(slept.size) { slept.pop }
+        processor.reopen
+        processor.log(new_log(message: "after"))
+
+        assert processor.flush, "the new worker thread should write the next entry"
+        assert_equal ["after"], appender.events.map(&:message)
+        assert_equal 0, processor.retry_count
+      end
+
+      it "starts counting failures afresh in a child process after a fork" do
+        processor = start(async_max_retries: 1)
+        worker    = processor.thread
+        slept     = Queue.new
+        processor.stub(:sleep, ->(seconds) { slept << seconds }) do
+          2.times { processor.log(new_log(message: "unavailable")) }
+
+          assert worker.join(5), "the worker thread should stop"
+          assert_equal 1, processor.retry_count
+          processor.instance_variable_set(:@pid, -1)
+          processor.reopen
+
+          assert_equal 0, processor.retry_count
+          processor.log(new_log(message: "unavailable"))
+          processor.log(new_log(message: "after"))
+
+          assert processor.flush, "the new worker thread should back off and carry on"
+        end
+
+        assert_equal [1, 1], Array.new(slept.size) { slept.pop }
+        refute_predicate processor, :stopped?
+        assert_equal ["after"], appender.events.map(&:message)
       end
 
       # An internal logger that holds the worker thread while it reports that it stopped: it pushes

@@ -48,12 +48,20 @@ module SemanticLogger
       end
 
       # Record a log message dropped because the queue was full, reporting the running count at most
-      # once every `interval` seconds.
-      def dropped(max_queue_size, interval:)
+      # once every `interval` seconds. The report gives the reason for the latest drop: a queue too
+      # small for the volume of messages, or, when `stopped`, a worker thread that has stopped for
+      # good, so that nothing empties the queue, however large.
+      def dropped(max_queue_size, stopped:, interval:)
         @dropped.record(interval: interval) do |count, seconds|
-          log(:warn, "Async: Dropped #{count} log messages in the last #{seconds.round} seconds. " \
-                     "The queue is full (max_queue_size: #{max_queue_size}). " \
-                     "Consider reducing the log level, increasing max_queue_size, or changing the appenders")
+          advice =
+            if stopped
+              "The worker thread has stopped after failing to write (see async_max_retries), so nothing " \
+                "empties the queue until SemanticLogger.reopen(force: true) starts it again"
+            else
+              "The queue is full (max_queue_size: #{max_queue_size}). " \
+                "Consider reducing the log level, increasing max_queue_size, or changing the appenders"
+            end
+          log(:warn, "Async: Dropped #{count} log messages in the last #{seconds.round} seconds. #{advice}")
         end
       end
 

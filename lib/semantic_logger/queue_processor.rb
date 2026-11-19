@@ -23,6 +23,10 @@ module SemanticLogger
     attr_reader :appender, :queue, :max_queue_size, :signal,
                 :processed_count, :async_max_retries, :retry_count
 
+    # How often, in seconds, a thread waiting for room on the full queue checks whether the worker
+    # thread has stopped for good (see #stopped?), so that it does not wait for ever.
+    STOPPED_CHECK_SECONDS = 1
+
     # Create a new processor and start its worker thread.
     def self.start(**args)
       processor = new(**args)
@@ -69,9 +73,10 @@ module SemanticLogger
     #     Default: false
     #
     #   dropped_message_report_seconds: [Integer]
-    #     When non_blocking is enabled, log the count of dropped messages to the internal logger
-    #     at most once every this number of seconds. Also limits how often messages discarded
-    #     because they could not be written are reported, after the first.
+    #     Log the count of messages dropped because the queue was full, with non_blocking or once
+    #     the worker thread has stopped (see async_max_retries), to the internal logger at most once
+    #     every this number of seconds. Also limits how often messages discarded because they could
+    #     not be written are reported, after the first.
     #     Default: 30
     #
     #   async_max_retries: [Integer]
@@ -82,6 +87,11 @@ module SemanticLogger
     #     processed successfully.
     #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour). The back-off
     #         still applies, and still resets after any successful message.
+    #     A worker thread started again by #reopen in the same process carries on with the count, so
+    #     that one that had used all its retries stops again at its first failure, rather than hold
+    #     up the threads logging to it with a back-off as long again while the destination is still
+    #     unavailable; one that stopped before, such as after a fatal exception, has the retries it
+    #     had left. Only the worker thread of a child process, after a fork, starts counting afresh.
     #     Default: 100
     def initialize(appender:,
                    max_queue_size: 10_000,
@@ -121,7 +131,8 @@ module SemanticLogger
 
     # Returns [Thread] the worker thread.
     #
-    # Starts the worker thread if it is not currently running.
+    # Starts the worker thread if it is not currently running. It carries on with the count of
+    # failures in a row (see async_max_retries).
     def thread
       return @thread if @thread&.alive?
 
@@ -158,19 +169,11 @@ module SemanticLogger
     # calling thread, and the count of dropped messages is reported periodically.
     #
     # Once the worker thread has stopped for good (see async_max_retries), nothing will empty the
-    # queue, so messages are also dropped instead of blocking the calling thread forever.
+    # queue, so messages are also dropped instead of blocking the calling thread forever. That
+    # includes a message already waiting for room on the full queue when the worker thread stops.
     def log(log)
-      enqueued = true
-      if non_blocking? || stopped?
-        begin
-          queue.push(log, true)
-        rescue ThreadError
-          message_dropped
-          enqueued = false
-        end
-      else
-        queue << log
-      end
+      enqueued = enqueue(log, wait: !(non_blocking? || stopped?)) { !stopped? }
+      message_dropped unless enqueued
 
       # For batches wake up the processing thread once the number of queued messages has been
       # exceeded. Also wake it on a drop so it drains the full queue rather than waiting out the
@@ -202,10 +205,11 @@ module SemanticLogger
     # so is the worker thread while it runs (see #thread). It writes the queued entries in order,
     # starting with one it has already taken off the queue, and no other thread writes to the
     # appender meanwhile. A worker thread that has ended is replaced by one that carries on with the
-    # queued entries. So is one that has stopped (see #stopped?), which may still be reporting that
-    # it stopped: it is given a moment to end first, so that its report comes before the new
-    # thread's. A worker thread that has stopped no longer writes to the appender, nor changes the
-    # state of this processor, so none that was replaced can change it once a new one has started.
+    # queued entries, and with the count of failures in a row (see async_max_retries). So is one that
+    # has stopped (see #stopped?), which may still be reporting that it stopped: it is given a moment
+    # to end first, so that its report comes before the new thread's. A worker thread that has
+    # stopped no longer writes to the appender, nor changes the state of this processor, so none that
+    # was replaced can change it once a new one has started.
     #
     # Also called from a signal trap, such as one that reopens the log files after a rotation, where
     # Ruby does not allow a Mutex to be locked, so it takes none: it uses only Queue and Thread
@@ -219,12 +223,15 @@ module SemanticLogger
       create_queue
 
       @thread&.kill if @thread&.alive?
+      # A worker thread new to this process, which has not failed to write yet.
+      @retry_count = 0
       spawn_worker
     end
 
     private
 
-    # Start a new worker thread, as @thread.
+    # Start a new worker thread, as @thread. It carries on with the count of failures in a row,
+    # including one taking over from a thread that overflowed its stack (see #process).
     #
     # The new thread waits until it has been assigned to @thread before it takes anything off the
     # queue. Otherwise it could overflow its stack and hand over to another new thread before then,
@@ -280,6 +287,23 @@ module SemanticLogger
     # Whether this is a child of the process that created the queue, whose copy of the queue then
     # holds that process's entries.
     def forked? = @pid != ::Process.pid
+
+    # Add to the `target` queue, the current one by default. Returns whether it was added.
+    #
+    # A queue that is not capped is never full, and its #push takes no timeout. On a full queue,
+    # without `wait`, returns false at once. With `wait`, waits for room while the block returns
+    # true, which it is asked every STOPPED_CHECK_SECONDS, and returns false once it returns false,
+    # such as once the worker thread has stopped for good, since then nothing makes room.
+    #
+    # Also called from a signal trap, where Ruby allows a Queue to wait.
+    def enqueue(item, target = queue, wait:)
+      return target.push(item) && true unless capped?
+
+      loop do
+        return true if target.push(item, timeout: wait ? STOPPED_CHECK_SECONDS : 0)
+        return false unless wait && yield
+      end
+    end
 
     # Separate thread for processing log messages.
     #
@@ -484,8 +508,11 @@ module SemanticLogger
       @reporter.failed(logs, exception, interval: dropped_message_report_seconds)
     end
 
-    # Record a dropped message, reported at most once every dropped_message_report_seconds.
-    def message_dropped = @reporter.dropped(max_queue_size, interval: dropped_message_report_seconds)
+    # Record a dropped message, reported at most once every dropped_message_report_seconds, with
+    # whether it was dropped because the worker thread has stopped for good.
+    def message_dropped
+      @reporter.dropped(max_queue_size, stopped: stopped?, interval: dropped_message_report_seconds)
+    end
 
     def check_lag(log)
       diff = Time.now - log.time
@@ -520,7 +547,8 @@ module SemanticLogger
 
       submitted_to = queue
       request      = Request.new(command)
-      submitted_to << request
+      return false unless enqueue(request, submitted_to, wait: true) { active? && !stopped? }
+
       # A reply can come while the request is on the current queue, which #reopen replaces, and a
       # worker thread is running it, which may be a new one after a stack overflow.
       request.wait { queue.equal?(submitted_to) && active? }
