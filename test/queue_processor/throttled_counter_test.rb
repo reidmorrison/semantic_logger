@@ -42,6 +42,14 @@ class ThrottledCounterTest < Minitest::Test
       assert_equal 2, reports.size
     end
 
+    it "does not report early when the system clock steps forward" do
+      counter = SemanticLogger::QueueProcessor::ThrottledCounter.new(reported_at: nil)
+      record(counter)
+      Time.stub(:now, Time.now + 3_600) { record(counter, interval: 30) }
+
+      assert_equal 1, reports.size
+    end
+
     it "counts every occurrence in the total" do
       counter = SemanticLogger::QueueProcessor::ThrottledCounter.new
       record(counter)
