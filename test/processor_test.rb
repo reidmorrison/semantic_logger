@@ -268,6 +268,56 @@ module SemanticLogger
         end
       end
 
+      # At exit, the flush reaches an appender added with async: true only once this processor's
+      # worker thread has handed it the entries ahead of the flush.
+      describe "with its appenders told that the process is exiting" do
+        # Cannot reach its destination, and says that each write wrote nothing, so that its worker
+        # thread holds the entry and backs off. Counts its writes.
+        let(:down) do
+          appender = Class.new(SemanticLogger::Subscriber) do
+            def attempts = @attempts ||= Queue.new
+
+            def log(_log)
+              attempts << true
+              raise IOError, "destination unavailable"
+            end
+
+            def wrote_nothing?(_exception) = true
+          end.new
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          appender
+        end
+
+        let(:healthy) { SemanticLogger::Test::CaptureLogEvents.new }
+
+        it "flushes within seconds while its worker thread waits on the full queue of an appender backing off" do
+          async = SemanticLogger::Appender::Async.new(appender: down, max_queue_size: 2)
+          processor.appenders << async << healthy
+          # Counts 30 failures, so that the back-off after the first entry lasts 31 seconds, longer than
+          # the test waits: the entry held is written again only once the appenders are told.
+          backoff = async.processor.instance_variable_get(:@backoff)
+          30.times { backoff.retry? }
+          20.times { |i| processor.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "entry #{i}" }) }
+          deadline = Time.now + 5
+          Thread.pass until (async.processor.retry_count > 30 && async.queue.num_waiting == 1) ||
+                            Time.now > deadline
+
+          assert_equal 1, async.queue.num_waiting, "the worker thread should be waiting for room"
+          started                             = Time.now
+          processor.appenders.process_exiting = true
+
+          assert processor.flush
+          assert_operator Time.now - started, :<, 3
+          assert_equal 20, async.failed_count
+          # The entry held tried once more, then none of the others.
+          assert_equal 2, down.attempts.size
+          assert_equal 20, healthy.events.size
+        ensure
+          processor.appenders.process_exiting = false
+          async&.close
+        end
+      end
+
       describe "#start" do
         it "returns false when the worker thread is already active" do
           assert_predicate processor, :active?

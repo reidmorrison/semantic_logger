@@ -516,7 +516,8 @@ the server has not answered it, so an outage loses no entries until the worker t
 request that failed once it was sent, such as one whose answer did not come within `read_timeout`,
 or whose connection was reset, is discarded instead, after the same back-off, since the server may
 have stored its entries. While a flush is waiting, such as the one at exit, a request that fails is
-discarded rather than sent again.
+discarded rather than sent again, and so are the entries queued after it, ahead of the flush,
+without being sent; see [Retry a failing appender](operations.html#retry-a-failing-appender).
 
 The worker thread stops for good after `async_max_retries` (default `100`) failures in a row,
 discarding the entry or batch it was sending; pass `async_max_retries: -1` to keep trying through a

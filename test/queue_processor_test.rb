@@ -199,6 +199,41 @@ class QueueProcessorTest < Minitest::Test
     end
   end
 
+  # Cannot reach its destination while `down`, and says that each such write wrote nothing. Counts
+  # every write, alone or in a batch, whether it fails or not, in `attempts`.
+  class OutageAppender < BatchAppender
+    attr_accessor :down
+
+    def initialize(**)
+      super
+      @down     = true
+      @attempts = Queue.new
+    end
+
+    def attempts = @attempts.size
+
+    def log(log)
+      attempt
+      super
+    end
+
+    def batch(logs)
+      attempt
+      super
+    end
+
+    def wrote_nothing?(exception)
+      exception.is_a?(IOError)
+    end
+
+    private
+
+    def attempt
+      @attempts << true
+      raise IOError, "destination unavailable" if down
+    end
+  end
+
   # A non-StandardError exception, used to exercise the fatal (non-retryable) path in #process.
   class FatalError < Exception; end # rubocop:disable Lint/InheritException
 
@@ -241,6 +276,14 @@ class QueueProcessorTest < Minitest::Test
     def stub_back_off(processor, on_wait = nil, &)
       backoff = processor.instance_variable_get(:@backoff)
       backoff.stub(:wait, -> { on_wait&.call(backoff.retry_count) }, &)
+    end
+
+    # Counts 30 failures in a row, so that the back-off after the next failure lasts 31 seconds,
+    # longer than any test waits: until the test ends it, such as with a flush, the worker thread
+    # does not write again what it holds.
+    def lengthen_back_off(processor)
+      backoff = processor.instance_variable_get(:@backoff)
+      30.times { backoff.retry? }
     end
 
     include SignalTrapHelper
@@ -1195,6 +1238,232 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    # Each write the destination fails could take as long to fail as the first, such as the
+    # open_timeout of a server that does not answer, so the rest of the queue is not written.
+    describe "once the destination fails while a flush waits" do
+      let(:appender) do
+        a        = OutageAppender.new
+        a.logger = internal_logger
+        a
+      end
+
+      # Starts a processor whose first back-off lasts longer than any test waits (see
+      # #lengthen_back_off), so that it still holds the entry that failed when the test goes on.
+      def start_down(**)
+        start(**).tap { |processor| lengthen_back_off(processor) }
+      end
+
+      # Waits until the worker thread has failed to write, and is backing off.
+      def wait_for_back_off(processor)
+        deadline = Time.now + 5
+        Thread.pass until processor.retry_count > 30 || Time.now > deadline
+
+        assert_equal 31, processor.retry_count, "the worker thread should be backing off"
+      end
+
+      it "discards the entries queued ahead of the flush, without writing them" do
+        processor = start_down
+        5.times { |i| processor.log(new_log(message: "unavailable #{i}")) }
+        wait_for_back_off(processor)
+
+        assert processor.flush
+        # The entry held tried once more, after the flush ended the back-off.
+        assert_equal 2, appender.attempts
+        assert_equal 5, processor.failed_count
+        assert_equal 31, processor.retry_count, "a failure while the flush waits should not count as a retry"
+      end
+
+      it "writes the entries queued after the flush has run" do
+        processor = start_down
+        3.times { |i| processor.log(new_log(message: "unavailable #{i}")) }
+        wait_for_back_off(processor)
+
+        assert processor.flush
+        appender.down = false
+        processor.log(new_log(message: "after the flush"))
+
+        assert processor.flush
+        assert_equal ["after the flush"], appender.events.map(&:message)
+        assert_equal 3, processor.failed_count
+      end
+
+      it "discards the batches queued ahead of a close, without writing them" do
+        processor = start_down(batch: true, batch_size: 2, batch_seconds: 60)
+        2.times { |i| processor.log(new_log(message: "unavailable #{i}")) }
+        wait_for_back_off(processor)
+        4.times { |i| processor.log(new_log(message: "unavailable #{i + 2}")) }
+
+        assert processor.close
+        assert_equal 2, appender.attempts
+        assert_equal 6, processor.failed_count
+        assert_predicate appender, :closed
+      end
+
+      describe "with a destination that is back once the entry it held failed again" do
+        let(:appender) do
+          a        = ResendingAppender.new(failures: 2)
+          a.logger = internal_logger
+          a
+        end
+
+        # The worker thread takes the entries queued after the flush off the queue in the same pass
+        # as those ahead of it, and the flush.
+        it "writes the batch of entries queued after the flush, taken off the queue with it" do
+          processor   = start(batch: true, batch_size: 1, batch_seconds: 60)
+          backing_off = Queue.new
+          gate        = Queue.new
+          stub_back_off(processor, lambda { |_seconds|
+            backing_off << true
+            gate.pop
+          }) do
+            processor.log(new_log(message: "unavailable"))
+
+            assert backing_off.pop(timeout: 5), "the worker thread should back off, holding the entry"
+            2.times { |i| processor.log(new_log(message: "ahead #{i}")) }
+            flusher  = Thread.new { processor.flush }
+            deadline = Time.now + 5
+            Thread.pass until processor.queue.size == 3 || Time.now > deadline
+            2.times { |i| processor.log(new_log(message: "after #{i}")) }
+            # The entry held fails again once the back-off ends, while the flush waits.
+            gate << true
+
+            assert flusher.join(5), "the flush should return"
+            assert flusher.value
+          ensure
+            flusher&.kill
+          end
+
+          assert_equal([["after 0", "after 1"]], Array(appender.batches).map { |logs| logs.map(&:message) })
+          assert_equal 3, processor.failed_count
+        end
+      end
+
+      it "writes every entry to a destination that takes them" do
+        appender.down = false
+        processor     = start
+        3.times { |i| processor.log(new_log(message: "entry #{i}")) }
+
+        assert processor.flush
+        assert_equal 3, appender.events.size
+        assert_equal 0, processor.failed_count
+      end
+    end
+
+    # The flush at exit can reach the queue only after the thread logging to it, normally the one that
+    # writes to every appender, has handed over the entries ahead of it, which it cannot while the
+    # queue is full and the worker thread backs off.
+    describe "while the process exits" do
+      let(:appender) do
+        a        = OutageAppender.new
+        a.logger = internal_logger
+        a
+      end
+
+      after { @processor&.process_exiting = false }
+
+      # Starts a processor whose worker thread backs off after its first entry, with a full queue,
+      # and a thread waiting for room on it, as the main processor's would be. Returns that thread.
+      # Its first back-off lasts longer than any test waits (see #lengthen_back_off).
+      def start_backing_off(**)
+        @processor = start(max_queue_size: 2, **)
+        lengthen_back_off(@processor)
+        logging  = Thread.new { 5.times { |i| @processor.log(new_log(message: "unavailable #{i}")) } }
+        deadline = Time.now + 5
+        Thread.pass until (@processor.retry_count > 30 && @processor.queue.num_waiting == 1) || Time.now > deadline
+
+        assert_equal 31, @processor.retry_count, "the worker thread should be backing off"
+        logging
+      end
+
+      it "stops backing off, and discards the queued entries once a write fails, without writing them" do
+        logging                    = start_backing_off
+        started                    = Time.now
+        @processor.process_exiting = true
+
+        assert logging.join(2), "the thread logging should not wait out the back-offs"
+        deadline = Time.now + 2
+        Thread.pass until @processor.failed_count == 5 || Time.now > deadline
+
+        assert_equal 5, @processor.failed_count
+        assert_operator Time.now - started, :<, 1, "the back-off under way should have ended"
+        # The entry held tried once more.
+        assert_equal 2, appender.attempts
+        assert_equal 31, @processor.retry_count, "a failure while the process exits should not count as a retry"
+        assert @processor.flush
+      end
+
+      it "discards the queued batches once a write fails, without writing them" do
+        logging                    = start_backing_off(batch: true, batch_size: 2, batch_seconds: 60)
+        @processor.process_exiting = true
+
+        assert logging.join(2), "the thread logging should not wait out the back-offs"
+        assert @processor.flush
+        assert_equal 2, appender.attempts
+        assert_equal 5, @processor.failed_count
+      end
+
+      it "writes every entry to a destination that takes them" do
+        appender.down              = false
+        @processor                 = start
+        @processor.process_exiting = true
+        3.times { |i| @processor.log(new_log(message: "entry #{i}")) }
+
+        assert @processor.flush
+        assert_equal 3, appender.events.size
+        assert_equal 0, @processor.failed_count
+      end
+
+      it "backs off again, and holds what it cannot write, once the process no longer exits" do
+        logging                    = start_backing_off
+        @processor.process_exiting = true
+
+        assert logging.join(2), "the thread logging should not wait out the back-offs"
+        assert @processor.flush
+        @processor.process_exiting = false
+        @processor.log(new_log(message: "unavailable again"))
+        deadline = Time.now + 5
+        Thread.pass until @processor.retry_count == 32 || Time.now > deadline
+
+        assert_equal 32, @processor.retry_count, "the worker thread should back off again"
+        assert_equal 5, @processor.failed_count, "the entry should be held to be written again"
+      end
+
+      # Such as when another thread forks while the parent process flushes at exit.
+      it "is no longer exiting in a child process after a fork" do
+        skip "fork is not supported" unless Process.respond_to?(:fork)
+
+        @processor                 = start
+        @processor.process_exiting = true
+        reader, writer             = IO.pipe
+        # The child exits whatever happens, so that a failure there does not run the tests again in it.
+        pid = fork do
+          reader.close
+          @processor.reopen
+          writer.write(@processor.instance_variable_get(:@backoff).waited_on?.inspect)
+          writer.close
+        ensure
+          exit!(0)
+        end
+        writer.close
+        Process.wait(pid)
+        waited_on_in_child = reader.read
+        reader.close
+
+        assert_equal "false", waited_on_in_child
+      end
+
+      it "can be told in a signal trap" do
+        logging = start_backing_off
+        told    = in_signal_trap do
+          @processor.process_exiting = true
+          :told
+        end
+
+        assert_equal :told, told
+        assert logging.join(2), "the thread logging should not wait out the back-offs"
+      end
+    end
+
     describe "a command taken off the queue with a batch that cannot be written" do
       let(:appender) do
         a        = UnavailableBatchAppender.new
@@ -1324,7 +1593,7 @@ class QueueProcessorTest < Minitest::Test
 
         refute @processor.send(:write_batch_then_run, [new_log], [close, flush])
         refute_predicate flush, :ran?
-        refute_predicate backoff, :requests_waiting?
+        refute_predicate backoff, :waited_on?
       end
 
       # A request waiting keeps the worker thread from giving up after async_max_retries, so it stops
@@ -1348,11 +1617,11 @@ class QueueProcessorTest < Minitest::Test
         @processor.reopen
 
         assert appender.waiting.pop(timeout: 5), "the new worker thread should take the next message"
-        assert_predicate backoff, :requests_waiting?, "the flush on the queue should still be waiting"
+        assert_predicate backoff, :waited_on?, "the flush on the queue should still be waiting"
         appender.gate << true
 
         assert @processor.flush
-        refute_predicate backoff, :requests_waiting?
+        refute_predicate backoff, :waited_on?
       ensure
         flusher&.kill
       end
@@ -1363,7 +1632,7 @@ class QueueProcessorTest < Minitest::Test
         @processor.instance_variable_get(:@inbox).instance_variable_set(:@pid, -1)
         @processor.reopen
 
-        refute_predicate backoff, :requests_waiting?
+        refute_predicate backoff, :waited_on?
       end
     end
 
@@ -1522,7 +1791,8 @@ class QueueProcessorTest < Minitest::Test
         flusher&.kill
       end
 
-      it "lets a flush carry on, which writes the queued entries, rather than wait for the worker thread to give up" do
+      # Having failed to write while the flush waits, it discards the entries queued ahead of the flush.
+      it "lets a flush carry on, which discards the queued entries, rather than wait for the thread to give up" do
         processor = start_full
         flusher   = Thread.new { processor.flush }
         wait_for_waiting(processor)
@@ -1530,8 +1800,8 @@ class QueueProcessorTest < Minitest::Test
 
         assert flusher.join(5), "the flush should not wait for ever"
         assert flusher.value
-        assert_equal ["queued"], appender.events.map(&:message)
-        assert_equal 1, processor.failed_count
+        assert_empty appender.events
+        assert_equal 2, processor.failed_count
         refute_predicate processor, :stopped?
       ensure
         flusher&.kill

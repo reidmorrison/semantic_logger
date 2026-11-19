@@ -170,8 +170,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   from `#not_sent?(exception)`, both of which return `false` by default.
   A flush or close, including the flush at exit, no longer waits out the back-offs during an outage:
   submitting one ends the back-off under way, and until it has run, an entry or batch that fails is
-  discarded, counted as `failed`, without backing off. It still waits while each entry ahead of it is
-  tried. Before, a flush with 5 entries queued during an outage waited 1 + 2 + 3 + 4 + 5 seconds. See
+  discarded, counted as `failed`, without backing off, and so are the entries queued after it, ahead
+  of the flush or close (see below). Before, a flush with 5 entries queued during an outage waited
+  1 + 2 + 3 + 4 + 5 seconds. See
+  [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
+  and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- During an outage of the destination of an appender added with `async: true` or in batches, the
+  process exits within seconds, rather than hours. A flush or close, including the flush at exit,
+  now discards the entries queued ahead of it once a write fails because of the destination, counted
+  as `failed`, rather than send each one in turn, which against a server that does not answer took
+  up to its `open_timeout` each. At exit, each such appender is also told that the process is
+  exiting before the flush, directly rather than through the main queue, so that it stops backing off
+  and sending again what failed even while the thread that writes to every appender is held up
+  handing it an entry. A destination that takes the entries still gets every one of them. See
   [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 

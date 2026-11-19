@@ -46,9 +46,21 @@ end
 # json 3.1 (see SemanticLogger::CoreExt::Warning).
 Warning.singleton_class.prepend(SemanticLogger::CoreExt::Warning) if SemanticLogger::CoreExt::Warning::NEEDED
 
-# Flush all appenders at exit, waiting for outstanding messages on the queue
-# to be written first.
+# Flush all appenders at exit, waiting for outstanding messages on the queue to be written first.
+#
+# During an outage of the destination of an appender added with async: true or in batches, that would
+# wait while each queued message failed in turn, which can take hours against a server that does not
+# answer. So the appenders are first told that the process is exiting, each one directly: the thread
+# that writes to every appender can be held up handing a message to that appender's full queue while
+# it backs off, and so would hand it the flush only once it stopped backing off. Each one then stops
+# backing off and writing again what failed, and once its destination fails a write, discards the
+# rest of its queue (see SemanticLogger::Appenders#process_exiting=). They are told again once the
+# flush has returned, since a test framework can run its tests in a later at_exit hook.
 at_exit do
+  appenders = SemanticLogger.appenders
+  appenders.process_exiting = true
   # Cannot close since test frameworks only run at exit, at which point the logging would already be closed.
   SemanticLogger.flush
+ensure
+  appenders&.process_exiting = false
 end

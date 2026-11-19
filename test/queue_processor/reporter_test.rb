@@ -6,6 +6,20 @@ class ReporterTest < Minitest::Test
     let(:reporter) { SemanticLogger::QueueProcessor::Reporter.new(appender) }
     let(:error) { IOError.new("destination unavailable") }
 
+    it "reports a log message taken off the queue that waited longer than the threshold" do
+      internal        = SemanticLogger::Test::CaptureLogEvents.new
+      appender.logger = internal
+      entry           = SemanticLogger::Log.new("Test", :info)
+      entry.time      = Time.now - 40
+      reporter.lag(entry, 30, 12)
+      entry.time = Time.now
+      reporter.lag(entry, 30, 12)
+
+      assert_equal 1, internal.events.size
+      assert_equal :warn, internal.events.first.level
+      assert_match(/fallen behind by 40\.\d+ seconds with 12 messages queued up/, internal.events.first.message)
+    end
+
     it "reports the log messages queued ahead of a command at a level that grows with their number" do
       internal        = SemanticLogger::Test::CaptureLogEvents.new
       appender.logger = internal
