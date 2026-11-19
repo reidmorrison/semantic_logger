@@ -145,6 +145,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   An option given as `nil` sets nothing, and is not reported. The options of `add_appender` itself,
   such as `async:` and `batch:`, still apply to an instance. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- Giving `add_appender` more than one destination, such as
+  `add_appender(file_name: "log/app.log", io: $stdout)`. It added only the first of `file_name:`,
+  `io:`, `logger:`, `appender:`, and `metric:`, and ignored the others without a word, so nothing
+  was written to `$stdout`. It still does, but now reports a deprecation warning that names the
+  destination it uses and those it ignores, and v6 raises `ArgumentError` for them. Call
+  `add_appender` once for each destination. A destination given as `nil` is not reported. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ### Removed
 

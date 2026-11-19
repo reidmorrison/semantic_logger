@@ -359,8 +359,15 @@ Notes:
 ## Per-appender settings
 
 Each destination is added with `SemanticLogger.add_appender`. The full catalogue of destinations,
-and the options specific to each, is in [Appenders](appenders.html). In addition to its own
-settings, almost every appender accepts these common options:
+and the options specific to each, is in [Appenders](appenders.html). Each call adds one destination,
+given as one of `file_name:`, `io:`, `logger:`, `appender:`, or `metric:`; to write to several, call
+it once for each. Given more than one of them, `add_appender` adds only the first, in that order, and
+reports a [deprecation warning](upgrading.html#seeing-deprecation-warnings) that names the others,
+which it ignores; v6 raises an `ArgumentError`. A destination given as `nil` is not one, so that
+settings of which only one is set can be passed on, such as
+`file_name: options[:log_file], io: options[:log_io]`.
+
+In addition to its own settings, almost every appender accepts these common options:
 
 | Option | Description |
 |--------|-------------|
