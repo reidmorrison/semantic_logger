@@ -87,9 +87,14 @@ module SemanticLogger
       #     Once stopped, messages are dropped when the queue is full, rather than block.
       #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour).
       #     Default: 100
+      #
+      # The proxy also answers #wrapped_logger, the logger that the appender writes to, when the
+      # appender has one, such as one added with `logger:`, so that it is found the same way with or
+      # without async: true. The proxy of any other appender does not respond to it.
       def initialize(appender:, **args)
         @appender  = appender
         @processor = QueueProcessor.start(appender: appender, **args)
+        define_singleton_method(:wrapped_logger) { @appender.wrapped_logger } if appender.respond_to?(:wrapped_logger)
       end
 
       # Returns [String] the class and object address of this proxy, whether it batches, and the

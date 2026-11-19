@@ -139,6 +139,25 @@ module Appender
           proxy&.close
         end
 
+        it "answers wrapped_logger and logger as the appender does, as add_appender returns it" do
+          proxy = SemanticLogger.add_appender(logger: mock_logger, async: true)
+
+          assert_instance_of SemanticLogger::Appender::Async, proxy
+          assert_same mock_logger, proxy.wrapped_logger
+          assert_same proxy.appender.logger, proxy.logger
+          refute_same mock_logger, proxy.logger
+        ensure
+          SemanticLogger.remove_appender(proxy)
+        end
+
+        it "has no wrapped_logger for an appender without one" do
+          proxy = SemanticLogger.add_appender(io: StringIO.new, async: true)
+
+          refute_respond_to proxy, :wrapped_logger
+        ensure
+          SemanticLogger.remove_appender(proxy)
+        end
+
         it "does not write its worker thread's own messages to the wrapped logger" do
           mock_logger.define_singleton_method(:trace) { |message = nil, progname = nil| debug(message, progname) }
           proxy = SemanticLogger::Appender::Async.new(appender: appender)
