@@ -2438,6 +2438,49 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+#### When the server does not accept a request
+
+An entry is written once the server answers its request with a 2xx status. The HTTP appender, and
+those built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:signalfx` metrics
+appender), handle any other answer by its status:
+
+* A 4xx other than 408 and 429, such as `400 Bad Request` or `401 Unauthorized`, rejects the request
+  itself, so sending it again cannot succeed. With `async: true` or `batch: true`, its entries are
+  discarded straight away. A batch, which is sent in one request, is first split up and sent again in
+  parts, so that only the entries in the parts the server rejects are discarded.
+* A 5xx, `408 Request Timeout`, `429 Too Many Requests`, or a redirect is a problem with the
+  destination. With `async: true` or `batch: true`, the entry or batch being sent is discarded, and
+  the worker thread [backs off](operations.html#retry-a-failing-appender) before sending the next one,
+  so that the entries logged meanwhile wait on the queue. It stops for good after `async_max_retries`
+  (default `100`) such failures in a row; pass `async_max_retries: -1` to keep trying through a long
+  outage.
+
+The discarded entries are counted as `failed` in `SemanticLogger.stats`, and reported to the internal
+logger with the status code, the url without its credentials, and the start of the response body.
+Without `async:` or `batch:`, each request that fails is reported in the same way.
+
+While the worker thread backs off, the entries logged meanwhile wait on the appender's own queue, as
+they already did while the server could not be reached. Once that queue is full (`max_queue_size`,
+default `10,000`), the thread that writes to every appender waits for room in it, so the other
+appenders stop receiving entries as well, and once the main queue is full too, so does every logging
+call, until the server accepts requests again. To keep logging while the server is unavailable, add
+the appender with `non_blocking: true` as well, so that once its queue is full, its entries are
+dropped and counted instead (see
+[Drop messages instead of blocking](operations.html#drop-messages-instead-of-blocking)):
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:     :http,
+  url:          "http://localhost:8088/path",
+  batch:        true,
+  non_blocking: true
+)
+~~~
+
+When the server rejects every request, for example because the password or the path is wrong, each
+batch is split until every entry has been sent on its own, which takes about two requests for each
+entry in the batch.
+
 ### TCP Appender (+SSL)
 
 The TCP appender sends JSON or other formatted messages to services that accept log messages over TCP,
@@ -5275,6 +5318,8 @@ as `failed` for that appender in `SemanticLogger.stats[:appenders]`.
 A `JSON::ParserError`, such as from a destination that answered with an HTML error page, is a
 problem with the destination, so the thread backs off as for any other error. The appender decides
 which errors are caused by message content; see [Custom appenders](config.html#custom-appenders).
+The HTTP based appenders decide by the status of the response; see
+[When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
 
 After `async_max_retries` (default `100`) consecutive failed restarts the worker thread gives up,
 rather than spinning forever on a persistent failure. From then on new log messages for that
@@ -6220,6 +6265,29 @@ agent.
   than replacing both and losing the entries. So it no longer stops a thread that is waiting
   between retries after an appender failed, or one that is stuck writing; it only starts the thread
   again once it has stopped. After a fork, the child still starts with an empty queue.
+* The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
+  metric subscriber, now raise an error from `#log` and `#batch` when the server answers with a status
+  other than 2xx, instead of reporting it and carrying on. With `async: true` or `batch: true`, the
+  entries the server did not accept are now counted as `failed` in `SemanticLogger.stats`, rather
+  than `processed`. On a 5xx, 408, 429, or a redirect, the worker thread now backs off (1 second, then
+  2, ...) before sending the next entry or batch, and stops for good after `async_max_retries`
+  (default `100`) such failures in a row, as it already did when the server could not be reached.
+  Pass `async_max_retries: -1` to keep trying through a long outage. On any other 4xx, a batch is now
+  split up and sent again in parts, to find the entries the server rejects, so a server that kept
+  some entries of a request it rejected can store them twice. See
+  [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
+
+  While the worker thread backs off, the entries logged meanwhile wait on the appender's queue, as
+  they already did while the server could not be reached. Once that queue, and then the main queue,
+  are full, logging calls block until the server accepts requests again. Add an HTTP appender that
+  uses `async: true` or `batch: true` with `non_blocking: true` as well, so that its entries are
+  dropped once its queue is full instead; see
+  [Drop messages instead of blocking](operations.html#drop-messages-instead-of-blocking).
+
+  Without `async:` or `batch:`, each failure is still reported to the internal logger, now as
+  `Failed to log to appender`, with the error and its backtrace. A subclass of
+  `SemanticLogger::Appender::Http` that checks the result of `post` or `put` now gets a
+  `SemanticLogger::Appender::Http::ResponseError` raised instead of `false`.
 
 ### Upgrading to Semantic Logger v5.2
 

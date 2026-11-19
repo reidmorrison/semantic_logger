@@ -26,6 +26,14 @@ require "openssl"
 #     url:      'http://localhost:8088/path',
 #     batch:    true
 #   )
+#
+# Responses:
+# A response other than 2xx raises ResponseError from #log and #batch. A 4xx other than 408 and
+# 429 rejects the request itself, so #message_error? recognizes it, and an asynchronous appender
+# discards the entries straight away. Any other status, such as a 5xx, 408, or 429, which ask to
+# send the request again later, is a problem with the destination, so an asynchronous appender
+# discards the entries and backs off before carrying on. Either way they are counted as failed. An
+# appender that is not asynchronous reports the error.
 module SemanticLogger
   module Appender
     class Http < SemanticLogger::Subscriber
@@ -35,6 +43,30 @@ module SemanticLogger
 
       # Maximum number of bytes of an error response body to write to the internal logger.
       MAX_LOGGED_RESPONSE_BODY = 512
+
+      # Raised when the server answers a request with a status other than 2xx. Its message holds
+      # the status code, the redacted url, and the start of the response body, for the internal
+      # logger.
+      class ResponseError < StandardError
+        # The 4xx statuses that ask the client to send the request again later:
+        # 408 Request Timeout and 429 Too Many Requests.
+        RETRY_LATER_CODES = [408, 429].freeze
+
+        # Returns [Integer] the status code of the response.
+        attr_reader :code
+
+        def initialize(message, code:)
+          super(message)
+          @code = code
+        end
+
+        # Whether the server rejected the request itself, with a 4xx status other than 408 and
+        # 429, so that sending it again cannot succeed. A 5xx, 408, or 429 asks to send it again
+        # later, and a 3xx to send it elsewhere: those are problems with the destination.
+        def rejected?
+          (400..499).cover?(code) && !RETRY_LATER_CODES.include?(code)
+        end
+      end
 
       # Describes a valid url in the error raised for an invalid one.
       URL_FORMAT_HINT = "Should be similar to: 'http://hostname:port/path'".freeze
@@ -237,7 +269,10 @@ module SemanticLogger
         false
       end
 
-      # The whole batch is formatted into a single request before anything is sent.
+      # The whole batch is formatted into a single request before anything is sent, and the
+      # server answers for the request as a whole. So a batch that a format error or a rejected
+      # request fails (see #message_error?) is split up and sent again, to find the entries at
+      # fault.
       def batch_all_or_nothing?
         true
       end
@@ -254,6 +289,13 @@ module SemanticLogger
       # #format_batch_refusal, as the Custom appenders section of docs/config.md shows.
       def batch_refusal
         format_batch_refusal if batch_defined_by?(Http)
+      end
+
+      # Whether the exception, raised by #log or #batch, was caused by the entries sent, rather
+      # than by the destination (see Subscriber#message_error?). That includes a request the
+      # server rejected (see ResponseError#rejected?), since sending it again cannot succeed.
+      def message_error?(exception)
+        (exception.is_a?(ResponseError) && exception.rejected?) || super
       end
 
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
@@ -306,9 +348,16 @@ module SemanticLogger
       # the server ingests log data, and servers reject it on a maintenance request.
       # Appender::ElasticsearchHttp#delete_all deletes an index, and Elasticsearch fails
       # the request with a 400 when it carries unrecognized parameters.
+      #
+      # A maintenance request is not log data written by the worker thread of an asynchronous
+      # appender, so a response other than 2xx is reported to the internal logger, and false
+      # returned, rather than raised.
       def delete(request_uri = path)
         request = Net::HTTP::Delete.new(request_uri, @header)
         process_request(request)
+      rescue ResponseError => e
+        logger.error(e.message)
+        false
       end
 
       # Applies the query string of the configured url, if any, to the uri of a request
@@ -328,6 +377,10 @@ module SemanticLogger
       end
 
       # Process HTTP Request
+      #
+      # Returns true when the server answers with a 2xx status. Raises ResponseError for any other
+      # status, so that the entries are counted as failed rather than written. Its message names
+      # only the redacted url, since the url can hold credentials, and the start of the body.
       def process_request(request, body = nil)
         if body
           request.body = compress ? compress_data(body) : body
@@ -338,16 +391,13 @@ module SemanticLogger
         # connection for the requests that follow, such as once a removed appender is added again.
         @http.start unless @http.started?
         response = @http.request(request)
-        if response.is_a?(Net::HTTPSuccess)
-          true
-        else
-          # Failures are logged to the global semantic logger failsafe logger (Usually stderr or file)
-          logger.error(
-            "Bad HTTP response from: #{redacted_url} code: #{response.code}, " \
-            "#{response.body.to_s[0, MAX_LOGGED_RESPONSE_BODY].inspect}"
-          )
-          false
-        end
+        return true if response.is_a?(Net::HTTPSuccess)
+
+        raise ResponseError.new(
+          "Bad HTTP response from: #{redacted_url} code: #{response.code}, " \
+          "#{response.body.to_s[0, MAX_LOGGED_RESPONSE_BODY].inspect}",
+          code: response.code.to_i
+        )
       rescue RuntimeError => e
         reopen
         raise e

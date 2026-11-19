@@ -379,6 +379,29 @@ agent.
   than replacing both and losing the entries. So it no longer stops a thread that is waiting
   between retries after an appender failed, or one that is stuck writing; it only starts the thread
   again once it has stopped. After a fork, the child still starts with an empty queue.
+* The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
+  metric subscriber, now raise an error from `#log` and `#batch` when the server answers with a status
+  other than 2xx, instead of reporting it and carrying on. With `async: true` or `batch: true`, the
+  entries the server did not accept are now counted as `failed` in `SemanticLogger.stats`, rather
+  than `processed`. On a 5xx, 408, 429, or a redirect, the worker thread now backs off (1 second, then
+  2, ...) before sending the next entry or batch, and stops for good after `async_max_retries`
+  (default `100`) such failures in a row, as it already did when the server could not be reached.
+  Pass `async_max_retries: -1` to keep trying through a long outage. On any other 4xx, a batch is now
+  split up and sent again in parts, to find the entries the server rejects, so a server that kept
+  some entries of a request it rejected can store them twice. See
+  [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
+
+  While the worker thread backs off, the entries logged meanwhile wait on the appender's queue, as
+  they already did while the server could not be reached. Once that queue, and then the main queue,
+  are full, logging calls block until the server accepts requests again. Add an HTTP appender that
+  uses `async: true` or `batch: true` with `non_blocking: true` as well, so that its entries are
+  dropped once its queue is full instead; see
+  [Drop messages instead of blocking](operations.html#drop-messages-instead-of-blocking).
+
+  Without `async:` or `batch:`, each failure is still reported to the internal logger, now as
+  `Failed to log to appender`, with the error and its backtrace. A subclass of
+  `SemanticLogger::Appender::Http` that checks the result of `post` or `put` now gets a
+  `SemanticLogger::Appender::Http::ResponseError` raised instead of `false`.
 
 ### Upgrading to Semantic Logger v5.2
 
