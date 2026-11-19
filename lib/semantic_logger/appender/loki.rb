@@ -49,6 +49,9 @@ module SemanticLogger
       #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call and #batch, or a Proc, to be used to
       #     format the output from this appender.
+      #     A Hash sets the options of the Loki formatter, such as the label limits of a Loki that
+      #     raises them (see SemanticLogger::Formatters::Loki#initialize).
+      #     Example: {loki: {max_label_names_per_series: 30}}
       #     Default: SemanticLogger::Formatters::Loki
       def initialize(url: nil,
                      formatter: nil,
