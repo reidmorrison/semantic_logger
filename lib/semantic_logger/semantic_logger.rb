@@ -442,9 +442,9 @@ module SemanticLogger
   # Whether appenders are automatically reopened in the child process after a fork.
   #
   # Enabled by default. A `Process._fork` hook (Ruby 3.1+) calls SemanticLogger.reopen
-  # in the child after `fork`, `Process.daemon`, `IO.popen`, `Kernel#system`, and
-  # backticks, so framework specific `after_fork` hooks (Puma, Unicorn, Resque,
-  # Spring, etc.) are no longer required.
+  # in the child after `fork`, `Process.fork`, `Process.daemon`, and `IO.popen("-")`,
+  # so framework specific `after_fork` hooks (Puma, Unicorn, Resque, Spring, etc.)
+  # are no longer required.
   def self.reopen_on_fork?
     @reopen_on_fork != false
   end

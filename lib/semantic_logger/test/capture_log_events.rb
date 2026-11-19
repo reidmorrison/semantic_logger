@@ -47,6 +47,12 @@ module SemanticLogger
         @events.clear
       end
 
+      # Returns [false]: standing in for the processor, it holds no lock, so another thread never
+      # waits for the calling thread to return from a call to it.
+      def current_thread_inside?
+        false
+      end
+
       def to_h
         events.map(&:to_h)
       end

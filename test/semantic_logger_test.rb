@@ -397,6 +397,9 @@ class SemanticLoggerTest < Minitest::Test
         mock.expect(:flush, nil)
         mock.expect(:close, nil)
         mock.expect(:reopen, nil)
+        # On Ruby 4.0, the flush first asks whether this thread is inside the processor (see
+        # RactorReceiver.flush).
+        def mock.current_thread_inside? = false
 
         # Clear the per-process reopen guard so reopen is not skipped.
         SemanticLogger.instance_variable_set(:@reopened_pid, nil)
