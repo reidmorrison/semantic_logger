@@ -3431,7 +3431,16 @@ the parent (see [Process forking](operations.html#process-forking)).
 RabbitMQ closes the channel when it refuses an entry, such as one larger than its `max_message_size`
 (`PRECONDITION_FAILED`). The appender then publishes the next entries on a new channel on the same
 connection, and reports the close to the internal logger. The refused entry is lost: RabbitMQ closes
-the channel after the entry was published, without answering the publish.
+the channel after the entry was published, without answering the publish. While Bunny recovers the
+connection from a network failure, its channels are closed too: the appender then leaves them to
+Bunny, and the entries are written again once it has recovered. Once Bunny will not recover the
+connection, such as after its `recovery_attempts` have run out, or after a network failure with
+`automatic_recovery: false`, the appender closes it and publishes on a new connection. With
+`recover_from_connection_close: false` and automatic recovery on, Bunny does not recover a connection
+that RabbitMQ closed, and the appender cannot tell it from one about to be recovered: it raises until
+it is reopened, such as with `SemanticLogger.reopen(force: true)`. When Bunny itself fails to write
+an entry to the socket, such as with a `write_timeout:` set, it does not raise, so that entry is
+lost without a report.
 
 ## Logging to several destinations at once
 
