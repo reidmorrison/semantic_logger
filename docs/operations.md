@@ -43,10 +43,11 @@ After a fork, that is the child's own thread, which reopens the appender before 
 In the child, the appenders that keep a connection open to their server leave the one they inherited
 to the parent, without closing it or writing to it, and connect again: `:http` and the appenders
 built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and `metric: :signalfx`), `:tcp`,
-`:syslog` and `:graylog` over TCP, and `:kafka`. Closing a TLS connection sends the server a
-`close_notify`, which ends the connection for the parent too, and over TLS the server cannot read
-what the parent writes after the child has written to it. When one of them cannot connect in the
-child, such as while its server cannot be reached, it connects before it writes the next entry.
+`:syslog` and `:graylog` over TCP, `:kafka`, and `:rabbitmq`. Closing a TLS connection sends the
+server a `close_notify`, which ends the connection for the parent too, and over TLS the server
+cannot read what the parent writes after the child has written to it. When one of them cannot
+connect in the child, such as while its server cannot be reached, it connects before it writes the
+next entry.
 (`:kafka` connects only when it delivers; when it cannot build a new producer in the child, such as
 for invalid options, logging to it raises `IOError` until it is reopened.)
 
