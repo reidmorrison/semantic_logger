@@ -592,6 +592,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   still starts with an empty queue, since the parent process writes the entries it had queued. The
   same goes for an appender added with `async: true` or in batches. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- A log call in a signal trap, such as the log level change (`USR2`) or thread dump (`TTIN`) of
+  `SemanticLogger.add_signal_handler`, no longer raises `ThreadError` ("can't be called from trap
+  context") when `SemanticLogger.non_blocking` is on and the queue is full, or the thread that writes
+  the log entries has stopped. Counting the dropped message locked a Mutex, which Ruby does not
+  allow in a trap. The message is now dropped and counted, as outside a trap, and reported just
+  after the trap, at most once every `dropped_message_report_seconds` as before. On Ruby 4.0,
+  `SemanticLogger.reopen` in a signal trap, such as after a log rotation, no longer raises
+  `ThreadError` either: reopening the thread that receives the entries logged in other Ractors
+  locked a Mutex, even when it had nothing to do.
 
 ## [5.2.0] 2026-10-30
 

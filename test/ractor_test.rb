@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require_relative "signal_trap_helper"
 require "timeout"
 
 module SemanticLogger
@@ -258,6 +259,40 @@ module SemanticLogger
         end
 
         assert_equal ["Before flush"], collector.logs.map(&:message)
+      end
+
+      describe "reopened in a signal trap, where Ruby does not allow a Mutex to be locked" do
+        include SignalTrapHelper
+
+        it "keeps the receiving thread" do
+          receiver = RactorReceiver.instance_variable_get(:@thread)
+          reopened = in_signal_trap { RactorReceiver.reopen }
+
+          assert_nil reopened
+          assert_same receiver, RactorReceiver.instance_variable_get(:@thread)
+          logs = logs_from_ractor { SemanticLogger["InRactor"].info("After the reopen") }
+
+          assert_equal ["After the reopen"], logs.map(&:message)
+        end
+
+        it "starts the receiving thread again once it has stopped, just after the trap" do
+          receiver = RactorReceiver.instance_variable_get(:@thread)
+          receiver.kill
+          receiver.join
+
+          refute_predicate RactorReceiver, :running?
+          reopened = in_signal_trap { RactorReceiver.reopen }
+
+          assert_nil reopened
+          deadline = Time.now + 5
+          sleep(0.01) until RactorReceiver.running? || Time.now > deadline
+
+          assert_predicate RactorReceiver, :running?
+          refute_same receiver, RactorReceiver.instance_variable_get(:@thread)
+          logs = logs_from_ractor { SemanticLogger["InRactor"].info("After the restart") }
+
+          assert_equal ["After the restart"], logs.map(&:message)
+        end
       end
 
       it "flushes, rather than waiting on the receiving thread, while the process forks" do

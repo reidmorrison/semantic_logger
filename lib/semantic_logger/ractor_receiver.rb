@@ -59,8 +59,16 @@ module SemanticLogger
       # Restarts the receiving thread, if it was started: in the child process after a fork, which the
       # thread does not survive, or after it stopped. The child also gets a new port, since the port it
       # inherited still holds the entries sent to the parent before the fork, which the parent writes.
+      #
+      # Also called from a signal trap, such as one that reopens the log files after a rotation, where
+      # Ruby does not allow a Mutex to be locked. So within the same process, a receiving thread that
+      # runs, or none that was started, is left as it is without taking the lock. When there is more
+      # to do, and Ruby refuses the lock, a new thread, which can take it, does it instead, once this
+      # call has returned.
       def reopen
-        @mutex.synchronize do
+        return if @pid == ::Process.pid && (!@started || @thread&.alive?)
+
+        locked = TrapSafe.try_synchronize(@mutex) do
           unless @pid == ::Process.pid
             @port   = ::Ractor::Port.new
             @pid    = ::Process.pid
@@ -69,7 +77,12 @@ module SemanticLogger
             @waits  = {}
           end
         end
-        start if @started
+        if locked
+          start if @started
+        else
+          Thread.new { reopen }
+          nil
+        end
       end
 
       # Runs the block, which forks the process, while the receiving thread waits on a Queue rather
