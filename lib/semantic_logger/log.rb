@@ -142,6 +142,7 @@ module SemanticLogger
       self.metric        = metric
       self.metric_amount = metric_amount
       self.dimensions    = dimensions
+      Log.negative_metric_amount_deprecated if metric_amount && negative_amount?(metric_amount)
 
       if exception
         unless exception.is_a?(Exception)
@@ -206,11 +207,33 @@ module SemanticLogger
       args           = extract_arguments(hash)
       added          = args.delete(:payload)
       assigned, kept = args.partition { |key, value| block_attribute?(key, value) }
-      assigned.each { |key, value| public_send(:"#{key}=", value) }
+      assigned.each do |key, value|
+        public_send(:"#{key}=", value)
+        Log.negative_metric_amount_deprecated if key == :metric_amount && negative_amount?(value)
+      end
       # An argument this entry already has wins over the block's :payload, like the block's other keys.
       added        = merge_payload(kept.to_h, added) unless kept.empty?
       self.payload = merge_payload(payload, added)
       self
+    end
+
+    # Reports, once per process, that a log call gave a negative metric amount, which is deprecated:
+    # a metric counts upward, and v6 drops a negative amount. The entry is still logged with it.
+    #
+    # Only once, so that a negative amount in a loop does not report a warning for each log call, and
+    # only once deprecation warnings are on, so that turning them on later still reports it. Not from
+    # a Ractor other than the main one, which cannot record that it was reported. Remove in v6, where
+    # the metrics API drops a negative amount instead.
+    def self.negative_metric_amount_deprecated
+      return if @negative_metric_amount_reported || !Warning[:deprecated] || RactorSupport.other_ractor?
+
+      @negative_metric_amount_reported = true
+      Deprecation.warn(
+        "A negative metric_amount is deprecated: a metric counts upward, and v6 drops a negative amount. " \
+        "Count what goes down as a metric of its own, such as \"cart/items_removed\". " \
+        "This is reported for the first negative amount only. See " \
+        "https://logger.reidmorrison.com/upgrading.html#negative-metric-amounts"
+      )
     end
 
     # Returns [true|false] whether the value can be used as the log argument named by the key.
@@ -508,6 +531,10 @@ module SemanticLogger
     end
 
     private
+
+    # Returns [true|false] whether the metric amount is a real number below zero. Never raises, since
+    # Base#backtrace passes its metric_amount to #assign without checking it (see .argument?).
+    def negative_amount?(amount) = REAL_NUMBER.call(amount) && amount.negative?
 
     # Returns the kept payload with the keys of the added one that it does not have, so that a kept
     # value is never replaced. A String and a Symbol key of the same name, such as "account_id" from

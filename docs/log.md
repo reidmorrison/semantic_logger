@@ -80,7 +80,7 @@ situational field.
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
 |`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`, and the log call did not pass `call_site: false`. See [The call site](#the-call-site).|
 |`metric`|`String`|The metric name, present for metric and `measure_*` calls. See [Metrics](metrics.html).|
-|`metric_amount`|`Numeric`|Amount to add to a counter metric, for example the quantity purchased. A counter adds 1 when it is `nil`.|
+|`metric_amount`|`Numeric`|Amount to add to a counter metric, for example the quantity purchased. A counter adds 1 when it is `nil`. A negative amount is deprecated, see [Negative metric amounts](upgrading.html#negative-metric-amounts).|
 |`dimensions`|`Hash`|Dimensions (key/value labels) supplied for a metric.|
 
 ### The call site
