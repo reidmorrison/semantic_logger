@@ -524,21 +524,42 @@ module SemanticLogger
     # String is still joined.
     #
     # Plain Strings that are all UTF-8, the usual texts, always join as they are, so they are joined
-    # without those checks, which take several times as long. With an explicit separator, so that a
-    # global `$,` set by another library is not added between them.
+    # without those checks, which take several times as long. With an explicit separator, a new
+    # empty String, so that a global `$,` set by another library is not added between them.
     def self.join_texts(*texts)
-      if texts.all? { |text| text.instance_of?(String) && text.encoding == Encoding::UTF_8 }
-        return texts.join("") # rubocop:disable Style/RedundantArgument
-      end
+      return texts.join(+"") if texts.all? { |text| text.instance_of?(String) && text.encoding == Encoding::UTF_8 }
 
       texts.map { |text| format("%s", text) }.reduce do |joined, text|
         encoding = Encoding.compatible?(joined, text)
-        if encoding && (encoding != Encoding::BINARY || joined.encoding == Encoding::BINARY)
-          "#{joined}#{text}"
-        else
-          "#{encode_utf8_string(joined)}#{encode_utf8_string(text)}"
-        end
+        joinable = encoding && (encoding != Encoding::BINARY || joined.encoding == Encoding::BINARY)
+        joinable ? "#{joined}#{text}" : "#{encode_utf8_string(joined)}#{encode_utf8_string(text)}"
       end
+    end
+
+    # Returns [String] the lines, such as those of a backtrace, joined into a new String with a line
+    # break between each, whatever their encodings: as they are, as Array#join joins them, or, when
+    # that would raise, such as for a UTF-8 line and an ISO-8859-1 one that both hold bytes outside
+    # ASCII, with each line formatted as .join_texts formats a text and converted to valid UTF-8
+    # (see .encode_utf8_string), which leaves a valid UTF-8 line as it is.
+    #
+    # Joined text that is binary or US-ASCII and holds bytes outside ASCII is converted to valid UTF-8
+    # too, such as for an ASCII line and a binary one, or for Ruby's own backtrace lines, which are
+    # US-ASCII where no locale is set, in a directory such as café. Unlike .join_texts, which keeps
+    # text binary when it starts with binary text, such as when every text is binary, this converts
+    # such text even when every line is binary. Each line of such text is in that encoding or
+    # ASCII-only, so it is converted whole, as each line would be. Its encoding is checked first,
+    # since checking that it is ASCII-only reads the whole text.
+    #
+    # Lines are converted only when they cannot be joined as they are, which is rare, since checking
+    # each of what can be dozens of lines would double the time it takes to format an exception.
+    # Each is then converted once and the lines joined once, rather than pair by pair as .join_texts
+    # joins texts, which for a backtrace of thousands of lines takes a time that grows with the
+    # square of their number.
+    def self.join_lines(lines)
+      text = lines.join("\n")
+      (text.encoding in Encoding::BINARY | Encoding::US_ASCII) && !text.ascii_only? ? encode_utf8_string(text) : text
+    rescue Encoding::CompatibilityError
+      lines.map { |line| encode_utf8_string(format("%s", line)) }.join("\n")
     end
   end
 end

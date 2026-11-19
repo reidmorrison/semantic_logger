@@ -762,7 +762,7 @@ module SemanticLogger
             root          = chained("root\ncause", %w[r1 r2])
             middle        = chained("middle", %w[m1], root)
             log.exception = chained("top", %w[t1 t2], middle)
-            name          = chained_error.name
+            name          = chained_error
 
             expected = "t1\nt2\nCause: #{name}: middle\nm1\nCause: #{name}: root\ncause\nr1\nr2"
 
@@ -772,13 +772,13 @@ module SemanticLogger
           it "lays out a cause without a backtrace" do
             log.exception = chained("top", %w[t1], chained("cause", nil))
 
-            assert_equal "t1\nCause: #{chained_error.name}: cause", log.backtrace_to_s
+            assert_equal "t1\nCause: #{chained_error}: cause", log.backtrace_to_s
           end
 
           it "lays out a cause of an exception without a backtrace" do
             log.exception = chained("top", nil, chained("cause", %w[c1]))
 
-            assert_equal "Cause: #{chained_error.name}: cause\nc1", log.backtrace_to_s
+            assert_equal "Cause: #{chained_error}: cause\nc1", log.backtrace_to_s
           end
 
           it "stops at a cyclic cause chain" do
@@ -787,12 +787,12 @@ module SemanticLogger
             first.cause   = second
             log.exception = first
 
-            assert_equal "f1\nCause: #{chained_error.name}: second\ns1", log.backtrace_to_s
+            assert_equal "f1\nCause: #{chained_error}: second\ns1", log.backtrace_to_s
           end
 
           it "passes each cause message and backtrace line to the block" do
             log.exception = chained("top\nmsg", %w[t1], chained("cause\nmsg", %w[c1]))
-            name          = chained_error.name
+            name          = chained_error
 
             trace         = log.backtrace_to_s { |text| "<#{text}>" }
 
@@ -803,13 +803,103 @@ module SemanticLogger
             log.exception = chained("top", %w[gem t1], chained("cause", %w[c1 gem]))
             cleaner       = ->(lines) { lines - ["gem"] }
 
-            assert_equal "t1\nCause: #{chained_error.name}: cause\nc1", log.backtrace_to_s(cleaner: cleaner)
+            assert_equal "t1\nCause: #{chained_error}: cause\nc1", log.backtrace_to_s(cleaner: cleaner)
           end
 
           it "passes each cleaned line to the block" do
             log.exception = chained("top", %w[gem t1])
 
             assert_equal "<t1>", log.backtrace_to_s(cleaner: ->(lines) { lines - ["gem"] }) { |text| "<#{text}>" }
+          end
+
+          it "names a cause by its class's name" do
+            log.exception = chained("top", %w[t1], IOError.new("disk full"))
+
+            assert_equal "t1\nCause: IOError: disk full", log.backtrace_to_s
+          end
+
+          it "names a cause of an anonymous class, which has no name, as Ruby writes the class" do
+            log.exception = chained("top", %w[t1], chained("cause", nil))
+
+            assert_match(/\At1\nCause: #<Class:0x\h+>: cause\z/, log.backtrace_to_s)
+          end
+
+          it "writes the message a cause was raised with when its #message raises" do
+            cause         = BrokenMessageError.new("Order 7").tap { |e| e.set_backtrace(%w[c1]) }
+            log.exception = chained("top", %w[t1], cause)
+
+            assert_equal "t1\nCause: #{BrokenMessageError.name}: Order 7\nc1", log.backtrace_to_s
+          end
+
+          it "writes the message a cause was raised with when its #message raises NotImplementedError" do
+            log.exception = chained("top", %w[t1], AbstractMessageError.new("Order 7"))
+
+            assert_equal "t1\nCause: #{AbstractMessageError.name}: Order 7", log.backtrace_to_s
+          end
+
+          it "passes the block the message a cause was raised with when its #message raises" do
+            log.exception = chained("top", %w[t1], BrokenMessageError.new("Order 7"))
+
+            trace         = log.backtrace_to_s { |text| "<#{text}>" }
+
+            assert_equal "<t1>\nCause: #{BrokenMessageError.name}: <Order 7>", trace
+          end
+
+          it "passes the block a String when a cause's #message returns nil" do
+            cause = IOError.new("disk full")
+            cause.define_singleton_method(:message) { nil }
+            log.exception = chained("top", %w[t1], cause)
+
+            assert_equal "T1\nCause: IOError: ", log.backtrace_to_s(&:upcase)
+          end
+
+          it "joins a cause's binary message with a UTF-8 backtrace line" do
+            log.exception = chained("top", ["/app/naïve.rb:2"], chained("Grüße ☕".b, %w[c1]))
+            text          = log.backtrace_to_s
+
+            assert_equal "/app/naïve.rb:2\nCause: #{chained_error}: Grüße ☕\nc1", text
+            assert_equal Encoding::UTF_8, text.encoding
+          end
+
+          it "joins a cause's binary message with its class's UTF-8 name" do
+            named         = Class.new(StandardError) { def self.name = "Bestellung::Größe" }
+            log.exception = chained("top", %w[t1], named.new("Grüße ☕".b))
+
+            assert_equal "t1\nCause: Bestellung::Größe: Grüße ☕", log.backtrace_to_s
+          end
+
+          it "joins backtrace lines in encodings that cannot be joined as they are" do
+            log.exception = chained("top", ["/app/naïve.rb:2"], chained("cause", ["/app/café.rb:7".b]))
+            text          = log.backtrace_to_s
+
+            assert_equal "/app/naïve.rb:2\nCause: #{chained_error}: cause\n/app/café.rb:7", text
+            assert_equal Encoding::UTF_8, text.encoding
+          end
+
+          it "joins a binary backtrace line with ASCII ones as UTF-8" do
+            log.exception = chained("top", ["/app/a.rb:2", "/app/café.rb:7".b])
+            text          = log.backtrace_to_s
+
+            assert_equal "/app/a.rb:2\n/app/café.rb:7", text
+            assert_equal Encoding::UTF_8, text.encoding
+          end
+
+          it "joins a US-ASCII backtrace that holds bytes outside ASCII, as Ruby's own can, as UTF-8" do
+            backtrace     = ["/srv/café/a.rb:2", "/srv/café/a.rb:7"].map { |line| line.dup.force_encoding(Encoding::US_ASCII) }
+            log.exception = chained("top", backtrace)
+            text          = log.backtrace_to_s
+
+            assert_equal "/srv/café/a.rb:2\n/srv/café/a.rb:7", text
+            assert_equal Encoding::UTF_8, text.encoding
+          end
+
+          it "leaves a backtrace in another encoding as it is when its lines can be joined" do
+            latin1        = "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1)
+            log.exception = chained("top", ["/app/#{latin1}.rb:2"], chained(latin1, nil))
+            text          = log.backtrace_to_s
+
+            assert_equal Encoding::ISO_8859_1, text.encoding
+            assert_equal "/app/Grüße.rb:2\nCause: #{chained_error}: Grüße", text.encode(Encoding::UTF_8)
           end
         end
       end
@@ -993,6 +1083,15 @@ module SemanticLogger
           ex = raised.call { raise raising_error, "raising" }
 
           assert_nil log.exception_details(ex)
+        end
+
+        it "returns nil when the exception's #message raises" do
+          assert_nil log.exception_details(BrokenMessageError.new("Order 7"))
+        end
+
+        it "returns nil when the exception's #message raises NotImplementedError" do
+          assert_nil log.exception_details(AbstractMessageError.new("Order 7"))
+          assert_nil log.exception_details(AbstractMessageError.new("Order 7"), source: true)
         end
 
         it "returns nil when an override replaces the message" do

@@ -12,7 +12,8 @@ module SemanticLogger
     # the class name that Ruby also adds, or nil when there is none or it cannot be separated.
     #
     # Never raises, so that an exception's own #detailed_message cannot stop a log entry being
-    # written.
+    # written, nor its #message, which Ruby's #detailed_message calls: as Utils.exception_message,
+    # that includes a ScriptError, such as the NotImplementedError of an abstract #message.
     def self.extract(exception, source: false)
       detailed = full_detailed_message(exception, source)
       return unless detailed
@@ -23,7 +24,7 @@ module SemanticLogger
 
       details = detailed.delete_prefix(base).sub(/\A\n+/, "").rstrip
       details unless details.empty?
-    rescue StandardError
+    rescue StandardError, ScriptError
       nil
     end
 

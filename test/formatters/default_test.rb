@@ -428,6 +428,53 @@ module SemanticLogger
               assert_equal expected, formatter.exception
             end
           end
+
+          describe "when the #message of an exception that caused it raises" do
+            before do
+              begin
+                raise ExceptionFixtures::BrokenMessageError, "Order 7"
+              rescue ExceptionFixtures::BrokenMessageError => e
+                e.set_backtrace(%w[c1])
+                raise "Could not save"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[t1])
+              log.exception = e
+            end
+
+            it "writes the message the cause was raised with" do
+              expected = "-- Exception: RuntimeError: Could not save\n" \
+                         "t1\nCause: ExceptionFixtures::BrokenMessageError: Order 7\nc1"
+
+              assert_equal expected, formatter.exception
+            end
+
+            it "writes the message the cause was raised with when control characters are escaped" do
+              formatter = SemanticLogger::Formatters::Default.new(escape_control_chars: true)
+              formatter.call(log, nil)
+              expected = "-- Exception: RuntimeError: Could not save\n" \
+                         "t1\nCause: ExceptionFixtures::BrokenMessageError: Order 7\nc1"
+
+              assert_equal expected, formatter.exception
+            end
+          end
+
+          it "names an exception that caused it of an anonymous class as Ruby writes the class" do
+            cause_class = Class.new(StandardError)
+            begin
+              begin
+                raise cause_class, "disk full"
+              rescue cause_class => e
+                e.set_backtrace(%w[c1])
+                raise "Could not save"
+              end
+            rescue RuntimeError => e
+              e.set_backtrace(%w[t1])
+              log.exception = e
+            end
+
+            assert formatter.exception.end_with?("\nt1\nCause: #{cause_class}: disk full\nc1")
+          end
         end
 
         describe "payload" do

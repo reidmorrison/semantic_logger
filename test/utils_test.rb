@@ -1011,6 +1011,97 @@ module SemanticLogger
           assert_instance_of String, result
         end
       end
+
+      describe ".join_lines" do
+        let(:latin1) { "Gr\xFC\xDFe".dup.force_encoding(Encoding::ISO_8859_1) }
+
+        it "puts each line on a line of its own" do
+          assert_equal "app/a.rb:1\napp/b.rb:2", Utils.join_lines(["app/a.rb:1", "app/b.rb:2"])
+        end
+
+        it "returns an empty String for no lines" do
+          assert_equal "", Utils.join_lines([])
+        end
+
+        it "leaves lines in another encoding as they are when they can be joined" do
+          result = Utils.join_lines([latin1, "app/b.rb:2"])
+
+          assert_equal Encoding::ISO_8859_1, result.encoding
+          assert_equal "Grüße\napp/b.rb:2", result.encode(Encoding::UTF_8)
+        end
+
+        it "converts lines in encodings that cannot be joined to UTF-8" do
+          result = Utils.join_lines(["app/naïve.rb:1", latin1, "app/b.rb:2"])
+
+          assert_equal "app/naïve.rb:1\nGrüße\napp/b.rb:2", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "keeps the UTF-8 characters of a binary line joined with a UTF-8 one" do
+          assert_equal "app/naïve.rb:1\napp/café.rb:2", Utils.join_lines(["app/naïve.rb:1", "app/café.rb:2".b])
+        end
+
+        it "converts a binary line joined with ASCII ones to UTF-8, which Array#join would join as binary" do
+          result = Utils.join_lines(["app/a.rb:1", "app/café.rb:2".b, "app/\xFFb.rb:3".b])
+
+          assert_equal "app/a.rb:1\napp/café.rb:2\napp/b.rb:3", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "converts binary lines that hold bytes outside ASCII to UTF-8, even when every line is binary" do
+          result = Utils.join_lines(["app/café.rb:1".b, "app/naïve.rb:2".b])
+
+          assert_equal "app/café.rb:1\napp/naïve.rb:2", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "converts a binary first line that holds bytes outside ASCII to UTF-8" do
+          result = Utils.join_lines(["app/café.rb:1".b, "app/a.rb:2"])
+
+          assert_equal "app/café.rb:1\napp/a.rb:2", result
+          assert_equal Encoding::UTF_8, result.encoding
+        end
+
+        it "converts to UTF-8 US-ASCII lines that hold bytes outside ASCII, as Ruby's own can with no locale set" do
+          lines  = ["/srv/café/app.rb:1:in 'boom'", "/srv/café/app.rb:2:in '<main>'", "app/\xFFb.rb:3"]
+          result = Utils.join_lines(lines.map { |line| line.dup.force_encoding(Encoding::US_ASCII) })
+
+          assert_equal "/srv/café/app.rb:1:in 'boom'\n/srv/café/app.rb:2:in '<main>'\napp/b.rb:3", result
+          assert_equal Encoding::UTF_8, result.encoding
+          assert_predicate result, :valid_encoding?
+        end
+
+        it "leaves ASCII-only binary and US-ASCII lines as they are" do
+          result = Utils.join_lines(["app/a.rb:1".dup.force_encoding(Encoding::US_ASCII), "app/b.rb:2".b])
+
+          assert_equal "app/a.rb:1\napp/b.rb:2", result
+          assert_equal Encoding::US_ASCII, result.encoding
+        end
+
+        it "drops the invalid bytes of a UTF-8 line joined with a line it converts" do
+          result = Utils.join_lines(["app/na\xFFïve.rb:1", latin1])
+
+          assert_equal "app/naïve.rb:1\nGrüße", result
+          assert_predicate result, :valid_encoding?
+        end
+
+        it "converts each of a few thousand lines in mixed encodings once, rather than the text joined so far" do
+          lines     = Array.new(4000) { |i| i.even? ? "app/naïve.rb:#{i}" : "app/café.rb:#{i}".b }
+          expected  = Array.new(4000) { |i| i.even? ? "app/naïve.rb:#{i}" : "app/café.rb:#{i}" }.join("\n")
+          converted = 0
+          encode    = Utils.method(:encode_utf8_string)
+          counting  = lambda do |text|
+            converted += text.bytesize
+            encode.call(text)
+          end
+
+          result = Utils.stub(:encode_utf8_string, counting) { Utils.join_lines(lines) }
+
+          assert_equal expected, result
+          assert_predicate converted, :positive?
+          assert_operator converted, :<=, lines.sum(&:bytesize)
+        end
+      end
     end
   end
 end

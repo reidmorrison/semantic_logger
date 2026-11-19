@@ -155,14 +155,11 @@ module SemanticLogger
       end
 
       # Returns [String] the lines of a stack trace, such as the Hash's `stack_trace`, as one text, one
-      # per line, for a subclass that writes it as text. Lines that cannot be joined, such as a UTF-16
-      # line, or a binary line next to a UTF-8 one, in a backtrace that the application set, are
-      # converted to valid UTF-8 first (see Utils.encode_utf8_string), rather than losing the entry.
-      def stack_trace(lines)
-        lines.join("\n")
-      rescue Encoding::CompatibilityError
-        lines.map { |line| Utils.encode_utf8_string(line.to_s) }.join("\n")
-      end
+      # per line, for a subclass that writes it as text, joined as Log#backtrace_to_s joins its lines
+      # (see Utils.join_lines). Lines that cannot be joined, such as a UTF-16 line, or a binary line
+      # next to a UTF-8 one, in a backtrace that the application set, are converted to valid UTF-8,
+      # rather than losing the entry.
+      def stack_trace(lines) = Utils.join_lines(lines)
     end
   end
 end
