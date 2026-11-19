@@ -62,10 +62,12 @@ To log everything, set the global default to `:trace`:
 SemanticLogger.default_level = :trace
 ~~~
 
-Every logger and appender uses this global default unless it has been given its own level. Once a
-logger or appender has an explicit level, changing `SemanticLogger.default_level` no longer affects
-it. The global default can also be changed at runtime (see [Signals](operations.html#linux-signals)
-for changing it in a running process without a restart):
+Every logger uses this global default unless it has been given its own level. Once a logger has an
+explicit level, changing `SemanticLogger.default_level` no longer affects it. An appender does not
+use the global default: without a level of its own it writes every entry that the loggers emit, and
+with one it keeps only those at or above it (see [Per-appender settings](#per-appender-settings)).
+The global default can also be changed at runtime (see [Signals](operations.html#linux-signals) for
+changing it in a running process without a restart):
 
 ~~~ruby
 SemanticLogger.default_level = :debug
@@ -371,18 +373,20 @@ In addition to its own settings, almost every appender accepts these common opti
 
 | Option | Description |
 |--------|-------------|
-| `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level`. |
+| `level` | Only write entries at this level or higher to this appender. Without it, an appender writes every entry it receives; those that send errors to a service, such as Bugsnag and Sentry, default to `:error` instead, and Honeybadger Insights to `:info`. Each logger only emits entries at or above its own level, which defaults to `SemanticLogger.default_level`, so set an appender's `level` to keep fewer entries than the loggers emit. |
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. A [block given to `add_appender`](#formatter-as-a-block-or-proc) takes its place. See [Custom formatters](#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
 
 A per-appender `level` lets each destination keep a different subset of the logs. For example, keep
-a full trace log and a separate warnings-only log:
+a full trace log and a separate warnings-only log. An appender only receives the entries that the
+loggers emit, so for the trace log to receive trace entries the loggers must emit them too:
 
 ~~~ruby
 require "semantic_logger"
 
-SemanticLogger.default_level = :info
+# Loggers emit every entry:
+SemanticLogger.default_level = :trace
 
 # Everything at :trace and above:
 SemanticLogger.add_appender(file_name: "log/trace.log",    level: :trace)

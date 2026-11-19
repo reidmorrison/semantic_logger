@@ -304,7 +304,9 @@ module SemanticLogger
   #
   #   level: [:trace | :debug | :info | :warn | :error | :fatal]
   #     Override the log level for this appender.
-  #     Default: SemanticLogger.default_level
+  #     Default: the appender's own. For most that is none (:trace), so it writes every entry that a
+  #     logger emits; each logger filters by its own level. Those that send errors to a service, such
+  #     as :bugsnag and :sentry_ruby, default to :error, and :honeybadger_insights to :info.
   #
   #   formatter: [Symbol|Object|Proc]
   #     Any of the following symbol values: :default, :color, :json, :logfmt, etc...

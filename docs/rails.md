@@ -219,7 +219,7 @@ In addition to a destination, most appenders accept these options:
 
 | Option | Description |
 |--------|-------------|
-| `level` | Only write entries at this level or higher to this appender. Defaults to `SemanticLogger.default_level` (which Rails Semantic Logger sets from `config.log_level`). |
+| `level` | Only write entries at this level or higher to this appender; for what it defaults to, and how it works with each logger's own level, which Rails Semantic Logger sets from `config.log_level`, see [Per-appender settings](config.html#per-appender-settings). |
 | `formatter` | How to format the output: `:default`, `:color`, `:json`, `:logfmt`, `:one_line`, or a custom formatter (see [Output formats](#output-formats)). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |

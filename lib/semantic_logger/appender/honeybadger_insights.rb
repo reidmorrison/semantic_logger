@@ -17,7 +17,7 @@ module SemanticLogger
       # Parameters
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
-      #     Default: :error
+      #     Default: :info
       #
       #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call, or a Proc to be used to format

@@ -15,11 +15,11 @@ module SemanticLogger
     #   the log level in any logging instance or the default log level
     #   SemanticLogger.default_level
     #
-    # Must be one of the values in SemanticLogger::LEVELS, or
-    # nil if this logger instance should use the global default level
+    # Must be one of the values in SemanticLogger::LEVELS, or nil to use this instance's fallback
+    # level (see #fallback_level).
     def level=(level)
       if level.nil?
-        # Use the global default level for this logger
+        # Use the fallback level for this instance (see #fallback_level)
         @level_index = nil
         @level       = nil
       else
@@ -29,7 +29,7 @@ module SemanticLogger
     end
 
     # Returns the level set by an enclosing `#with_level` block on the current fiber,
-    # otherwise the level set for this instance, otherwise the global default level.
+    # otherwise the level set for this instance, otherwise its fallback level (see #fallback_level).
     def level
       index = @with_level_used && with_level_index
       return Levels.level(index) if index
@@ -76,7 +76,7 @@ module SemanticLogger
     # Examples:
     #    require 'semantic_logger'
     #
-    #    # Enable trace level logging
+    #    # Log :info and above
     #    SemanticLogger.default_level = :info
     #
     #    # Log to screen
@@ -321,7 +321,7 @@ module SemanticLogger
       # that sets an override needs to see the flag, and that fiber set it itself.
       @with_level_used     = false
       if level.nil?
-        # Allow the global default level to determine this loggers log level
+        # Use the fallback level for this instance (see #fallback_level)
         @level_index = nil
         @level       = nil
       else
