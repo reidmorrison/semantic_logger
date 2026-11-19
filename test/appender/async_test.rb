@@ -270,7 +270,8 @@ module Appender
         end
 
         it "counts dropped messages" do
-          proxy = SemanticLogger::Appender::Async.new(
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          proxy           = SemanticLogger::Appender::Async.new(
             appender:                       appender,
             max_queue_size:                 2,
             non_blocking:                   true,
@@ -286,6 +287,9 @@ module Appender
           4.times { proxy.log(log) }
 
           assert_equal 2, proxy.stats[:dropped]
+          reports = appender.logger.events.map(&:message)
+
+          assert_equal 2, reports.grep(/\AAsync: Dropped 1 log messages .* \(max_queue_size: 2\)/).size, reports.inspect
         ensure
           proxy&.queue&.clear
         end
