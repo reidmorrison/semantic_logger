@@ -4,6 +4,7 @@ require "semantic_logger/queue_processor/reporter"
 require "semantic_logger/queue_processor/backoff"
 require "semantic_logger/queue_processor/inbox"
 require "semantic_logger/queue_processor/held_write"
+require "semantic_logger/queue_processor/reopener"
 
 module SemanticLogger
   # Internal class that processes log messages from a queue on a separate thread.
@@ -113,6 +114,7 @@ module SemanticLogger
       # Only batch mode parks the worker on the signal; streaming mode never touches it.
       @signal                         = Concurrent::Event.new if batch
       @reporter                       = Reporter.new(appender)
+      @reopener                       = Reopener.new(appender, @reporter)
       @processed_count                = 0
       @inbox                          = Inbox.new(max_queue_size)
       @held                           = HeldWrite.new
@@ -206,12 +208,19 @@ module SemanticLogger
       submit_request(:close)
     end
 
-    # Re-open the queue and worker thread after a fork, or start the worker thread again within the
-    # same process once it has ended or stopped.
+    # Reopen the appender, on the worker thread, and the queue and worker thread after a fork (see
+    # #renew_after_fork), or start the worker thread again within the same process once it has ended
+    # or stopped.
     #
-    # After a fork, the queue holds the entries that the parent process had queued, which the
-    # parent's worker thread writes, so the child starts again with an empty queue and a worker
-    # thread of its own, rather than write them a second time.
+    # The worker thread reopens the appender before it next takes messages off the queue, or writes
+    # again the ones it holds (see Reopener), so that it is never reopened while it is writing, and
+    # this returns before it has. After a fork, the reopen is asked for before the child's new worker
+    # thread starts, so that it reopens the appender before it writes anything. To wake up a
+    # streaming worker thread waiting for the next message, :reopen is added to the queue, without
+    # waiting for room: one that is not waiting has messages to write, and reopens the appender before
+    # them. A batching worker thread is not woken up, since that would write a partial batch, so
+    # nothing is added to its queue: it reopens the appender at its next batch, at most batch_seconds
+    # later, or when a flush or close wakes it up, before running them.
     #
     # Within the same process, such as after a log rotation, the queue and its entries are kept, and
     # so is the worker thread while it runs (see #thread). It writes the queued entries in order,
@@ -227,14 +236,29 @@ module SemanticLogger
     # Ruby does not allow a Mutex to be locked, so it takes none: it uses only Queue and Thread
     # methods, which Ruby allows there.
     def reopen
-      return restart_worker unless @inbox.forked?
+      @reopener.ask
+      renew_after_fork
+      @inbox.push(:reopen, wait: false) unless batch?
+      restart_worker
+    end
+
+    # After a fork, the queue holds the entries that the parent process had queued, which the
+    # parent's worker thread writes, so the child starts again with an empty queue and a worker
+    # thread of its own, rather than write them a second time. Does nothing in the process that
+    # created the queue. Asks for no reopen of the appender: #reopen asks before it calls this.
+    #
+    # Called on the thread that reopens after the fork, which takes no lock (see #reopen). Called
+    # by Processor#reopen, through Appenders#renew_after_fork, before the appender is asked to
+    # reopen: the new worker thread has nothing to write until the processor's worker thread, which
+    # asks first, hands it entries.
+    def renew_after_fork
+      return unless @inbox.forked?
 
       # Workaround CRuby crash on fork by recreating queue on reopen
       #   https://github.com/reidmorrison/semantic_logger/issues/103
       @inbox.recreate
       # The parent process writes the messages it held to write again.
       @held.release
-
       @thread&.kill if @thread&.alive?
       # A worker thread new to this process, which has not failed to write yet.
       @backoff.restart
@@ -298,7 +322,7 @@ module SemanticLogger
     def process
       safe_log(:trace, "Async: Appender thread active")
       begin
-        resend_held
+        resend_held if reopen_appender
         carry_on = @stack_overflow || (batch? ? process_messages_in_batches : process_messages)
       rescue StandardError => e
         retry if @backoff.requests_waiting?
@@ -334,7 +358,7 @@ module SemanticLogger
     # Returns true when processing must carry on in a new thread (see #stack_overflowed).
     def process_messages
       count = 0
-      while (message = queue.pop)
+      while reopen_appender && (message = queue.pop)
         if message.is_a?(Log)
           write_message(message)
           return true if @stack_overflow
@@ -346,10 +370,13 @@ module SemanticLogger
             check_lag(message)
             count = 0
           end
-        else
+        elsif message.is_a?(Request)
           break unless run_command(message)
         end
+        # Otherwise :reopen, which #reopen adds to wake up this thread to reopen the appender.
       end
+      return true if @stack_overflow
+
       safe_log(:trace, "Async: Queue Closed")
       false
     end
@@ -362,10 +389,14 @@ module SemanticLogger
         # Wait for batch interval or number of messages to be exceeded.
         signal.wait(batch_seconds)
 
+        # Counted before the appender is reopened, so that a flush or close counted here, and so run
+        # in this batch, comes after the reopen asked for before it.
+        message_count = queue.length
+        return true unless reopen_appender
+
         logs          = []
         commands      = []
         first         = true
-        message_count = queue.length
         message_count.times do
           # Queue#pop(true) raises an exception when there are no more messages, which is considered expensive.
           message = queue.pop
@@ -375,7 +406,7 @@ module SemanticLogger
               check_lag(message)
               first = false
             end
-          else
+          elsif message.is_a?(Request)
             commands << message
           end
         end
@@ -440,6 +471,13 @@ module SemanticLogger
         safe_log(:warn, "Async: Appender thread: Ignoring unknown command: #{command}")
       end
     end
+
+    # Reopen the appender, if asked to (see #reopen), before taking more messages off the queue, or
+    # writing again the ones held, so that it is never reopened while it is writing, and a stack
+    # overflow while it reopens is charged to none of them. Returns false once the stack has
+    # overflowed: this thread then takes nothing more off the queue, and a new one carries on (see
+    # #stack_overflowed), which writes them.
+    def reopen_appender = !(@stack_overflow ||= @reopener.reopen_if_asked)
 
     # Write one log message to the appender.
     #
@@ -587,16 +625,7 @@ module SemanticLogger
     def submit_request(command)
       return false if !active? || @thread.equal?(Thread.current)
 
-      queue_size = queue.size
-      msg        = "Async: Queued log messages: #{queue_size}, running command: #{command}"
-      if queue_size > 1_000
-        safe_log(:warn, msg)
-      elsif queue_size > 100
-        safe_log(:info, msg)
-      elsif queue_size.positive?
-        safe_log(:trace, msg)
-      end
-
+      @reporter.queued(queue.size, command)
       # Wake up the processing thread to process this command immediately.
       signal.set if batch?
 

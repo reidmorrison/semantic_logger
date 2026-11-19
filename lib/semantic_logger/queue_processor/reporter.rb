@@ -65,6 +65,14 @@ module SemanticLogger
         end
       end
 
+      # Report the number of log messages queued ahead of a command, such as a flush, that is being
+      # submitted: at :warn for more than 1,000, at :info for more than 100, otherwise at :trace, and
+      # not at all for none.
+      def queued(count, command)
+        level = (count > 1_000 && :warn) || (count > 100 && :info) || (count.positive? && :trace)
+        log(level, "Async: Queued log messages: #{count}, running command: #{command}") if level
+      end
+
       # Record log messages discarded because they could not be written, whether their content or the
       # destination was at fault. The first is reported straight away, with the error. After that the
       # count is reported, with the latest error, at most once every `interval` seconds.

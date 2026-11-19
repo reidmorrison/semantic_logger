@@ -25,7 +25,7 @@ module SemanticLogger
       # read back are re-exposed here. lag_* and non_blocking= back the public
       # SemanticLogger.lag_* and SemanticLogger.non_blocking= API on the main Processor.
       def_delegators :@processor,
-                     :log, :flush, :close, :thread, :active?, :queue, :max_queue_size,
+                     :log, :flush, :close, :renew_after_fork, :thread, :active?, :queue, :max_queue_size,
                      :capped?, :non_blocking?, :non_blocking=, :batch?,
                      :lag_check_interval, :lag_check_interval=,
                      :lag_threshold_s, :lag_threshold_s=,
@@ -100,17 +100,16 @@ module SemanticLogger
         "#{address} batch=#{batch?} appender=#{appender.inspect}>"
       end
 
-      # Re-open the wrapped appender, then the queue processor, after a fork, or within the same
+      # Re-open the wrapped appender and the queue processor, after a fork, or within the same
       # process, such as after a log rotation (see QueueProcessor#reopen).
       #
-      # The processor is reopened even when the appender's #reopen raises, such as for a server
-      # name that no longer resolves, and the error is then raised for the caller to report.
-      # Otherwise the child of a fork would have no worker thread: its entries would wait on the
-      # queue for ever, and once the queue was full every log call would block. The appender is
-      # reopened first, so that a new worker thread does not write to it while it is reopened.
+      # The wrapped appender is reopened by the worker thread, before it writes again, so that it
+      # is never reopened while it is writing, and not in a signal trap, from which this is often
+      # called. So this returns before it has reopened, and a reopen that fails, such as for a server
+      # name that no longer resolves, is reported by the worker thread, which carries on. After a
+      # fork, the child then always has a worker thread, which reopens the appender before it
+      # writes anything.
       def reopen
-        appender.reopen if appender.respond_to?(:reopen)
-      ensure
         processor.reopen
       end
 
