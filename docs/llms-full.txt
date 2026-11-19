@@ -5122,6 +5122,13 @@ Resque, Spring, Phusion Passenger, parallel tests, and so on).
 
 `reopen` runs only once per process after a fork, so it is safe even if something else also calls it.
 
+An appender that cannot be reopened, such as `:udp` once its server's name no longer resolves, or
+`:http` while its server cannot be reached, is reported to the internal logger as
+`Failed to re-open appender`, and the other appenders are still reopened. When it runs on a thread of
+its own (`async: true` or in batches), that thread is still started in the child, so its entries are
+written, or discarded and counted like any other entry it cannot write (see
+[Retry a failing appender](#retry-a-failing-appender)), rather than left on its queue.
+
 ### Reopen manually
 
 You only need the steps below if you turned the automatic hook off, or you rotated logs in a way that

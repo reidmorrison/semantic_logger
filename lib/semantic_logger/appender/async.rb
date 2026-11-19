@@ -98,9 +98,17 @@ module SemanticLogger
         "#{address} batch=#{batch?} appender=#{appender.inspect}>"
       end
 
-      # Re-open appender after a fork.
+      # Re-open the wrapped appender, then the queue processor, after a fork, or within the same
+      # process, such as after a log rotation (see QueueProcessor#reopen).
+      #
+      # The processor is reopened even when the appender's #reopen raises, such as for a server
+      # name that no longer resolves, and the error is then raised for the caller to report.
+      # Otherwise the child of a fork would have no worker thread: its entries would wait on the
+      # queue for ever, and once the queue was full every log call would block. The appender is
+      # reopened first, so that a new worker thread does not write to it while it is reopened.
       def reopen
         appender.reopen if appender.respond_to?(:reopen)
+      ensure
         processor.reopen
       end
 

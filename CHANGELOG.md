@@ -659,6 +659,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   start of the response body. See
   [When the server does not accept a request](https://logger.reidmorrison.com/appenders.html#when-the-server-does-not-accept-a-request)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- An appender added with `async: true` or in batches keeps logging in the child process after a fork
+  when it cannot be reopened, such as `:udp` once its server's name no longer resolves, or `:http`
+  while its server cannot be reached. Before, the error from the appender's own `#reopen` also kept
+  the thread that writes its entries from starting in the child, so they waited on its queue for
+  ever, and once that queue was full every log call blocked. The thread is now started, and the error
+  is still reported to the internal logger, as `Failed to re-open appender`. The same goes for
+  `SemanticLogger.reopen(force: true)` within the same process, once that thread has stopped.
 
 ## [5.2.0] 2026-10-30
 
