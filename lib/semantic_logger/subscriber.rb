@@ -168,7 +168,7 @@ module SemanticLogger
     # Whether the supplied exception, a message error (see #message_error?) that #batch raised,
     # would fail any batch, whatever messages it holds, such as a request the destination refuses
     # for its credentials or its url. Asked only about a message error, and only when
-    # #batch_all_or_nothing? is true.
+    # #batch_all_or_nothing? is true, or #rejected_entry names a message.
     #
     # When true, the whole batch is discarded at once, rather than split up and each part written
     # again to find the messages at fault, which would be refused in turn, about two writes for each
@@ -176,6 +176,20 @@ module SemanticLogger
     # messages in the batch.
     def fails_any_batch?(_exception)
       false
+    end
+
+    # Returns [Integer|nil] the position, counted from 0, of the log message in the batch that the
+    # destination rejected, when the supplied exception, a message error (see #message_error?) that
+    # #batch raised, says so, and the destination stored every message before that one. Nil when it
+    # cannot tell, as by default.
+    #
+    # When an Integer, the messages before that one are counted as written, that one is discarded,
+    # or, when the error would fail any batch (see #fails_any_batch?), it and every message after
+    # it, and the messages after it are written again as a batch. So none is written twice, and
+    # none that the destination did not reject is discarded, without splitting the batch to find
+    # the message at fault. Appender::SplunkHttp answers it from the HTTP Event Collector's response.
+    def rejected_entry(_exception)
+      nil
     end
 
     # Whether #log or #batch, when it raised the supplied exception, wrote none of the log messages

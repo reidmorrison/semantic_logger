@@ -84,9 +84,11 @@ module SemanticLogger
       end
 
       # Record log messages discarded because they could not be written, whether their content or the
-      # destination was at fault. The first is reported straight away, with the error. After that the
-      # count is reported, with the latest error, at most once every `interval` seconds.
+      # destination was at fault, if any. The first is reported straight away, with the error. After
+      # that the count is reported, with the latest error, at most once every `interval` seconds.
       def failed(logs, exception, interval:)
+        return if logs.empty?
+
         @failed.record(logs.size, interval: interval) do |count, seconds|
           period = seconds ? " in the last #{seconds.round} seconds" : ""
           log(:error, "Async: Discarded #{count} log message(s)#{period} that could not be written, " \

@@ -837,19 +837,43 @@ For HTTPS, change the URL scheme to `https`. Once entries have been sent, open t
 interface, select Search, limit to the new host (`host=hostname`), switch to table view, and select
 the interesting columns: `host`, `duration`, `name`, `level`, `message`.
 
+To send many entries in each request, add it with `batch: true`. Each request then holds the entries
+of a batch as event objects stacked one after the other, each one what the appender sends for that
+entry on its own, the batch format of Splunk's
+[Format events for HTTP Event Collector](https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.6/get-data-with-http-event-collector/format-events-for-http-event-collector):
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender: :splunk_http,
+  url:      "http://localhost:8088/services/collector/event",
+  token:    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  batch:    true
+)
+~~~
+
+A batch needs a formatter that formats each entry as exactly one event object, with its `event`
+field, as the default formatter does. The collector names an event it rejects by its position in the
+request, which the appender takes as the position of the entry in the batch. So do not add it with
+`batch: true` and a formatter such as `:json`, whose objects the collector rejects, or one that
+formats an entry as more than one event.
+
 The HTTP Event Collector answers `400` both for the entries a request holds and for its own
 configuration, and says which with the `code` and `text` in its response. When it rejects a request
 for its configuration (an incorrect index, a missing or invalid data channel, acknowledgement
 disabled, query string authorization not enabled, or an invalid or disabled token), a batch is
 discarded at once and reported once to the internal logger with that text, such as
-`"Incorrect index"`, rather than split up to find the entries at fault. When it rejects a batch for
-its entries, such as with `"Invalid data format"`, the batch is split up, as for any
-[request rejected for its entries](#when-the-server-does-not-accept-a-request). See Splunk's
+`"Incorrect index"`, rather than split up to find the entries at fault. When it rejects a batch at
+one of its entries, such as with `"Invalid data format"`, it says which one, and has already indexed
+those before it: that entry is discarded, and only the entries after it are sent again, so that none
+is indexed twice. A `400` that does not say which entry, such as one from a proxy, has the batch split
+up, as for any [request rejected for its entries](#when-the-server-does-not-accept-a-request). See
+Splunk's
 [HTTP Event Collector error codes](https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.4/get-data-with-http-event-collector/troubleshoot-http-event-collector).
 
 **Performance:** against a local Splunk instance, the HTTP collector handled only about 30 entries per
-second. For much higher throughput, write to Splunk with the [TCP appender](#tcp-appender-ssl)
-instead, which reached about 1,400 entries per second (1,200 with SSL).
+second, one entry for each request. To send more, add it with `batch: true`, or write to Splunk with
+the [TCP appender](#tcp-appender-ssl) instead, which reached about 1,400 entries per second (1,200
+with SSL).
 
 ### Splunk SDK
 

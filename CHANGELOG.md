@@ -90,6 +90,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `add_appender(appender: :loki, formatter: {loki: {structured_metadata: [:pid, :thread]}}, ...)`.
   The default is still to write them as labels; v6 changes it (see Deprecated). See
   [pid and thread as structured metadata](https://logger.reidmorrison.com/appenders.html#pid-and-thread-as-structured-metadata).
+- The `:splunk_http` appender can be added with `batch: true`, to send many entries in each request to
+  Splunk's HTTP Event Collector, as event objects stacked one after the other, each one what it sends
+  for that entry on its own, with its `index:` and `source_type:`. Before, with its default formatter,
+  every batch failed, so nothing was written. When the collector rejects a batch at one of its
+  entries, such as with "Invalid data format", it has already indexed those before it: that entry is
+  discarded, and only the entries after it are sent again, so that none is indexed twice. Batching
+  needs a formatter that formats each entry as exactly one event object, as the default formatter
+  does. It is still not batched by default. See [Splunk HTTP](https://logger.reidmorrison.com/appenders.html#splunk-http).
+- A custom appender whose destination stores a batch in order, up to the first message it rejects,
+  can say which one from `#rejected_entry(exception)`: the messages before it are counted as written,
+  it is discarded, and only those after it are written again, rather than the batch split up and
+  written again in parts. See
+  [Custom appenders](https://logger.reidmorrison.com/config.html#custom-appenders).
 
 ### Changed
 
@@ -779,15 +792,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   code, the url without its credentials, and the start of the response body. See
   [When the server does not accept a request](https://logger.reidmorrison.com/appenders.html#when-the-server-does-not-accept-a-request)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
-- The `:splunk_http` appender, with `batch: true`, discards a batch that Splunk's HTTP Event
-  Collector rejects for its configuration at once, in one request, and reports it once, with the
-  collector's text, such as "Incorrect index" for a wrong `index:`. The collector answers `400` for
-  these as well as for the entries a request holds, and says which with the `code` in its response:
-  an incorrect index, a missing or invalid data channel, acknowledgement disabled, query string
-  authorization not enabled, or an invalid or disabled token. Before, such a batch was split up and
-  each part sent again to find the entries at fault, which every part failed in turn, so each entry
-  was sent on its own and rejected. A batch rejected for its entries, such as with "Invalid data
-  format", is still split up. See
+- The `:splunk_http` appender, with `batch: true` (see Added), discards a batch that Splunk's HTTP
+  Event Collector rejects for its configuration at once, in one request, and reports it once, with
+  the collector's text, such as "Incorrect index" for a wrong `index:`. The collector answers `400`
+  for these as well as for the entries a request holds, and says which with the `code` in its
+  response: an incorrect index, a missing or invalid data channel, acknowledgement disabled, query
+  string authorization not enabled, or an invalid or disabled token. Before, with a formatter that
+  could format a batch, such a batch was split up and each part sent again to find the entries at
+  fault, which every part failed in turn, so each entry was sent on its own and rejected. See
   [Splunk HTTP](https://logger.reidmorrison.com/appenders.html#splunk-http).
 - An appender added with `async: true` or in batches keeps logging in the child process after a fork
   when it cannot be reopened, such as `:udp` once its server's name no longer resolves, or `:http`

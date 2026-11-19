@@ -858,6 +858,29 @@ class QueueProcessorTest < Minitest::Test
           assert_equal(1, internal_logger.events.count { |event| event.message.include?("Discarded") })
         end
 
+        it "writes the rest of a batch again without deepening the stack or chaining the errors" do
+          rejected = Class.new(StandardError)
+          appender.define_singleton_method(:message_error?) { |exception| exception.is_a?(rejected) }
+          # The destination stores nothing, and rejects the first message every time.
+          appender.define_singleton_method(:rejected_entry) { |_exception| 0 }
+          depths = []
+          causes = []
+          appender.define_singleton_method(:batch) do |_logs|
+            depths << caller.size
+            causes << $!
+            raise rejected, "rejected"
+          end
+          processor = start(batch: true, batch_size: 300, batch_seconds: 60)
+          300.times { |i| processor.log(new_log(message: "message #{i}")) }
+          processor.flush
+
+          assert_equal 300, depths.size
+          assert_equal 1, depths.uniq.size, "the stack must not deepen with each resend"
+          assert_equal [nil], causes.uniq, "each resend must not run within the previous rescue"
+          assert_equal 0, processor.processed_count
+          assert_equal 300, processor.failed_count
+        end
+
         describe "when the appender may have written part of the batch" do
           let(:appender) do
             a        = PoisonedItemBatchAppender.new

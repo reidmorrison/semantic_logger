@@ -13,12 +13,17 @@ require "json"
 #     token:    '70CA900C-3D7E-42A4-9C79-7975D1C422A8'
 #   )
 #
+# Batching:
+# Add it with `batch: true` to send many entries in each request, as event objects stacked one after
+# the other, each one what the appender sends for that entry on its own (see #batch).
+#
 # Responses:
 # The HTTP Event Collector answers 400 Bad Request both for the entries a request holds, and for its
 # own configuration, such as an index it does not know. Its JSON body says which, with a numeric
 # `code` and a `text`. A batch it rejects for its configuration is discarded at once, rather than
 # split up to find the entries at fault, since every part would be rejected too (see
-# #fails_any_batch?).
+# #fails_any_batch?). For a batch it rejects at one of its events, it says which one, having indexed
+# those before it (see #rejected_entry).
 module SemanticLogger
   module Appender
     class SplunkHttp < SemanticLogger::Appender::Http
@@ -132,19 +137,59 @@ module SemanticLogger
       # reported once, with the collector's text, rather than split up and each entry sent on its own.
       def fails_any_batch?(exception)
         super || (exception.is_a?(ResponseError) && exception.rejected? &&
-          CONFIGURATION_CODES.include?(collector_code(exception.body)))
+          CONFIGURATION_CODES.include?(collector_response(exception.body)["code"]))
+      end
+
+      # Send a batch of log messages to the HTTP Event Collector in a single request, as event objects
+      # stacked one after the other, the batch format of "Format events for HTTP Event Collector":
+      #   https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.6/get-data-with-http-event-collector/format-events-for-http-event-collector
+      #
+      # Each event is what #log sends for that entry, formatted by #format_log. The formatter must
+      # format each entry as exactly one event object, as the default one, the appender itself (see
+      # #call), does, since the collector names a rejected event by its position in the request (see
+      # #rejected_entry).
+      # Every entry is formatted before the request is sent, so a format error sends nothing, and the
+      # batch is split up to find the entry at fault (see Http#batch_all_or_nothing?).
+      def batch(logs)
+        message = logs.map { |log| format_log(log) }.join
+        logger.trace(message)
+        post(message)
+      end
+
+      # Returns [Integer|nil] the position in the batch of the event that the HTTP Event Collector
+      # rejected, from the `invalid-event-number` in the body of its 400 Bad Request, such as
+      # {"text":"Invalid data format","code":6,"invalid-event-number":2}, or nil when it holds none
+      # (see Subscriber#rejected_entry).
+      #
+      # The collector reads the events of a batch in order, and indexes those before the one it
+      # rejects. Splunk's documentation does not say so: "Troubleshoot HTTP Event Collector" and
+      # "Format events for HTTP Event Collector" describe neither `invalid-event-number` nor what
+      # happens to the rest of a batch. Users report it, for example
+      # https://github.com/moby/moby/issues/35862, where a batch of 10 whose last event is malformed,
+      # sent again and again, had "the first 1-9 ... accepted by Splunk over and over again".
+      #
+      # So splitting such a batch to find the event at fault would index the events before it twice.
+      # Instead the events before it are counted as written, it is discarded, and those after it,
+      # which the collector never read, are sent again. A 400 without the number, such as a proxy's,
+      # is split as for Http, and so is any other status, which the collector does not answer with an
+      # event number. The number counts events, so a formatter must format each entry as one event
+      # object, as the default one does.
+      def rejected_entry(exception)
+        return unless exception.is_a?(ResponseError) && exception.code == 400
+
+        collector_response(exception.body)["invalid-event-number"]
       end
 
       private
 
-      # Returns [Integer|nil] the status code in the body of a response from the HTTP Event
-      # Collector, such as {"text":"Incorrect index","code":7}, or nil when it holds none, such as a
-      # response from a proxy in front of it.
-      def collector_code(body)
+      # Returns [Hash] the body of a response from the HTTP Event Collector, such as
+      # {"text":"Incorrect index","code":7}, or an empty Hash for a body that is not a JSON object,
+      # such as a response from a proxy in front of it.
+      def collector_response(body)
         parsed = JSON.parse(body.to_s)
-        parsed["code"] if parsed.is_a?(Hash)
+        parsed.is_a?(Hash) ? parsed : {}
       rescue JSON::ParserError
-        nil
+        {}
       end
     end
   end
