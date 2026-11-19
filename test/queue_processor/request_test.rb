@@ -53,6 +53,30 @@ class RequestTest < Minitest::Test
       assert_equal 1, calls
     end
 
+    it "replies false without running when abandoned, and is done, so that nobody waits for it" do
+      calls   = 0
+      request = SemanticLogger::QueueProcessor::Request.new(:flush) { calls += 1 }
+      request.abandon
+
+      refute_predicate request, :ran?
+      assert_equal 1, calls
+      refute(request.wait { true })
+    end
+
+    it "runs a task on a thread of its own when abandoned, so that what it raises stays there" do
+      ran    = Queue.new
+      thread = nil
+      capture_io do
+        thread = SemanticLogger::QueueProcessor::Request.new(lambda {
+          ran << Thread.current
+          raise SystemStackError, "overflowed"
+        }).abandon
+        assert_raises(SystemStackError) { thread.join(5) }
+      end
+
+      refute_equal Thread.current, ran.pop(timeout: 5)
+    end
+
     it "is done once when it will not run, such as one skipped behind a close" do
       calls   = 0
       request = SemanticLogger::QueueProcessor::Request.new(:flush) { calls += 1 }

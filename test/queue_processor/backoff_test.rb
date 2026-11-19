@@ -95,6 +95,20 @@ class BackoffTest < Minitest::Test
       assert_predicate backoff, :waited_on?
     end
 
+    it "knows whether a request is waiting, not counting the process exiting" do
+      backoff.exiting = true
+
+      refute_predicate backoff, :request_waiting?
+
+      backoff.request_submitted
+
+      assert_predicate backoff, :request_waiting?
+
+      backoff.request_done
+
+      refute_predicate backoff, :request_waiting?
+    end
+
     it "ignores a request done that was not submitted" do
       backoff.request_done
 

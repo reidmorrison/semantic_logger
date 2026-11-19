@@ -1976,6 +1976,23 @@ buffered. In a forked child, closing an appender leaves the connections it inher
 process, and `remove_appender` first lets the appenders reopen, when they have not yet, so that the
 appender closes only what the child built (see [Process forking](operations.html#process-forking)).
 
+An appender added with `async: true` or in batches writes on a thread of its own, which the thread
+that writes to every appender may be waiting for. So when `remove_appender` is called on that
+thread, such as by an appender of your own as it writes, removing itself or another appender, it
+does not wait: it returns `true` at once. The thread that writes to every appender then, once it
+has written the messages logged before, closes the appender between writes, never while it is
+writing to it, and removes it from the list. Until then, `SemanticLogger.appenders` still lists the
+appender, and it is still given the messages logged before. An appender that removes itself is
+closed once its current write has returned. When the process forks before that, the child still
+removes the appender, once it has reopened it, so that it closes only what the child built.
+
+A message logged on that thread, such as by a library that your appender calls as it writes, is
+dropped at once when it finds the queue of the thread that writes to every appender full while your
+appender's own queue is full too, or a flush or close of your appender is waiting, since that thread
+may then be waiting for room on your appender's queue, or for your appender to flush. That holds
+whoever asked for the flush or close, so such a message can be dropped even when it could safely
+have waited: a dropped message is the price of never waiting forever.
+
 Other appender management methods:
 
 ~~~ruby
@@ -2039,6 +2056,12 @@ flush of all appenders and wait for any queued messages to be written:
 ~~~ruby
 SemanticLogger.flush
 ~~~
+
+Called on the thread of an appender added with `async: true` or in batches, such as by an appender
+of your own as it writes, `SemanticLogger.flush` returns `false` at once without flushing, since the
+thread that writes to every appender waits for that thread to flush its appender, and so would wait
+forever. So do `SemanticLogger.close` and `SemanticLogger.clear_appenders!`. The first such call is
+reported to the internal logger.
 
 ### Capturing context with `on_log`
 

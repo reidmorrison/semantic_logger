@@ -724,6 +724,71 @@ class QueueProcessorTest < Minitest::Test
             refute_predicate processor, :stopped?
           end
 
+          # On macOS a second stack overflow on the same thread crashes Ruby, so the commands taken off
+          # the queue with a batch that overflowed run on the next worker thread instead.
+          it "passes the commands taken off the queue with a batch that overflows on to a new thread" do
+            processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+            ran       = Queue.new
+            processor.log(new_log(message: "deep"))
+            processor.hand_over { ran << Thread.current }
+
+            assert processor.flush, "the flush must be answered by the new thread"
+
+            overflowed = appender.threads.first
+
+            refute_same overflowed, ran.pop(timeout: 5), "a command ran on the thread that overflowed"
+            assert_equal 1, processor.failed_count
+            refute_predicate processor.instance_variable_get(:@backoff), :request_waiting?
+          end
+
+          it "passes the commands after one that overflows the stack on to a new thread, in order" do
+            processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+            ran       = Queue.new
+            processor.hand_over do
+              ran << Thread.current
+              raise SystemStackError, "stack level too deep"
+            end
+            processor.hand_over { ran << :second }
+            processor.hand_over { ran << :third }
+
+            assert processor.flush, "the flush must be answered by the new thread"
+
+            overflowed = ran.pop(timeout: 5)
+
+            assert_equal %i[second third], Array.new(2) { ran.pop(timeout: 5) }
+            refute_predicate overflowed, :alive?
+            refute_predicate processor, :stopped?
+          end
+
+          # Each passed on by its own thread, they could land in any order on a full queue.
+          it "passes the commands on in order when the queue is full" do
+            processor = start(batch: true, batch_size: 3, batch_seconds: 60, max_queue_size: 3)
+            ran       = Queue.new
+            writing   = Queue.new
+            release   = Queue.new
+            appender.define_singleton_method(:batch) do |logs|
+              next logs.each { |log| events << log } unless logs.first.message == "deep"
+
+              writing << true
+              release.pop(timeout: 5)
+              raise SystemStackError, "stack level too deep"
+            end
+            processor.hand_over { ran << :first }
+            processor.hand_over { ran << :second }
+            processor.log(new_log(message: "deep"))
+
+            assert writing.pop(timeout: 5), "the batch was not written"
+            %w[a b c].each { |message| processor.log(new_log(message: message)) }
+            release << true
+            # The new worker thread writes a, b and c, making room for the commands passed on.
+            deadline = Time.now + 5
+            sleep(0.01) until (appender.events.size == 3 && processor.queue.size == 2) || Time.now > deadline
+
+            assert processor.flush
+            assert_equal %i[first second], Array.new(2) { ran.pop(timeout: 0) }
+            assert_equal %w[a b c], appender.events.map(&:message)
+          end
+
           it "discards the rest of a batch being split once one part overflows" do
             processor = start(batch: true, batch_size: 100, batch_seconds: 60)
             calls     = 0
@@ -1704,6 +1769,142 @@ class QueueProcessorTest < Minitest::Test
         refute appender.closed
         assert processor.flush
         assert_predicate appender, :flushed
+      end
+    end
+
+    describe "#worker_thread?" do
+      it "is true only for the worker thread" do
+        results   = Queue.new
+        processor = nil
+        appender.define_singleton_method(:log) { |_log| results << processor.worker_thread?(Thread.current) }
+        processor = start
+        processor.log(new_log)
+
+        assert results.pop(timeout: 5)
+        refute processor.worker_thread?(Thread.current)
+        refute build.worker_thread?(Thread.current)
+      end
+    end
+
+    describe "#hand_over" do
+      # Each log message waits until released.
+      let(:writing) { Queue.new }
+      let(:release) { Queue.new }
+
+      before do
+        gate = [writing, release]
+        appender.define_singleton_method(:log) do |log|
+          gate.first << log.message
+          gate.last.pop(timeout: 5)
+          events << log
+        end
+      end
+
+      it "runs the block on the worker thread, after the entries queued, without waiting for it" do
+        processor = start
+        ran       = Queue.new
+        processor.log(new_log(message: "first"))
+
+        assert_equal "first", writing.pop(timeout: 5)
+        processor.hand_over { ran << [Thread.current, appender.events.map(&:message)] }
+
+        assert_predicate ran, :empty?, "it should not run while the worker thread writes"
+
+        release << true
+
+        assert_equal [processor.thread, ["first"]], ran.pop(timeout: 5)
+      end
+
+      it "does not wait for room on the full queue, and the worker thread still runs the block" do
+        processor = start(max_queue_size: 1)
+        ran       = Queue.new
+        processor.log(new_log(message: "first"))
+
+        assert_equal "first", writing.pop(timeout: 5)
+        processor.log(new_log(message: "second"))
+        handing = Thread.new { processor.hand_over { ran << [Thread.current, appender.events.map(&:message)] } }
+
+        assert handing.join(5), "hand_over waited for room on the full queue"
+        2.times { release << true }
+
+        assert_equal [processor.thread, %w[first second]], ran.pop(timeout: 5)
+      end
+
+      it "runs the block on another thread when the worker thread is not running" do
+        ran = Queue.new
+        build.hand_over { ran << Thread.current }
+
+        thread = ran.pop(timeout: 5)
+
+        refute_nil thread
+        refute_equal Thread.current, thread
+      end
+    end
+
+    describe "#log on a thread that the worker thread may be waiting for" do
+      it "drops the message at once when the queue is full, rather than wait for room first" do
+        processor = start(max_queue_size: 1)
+        writing   = Queue.new
+        release   = Queue.new
+        appender.define_singleton_method(:log) do |log|
+          writing << true
+          release.pop(timeout: 5)
+          events << log
+        end
+        appender.define_singleton_method(:holding_up?) { true }
+        processor.log(new_log(message: "first"))
+
+        assert writing.pop(timeout: 5), "the first was not written"
+        processor.log(new_log(message: "second"))
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        refute processor.log(new_log(message: "dropped"))
+        assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started,
+                        :<, SemanticLogger::QueueProcessor::Inbox::WAIT_CHECK_SECONDS / 2.0
+        assert_equal 1, processor.dropped_count
+        2.times { release << true }
+      end
+    end
+
+    describe "when the worker thread stops on a close" do
+      it "releases the requests taken off the queue with it in a batch" do
+        processor = start(batch: true, batch_seconds: 60)
+        ran       = Queue.new
+        flush     = request(:flush)
+        processor.queue << request(:close)
+        processor.hand_over { ran << :task }
+        processor.queue << flush
+        processor.signal.set
+
+        assert_equal :task, ran.pop(timeout: 5)
+        refute(flush.wait { flunk "the flush was not released" })
+        assert appender.closed
+      end
+
+      it "releases the requests still queued, and keeps the log messages queued" do
+        processor = start
+        ran       = Queue.new
+        flush     = request(:flush)
+        writing   = Queue.new
+        release   = Queue.new
+        appender.define_singleton_method(:log) do |log|
+          writing << true
+          release.pop(timeout: 5)
+          events << log
+        end
+        processor.log(new_log(message: "first"))
+
+        assert writing.pop(timeout: 5), "the first was not written"
+        processor.queue << request(:close)
+        processor.hand_over { ran << :task }
+        processor.queue << flush
+        processor.log(new_log(message: "after"))
+        release << true
+
+        assert_equal :task, ran.pop(timeout: 5)
+        refute(flush.wait { flunk "the flush was not released" })
+        assert processor.instance_variable_get(:@thread).join(5)
+        assert_equal ["after"], Array.new(processor.queue.size) { processor.queue.pop.message }
       end
     end
 

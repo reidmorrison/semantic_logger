@@ -139,14 +139,20 @@ module SemanticLogger
     #
     # Starts the worker thread if it is not currently running. It carries on with the count of
     # failures in a row (see async_max_retries).
-    def thread
-      return @thread if @thread&.alive?
-
-      spawn_worker
-    end
+    def thread = active? ? @thread : spawn_worker
 
     # Returns [true|false] whether the worker thread is running.
     def active? = @thread&.alive?
+
+    # Returns [true|false] whether the thread is the worker thread, the one that writes to the
+    # appender. Takes no lock, so that it can be called from a signal trap.
+    def worker_thread?(thread = Thread.current) = @thread.equal?(thread)
+
+    # Returns [true|false] whether the thread is the worker thread while another thread may be waiting
+    # for it: the queue is full, so that a thread adding to it waits for it to make room, or a request,
+    # such as a flush or close, is waiting for it to run it (see Backoff#request_waiting?), whoever
+    # submitted it, so a message it logs that could wait may be dropped (see #waited_on?). Lock free.
+    def holding_up?(thread = Thread.current) = worker_thread?(thread) && (@inbox.full? || @backoff.request_waiting?)
 
     # Returns [Queue|SizedQueue] the queue of log messages and requests waiting for the worker thread.
     def queue = @inbox.queue
@@ -183,11 +189,14 @@ module SemanticLogger
     # Once the worker thread has stopped for good (see async_max_retries), nothing will empty the
     # queue, so messages are also dropped instead of blocking the calling thread forever. That
     # includes a message already waiting for room on the full queue when the worker thread stops.
+    #
+    # Nor does a thread that the worker thread may itself be waiting for wait for room on the full
+    # queue (see #waited_on?): the message is dropped instead.
     def log(log)
-      enqueued = @inbox.push(log, wait: !(non_blocking? || stopped?)) { !stopped? }
+      enqueued = @inbox.push(log, wait: !(non_blocking? || stopped?)) { !stopped? && !waited_on? }
       # Reported at most once every dropped_message_report_seconds, with whether it was dropped
       # because the worker thread has stopped for good.
-      @reporter.dropped(max_queue_size, stopped: stopped?, interval: dropped_message_report_seconds) unless enqueued
+      message_dropped unless enqueued
 
       # For batches wake up the processing thread once the number of queued messages has been
       # exceeded. Also wake it on a drop so it drains the full queue rather than waiting out the
@@ -209,6 +218,22 @@ module SemanticLogger
 
     # Flush any outstanding messages and close the appender.
     def close = submit_request(:close)
+
+    # Hand the block over to the worker thread, which runs it between writes, after the entries
+    # already queued, without waiting for it to run. The block reports its own errors: one that it
+    # raises is handled as a failure of the appender.
+    #
+    # Never waits, so that it can be called on a thread that the worker thread may itself be
+    # waiting for, such as the worker thread of an appender that it hands entries to, whose full
+    # queue it waits on. When the queue is full, a new thread adds the block to the queue, waiting for
+    # room, rather than the calling thread: once the calling thread returns, the worker thread can
+    # make room (see Inbox#push_aside). When the worker thread is not running, or has stopped (see
+    # #stopped?), or stops while that thread waits, a new thread runs the block instead, since nothing
+    # then writes to the appender. Takes no lock, so that it can be called from a signal trap.
+    #
+    # A batching worker thread is not woken up, since that would write a partial batch: it runs the
+    # block at its next batch, at most batch_seconds later.
+    def hand_over(&task) = pass_on([Request.new(task)])
 
     # Tell the worker thread whether the process is exiting, before and after the flush at exit
     # (see Backoff#exiting=). While it is, the worker thread acts as though a flush were waiting
@@ -263,11 +288,7 @@ module SemanticLogger
     # submitted now runs after the reopen, and returns once it has (see #flush). Like #flush, it
     # returns without waiting when called on the worker thread itself, or once that thread has
     # stopped. Takes no lock, as #flush takes none, so that it can be called from a signal trap.
-    def await_reopen
-      return true unless @reopener.pending?
-
-      flush
-    end
+    def await_reopen = !@reopener.pending? || flush
 
     # After a fork, the queue holds the entries that the parent process had queued, which the
     # parent's worker thread writes, so the child starts again with an empty queue and a worker
@@ -311,8 +332,7 @@ module SemanticLogger
         name_worker
         process
       end
-      assigned << true
-      @thread
+      @thread.tap { assigned << true }
     end
 
     # Start the worker thread again within the same process, unless it is running (see #reopen).
@@ -379,6 +399,14 @@ module SemanticLogger
       safe_log(:trace, "Async: Thread has stopped") unless carry_on
     end
 
+    # Returns [true|false] whether the calling thread is one that the worker thread may be waiting
+    # for: the worker thread of an appender written to by the appender of this processor, which is
+    # then the Appenders of the main Processor, while that appender's own queue is full, or a flush or
+    # close submitted to it, such as by the worker thread, waits for it (see Appenders#holding_up?).
+    # Otherwise the worker thread, if it waits at all, waits on another thread, which makes room.
+    # Asked only once a log message finds the queue full, then before each wait for room.
+    def waited_on? = appender.respond_to?(:holding_up?) && appender.holding_up?
+
     # Report to the internal logger, ignoring any error (see Reporter#log).
     def safe_log(level, message, exception = nil) = @reporter.log(level, message, exception)
 
@@ -410,7 +438,7 @@ module SemanticLogger
       return true if @stack_overflow
 
       safe_log(:trace, "Async: Queue Closed")
-      false
+      release_requests
     end
 
     # Batching: group up log messages before writing them via the appender's #batch method.
@@ -434,7 +462,6 @@ module SemanticLogger
         commands      = []
         discarded     = []
         gave_up       = @backoff.gave_up
-        first         = true
         message_count.times do
           # Queue#pop(true) raises an exception when there are no more messages, which is considered expensive.
           message = queue.pop
@@ -442,17 +469,16 @@ module SemanticLogger
             next discarded << message if gave_up && commands.empty?
 
             logs << message
-            if first
-              check_lag(message)
-              first = false
-            end
+            check_lag(message) if logs.size == 1
           elsif message.is_a?(Request)
             commands << message
           end
         end
         messages_failed(discarded, gave_up) unless discarded.empty?
-        # Stop processing once a command (e.g. :close) signals the thread to terminate.
-        return false unless write_batch_then_run(logs, commands)
+        # Stop processing once a command (e.g. :close) signals the thread to terminate, releasing the
+        # requests left (see #release_requests), unless the stack overflowed, when a new thread carries
+        # on (see #run_command).
+        return !@stack_overflow.nil? || release_requests unless write_batch_then_run(logs, commands)
         return true if @stack_overflow
 
         signal.reset unless queue.size >= batch_size
@@ -465,9 +491,9 @@ module SemanticLogger
     # When the batch cannot be written, for example because the destination is unavailable, the
     # messages not yet written are held to be written again after the back-off, or discarded and
     # counted as failed (see #not_written). The commands still run before the error propagates to
-    # #process to back off. Otherwise they would be lost, and a caller waiting on #flush or #close,
-    # such as the flush at exit, would wait forever. Since they are waiting, the messages are then
-    # discarded rather than held. A command behind a close is not run, and so no longer waits.
+    # #process to back off. Otherwise they would be lost, and a caller waiting on #flush or #close, such
+    # as the flush at exit, would wait forever. Since they are waiting, the messages are then discarded
+    # rather than held. A command behind a close is not run, but released (see Request#abandon).
     def write_batch_then_run(logs, commands)
       accounted = processed_count + failed_count
       unless logs.empty?
@@ -490,7 +516,9 @@ module SemanticLogger
       safe_log(:warn, "Async: #{message}", e)
       false
     ensure
-      commands.each(&:done)
+      # Once the stack has overflowed, the commands not run are passed on to the next worker thread
+      # (see #run_command). Otherwise they were behind a close.
+      commands.reject(&:ran?).then { |not_run| @stack_overflow ? pass_on(not_run) : not_run.each(&:abandon) }
     end
 
     # Run a command after a batch could not be written, unless it has run already, such as a flush
@@ -507,11 +535,33 @@ module SemanticLogger
 
     # Run a command taken off the queue on the appender, reporting one it does not know. Returns
     # false once message processing must stop (:close).
+    #
+    # A command that overflows the stack, such as a task handed over (see #hand_over), has failed,
+    # even a close, and this thread takes nothing more off the queue: a new one carries on, as after
+    # a message that overflowed it (see #stack_overflowed). Nor does it run any more commands, since on
+    # macOS a second stack overflow on the same thread crashes Ruby: those taken off the queue with it,
+    # in the same batch, or after a batch that overflowed it, return true here without running, and
+    # are passed on to the new one (see #write_batch_then_run).
     def run_command(request)
+      return true if @stack_overflow
+
       request.run(appender) do |command|
         safe_log(:warn, "Async: Appender thread: Ignoring unknown command: #{command}")
       end
+    rescue SystemStackError => e
+      @stack_overflow = e
     end
+
+    # Add the requests, in order, to the end of the queue, for the worker thread, without waiting for room
+    # (see Inbox#push_aside). Once no worker thread runs, those not added are abandoned (see Request#abandon).
+    def pass_on(requests) = @inbox.push_aside(requests, ->(rest) { rest.each(&:abandon) }) { active? && !stopped? }
+
+    # Once the worker thread stops on a close, release the requests still queued (see Request#abandon),
+    # which none would run until #reopen; log messages stay queued for it (see Inbox#take). Returns false.
+    # A log message that cannot be put back on the full queue is counted as dropped.
+    def release_requests = @inbox.take(Request) { message_dropped }.each(&:abandon) && false
+
+    def message_dropped = @reporter.dropped(max_queue_size, stopped: stopped?, interval: dropped_message_report_seconds)
 
     # Reopen the appender, if asked to (see #reopen), before taking more messages off the queue, or
     # writing again the ones held, so that it is never reopened while it is writing, and a stack

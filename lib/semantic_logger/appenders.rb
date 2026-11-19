@@ -112,6 +112,13 @@ module SemanticLogger
       logger.trace "All appenders flushed"
     end
 
+    # Flush and close every appender, then remove those closed. An appender that fails is reported,
+    # and the others are still closed.
+    #
+    # A stack overflow is raised at once, as #log raises it, since the thread must not carry on: on
+    # macOS a second stack overflow on the same thread crashes Ruby. The appenders already closed are
+    # still removed. The one that overflowed the stack, and those after it, not yet closed, stay
+    # listed, as one whose close fails does.
     def close
       closed_appenders = []
       each do |appender|
@@ -119,12 +126,15 @@ module SemanticLogger
         appender.flush
         appender.close
         closed_appenders << appender
+      rescue SystemStackError
+        raise
       rescue Exception => e
         logger.error "Failed to close appender: #{appender.name}", e
       end
-      # Delete appenders outside the #each above which prevents changes during iteration.
-      closed_appenders.each { |appender| delete(appender) }
       logger.trace "All appenders closed and removed from appender list"
+    ensure
+      # Delete appenders outside the #each above which prevents changes during iteration.
+      closed_appenders&.each { |appender| delete(appender) }
     end
 
     # After a fork, or a log rotation, reopen each appender. Called on the thread that writes to the
@@ -176,6 +186,22 @@ module SemanticLogger
     # Takes no lock, so that it can be called from a signal trap.
     def renew_after_fork
       each { |appender| appender.renew_after_fork if appender.respond_to?(:renew_after_fork) }
+    end
+
+    # Returns [true|false] whether the thread is the worker thread of one of the appenders: one added
+    # with async: true or in batches, which writes to it (see QueueProcessor#worker_thread?). The thread
+    # that writes to every appender may be waiting for it, so it must not wait for that thread. Takes
+    # no lock, so that it can be called from a signal trap.
+    def worker_thread?(thread = Thread.current)
+      any? { |appender| appender.respond_to?(:worker_thread?) && appender.worker_thread?(thread) }
+    end
+
+    # Returns [true|false] whether the thread is the worker thread of one of the appenders while that
+    # appender's queue is full, or a flush or close of it is waiting (see QueueProcessor#holding_up?):
+    # the thread that writes to every appender may then be waiting for it, to make room or to run that
+    # request. Takes no lock, as #worker_thread? takes none.
+    def holding_up?(thread = Thread.current)
+      any? { |appender| appender.respond_to?(:holding_up?) && appender.holding_up?(thread) }
     end
 
     private

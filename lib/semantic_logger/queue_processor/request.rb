@@ -1,7 +1,8 @@
 module SemanticLogger
   class QueueProcessor
     # Internal: a command, such as :flush or :close, submitted on the queue for the worker thread
-    # to run, while the submitting thread waits for the reply.
+    # to run, while the submitting thread waits for the reply. Or a task, a Proc, handed over for the
+    # worker thread to run without waiting for it (see QueueProcessor#hand_over), which nobody waits on.
     #
     # It knows its command, whether it has run, and how its reply gets back to the submitting
     # thread, and makes sure that the submitting thread is never left waiting on a reply that cannot
@@ -44,11 +45,13 @@ module SemanticLogger
         @replies.push(succeeded)
       end
 
-      # Called by the worker thread: run this command on the appender, then reply. Returns false
-      # once message processing must stop (:close). A command it does not know is yielded to the
-      # block, for the caller to report, and otherwise ignored.
+      # Called by the worker thread: run this command on the appender, or this task, then reply.
+      # Returns false once message processing must stop (:close). A command it does not know is
+      # yielded to the block, for the caller to report, and otherwise ignored.
       def run(appender)
         case command
+        when Proc
+          reply { command.call }
         when :flush
           reply { appender.flush }
         when :close
@@ -58,6 +61,19 @@ module SemanticLogger
           reply { yield(command) if block_given? }
         end
         true
+      end
+
+      # Called once no worker thread will run this request, such as one passed on to the next worker
+      # thread when none is running (see QueueProcessor#pass_on). A task runs on a new thread, since
+      # nothing then writes to the appender, and returns that thread. A command is not run:
+      # it replies false, so that the submitting thread does not wait for it.
+      def abandon
+        # A handed-over task runs on a thread of its own, so that one that raises, even SystemStackError,
+        # never keeps the requests released with it from being released.
+        return Thread.new(&command) if command.is_a?(Proc)
+
+        done
+        @replies.push(false)
       end
 
       # Called by the submitting thread: wait for the reply from the worker thread.

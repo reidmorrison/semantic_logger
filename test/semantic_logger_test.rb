@@ -216,6 +216,81 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    # As an appender added with async: true writes, on its worker thread, which the thread that writes to
+    # every appender may be waiting for.
+    describe "called on the worker thread of an appender added with async: true" do
+      # Runs the block given to #on_write as it writes a log message of these tests.
+      let(:caller_class) do
+        Class.new(SemanticLogger::Subscriber) do
+          def on_write(&block)
+            @on_write = block
+          end
+
+          def log(_log)
+            @on_write&.call
+            true
+          end
+        end
+      end
+
+      let(:caller_appender) { caller_class.new(filter: /\AOnAppenderThreadTest\z/) }
+      let(:results) { Queue.new }
+      let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+
+      before do
+        @logger = SemanticLogger::Logger.processor.appenders.logger
+        SemanticLogger::Logger.processor.appenders.logger = internal_logger
+      end
+
+      after do
+        SemanticLogger::Logger.processor.appenders.logger = @logger
+        # Should the call wait forever, its thread is ended, so that the processor's thread no longer
+        # waits for it, and the tests that follow do not wait either.
+        @caller.processor.instance_variable_get(:@thread)&.kill&.join
+        [@caller, @removed].each { |appender| SemanticLogger.remove_appender(appender) }
+      end
+
+      it "removes another appender, without waiting forever, and closes it" do
+        closed   = Queue.new
+        @removed = SemanticLogger.add_appender(io: StringIO.new)
+        @removed.define_singleton_method(:close) { closed << true }
+        caller_appender.on_write { results << SemanticLogger.remove_appender(@removed) }
+        @caller = SemanticLogger.add_appender(appender: caller_appender, async: true)
+        SemanticLogger["OnAppenderThreadTest"].info("remove now")
+
+        assert results.pop(timeout: 5), "remove_appender did not return"
+        SemanticLogger.flush
+
+        refute_includes SemanticLogger.appenders, @removed
+        assert closed.pop(timeout: 5), "the appender was not closed"
+      end
+
+      it "removes itself, then flushes, without waiting forever" do
+        caller_appender.on_write do
+          SemanticLogger.remove_appender(@caller)
+          # Gives the processor's thread time to start closing the appender.
+          sleep 0.1
+          results << [SemanticLogger.flush]
+        end
+        @caller = SemanticLogger.add_appender(appender: caller_appender, async: true)
+        SemanticLogger["OnAppenderThreadTest"].info("remove me")
+
+        refute_nil results.pop(timeout: 5), "SemanticLogger.flush did not return"
+        flushing = Thread.new { SemanticLogger.flush }
+
+        assert flushing.join(5), "SemanticLogger.flush no longer returns"
+        refute_includes SemanticLogger.appenders, @caller
+      end
+
+      it "flushes, returning without waiting forever" do
+        caller_appender.on_write { results << [SemanticLogger.flush] }
+        @caller = SemanticLogger.add_appender(appender: caller_appender, async: true)
+        SemanticLogger["OnAppenderThreadTest"].info("flush now")
+
+        refute_nil results.pop(timeout: 5), "SemanticLogger.flush did not return"
+      end
+    end
+
     describe ".remove_appender in a forked child" do
       include ForkedChildHelper
 
