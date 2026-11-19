@@ -282,6 +282,23 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   delivery, replaced the appender's default of `1`, or the value given.
 - The `LoadError` raised when the `:kafka` appender is added without the `ruby-kafka` gem names
   Kafka. It said that the gem is required for logging to Elasticsearch.
+- Reopening the `:kafka` appender in the same process, such as with
+  `SemanticLogger.reopen(force: true)`, no longer leaves the producer it replaces running, with its
+  two threads, and its connections open. The next time the appender logs, it starts a thread that
+  shuts that producer down, which delivers the entries it still holds, and closes its client.
+  Flushing or closing the appender waits for that thread, or shuts the producer down itself.
+  Neither reopening nor logging waits for the delivery, so that reopening still works in a signal
+  trap, where ruby-kafka cannot shut down a producer, and the thread that writes to every appender
+  does not stop while Kafka cannot be reached. Since the new producer delivers meanwhile, the
+  entries of the one it replaced can reach Kafka after newer ones. An error shutting that producer
+  down is reported to the internal logger, rather than raised. After a fork, the child still leaves
+  the producer and client it inherited alone, since shutting them down there would send the
+  parent's undelivered entries a second time, over the parent's own connections. When the appender
+  cannot build a new producer, such as after setting a negative `delivery_threshold`, flushing it
+  now keeps the producer it has, which still delivers, rather than the one it had just shut down,
+  and reopening it in the same process keeps both its client and producer. In a forked child it
+  then has none, and logging to it raises `IOError` until a reopen builds one. Flushing the appender
+  after closing it no longer raises `NoMethodError`, and logging to it raises `IOError` instead.
 - The `:udp` appender sends to an IPv6 address written in brackets, as a URL writes it, such as
   `server: "[::1]:8088"`. Before, it split the server at every colon, and its socket was IPv4 only,
   so it could not be given an IPv6 address. A host name is still resolved to its IPv4 address. A
