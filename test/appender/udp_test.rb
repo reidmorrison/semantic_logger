@@ -356,6 +356,21 @@ module Appender
           appender.close
         end
 
+        it "reports an error closing the socket it replaced as a warning, keeping the new one" do
+          socket = appender.socket
+          socket.define_singleton_method(:close) { raise(IOError, "close failed") }
+          warned = nil
+          appender.logger.stub(:warn, ->(message, error) { warned = [message, error] }) { appender.reopen }
+
+          refute_same socket, appender.socket
+          assert_equal "Could not close the socket to the UDP server that a reopen replaced", warned&.first
+          assert_equal "close failed", warned&.last&.message
+        ensure
+          socket&.singleton_class&.send(:remove_method, :close)
+          socket&.close
+          appender.close
+        end
+
         it "closes the new socket when connecting is interrupted by an exception that is not a StandardError" do
           socket      = appender.socket
           interrupted = UDPSocket.new

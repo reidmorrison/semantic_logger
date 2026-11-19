@@ -91,11 +91,13 @@ module SemanticLogger
       # Connects a new socket to the server before closing the one it replaces. When it cannot, it
       # raises, keeping the socket it has: ArgumentError for a server that is not "host:port", or
       # the error from resolving or connecting, such as SocketError for a host name that does not resolve.
+      # An error closing the socket it replaced is reported to the internal logger as a warning, since the
+      # reopen itself worked.
       def reopen
         socket     = connected_socket
         old_socket = @socket
         @socket    = socket
-        old_socket&.close
+        close_socket(old_socket, replaced: true)
       end
 
       # Write the log using the specified protocol and server. Opens a new socket, connected to the server, first
@@ -117,9 +119,7 @@ module SemanticLogger
       def close
         socket  = @socket
         @socket = nil
-        socket&.close
-      rescue StandardError => e
-        logger.warn("Could not close the socket to the UDP server", e)
+        close_socket(socket)
       end
 
       # A log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.
@@ -133,6 +133,14 @@ module SemanticLogger
       end
 
       private
+
+      # Closes the given socket, if any: the one that a reopen replaced, when replaced: is true. An error closing
+      # it is reported to the internal logger as a warning, rather than raised.
+      def close_socket(socket, replaced: false)
+        socket&.close
+      rescue StandardError => e
+        logger.warn("Could not close the socket to the UDP server#{' that a reopen replaced' if replaced}", e)
+      end
 
       # Returns [UDPSocket] a new socket, connected to the first of the server's addresses that it can connect to, as
       # Ruby's own UDPSocket#connect tries the addresses of its socket's family in turn. A host name's IPv4 addresses
