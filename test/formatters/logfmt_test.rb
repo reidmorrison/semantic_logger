@@ -101,6 +101,21 @@ module SemanticLogger
               assert_includes text, %( exception_name="RuntimeError" exception_message="Oh no")
               assert_includes text, %( payload.name="shrek" payload.exception_message="forged")
             end
+
+            it "writes the message the exception was raised with when its #message raises" do
+              log.exception = ExceptionFixtures::BrokenMessageError.new("Order 7")
+
+              assert_includes formatter.call(log, nil),
+                              %( exception_name="ExceptionFixtures::BrokenMessageError" exception_message="Order 7")
+            end
+
+            it "names an exception of an anonymous class as Ruby writes the class" do
+              error_class   = Class.new(StandardError)
+              log.exception = error_class.new("disk full")
+
+              assert_includes formatter.call(log, nil),
+                              %( exception_name="#{error_class}" exception_message="disk full")
+            end
           end
 
           describe "given a set of tags" do

@@ -154,6 +154,40 @@ module SemanticLogger
         end
       end
 
+      describe ".exception_name" do
+        it "returns the name of the exception's class" do
+          assert_equal "ExceptionFixtures::BrokenMessageError", SemanticLogger::Utils.exception_name(BrokenMessageError.new)
+        end
+
+        it "returns the class as Ruby writes it for an anonymous class, which has no name" do
+          error_class = Class.new(StandardError)
+
+          assert_equal error_class.to_s, SemanticLogger::Utils.exception_name(error_class.new)
+          assert_match(/\A#<Class:0x\h+>\z/, SemanticLogger::Utils.exception_name(error_class.new))
+        end
+
+        it "names a class that names itself otherwise as Ruby names it, as Exception#inspect does" do
+          [OtherwiseNamedError, Class.new(StandardError) { def self.name = "PaymentError" }].each do |error_class|
+            error = error_class.new("declined")
+
+            assert_equal "#<#{SemanticLogger::Utils.exception_name(error)}: declined>", error.inspect
+          end
+
+          assert_equal "ExceptionFixtures::OtherwiseNamedError", SemanticLogger::Utils.exception_name(OtherwiseNamedError.new)
+        end
+
+        it "does not ask a class for its name, which can raise" do
+          assert_equal "ExceptionFixtures::UnnameableError", SemanticLogger::Utils.exception_name(UnnameableError.new)
+        end
+
+        it "returns the name in UTF-8, whatever the encoding of the class's constant" do
+          name = SemanticLogger::Utils.exception_name(ISO_8859_1_NAMED_ERROR.new)
+
+          assert_equal "ExceptionFixtures::FehlÄr", name
+          assert_equal Encoding::UTF_8, name.encoding
+        end
+      end
+
       describe ".exception_message" do
         it "returns the exception's message" do
           assert_equal "disk full", SemanticLogger::Utils.exception_message(IOError.new("disk full"))

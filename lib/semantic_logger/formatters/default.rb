@@ -90,8 +90,8 @@ module SemanticLogger
       def exception
         return unless log.exception
 
-        "-- Exception: #{log.exception.class}: #{escape_control_characters(log.exception.message)}" \
-          "#{exception_detail_lines}"
+        message = escape_control_characters(Utils.exception_message(log.exception))
+        "-- Exception: #{Utils.exception_name(log.exception)}: #{message}#{exception_detail_lines}"
       end
 
       # The detail Ruby adds to the exception's message, such as did_you_mean suggestions.

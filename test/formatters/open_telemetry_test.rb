@@ -385,6 +385,24 @@ module SemanticLogger
               assert_equal "Hello World", formatted[:body]
             end
 
+            describe "whose #message raises" do
+              let(:exception) { ExceptionFixtures::AbstractMessageError.new("Order 7") }
+
+              it "uses the message the exception was raised with" do
+                assert_equal "ExceptionFixtures::AbstractMessageError", attributes["exception.type"]
+                assert_equal "Order 7", attributes["exception.message"]
+              end
+            end
+
+            describe "of an anonymous class" do
+              let(:error_class) { Class.new(StandardError) }
+              let(:exception) { error_class.new("disk full") }
+
+              it "names the type as Ruby writes the class" do
+                assert_equal error_class.to_s, attributes["exception.type"]
+              end
+            end
+
             describe "details" do
               let(:exception) do
                 "abc".upcasee

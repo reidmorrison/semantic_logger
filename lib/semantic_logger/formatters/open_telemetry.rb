@@ -149,12 +149,17 @@ module SemanticLogger
       # The logged exception, with the backtrace of each exception that caused it in its stacktrace.
       # With `log_exception_details`, the message is followed by the detail Ruby adds to it, on a
       # line of its own, as in Exception#detailed_message.
+      #
+      # The type is the class as Utils.exception_name names it, as every formatter does: as Ruby names
+      # it, without asking the class, such as `#<Class:0x000...>` for an anonymous class. The
+      # message is read with Utils.exception_message, so that a #message that raises, or does not
+      # return a String, cannot lose the entry.
       def add_exception(attributes)
         exception = log.exception
         return unless exception
 
-        add(attributes, EXCEPTION_TYPE, exception.class.name)
-        message = exception.message
+        add(attributes, EXCEPTION_TYPE, Utils.exception_name(exception))
+        message = Utils.exception_message(exception)
         details = exception_details_for(exception)
         add(attributes, EXCEPTION_MESSAGE, details ? "#{message}\n#{details}" : message)
         stacktrace = exception_backtrace

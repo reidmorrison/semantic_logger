@@ -904,7 +904,8 @@ message again cannot fix, such as a request the destination refuses outright for
 so the thread carries on straight away instead. `#message_error?(exception)` decides which is
 which, and these are the message errors. Format each message with `format_log(log)` (or
 a batch with `format_batch(logs)`) rather than `formatter.call`: any error the
-formatter raises is then raised as a `SemanticLogger::Subscriber::FormatError`, which
+formatter raises, including a `ScriptError` such as `NotImplementedError`, which would otherwise
+stop the worker thread, is then raised as a `SemanticLogger::Subscriber::FormatError`, which
 `#message_error?` recognizes, since a formatter can only fail because of the content of the message.
 By default it also recognizes the errors raised when serializing a value that cannot be written
 (`JSON::GeneratorError`, `JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it

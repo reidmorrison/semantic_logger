@@ -1773,7 +1773,8 @@ message again cannot fix, such as a request the destination refuses outright for
 so the thread carries on straight away instead. `#message_error?(exception)` decides which is
 which, and these are the message errors. Format each message with `format_log(log)` (or
 a batch with `format_batch(logs)`) rather than `formatter.call`: any error the
-formatter raises is then raised as a `SemanticLogger::Subscriber::FormatError`, which
+formatter raises, including a `ScriptError` such as `NotImplementedError`, which would otherwise
+stop the worker thread, is then raised as a `SemanticLogger::Subscriber::FormatError`, which
 `#message_error?` recognizes, since a formatter can only fail because of the content of the message.
 By default it also recognizes the errors raised when serializing a value that cannot be written
 (`JSON::GeneratorError`, `JSON::NestingError`, `EncodingError`, and `FloatDomainError`). Override it
@@ -2302,6 +2303,12 @@ Notes:
 * The layout above is formatted for readability. The real output is a single line terminated by one
   newline, with no embedded newlines.
 * A field with a `nil` value is excluded from the output.
+* An exception, and each exception that caused it, is named as Ruby names its class in
+  `Exception#inspect`, as every formatter names it: by the constant the class was assigned to, even
+  when the class overrides `self.name`, or for an anonymous class by the class as Ruby writes it,
+  such as `#<Class:0x000...>`. Its `message` is always a String: when the exception's `#message`
+  raises, such as one that reads a record that is nil, the message it was raised with is written
+  instead.
 * To also log the detail Ruby adds to an exception's message, such as did_you_mean suggestions, as
   `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
   See [Exception details](config.html#exception-details).
@@ -3571,7 +3578,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`level_to_s`|`String`|The level as a single upper-case character, for example `"I"` for `:info`.|
 |`cleansed_message`|`String`|The message with Rails/ANSI color escape codes stripped. Used to keep terminal codes out of structured output.|
 |`each_exception`|Enumerator|Iterates the exception and its nested `cause` chain, yielding `(exception, depth)`.|
-|`backtrace_to_s(cleaner: nil)`|`String`|The exception backtrace as a string, including every exception in the `cause` chain. Lines are separated by a line break, with none before the first or after the last, so put your own line break before it. With a block, each cause's message and each backtrace line is replaced by the value the block returns, for example to escape it. With a `cleaner`, each backtrace is first cleaned as `backtrace_of` cleans it. Each cause is written as `Cause: Class: message`, with the class's name, or for an anonymous class the class as Ruby writes it, such as `#<Class:0x000...>`. A cause's message, as written and as passed to the block, is always a `String`: when its `#message` raises, the message it was raised with is used instead, and a `nil` message is empty. Text in encodings that cannot be joined, such as a binary message and a UTF-8 backtrace line, is joined as UTF-8, and so are binary or US-ASCII backtrace lines that hold bytes outside ASCII, such as Ruby's own where no locale is set in a directory such as `café`, which would otherwise make the whole text binary or invalid US-ASCII.|
+|`backtrace_to_s(cleaner: nil)`|`String`|The exception backtrace as a string, including every exception in the `cause` chain. Lines are separated by a line break, with none before the first or after the last, so put your own line break before it. With a block, each cause's message and each backtrace line is replaced by the value the block returns, for example to escape it. With a `cleaner`, each backtrace is first cleaned as `backtrace_of` cleans it. Each cause is written as `Cause: Class: message`, with the class named as Ruby names it in `Exception#inspect`: the constant it was assigned to, even when the class overrides `self.name`, or for an anonymous class the class as Ruby writes it, such as `#<Class:0x000...>`. A cause's message, as written and as passed to the block, is always a `String`: when its `#message` raises, the message it was raised with is used instead, and a `nil` message is empty. Text in encodings that cannot be joined, such as a binary message and a UTF-8 backtrace line, is joined as UTF-8, and so are binary or US-ASCII backtrace lines that hold bytes outside ASCII, such as Ruby's own where no locale is set in a directory such as `café`, which would otherwise make the whole text binary or invalid US-ASCII.|
 |`backtrace_of(exception, cleaner: nil)`|`Array<String>` or `nil`|The backtrace of `exception` (this event's exception or one of its causes). With a [backtrace cleaner](config.html#cleaning-backtraces) object, such as `Rails.backtrace_cleaner` (not `true`, as the formatter option accepts), the lines it keeps, or the full backtrace when it keeps none; the exception is not changed. A cleaned backtrace, and each of its lines, is frozen and cached on the event.|
 |`exception_details(exception, source: false)`|`String` or `nil`|The detail Ruby's `Exception#detailed_message` adds to the message of `exception` (this event's exception or one of its causes), such as did_you_mean suggestions, without the class name. `source: true` also includes error_highlight's source snippet. `nil` when there is none. Cached on the event.|
 |`file_name_and_line(short_name = false)`|`[String, Integer]` or `nil`|The file name and line number from the event's call site, or else its backtrace or exception. Pass `true` for just the base file name.|
@@ -6602,6 +6609,26 @@ agent.
   ```
 
   Alerts, searches, or tests that match the whole message of such an entry need updating.
+* An exception whose class overrides `self.name` or `self.to_s` is now named by the constant the
+  class was assigned to, as Ruby names it in `Exception#inspect`, wherever Semantic Logger writes the
+  class. Before, what `self.name` returned was written as `name` in `:raw`, and so in `:json`,
+  `:logfmt`, `:fluentd`, `:ecs`, `:syslog_cee`, and `:new_relic_logs`, as `exception_name` in
+  `:loki`, and in each `Cause:` line of a backtrace, while the text formatters (`:default`,
+  `:color`, `:one_line`, `:pattern`, and `:syslog`) and `log_exception: :partial` wrote what
+  `self.to_s` returned. A class without a constant is named as Ruby writes the class, such as
+  `#<Class:0x000...>`, even when it gives itself a name. Update any search, alert, or dashboard that
+  selects such an exception by the name its class gave itself:
+
+  ```ruby
+  class DeclinedError < StandardError
+    def self.name = "Payments::Declined"
+    def self.to_s = name
+  end
+  # Before, in :json:    "exception":{"name":"Payments::Declined",...}
+  #         in :default: -- Exception: Payments::Declined: Card declined
+  # After,  in :json:    "exception":{"name":"DeclinedError",...}
+  #         in :default: -- Exception: DeclinedError: Card declined
+  ```
 * `:default`, `:color`, `:pattern`, and `:syslog` with `escape_control_chars: false` now always
   write UTF-8, as the JSON based formatters, `:one_line`, and `:syslog` with its default
   `escape_control_chars: true` already did. Text in another encoding, such as ISO-8859-1, used to be

@@ -92,7 +92,7 @@ module SemanticLogger
       walk(value, {}.compare_by_identity, 0)
     rescue StandardError => e
       report(e)
-      {redaction_failed: e.class.name || e.class.inspect}
+      {redaction_failed: Utils.exception_name(e)}
     end
 
     # Returns the value that replaces the value of a sensitive key, or nil when the key is not
@@ -300,7 +300,7 @@ module SemanticLogger
     def report(exception)
       where = exception.backtrace&.first
       Logger.processor.logger.warn(
-        "Redacting sensitive keys raised #{exception.class.inspect}" \
+        "Redacting sensitive keys raised #{Utils.exception_name(exception)}" \
         "#{" (#{where})" if where}, so the value was replaced with :redaction_failed"
       )
     rescue StandardError

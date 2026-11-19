@@ -275,7 +275,9 @@ class SubscriberTest < Minitest::Test
 
       it "raises any error from the formatter as a FormatError, with the error as its cause" do
         [NoMethodError.new("undefined method 'each' for an instance of String"),
-         ArgumentError.new("invalid byte sequence in UTF-8")].each do |error|
+         ArgumentError.new("invalid byte sequence in UTF-8"),
+         NotImplementedError.new("ExceptionFixtures::AbstractMessageError must define #message"),
+         LoadError.new("cannot load such file -- amazing_print")].each do |error|
           appender.instance_variable_set(:@formatter, formatter_raising(error))
 
           [-> { appender.send(:format_log, log) }, -> { appender.send(:format_batch, [log]) }].each do |format|
@@ -284,6 +286,20 @@ class SubscriberTest < Minitest::Test
             assert_same error, raised.cause
             assert appender.message_error?(raised), "expected a FormatError to be a message error"
           end
+        end
+      end
+
+      it "names the formatter's error by its class as Ruby names it, even one that names itself otherwise, or raises" do
+        {
+          ExceptionFixtures::OtherwiseNamedError => "ExceptionFixtures::OtherwiseNamedError",
+          ExceptionFixtures::UnnameableError     => "ExceptionFixtures::UnnameableError"
+        }.each_pair do |error_class, name|
+          appender.instance_variable_set(:@formatter, formatter_raising(error_class.new("declined")))
+          one   = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.send(:format_log, log) }
+          batch = assert_raises(SemanticLogger::Subscriber::FormatError) { appender.send(:format_batch, [log]) }
+
+          assert_equal "Could not format the log message (#{name})", one.message
+          assert_equal "Could not format the batch of log messages (#{name})", batch.message
         end
       end
 

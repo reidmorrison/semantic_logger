@@ -770,6 +770,32 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   or batching). See
   [Process forking](https://logger.reidmorrison.com/operations.html#process-forking) and the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The formatters no longer lose an entry when the `#message` of its exception raises, such as one
+  that reads a record that is nil, or an abstract one that raises `NotImplementedError`: `:raw`, and
+  so `Log#to_h` and the formatters built on it (`:json`, `:logfmt`, `:fluentd`, `:ecs`,
+  `:syslog_cee`, and `:new_relic_logs`), which also read each cause's message, and `:default`,
+  `:color`, `:one_line`, `:pattern`, `:syslog`, `:open_telemetry`, and the `:graylog` appender. The
+  error was reported to the internal logger instead, and the error service appenders that use
+  `:raw`, such as `:bugsnag`, `:honeybadger`, and `:sentry_ruby`, did not send the exception at all.
+  They now write the message the exception, or the cause, was raised with, and `:raw` writes a
+  `#message` that returns something other than a String, such as nil or a Symbol, as a String.
+  Every formatter, `log_exception: :partial`, and the internal reports now name an exception's class
+  as Ruby does in `Exception#inspect`, without calling the class's own `self.name`, `self.to_s`, or
+  `self.inspect`. So a `self.name` that raises no longer loses the entry in `:raw` and the formatters
+  built on it, `:loki`, and `:open_telemetry`, nor, for an exception that caused the logged one, in
+  the text formatters, and a `self.to_s` that raises no longer loses the entry in the text
+  formatters, nor raises from `log_exception: :partial`. An exception of an anonymous class is named
+  as Ruby writes the class, such as `#<Class:0x000...>`, where `:raw` wrote no name. A class that
+  overrides `self.name` or `self.to_s` is named by the constant it was assigned to, rather than by
+  what `self.name` returns in `:raw`, `:loki`, and each `Cause:` line, or what `self.to_s` returns in
+  the text formatters and `log_exception: :partial` (see the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html)). A class named in another
+  encoding, such as one from a source file in ISO-8859-1, is named in UTF-8, so that the text
+  formatters no longer lose an entry whose exception's message holds UTF-8 text outside ASCII.
+  `:graylog` also no longer loses an entry logged with only an exception whose message holds bytes
+  that are not valid UTF-8. A formatter that raises a `ScriptError`, such as `NotImplementedError`,
+  now loses only that entry, as for any other error. Before, it stopped an appender added with
+  `async: true` or `batch: true`, which then dropped every entry after it.
 
 ## [5.2.0] 2026-10-30
 

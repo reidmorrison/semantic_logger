@@ -41,7 +41,7 @@ module SemanticLogger
 
         internal.public_send(
           level,
-          Utils.join_texts(message, " -- ", exception.class.to_s, ": ", Utils.exception_message(exception))
+          Utils.join_texts(message, " -- ", Utils.exception_name(exception), ": ", Utils.exception_message(exception))
         )
       rescue StandardError
         nil

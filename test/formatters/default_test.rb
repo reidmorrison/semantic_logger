@@ -529,6 +529,35 @@ module SemanticLogger
             assert_equal "-- Exception: RuntimeError: outer\nCause: ArgumentError: inner\nc1", formatter.exception
           end
 
+          it "writes the message the exception was raised with when its #message raises" do
+            [ExceptionFixtures::BrokenMessageError, ExceptionFixtures::AbstractMessageError].each do |error_class|
+              log.exception = error_class.new("Order 7")
+
+              assert formatter.call(log, nil).end_with?(" DefaultTest -- Exception: #{error_class.name}: Order 7")
+            end
+          end
+
+          it "names an exception, and a cause, whose class names itself otherwise, or raises, as Ruby names it" do
+            {
+              ExceptionFixtures::OtherwiseNamedError => "ExceptionFixtures::OtherwiseNamedError",
+              ExceptionFixtures::UnnameableError     => "ExceptionFixtures::UnnameableError"
+            }.each_pair do |error_class, name|
+              begin
+                begin
+                  raise error_class, "declined"
+                rescue error_class => e
+                  e.set_backtrace(%w[c1])
+                  raise error_class, "card failed", %w[t1]
+                end
+              rescue error_class => e
+                log.exception = e
+              end
+              formatter.call(log, nil)
+
+              assert_equal "-- Exception: #{name}: card failed\nt1\nCause: #{name}: declined\nc1", formatter.exception
+            end
+          end
+
           it "skips nil exception" do
             refute formatter.exception
           end
@@ -612,6 +641,12 @@ module SemanticLogger
             log.exception = raised("Grüße".encode(Encoding::ISO_8859_1))
 
             assert_includes output, "-- Café -- Exception: RuntimeError: Grüße"
+          end
+
+          it "writes the ISO-8859-1 name of an exception's class with its UTF-8 message" do
+            log.exception = raised("Größe ungültig", ExceptionFixtures::ISO_8859_1_NAMED_ERROR)
+
+            assert_includes output, "-- Exception: ExceptionFixtures::FehlÄr: Größe ungültig"
           end
 
           it "writes the binary message of an exception that caused the logged one" do

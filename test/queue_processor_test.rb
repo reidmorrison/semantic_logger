@@ -96,13 +96,15 @@ class QueueProcessorTest < Minitest::Test
   end
 
   # Formats every message through Subscriber#format_log, with a formatter that fails on a message
-  # containing "poison" with an error that is not one of Subscriber::MESSAGE_ERRORS.
+  # containing "poison" with an error that is not one of Subscriber::MESSAGE_ERRORS, and on one
+  # containing "abstract" with a ScriptError, as an abstract method's NotImplementedError is.
   class FormattingAppender < SemanticLogger::Subscriber
     attr_reader :written
 
     def initialize(**)
       super(formatter: lambda { |log, _appender|
         raise NoMethodError, "undefined method 'each' for an instance of String" if log.message.include?("poison")
+        raise NotImplementedError, "#message must be defined" if log.message.include?("abstract")
 
         log.message
       }, **)
@@ -777,6 +779,21 @@ class QueueProcessorTest < Minitest::Test
 
             assert_kind_of SemanticLogger::Subscriber::FormatError, report.exception
             assert_kind_of NoMethodError, report.exception.cause
+          end
+
+          it "discards only that message when the error is a ScriptError, rather than stopping" do
+            processor = build
+            processor.queue << new_log(message: "first")
+            processor.queue << new_log(message: "abstract")
+            processor.queue << new_log(message: "last")
+            processor.queue << request(:close)
+
+            processor.stub(:sleep, ->(_) { flunk "must not back off for a message error" }) do
+              processor.send(:process)
+            end
+
+            assert_equal %w[first last], appender.written
+            assert_equal 1, processor.failed_count
           end
         end
 

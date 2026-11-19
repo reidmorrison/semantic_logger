@@ -433,6 +433,26 @@ agent.
   ```
 
   Alerts, searches, or tests that match the whole message of such an entry need updating.
+* An exception whose class overrides `self.name` or `self.to_s` is now named by the constant the
+  class was assigned to, as Ruby names it in `Exception#inspect`, wherever Semantic Logger writes the
+  class. Before, what `self.name` returned was written as `name` in `:raw`, and so in `:json`,
+  `:logfmt`, `:fluentd`, `:ecs`, `:syslog_cee`, and `:new_relic_logs`, as `exception_name` in
+  `:loki`, and in each `Cause:` line of a backtrace, while the text formatters (`:default`,
+  `:color`, `:one_line`, `:pattern`, and `:syslog`) and `log_exception: :partial` wrote what
+  `self.to_s` returned. A class without a constant is named as Ruby writes the class, such as
+  `#<Class:0x000...>`, even when it gives itself a name. Update any search, alert, or dashboard that
+  selects such an exception by the name its class gave itself:
+
+  ```ruby
+  class DeclinedError < StandardError
+    def self.name = "Payments::Declined"
+    def self.to_s = name
+  end
+  # Before, in :json:    "exception":{"name":"Payments::Declined",...}
+  #         in :default: -- Exception: Payments::Declined: Card declined
+  # After,  in :json:    "exception":{"name":"DeclinedError",...}
+  #         in :default: -- Exception: DeclinedError: Card declined
+  ```
 * `:default`, `:color`, `:pattern`, and `:syslog` with `escape_control_chars: false` now always
   write UTF-8, as the JSON based formatters, `:one_line`, and `:syslog` with its default
   `escape_control_chars: true` already did. Text in another encoding, such as ISO-8859-1, used to be

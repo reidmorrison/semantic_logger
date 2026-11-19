@@ -39,6 +39,25 @@ module Appender
         assert_equal ["Disk full", "<no-exception-message>"], sent
       end
 
+      it "sends the message an exception was raised with as short_message when its #message raises" do
+        sent = []
+        appender.notifier.stub(:notify!, ->(h) { sent << h[:short_message] }) do
+          appender.error("", ExceptionFixtures::BrokenMessageError.new("Order 7"))
+          appender.error("", ExceptionFixtures::AbstractMessageError.new("Order 8"))
+        end
+
+        assert_equal ["Order 7", "Order 8"], sent
+      end
+
+      it "sends an exception message with bytes that are not valid UTF-8 as short_message, without them" do
+        hash = nil
+        appender.notifier.stub(:notify!, ->(h) { hash = h }) do
+          appender.error("", RuntimeError.new((+" Disk full \xFF ").force_encoding(Encoding::UTF_8)))
+        end
+
+        assert_equal "Disk full", hash[:short_message]
+      end
+
       it "hands GELF the formatted Hash itself, without copying it, when JSON can write it" do
         hash = nil
         SemanticLogger::Utils.stub(:json_safe, ->(*) { flunk "must not copy a Hash that JSON can write" }) do

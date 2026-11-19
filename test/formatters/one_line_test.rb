@@ -79,6 +79,12 @@ module SemanticLogger
 
             assert_equal "-- Exception: RuntimeError: Oh\\e[31m no\\nforged", formatter.exception
           end
+
+          it "writes the message the exception was raised with when its #message raises" do
+            log.exception = ExceptionFixtures::BrokenMessageError.new("Order 7")
+
+            assert formatter.call(log, nil).end_with?(" -- Exception: ExceptionFixtures::BrokenMessageError: Order 7")
+          end
         end
 
         describe "tags" do

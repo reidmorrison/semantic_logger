@@ -123,7 +123,7 @@ module SemanticLogger
 
         # GELF rejects an empty short_message, such as a message of only ANSI escape codes.
         h[:short_message] = h.delete(:message).to_s
-        h[:short_message] = log.exception.message.to_s.strip if h[:short_message].empty? && log.exception
+        h[:short_message] = short_message_of(log.exception) if h[:short_message].empty? && log.exception
         h[:short_message] = "<no-exception-message>" if h[:short_message].empty?
         h[:level]        = logger.level_map[log.level]
         h[:level_str]    = log.level.to_s
@@ -157,6 +157,13 @@ module SemanticLogger
 
       def default_formatter
         SemanticLogger::Formatters::Raw.new(time_format: :seconds, time_key: :timestamp)
+      end
+
+      # Returns [String] the exception's message, without the whitespace around it, for an entry
+      # without a message. Read with Utils.exception_message, so that a #message that raises cannot
+      # lose the entry, and converted to valid UTF-8 first, since #strip raises for invalid bytes.
+      def short_message_of(exception)
+        Utils.encode_utf8_string(Utils.exception_message(exception)).strip
       end
     end
   end

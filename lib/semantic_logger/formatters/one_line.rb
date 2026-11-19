@@ -75,8 +75,9 @@ module SemanticLogger
       def exception
         return unless log.exception
 
+        message = one_line(Utils.exception_message(log.exception))
         details = exception_details
-        "-- Exception: #{log.exception.class}: #{one_line(log.exception.message)}#{" -- #{details}" if details}"
+        "-- Exception: #{Utils.exception_name(log.exception)}: #{message}#{" -- #{details}" if details}"
       end
 
       # The exception details, with each line trimmed and joined by a space.

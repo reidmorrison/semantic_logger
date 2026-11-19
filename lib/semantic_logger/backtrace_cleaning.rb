@@ -66,7 +66,7 @@ module SemanticLogger
     def self.report(exception)
       where = exception.backtrace&.first
       Logger.processor.logger.warn(
-        "Backtrace cleaner raised #{exception.class.inspect}: #{exception.message}" \
+        "Backtrace cleaner raised #{Utils.exception_name(exception)}: #{Utils.exception_message(exception)}" \
         "#{" (#{where})" if where}, so the full backtrace is logged"
       )
     rescue StandardError

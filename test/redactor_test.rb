@@ -418,6 +418,18 @@ class RedactorTest < Minitest::Test
           assert_equal({redaction_failed: error_class.inspect}, redact_reporting_to_io({password: "x"}, redactor))
         end
 
+        it "names an error class that names itself otherwise, or raises, as Ruby names it" do
+          {
+            ExceptionFixtures::OtherwiseNamedError => "ExceptionFixtures::OtherwiseNamedError",
+            ExceptionFixtures::UnnameableError     => "ExceptionFixtures::UnnameableError"
+          }.each_pair do |error_class, name|
+            redactor = SemanticLogger::Redactor.new(->(_name) { raise error_class })
+
+            assert_equal({redaction_failed: name}, redact_reporting_to_io({password: "x"}, redactor))
+            assert_includes io.string, "Redacting sensitive keys raised #{name} ("
+          end
+        end
+
         it "asks again for a key next time, since nothing is remembered for it" do
           asked    = 0
           redactor = SemanticLogger::Redactor.new(->(_name) { (asked += 1) && raise("broken") })
