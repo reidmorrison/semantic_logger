@@ -584,8 +584,20 @@ end
 SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088", formatter: formatter)
 ~~~
 
-See [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client) for the remaining connection
-options.
+The `server:` is `"host:port"`. [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client)
+connects over IPv4 only, so give an IPv4 address, or a host name that has one. Pass several servers
+as `servers:` to try the next when one cannot be connected to. Every host name is resolved before
+the first of them is connected to, so a name that does not resolve fails at once, without trying the
+others or retrying.
+
+Net::TCPClient retries only after a network error, such as a refused, reset, or timed-out
+connection: it connects again up to `connect_retry_count:` times (default 10), and writes an entry
+again on a new connection up to `retry_count:` times (default 3). A write timeout, or an SSL error
+such as a certificate that does not verify, fails without a retry. The appender passes these and its
+other connection options, such as `connect_timeout:`, `write_timeout:`, and `ssl:`, to
+`Net::TCPClient.new`, which raises `ArgumentError` for a keyword it does not take; see
+[`Net::TCPClient#initialize`](https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb)
+for them all and their defaults.
 
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter

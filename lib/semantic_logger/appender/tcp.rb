@@ -47,98 +47,19 @@ module SemanticLogger
       # Create TCP log appender.
       #
       # Net::TCPClient Parameters:
+      #   Every keyword argument other than the appender parameters below goes to Net::TCPClient.new,
+      #   which raises ArgumentError for a keyword it does not take. See Net::TCPClient#initialize for
+      #   them and their defaults, such as connect_timeout:, write_timeout:, connect_retry_count:,
+      #   retry_count:, policy:, and ssl:
+      #     https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
+      #
       #   :server [String]
-      #     URL of the server to connect to with port number
-      #     'localhost:2000'
-      #     '192.168.1.10:80'
+      #     The server to connect to, as "host:port", such as 'localhost:2000' or '192.168.1.10:80'.
+      #     Net::TCPClient connects over IPv4 only, so the host must be an IPv4 address or a host name
+      #     that has one.
       #
       #   :servers [Array of String]
-      #     Array of URL's of servers to connect to with port numbers
-      #     ['server1:2000', 'server2:2000']
-      #
-      #     The second server will only be attempted once the first server
-      #     cannot be connected to or has timed out on connect
-      #     A read failure or timeout will not result in switching to the second
-      #     server, only a connection failure or during an automatic reconnect
-      #
-      #   :connect_timeout [Float]
-      #     Time in seconds to timeout when trying to connect to the server
-      #     A value of -1 will cause the connect wait time to be infinite
-      #     Default: Half of the :read_timeout ( 30 seconds )
-      #
-      #   :read_timeout [Float]
-      #     Time in seconds to timeout on read
-      #     Can be overridden by supplying a timeout in the read call
-      #     Default: 60
-      #
-      #   :write_timeout [Float]
-      #     Time in seconds to timeout on write
-      #     Can be overridden by supplying a timeout in the write call
-      #     Default: 60
-      #
-      #   :log_level [Symbol]
-      #     Optional: Set the logging level for the TCPClient
-      #     Any valid SemanticLogger log level:
-      #       :trace, :debug, :info, :warn, :error, :fatal
-      #     Default: SemanticLogger.default_level
-      #
-      #   :buffered [Boolean]
-      #     Whether to use Nagle's Buffering algorithm (http://en.wikipedia.org/wiki/Nagle's_algorithm)
-      #     Recommend disabling for RPC style invocations where we don't want to wait for an
-      #     ACK from the server before sending the last partial segment
-      #     Buffering is recommended in a browser or file transfer style environment
-      #     where multiple sends are expected during a single response
-      #     Default: true
-      #
-      #   :connect_retry_count [Integer]
-      #     Number of times to retry connecting when a connection fails
-      #     Default: 10
-      #
-      #   :connect_retry_interval [Float]
-      #     Number of seconds between connection retry attempts after the first failed attempt
-      #     Default: 0.5
-      #
-      #   :retry_count [Integer]
-      #     Number of times to retry when calling #retry_on_connection_failure
-      #     This is independent of :connect_retry_count which still applies with
-      #     connection failures. This retry controls upto how many times to retry the
-      #     supplied block should a connection failure occurr during the block
-      #     Default: 3
-      #
-      #   :on_connect [Proc]
-      #     Directly after a connection is established and before it is made available
-      #     for use this Block is invoked.
-      #     Typical Use Cases:
-      #     - Initialize per connection session sequence numbers
-      #     - Pass any authentication information to the server
-      #     - Perform a handshake with the server
-      #
-      #   :policy [Symbol|Proc]
-      #     Specify the policy to use when connecting to servers.
-      #       :ordered
-      #         Select a server in the order supplied in the array, with the first
-      #         having the highest priority. The second server will only be connected
-      #         to if the first server is unreachable
-      #       :random
-      #         Randomly select a server from the list every time a connection
-      #         is established, including during automatic connection recovery.
-      #       :ping_time
-      #         FUTURE - Not implemented yet - Pull request anyone?
-      #         The server with the lowest ping time will be tried first
-      #       Proc:
-      #         When a Proc is supplied, it will be called passing in the list
-      #         of servers. The Proc must return one server name
-      #           Example:
-      #             :policy => Proc.new do |servers|
-      #               servers.last
-      #             end
-      #       Default: :ordered
-      #
-      #   :close_on_error [True|False]
-      #     To prevent the connection from going into an inconsistent state
-      #     automatically close the connection if an error occurs
-      #     This includes a Read Timeout
-      #     Default: true
+      #     Instead of :server, several servers, each as "host:port".
       #
       # Appender Parameters:
       #   separator: [String]
@@ -160,16 +81,21 @@ module SemanticLogger
       #     Default: none (:trace), so it writes every entry that a logger emits; each logger
       #     filters by its own level.
       #
-      #   formatter: [Object|Proc]
+      #   formatter: [Object|Proc|Symbol|Hash]
       #     An instance of a class that implements #call, or a Proc to be used to format
       #     the output from this appender
-      #     Default: Use the built-in formatter (See: #call)
+      #     Default: :json
       #
       #   filter: [Regexp|Proc]
       #     RegExp: Only include log messages where the class name matches the supplied.
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
+      #
+      #   metrics: [Boolean]
+      #     Also send metric-only entries: a metric without a message or an exception.
+      #     Default: false
+      #
       # Example:
       #   SemanticLogger.add_appender(
       #     appender: :tcp,
