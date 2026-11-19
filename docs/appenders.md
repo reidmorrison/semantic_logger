@@ -542,7 +542,16 @@ SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", metrics: f
 ~~~
 
 The `server:` is `"host:port"`. Write an IPv6 address in brackets, as a URL does, such as
-`server: "[::1]:8088"`. A host name is resolved to its IPv4 address.
+`server: "[::1]:8088"`. A host name with an IPv4 address is sent to over IPv4, even when the
+resolver returns its IPv6 address first, as it does for `localhost` on macOS. It is sent to over
+IPv6 when it has only IPv6 addresses, or when the socket cannot connect over IPv4, such as on a
+machine with no IPv4 route. Its IPv6 addresses are looked up only when the resolver answers that it
+has no IPv4 address, or when the socket cannot connect to any of them. When looking up its IPv4
+addresses fails for another reason, such as a resolver that does not answer in time, adding or
+reopening the appender raises that `SocketError`. On Linux with glibc, that includes a name whose
+only addresses are IPv6 ones in `/etc/hosts`, while DNS cannot be reached: its IPv4 lookup then
+fails, rather than finding no address. On Ruby 3.2 and JRuby, whose `SocketError` does not say why
+a lookup failed, the IPv6 addresses are looked up after any failure.
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it sends them and reports a

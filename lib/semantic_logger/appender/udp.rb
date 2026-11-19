@@ -17,6 +17,13 @@ module SemanticLogger
       SERVER = /\A(?:\[(?<ipv6>[^\[\]]+)\]|(?<host>[^:\[\]]+)):(?<port>\d+)\z/
       private_constant :SERVER
 
+      # The codes of a lookup that found no address of the family it asked for, rather than failing, of those that
+      # the platform defines.
+      NO_ADDRESS = %i[EAI_NONAME EAI_NODATA EAI_ADDRFAMILY].filter_map do |name|
+        Socket.const_get(name) if Socket.const_defined?(name)
+      end.freeze
+      private_constant :NO_ADDRESS
+
       attr_accessor :server, :udp_flags
       attr_reader :socket
 
@@ -24,7 +31,8 @@ module SemanticLogger
       #
       #   server: [String]
       #     The server to write UDP messages to, as "host:port", such as "localhost:8088", with an IPv6
-      #     address in brackets, as a URL writes it, such as "[::1]:8088".
+      #     address in brackets, as a URL writes it, such as "[::1]:8088". A host name is sent to over
+      #     IPv4 when it has an IPv4 address, and otherwise, or when it cannot connect over IPv4, over IPv6.
       #
       #   udp_flags: [Integer]
       #     Should be a bitwise OR of Socket::MSG_* constants.
@@ -81,7 +89,7 @@ module SemanticLogger
       #
       # Connects a new socket to the server before closing the one it replaces. When it cannot, it
       # raises, keeping the socket it has: ArgumentError for a server that is not "host:port", or
-      # the error from connecting, such as SocketError for a host name that does not resolve.
+      # the error from resolving or connecting, such as SocketError for a host name that does not resolve.
       def reopen
         socket     = connected_socket
         old_socket = @socket
@@ -117,22 +125,71 @@ module SemanticLogger
 
       private
 
-      # Returns [UDPSocket] a new socket, connected to the server. Closes the socket when it does not return it, such as
-      # when connecting raises, or the thread is interrupted.
+      # Returns [UDPSocket] a new socket, connected to the first of the server's addresses that it can connect to, as
+      # Ruby's own UDPSocket#connect tries the addresses of its socket's family in turn. A host name's IPv4 addresses
+      # come first, so that a name with both is still sent to over IPv4, as when the socket was IPv4 only, whichever
+      # address the resolver returns first. Its IPv6 addresses are looked up only when the resolver answers that it has
+      # no IPv4 address, or it has none that it can connect to, so that a resolver that does not answer for them does
+      # not hold up the others. Each family keeps the resolver's order. When looking up its IPv4 addresses fails for
+      # another reason, such as a resolver that does not answer in time, raises that SocketError at once, rather than
+      # sending over IPv6 to a name that has IPv4 addresses, or waiting for a resolver that is down a second time.
+      #
+      # When it cannot connect to any address, raises the error from the first one it tried, the one it prefers. When
+      # the host has no address, such as a name that does not resolve, raises the SocketError from looking up its IPv6
+      # addresses, with the one from looking up its IPv4 addresses as its cause (see #raise_lookup_error).
       def connected_socket
-        family, host, port = server_address
-        socket             = UDPSocket.new(family)
-        socket.connect(host, port)
+        host, port, families = server_endpoint
+        connect_error        = nil
+        lookup_errors        = []
+        families.each do |family|
+          Addrinfo.getaddrinfo(host, port, family, :DGRAM).each do |address|
+            return connect_to(address)
+          rescue SystemCallError => e
+            connect_error ||= e
+          end
+        rescue SocketError => e
+          lookup_errors << e
+          break unless no_address?(e)
+        end
+        raise(connect_error) if connect_error
+
+        raise_lookup_error(host, lookup_errors)
+      end
+
+      # Returns [true|false] whether the SocketError from looking up a host's addresses of one family says that it has
+      # none, rather than that the lookup failed. It cannot tell without the error's code, which Socket::ResolutionError
+      # has from Ruby 3.3, so on Ruby 3.2, or on JRuby, it takes any SocketError to say so, as before.
+      def no_address?(error)
+        !error.respond_to?(:error_code) || NO_ADDRESS.include?(error.error_code)
+      end
+
+      # Raises the last of the SocketErrors from looking up the host's addresses, with the one before it, if any, as its
+      # cause, since it looked up the later family only because the earlier one had no address. Raises a SocketError
+      # of its own, naming the host, when no lookup raised, since JRuby returns no addresses for a family that the host
+      # has none in, rather than raising.
+      def raise_lookup_error(host, errors)
+        last, earlier = errors.reverse
+        raise(SocketError, "getaddrinfo: no address for #{host}") unless last
+
+        earlier ? raise(last, cause: earlier) : raise(last)
+      end
+
+      # Returns [UDPSocket] a new socket of the address's family, connected to it. Closes the socket when it does not
+      # return it, such as when connecting raises, or the thread is interrupted.
+      def connect_to(address)
+        socket = UDPSocket.new(address.afamily)
+        socket.connect(address.ip_address, address.ip_port)
         connected = true
         socket
       ensure
         socket&.close unless connected
       end
 
-      # Returns [Array(Integer, String, Integer)] the address family, host, and port of the server. A host in brackets
-      # is an IPv6 address. Any other host is an IPv4 address, or a name, which is resolved to its IPv4 address, as
-      # before. Whitespace around the server, such as the newline at the end of an environment variable, is ignored.
-      def server_address
+      # Returns [Array(String, Integer, Array<Symbol>)] the host and port of the server, and the address families to
+      # look the host up in, in the order to try them. A host in brackets is an IPv6 address. Any other host is an IPv4
+      # address, or a name, which is looked up for its IPv4 addresses first, then for its IPv6 addresses. Whitespace
+      # around the server, such as the newline at the end of an environment variable, is ignored.
+      def server_endpoint
         match = SERVER.match(server.to_s.strip)
         unless match
           raise(ArgumentError,
@@ -141,7 +198,7 @@ module SemanticLogger
         end
 
         port = match[:port].to_i
-        match[:ipv6] ? [Socket::AF_INET6, match[:ipv6], port] : [Socket::AF_INET, match[:host], port]
+        match[:ipv6] ? [match[:ipv6], port, %i[INET6]] : [match[:host], port, %i[INET INET6]]
       end
 
       # Returns [SemanticLogger::Formatters::Json] formatter default for this Appender
