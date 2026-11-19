@@ -12,24 +12,37 @@ module Appender
       let(:appender) do
         Aws::CloudWatchLogs::Client.stub :new, mock_client do
           SemanticLogger::Appender::CloudwatchLogs.new(
-            group:         log_group,
-            stream:        log_stream,
-            create_group:  true,
-            create_stream: true
+            group:                        log_group,
+            stream:                       log_stream,
+            create_group:                 true,
+            create_stream:                true,
+            # Long enough that the timer never sends the buffered log messages during a test, to the
+            # mock client, which answers no request to send them.
+            force_flush_interval_seconds: 3_600
           )
         end
       end
 
-      it "does not show the AWS credentials in #inspect" do
-        credentials = {secret_access_key: "aws-s3cr3t"}
-        appender    = Aws::CloudWatchLogs::Client.stub :new, mock_client do
-          SemanticLogger::Appender::CloudwatchLogs.new(group: log_group, client_kwargs: credentials)
+      # Shuts down the timer of the `appender` that the tests build, which otherwise keeps running
+      # into later tests. A test that builds another appender closes it itself.
+      after do
+        appender.buffered_logs.clear
+        appender.close
+      end
+
+      describe "#inspect" do
+        let(:appender) do
+          Aws::CloudWatchLogs::Client.stub :new, mock_client do
+            SemanticLogger::Appender::CloudwatchLogs.new(
+              group: log_group, client_kwargs: {secret_access_key: "aws-s3cr3t"}
+            )
+          end
         end
 
-        refute_includes appender.inspect, "aws-s3cr3t"
-        assert_includes appender.inspect, %( group="/test/log/group")
-      ensure
-        appender&.close
+        it "does not show the AWS credentials" do
+          refute_includes appender.inspect, "aws-s3cr3t"
+          assert_includes appender.inspect, %( group="/test/log/group")
+        end
       end
 
       describe "sending the buffered log messages" do
@@ -61,10 +74,6 @@ module Appender
               group: log_group, stream: log_stream, force_flush_interval_seconds: 3_600
             ).tap { |appender| appender.logger = internal_logger }
           end
-        end
-
-        after do
-          appender.close
         end
 
         def buffer(message, time = Time.now)
@@ -280,12 +289,6 @@ module Appender
       describe "#reopen" do
         include ForkedChildHelper
 
-        after do
-          # The mock client answers no request to send them.
-          appender.buffered_logs.clear
-          appender.close
-        end
-
         def reopen
           Aws::CloudWatchLogs::Client.stub(:new, mock_client) { appender.reopen }
         end
@@ -381,9 +384,6 @@ module Appender
           assert_equal({"buffered" => 0, "reports" => []}, JSON.parse(output))
           assert_equal 1, appender.buffered_logs.size
           assert_predicate appender.task, :running?
-        ensure
-          appender.buffered_logs.clear
-          appender.close
         end
       end
     end
