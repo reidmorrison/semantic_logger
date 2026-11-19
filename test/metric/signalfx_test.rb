@@ -16,7 +16,7 @@ module Appender
         if ENV["SIGNALFX_TOKEN"]
           SemanticLogger::Metric::Signalfx.new(token: ENV["SIGNALFX_TOKEN"])
         else
-          Net::HTTP.stub_any_instance(:start, true) do
+          stub_http_start do
             SemanticLogger::Metric::Signalfx.new(token: "TEST")
           end
         end
@@ -61,7 +61,7 @@ module Appender
 
       describe "request uri" do
         def build_appender(url)
-          Net::HTTP.stub_any_instance(:start, true) do
+          stub_http_start do
             SemanticLogger::Metric::Signalfx.new(token: "TEST", url: url)
           end
         end

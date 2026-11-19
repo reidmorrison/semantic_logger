@@ -105,6 +105,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `-- Exception: ActionDispatch::Http::MimeNegotiation::InvalidType: "foo/bar" is not a valid MIME
   type -- Cause: Mime::Type::InvalidMimeType`. Before, the causes were left out. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The `:http` appender, and the appenders derived from it, such as `:loki`, `:splunk_http`,
+  `:elasticsearch_http`, and `metric: :signalfx`, close their connection when they are closed, such
+  as when removed with `SemanticLogger.remove_appender`, or by `SemanticLogger.close`. Before, it was
+  left open. One that is added again opens a new connection for its next request, and keeps it for
+  the requests that follow.
+- `SemanticLogger.remove_appender` waits, as `SemanticLogger.flush` does, until the log messages
+  already logged are written to the other appenders, and those are flushed, before it closes the
+  appender. Before, it closed the appender at once, while the processor could still be writing a
+  message to it, such as on the socket of a `:tcp` appender, or the connection of an `:http`
+  appender, which could then open a new connection that was left open. Called on the processor's own
+  thread, such as by an appender as it writes, it still closes the appender at once.
 
 - `Log#each_exception` accepts the exception to start from, for custom formatters and appenders that
   walk the causes of an exception the entry does not keep.
@@ -164,6 +175,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- `add_appender` raises `ArgumentError` when it would batch an appender whose formatter cannot
+  format a batch, such as a formatter block given to `:http`, `:loki`, or `metric: :signalfx` with
+  `batch: true`, and says what to do instead. Before, it added the appender, but every batch failed
+  on the appender's worker thread, which backed off and tried again, so nothing was ever written,
+  and once its queue was full, logging blocked, unless it was added with `non_blocking: true`. The
+  error names the formatter. A custom appender whose `#batch` formats each entry with `format_log`
+  is batched with any formatter, as before, and one that cannot be batched in some configuration can
+  say why from `#batch_refusal`. When `add_appender` fails after creating the appender, such as for
+  one that it cannot batch, it closes the appender. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - The `:statsd` metric subscriber records metrics as soon as it is added. Before, it created its
   Statsd client only when reopened, such as after a fork, so in a process that did not fork, such as
   a single Puma or Sidekiq process, every metric failed with `NoMethodError` and was reported to the

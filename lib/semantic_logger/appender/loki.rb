@@ -80,6 +80,12 @@ module SemanticLogger
         post(message)
       end
 
+      # The #batch above formats the whole batch with #format_batch, so it answers as
+      # Appender::Http#batch_refusal does for its own #batch: only while it is the one in use.
+      def batch_refusal
+        format_batch_refusal if batch_defined_by?(Loki)
+      end
+
       private
 
       # Use the Loki formatter by default

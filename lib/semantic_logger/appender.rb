@@ -33,6 +33,10 @@ module SemanticLogger
     # @formatter:on
 
     # Returns [SemanticLogger::Subscriber] appender for the supplied options
+    #
+    # Raises ArgumentError when the appender is to be batched, with `batch: true` or by default, see
+    # Subscriber#batch_by_default?, and it says why it cannot be, see Subscriber#batch_refusal. When it fails
+    # after .build, it first closes the appender that .build says it created, see .close_created.
     def self.factory(async: false, batch: nil,
                      max_queue_size: 10_000, lag_check_interval: 1_000, lag_threshold_s: 30,
                      batch_size: 300, batch_seconds: 5,
@@ -40,13 +44,16 @@ module SemanticLogger
                      async_max_retries: 100,
                      **args,
                      &)
-      appender = build(**args, &)
+      appender, created = build(**args, &)
 
       # If appender implements #batch, then it should use the batch proxy by default,
       # unless the appender opts out of batching by default (e.g. the HTTP appender).
       batch    = true if batch.nil? && appender.respond_to?(:batch) && appender.batch_by_default?
 
       if batch == true
+        refusal = appender.batch_refusal
+        raise(ArgumentError, "add_appender cannot batch #{appender.class}: #{refusal}") if refusal
+
         Appender::Async.new(
           appender:                       appender,
           batch:                          true,
@@ -71,9 +78,27 @@ module SemanticLogger
       else
         appender
       end
+    rescue Exception
+      close_created(appender) if created
+      raise
     end
 
-    # Returns [Subscriber] instance from the supplied options.
+    # Closes the appender that .build created, since .factory failed after creating it, such as when the appender
+    # cannot be batched, and nothing else holds it, yet it may have opened its destination, such as a connection.
+    # An error from closing it is ignored, so that .factory raises the one that it failed with.
+    def self.close_created(appender)
+      appender.close
+    rescue StandardError
+      nil
+    end
+    private_class_method :close_created
+
+    # Returns [Subscriber, true | false] the appender for the supplied options, and whether .build created both it
+    # and its destination, so that nothing else holds them, and .factory closes it when it fails afterwards (see
+    # .close_created): true for the appender for `file_name:`, or one named by a Symbol as `appender:` or `metric:`.
+    # False for a Subscriber instance that the caller supplied as `appender:` or `metric:`, and for the appender that
+    # writes to the caller's own `io:` or `logger:`: closing the one for `logger:` closes that logger, and the stream
+    # it writes to, such as $stdout.
     #
     # It adds one destination, the first of file_name:, io:, logger:, appender:, and metric: that is given, in that
     # order, and ignores any other, see .report_ignored_destinations.
@@ -82,16 +107,16 @@ module SemanticLogger
       report_ignored_destinations(file_name: file_name, io: io, logger: logger, appender: appender, metric: metric)
 
       if file_name
-        SemanticLogger::Appender::File.new(file_name, **args, &)
+        [SemanticLogger::Appender::File.new(file_name, **args, &), true]
       elsif io
-        SemanticLogger::Appender::IO.new(io, **args, &)
+        [SemanticLogger::Appender::IO.new(io, **args, &), false]
       elsif logger
-        SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &)
+        [SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &), false]
       elsif appender
         if appender.is_a?(Symbol)
-          SemanticLogger::Utils.constantize_symbol(appender).new(**args, &)
+          [SemanticLogger::Utils.constantize_symbol(appender).new(**args, &), true]
         elsif appender.is_a?(Subscriber)
-          subscriber_instance(:appender, appender, **args, &)
+          [subscriber_instance(:appender, appender, **args, &), false]
         else
           raise(ArgumentError,
                 "Parameter :appender must be either a Symbol or an object derived from " \
@@ -99,9 +124,9 @@ module SemanticLogger
         end
       elsif metric
         if metric.is_a?(Symbol)
-          SemanticLogger::Utils.constantize_symbol(metric, "SemanticLogger::Metric").new(**args, &)
+          [SemanticLogger::Utils.constantize_symbol(metric, "SemanticLogger::Metric").new(**args, &), true]
         elsif metric.is_a?(Subscriber)
-          subscriber_instance(:metric, metric, **args, &)
+          [subscriber_instance(:metric, metric, **args, &), false]
         else
           raise(ArgumentError,
                 "Parameter :metric must be either a Symbol or an object derived from " \

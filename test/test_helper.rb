@@ -55,6 +55,13 @@ module Minitest
         "#{custom_message}#{yield}#{ending || '.'}"
       }
     end
+
+    # Stubs Net::HTTP#start while the block runs, so that an HTTP appender created in it does not
+    # connect to its server, yet its connection is started, as Net::HTTP#started? reports, so that
+    # it sends its requests on that connection, to a stubbed Net::HTTP#request, without starting it.
+    def stub_http_start(&)
+      Net::HTTP.stub_any_instance(:start, -> { @started = true }, &)
+    end
   end
 end
 

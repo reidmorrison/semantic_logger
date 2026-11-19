@@ -106,6 +106,22 @@ module SemanticLogger
       true
     end
 
+    # Returns [String] why this appender cannot be batched, and what to do instead, or nil when it
+    # can. add_appender asks it before it batches the appender, with `batch: true` or by default, see
+    # #batch_by_default?, and raises ArgumentError with it, after "add_appender cannot batch <class>: ",
+    # rather than add an appender whose worker thread fails on every batch, and so writes nothing.
+    #
+    # Nil, since a #batch that writes each log message, formatted by #format_log, works with any
+    # formatter. A class whose own #batch cannot write a batch, with some formatters or at all,
+    # answers for that #batch, and only while it is the #batch in use (see #batch_defined_by?), so
+    # that a subclass that replaces it is batched as before. Appender::Http does, since its #batch
+    # formats the whole batch with #format_batch, which needs a formatter that can, see
+    # #format_batch_refusal. A subclass whose #batch calls super keeps that need, so it answers too,
+    # usually with #format_batch_refusal.
+    def batch_refusal
+      nil
+    end
+
     # Raised by #format_log and #format_batch when the formatter fails, with the formatter's
     # error as its cause. A formatter has no destination, so it can only fail because of the
     # content of the log message, whatever it raises.
@@ -162,25 +178,50 @@ module SemanticLogger
 
     # Returns the log messages formatted by the formatter's #batch, as for #format_log.
     #
-    # A formatter that cannot format a batch is a configuration error rather than bad content, so
-    # it raises ArgumentError instead, which backs off and is reported like any other error from
-    # the destination. That includes an appender that is its own formatter (it implements #call),
-    # whose #batch is the appender's own.
+    # A formatter that cannot format a batch, see #format_batch_refusal, is a configuration error
+    # rather than bad content, so it raises ArgumentError instead, which backs off and is reported
+    # like any other error from the destination. add_appender refuses such a formatter for an
+    # appender whose #batch_refusal says so, such as Appender::Http, so for one of those this only
+    # happens when #formatter= replaces it afterwards.
     #
     # The formatter is read once, so that one changed by #formatter= on another thread cannot be
     # swapped in between the check and the call.
     def format_batch(logs)
       batch_formatter = formatter
-      unless batch_formatter.respond_to?(:batch) && !batch_formatter.equal?(self)
-        raise(ArgumentError,
-              "#{batch_formatter.class.name} cannot format a batch. It must implement #batch(logs, logger)")
-      end
+      refusal         = format_batch_refusal(batch_formatter)
+      raise(ArgumentError, "Cannot batch #{self.class}: #{refusal}") if refusal
 
       begin
         batch_formatter.batch(logs, self)
       rescue StandardError => e
         raise FormatError, "Could not format the batch of log messages (#{e.class})"
       end
+    end
+
+    # Returns [String] why #format_batch cannot format a batch with the formatter, and what to do
+    # instead, or nil when it can. It needs a formatter that implements #batch(logs, logger), which a
+    # formatter block or Proc does not, other than this appender itself, which is its own formatter
+    # when it implements #call, and whose #batch is the appender's own. Such an appender sets the
+    # format of each entry that its destination takes, so the only advice for it is `batch: false`.
+    #
+    # #format_batch raises with it, and a #batch_refusal that answers for a #batch that calls
+    # #format_batch, such as that of Appender::Http, returns it, so that both give the same answer.
+    def format_batch_refusal(batch_formatter = formatter)
+      if batch_formatter.equal?(self)
+        "it is its own formatter, which cannot format a batch. Add it with batch: false."
+      elsif !batch_formatter.respond_to?(:batch)
+        "its formatter, #{batch_formatter.class}, cannot format a batch. Give it a formatter that " \
+          "implements #batch(logs, logger), or add it with batch: false."
+      end
+    end
+
+    # Returns [true|false] whether the #batch in use is the one that `owner` defines, for a
+    # #batch_refusal that answers only for its own #batch, such as that of Appender::Http. False for
+    # any other, even one that calls super, such as one that a subclass, a prepended module, or the
+    # appender itself defines, and when it has none. Kernel#method finds it, since an appender may
+    # define a #method of its own, such as for the HTTP method of its requests.
+    def batch_defined_by?(owner)
+      respond_to?(:batch) && Kernel.instance_method(:method).bind_call(self, :batch).owner.equal?(owner)
     end
 
     # Initializer for Abstract Class SemanticLogger::Subscriber

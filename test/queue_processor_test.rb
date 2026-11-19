@@ -797,6 +797,23 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    describe "a command submitted on the worker thread itself" do
+      it "returns false at once, rather than waiting for the worker thread, which cannot reply" do
+        results   = Queue.new
+        processor = nil
+        appender.define_singleton_method(:log) { |_log| results << [processor.flush, processor.close] }
+        processor = start
+
+        processor.log(new_log)
+
+        assert_equal [false, false], results.pop(timeout: 5), "the worker thread waited for itself"
+        refute appender.flushed
+        refute appender.closed
+        assert processor.flush
+        assert_predicate appender, :flushed
+      end
+    end
+
     describe "after the worker thread stops" do
       it "stops waiting on #flush when the worker thread ends without replying" do
         processor = build

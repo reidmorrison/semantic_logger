@@ -652,7 +652,10 @@ SemanticLogger.add_appender(appender: :tcp, server: "localhost:514") { |log| "#{
 
 A block formats one entry at a time, so it cannot format the single request that `:http`, `:loki`,
 and `metric: :signalfx` send for a whole batch when added with `batch: true`: those need a formatter
-that implements `#batch(logs, logger)`.
+that implements `#batch(logs, logger)`, such as the one each uses by default. `add_appender` raises
+an `ArgumentError` for a block, or any other formatter that cannot format a batch, given to one of
+them with `batch: true`. Add it without `batch: true` to send one request for each entry, formatted
+by the block.
 
 When both a block and `formatter:` are given, the block takes precedence, and `formatter:` is
 ignored.
@@ -927,6 +930,49 @@ def batch_all_or_nothing?
 end
 ~~~
 
+Such a `#batch` works with any formatter, including a formatter block. An appender that cannot be
+batched in some configuration says why from `#batch_refusal`, and what to do instead, so that
+`add_appender` raises an `ArgumentError` with it when asked to batch the appender, with
+`batch: true` or by default, rather than add an appender that writes nothing. It returns `nil`, by
+default, when the appender can be batched. For example, a `#batch` that formats the whole batch with
+`format_batch(logs)` needs a formatter that implements `#batch(logs, logger)`, so return
+`format_batch_refusal`, which says whether the appender's formatter can format a batch:
+
+~~~ruby
+def batch(logs)
+  client.send_request(format_batch(logs))
+end
+
+def batch_refusal
+  format_batch_refusal
+end
+~~~
+
+Like `format_log` and `format_batch`, `format_batch_refusal` is a private helper of
+`SemanticLogger::Subscriber`. It returns `nil` when the formatter implements
+`#batch(logs, logger)`, and otherwise why it cannot format a batch, naming the formatter's class,
+and what to do instead. That includes an appender that is its own formatter, since it implements
+`#call`, for which the only advice is `batch: false`.
+
+The error starts with `add_appender cannot batch <class>: `, followed by the reason.
+`SemanticLogger::Appender::Http`, and the appenders derived from it, such as `:loki`, answer for
+their own `#batch`, so a subclass that replaces `#batch` is batched with any formatter, unless its
+own `#batch_refusal` says otherwise. A subclass whose `#batch` calls `super`, or that a prepended
+module wraps, still formats the whole batch with `format_batch`, yet is not refused on its own, so
+define its `#batch_refusal` too:
+
+~~~ruby
+class FilteredHttp < SemanticLogger::Appender::Http
+  def batch(logs)
+    super(logs.reject { |log| log.name == "HealthCheck" })
+  end
+
+  def batch_refusal
+    format_batch_refusal
+  end
+end
+~~~
+
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby
@@ -965,6 +1011,10 @@ appender = SemanticLogger.add_appender(file_name: "development.log")
 SemanticLogger.remove_appender(appender)
 ~~~
 
+`remove_appender` stops sending log messages to the appender, then waits, as `SemanticLogger.flush`
+does, until the messages already logged are written to the other appenders and those are flushed,
+so that none is still being written to the appender when it closes it.
+
 Other appender management methods:
 
 ~~~ruby
@@ -992,7 +1042,9 @@ console.formatter = :json
 ~~~
 
 An appender that formats its messages as one batch, such as `:http` or `:loki` with `batch: true`,
-needs a formatter that implements `#batch(logs, logger)`, such as `:json`.
+needs a formatter that implements `#batch(logs, logger)`, such as `:json`. `add_appender` checks the
+formatter it is added with, but not one set later: a batch that the new formatter cannot format is
+not written.
 
 Messages are formatted as they are written. When the appender runs asynchronously, messages still
 on its queue are written with the new formatter. Call `SemanticLogger.flush` just before changing it

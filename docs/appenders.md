@@ -465,6 +465,10 @@ one document per element, such as the
 SemanticLogger.add_appender(appender: :http, url: "http://localhost:8088/path", batch: true)
 ~~~
 
+The formatter formats the whole batch with its `#batch(logs, logger)`, as the default `:json`
+formatter does. `add_appender` raises an `ArgumentError` for a formatter that cannot, such as a
+[formatter block](config.html#formatter-as-a-block-or-proc), given with `batch: true`.
+
 With batching the appender runs on its own thread and flushes once `batch_size` entries have
 accumulated (default 300) or `batch_seconds` have elapsed (default 5), whichever comes first:
 

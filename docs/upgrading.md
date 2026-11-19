@@ -187,6 +187,37 @@ instead, so it now reports the same warning. Leave out `appender: :wrapper`:
 A destination given as `nil`, such as `file_name: options[:log_file]` when no log file is set, is not
 one, so it is not reported.
 
+#### Batch an appender with a formatter that can format a batch
+
+`add_appender` now raises `ArgumentError` when it would batch an appender whose formatter cannot
+format a batch, such as a formatter block given to `:http`, `:loki`, or `metric: :signalfx` with
+`batch: true`. Before, it added the appender, but every batch failed on the appender's worker
+thread, which backed off and tried again, so nothing was ever written, and once its queue was full,
+logging blocked, unless it was added with `non_blocking: true`. Add the appender without
+`batch: true`, or give it a formatter that implements `#batch(logs, logger)`, such as the one it
+uses by default:
+
+~~~ruby
+# Before, nothing was ever sent:
+SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com", batch: true) { |log| log.message }
+
+# After, one request for each entry:
+SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com") { |log| log.message }
+
+# Or one request for each batch, formatted by the default :json formatter:
+SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com", batch: true)
+~~~
+
+`:splunk_http` with `batch: true` is refused too, since it formats each entry itself, for Splunk's
+HTTP Event Collector: add it without `batch: true`.
+
+A custom appender whose `#batch` formats each entry with `format_log` is batched with any formatter,
+as before, including a subclass of `SemanticLogger::Appender::Http` that replaces its `#batch`. A
+custom appender that cannot be batched in some configuration, such as one whose `#batch` formats the
+whole batch with `format_batch`, can now say why from `#batch_refusal`, so that `add_appender`
+raises instead. So can a subclass of `SemanticLogger::Appender::Http` whose `#batch` calls `super`,
+which is not refused on its own. See [Custom appenders](config.html#custom-appenders).
+
 #### Loki stack traces
 
 The `:loki` formatter now writes the `stack_trace` of a logged exception one frame per line, followed

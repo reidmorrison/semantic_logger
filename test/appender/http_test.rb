@@ -8,7 +8,7 @@ module Appender
       let(:log_message) { "AppenderHttpTest log message" }
 
       let(:appender) do
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path")
         end
       end
@@ -88,6 +88,64 @@ module Appender
           refute_predicate appender, :batch_by_default?
         end
 
+        it "can be batched only with a formatter that can format a batch, as its default one can" do
+          assert_nil appender.batch_refusal
+
+          [->(log, _logger) { log.message }, :default].each do |formatter|
+            appender.formatter = formatter
+
+            assert_equal appender.send(:format_batch_refusal), appender.batch_refusal
+            refute_nil appender.batch_refusal
+          end
+        end
+
+        it "can be batched with any formatter by a subclass that replaces #batch" do
+          subclass = Class.new(SemanticLogger::Appender::Http) do
+            def batch(logs)
+              post(logs.map { |log| format_log(log) }.join("\n"))
+            end
+          end
+          appender = stub_http_start { subclass.new(url: "http://localhost:8088/path", formatter: ->(log, _) { log.message }) }
+
+          assert_nil appender.batch_refusal
+        end
+
+        it "is refused by a subclass whose #batch calls super, once it defines #batch_refusal, as the docs show" do
+          subclass = Class.new(SemanticLogger::Appender::Http) do
+            def batch(logs)
+              super(logs.reject { |log| log.name == "HealthCheck" })
+            end
+
+            def batch_refusal
+              format_batch_refusal
+            end
+          end
+          appender = stub_http_start { subclass.new(url: "http://localhost:8088/path", formatter: ->(log, _) { log.message }) }
+
+          assert_equal appender.send(:format_batch_refusal), appender.batch_refusal
+          refute_nil appender.batch_refusal
+        end
+
+        it "can be refused for a subclass that defines its own #method, such as for the HTTP verb" do
+          subclass = Class.new(SemanticLogger::Appender::Http) do
+            attr_reader :method
+          end
+          appender = stub_http_start { subclass.new(url: "http://localhost:8088/path", formatter: ->(log, _) { log.message }) }
+
+          assert_equal appender.send(:format_batch_refusal), appender.batch_refusal
+        end
+
+        it "is not refused for a subclass without #batch, which add_appender then says it cannot batch" do
+          subclass = Class.new(SemanticLogger::Appender::Http) do
+            undef_method :batch
+          end
+          appender = stub_http_start { subclass.new(url: "http://localhost:8088/path") }
+
+          assert_nil appender.batch_refusal
+          error = assert_raises(ArgumentError) { SemanticLogger::Appender.factory(appender: appender, batch: true) }
+          assert_includes error.message, "does not support batching"
+        end
+
         it "sends nothing from a batch that has a message it cannot format" do
           assert_predicate appender, :batch_all_or_nothing?
 
@@ -124,7 +182,7 @@ module Appender
         let(:credentials) { %w[url-password proxy-password header-token query-token] }
 
         let(:appender_with_credentials) do
-          Net::HTTP.stub_any_instance(:start, true) do
+          stub_http_start do
             SemanticLogger::Appender::Http.new(
               url:       "https://user:url-password@localhost:8088/path?token=query-token",
               proxy_url: "http://proxy-user:proxy-password@localhost:3128",
@@ -154,7 +212,7 @@ module Appender
               super(**)
             end
           end
-          inspected = Net::HTTP.stub_any_instance(:start, true) do
+          inspected = stub_http_start do
             subclass.new(api_key: "subclass-secret", url: "http://localhost:8088/path").inspect
           end
 
@@ -203,7 +261,7 @@ module Appender
         # Appender::ElasticsearchHttp builds its request uri from the path, so the query
         # has to be applied after it, not merged into the path.
         it "keeps the query at the end of a request uri built by a subclass" do
-          appender = Net::HTTP.stub_any_instance(:start, true) do
+          appender = stub_http_start do
             SemanticLogger::Appender::ElasticsearchHttp.new(
               url: "http://localhost:8088/insert/elasticsearch?source=my_app", index: "rs"
             )
@@ -242,7 +300,7 @@ module Appender
         end
 
         def build_appender(url)
-          Net::HTTP.stub_any_instance(:start, true) do
+          stub_http_start do
             SemanticLogger::Appender::Http.new(url: url)
           end
         end
@@ -260,7 +318,7 @@ module Appender
       describe "credentials" do
         let(:url) { "https://elastic:S3cr3t@logs.example.com:9200/path?dd-api-key=0123456789abcdef" }
         let(:appender) do
-          Net::HTTP.stub_any_instance(:start, true) do
+          stub_http_start do
             SemanticLogger::Appender::Http.new(url: url, header: {"Authorization" => "Bearer BEARER_TOKEN"})
           end
         end
@@ -270,7 +328,7 @@ module Appender
         end
 
         it "omits the default port from the redacted url" do
-          appender = Net::HTTP.stub_any_instance(:start, true) do
+          appender = stub_http_start do
             SemanticLogger::Appender::Http.new(url: "https://user:pass@logs.example.com/path")
           end
 
@@ -278,7 +336,7 @@ module Appender
         end
 
         it "redacts a token carried in the path" do
-          appender = Net::HTTP.stub_any_instance(:start, true) do
+          appender = stub_http_start do
             SemanticLogger::Appender::Http.new(url: "https://collectors.example.com/receiver/v1/http/SECRETCODE")
           end
 
@@ -343,6 +401,32 @@ module Appender
         end
       end
 
+      it "closes its connection, and does nothing when it is not open" do
+        assert_predicate appender.http, :started?
+
+        appender.close
+
+        refute_predicate appender.http, :started?
+        assert_nil appender.close
+      end
+
+      it "starts its connection again for the next request once closed, and keeps it for those that follow" do
+        appender.close
+        starts = 0
+        Net::HTTP.stub_any_instance(:start, lambda {
+          starts += 1
+          @started = true
+        }) do
+          appender.http.stub(:request, http_success) do
+            appender.info("one")
+            appender.info("two")
+          end
+        end
+
+        assert_equal 1, starts
+        assert_predicate appender.http, :started?
+      end
+
       it "supports http 204 success" do
         http_success = Net::HTTPSuccess.new("1.1", "204", "OK")
         request = nil
@@ -358,7 +442,7 @@ module Appender
       end
 
       it "supports custom headers" do
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           request = nil
           header = {"Authorization" => "Bearer BEARER_TOKEN"}
           appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", header: header)
@@ -382,7 +466,7 @@ module Appender
       # run on a machine that cannot resolve hostnames
       it "uses a proxy if specified" do
         proxy = "http://user:password@proxy.example.com:12345"
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path", proxy_url: proxy)
 
           proxy_uri = URI.parse(proxy)
@@ -399,7 +483,7 @@ module Appender
       it "uses the ENV proxy if specified" do
         old_env_proxy = ENV.fetch("http_proxy", nil)
         ENV["http_proxy"] = "http://user:password@proxy.example.com:12345"
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path")
 
           proxy_uri = URI.parse(ENV.fetch("http_proxy", nil))
@@ -418,7 +502,7 @@ module Appender
       it "doesn't use the ENV proxy if explicity requested" do
         old_env_proxy = ENV.fetch("http_proxy", nil)
         ENV["http_proxy"] = "http://user:password@proxy.example.com:12345"
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           appender = SemanticLogger::Appender::Http.new(url: "http://ruby-lang.org:8088/path", proxy_url: nil)
 
           refute_predicate(appender.http, :proxy_from_env?)

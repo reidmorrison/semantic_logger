@@ -8,7 +8,7 @@ module Appender
       let(:log_message) { "AppenderSplunkHttpTest log message" }
 
       let(:appender) do
-        Net::HTTP.stub_any_instance(:start, true) do
+        stub_http_start do
           SemanticLogger::Appender::SplunkHttp.new(
             url:   "http://localhost:8088/path",
             token: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -78,6 +78,12 @@ module Appender
           assert_equal(1, payload["key1"], message)
           assert_equal("a", payload["key2"], message)
         end
+      end
+
+      it "cannot be batched with its default formatter, which is the appender itself" do
+        assert_same appender, appender.formatter
+        assert_equal "it is its own formatter, which cannot format a batch. Add it with batch: false.",
+                     appender.batch_refusal
       end
 
       def decompress_data(data)

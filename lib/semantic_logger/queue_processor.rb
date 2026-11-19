@@ -449,8 +449,13 @@ module SemanticLogger
     end
 
     # Submit a command to the worker thread and wait for the reply.
+    #
+    # Returns false, without submitting it, when called on the worker thread itself, such as by an
+    # appender that, as it writes, removes an appender, which flushes the processor first (see
+    # SemanticLogger.remove_appender): the worker thread cannot run the command while it waits for
+    # the reply, so it would wait forever.
     def submit_request(command)
-      return false unless active?
+      return false if !active? || @thread.equal?(Thread.current)
 
       queue_size = queue.size
       msg        = "Async: Queued log messages: #{queue_size}, running command: #{command}"
