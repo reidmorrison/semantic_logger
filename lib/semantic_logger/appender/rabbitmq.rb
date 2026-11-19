@@ -132,8 +132,17 @@ module SemanticLogger
         @connection = nil
       end
 
+      # Publishes the formatted entry. When RabbitMQ has closed the appender's channel, publishes it on a new
+      # channel instead (see #queue). That includes a channel that RabbitMQ closed while this entry was being
+      # published: Bunny raises Bunny::ChannelAlreadyClosed before it sends anything, so publishing the entry
+      # once more, on the new channel, cannot publish it twice.
       def log(log)
-        queue.publish(format_log(log))
+        message = format_log(log)
+        begin
+          queue.publish(message)
+        rescue Bunny::ChannelAlreadyClosed
+          queue.publish(message)
+        end
       end
 
       def flush
@@ -147,7 +156,9 @@ module SemanticLogger
 
       # Returns [Bunny::Queue] the queue to publish to, on the appender's channel. Connects first when the
       # appender has no channel: after #close, or when connecting failed as it was reopened after a fork.
+      # Opens a new channel first when RabbitMQ has closed the appender's channel (see #replace_closed_channel).
       def queue
+        replace_closed_channel if @channel&.closed?
         @queue ||= (@channel || connect).queue(@queue_name)
       end
 
@@ -165,11 +176,12 @@ module SemanticLogger
       def connect
         connection = Bunny.new(@rabbitmq_args)
         connection.start
-        channel     = create_channel(connection)
-        @connection = connection
-        @channel    = channel
-        @queue      = nil
-        @pid        = ::Process.pid
+        channel       = create_channel(connection)
+        @connection   = connection
+        @channel      = channel
+        @queue        = nil
+        @close_reason = nil
+        @pid          = ::Process.pid
         channel
       end
 
@@ -177,7 +189,9 @@ module SemanticLogger
       # raises, such as Bunny::ClientTimeout from a broker too busy to answer, closes the connection before
       # raising: its reader and heartbeat threads would otherwise keep it open, and recovering, unused.
       def create_channel(connection)
-        connection.create_channel
+        channel = connection.create_channel
+        channel.on_error { |_channel, close| @close_reason = close.reply_text if channel.equal?(@channel) }
+        channel
       rescue StandardError
         close_unused(connection, "whose channel could not be created")
         raise
@@ -191,6 +205,44 @@ module SemanticLogger
         connection&.close
       rescue StandardError => e
         logger.warn("Could not close the RabbitMQ connection #{description}", e)
+      end
+
+      # Opens a new channel on the appender's connection, in place of the one that RabbitMQ closed, such as for
+      # an entry larger than its max_message_size, which RabbitMQ refuses with PRECONDITION_FAILED by closing
+      # the channel, so that publishing on it raises Bunny::ChannelAlreadyClosed.
+      #
+      # RabbitMQ closes the channel after Bunny has published the entry that it refuses, without answering the
+      # publish, so that entry was not raised, and cannot be told apart from the others: it is lost, and the
+      # appender reports to the internal logger that RabbitMQ closed the channel, with the reason when Bunny
+      # has passed it on (see #create_channel). The entry being published is not at fault, and is published on
+      # the new channel.
+      #
+      # When opening the channel raises, such as because RabbitMQ has closed the connection too, the connection
+      # is closed (see #create_channel) and forgotten, so that the next entry connects again (see #queue).
+      #
+      # In a forked child, it forgets the connection and channel it inherited instead, without opening a channel
+      # on the parent's connection, and the caller connects again (see #reopen).
+      def replace_closed_channel
+        forget_inherited
+        return unless @channel
+
+        reason        = @close_reason
+        @close_reason = nil
+        @queue        = nil
+        @channel      = nil
+        logger.warn("RabbitMQ closed the channel, so the entries are published on a new one. " \
+                    "An entry that RabbitMQ refused, such as one larger than its max_message_size, " \
+                    "was not written. Reason: #{reason || 'not reported'}")
+        open_channel
+      end
+
+      # Opens a new channel on the appender's connection, which it publishes on next. When that raises, the
+      # connection was closed (see #create_channel), and is forgotten.
+      def open_channel
+        @channel = create_channel(@connection)
+      rescue StandardError
+        @connection = nil
+        raise
       end
 
       # In a child process, forgets the connection and channel built in the parent before a fork, and the

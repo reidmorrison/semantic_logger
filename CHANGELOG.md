@@ -882,6 +882,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   its channel, such as after it restarted, rather than raising `Bunny::ChannelAlreadyClosed` and
   leaving the connection open. See
   [RabbitMQ](https://logger.reidmorrison.com/appenders.html#rabbitmq-amqp).
+- The `:rabbitmq` appender keeps publishing once RabbitMQ has closed its channel, such as with
+  `PRECONDITION_FAILED` for an entry larger than the broker's `max_message_size`: it opens a new
+  channel on the same connection and publishes the next entry there, and reports to the internal
+  logger that RabbitMQ closed the channel, with the reason when Bunny passes it on. The entry that
+  RabbitMQ refused is lost, since RabbitMQ closes the channel after it was published, without
+  answering the publish. When the new channel cannot be opened, such as when RabbitMQ has closed the
+  connection too, it closes that connection and connects again for the next entry. In a forked child,
+  it connects again rather than opening a channel on the parent's connection. Before, every later
+  entry raised `Bunny::ChannelAlreadyClosed`, so that one oversized entry stopped all logging to
+  RabbitMQ until the appender was reopened. See
+  [RabbitMQ](https://logger.reidmorrison.com/appenders.html#rabbitmq-amqp).
 - Reopening the `:syslog` or `:graylog` appender over TCP in the same process, such as with
   `SemanticLogger.reopen(force: true)` after a log rotation, closes the connection it replaced, which
   it left open, so that each reopen left one more connection to the server open. `:syslog` over UDP

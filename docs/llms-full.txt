@@ -3428,6 +3428,11 @@ publishes the next entries on a new channel, and closes the connection it replac
 connect, it keeps the connection it has. In a forked child, it leaves the connection it inherited to
 the parent (see [Process forking](operations.html#process-forking)).
 
+RabbitMQ closes the channel when it refuses an entry, such as one larger than its `max_message_size`
+(`PRECONDITION_FAILED`). The appender then publishes the next entries on a new channel on the same
+connection, and reports the close to the internal logger. The refused entry is lost: RabbitMQ closes
+the channel after the entry was published, without answering the publish.
+
 ## Logging to several destinations at once
 
 Add as many appenders as you like; every entry is written to all of them. Use a per-appender `level`

@@ -273,6 +273,78 @@ module Appender
           assert_equal expected, JSON.parse(output)
         end
 
+        # RabbitMQ closes a channel on its own, such as with PRECONDITION_FAILED for an entry larger than its
+        # max_message_size, which the appender has already published.
+        describe "once RabbitMQ has closed the channel" do
+          it "publishes the next entries on a new channel on the same connection, and reports the close" do
+            internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+            output          = with_appender do |appender|
+              appender.logger = internal_logger
+              appender.log(log_with("one"))
+              bunnies.first.channels.first.close_for_message_too_large
+              appender.log(log_with("two"))
+              appender.log(log_with("three"))
+              connections_json
+            end
+
+            assert_equal({"published" => [%w[one two three]], "closed" => [false]}, JSON.parse(output))
+            assert_equal [true, false], bunnies.first.channels.map(&:closed?)
+            reports = internal_logger.events
+
+            assert_equal 1, reports.size
+            assert_equal :warn, reports.first.level
+            assert_includes reports.first.message, "RabbitMQ closed the channel"
+            assert_includes reports.first.message, FakeBunny::MESSAGE_TOO_LARGE
+          end
+
+          it "publishes the entry on a new channel when RabbitMQ closed the channel while it was publishing" do
+            output = with_appender do |appender|
+              appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+              appender.log(log_with("one"))
+              channel = bunnies.first.channels.first
+              checks  = 0
+              # The appender finds the channel open, then RabbitMQ closes it before the entry is published.
+              channel.stub(:closed?, -> { (checks += 1) > 1 }) { appender.log(log_with("two")) }
+              connections_json
+            end
+
+            assert_equal({"published" => [%w[one two]], "closed" => [false]}, JSON.parse(output))
+            assert_equal 2, bunnies.first.channels.size
+          end
+
+          it "closes the connection when it cannot open a new channel, and connects again for the next entry" do
+            output = with_appender do |appender|
+              appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+              appender.log(log_with("one"))
+              bunnies.first.channels.first.close_for_message_too_large
+              bunnies.first.time_out_channels
+              assert_raises(Bunny::ClientTimeout) { appender.log(log_with("two")) }
+              appender.log(log_with("three"))
+              connections_json
+            end
+
+            assert_equal({"published" => [["one"], ["three"]], "closed" => [true, false]}, JSON.parse(output))
+          end
+
+          it "connects again in a forked child, rather than opening a channel on the parent's connection" do
+            output = with_appender do |appender|
+              appender.log(log_with("parent"))
+              in_forked_child do
+                bunnies.first.channels.first.close_for_message_too_large
+                appender.log(log_with("child"))
+                JSON.generate(parent_channels: bunnies.first.channels.size, connections: JSON.parse(connections_json))
+              end
+            end
+
+            expected = {
+              "parent_channels" => 1,
+              "connections"     => {"published" => [["parent"], ["child"]], "closed" => [false, false]}
+            }
+
+            assert_equal expected, JSON.parse(output)
+          end
+        end
+
         it "connects again to publish once it was closed" do
           output = with_appender do |appender|
             appender.log(log_with("one"))
