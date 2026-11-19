@@ -532,6 +532,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   locale is set in a directory such as `café`, rather than returning the whole text as binary or
   as invalid US-ASCII. `Log#exception_details` returns nil, rather than raising, when the
   exception's `#message` raises `NotImplementedError`.
+- The `:signalfx` metric subscriber sends a metric whose dimensions are all blank, such as
+  `dimensions: {state: ""}` or `{supplier: nil}`, as it sends a metric without dimensions: a duration
+  as `Application.average` and `Application.counter`, and a count as `Application.counter`, each with
+  the `class` and `action` taken from the metric name and the named tags listed in its `dimensions:`
+  option. Before, it sent such a metric under its own name, with only the `host`, `application`, and
+  `environment` dimensions, since it left out the blank values, and a duration without a count. A
+  blank value is `nil`, or text that is empty or only whitespace; a value of only whitespace, which it
+  sent before, is now also left out of dimensions that have other values, and of the named tags it
+  forwards. `Log#dimensions?`, which the formatters that write an entry's data ask, still counts such
+  dimensions. Without a `dimensions:` option it no longer reads the named tags, so a named tag whose
+  key cannot be turned into a Symbol, such as an Integer, no longer stops the metric being sent. See
+  the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ## [5.2.0] 2026-10-30
 

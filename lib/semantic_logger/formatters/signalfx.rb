@@ -2,6 +2,10 @@ require "json"
 module SemanticLogger
   module Formatters
     class Signalfx < Base
+      # Text of a dimension value that is blank (see #blank_value?).
+      BLANK_VALUE = /\A[[:space:]]*\z/
+      private_constant :BLANK_VALUE
+
       attr_accessor :token, :dimensions, :hash, :gauge_name, :counter_name
 
       def initialize(token:,
@@ -24,11 +28,11 @@ module SemanticLogger
       # A name that is not valid UTF-8, such as one with invalid bytes or in UTF-16, which matching
       # it raises for, is converted to valid UTF-8 first (see Utils.encode_utf8_string).
       #
-      # A metric with dimensions, as Log#dimensions? tells, is sent under its own name. Any other is sent as
-      # the gauge or the counter, with the class and action taken from its name.
+      # A metric with dimensions that are not blank (see #present_dimensions) is sent under its own name.
+      # Any other is sent as the gauge or the counter, with the class and action taken from its name.
       def metric
         name = Utils.encode_utf8_string(log.metric.to_s).sub(%r{\A/+}, "")
-        if log.dimensions?
+        if metric_dimensions
           name.tr!("/", ".")
           hash[:metric] = name
         else
@@ -58,22 +62,19 @@ module SemanticLogger
         hash[:value] = log.metric_amount || log.duration || 1
       end
 
-      # Dimensions for this metric: those of the log entry, or when it has none, the named tags listed in
-      # the dimensions option.
+      # Dimensions for this metric: those of the log entry that are not blank, or when it has none, the
+      # named tags listed in the dimensions option whose values are not blank (see #blank_value?).
       def format_dimensions
         h = (hash[:dimensions] ||= {})
-        if log.dimensions?
-          log.dimensions.each_pair do |name, value|
-            value   = value.to_s
-            h[name] = value unless value.empty?
-          end
-        else
+        if metric_dimensions
+          h.merge!(metric_dimensions)
+        elsif dimensions
           log.named_tags.each_pair do |name, value|
-            name  = name.to_sym
-            value = value.to_s
-            next if value.empty?
+            name = name.to_sym
+            next unless dimensions.include?(name)
 
-            h[name] = value if dimensions&.include?(name)
+            value   = value.to_s
+            h[name] = value unless blank_value?(value)
           end
         end
         h[:host]        = logger.host if log_host && logger.host
@@ -97,7 +98,7 @@ module SemanticLogger
         if log.duration
           data[:gauge] = [hash]
           # Also send a count metric whenever it is a gauge so that it can be counted.
-          unless log.dimensions?
+          unless metric_dimensions
             count_hash          = hash.dup
             count_hash[:value]  = log.metric_amount || 1
             count_hash[:metric] = counter_name
@@ -131,7 +132,7 @@ module SemanticLogger
             add_gauge(gauges, hash)
 
             # Also send a count metric whenever it is a gauge so that it can be counted.
-            unless log.dimensions?
+            unless metric_dimensions
               count_hash          = hash.dup
               count_hash[:value]  = log.metric_amount || 1
               count_hash[:metric] = counter_name
@@ -147,7 +148,40 @@ module SemanticLogger
         Utils.to_json(data)
       end
 
+      # The log entry to format. Also keeps the dimensions of its metric that are sent (see
+      # #present_dimensions), which formatting the entry asks for several times.
+      def log=(log)
+        super
+        @metric_dimensions = log && present_dimensions
+      end
+
       private
+
+      # The dimensions of the entry's metric that are sent, or nil when there are none.
+      attr_reader :metric_dimensions
+
+      # Returns [Hash] the dimensions of the entry's metric, as Log#dimensions? tells, with each value as
+      # text, leaving out those that are blank (see #blank_value?). Returns nil when there are none, or only
+      # blank ones, such as `{state: ""}`, so that the metric is sent as a metric without dimensions is:
+      # as the gauge or the counter, with the class and action taken from its name. Log#dimensions?
+      # counts such dimensions, which the formatters that write the entry's data write as they are.
+      def present_dimensions
+        return unless log.dimensions?
+
+        present = {}
+        log.dimensions.each_pair do |name, value|
+          value         = value.to_s
+          present[name] = value unless blank_value?(value)
+        end
+        present unless present.empty?
+      end
+
+      # Returns [true|false] whether the text of a dimension value is blank: empty, as for nil, or only
+      # whitespace, which includes Unicode whitespace such as a no-break space, but not NUL. The text is
+      # converted to valid UTF-8 first (see Utils.encode_utf8_string): matching raises for UTF-8 text
+      # with invalid bytes, or text that is not ASCII-compatible, such as UTF-16, and would not find the
+      # Unicode whitespace in text in an encoding such as binary or Shift_JIS.
+      def blank_value?(text) = BLANK_VALUE.match?(Utils.encode_utf8_string(text))
 
       def add_gauge(gauges, metric)
         gauges << metric

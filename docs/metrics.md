@@ -157,8 +157,8 @@ SemanticLogger.add_appender(metric: :signalfx, token: "SIGNALFX_ORG_ACCESS_TOKEN
 ~~~
 
 `application` and `host` are always sent as dimensions, and so is `environment` when it is set. To
-also forward specific named tags as dimensions whenever they are present on a log entry that has no
-dimensions of its own, list them:
+also forward specific named tags as dimensions whenever they are present, and not blank, on a log
+entry that has no dimensions of its own, list them:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -178,8 +178,12 @@ sent as `Application.counter` alone, with the same `class` and `action` dimensio
 When dimensions are present, the metric is sent as-is: under its own name, without its leading `/`
 characters and with each other `/` replaced by `.`, with its value (the `metric_amount` when given,
 otherwise the duration, or 1 for a count), and, for a duration, without a count. Its dimensions are sent in place of the named tags
-listed in `dimensions:` above, so add any of those values it needs to its own dimensions. Empty
-dimensions, such as `{}`, count as none.
+listed in `dimensions:` above, so add any of those values it needs to its own dimensions.
+
+A dimension whose value is blank, `nil` or text that is empty or only whitespace, is left out, since
+it carries nothing to break the metric down by. Dimensions that are empty, such as `{}`, or whose
+values are all blank, such as `{state: ""}` or `{supplier: nil}`, count as none, so the metric is
+sent as a metric without dimensions is.
 
 ## Metrics in log appenders
 

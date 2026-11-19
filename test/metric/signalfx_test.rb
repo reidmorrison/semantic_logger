@@ -98,6 +98,36 @@ module Appender
 
           assert_equal "/#{SemanticLogger::Metric::Signalfx::END_POINT}?orgid=ABC", request.path
         end
+
+        describe "a duration whose dimensions are all blank" do
+          let(:appender) { build_appender("https://ingest.signalfx.com") }
+
+          before do
+            log.dimensions = {state: "", user: nil}
+            log.duration   = 12.5
+          end
+
+          # Returns [Array<Array>] the name, class, and action of each point of the type in the posted body.
+          def points(request, type)
+            JSON.parse(request.body).fetch(type).map do |point|
+              [point["metric"], point["dimensions"]["class"], point["dimensions"]["action"]]
+            end
+          end
+
+          it "posts the gauge and the counter, with the class and action from its name" do
+            request = capture_request(appender) { appender.log(log) }
+
+            assert_equal [["Application.average", "user", "login"]], points(request, "gauge")
+            assert_equal [["Application.counter", "user", "login"]], points(request, "counter")
+          end
+
+          it "posts the gauge and the counter in a batch" do
+            request = capture_request(appender) { appender.batch([log]) }
+
+            assert_equal [["Application.average", "user", "login"]], points(request, "gauge")
+            assert_equal [["Application.counter", "user", "login"]], points(request, "counter")
+          end
+        end
       end
 
       describe "should_log?" do

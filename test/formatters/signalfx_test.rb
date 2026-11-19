@@ -122,6 +122,16 @@ module SemanticLogger
             )
           end
 
+          it "sends no named tags without the dimensions option, even ones whose keys are not Symbol names" do
+            log.named_tags = {1 => "one", "us\xFFer" => "two", user_id: 47}
+
+            assert_equal(
+              {"class" => "user", "action" => "login", "environment" => "test",
+               "host" => SemanticLogger.host, "application" => SemanticLogger.application},
+              result["counter"].first["dimensions"]
+            )
+          end
+
           it "raises exception with both a whitelist and blacklist" do
             assert_raises ArgumentError do
               SemanticLogger::Formatters::Signalfx.new(token: "TEST", dimensions: [:user_id],
@@ -227,10 +237,11 @@ module SemanticLogger
           end
         end
 
-        # Empty dimensions, such as those of `{supplier: nil}.compact`, are none (see Log#dimensions?): the
-        # metric keeps the class and action from its name, the count, and the named tags listed in the
-        # formatter's dimensions.
-        describe "with empty dimensions" do
+        # Empty dimensions, such as those of `{supplier: nil}.compact`, are none (see Log#dimensions?), and
+        # so are dimensions whose values are all blank, such as `{supplier: nil}`: the metric keeps the
+        # class and action from its name, the count, and the named tags listed in the formatter's
+        # dimensions.
+        describe "with empty or blank dimensions" do
           let(:capture) { SemanticLogger::Test::CaptureLogEvents.new }
 
           let :expected_dimensions do
@@ -295,6 +306,132 @@ module SemanticLogger
 
             assert_equal [counter.except("value")], counters.uniq
             assert_equal(2, hash["counter"].sum { |point| point["value"] })
+          end
+
+          ideographic_space = 0x3000.chr(Encoding::UTF_8)
+          [
+            {state: ""}, {state: nil}, {state: "  "}, {state: "\t\n"}, {state: ideographic_space},
+            {"state" => "", user: nil}
+          ].each do |blank|
+            it "sends a duration with the dimensions #{blank.inspect} as the gauge and the counter" do
+              log  = logged { |logger| logger.info(metric: "/user/login", dimensions: blank, duration: 12.5) }.first
+              hash = JSON.parse(formatter.call(log, appender))
+
+              gauge = {"metric" => average_metric_name, "value" => 12.5, "dimensions" => expected_dimensions}
+
+              assert_equal [gauge], points(hash, "gauge")
+              assert_equal [counter], points(hash, "counter")
+            end
+          end
+
+          it "sends a count with blank dimensions as the counter" do
+            log  = logged { |logger| logger.info(metric: "/user/login", dimensions: {state: ""}) }.first
+            hash = JSON.parse(formatter.call(log, appender))
+
+            assert_empty points(hash, "gauge")
+            assert_equal [counter], points(hash, "counter")
+          end
+
+          it "sends a measure_ duration with blank dimensions as the gauge and the counter" do
+            logs = logged do |logger|
+              logger.measure_info("Login", metric: "/user/login", dimensions: {state: nil}) { nil }
+            end
+            hash = JSON.parse(formatter.call(logs.first, appender))
+
+            gauge = {"metric" => average_metric_name, "dimensions" => expected_dimensions}
+
+            assert_equal [gauge], points(hash, "gauge", %w[metric dimensions])
+            assert_equal [counter], points(hash, "counter")
+          end
+
+          it "sends each duration of a batch with blank dimensions as the gauge and the counter" do
+            logs = logged do |logger|
+              logger.info(metric: "/user/login", dimensions: {state: ""}, duration: 12.5)
+              logger.info(metric: "/user/login", dimensions: {state: nil}, duration: 12.5)
+            end
+            hash = JSON.parse(formatter.batch(logs, appender))
+
+            gauge = {"metric" => average_metric_name, "value" => 12.5, "dimensions" => expected_dimensions}
+
+            assert_equal [gauge] * 2, points(hash, "gauge")
+            counters = points(hash, "counter", %w[metric dimensions])
+
+            assert_equal [counter.except("value")], counters.uniq
+            assert_equal(2, hash["counter"].sum { |point| point["value"] })
+          end
+
+          it "adds up a count of a batch with blank dimensions and one without dimensions" do
+            logs = logged do |logger|
+              logger.info(metric: "/user/login", dimensions: {state: " "})
+              logger.info(metric: "/user/login")
+            end
+            hash = JSON.parse(formatter.batch(logs, appender))
+
+            assert_empty points(hash, "gauge")
+            assert_equal [counter.except("value")], points(hash, "counter", %w[metric dimensions]).uniq
+            assert_equal(2, hash["counter"].sum { |point| point["value"] })
+          end
+
+          it "leaves out the blank values of dimensions that have others" do
+            dimensions = {user: "jbloggs", state: "", region: "  ", plan: nil}
+            log        = logged { |logger| logger.info(metric: "/user/login", dimensions: dimensions, duration: 12.5) }
+            hash       = JSON.parse(formatter.call(log.first, appender))
+
+            expected = {"user" => "jbloggs", "host" => SemanticLogger.host,
+                        "application" => SemanticLogger.application, "environment" => "test"}
+            gauge    = {"metric" => "user.login", "value" => 12.5, "dimensions" => expected}
+
+            assert_equal [gauge], points(hash, "gauge")
+            assert_empty points(hash, "counter")
+          end
+
+          it "leaves out a dimension whose value is only Unicode whitespace, in any encoding" do
+            no_break_space = 0xA0.chr(Encoding::UTF_8)
+            dimensions     = {
+              user:   "jbloggs",
+              state:  no_break_space,
+              region: "#{0x3000.chr(Encoding::UTF_8)} ",
+              plan:   no_break_space.encode(Encoding::ISO_8859_1)
+            }
+            log            = logged { |logger| logger.info(metric: "/user/login", dimensions: dimensions) }.first
+            point          = JSON.parse(formatter.call(log, appender))["counter"].first
+
+            assert_equal "user.login", point["metric"]
+            assert_equal %w[user host application environment], point["dimensions"].keys
+          end
+
+          it "keeps a dimension whose value is NUL, which is not whitespace" do
+            log   = logged { |logger| logger.info(metric: "/user/login", dimensions: {state: "\0"}) }.first
+            point = JSON.parse(formatter.call(log, appender))["counter"].first
+
+            assert_equal "user.login", point["metric"]
+            assert_equal "\0", point["dimensions"]["state"]
+          end
+
+          it "leaves out a dimension whose value is not valid UTF-8 and holds nothing else" do
+            dimensions = {user: "jbloggs", state: (+"\xFF").force_encoding(Encoding::UTF_8)}
+            log        = logged { |logger| logger.info(metric: "/user/login", dimensions: dimensions) }.first
+            point      = JSON.parse(formatter.call(log, appender))["counter"].first
+
+            assert_equal "jbloggs", point["dimensions"]["user"]
+            refute point["dimensions"].key?("state"), point
+          end
+
+          it "keeps a dimension whose value is not valid UTF-8 but holds other text" do
+            dimensions = {state: (+"Fl\xFForida").force_encoding(Encoding::UTF_8)}
+            log        = logged { |logger| logger.info(metric: "/user/login", dimensions: dimensions) }.first
+            point      = JSON.parse(formatter.call(log, appender))["counter"].first
+
+            assert_equal "user.login", point["metric"]
+            assert_equal "Florida", point["dimensions"]["state"]
+          end
+
+          it "leaves out a listed named tag whose value is only whitespace" do
+            formatter.dimensions = %i[user_id state]
+            logs = SemanticLogger.named_tagged(state: "  ") { logged { |logger| logger.info(metric: "/user/login") } }
+            hash = JSON.parse(formatter.call(logs.first, appender))
+
+            assert_equal [counter], points(hash, "counter")
           end
         end
       end
