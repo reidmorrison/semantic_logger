@@ -991,6 +991,20 @@ The HTTP appenders answer both from the status of the response: a request reject
 `413`, or `422` is a message error that only some of the messages cause, and one rejected with any
 other 4xx but `408` and `429`, such as a `401`, `403`, or `404`, is one that fails any batch.
 
+A destination that stores the messages of a batch in order, and stops at the first one it rejects,
+may say which one that is. Return its position in the batch, counted from 0, from
+`#rejected_entry(exception)`: the messages before it are then counted as written, it is discarded
+(with every message after it, when `#fails_any_batch?` is true), and the messages after it are
+written again as a batch, so that none is written twice. It returns `nil` by default, when the
+appender cannot tell. The `:splunk_http` appender answers it from the HTTP Event Collector's
+`invalid-event-number`:
+
+~~~ruby
+def rejected_entry(exception)
+  exception.rejected_index if exception.is_a?(MyClient::Rejected)
+end
+~~~
+
 `#batch_all_or_nothing?` says nothing about an error from the destination: a batch formatted before
 any of it is sent can still be stored by a destination whose answer then times out. Answer that from
 `#wrote_nothing?`, for `#log` and `#batch` alike.

@@ -244,8 +244,9 @@ SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com") { 
 SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com", batch: true)
 ~~~
 
-`:splunk_http` with `batch: true` is refused too, since it formats each entry itself, for Splunk's
-HTTP Event Collector: add it without `batch: true`.
+`:splunk_http` with `batch: true` is not refused: it now sends each batch as the HTTP Event
+Collector's event objects, stacked one after the other. Before, every batch failed. See
+[Splunk HTTP](appenders.html#splunk-http).
 
 A custom appender whose `#batch` formats each entry with `format_log` is batched with any formatter,
 as before, including a subclass of `SemanticLogger::Appender::Http` that replaces its `#batch`. A

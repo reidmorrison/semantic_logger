@@ -61,15 +61,23 @@ module SemanticLogger
         # The 4xx statuses that reject the request for the entries it holds: 400 Bad Request,
         # 413 Content Too Large, and 422 Unprocessable Content. A server can answer 400 for its own
         # configuration too, such as Splunk's HTTP Event Collector for an index it does not know, which
-        # then rejects every part of a batch split up to find the entries at fault.
+        # then rejects every part of a batch split up to find the entries at fault. A subclass that
+        # can tell such an answer from its body says so from #fails_any_batch?, as
+        # Appender::SplunkHttp does.
         CONTENT_CODES = [400, 413, 422].freeze
 
         # Returns [Integer] the status code of the response.
         attr_reader :code
 
-        def initialize(message, code:)
+        # Returns [String|nil] the body of the response, for a subclass that reads the server's own
+        # reason from it, such as Appender::SplunkHttp. Not in the message beyond its start, see
+        # MAX_LOGGED_RESPONSE_BODY.
+        attr_reader :body
+
+        def initialize(message, code:, body: nil)
           super(message)
           @code = code
+          @body = body
         end
 
         # Whether the server rejected the request itself, with a 4xx status other than 408 and
@@ -506,7 +514,8 @@ module SemanticLogger
         raise ResponseError.new(
           "Bad HTTP response from: #{redacted_url} code: #{response.code}, " \
           "#{response.body.to_s[0, MAX_LOGGED_RESPONSE_BODY].inspect}",
-          code: response.code.to_i
+          code: response.code.to_i,
+          body: response.body
         )
       rescue RuntimeError => e
         reconnect unless not_sent?(e)

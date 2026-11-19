@@ -29,6 +29,15 @@ class ReporterTest < Minitest::Test
       assert_equal "Async: Queued log messages: 1001, running command: flush", internal.events.last.message
     end
 
+    it "neither counts nor reports an empty list of discarded log messages" do
+      internal        = SemanticLogger::Test::CaptureLogEvents.new
+      appender.logger = internal
+      reporter.failed([], error, interval: 30)
+
+      assert_equal 0, reporter.failed_count
+      assert_empty internal.events
+    end
+
     it "reports to the internal logger of the appender, with the exception" do
       internal        = SemanticLogger::Test::CaptureLogEvents.new
       appender.logger = internal

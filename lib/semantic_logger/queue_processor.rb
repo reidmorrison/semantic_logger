@@ -4,6 +4,7 @@ require "semantic_logger/queue_processor/reporter"
 require "semantic_logger/queue_processor/backoff"
 require "semantic_logger/queue_processor/inbox"
 require "semantic_logger/queue_processor/held_write"
+require "semantic_logger/queue_processor/batch_failure"
 require "semantic_logger/queue_processor/reopener"
 
 module SemanticLogger
@@ -204,14 +205,10 @@ module SemanticLogger
     # message or batch that the destination fails is discarded, rather than written again after a
     # back-off, and so are the messages queued after that one, ahead of the flush or close, without
     # being written (see Backoff#give_up?).
-    def flush
-      submit_request(:flush)
-    end
+    def flush = submit_request(:flush)
 
     # Flush any outstanding messages and close the appender.
-    def close
-      submit_request(:close)
-    end
+    def close = submit_request(:close)
 
     # Tell the worker thread whether the process is exiting, before and after the flush at exit
     # (see Backoff#exiting=). While it is, the worker thread acts as though a flush were waiting
@@ -544,26 +541,34 @@ module SemanticLogger
 
     # Write the log messages to the appender as a batch.
     #
-    # When the content of a message cannot be written (see #message_error?), and the appender's
-    # #batch is all or nothing, the batch is split in half and each half written separately, so
-    # that only the offending message is discarded rather than every message in the batch.
-    # Otherwise the batch is discarded, since writing it again could duplicate the messages that
-    # the appender had already written. So it is, at once, when the appender says that the error is
-    # one that would fail any batch, whatever messages it holds (see #fails_any_batch?). A stack overflow
-    # discards the batch, and the rest of the batch being split, without splitting it further (see
-    # #stack_overflowed).
+    # When the content of a message cannot be written (see #message_error?), the appender says what
+    # became of the batch (see BatchFailure): the messages the destination stored are counted as
+    # written, those at fault discarded, and the rest written again, as when an all or nothing batch
+    # is split in half to find the messages at fault, so that only those are discarded rather than
+    # every message in the batch, and none written twice. A stack overflow discards the batch, and the
+    # rest of the batch still to be written, without splitting it further (see #stack_overflowed).
+    #
+    # The parts still to be written are written in turn, in order, each one once the write before it
+    # has been rescued, rather than from within its rescue clause. So a destination that rejects one
+    # message after another, each time the first of the rest, neither deepens the stack nor chains
+    # each error to the one before it (Exception#cause).
     def write_batch(logs)
-      return messages_failed(logs, @stack_overflow) if @stack_overflow
+      parts = [logs]
+      while (part = parts.shift)
+        begin
+          appender.batch(part)
+          @processed_count += part.size
+        rescue SystemStackError => e
+          return stack_overflowed(part + parts.flatten(1), e)
+        rescue StandardError => e
+          raise unless message_error?(e)
 
-      appender.batch(logs)
-      @processed_count += logs.size
-    rescue SystemStackError => e
-      stack_overflowed(logs, e)
-    rescue StandardError => e
-      raise unless message_error?(e)
-      return messages_failed(logs, e) if logs.size == 1 || !appender.batch_all_or_nothing? || fails_any_batch?(e)
-
-      logs.each_slice((logs.size + 1) / 2) { |half| write_batch(half) }
+          failure = BatchFailure.new(appender, part, e)
+          @processed_count += failure.written
+          messages_failed(failure.discarded, e)
+          parts.unshift(*failure.parts)
+        end
+      end
     end
 
     # Discard log messages whose writing overflowed the stack, for example a value nested too
@@ -593,11 +598,6 @@ module SemanticLogger
     # An appender that cannot tell (it does not implement #not_sent?) has every failure counted
     # towards HeldWrite::MAX_RESENDS.
     def not_sent?(exception) = appender.respond_to?(:not_sent?) && appender.not_sent?(exception)
-
-    # Whether the appender says that the exception, a message error, would fail any batch, whatever
-    # messages it holds, so that splitting the batch cannot find messages at fault. An appender that
-    # does not implement #fails_any_batch? has every all or nothing batch split, as before it could say.
-    def fails_any_batch?(exception) = appender.respond_to?(:fails_any_batch?) && appender.fails_any_batch?(exception)
 
     # Log messages that the destination kept from being written. They are held to be written again
     # once the thread has backed off (see #process), when the appender says that the write wrote
@@ -629,11 +629,9 @@ module SemanticLogger
     def discard_held(exception) = @held.release&.then { |logs| messages_failed(logs, exception) }
 
     # Record log messages discarded because they could not be written, whether their content or
-    # the destination was at fault, reported at most once every dropped_message_report_seconds
+    # the destination was at fault, if any, reported at most once every dropped_message_report_seconds
     # after the first (see Reporter#failed).
-    def messages_failed(logs, exception)
-      @reporter.failed(logs, exception, interval: dropped_message_report_seconds)
-    end
+    def messages_failed(logs, exception) = @reporter.failed(logs, exception, interval: dropped_message_report_seconds)
 
     # Report when the log message taken off the queue has waited longer than lag_threshold_s.
     def check_lag(log) = @reporter.lag(log, lag_threshold_s, queue.size)

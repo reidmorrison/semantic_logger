@@ -411,14 +411,24 @@ class AppenderTest < Minitest::Test
                        error.message
         end
 
-        it "says only to add :splunk_http with batch: false, since it is its own formatter" do
-          error = assert_raises(ArgumentError) do
-            factory(appender: :splunk_http, url: "http://localhost:8088/path", token: "TEST", batch: true)
+        it "says only to add an appender that is its own formatter with batch: false" do
+          own_formatter = Class.new(SemanticLogger::Appender::Http) do
+            def call(log, _logger) = log.message
           end
+          appender = stub_http_start { own_formatter.new(url: "http://localhost:8088/path") }
+          error    = assert_raises(ArgumentError) { factory(appender: appender, batch: true) }
 
-          assert_equal "add_appender cannot batch SemanticLogger::Appender::SplunkHttp: it is its own formatter, " \
+          assert_equal "add_appender cannot batch #{own_formatter}: it is its own formatter, " \
                        "which cannot format a batch. Add it with batch: false.",
                        error.message
+        end
+
+        it "batches :splunk_http, which is its own formatter, but formats each entry of a batch itself" do
+          added = factory(appender: :splunk_http, url: "http://localhost:8088/path", token: "TEST", batch: true)
+
+          assert_predicate added, :batch?
+        ensure
+          added&.close
         end
 
         it "raises ArgumentError with the refusal that a custom appender gives, even when batched by default" do
