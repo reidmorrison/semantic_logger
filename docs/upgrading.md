@@ -135,6 +135,28 @@ SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], met
 SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: false)
 ~~~
 
+#### Negative metric amounts
+
+A metric counts upward. In v6, a counter drops a negative `metric_amount`, and reports it once on
+Semantic Logger's internal logger, rather than subtracting it. Until then, a log call or a
+`measure_*` call with a `metric:` and a negative `metric_amount` is still logged and sent as before,
+and reports a [deprecation warning](#seeing-deprecation-warnings) that names the line of the call.
+It is reported
+once per process, for the first negative amount only, so that a loop does not repeat it; once that
+call is changed, the next one, if any, is reported. A `metric_amount` of zero is not negative, and
+one without a `metric:`, which no metric subscriber receives, is not reported.
+
+~~~ruby
+# Deprecated:
+logger.info(message: "Item removed", metric: "cart/items", metric_amount: -1)
+
+# Count what goes down as a metric of its own:
+logger.info(message: "Item removed", metric: "cart/items_removed")
+~~~
+
+To record a value that goes up and down, such as the number of items in a cart, a `gauge` is planned
+for the metrics API of v6.
+
 #### Choose where Loki writes `pid` and `thread`
 
 The `:loki` formatter writes the process id and the thread name as the stream labels `pid` and

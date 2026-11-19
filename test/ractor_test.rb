@@ -163,6 +163,17 @@ module SemanticLogger
         assert_match %r{\Aractor-\d+/}, log.thread_name
       end
 
+      # Only the main Ractor can record that the deprecation was reported (see
+      # Log.negative_metric_amount_deprecated).
+      it "logs a negative metric amount without reporting its deprecation" do
+        SemanticLogger::Log.instance_variable_set(:@negative_metric_amount_reported, nil)
+        logs = refute_deprecated do
+          logs_from_ractor { SemanticLogger["InRactor"].info("Removed", metric: "cart/items", metric_amount: -1) }
+        end
+
+        assert_equal(-1, logs.first.metric_amount)
+      end
+
       it "writes an exception with its cause and backtraces" do
         log = logs_from_ractor do
           begin

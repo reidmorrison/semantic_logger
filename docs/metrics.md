@@ -51,11 +51,17 @@ and the metric is incremented by 1:
 logger.info(message: "Signed up", metric: "users/signup")
 ~~~
 
-Supply `:metric_amount` to change the amount. To decrement:
+Supply `:metric_amount` to change the amount. A metric counts upward, so the amount is zero or
+more. To count something that goes down, such as items removed from a cart, give it a metric of its
+own:
 
 ~~~ruby
-logger.info(message: "Item removed", metric: "cart/items", metric_amount: -1)
+logger.info(message: "Item removed", metric: "cart/items_removed")
 ~~~
+
+A negative `:metric_amount` with a `:metric` is deprecated: it is still logged and sent as before,
+but reports a [deprecation warning](upgrading.html#seeing-deprecation-warnings), and v6 drops it. See
+[Negative metric amounts](upgrading.html#negative-metric-amounts).
 
 To add to a running total, such as the dollar amount of purchases per department:
 
