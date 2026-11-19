@@ -398,40 +398,62 @@ that appender.
 
 ### When every log entry must be delivered
 
-Semantic Logger keeps the log entries it has not yet written in memory, on the queue of the thread
-that writes to every appender and on the queue of each appender added with `async: true` or in
-batches. It does not store them anywhere that outlives the process. So entries that are still queued
-are lost when the process is killed (`kill -9`, the out of memory killer, or the `SIGKILL` that
+Semantic Logger keeps the log entries it has not yet written in memory: on the queue of the thread
+that writes to every appender, and on the queue of each appender added with `async: true` or in
+batches. It does not store them anywhere that outlives the process. So the entries still queued are
+lost when the process is killed (`kill -9`, the out of memory killer, or the `SIGKILL` that
 Kubernetes and other process managers send once the grace period after `SIGTERM` runs out), or when
-it crashes. During an outage of a remote destination, a flush, a close, and the flush at exit
-discard the entries that destination fails, as described above, so that the process exits within
-seconds rather than waiting for the outage to end. There is no option to wait for every entry
-instead: such a process would not stop until the destination came back, or until it was killed,
-losing the entries anyway.
+it ends without running `at_exit`, such as on a segmentation fault or `exit!`. An uncaught
+exception, `exit`, and the default handling of `SIGTERM` still run the flush at exit, which writes
+the queued entries to every destination that takes them.
 
-When every entry must reach its destination, such as for an audit log, write it first to something
-durable that is local to the process, and let a separate process deliver it:
+During an outage of a remote destination, a flush, a close, and the flush at exit discard the
+entries that destination fails, as described above, so that the process exits within seconds rather
+than waiting for the outage to end. That holds for every `SemanticLogger.flush`, including one an
+application or job framework calls while the process runs. There is no option to wait for every
+entry instead: such a process would not stop until the destination came back, or until it was
+killed, losing the entries anyway.
 
-- Log to a file (`file_name:`), or to standard output in a container, and ship it with a log
-  collector, such as [Vector](https://vector.dev), [Fluent Bit](https://fluentbit.io), or the
+When every entry must reach its destination, such as for an audit log, write it to a local file
+before the log call returns, and let a separate process deliver it:
+
+- Log in synchronous mode (see [Synchronous operation](#synchronous-operation)), so that each entry
+  is written to the file before the log call returns, rather than waiting on a queue. The file
+  appender hands each entry to the operating system straight away, though without `fsync`, so a
+  crash of the host itself can still lose the last entries. A write that fails, such as on a full
+  disk, is reported to the internal logger rather than raised, so the log call still returns.
+- In synchronous mode every appender writes on the application's thread, so add any remote appender,
+  such as `:http` or `:splunk_http`, with `async: true` or in batches, or during its outage every log
+  call waits out its timeouts.
+- Ship the file with a log collector, such as [Vector](https://vector.dev),
+  [Fluent Bit](https://fluentbit.io), or the
   [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/), which keep their place in the
   file and retry until the destination accepts the entries.
-- Or send it to a collector or agent running on the same host, such as the OpenTelemetry Collector
-  or Fluent Bit with its own disk buffer, so that the network hop that can fail is one the collector
-  retries, not the application.
 
 ~~~ruby
-# The application writes each entry to a local file, which it can always do...
+# Each entry is in the file before the log call returns...
+SemanticLogger.sync!
 SemanticLogger.add_appender(file_name: "log/production.json", formatter: :json)
+# A remote appender in synchronous mode gets a thread of its own:
+SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com", async: true)
 
-# ...and a collector running beside it, such as Vector or Fluent Bit, reads that file and delivers
-# every entry to the remote service, retrying through an outage.
+# ...and a collector running beside the application, such as Vector or Fluent Bit, reads the file
+# and delivers every entry to the remote service, retrying through an outage.
 ~~~
 
+Sending the entries to a collector or agent on the same host, such as the OpenTelemetry Collector or
+Fluent Bit with its own disk buffer, narrows the window, since a connection to the same host rarely
+fails, but does not close it: those entries still wait in memory, and are discarded or lost as above.
+
 Within those limits, an appender added with `async: true` or in batches loses no entries during an
-outage while the process runs, until its worker thread gives up after `async_max_retries` (see
-above); set `async_max_retries: -1` to never give up, with `max_queue_size` large enough to hold
-the entries logged during the longest outage it should ride out.
+outage while the process runs and nothing flushes or closes it, until its worker thread gives up
+after `async_max_retries` (see above). With `async_max_retries: -1` it never gives up, so give it a
+`max_queue_size` large enough to hold the entries logged during the longest outage it should ride
+out: once its queue is full, logging waits for room for as long as the outage lasts, first the
+thread that writes to every appender, so that the other appenders stop receiving entries too, then
+the application's log calls, once the main queue is full as well. With `non_blocking: true` on the
+appender, and `SemanticLogger.non_blocking = true` for the main queue, the entries are dropped
+instead (see [Drop messages instead of blocking](#drop-messages-instead-of-blocking)).
 
 ### Give a slow appender its own thread
 
@@ -501,8 +523,9 @@ number of appenders, or speed up the slow appender.
 
 Synchronous mode bypasses the background thread and logs inline on the calling thread. This disables
 a core design principle of Semantic Logger and slows the calling thread, so it is not recommended for
-most applications. It can suit short-lived or single-threaded programs, or forked environments where
-you would rather not re-create the logging thread.
+most applications. It can suit short-lived or single-threaded programs, forked environments where
+you would rather not re-create the logging thread, or an audit log that must be in a file before each
+log call returns (see [When every log entry must be delivered](#when-every-log-entry-must-be-delivered)).
 
 Enable it **before** adding any appenders:
 
