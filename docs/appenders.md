@@ -492,12 +492,32 @@ appender), handle any other answer by its status:
   itself, so sending it again cannot succeed. With `async: true` or `batch: true`, its entries are
   discarded straight away. A batch, which is sent in one request, is first split up and sent again in
   parts, so that only the entries in the parts the server rejects are discarded.
-* A 5xx, `408 Request Timeout`, `429 Too Many Requests`, or a redirect is a problem with the
-  destination. With `async: true` or `batch: true`, the entry or batch being sent is discarded, and
-  the worker thread [backs off](operations.html#retry-a-failing-appender) before sending the next one,
-  so that the entries logged meanwhile wait on the queue. It stops for good after `async_max_retries`
-  (default `100`) such failures in a row; pass `async_max_retries: -1` to keep trying through a long
-  outage.
+* `408 Request Timeout`, `429 Too Many Requests`, or `503 Service Unavailable` asks to send the
+  request again later, and the server did not store the entries. With `async: true` or
+  `batch: true`, the worker thread [backs off](operations.html#retry-a-failing-appender), then sends
+  the same entry or batch again, so that it is written once the server is back, ahead of the entries
+  logged meanwhile, which wait on the queue. Once the server has answered it in this way after it
+  was sent again 3 times, it is discarded, and the worker thread carries on with the next one once
+  it has backed off, so that a request the server keeps turning away, such as one it answers with a
+  `429` that never clears, does not hold up the others.
+* Any other status, such as `500 Internal Server Error`, `502 Bad Gateway`, `504 Gateway Timeout`,
+  or a redirect, is a problem with the destination too, but the entry or batch is not sent again: a
+  `500` often comes again for the same request, and a proxy can answer a `502` or `504` once the
+  server behind it has stored it. With `async: true` or `batch: true`, it is discarded straight
+  away, and the worker thread backs off before sending the next one.
+
+A request that the appender could not send, since it could not connect to the server (the name does
+not resolve, the server cannot be reached, or it refuses the connection or does not accept it within
+`open_timeout`), is sent again in the same way as a `503`, but without counting towards the 3 times:
+the server has not answered it, so an outage loses no entries until the worker thread gives up. A
+request that failed once it was sent, such as one whose answer did not come within `read_timeout`,
+or whose connection was reset, is discarded instead, after the same back-off, since the server may
+have stored its entries. While a flush is waiting, such as the one at exit, a request that fails is
+discarded rather than sent again.
+
+The worker thread stops for good after `async_max_retries` (default `100`) failures in a row,
+discarding the entry or batch it was sending; pass `async_max_retries: -1` to keep trying through a
+long outage.
 
 The discarded entries are counted as `failed` in `SemanticLogger.stats`, and reported to the internal
 logger with the status code, the url without its credentials, and the start of the response body.

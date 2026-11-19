@@ -30,10 +30,12 @@ require "openssl"
 # Responses:
 # A response other than 2xx raises ResponseError from #log and #batch. A 4xx other than 408 and
 # 429 rejects the request itself, so #message_error? recognizes it, and an asynchronous appender
-# discards the entries straight away. Any other status, such as a 5xx, 408, or 429, which ask to
-# send the request again later, is a problem with the destination, so an asynchronous appender
-# discards the entries and backs off before carrying on. Either way they are counted as failed. An
-# appender that is not asynchronous reports the error.
+# discards the entries straight away, counted as failed. Any other status is a problem with the
+# destination, so an asynchronous appender backs off. After a 408, 429, or 503, which ask to send
+# the request again later, it then sends the entries again, up to
+# QueueProcessor::HeldWrite::MAX_RESENDS times, since the server did not store them (see
+# #wrote_nothing?). After any other, such as a 500, 502, 504, or a redirect, it discards them,
+# counted as failed. An appender that is not asynchronous reports the error.
 module SemanticLogger
   module Appender
     class Http < SemanticLogger::Subscriber
@@ -48,9 +50,11 @@ module SemanticLogger
       # the status code, the redacted url, and the start of the response body, for the internal
       # logger.
       class ResponseError < StandardError
-        # The 4xx statuses that ask the client to send the request again later:
-        # 408 Request Timeout and 429 Too Many Requests.
-        RETRY_LATER_CODES = [408, 429].freeze
+        # The statuses that ask the client to send the request again later, after which the server
+        # has not stored it: 408 Request Timeout, 429 Too Many Requests, and 503 Service
+        # Unavailable. Not a 500, which often comes again for the same request, or a 502 Bad Gateway
+        # or 504 Gateway Timeout, which a proxy can answer once the server behind it has stored it.
+        RETRY_LATER_CODES = [408, 429, 503].freeze
 
         # Returns [Integer] the status code of the response.
         attr_reader :code
@@ -61,15 +65,27 @@ module SemanticLogger
         end
 
         # Whether the server rejected the request itself, with a 4xx status other than 408 and
-        # 429, so that sending it again cannot succeed. A 5xx, 408, or 429 asks to send it again
-        # later, and a 3xx to send it elsewhere: those are problems with the destination.
+        # 429, so that sending it again cannot succeed. A 408, 429, or 5xx, and a 3xx, which asks to
+        # send it elsewhere, are problems with the destination instead.
         def rejected?
-          (400..499).cover?(code) && !RETRY_LATER_CODES.include?(code)
+          (400..499).cover?(code) && !retry_later?
         end
+
+        # Whether the server asks to send the request again later (see RETRY_LATER_CODES).
+        def retry_later? = RETRY_LATER_CODES.include?(code)
       end
 
       # Describes a valid url in the error raised for an invalid one.
       URL_FORMAT_HINT = "Should be similar to: 'http://hostname:port/path'".freeze
+
+      # The errors raised when the appender cannot connect to the server, so that the request was
+      # never sent: the server's name does not resolve, it cannot be reached, or it does not accept
+      # the connection, refusing it or within the open_timeout. Once connected, an error such as a
+      # read timeout or a reset connection may come after the server took the request.
+      NOT_SENT_ERRORS = [
+        SocketError, Net::OpenTimeout, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
+        Errno::EADDRNOTAVAIL
+      ].freeze
 
       # Create HTTP(S) log appender
       #
@@ -298,6 +314,34 @@ module SemanticLogger
         (exception.is_a?(ResponseError) && exception.rejected?) || super
       end
 
+      # Whether the request that raised the exception from #log or #batch stored none of its
+      # entries, and is worth sending again later (see Subscriber#wrote_nothing?): the server asked
+      # to send it again later (see ResponseError#retry_later?), or it was never sent (see
+      # #not_sent?). So an asynchronous appender sends the entries again once it has backed off.
+      #
+      # Decided from the class of the exception alone. Its cause, which Ruby sets to the error being
+      # handled when it was raised, such as a format error while a batch is split, says nothing about
+      # this request; #process_request raises the error of the request, not one from reconnecting.
+      #
+      # A subclass whose #log or #batch sends more than one request must override this to return
+      # false: a failure of a later request would otherwise have the entries of the earlier ones,
+      # which the server stored, sent again.
+      def wrote_nothing?(exception)
+        return exception.retry_later? if exception.is_a?(ResponseError)
+
+        not_sent?(exception)
+      end
+
+      # Whether the request that raised the exception from #log or #batch was never sent, because
+      # the appender could not connect (see NOT_SENT_ERRORS), so that the server has not answered it
+      # (see Subscriber#not_sent?). An asynchronous appender then sends the entries again without
+      # counting it towards QueueProcessor::HeldWrite::MAX_RESENDS, so that an outage loses none of
+      # them until the worker thread gives up after async_max_retries. Decided from the class of the
+      # exception alone, as for #wrote_nothing?.
+      def not_sent?(exception)
+        NOT_SENT_ERRORS.any? { |error_class| exception.is_a?(error_class) }
+      end
+
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.
       # See Utils.redacted_url.
       def redacted_url
@@ -381,6 +425,13 @@ module SemanticLogger
       # Returns true when the server answers with a 2xx status. Raises ResponseError for any other
       # status, so that the entries are counted as failed rather than written. Its message names
       # only the redacted url, since the url can hold credentials, and the start of the body.
+      #
+      # After a RuntimeError, such as a read timeout, it connects again for the next request, and
+      # raises the error of this one even when connecting again fails, since only that error says
+      # whether the server may have stored the request (see #wrote_nothing?). Not after a request it
+      # could not send (see #not_sent?), such as a Net::OpenTimeout: connecting again straight away
+      # would fail the same way, so that a server that cannot be reached would hold up each request
+      # for twice its open_timeout.
       def process_request(request, body = nil)
         if body
           request.body = compress ? compress_data(body) : body
@@ -399,8 +450,16 @@ module SemanticLogger
           code: response.code.to_i
         )
       rescue RuntimeError => e
-        reopen
+        reconnect unless not_sent?(e)
         raise e
+      end
+
+      # Connects again after a request failed. A failure to connect is reported to the internal
+      # logger, and left to the next request, which connects again when the connection is not open.
+      def reconnect
+        reopen
+      rescue StandardError => e
+        logger.warn("Could not connect again to #{redacted_url}", e)
       end
     end
   end

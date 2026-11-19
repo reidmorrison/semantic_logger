@@ -1,6 +1,9 @@
 require "semantic_logger/queue_processor/request"
 require "semantic_logger/queue_processor/throttled_counter"
 require "semantic_logger/queue_processor/reporter"
+require "semantic_logger/queue_processor/backoff"
+require "semantic_logger/queue_processor/inbox"
+require "semantic_logger/queue_processor/held_write"
 
 module SemanticLogger
   # Internal class that processes log messages from a queue on a separate thread.
@@ -20,19 +23,10 @@ module SemanticLogger
 
     attr_accessor :lag_check_interval, :lag_threshold_s, :dropped_message_report_seconds,
                   :batch_size, :batch_seconds, :non_blocking
-    attr_reader :appender, :queue, :max_queue_size, :signal,
-                :processed_count, :async_max_retries, :retry_count
-
-    # How often, in seconds, a thread waiting for room on the full queue checks whether the worker
-    # thread has stopped for good (see #stopped?), so that it does not wait for ever.
-    STOPPED_CHECK_SECONDS = 1
+    attr_reader :appender, :signal, :processed_count
 
     # Create a new processor and start its worker thread.
-    def self.start(**args)
-      processor = new(**args)
-      processor.thread
-      processor
-    end
+    def self.start(**args) = new(**args).tap(&:thread)
 
     # Parameters:
     #   appender: [SemanticLogger::Subscriber]
@@ -82,9 +76,12 @@ module SemanticLogger
     #   async_max_retries: [Integer]
     #     Maximum number of consecutive times to restart the worker thread after it raises an
     #     exception while processing messages. Each restart first sleeps for `retry_count` seconds
-    #     (1s, then 2s, ...) as a back-off. Once this many consecutive retries are exhausted the
-    #     thread stops instead of restarting. The counter resets to zero whenever a message is
-    #     processed successfully.
+    #     (1s, then 2s, ...) as a back-off, unless a flush or close is waiting (see #flush). Once this
+    #     many consecutive retries are exhausted the thread stops instead of restarting. The counter
+    #     resets to zero whenever a message is processed successfully. A message or batch that the
+    #     destination failed is written again after the back-off when the appender says that the
+    #     write wrote none of it (see Subscriber#wrote_nothing?), up to HeldWrite::MAX_RESENDS times
+    #     after the destination answered with a failure, and is otherwise discarded.
     #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour). The back-off
     #         still applies, and still resets after any successful message.
     #     A worker thread started again by #reopen in the same process carries on with the count, so
@@ -104,7 +101,6 @@ module SemanticLogger
                    dropped_message_report_seconds: 30,
                    async_max_retries: 100)
       @appender                       = appender
-      @max_queue_size                 = max_queue_size
       @lag_check_interval             = lag_check_interval
       @lag_threshold_s                = lag_threshold_s
       @batch                          = batch
@@ -112,14 +108,14 @@ module SemanticLogger
       @batch_seconds                  = batch_seconds
       @non_blocking                   = non_blocking
       @dropped_message_report_seconds = dropped_message_report_seconds
-      @async_max_retries              = async_max_retries
-      @retry_count                    = 0
+      @backoff                        = Backoff.new(async_max_retries)
       @thread                         = nil
       # Only batch mode parks the worker on the signal; streaming mode never touches it.
       @signal                         = Concurrent::Event.new if batch
       @reporter                       = Reporter.new(appender)
       @processed_count                = 0
-      create_queue
+      @inbox                          = Inbox.new(max_queue_size)
+      @held                           = HeldWrite.new
 
       return unless batch? && !appender.respond_to?(:batch)
 
@@ -128,6 +124,12 @@ module SemanticLogger
 
     # Internal logger used to report problems encountered while processing log messages.
     def logger = @reporter.logger
+
+    # Returns [Integer] the maximum number of consecutive retries after a failure (see #initialize).
+    def async_max_retries = @backoff.max_retries
+
+    # Returns [Integer] the number of consecutive failures, since a message was last processed.
+    def retry_count = @backoff.retry_count
 
     # Returns [Thread] the worker thread.
     #
@@ -142,8 +144,14 @@ module SemanticLogger
     # Returns [true|false] whether the worker thread is running.
     def active? = @thread&.alive?
 
+    # Returns [Queue|SizedQueue] the queue of log messages and requests waiting for the worker thread.
+    def queue = @inbox.queue
+
+    # Returns [Integer] the most entries the queue holds, or -1 for no limit.
+    def max_queue_size = @inbox.max_queue_size
+
     # Returns [true|false] whether the queue has a capped size.
-    def capped? = @capped
+    def capped? = @inbox.capped?
 
     # Returns [true|false] whether messages are dropped instead of blocking when the queue is full.
     # Only a capped queue can drop messages.
@@ -172,7 +180,7 @@ module SemanticLogger
     # queue, so messages are also dropped instead of blocking the calling thread forever. That
     # includes a message already waiting for room on the full queue when the worker thread stops.
     def log(log)
-      enqueued = enqueue(log, wait: !(non_blocking? || stopped?)) { !stopped? }
+      enqueued = @inbox.push(log, wait: !(non_blocking? || stopped?)) { !stopped? }
       message_dropped unless enqueued
 
       # For batches wake up the processing thread once the number of queued messages has been
@@ -185,6 +193,10 @@ module SemanticLogger
 
     # Flush all queued log entries to the appender.
     #  All queued log messages are written and then the appender is flushed.
+    #
+    # A flush or close does not wait out back-offs after the destination failed: submitting it ends
+    # the back-off under way, and until it has run, a message or batch that the destination fails is
+    # discarded, rather than written again after a back-off.
     def flush
       submit_request(:flush)
     end
@@ -215,16 +227,17 @@ module SemanticLogger
     # Ruby does not allow a Mutex to be locked, so it takes none: it uses only Queue and Thread
     # methods, which Ruby allows there.
     def reopen
-      return restart_worker unless forked?
+      return restart_worker unless @inbox.forked?
 
       # Workaround CRuby crash on fork by recreating queue on reopen
       #   https://github.com/reidmorrison/semantic_logger/issues/103
-      @queue&.close
-      create_queue
+      @inbox.recreate
+      # The parent process writes the messages it held to write again.
+      @held.release
 
       @thread&.kill if @thread&.alive?
       # A worker thread new to this process, which has not failed to write yet.
-      @retry_count = 0
+      @backoff.restart
       spawn_worker
     end
 
@@ -272,39 +285,6 @@ module SemanticLogger
       nil
     end
 
-    # Creates the queue, which belongs to this process: see #forked?.
-    def create_queue
-      @pid = ::Process.pid
-      if max_queue_size == -1
-        @queue  = Queue.new
-        @capped = false
-      else
-        @queue  = SizedQueue.new(max_queue_size)
-        @capped = true
-      end
-    end
-
-    # Whether this is a child of the process that created the queue, whose copy of the queue then
-    # holds that process's entries.
-    def forked? = @pid != ::Process.pid
-
-    # Add to the `target` queue, the current one by default. Returns whether it was added.
-    #
-    # A queue that is not capped is never full, and its #push takes no timeout. On a full queue,
-    # without `wait`, returns false at once. With `wait`, waits for room while the block returns
-    # true, which it is asked every STOPPED_CHECK_SECONDS, and returns false once it returns false,
-    # such as once the worker thread has stopped for good, since then nothing makes room.
-    #
-    # Also called from a signal trap, where Ruby allows a Queue to wait.
-    def enqueue(item, target = queue, wait:)
-      return target.push(item) && true unless capped?
-
-      loop do
-        return true if target.push(item, timeout: wait ? STOPPED_CHECK_SECONDS : 0)
-        return false unless wait && yield
-      end
-    end
-
     # Separate thread for processing log messages.
     #
     # This thread is designed to never go down unless the main thread terminates or the appender is
@@ -312,25 +292,30 @@ module SemanticLogger
     # async_max_retries times. Any other exception, even one from the first report, stops this
     # processor, which then drops new messages, rather than ending the thread and leaving the
     # calling threads blocked on a full queue.
+    #
+    # A flush or close that is waiting (see #flush) does not wait out a back-off, so processing then
+    # restarts straight away, without counting a retry.
     def process
       safe_log(:trace, "Async: Appender thread active")
       begin
-        carry_on = batch? ? process_messages_in_batches : process_messages
+        resend_held
+        carry_on = @stack_overflow || (batch? ? process_messages_in_batches : process_messages)
       rescue StandardError => e
-        if async_max_retries == -1 || retry_count < async_max_retries
-          @retry_count += 1
-          limit = async_max_retries == -1 ? "unlimited" : async_max_retries
-          safe_log(:warn,
-                   "Async: Restarting due to exception, retry #{retry_count} of #{limit}, sleeping #{retry_count}s", e)
-          sleep(retry_count)
+        retry if @backoff.requests_waiting?
+        if @backoff.retry?
+          safe_log(:warn, "Async: Restarting due to exception, retry #{retry_count} of #{@backoff.limit}, " \
+                          "sleeping #{retry_count}s", e)
+          @backoff.wait
           retry
-        else
-          @stopped = true
-          safe_log(:error, "Async: Stopping after #{retry_count} failed retries, dropping new messages", e)
         end
+
+        @stopped = true
+        discard_held(e)
+        safe_log(:error, "Async: Stopping after #{retry_count} failed retries, dropping new messages", e)
       end
     rescue Exception => e
       @stopped = true
+      discard_held(e)
       safe_log(:error, "Async: Stopping due to fatal exception", e)
     ensure
       # A thread that overflowed its stack hands the queue over to a new one (see #stack_overflowed).
@@ -354,7 +339,7 @@ module SemanticLogger
           write_message(message)
           return true if @stack_overflow
 
-          @retry_count = 0 unless retry_count.zero?
+          @backoff.reset
           count += 1
           # Check every few log messages whether this appender thread is falling behind
           if count > lag_check_interval
@@ -406,31 +391,42 @@ module SemanticLogger
     # queue with them. Returns false once a command (:close) stops processing.
     #
     # When the batch cannot be written, for example because the destination is unavailable, the
-    # messages not yet written are discarded and counted as failed, since #process starts again
-    # from the queue. The commands still run before the error propagates to #process to back off.
-    # Otherwise they would be lost, and a caller waiting on #flush or #close, such as the flush at
-    # exit, would wait forever.
+    # messages not yet written are held to be written again after the back-off, or discarded and
+    # counted as failed (see #not_written). The commands still run before the error propagates to
+    # #process to back off. Otherwise they would be lost, and a caller waiting on #flush or #close,
+    # such as the flush at exit, would wait forever. Since they are waiting, the messages are then
+    # discarded rather than held. A command behind a close is not run, and so no longer waits.
     def write_batch_then_run(logs, commands)
       accounted = processed_count + failed_count
       unless logs.empty?
         write_batch(logs)
-        @retry_count = 0 unless retry_count.zero?
+        @backoff.reset
       end
       commands.all? { |command| run_command(command) }
     rescue StandardError => e
       # Every message taken off the queue was written or already discarded, except those still
       # to be written when the error was raised: the last ones, since a batch is written in order.
+      # The write that raised wrote none of them, if the appender says so, and the rest were not
+      # sent at all.
       unwritten = logs.size - (processed_count + failed_count - accounted)
-      messages_failed(logs.last(unwritten), e) if unwritten.positive?
+      not_written(logs.last(unwritten), e, hold: commands.empty?) if unwritten.positive?
+      # The commands run once the batch is written, until one raises: the last one that ran, if any.
+      failed = commands.select(&:ran?).last
       raise e if commands.all? { |command| process_message_after_failure(command) }
 
-      safe_log(:warn, "Async: Closed without writing #{unwritten} log messages", e)
+      message = failed ? "Failed to #{failed.command} the appender" : "Closed without writing #{unwritten} log messages"
+      safe_log(:warn, "Async: #{message}", e)
       false
+    ensure
+      commands.each(&:done)
     end
 
-    # Run a command after a batch could not be written. Returns false once a command (:close)
-    # stops processing, even when the command itself fails.
+    # Run a command after a batch could not be written, unless it has run already, such as a flush
+    # that raised. Returns false once a command (:close) stops processing, even when the command
+    # itself fails.
     def process_message_after_failure(command)
+      return command.command != :close if command.ran?
+
       run_command(command)
     rescue StandardError => e
       safe_log(:warn, "Async: Failed to #{command.command} the appender", e)
@@ -447,19 +443,21 @@ module SemanticLogger
 
     # Write one log message to the appender.
     #
-    # A message that cannot be written is discarded and reported. When its content is at fault
-    # (see #message_error?) the thread carries on with the next message. Any other error, such as
-    # the destination being unavailable, then propagates to #process, which backs off before
-    # carrying on with the next message. A stack overflow discards the message too (see
-    # #stack_overflowed).
+    # A message whose content cannot be written (see #message_error?) is discarded and reported,
+    # and the thread carries on with the next message. Any other error, such as the destination
+    # being unavailable, propagates to #process, which backs off before writing the message again,
+    # or before carrying on with the next one, having discarded it (see #not_written). A stack
+    # overflow discards the message too (see #stack_overflowed).
     def write_message(log)
       appender.log(log)
       @processed_count += 1
     rescue SystemStackError => e
       stack_overflowed([log], e)
     rescue StandardError => e
-      messages_failed([log], e)
-      raise e unless message_error?(e)
+      return messages_failed([log], e) if message_error?(e)
+
+      not_written([log], e)
+      raise e
     end
 
     # Write the log messages to the appender as a batch.
@@ -501,6 +499,49 @@ module SemanticLogger
     # #message_error?) has every error treated as the destination's, so the thread backs off.
     def message_error?(exception) = appender.respond_to?(:message_error?) && appender.message_error?(exception)
 
+    # Whether the appender says that the write that raised the exception wrote none of the log
+    # messages it was given. An appender that cannot tell (it does not implement #wrote_nothing?)
+    # may have written some of them, so they are not written again.
+    def wrote_nothing?(exception) = appender.respond_to?(:wrote_nothing?) && appender.wrote_nothing?(exception)
+
+    # Whether the appender says that the write that raised the exception sent nothing to the
+    # destination, such as when it could not connect, so that the destination has not answered it.
+    # An appender that cannot tell (it does not implement #not_sent?) has every failure counted
+    # towards HeldWrite::MAX_RESENDS.
+    def not_sent?(exception) = appender.respond_to?(:not_sent?) && appender.not_sent?(exception)
+
+    # Log messages that the destination kept from being written. They are held to be written again
+    # once the thread has backed off (see #process), when the appender says that the write wrote
+    # none of them, up to HeldWrite::MAX_RESENDS times after the destination answered with a failure
+    # (a write it never received, see #not_sent?, is not counted). Otherwise they are discarded and
+    # counted as failed, since writing them again could write some of them twice, or has failed every
+    # time. So they are while a flush or close is waiting, such as one taken off the queue with them
+    # (`hold: false`), which must not wait for them to be written again.
+    def not_written(logs, exception, hold: true)
+      hold &&= wrote_nothing?(exception) && !@backoff.requests_waiting?
+      return if hold && @held.hold(logs, answered: !not_sent?(exception))
+
+      messages_failed(logs, exception)
+    end
+
+    # Write the log messages held after the destination failed (see #not_written) again, ahead of
+    # those still on the queue, as they were written: as a batch when batching. When that fails as
+    # well, they are held again, or discarded once the destination has answered them with a failure
+    # after they were written again HeldWrite::MAX_RESENDS times, and the error propagates to
+    # #process, which backs off before carrying on.
+    def resend_held
+      @held.resend do |logs|
+        batch? ? write_batch_then_run(logs, []) : write_message(logs.first)
+        @backoff.reset
+      end
+    end
+
+    # Discard the log messages held to be written again, if any, once they will not be.
+    def discard_held(exception)
+      logs = @held.release
+      messages_failed(logs, exception) if logs
+    end
+
     # Record log messages discarded because they could not be written, whether their content or
     # the destination was at fault, reported at most once every dropped_message_report_seconds
     # after the first (see Reporter#failed).
@@ -521,6 +562,16 @@ module SemanticLogger
       safe_log(:warn, "Async: Appender thread has fallen behind by #{diff} seconds with " \
                       "#{queue.size} messages queued up. Consider reducing the log level or " \
                       "changing the appenders")
+    end
+
+    # Add the request to the queue, counted as waiting until it has run or will not (see Request#done),
+    # so that the worker thread does not wait out back-offs meanwhile (see Backoff). Returns false
+    # when it could not be added.
+    def enqueue_request(request, submitted_to)
+      @backoff.request_submitted
+      added = @inbox.push(request, submitted_to, wait: true) { active? && !stopped? }
+    ensure
+      request.done unless added
     end
 
     # Submit a command to the worker thread and wait for the reply.
@@ -546,8 +597,8 @@ module SemanticLogger
       signal.set if batch?
 
       submitted_to = queue
-      request      = Request.new(command)
-      return false unless enqueue(request, submitted_to, wait: true) { active? && !stopped? }
+      request      = Request.new(command) { @backoff.request_done }
+      return false unless enqueue_request(request, submitted_to)
 
       # A reply can come while the request is on the current queue, which #reopen replaces, and a
       # worker thread is running it, which may be a new one after a stack overflow.

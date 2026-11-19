@@ -383,10 +383,17 @@ agent.
   metric subscriber, now raise an error from `#log` and `#batch` when the server answers with a status
   other than 2xx, instead of reporting it and carrying on. With `async: true` or `batch: true`, the
   entries the server did not accept are now counted as `failed` in `SemanticLogger.stats`, rather
-  than `processed`. On a 5xx, 408, 429, or a redirect, the worker thread now backs off (1 second, then
-  2, ...) before sending the next entry or batch, and stops for good after `async_max_retries`
-  (default `100`) such failures in a row, as it already did when the server could not be reached.
-  Pass `async_max_retries: -1` to keep trying through a long outage. On any other 4xx, a batch is now
+  than `processed`. On a 408, 429, or 503, the worker thread now backs off (1 second, then 2, ...),
+  then sends the same entry or batch again, up to 3 times, before it discards it and carries on with
+  the next one. So does a request it could not send because it could not connect, which was
+  discarded before, except that such a failure does not count towards the 3 times, since the server
+  never answered. On any other 5xx, such as a 500, 502, or 504, or a redirect, it discards the entry
+  or batch, then backs off before sending the next one. It stops for good after `async_max_retries`
+  (default `100`) failures in a row. During an outage the entries logged meanwhile now wait on the
+  queue while the worker thread backs off, rather than being sent, and discarded, one per back-off,
+  so with a capped queue (the default) and without `non_blocking`, logging waits once the queue is
+  full until the server is back or the thread gives up. Pass `async_max_retries: -1` to keep trying
+  through a long outage. On any other 4xx, a batch is now
   split up and sent again in parts, to find the entries the server rejects, so a server that kept
   some entries of a request it rejected can store them twice. See
   [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
@@ -402,6 +409,19 @@ agent.
   `Failed to log to appender`, with the error and its backtrace. A subclass of
   `SemanticLogger::Appender::Http` that checks the result of `post` or `put` now gets a
   `SemanticLogger::Appender::Http::ResponseError` raised instead of `false`.
+* A flush or close of an appender added with `async: true` or in batches no longer waits out the
+  back-offs of its worker thread during an outage, which could keep the flush at exit waiting for
+  minutes: 1 second for the first entry queued, 2 for the next, and so on. It ends the back-off
+  under way, and until it has run, an entry or batch that the destination fails is discarded,
+  counted as `failed`, rather than sent again after a back-off. It still waits while each entry
+  ahead of it is tried, up to the appender's own timeouts. A custom appender can now say that a
+  write that raised wrote nothing, from `#wrote_nothing?(exception)`, so that the worker thread
+  writes it again after the back-off, up to 3 times once the destination answered it, and that the
+  write never reached the destination, from `#not_sent?(exception)`, which is not counted; see
+  [Custom appenders](config.html#custom-appenders). A subclass of `SemanticLogger::Appender::Http`
+  whose `#log` or `#batch` sends more than one request inherits a `#wrote_nothing?` that answers
+  `true` for a 503 or a refused connection from any of them, which sends the entries of the earlier
+  requests a second time: override it to return `false` for a failure after the first request.
 * The `:elasticsearch` and `:opensearch` appenders now send again the entries of a bulk request that
   the server rejected with status 429, because its write queue was full, up to 3 times, after waiting
   0.2, 0.4, then 0.8 seconds. Before, they were reported and discarded straight away. That holds up

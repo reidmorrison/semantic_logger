@@ -150,6 +150,24 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   not indexed are reported and discarded, as before. See
   [Elasticsearch](https://logger.reidmorrison.com/appenders.html#elasticsearch) and the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- An appender added with `async: true` or in batches sends an entry or batch that its destination
+  could not take again once it has backed off, rather than discarding it, when the appender says that
+  the write wrote nothing and is worth trying again. Once the destination has answered it with a
+  failure after it was sent again 3 times, it is discarded, and the thread carries on with the next
+  one; a write that never reached the destination, such as one that could not connect, is not
+  counted, so an outage loses no entries until the thread gives up after `async_max_retries`. The
+  `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx` metric
+  subscriber, say so for a 408, 429, or 503, such as a 503 while Loki restarts, and for a request
+  they could not send because they could not connect. A 500, 502, or 504, and a request that failed
+  once it was sent, such as one whose answer timed out, are still discarded. A custom appender says
+  so from the new `#wrote_nothing?(exception)`, and that the write never reached the destination
+  from `#not_sent?(exception)`, both of which return `false` by default.
+  A flush or close, including the flush at exit, no longer waits out the back-offs during an outage:
+  submitting one ends the back-off under way, and until it has run, an entry or batch that fails is
+  discarded, counted as `failed`, without backing off. It still waits while each entry ahead of it is
+  tried. Before, a flush with 5 entries queued during an outage waited 1 + 2 + 3 + 4 + 5 seconds. See
+  [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
+  and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ### Deprecated
 
@@ -652,11 +670,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   server rejected for one entry lost every other entry with it, and while the server was unavailable,
   such as Loki restarting, the worker thread kept sending, and losing, each entry or batch at once.
   Now a 4xx other than 408 and 429 discards the entries straight away, and a batch is first split up
-  and sent again in parts, so that the entries in the parts the server accepts are written. A 5xx,
-  408, 429, or redirect discards the entry or batch being sent, and the worker thread backs off before
-  sending the next one, so that the entries logged meanwhile wait on the queue. Either way they are
-  counted as `failed`, and reported with the status code, the url without its credentials, and the
-  start of the response body. See
+  and sent again in parts, so that the entries in the parts the server accepts are written. Any other
+  status is a problem with the destination, so the worker thread backs off before sending again, and
+  the entries logged meanwhile wait on the queue: a 408, 429, or 503 sends the same entry or batch
+  again (see the entry on sending again after an outage), and any other, such as a 500, 502, 504, or
+  redirect, discards it. The entries discarded are counted as `failed`, and reported with the status
+  code, the url without its credentials, and the start of the response body. See
   [When the server does not accept a request](https://logger.reidmorrison.com/appenders.html#when-the-server-does-not-accept-a-request)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - An appender added with `async: true` or in batches keeps logging in the child process after a fork

@@ -38,6 +38,38 @@ class RequestTest < Minitest::Test
       assert(unknown.wait { finished_thread.alive? })
     end
 
+    it "has run once it has replied, even when the block raised" do
+      refute_predicate request, :ran?
+      assert_raises(RuntimeError) { request.reply { raise "boom" } }
+      assert_predicate request, :ran?
+    end
+
+    it "is done once, when it has run, however many times it is called" do
+      calls   = 0
+      request = SemanticLogger::QueueProcessor::Request.new(:flush) { calls += 1 }
+      request.reply { nil }
+      request.done
+
+      assert_equal 1, calls
+    end
+
+    it "is done once when it will not run, such as one skipped behind a close" do
+      calls   = 0
+      request = SemanticLogger::QueueProcessor::Request.new(:flush) { calls += 1 }
+      2.times { request.done }
+
+      assert_equal 1, calls
+      refute_predicate request, :ran?
+    end
+
+    it "is done once when called from many threads at the same time" do
+      calls   = Queue.new
+      request = SemanticLogger::QueueProcessor::Request.new(:flush) { calls << true }
+      Array.new(8) { Thread.new { request.done } }.each(&:join)
+
+      assert_equal 1, calls.size
+    end
+
     it "returns false once the worker thread ends without replying" do
       refute(request.wait { finished_thread.alive? })
     end
