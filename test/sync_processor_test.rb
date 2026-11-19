@@ -1,7 +1,48 @@
 require_relative "test_helper"
+require_relative "signal_trap_helper"
 
 module SemanticLogger
   class SyncProcessorTest < Minitest::Test
+    # Records the messages it writes, whether it wrote one while it wrote another, and the threads that
+    # flushed, reopened, and closed it. Holds the thread that writes an entry whose message is "hold"
+    # until released through #gate, and runs #on_write as it writes each entry.
+    class RecordingAppender < SemanticLogger::Subscriber
+      attr_reader :messages, :entered, :gate, :flushed_on, :reopened_on, :closed_on
+      attr_accessor :on_write
+
+      def initialize
+        super
+        @messages = []
+        @entered  = Queue.new
+        @gate     = Queue.new
+        @writing  = false
+      end
+
+      def log(log)
+        @overlapped = true if @writing
+        @writing    = true
+        if log.message == "hold"
+          @entered << true
+          @gate.pop
+        end
+        on_write&.call(log)
+        @messages << log.message
+      ensure
+        @writing = false
+      end
+
+      def overlapped? = @overlapped || false
+
+      def flush = @flushed_on = Thread.current
+
+      def reopen = @reopened_on = Thread.current
+
+      def close
+        @closed_on = Thread.current
+        :closed
+      end
+    end
+
     describe SemanticLogger::SyncProcessor do
       let(:appender) { SemanticLogger::Test::CaptureLogEvents.new }
       let(:processor) do
@@ -134,6 +175,161 @@ module SemanticLogger
 
           assert_equal [true, false], inside
           refute_predicate sync, :current_thread_inside?
+        end
+      end
+
+      describe "in a signal trap" do
+        include SignalTrapHelper
+
+        let(:recorder) { RecordingAppender.new }
+        let(:sync) { SemanticLogger::SyncProcessor.new(SemanticLogger::Appenders.new.tap { |a| a << recorder }) }
+
+        def entry(message) = SemanticLogger::Log.new("Test", :info).tap { |log| log.message = message }
+
+        # Another thread holds the processor, writing an entry until #release.
+        def hold
+          holder = Thread.new { sync.log(entry("hold")) }
+          recorder.entered.pop
+          holder
+        end
+
+        def release(after: 0)
+          Thread.new do
+            sleep(after)
+            recorder.gate << true
+          end
+        end
+
+        def wait_for(deadline: Time.now + 5)
+          sleep(0.01) until yield || Time.now > deadline
+        end
+
+        it "writes an entry at once when no other call is inside the processor" do
+          written = in_signal_trap do
+            sync.log(entry("in trap"))
+            recorder.messages.dup
+          end
+
+          assert_equal ["in trap"], written
+        end
+
+        it "writes an entry just after the entry that another thread is writing, before the next one" do
+          holder  = hold
+          written = in_signal_trap do
+            sync.log(entry("in trap"))
+            recorder.messages.dup
+          end
+
+          assert_empty written
+          release(after: 0.05)
+          sync.log(entry("after"))
+          holder.join
+
+          assert_equal ["hold", "in trap", "after"], recorder.messages
+        end
+
+        it "writes an entry just after the write that the trap interrupted, not inside it" do
+          written           = nil
+          recorder.on_write = lambda do |log|
+            next unless log.message == "interrupted"
+
+            written = in_signal_trap do
+              sync.log(entry("in trap"))
+              recorder.messages.dup
+            end
+          end
+          sync.log(entry("interrupted"))
+          sync.log(entry("after"))
+
+          assert_empty written
+          assert_equal ["interrupted", "in trap", "after"], recorder.messages
+          refute_predicate recorder, :overlapped?
+        end
+
+        it "writes an entry from a thread of its own when no other call follows" do
+          holder = hold
+          in_signal_trap { sync.log(entry("in trap")) }
+          holder.kill.join
+          wait_for { recorder.messages.any? }
+
+          assert_equal ["in trap"], recorder.messages
+        end
+
+        it "flushes the appenders outside the trap, after the entries pending, and waits for it" do
+          holder = hold
+          release(after: 0.05)
+          flushed = in_signal_trap do
+            sync.log(entry("in trap"))
+            sync.flush
+            [recorder.flushed_on, recorder.messages.dup]
+          end
+          holder.join
+
+          refute_nil flushed.first
+          refute_equal Thread.current, flushed.first
+          assert_equal ["hold", "in trap"], flushed.last
+        end
+
+        it "flushes just after the write that the trap interrupted, without waiting for it" do
+          flushed           = :not_called
+          recorder.on_write = lambda do |log|
+            next unless log.message == "interrupted"
+
+            flushed = in_signal_trap do
+              sync.flush
+              recorder.flushed_on
+            end
+          end
+          sync.log(entry("interrupted"))
+
+          assert_nil flushed
+          assert_equal Thread.current, recorder.flushed_on
+        end
+
+        it "reopens the appenders outside the trap" do
+          reopened = in_signal_trap do
+            sync.reopen
+            recorder.reopened_on
+          end
+
+          refute_nil reopened
+          refute_equal Thread.current, reopened
+        end
+
+        it "removes an appender and returns the result of closing it" do
+          closed = in_signal_trap { sync.remove(recorder) }
+
+          assert_equal :closed, closed
+          refute_includes sync.appenders, recorder
+        end
+
+        it "closes the appenders" do
+          in_signal_trap { sync.close }
+
+          refute_nil recorder.closed_on
+          assert_empty sync.appenders
+        end
+
+        it "raises what a call raised outside the trap" do
+          recorder.define_singleton_method(:close) { raise IOError, "cannot close" }
+          raised = in_signal_trap { sync.remove(recorder) }
+
+          assert_kind_of IOError, raised
+        end
+
+        it "returns the statistics, counting the entries still to be written" do
+          holder = hold
+          stats  = in_signal_trap do
+            sync.log(entry("in trap"))
+            sync.stats
+          end
+          release
+          holder.join
+
+          assert_equal 1, stats[:queue_size]
+          assert_equal 1, stats[:processed]
+          assert_equal 0, sync.stats[:queue_size]
+          assert_equal 2, sync.stats[:processed]
         end
       end
 

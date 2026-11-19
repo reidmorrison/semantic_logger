@@ -445,7 +445,8 @@ module SemanticLogger
   # reopened: a flush after it returns once they have. One added with async: true or in batches has
   # a thread of its own; a batching one reopens at its next batch, or flush. That also lets this be
   # called from a signal trap. With sync!, the appenders without a thread of their own are reopened
-  # on the calling thread instead, so that it then cannot be called from a signal trap.
+  # on the calling thread instead, or, in a signal trap, on a thread that the trap starts and waits
+  # for (see SyncProcessor#reopen).
   #
   # Note:
   #   Not all appender's implement reopen.

@@ -793,6 +793,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `SemanticLogger.call_site_level` set: adding to their caches locked a Mutex. In a trap, a new
   thread caches the logger before the trap returns, or just after it when the trap interrupted a
   thread adding to the cache, and the call site is captured without remembering its path.
+- In synchronous mode (`SemanticLogger.sync!` or `require "semantic_logger/sync"`), a log call in a
+  signal trap no longer raises `ThreadError` ("can't be called from trap context") into the
+  application, nor does `SemanticLogger.flush`, `close`, `reopen`, `remove_appender`, or `stats`,
+  nor `fork` there. The message is written at once when no other thread is writing one, and
+  otherwise just after, before any message logged after the trap, without the trap waiting for it.
+  When the trap interrupted its own thread while it was writing a message, the trap's message is
+  written once that one is, never in the middle of it. A flush, close, reopen, or appender removal
+  in a trap runs on a thread that the trap starts and waits for. Before, every one of these calls
+  waited for a lock, which Ruby does not allow in a trap. See
+  [Synchronous operation](https://logger.reidmorrison.com/operations.html#synchronous-operation).
 - The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
   metric subscriber, no longer count an entry that the server did not accept as written. They
   reported a response other than 2xx to the internal logger and carried on, so with `async: true` or
