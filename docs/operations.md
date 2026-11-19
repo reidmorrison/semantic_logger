@@ -258,7 +258,8 @@ report made just after the trap rather than in it.
 Either setting keeps logging calls from blocking; neither makes `SemanticLogger.flush` return sooner.
 A flush, including the one that runs automatically when the process exits, still waits for every
 message already on the queue to be written, unless the destination of an appender added with
-`async: true` or in batches fails meanwhile (see [Retry a failing appender](#retry-a-failing-appender)).
+`async: true` or in batches fails meanwhile, or, at exit, that of any other appender (see
+[Retry a failing appender](#retry-a-failing-appender)).
 
 `non_blocking` applies only to a capped queue. An uncapped queue (`max_queue_size: -1`) never blocks
 and never drops, but can grow without bound.
@@ -358,6 +359,23 @@ an outage the process exits within seconds, the time one write takes to fail, ra
 hours, and an appender whose destination takes the messages still writes every one of them. A
 `SemanticLogger.flush` called while the process runs reaches each appender through that thread,
 behind the messages logged before it.
+
+An appender added without `async: true`, and not in batches, such as a plain `:http`,
+`:splunk_http`, `:tcp`, or `:udp`, has no queue of its own: the thread that writes to every
+appender writes each message to it in turn, and carries on with the next one when it fails, without
+backing off. So during an outage, the flush at exit would wait while each message queued ahead of
+it failed in turn, up to the `read_timeout` or `open_timeout` of an HTTP based appender whose server
+does not answer. While the process exits, once a write to such an appender fails because of its
+destination, rather than the content of the message, it is given no more messages for the rest of
+the flush at exit. The messages it was not given are discarded, and the flush at exit reports their
+number to the internal logger, with the error, as
+`Discarded 29 log message(s) during the flush at exit, after the destination failed, for appender: SemanticLogger::Appender::Http`.
+The flush at exit then still flushes it, so that it delivers the messages it had already accepted,
+such as those that the producer of a `:kafka` appender holds; for `:http`, `:tcp`, or `:udp` that
+flush does nothing. The other appenders are still given every message. Such an appender has no count
+of its own in `SemanticLogger.stats`, so that report is the only record of them. While the process
+runs, it is given every message, as before, and so is it in a child process forked during the flush
+at exit.
 
 A flush or close is never left waiting on a worker thread that cannot answer it. When a batch cannot
 be written, a flush or close taken off the queue with it still runs before the thread backs off; a

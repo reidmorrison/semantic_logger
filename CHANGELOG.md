@@ -195,6 +195,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   handing it an entry. A destination that takes the entries still gets every one of them. See
   [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- During an outage of the destination of an appender added without `async: true`, and not in
+  batches, such as a plain `:http`, `:splunk_http`, `:tcp`, or `:udp`, the process exits within
+  seconds too. Such an appender has no queue of its own, and the thread that writes to every
+  appender does not back off when it fails, so the flush at exit waited while each queued entry
+  failed in turn, up to the `read_timeout` or `open_timeout` of an HTTP based appender each. Now,
+  once its write fails because of its destination while the process exits, rather than the content
+  of the entry, it is given no more entries for the rest of the flush at exit, and the number it was
+  not given is reported to the internal logger at the flush, which then still flushes it, so that it
+  delivers the entries it already accepted, such as those that the producer of a `:kafka` appender
+  holds. The other appenders still get every entry. See
+  [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender)
+  and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 
 ### Deprecated
 

@@ -554,6 +554,17 @@ agent.
   it an entry. The entries queued after a flush, and every entry to a destination that takes them,
   are written as before. The entries discarded are reported to the internal logger, as for any entry
   that could not be written.
+* During an outage of the destination of an appender added without `async: true`, and not in
+  batches, such as a plain `:http`, `:splunk_http`, `:tcp`, or `:udp`, the process now exits within
+  seconds too. Once a write to such an appender fails because of its destination while the process
+  exits, it is given no more of the entries queued ahead of the flush at exit, or logged meanwhile,
+  and the number it was not given is reported to the internal logger, as
+  `Discarded ... log message(s) during the flush at exit, after the destination failed`. The flush
+  at exit still flushes it, so that it delivers the entries it already accepted. Before, the
+  flush at exit waited while each one failed in turn, up to the `read_timeout` or `open_timeout` of
+  an HTTP based appender each. The other appenders still get every entry, and while the process
+  runs, such an appender is still given every entry. See
+  [Retry a failing appender](operations.html#retry-a-failing-appender).
 * The `:elasticsearch` and `:opensearch` appenders now send again the entries of a bulk request that
   the server rejected with status 429, because its write queue was full, up to 3 times, after waiting
   0.2, 0.4, then 0.8 seconds. Before, they were reported and discarded straight away. That holds up

@@ -536,7 +536,11 @@ long outage.
 
 The discarded entries are counted as `failed` in `SemanticLogger.stats`, and reported to the internal
 logger with the status code, the url without its credentials, and the start of the response body.
-Without `async:` or `batch:`, each request that fails is reported in the same way.
+Without `async:` or `batch:`, each request that fails is reported in the same way, and while the
+process exits, once a request fails other than by the server rejecting it (a 4xx status other than
+408 and 429), the appender is given no more entries for the rest of the flush at exit, rather than
+have the flush at exit wait for each one to fail in turn; see
+[Retry a failing appender](operations.html#retry-a-failing-appender).
 
 While the worker thread backs off, the entries logged meanwhile wait on the appender's own queue, as
 they already did while the server could not be reached. Once that queue is full (`max_queue_size`,
