@@ -831,22 +831,25 @@ Send log entries to [Grafana Loki](https://grafana.com/docs/loki) via its
 
 ~~~ruby
 SemanticLogger.add_appender(
-  appender: :loki,
-  url:      "https://logs-prod-001.grafana.net",
-  username: "grafana_username",
-  password: "grafana_token_here",
-  compress: true
+  appender:  :loki,
+  url:       "https://logs-prod-001.grafana.net",
+  username:  "grafana_username",
+  password:  "grafana_token_here",
+  compress:  true,
+  formatter: {loki: {structured_metadata: [:pid, :thread]}}
 )
 ~~~
 
 Set the URL, username, and password to match your Loki instance. Set `compress: true` to compress the
 log messages. The ingestion path is appended to the url, so a query string on the url is kept and sent
-with every push.
+with every push. `structured_metadata:` writes the process id and the thread name as structured
+metadata rather than as labels, see
+[pid and thread as structured metadata](#pid-and-thread-as-structured-metadata).
 
 Each entry is a stream whose labels are `pid`, `host`, `application`, `environment`, `level`,
-`thread`, `tags` (as JSON), each named tag, and each value an `on_log` subscriber adds to the context.
-Its line is the message. Its structured metadata holds each payload key, and these fields when the
-entry has the value:
+`thread`, `tags` (as JSON), each named tag, and each value an `on_log` subscriber adds to the
+context, except `pid` and `thread` when they are structured metadata. Its line is the message. Its
+structured metadata holds each payload key, and these fields when the entry has the value:
 
 | Field | Value |
 |-------|-------|
@@ -854,6 +857,7 @@ entry has the value:
 | `duration`, `duration_human` | The duration in milliseconds, from the `measure_*` methods, and as text. |
 | `exception_name`, `exception_message` | The class and message of the logged exception. |
 | `stack_trace` | Its backtrace, followed by each exception that caused it. |
+| `pid`, `thread` | The process id and the thread name, instead of as labels, when [`structured_metadata:`](#pid-and-thread-as-structured-metadata) names them. |
 
 Structured metadata holds only Strings, so a nested value in the payload is written as JSON, and any
 other value as its text. A payload key named like one of these fields is written with a `payload_`
@@ -877,12 +881,46 @@ Loki keeps one value of a label name, so a label whose name another label alread
 named tag `host`, is written with the first number added that no other label has, as in `host_2`,
 so that both values are kept. When the label of that name, or of a numbered name before it, has the
 same value, as Loki stores them, it is not written again. The labels come in this order: the
-formatter's own (`pid`, `application`, `environment`, `host`, `level`, `thread`, and `tags`), the
-named tags, and the context, each under its own name; then each named tag and context key whose name
-was replaced, under that name when no label has it yet; and then the rest, numbered, so that every
-label keeps the name it was written under. So the named tags `host: "db-1", host_2: "db-2"` are
-written as `host_2="db-2"` and `host_3="db-1"`, and so are `host: "db-1", "host-2": "db-2"`, in
-either order.
+formatter's own (`pid`, `application`, `environment`, `host`, `level`, `thread`, and `tags`, without
+`pid` or `thread` when it is structured metadata), the named tags, and the context, each under its
+own name; then each named tag and context key whose name was replaced, under that name when no label
+has it yet; and then the rest, numbered, so that every label keeps the name it was written under. So
+the named tags `host: "db-1", host_2: "db-2"` are written as `host_2="db-2"` and `host_3="db-1"`, and
+so are `host: "db-1", "host-2": "db-2"`, in either order.
+
+#### pid and thread as structured metadata
+
+Loki [advises against](https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/) labels
+whose values are many and keep changing, as `pid` and `thread` do: every process restart, and every
+thread, adds a stream, which Loki indexes and stores on its own. Its documentation names process and
+thread ids as data for
+[structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/)
+instead. The formatter's `structured_metadata:` option names the labels to write there instead,
+`:pid`, `:thread`, or both, where a query can still filter on them, as in
+`{application="shop"} | thread="worker-1"`, but a stream selector cannot:
+
+~~~ruby
+SemanticLogger.add_appender(
+  appender:  :loki,
+  url:       "https://logs-prod-001.grafana.net",
+  formatter: {loki: {structured_metadata: [:pid, :thread]}}
+)
+~~~
+
+Structured metadata needs a Loki that accepts it: one with schema v13, and with
+`allow_structured_metadata`, which is on by default since Loki 3.0. Any other Loki rejects each
+entry that has structured metadata, which with `:pid` is every entry, rather than only those with a
+payload, a metric, a duration, or an exception.
+
+A payload key named `pid` or `thread` is then written with the `payload_` prefix, as for the other
+fields above. A named tag or context key of that name is written as a label with a number added, as
+in `thread_2`, since Loki would otherwise show the structured metadata as `thread_extracted`.
+
+By default both are labels, as with `structured_metadata: []`. Semantic Logger v6 writes both as
+structured metadata by default, so building the formatter without `structured_metadata:`, as
+`appender: :loki` does unless it is given one with `formatter: {loki: {...}}`, reports a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings). Pass `structured_metadata: []` to
+keep them as labels without it.
 
 #### Loki's label limits
 
@@ -912,7 +950,14 @@ names to match, each an Integer of 1 or more:
 SemanticLogger.add_appender(
   appender:  :loki,
   url:       "https://logs-prod-001.grafana.net",
-  formatter: {loki: {max_label_names_per_series: 30, max_label_name_length: 2048, max_label_value_length: 4096}}
+  formatter: {
+    loki: {
+      structured_metadata:        [:pid, :thread],
+      max_label_names_per_series: 30,
+      max_label_name_length:      2048,
+      max_label_value_length:     4096
+    }
+  }
 )
 ~~~
 

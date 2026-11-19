@@ -80,6 +80,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   once, rather than split up and each part written again to find the entries at fault. It returns
   `false` by default, so that every batch is split as before. See
   [Custom appenders](https://logger.reidmorrison.com/config.html#custom-appenders).
+- The `:loki` formatter's `structured_metadata:` option writes the process id, the thread name, or
+  both, as the structured metadata `pid` and `thread`, instead of as stream labels, so that a
+  process restart or a new thread no longer adds a Loki stream. A query can still filter on them,
+  as in `{application="shop"} | thread="worker-1"`. A payload key of that name is then written as
+  `payload_pid` or `payload_thread`, and a named tag or context key as the label `pid_2` or
+  `thread_2`. It needs a Loki that accepts structured metadata, with schema v13 and
+  `allow_structured_metadata`, on by default since Loki 3.0. Set it with
+  `add_appender(appender: :loki, formatter: {loki: {structured_metadata: [:pid, :thread]}}, ...)`.
+  The default is still to write them as labels; v6 changes it (see Deprecated). See
+  [pid and thread as structured metadata](https://logger.reidmorrison.com/appenders.html#pid-and-thread-as-structured-metadata).
 
 ### Changed
 
@@ -188,6 +198,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Deprecated
 
+- Building the `:loki` formatter without `structured_metadata:`, as adding the `:loki` appender does
+  unless it is given `formatter: {loki: {structured_metadata: ...}}`. It still writes `pid` and
+  `thread` as stream labels, but v6 writes them as structured metadata by default, so it now reports
+  a deprecation warning. Pass `structured_metadata: []` to keep them as labels, or
+  `structured_metadata: [:pid, :thread]` to write them as structured metadata. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - Adding the `:kafka`, `:rabbitmq`, or `:udp` appender without `metrics:`. They still send
   metric-only entries by default, which have a metric but no message and no exception, but v6 leaves
   them out by default, as the other log appenders do, so they now report a deprecation warning. Pass

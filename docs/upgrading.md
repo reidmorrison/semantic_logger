@@ -135,6 +135,42 @@ SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], met
 SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], metrics: false)
 ~~~
 
+#### Choose where Loki writes `pid` and `thread`
+
+The `:loki` formatter writes the process id and the thread name as the stream labels `pid` and
+`thread`, so every process restart, and every thread, adds a Loki stream. Its new
+`structured_metadata:` option writes either or both as structured metadata instead, as Loki advises,
+and v6 writes both there by default. Until then, adding the `:loki` appender, or building its
+formatter, without `structured_metadata:` still writes them as labels, and reports a
+[deprecation warning](#seeing-deprecation-warnings). Pass it to choose:
+
+~~~ruby
+# Write them as structured metadata, as v6 does by default:
+SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
+                            formatter: {loki: {structured_metadata: [:pid, :thread]}})
+
+# Keep them as labels:
+SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
+                            formatter: {loki: {structured_metadata: []}})
+~~~
+
+Structured metadata needs a Loki with schema v13 and `allow_structured_metadata`, which is on by
+default since Loki 3.0. Any other Loki rejects every entry once `pid` is structured metadata, so
+keep them as labels until your Loki accepts it.
+
+As structured metadata, a query filters on them after the stream selector, a payload key named `pid`
+or `thread` is written as `payload_pid` or `payload_thread`, and a named tag or context key of that
+name as the label `pid_2` or `thread_2`:
+
+```
+# Labels:
+{application="shop", thread="worker-1"}
+# Structured metadata:
+{application="shop"} | thread="worker-1"
+```
+
+See [pid and thread as structured metadata](appenders.html#pid-and-thread-as-structured-metadata).
+
 #### Set the options of an appender instance on the instance
 
 `add_appender` adds an appender or metric subscriber that is already created, given as `appender:` or
@@ -327,7 +363,7 @@ agent.
   SemanticLogger.add_appender(
     appender:  :loki,
     url:       "https://logs-prod-001.grafana.net",
-    formatter: {loki: {max_label_names_per_series: 30}}
+    formatter: {loki: {structured_metadata: [:pid, :thread], max_label_names_per_series: 30}}
   )
   ```
 
