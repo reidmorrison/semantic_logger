@@ -593,6 +593,7 @@ module Appender
             error = error_for(code)
 
             assert_equal code, error.code
+            assert_equal "Status #{code}", error.body
             assert_predicate error, :rejected?
             assert appender.message_error?(error)
           end

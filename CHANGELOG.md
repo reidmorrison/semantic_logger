@@ -779,6 +779,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   code, the url without its credentials, and the start of the response body. See
   [When the server does not accept a request](https://logger.reidmorrison.com/appenders.html#when-the-server-does-not-accept-a-request)
   and the [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- The `:splunk_http` appender, with `batch: true`, discards a batch that Splunk's HTTP Event
+  Collector rejects for its configuration at once, in one request, and reports it once, with the
+  collector's text, such as "Incorrect index" for a wrong `index:`. The collector answers `400` for
+  these as well as for the entries a request holds, and says which with the `code` in its response:
+  an incorrect index, a missing or invalid data channel, acknowledgement disabled, query string
+  authorization not enabled, or an invalid or disabled token. Before, such a batch was split up and
+  each part sent again to find the entries at fault, which every part failed in turn, so each entry
+  was sent on its own and rejected. A batch rejected for its entries, such as with "Invalid data
+  format", is still split up. See
+  [Splunk HTTP](https://logger.reidmorrison.com/appenders.html#splunk-http).
 - An appender added with `async: true` or in batches keeps logging in the child process after a fork
   when it cannot be reopened, such as `:udp` once its server's name no longer resolves, or `:http`
   while its server cannot be reached. Before, the error from the appender's own `#reopen` also kept

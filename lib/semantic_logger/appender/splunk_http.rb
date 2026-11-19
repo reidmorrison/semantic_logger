@@ -12,9 +12,33 @@ require "json"
 #     url:      'http://localhost:8080',
 #     token:    '70CA900C-3D7E-42A4-9C79-7975D1C422A8'
 #   )
+#
+# Responses:
+# The HTTP Event Collector answers 400 Bad Request both for the entries a request holds, and for its
+# own configuration, such as an index it does not know. Its JSON body says which, with a numeric
+# `code` and a `text`. A batch it rejects for its configuration is discarded at once, rather than
+# split up to find the entries at fault, since every part would be rejected too (see
+# #fails_any_batch?).
 module SemanticLogger
   module Appender
     class SplunkHttp < SemanticLogger::Appender::Http
+      # The status codes in the body of a 400 Bad Request from the HTTP Event Collector that reject
+      # the request for the collector's configuration or the appender's, whatever entries it holds:
+      #    7 Incorrect index
+      #   10 Data channel is missing
+      #   11 Invalid data channel
+      #   14 ACK is disabled
+      #   16 Query string authorization is not enabled
+      #   21 Invalid token
+      #   22 Token disabled
+      # The others it answers with a 400 are caused by the entries, so a batch is split up to find
+      # them: 5 No data, 6 Invalid data format, 12 Event field is required, 13 Event field cannot be
+      # blank, and 15 Error in handling indexed fields.
+      #
+      # See "Troubleshoot HTTP Event Collector", Possible error codes:
+      #   https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.4/get-data-with-http-event-collector/troubleshoot-http-event-collector
+      CONFIGURATION_CODES = [7, 10, 11, 14, 16, 21, 22].freeze
+
       attr_accessor :source_type, :index
 
       # Create Splunk appender over persistent HTTP(S)
@@ -100,6 +124,27 @@ module SemanticLogger
         message[:sourcetype]  = source_type if source_type
         message[:index]       = index if index
         Utils.to_json(message)
+      end
+
+      # Whether the exception would fail any batch, whatever entries it holds (see
+      # Http#fails_any_batch?), including a 400 Bad Request whose body holds one of the collector's
+      # CONFIGURATION_CODES, such as for a wrong `index:`. So the batch is discarded at once, and
+      # reported once, with the collector's text, rather than split up and each entry sent on its own.
+      def fails_any_batch?(exception)
+        super || (exception.is_a?(ResponseError) && exception.rejected? &&
+          CONFIGURATION_CODES.include?(collector_code(exception.body)))
+      end
+
+      private
+
+      # Returns [Integer|nil] the status code in the body of a response from the HTTP Event
+      # Collector, such as {"text":"Incorrect index","code":7}, or nil when it holds none, such as a
+      # response from a proxy in front of it.
+      def collector_code(body)
+        parsed = JSON.parse(body.to_s)
+        parsed["code"] if parsed.is_a?(Hash)
+      rescue JSON::ParserError
+        nil
       end
     end
   end

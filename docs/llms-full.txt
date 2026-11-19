@@ -2601,9 +2601,9 @@ SemanticLogger.add_appender(
 
 When the server rejects every request with a `401`, `403`, or `404`, for example because the
 password or the path is wrong, each batch is discarded with its first request, and reported once. A
-server that answers `400` for a problem with its own configuration, as Splunk's HTTP Event Collector
-does for an index it does not know, rejects every part of each batch too, which takes about two
-requests for each entry in the batch.
+server that answers `400` for a problem with its own configuration rejects every part of each batch
+too, which takes about two requests for each entry in the batch. The `:splunk_http` appender tells
+those apart for Splunk's HTTP Event Collector, see [Splunk HTTP](#splunk-http).
 
 ### TCP Appender (+SSL)
 
@@ -2875,6 +2875,16 @@ SemanticLogger.add_appender(
 For HTTPS, change the URL scheme to `https`. Once entries have been sent, open the Splunk web
 interface, select Search, limit to the new host (`host=hostname`), switch to table view, and select
 the interesting columns: `host`, `duration`, `name`, `level`, `message`.
+
+The HTTP Event Collector answers `400` both for the entries a request holds and for its own
+configuration, and says which with the `code` and `text` in its response. When it rejects a request
+for its configuration (an incorrect index, a missing or invalid data channel, acknowledgement
+disabled, query string authorization not enabled, or an invalid or disabled token), a batch is
+discarded at once and reported once to the internal logger with that text, such as
+`"Incorrect index"`, rather than split up to find the entries at fault. When it rejects a batch for
+its entries, such as with `"Invalid data format"`, the batch is split up, as for any
+[request rejected for its entries](#when-the-server-does-not-accept-a-request). See Splunk's
+[HTTP Event Collector error codes](https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.4/get-data-with-http-event-collector/troubleshoot-http-event-collector).
 
 **Performance:** against a local Splunk instance, the HTTP collector handled only about 30 entries per
 second. For much higher throughput, write to Splunk with the [TCP appender](#tcp-appender-ssl)
