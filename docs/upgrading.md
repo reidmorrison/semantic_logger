@@ -139,10 +139,12 @@ SemanticLogger.add_appender(appender: :kafka, seed_brokers: ["kafka1:9092"], met
 
 A metric counts upward. In v6, a counter drops a negative `metric_amount`, and reports it once on
 Semantic Logger's internal logger, rather than subtracting it. Until then, a log call or a
-`measure_*` call with a negative `metric_amount` is still logged and sent as before, and reports a
-[deprecation warning](#seeing-deprecation-warnings) that names the line of the call. It is reported
+`measure_*` call with a `metric:` and a negative `metric_amount` is still logged and sent as before,
+and reports a [deprecation warning](#seeing-deprecation-warnings) that names the line of the call.
+It is reported
 once per process, for the first negative amount only, so that a loop does not repeat it; once that
-call is changed, the next one, if any, is reported. A `metric_amount` of zero is not negative.
+call is changed, the next one, if any, is reported. A `metric_amount` of zero is not negative, and
+one without a `metric:`, which no metric subscriber receives, is not reported.
 
 ~~~ruby
 # Deprecated:

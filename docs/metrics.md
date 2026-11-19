@@ -59,8 +59,8 @@ own:
 logger.info(message: "Item removed", metric: "cart/items_removed")
 ~~~
 
-A negative `:metric_amount` is deprecated: it is still logged and sent as before, but reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), and v6 drops it. See
+A negative `:metric_amount` with a `:metric` is deprecated: it is still logged and sent as before,
+but reports a [deprecation warning](upgrading.html#seeing-deprecation-warnings), and v6 drops it. See
 [Negative metric amounts](upgrading.html#negative-metric-amounts).
 
 To add to a running total, such as the dollar amount of purchases per department:

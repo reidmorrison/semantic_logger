@@ -423,6 +423,14 @@ class LoggerTest < Minitest::Test
         assert_equal(-2, logger.events.last.metric_amount)
       end
 
+      it "is not reported without a metric, and is still reported for a later one with a metric" do
+        refute_deprecated { logger.info("Balance", metric_amount: -10) }
+
+        assert_deprecated(/negative metric_amount is deprecated/) do
+          logger.info(metric: "cart/items", metric_amount: -1)
+        end
+      end
+
       it "is reported for a Hash returned by the block" do
         assert_deprecated(/negative metric_amount is deprecated/) do
           logger.info("Item removed") { {metric: "cart/items", metric_amount: -3} }

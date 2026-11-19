@@ -255,7 +255,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   destination it uses and those it ignores, and v6 raises `ArgumentError` for them. Call
   `add_appender` once for each destination. A destination given as `nil` is not reported. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
-- A negative `metric_amount` on a log call or a `measure_*` call, such as
+- A negative `metric_amount` on a log call or a `measure_*` call with a `metric:`, such as
   `logger.info(metric: "cart/items", metric_amount: -1)`. It is still logged and sent to the
   metric subscribers as before, but v6 counts a metric only upward and drops a negative amount, so it
   now reports a deprecation warning, once per process, at the line of the first such call. Count

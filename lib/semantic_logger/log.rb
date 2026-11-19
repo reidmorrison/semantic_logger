@@ -142,7 +142,7 @@ module SemanticLogger
       self.metric        = metric
       self.metric_amount = metric_amount
       self.dimensions    = dimensions
-      Log.negative_metric_amount_deprecated if metric_amount && negative_amount?(metric_amount)
+      Log.negative_metric_amount_deprecated if counted_negative_amount?
 
       if exception
         unless exception.is_a?(Exception)
@@ -207,10 +207,9 @@ module SemanticLogger
       args           = extract_arguments(hash)
       added          = args.delete(:payload)
       assigned, kept = args.partition { |key, value| block_attribute?(key, value) }
-      assigned.each do |key, value|
-        public_send(:"#{key}=", value)
-        Log.negative_metric_amount_deprecated if key == :metric_amount && negative_amount?(value)
-      end
+      assigned.each { |key, value| public_send(:"#{key}=", value) }
+      # Once per process, so that #assign having reported it already does no harm.
+      Log.negative_metric_amount_deprecated if counted_negative_amount?
       # An argument this entry already has wins over the block's :payload, like the block's other keys.
       added        = merge_payload(kept.to_h, added) unless kept.empty?
       self.payload = merge_payload(payload, added)
@@ -222,10 +221,13 @@ module SemanticLogger
     #
     # Only once, so that a negative amount in a loop does not report a warning for each log call, and
     # only once deprecation warnings are on, so that turning them on later still reports it. Not from
-    # a Ractor other than the main one, which cannot record that it was reported. Remove in v6, where
-    # the metrics API drops a negative amount instead.
+    # a Ractor other than the main one, which cannot record that it was reported. Two threads that
+    # report at the same moment can each report it, which costs a second warning at worst. Remove in
+    # v6, where the metrics API drops a negative amount instead.
+    #
+    # Internal: called by #assign and #assign_hash only (@api private).
     def self.negative_metric_amount_deprecated
-      return if @negative_metric_amount_reported || !Warning[:deprecated] || RactorSupport.other_ractor?
+      return if !Warning[:deprecated] || RactorSupport.other_ractor? || @negative_metric_amount_reported
 
       @negative_metric_amount_reported = true
       Deprecation.warn(
@@ -532,9 +534,12 @@ module SemanticLogger
 
     private
 
-    # Returns [true|false] whether the metric amount is a real number below zero. Never raises, since
-    # Base#backtrace passes its metric_amount to #assign without checking it (see .argument?).
-    def negative_amount?(amount) = REAL_NUMBER.call(amount) && amount.negative?
+    # Returns [true|false] whether this entry gives a metric a negative amount, which is deprecated (see
+    # .negative_metric_amount_deprecated): whether it has a metric and a metric amount that is a real
+    # number below zero. Also for a measure_* entry, since SignalFx adds its amount to a counter too.
+    # Without a metric no metric subscriber receives the amount. Costs a nil check when there is no
+    # metric. Never raises, since Base#backtrace passes its metric_amount to #assign without checking it.
+    def counted_negative_amount? = metric && REAL_NUMBER.call(metric_amount) && metric_amount.negative?
 
     # Returns the kept payload with the keys of the added one that it does not have, so that a kept
     # value is never replaced. A String and a Symbol key of the same name, such as "account_id" from
