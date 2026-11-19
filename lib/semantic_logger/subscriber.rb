@@ -134,7 +134,8 @@ module SemanticLogger
     MESSAGE_ERRORS = [FormatError, JSON::GeneratorError, JSON::NestingError, EncodingError, FloatDomainError].freeze
 
     # Whether the supplied exception, raised by #log or #batch, was caused by the content of a
-    # log message, rather than by the destination, for example being unavailable.
+    # log message, or is one that writing the message again cannot fix, such as a request the
+    # destination refuses outright, rather than by the destination being unavailable for now.
     #
     # Waiting cannot write such a message, so an asynchronous appender discards it and carries on
     # straight away. On any other exception it backs off before carrying on, since the destination
@@ -155,6 +156,19 @@ module SemanticLogger
     # so that only the offending message is discarded. When false, retrying could write some
     # messages twice, so the whole batch is discarded instead.
     def batch_all_or_nothing?
+      false
+    end
+
+    # Whether the supplied exception, a message error (see #message_error?) that #batch raised,
+    # would fail any batch, whatever messages it holds, such as a request the destination refuses
+    # for its credentials or its url. Asked only about a message error, and only when
+    # #batch_all_or_nothing? is true.
+    #
+    # When true, the whole batch is discarded at once, rather than split up and each part written
+    # again to find the messages at fault, which would be refused in turn, about two writes for each
+    # message. False, since an error caused by the content of a message is caused by some of the
+    # messages in the batch.
+    def fails_any_batch?(_exception)
       false
     end
 

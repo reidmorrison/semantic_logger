@@ -749,6 +749,26 @@ class QueueProcessorTest < Minitest::Test
           assert_predicate processor, :active?
         end
 
+        it "discards the whole batch at once, when the appender says that the error fails any batch" do
+          appender.define_singleton_method(:fails_any_batch?) { |_exception| true }
+          calls    = 0
+          original = appender.method(:batch)
+          appender.define_singleton_method(:batch) do |logs|
+            calls += 1
+            original.call(logs)
+          end
+          processor = start(batch: true, batch_size: 100, batch_seconds: 60)
+          messages  = Array.new(9) { |i| "message #{i}" }.insert(4, "poison")
+          messages.each { |message| processor.log(new_log(message: message)) }
+          processor.flush
+
+          assert_equal 1, calls
+          assert_nil appender.batches
+          assert_equal 0, processor.processed_count
+          assert_equal 10, processor.failed_count
+          assert_equal(1, internal_logger.events.count { |event| event.message.include?("Discarded") })
+        end
+
         describe "when the appender may have written part of the batch" do
           let(:appender) do
             a        = PoisonedItemBatchAppender.new

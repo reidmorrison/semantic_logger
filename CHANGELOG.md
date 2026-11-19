@@ -74,6 +74,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   behalf of other code, such as a log subscriber. It is only recorded at or above `call_site_level`.
   See
   [Recording where each entry was logged](https://logger.reidmorrison.com/config.html#recording-where-each-entry-was-logged).
+- A custom appender whose `#batch` is all or nothing can now say, from the new
+  `#fails_any_batch?(exception)`, that a message error would fail any batch, whatever it holds, such
+  as a request refused for its credentials. A batch that fails with such an error is then discarded at
+  once, rather than split up and each part written again to find the entries at fault. It returns
+  `false` by default, so that every batch is split as before. See
+  [Custom appenders](https://logger.reidmorrison.com/config.html#custom-appenders).
 
 ### Changed
 
@@ -669,8 +675,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `batch: true` such entries were counted as `processed` in `SemanticLogger.stats`, a batch that the
   server rejected for one entry lost every other entry with it, and while the server was unavailable,
   such as Loki restarting, the worker thread kept sending, and losing, each entry or batch at once.
-  Now a 4xx other than 408 and 429 discards the entries straight away, and a batch is first split up
-  and sent again in parts, so that the entries in the parts the server accepts are written. Any other
+  Now a 4xx other than 408 and 429 discards the entries straight away. A batch the server rejects for
+  the entries it holds, with a 400, 413, or 422, is first split up and sent again in parts, so that the
+  entries in the parts the server accepts are written; one it rejects whatever it holds, such as with
+  a 401, 403, or 404 for a wrong password or url, is discarded at once, with one report. Any other
   status is a problem with the destination, so the worker thread backs off before sending again, and
   the entries logged meanwhile wait on the queue: a 408, 429, or 503 sends the same entry or batch
   again (see the entry on sending again after an outage), and any other, such as a 500, 502, 504, or

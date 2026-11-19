@@ -393,9 +393,10 @@ agent.
   queue while the worker thread backs off, rather than being sent, and discarded, one per back-off,
   so with a capped queue (the default) and without `non_blocking`, logging waits once the queue is
   full until the server is back or the thread gives up. Pass `async_max_retries: -1` to keep trying
-  through a long outage. On any other 4xx, a batch is now
+  through a long outage. On a 400, 413, or 422, a batch is now
   split up and sent again in parts, to find the entries the server rejects, so a server that kept
-  some entries of a request it rejected can store them twice. See
+  some entries of a request it rejected can store them twice. On any other 4xx, such as 401 or 404,
+  which the server answers whatever the request holds, the whole batch is discarded at once. See
   [When the server does not accept a request](appenders.html#when-the-server-does-not-accept-a-request).
 
   While the worker thread backs off, the entries logged meanwhile wait on the appender's queue, as

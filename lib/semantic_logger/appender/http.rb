@@ -30,12 +30,14 @@ require "openssl"
 # Responses:
 # A response other than 2xx raises ResponseError from #log and #batch. A 4xx other than 408 and
 # 429 rejects the request itself, so #message_error? recognizes it, and an asynchronous appender
-# discards the entries straight away, counted as failed. Any other status is a problem with the
-# destination, so an asynchronous appender backs off. After a 408, 429, or 503, which ask to send
-# the request again later, it then sends the entries again, up to
-# QueueProcessor::HeldWrite::MAX_RESENDS times, since the server did not store them (see
-# #wrote_nothing?). After any other, such as a 500, 502, 504, or a redirect, it discards them,
-# counted as failed. An appender that is not asynchronous reports the error.
+# discards the entries straight away, counted as failed. A batch rejected for what it holds (400,
+# 413, or 422) is first split up and each part sent again, to find the entries at fault; any other
+# such 4xx, such as 401 or 404, would reject any part too, so the whole batch is discarded at once
+# (see #fails_any_batch?). Any other status is a problem with the destination, so an asynchronous
+# appender backs off. After a 408, 429, or 503, which ask to send the request again later, it then
+# sends the entries again, up to QueueProcessor::HeldWrite::MAX_RESENDS times, since the server did
+# not store them (see #wrote_nothing?). After any other, such as a 500, 502, 504, or a redirect, it
+# discards them, counted as failed. An appender that is not asynchronous reports the error.
 module SemanticLogger
   module Appender
     class Http < SemanticLogger::Subscriber
@@ -56,6 +58,12 @@ module SemanticLogger
         # or 504 Gateway Timeout, which a proxy can answer once the server behind it has stored it.
         RETRY_LATER_CODES = [408, 429, 503].freeze
 
+        # The 4xx statuses that reject the request for the entries it holds: 400 Bad Request,
+        # 413 Content Too Large, and 422 Unprocessable Content. A server can answer 400 for its own
+        # configuration too, such as Splunk's HTTP Event Collector for an index it does not know, which
+        # then rejects every part of a batch split up to find the entries at fault.
+        CONTENT_CODES = [400, 413, 422].freeze
+
         # Returns [Integer] the status code of the response.
         attr_reader :code
 
@@ -73,6 +81,13 @@ module SemanticLogger
 
         # Whether the server asks to send the request again later (see RETRY_LATER_CODES).
         def retry_later? = RETRY_LATER_CODES.include?(code)
+
+        # Whether the server rejected the request for the entries it holds (see CONTENT_CODES), so
+        # that it may accept a part of them. It rejects a request with any other 4xx (see
+        # #rejected?), such as 401 Unauthorized, 403 Forbidden, or 404 Not Found, whatever it holds.
+        def content_rejected?
+          CONTENT_CODES.include?(code)
+        end
       end
 
       # Describes a valid url in the error raised for an invalid one.
@@ -312,6 +327,16 @@ module SemanticLogger
       # server rejected (see ResponseError#rejected?), since sending it again cannot succeed.
       def message_error?(exception)
         (exception.is_a?(ResponseError) && exception.rejected?) || super
+      end
+
+      # Whether the exception, a message error, would fail any batch, whatever entries it holds (see
+      # Subscriber#fails_any_batch?): the server rejected the request (see ResponseError#rejected?)
+      # other than for the entries it holds (see ResponseError#content_rejected?), such as for its
+      # credentials or its url, and would reject every part of the batch too. So the batch is
+      # discarded at once, rather than split up. A batch that could not be formatted, or that the
+      # server rejected for its entries, is split up to find the entries at fault.
+      def fails_any_batch?(exception)
+        exception.is_a?(ResponseError) && exception.rejected? && !exception.content_rejected?
       end
 
       # Whether the request that raised the exception from #log or #batch stored none of its

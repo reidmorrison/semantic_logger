@@ -895,8 +895,10 @@ every appender, such as `@name` and `@host`.
 When the appender runs asynchronously (`async: true` or batching), an exception raised by `#log`
 discards the message, and the worker thread backs off before writing the next one, on the basis
 that the destination may be briefly unavailable. An exception caused by the content of one message
-says nothing about the destination, so the thread carries on straight away instead.
-`#message_error?(exception)` decides which is which. Format each message with `format_log(log)` (or
+says nothing about whether the destination is available, and nor does one that writing the
+message again cannot fix, such as a request the destination refuses outright for its credentials,
+so the thread carries on straight away instead. `#message_error?(exception)` decides which is
+which, and these are the message errors. Format each message with `format_log(log)` (or
 a batch with `format_batch(logs)`) rather than `formatter.call`: any error the
 formatter raises is then raised as a `SemanticLogger::Subscriber::FormatError`, which
 `#message_error?` recognizes, since a formatter can only fail because of the content of the message.
@@ -962,6 +964,27 @@ def batch_all_or_nothing?
   true
 end
 ~~~
+
+A message error that the destination raises for any batch, whatever messages it holds, such as a
+request refused for its credentials or its url, would be raised again for every part. Recognize it in
+`#message_error?`, since writing the batch again cannot fix it, and return `true` from
+`#fails_any_batch?(exception)` for it, so that the whole batch is discarded at once, rather than
+every message sent again on its own to be refused in turn. `#fails_any_batch?` is asked only about
+a message error, and returns `false` by default:
+
+~~~ruby
+def message_error?(exception)
+  exception.is_a?(MyClient::Unauthorized) || exception.is_a?(MyClient::InvalidDocument) || super
+end
+
+def fails_any_batch?(exception)
+  exception.is_a?(MyClient::Unauthorized)
+end
+~~~
+
+The HTTP appenders answer both from the status of the response: a request rejected with a `400`,
+`413`, or `422` is a message error that only some of the messages cause, and one rejected with any
+other 4xx but `408` and `429`, such as a `401`, `403`, or `404`, is one that fails any batch.
 
 `#batch_all_or_nothing?` says nothing about an error from the destination: a batch formatted before
 any of it is sent can still be stored by a destination whose answer then times out. Answer that from
