@@ -914,11 +914,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `SemanticLogger.stats[:appenders]` and reports the first such entry to the internal logger straight
   away, then a count at most once every `dropped_message_report_seconds`, without backing off; added
   without it, the internal logger reports "Failed to log to appender". That is any error, such as a
-  formatter that raises, or the agent not having started, since the agent only adds the entry to its
-  own buffer, so writing it again cannot help. Before, the appender caught every error itself and
-  wrote a warning, "Could not log to New Relic", to the internal logger for every entry, so an error
-  that repeated for every entry, such as an agent that never started, wrote a warning for each one,
-  and an asynchronous appender never counted the entry as failed.
+  formatter that raises, or newrelic_rpm not yet initialized, such as early in Rails boot, since the
+  agent only adds the entry to its own buffer, so writing it again cannot help. Before, the appender
+  caught every error itself and wrote a warning, "Could not log to New Relic", to the internal logger
+  for every entry, and an asynchronous appender never counted the entry as failed or throttled the
+  reports.
 
 ## [5.2.0] 2026-10-30
 

@@ -75,7 +75,9 @@ module SemanticLogger
       # process, and rescues any StandardError of its own; the agent sends that buffer to New Relic
       # later, on its own thread. So nothing here waits on New Relic, and an error comes either from
       # the entry, when it cannot be formatted or converted to JSON, or from the agent not being
-      # available, such as before it has started, when NewRelic::Agent.agent is nil. Backing off for
+      # available, before newrelic_rpm has been initialized, when NewRelic::Agent.agent is nil, such as
+      # during Rails boot before its initializer runs. An agent that is initialized but not started, or
+      # disabled, is not nil, and drops the entry itself without raising. Backing off for
       # the latter would hold up every entry, and stop the worker thread after async_max_retries,
       # dropping every entry after it, even once the agent has started.
       def message_error?(_exception)
