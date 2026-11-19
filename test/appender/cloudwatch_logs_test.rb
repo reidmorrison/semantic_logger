@@ -20,6 +20,14 @@ module Appender
         end
       end
 
+      # Shuts down the timer of every appender a test builds, which otherwise sends the buffered log
+      # messages force_flush_interval_seconds later, during another test. The mock client answers no
+      # request to send them.
+      after do
+        appender.buffered_logs.clear
+        appender.close
+      end
+
       it "does not show the AWS credentials in #inspect" do
         credentials = {secret_access_key: "aws-s3cr3t"}
         appender    = Aws::CloudWatchLogs::Client.stub :new, mock_client do
@@ -61,10 +69,6 @@ module Appender
               group: log_group, stream: log_stream, force_flush_interval_seconds: 3_600
             ).tap { |appender| appender.logger = internal_logger }
           end
-        end
-
-        after do
-          appender.close
         end
 
         def buffer(message, time = Time.now)
@@ -280,12 +284,6 @@ module Appender
       describe "#reopen" do
         include ForkedChildHelper
 
-        after do
-          # The mock client answers no request to send them.
-          appender.buffered_logs.clear
-          appender.close
-        end
-
         def reopen
           Aws::CloudWatchLogs::Client.stub(:new, mock_client) { appender.reopen }
         end
@@ -381,9 +379,6 @@ module Appender
           assert_equal({"buffered" => 0, "reports" => []}, JSON.parse(output))
           assert_equal 1, appender.buffered_logs.size
           assert_predicate appender.task, :running?
-        ensure
-          appender.buffered_logs.clear
-          appender.close
         end
       end
     end
