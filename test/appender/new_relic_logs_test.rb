@@ -136,7 +136,9 @@ module Appender
       end
 
       it "rescues a serialization error and does not raise" do
-        unserializable = Object.new
+        internal         = SemanticLogger::Test::CaptureLogEvents.new
+        @appender.logger = internal
+        unserializable   = Object.new
         def unserializable.to_json(*)
           raise ArgumentError, "bug in #to_json"
         end
@@ -151,9 +153,15 @@ module Appender
 
         # log_newrelic is never reached when serialization fails.
         assert_nil @logged_message
+        assert_equal ["Could not log to New Relic"], internal.events.map(&:message)
+        assert_equal :warn, internal.events.first.level
+        assert_kind_of ArgumentError, internal.events.first.exception
+        assert_equal "bug in #to_json", internal.events.first.exception.message
       end
 
       it "rescues an unexpected error and does not raise" do
+        internal         = SemanticLogger::Test::CaptureLogEvents.new
+        @appender.logger = internal
         @appender.instance_variable_set(:@formatter, ->(_log, _appender) { raise "boom" })
         log = SemanticLogger::Log.new("TestLogger", :info)
 
@@ -162,6 +170,12 @@ module Appender
         end
 
         assert_nil @logged_message
+        assert_equal ["Could not log to New Relic"], internal.events.map(&:message)
+        exception = internal.events.first.exception
+
+        assert_kind_of SemanticLogger::Subscriber::FormatError, exception
+        assert_kind_of RuntimeError, exception.cause
+        assert_equal "boom", exception.cause.message
       end
 
       it "reports an error to the internal logger, instead of logging it through itself" do
