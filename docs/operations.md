@@ -396,6 +396,43 @@ close then stops the thread instead of restarting it. If the worker thread ends 
 for example once it gives up, `SemanticLogger.flush` (including the flush at exit) stops waiting on
 that appender.
 
+### When every log entry must be delivered
+
+Semantic Logger keeps the log entries it has not yet written in memory, on the queue of the thread
+that writes to every appender and on the queue of each appender added with `async: true` or in
+batches. It does not store them anywhere that outlives the process. So entries that are still queued
+are lost when the process is killed (`kill -9`, the out of memory killer, or the `SIGKILL` that
+Kubernetes and other process managers send once the grace period after `SIGTERM` runs out), or when
+it crashes. During an outage of a remote destination, a flush, a close, and the flush at exit
+discard the entries that destination fails, as described above, so that the process exits within
+seconds rather than waiting for the outage to end. There is no option to wait for every entry
+instead: such a process would not stop until the destination came back, or until it was killed,
+losing the entries anyway.
+
+When every entry must reach its destination, such as for an audit log, write it first to something
+durable that is local to the process, and let a separate process deliver it:
+
+- Log to a file (`file_name:`), or to standard output in a container, and ship it with a log
+  collector, such as [Vector](https://vector.dev), [Fluent Bit](https://fluentbit.io), or the
+  [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/), which keep their place in the
+  file and retry until the destination accepts the entries.
+- Or send it to a collector or agent running on the same host, such as the OpenTelemetry Collector
+  or Fluent Bit with its own disk buffer, so that the network hop that can fail is one the collector
+  retries, not the application.
+
+~~~ruby
+# The application writes each entry to a local file, which it can always do...
+SemanticLogger.add_appender(file_name: "log/production.json", formatter: :json)
+
+# ...and a collector running beside it, such as Vector or Fluent Bit, reads that file and delivers
+# every entry to the remote service, retrying through an outage.
+~~~
+
+Within those limits, an appender added with `async: true` or in batches loses no entries during an
+outage while the process runs, until its worker thread gives up after `async_max_retries` (see
+above); set `async_max_retries: -1` to never give up, with `max_queue_size` large enough to hold
+the entries logged during the longest outage it should ride out.
+
 ### Give a slow appender its own thread
 
 If one destination is slow, such as a remote HTTP service, run just that appender on its own thread
