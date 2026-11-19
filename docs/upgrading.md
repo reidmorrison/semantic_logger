@@ -287,6 +287,27 @@ agent.
   # After:
   {application="shop"} | payload_duration="PT5S"
   ```
+* The `:loki` formatter no longer lets a named tag, or a value that an `on_log` subscriber adds to
+  the context, replace a label of the same name. Its own labels (`pid`, `application`,
+  `environment`, `host`, `level`, `thread`, and `tags`) keep their values, a named tag keeps its
+  value over a context key, and the later of the two is written with a number added, as in
+  `host_2`, unless both have the same value. Before, the later value replaced the earlier one. Update
+  any query or alert that selects such a named tag or context value by that name:
+
+  ```
+  # Before, with the named tag host: "db-1":
+  {application="shop", host="db-1"}
+  # After:
+  {application="shop", host_2="db-1"}
+  ```
+
+  A subclass of `SemanticLogger::Formatters::Loki` that reads, replaces, or deletes a label in
+  `stream[:stream]` needs to use a String key, such as `stream[:stream]["host"]`. The label names
+  are now Strings rather than Symbols, so that a named tag or context key, whether a Symbol or a
+  String, is found among them by name. A label that the subclass writes under a Symbol, as v5.2
+  did, is written under its name as a String, and with a number added when a label written before
+  it has that name, as a named tag is: `stream[:stream][:level] = "INFO"` after `super` adds
+  `level_2="INFO"` rather than replacing `level`.
 * The `#logger` of an appender added with `logger:`, such as the one `add_appender(logger: ...)`
   returns, is now its internal logger, the one it reports its own problems to, as for every other
   appender, and `#logger=` replaces that internal logger. Before, they returned and replaced the

@@ -300,6 +300,21 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   Loki stores it, so an empty key as `payload_`, and with the prefix again when another key has that
   name, so that Loki keeps the value of each. A named tag that is nil, and a nil host, are left out,
   instead of being written as the label `null`.
+- The `:loki` formatter keeps both values of a named tag or context key that has the name of another
+  label. Loki keeps one value of a label, so a named tag such as `host`, `level`, or `pid` replaced
+  the formatter's own label, and an `:info` entry tagged `level: "warn"` was stored as `level="warn"`.
+  A context key replaced a named tag of the same name, and so did a named tag given both as a Symbol
+  and as a String. Now the formatter's own labels, the named tags, and the context are written under
+  their own names, in that order, then each one whose name Loki does not accept under the name that
+  replaces it, when no label has that name yet, and then each of the rest, with the first number
+  added that no other label has, as in `host_2`, so that the number is never another label's name,
+  whatever the order of the keys. It is written once when the label of that name, or of a numbered
+  name before it, has the same value, as Loki stores it. The stream's label names are now Strings,
+  so a subclass of the formatter that reads, replaces, or deletes a label in `stream[:stream]` uses a
+  String key, such as `"host"`. A label that a subclass writes under a Symbol, as v5.2 did, is
+  written under its name as a String, numbered when a label written before it has that name. See
+  [Upgrading to v5.3](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v53)
+  and [Grafana Loki](https://logger.reidmorrison.com/appenders.html#grafana-loki).
 - The `:open_telemetry` appender, and an appender added with `logger:`, work with `async: true`.
   Before, the worker thread stopped as it started, with `NoMethodError` (undefined method 'trace'),
   so the appender wrote nothing, and unless it was added with `non_blocking: true`, every log call
