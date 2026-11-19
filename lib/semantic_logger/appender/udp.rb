@@ -91,27 +91,35 @@ module SemanticLogger
       # Connects a new socket to the server before closing the one it replaces. When it cannot, it
       # raises, keeping the socket it has: ArgumentError for a server that is not "host:port", or
       # the error from resolving or connecting, such as SocketError for a host name that does not resolve.
+      # An error closing the socket it replaced is reported to the internal logger as a warning, since the
+      # reopen itself worked.
       def reopen
         socket     = connected_socket
         old_socket = @socket
         @socket    = socket
-        old_socket&.close
+        close_socket(old_socket, replaced: true)
       end
 
-      # Write the log using the specified protocol and server.
+      # Write the log using the specified protocol and server. Opens a new socket, connected to the server, first
+      # when the appender has none, after #close.
       def log(log)
-        @socket.send(format_log(log), udp_flags)
+        (@socket ||= connected_socket).send(format_log(log), udp_flags)
         true
       end
 
-      # Flush is called by the semantic_logger during shutdown.
+      # Flush is called by the semantic_logger during shutdown. Does nothing after #close, which left no socket.
       def flush
         @socket&.flush
       end
 
-      # Close is called during shutdown.
+      # Closes the socket, such as when the appender is removed, and forgets it, so that the next write opens a new
+      # one. An error closing it is reported to the internal logger as a warning, rather than raised.
+      #
+      # In a forked child, the socket is the child's own copy of the parent's, so closing it leaves the parent's open.
       def close
-        @socket&.close
+        socket  = @socket
+        @socket = nil
+        close_socket(socket)
       end
 
       # A log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.
@@ -125,6 +133,14 @@ module SemanticLogger
       end
 
       private
+
+      # Closes the given socket, if any: the one that a reopen replaced, when replaced: is true. An error closing
+      # it is reported to the internal logger as a warning, rather than raised.
+      def close_socket(socket, replaced: false)
+        socket&.close
+      rescue StandardError => e
+        logger.warn("Could not close the socket to the UDP server#{' that a reopen replaced' if replaced}", e)
+      end
 
       # Returns [UDPSocket] a new socket, connected to the first of the server's addresses that it can connect to, as
       # Ruby's own UDPSocket#connect tries the addresses of its socket's family in turn. A host name's IPv4 addresses

@@ -919,6 +919,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   caught every error itself and wrote a warning, "Could not log to New Relic", to the internal logger
   for every entry, and an asynchronous appender never counted the entry as failed or throttled the
   reports.
+- Writing to the `:udp` appender after it was closed, such as with `SemanticLogger.close`, opens a
+  new socket to its server, and `flush` does nothing. Before, it kept the closed socket, so every
+  later write, and `flush`, raised `IOError` (closed stream). An error closing the socket is reported
+  to the internal logger as a warning, rather than raised.
 
 ## [5.2.0] 2026-10-30
 

@@ -356,6 +356,21 @@ module Appender
           appender.close
         end
 
+        it "reports an error closing the socket it replaced as a warning, keeping the new one" do
+          socket = appender.socket
+          socket.define_singleton_method(:close) { raise(IOError, "close failed") }
+          warned = nil
+          appender.logger.stub(:warn, ->(message, error) { warned = [message, error] }) { appender.reopen }
+
+          refute_same socket, appender.socket
+          assert_equal "Could not close the socket to the UDP server that a reopen replaced", warned&.first
+          assert_equal "close failed", warned&.last&.message
+        ensure
+          socket&.singleton_class&.send(:remove_method, :close)
+          socket&.close
+          appender.close
+        end
+
         it "closes the new socket when connecting is interrupted by an exception that is not a StandardError" do
           socket      = appender.socket
           interrupted = UDPSocket.new
@@ -401,6 +416,52 @@ module Appender
           refute_predicate socket, :closed?
         ensure
           appender.close
+        end
+      end
+
+      describe "#close" do
+        it "closes and forgets the socket, and the next write opens a new one, rather than raising IOError" do
+          receiver = UDPSocket.new
+          receiver.bind("127.0.0.1", 0)
+          server   = "127.0.0.1:#{receiver.local_address.ip_port}"
+          udp      = SemanticLogger::Appender::Udp.new(server: server, metrics: false)
+          socket   = udp.socket
+
+          udp.close
+
+          assert_predicate socket, :closed?
+          assert_nil udp.socket
+          udp.flush
+          udp.info(amessage)
+
+          refute_nil udp.socket
+          refute_same socket, udp.socket
+          assert receiver.wait_readable(5), "The server received nothing"
+          assert_equal amessage, JSON.parse(receiver.recv(65_535))["message"]
+        ensure
+          udp&.close
+          receiver&.close
+        end
+
+        it "can be called again once closed" do
+          appender.close
+          appender.close
+
+          assert_nil appender.socket
+        end
+
+        it "reports an error closing the socket as a warning, and still forgets it" do
+          socket = appender.socket
+          socket.define_singleton_method(:close) { raise(IOError, "close failed") }
+          warned = nil
+          appender.logger.stub(:warn, ->(message, error) { warned = [message, error] }) { appender.close }
+
+          assert_nil appender.socket
+          assert_equal "Could not close the socket to the UDP server", warned&.first
+          assert_equal "close failed", warned&.last&.message
+        ensure
+          socket&.singleton_class&.send(:remove_method, :close)
+          socket&.close
         end
       end
 
