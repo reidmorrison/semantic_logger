@@ -33,6 +33,23 @@ class ThrottledCounterTest < Minitest::Test
       sleep(0.01) until yield || Time.now > deadline
     end
 
+    it "measures the interval with the monotonic clock, unaffected by a change of the system clock" do
+      counter = SemanticLogger::QueueProcessor::ThrottledCounter.new(reported_at: nil)
+      record(counter)
+      # The system clock steps back an hour, as NTP can, between two occurrences.
+      Time.stub(:now, Time.now - 3_600) { record(counter, interval: 0) }
+
+      assert_equal 2, reports.size
+    end
+
+    it "does not report early when the system clock steps forward" do
+      counter = SemanticLogger::QueueProcessor::ThrottledCounter.new(reported_at: nil)
+      record(counter)
+      Time.stub(:now, Time.now + 3_600) { record(counter, interval: 30) }
+
+      assert_equal 1, reports.size
+    end
+
     it "counts every occurrence in the total" do
       counter = SemanticLogger::QueueProcessor::ThrottledCounter.new
       record(counter)
@@ -42,7 +59,8 @@ class ThrottledCounterTest < Minitest::Test
     end
 
     it "reports once the interval has passed since counting started" do
-      counter = SemanticLogger::QueueProcessor::ThrottledCounter.new(reported_at: Time.now - 60)
+      started = SemanticLogger::QueueProcessor::ThrottledCounter.now - 60
+      counter = SemanticLogger::QueueProcessor::ThrottledCounter.new(reported_at: started)
       record(counter, 2)
       record(counter, 3)
 
