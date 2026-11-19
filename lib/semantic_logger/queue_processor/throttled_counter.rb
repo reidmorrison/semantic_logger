@@ -11,12 +11,18 @@ module SemanticLogger
     # occurrences recorded there wait on a Queue, which it does allow, until a thread started for
     # them, or the next read or record where the Mutex can be locked, adds them in.
     class ThrottledCounter
+      # Returns [Float] the seconds on the monotonic clock, which the intervals between reports are
+      # measured with, so that a change of the system clock, such as NTP stepping it back, neither
+      # holds back a report nor makes one early.
+      def self.now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
       # Parameters:
-      #   reported_at: [Time|nil]
-      #     When counting starts, so that the first report is due one interval later.
+      #   reported_at: [Float|nil]
+      #     When counting starts, on the monotonic clock (see .now), so that the first report is due
+      #     one interval later.
       #     nil: Report the first occurrence straight away.
-      #     Default: Time.now
-      def initialize(reported_at: Time.now)
+      #     Default: ThrottledCounter.now
+      def initialize(reported_at: ThrottledCounter.now)
         @reported_at = reported_at
         @total       = 0
         @unreported  = 0
@@ -43,7 +49,7 @@ module SemanticLogger
         report  = nil
         counted = TrapSafe.try_synchronize(@mutex) do
           add(count)
-          now     = Time.now
+          now     = ThrottledCounter.now
           elapsed = @reported_at && (now - @reported_at)
           unless elapsed && elapsed < interval
             report       = [@unreported, elapsed]

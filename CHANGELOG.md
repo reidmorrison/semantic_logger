@@ -248,6 +248,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- The reports of the log messages that an appender added with `async: true` or in batches dropped or
+  failed to write, made at most once every `dropped_message_report_seconds`, are timed with the
+  monotonic clock. Before, when the system clock stepped back, as NTP can, the next report was held
+  back until the clock caught up, up to an hour later.
 - `add_appender` raises `ArgumentError` when it would batch an appender whose formatter cannot
   format a batch, such as a formatter block given to `:http`, `:loki`, or `metric: :signalfx` with
   `batch: true`, and says what to do instead. Before, it added the appender, but every batch failed
