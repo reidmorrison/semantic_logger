@@ -151,19 +151,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   waiting for that thread: it returns `true` at once, and the processor's thread, once it has written
   the messages logged before, closes the appender between writes, then removes it. See
   [Adding and removing appenders](https://logger.reidmorrison.com/config.html#adding-and-removing-appenders).
-
 - `Log#each_exception` accepts the exception to start from, for custom formatters and appenders that
   walk the causes of an exception the entry does not keep.
-
 - A `call_site` key of a logged Hash is now the `call_site:` argument when its value is `false`, a
   `Thread::Backtrace::Location`, or a well-formed `SemanticLogger::CallSite`, and is no longer logged
   in the payload. A `nil` value counts as not supplied, as for the other arguments, and is not logged
   either. Other values, such as a String, are still logged in the payload.
-
 - `SemanticLogger.host=`, `application=`, and `environment=` store a frozen copy of the value
   supplied, so that code in a Ractor can read it, and the default host name is frozen too.
   The value supplied is left as it is.
-
 - The `:open_telemetry` appender sends the message as the body of each log record, as documented,
   instead of a map of the whole log entry. The named tags become attributes of their own alongside
   the payload, and the entry's own fields become attributes: the exception as `exception.type`,
@@ -175,7 +171,6 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   The formatter now returns the keyword arguments for the OpenTelemetry `Logger#on_emit`, so a
   custom formatter for this appender must do the same. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html). Resolves #428.
-
 - The `:elasticsearch` and `:opensearch` appenders send again the entries of a bulk request that the
   server rejected with status 429 because its write queue was full, which are likely to be indexed a
   little later. Before, they were reported to the internal logger and discarded with the entries that
@@ -373,9 +368,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   other than ASCII letters and digits replaced with one `_`, and `key_` before a name that would
   start with a digit, or is empty. So `request-id` is written as `request_id`, and `1st` as
   `key_1st`. When another label already has that name with another value, as Loki stores it, a
-  number is added, as in `request_id_2`, so that both are kept. Such a payload key is written with the `payload_` prefix, as
-  Loki stores it, so an empty key as `payload_`, and with the prefix again when another key has that
-  name, so that Loki keeps the value of each. A named tag that is nil, and a nil host, are left out,
+  number is added, as in `request_id_2`, so that both are kept. Such a payload key is written with
+  the `payload_` prefix, as Loki stores it, so an empty key as `payload_`, and with the prefix again
+  when another key has that name, so that Loki keeps the value of each. A named tag that is nil, and a nil host, are left out,
   instead of being written as the label `null`.
 - The `:loki` formatter keeps both values of a named tag or context key that has the name of another
   label. Loki keeps one value of a label, so a named tag such as `host`, `level`, or `pid` replaced
@@ -804,8 +799,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   application, nor does `SemanticLogger.flush`, `close`, `reopen`, `remove_appender`, or `stats`,
   nor `fork` there. The message is written by another thread, before any message logged after the
   trap, and the trap does not wait for it, so an appender that locks a Mutex as it writes, such as a
-  Ruby `Logger` given to `add_appender(logger:)`, receives it too. When the trap interrupted its own thread while it was
-  writing a message, the trap's message is written once that one is, never in the middle of it. A
+  Ruby `Logger` given to `add_appender(logger:)`, receives it too. When the trap interrupted its own
+  thread while it was writing a message, the trap's message is written once that one is, never in
+  the middle of it. A
   flush, close, reopen, or appender removal in a trap runs on a thread that the trap starts and
   waits for, at most one second, then returns `nil` and lets it finish just after. Before, every
   one of these calls waited for a lock, which Ruby does not allow in a trap. See
