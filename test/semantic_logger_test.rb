@@ -1128,18 +1128,31 @@ class SemanticLoggerTest < Minitest::Test
     end
 
     describe ".queue_size" do
+      include SignalTrapHelper
+
       it "returns the size of the processor queue" do
-        queue = Minitest::Mock.new
-        queue.expect(:size, 7)
         processor = Minitest::Mock.new
-        processor.expect(:queue, queue)
+        processor.expect(:queue_size, 7)
 
         SemanticLogger::Logger.stub(:processor, processor) do
           assert_equal 7, SemanticLogger.queue_size
         end
 
         processor.verify
-        queue.verify
+      end
+
+      it "returns the entries waiting with sync!" do
+        processor = SemanticLogger::SyncProcessor.new
+        SemanticLogger::Logger.stub(:processor, processor) do
+          assert_equal 0, SemanticLogger.queue_size
+
+          # Left by a signal trap, with no thread started to write it.
+          processor.stub(:start_runner, nil) do
+            in_signal_trap { processor.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "x" }) }
+          end
+
+          assert_equal 1, SemanticLogger.queue_size
+        end
       end
     end
 

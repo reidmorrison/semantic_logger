@@ -778,10 +778,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `ThreadError` either: reopening the thread that receives the entries logged in other Ractors
   locked a Mutex, even when it had nothing to do.
 - On Ruby 4.0, with an appender added, `fork` in a signal trap no longer raises `ThreadError`
-  ("can't be called from trap context"), and neither does `SemanticLogger.flush` there, except in
-  synchronous mode. Pausing the thread that receives the entries logged in other Ractors while the
-  process forks, and asking it to write the entries already received before a flush, locked a Mutex,
-  which Ruby does not allow in a trap. Neither locks one now.
+  ("can't be called from trap context"), and neither does `SemanticLogger.flush` there. Pausing the
+  thread that receives the entries logged in other Ractors while the process forks, and asking it to
+  write the entries already received before a flush, locked a Mutex, which Ruby does not allow in a
+  trap. Neither locks one now.
 - The first log call of a process, made in a signal trap before anything was logged or any appender
   added, no longer raises `ThreadError` ("can't be called from trap context"). It builds the
   processor's internal logger, whose IO appender and default formatter were loaded on first use, and
@@ -796,13 +796,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - In synchronous mode (`SemanticLogger.sync!` or `require "semantic_logger/sync"`), a log call in a
   signal trap no longer raises `ThreadError` ("can't be called from trap context") into the
   application, nor does `SemanticLogger.flush`, `close`, `reopen`, `remove_appender`, or `stats`,
-  nor `fork` there. The message is written at once when no other thread is writing one, and
-  otherwise just after, before any message logged after the trap, without the trap waiting for it.
-  When the trap interrupted its own thread while it was writing a message, the trap's message is
-  written once that one is, never in the middle of it. A flush, close, reopen, or appender removal
-  in a trap runs on a thread that the trap starts and waits for. Before, every one of these calls
-  waited for a lock, which Ruby does not allow in a trap. See
+  nor `fork` there. The message is written by another thread, before any message logged after the
+  trap, and the trap does not wait for it, so an appender that locks a Mutex as it writes, such as a
+  Ruby `Logger` given to `add_appender(logger:)`, receives it too. When the trap interrupted its own thread while it was
+  writing a message, the trap's message is written once that one is, never in the middle of it. A
+  flush, close, reopen, or appender removal in a trap runs on a thread that the trap starts and
+  waits for, at most one second, then returns `nil` and lets it finish just after. Before, every
+  one of these calls waited for a lock, which Ruby does not allow in a trap. See
   [Synchronous operation](https://logger.reidmorrison.com/operations.html#synchronous-operation).
+- `SemanticLogger.queue_size` answers in synchronous mode, with the number of messages logged in a
+  signal trap that are still to be written, as `SemanticLogger.stats[:queue_size]` does. Before, it
+  raised `NoMethodError`.
+- `SemanticLogger.close` in synchronous mode reports a stack overflow raised while closing the
+  appenders to the internal logger, as a log call does, rather than raising `SystemStackError` into
+  the application, once it has closed the other appenders.
 - The `:http`, `:elasticsearch_http`, `:splunk_http`, and `:loki` appenders, and the `:signalfx`
   metric subscriber, no longer count an entry that the server did not accept as written. They
   reported a response other than 2xx to the internal logger and carried on, so with `async: true` or

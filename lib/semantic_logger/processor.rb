@@ -157,6 +157,11 @@ module SemanticLogger
       true
     end
 
+    # Returns [Integer] the number of log messages waiting on the main pipeline queue.
+    def queue_size
+      queue.size
+    end
+
     # Returns [Hash] operational statistics for the logging pipeline.
     #
     #   queue_size:     [Integer] Number of log messages waiting on the main pipeline queue.
@@ -168,7 +173,7 @@ module SemanticLogger
     #   appenders:      [Array<Hash>] Per-appender statistics, see Appenders#stats.
     def stats
       {
-        queue_size:     queue.size,
+        queue_size:     queue_size,
         capped:         capped?,
         max_queue_size: capped? ? max_queue_size : nil,
         thread_active:  active? || false,

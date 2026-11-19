@@ -118,8 +118,8 @@ did not fork (see [Log rotation](#log-rotation)).
    log rotation tool signals, since no appender connects or locks anything there. In synchronous mode
    (see [Synchronous operation](#synchronous-operation)), `reopen` reopens on the calling thread each
    appender that has no thread of its own, or, in a signal trap, on a thread that the trap starts
-   and waits for; an appender added with `async: true` or in batches is still reopened by its own
-   thread.
+   and waits for, at most one second; an appender added with `async: true` or in batches is still
+   reopened by its own thread.
 
 You might opt out if another library forks in ways you do not want to trigger a reopen, or you need
 to control exactly when the appender thread restarts.
@@ -474,6 +474,9 @@ burst of logging occurs. Check the queue at runtime:
 SemanticLogger.queue_size
 ~~~
 
+In [synchronous mode](#synchronous-operation) entries are written on the calling thread, so it counts
+only those logged in a signal trap that another thread has yet to write.
+
 For a fuller operational picture, including per-appender queues, use `SemanticLogger.stats`. It
 returns a Hash describing the main pipeline and every appender, handy for exporting Semantic Logger's
 own health to a monitoring system such as Prometheus or statsd:
@@ -546,20 +549,18 @@ gem "semantic_logger", require: "semantic_logger/sync"
 ~~~
 
 In synchronous mode, one thread at a time writes to the appenders, so a log call waits while another
-thread writes. Ruby does not allow that wait in a signal trap, so a message logged in a trap, such
-as by the handlers of [`add_signal_handler`](#linux-signals), is written at once when no other
-thread is writing, and otherwise just after, before any message logged after the trap; the trap
-does not wait for it. That includes a trap that interrupted its own thread while it was writing a
-message: the trap's message is written once that one is, never in the middle of it. In a trap,
-`SemanticLogger.flush`, `close`, `reopen`, and `remove_appender` run on a thread that the trap
-starts, after those messages, and the trap waits for it to finish, so that an appender can lock what
-it needs. In a trap that interrupted its own thread while it was writing, they cannot wait, so they
-run just after that message is written and return `nil`. `add_appender` adds the appender at once.
+thread writes. Ruby does not allow that wait in a signal trap, nor an appender to lock a Mutex of its
+own there, as a Ruby `Logger` given to `add_appender(logger:)` does when it writes. So a message
+logged in a trap, such as by the handlers of [`add_signal_handler`](#linux-signals), is written just
+after, by another thread, before any message logged after the trap; the trap does not wait for it.
+That includes a trap that interrupted its own thread while it was writing a message: the trap's
+message is written once that one is, never in the middle of it.
 
-Each appender still writes a message logged in a trap on the trap's thread when no other thread is
-writing. An appender whose write locks a Mutex of its own cannot do that in a trap: for example, a
-Ruby `Logger` given to `add_appender(logger:)` reports `log writing failed` to standard error
-instead. Use the asynchronous mode, the default, to log from a trap to such an appender.
+In a trap, `SemanticLogger.flush`, `close`, `reopen`, and `remove_appender` run on a thread that the
+trap starts, after the messages logged in the trap before them, and the trap waits for it, at most
+one second, and returns what it returned. When it has not finished by then, such as when the trap
+interrupted its own thread while it was writing a message, which cannot go on before the trap
+returns, the call returns `nil` and finishes just after. `add_appender` adds the appender at once.
 
 ## Linux signals
 

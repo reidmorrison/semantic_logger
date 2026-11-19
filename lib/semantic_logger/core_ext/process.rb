@@ -13,8 +13,9 @@ module SemanticLogger
     #
     # It can also run in a signal trap, such as one that forks, where Ruby does
     # not allow a Mutex to be locked: pausing the thread that receives the entries
-    # of other Ractors locks none, and neither does reopening in the child, except
-    # in synchronous mode (see SemanticLogger.reopen).
+    # of other Ractors locks none, and neither does reopening in the child. In
+    # synchronous mode, a thread that the trap starts reopens the appenders that
+    # have no thread of their own (see SyncProcessor#reopen).
     #
     # Note: both `_fork` and `daemon` must be overridden to reliably restart the
     # appender thread, since `Process.daemon` does not route through `_fork`

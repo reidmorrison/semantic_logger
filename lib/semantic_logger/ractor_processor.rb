@@ -56,7 +56,8 @@ module SemanticLogger
     end
 
     # The operations that only the main Ractor can do, such as adding an appender.
-    %i[appenders close reopen start queue stats lag_check_interval lag_threshold_s non_blocking?].each do |method|
+    %i[appenders close reopen start queue queue_size stats lag_check_interval lag_threshold_s
+       non_blocking?].each do |method|
       class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
         def #{method}(*)                                 # def appenders(*)
           raise ::Ractor::IsolationError, main_only(:#{method}) #   raise ::Ractor::IsolationError, main_only(:appenders)

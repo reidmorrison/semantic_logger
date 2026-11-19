@@ -4,66 +4,100 @@ module SemanticLogger
   # Appenders are designed to only be used by one thread at a time, so all calls
   # are monitor protected in case SyncProcessor is being used in a multi-threaded environment.
   #
-  # Ruby does not allow a Monitor to be entered in a signal trap, except without waiting, so a call
-  # made in a trap that cannot enter it at once, or that interrupted the thread inside it, which may be
-  # in the middle of writing an entry, is left on a queue of pending calls instead (see #exclusively).
-  # The next call to enter the monitor first runs the pending ones, in order, and a thread started
-  # from the trap enters it to run them, when nothing else does.
+  # Ruby does not allow a Monitor to be entered in a signal trap, so another thread runs a call made
+  # in a trap. A log entry is left on a queue of pending calls, which whoever next enters the monitor
+  # runs first, in order, and a thread started from the trap enters it to do so when nothing else does
+  # (see #defer). Every other call runs on a thread that the trap starts and waits for, at most
+  # TRAP_WAIT_SECONDS (see #outside_trap). Neither ever runs on the trap's thread, so that an appender
+  # can lock a Mutex of its own as it writes, flushes, closes, or reopens, as a Ruby Logger does.
   class SyncProcessor
-    def add(...)
-      @monitor.synchronize { @appenders.add(...) }
+    # Seconds that a call other than a log call, such as a flush or a reopen, waits in a signal trap
+    # for the thread that runs it. It may need a lock that the thread the trap interrupted holds.
+    TRAP_WAIT_SECONDS = 1
+
+    # Returned by #exclusively, which does not run its block, in a signal trap.
+    TRAPPED = Object.new.freeze
+    private_constant :TRAPPED
+
+    # Add an appender. In a signal trap, as for #flush, which returns nil instead of the appender when
+    # it is not added in time. SemanticLogger.add_appender adds to the appenders directly instead.
+    def add(**args, &block)
+      synchronize { @appenders.add(**args, &block) }
     end
 
     # Logs on the calling thread, which belongs to the application, so a stack overflow while
     # writing (see Appenders#log) is reported rather than raised from the log call.
     #
-    # In a signal trap, the entry is written at once when no other call is inside this processor.
-    # Otherwise it is written just after, before any entry logged after the trap, and the trap
-    # returns without waiting for it.
+    # In a signal trap, the entry is written just after, by another thread, before any entry logged
+    # after the trap, and the trap returns without waiting for it (see #defer).
     def log(log)
-      exclusively(wait: false) { write(log) }
+      logged = exclusively { write(log) }
+      return logged unless logged.equal?(TRAPPED)
+
+      defer { write(log) }
+      true
+    rescue SystemStackError => e
+      @appenders.logger.error("Failed to log a message: the stack overflowed", e)
+      false
     end
 
     # Returns [Hash] operational statistics for the logging pipeline.
     #
     # In synchronous mode messages are written inline on the calling thread, so the queue holds only
-    # the calls made in a signal trap that are still to run (see #log), and no messages are dropped.
-    # In a trap it reads them without entering the monitor.
+    # the entries logged in a signal trap that are still to be written (see #log), and no messages
+    # are dropped. In a trap it reads them without entering the monitor.
     def stats
-      return statistics if TrapSafe.in_trap?
-
-      @monitor.synchronize { statistics }
+      stats = exclusively { statistics }
+      stats.equal?(TRAPPED) ? statistics : stats
     end
 
-    # Flush the appenders. In a signal trap, a thread started from it flushes them, after the
-    # entries pending, and the trap waits for it, unless the trap interrupted a call inside this
-    # processor: the flush then runs just after that call, without waiting (see #exclusively).
+    # Flush the appenders. In a signal trap, a thread that the trap starts flushes them, after the
+    # entries logged in the trap before, and the trap waits for it, at most TRAP_WAIT_SECONDS, then
+    # returns its result, or raises what it raised. When it has not finished by then, such as when the
+    # trap interrupted a call inside this processor, which cannot return before the trap does, it
+    # returns nil and the flush runs just after.
     def flush
-      exclusively { @appenders.flush }
+      synchronize { @appenders.flush }
     end
 
     # Close the appenders, as for #flush in a signal trap.
+    #
+    # A stack overflow while closing is reported rather than raised, as by #log, since the calling
+    # thread belongs to the application, even when Appenders#close raises it, for the asynchronous
+    # Processor to move to a new thread.
     def close
-      exclusively { @appenders.close }
+      synchronize do
+        @appenders.close
+      rescue SystemStackError => e
+        logger.error("Failed to close the appenders: the stack overflowed", e)
+        nil
+      end
     end
 
     # Remove the appender from those that this processor writes to, and close it, once any log call
-    # writing to it has returned. Returns the result of closing it, or nil when it is closed after a
-    # signal trap that interrupted a call inside this processor (see #flush).
+    # writing to it has returned. Closes it after leaving the monitor, so that the other threads
+    # can log meanwhile. Returns the result of closing it, or, in a signal trap, as for #flush, nil
+    # when it is not closed in time.
     #
     # The appenders are reopened on the calling thread (see #reopen), so none is ever waiting to be
     # reopened when it is removed.
     def remove(appender)
-      exclusively do
-        @appenders.flush if @appenders.delete(appender)
-        appender.close
-      end
+      removed = exclusively { @appenders.flush if @appenders.delete(appender) }
+      return outside_trap { remove(appender) } if removed.equal?(TRAPPED)
+
+      appender.close
     end
 
     # Reopen the appenders on the calling thread, or, in a signal trap, as for #flush, so that an
     # appender that connects or locks a Mutex as it reopens can do so.
     def reopen(*args)
-      exclusively { @appenders.reopen(*args) }
+      synchronize { @appenders.reopen(*args) }
+    end
+
+    # Returns [Integer] the number of entries logged in a signal trap that are still to be written
+    # (see #log), the only ones that wait in synchronous mode. Never enters the monitor.
+    def queue_size
+      pending_count
     end
 
     # Returns [true|false] whether the calling thread is inside a call to this processor, such as in
@@ -110,6 +144,7 @@ module SemanticLogger
       @processed_count = 0
       @pending         = Thread::Queue.new
       @runner          = nil
+      @pid             = Process.pid
     end
 
     def start
@@ -118,114 +153,135 @@ module SemanticLogger
 
     private
 
-    # Runs the block inside the monitor, after the pending calls, and returns its value.
+    # Runs the block inside the monitor, after the pending calls, and returns its value, or returns
+    # TRAPPED, without running it, in a signal trap. Leaves the monitor even when a pending call
+    # raises past its rescue, such as Timeout or Thread#raise, so that no other thread waits for ever.
     #
     # A call made by the thread already inside, such as by an appender while it writes, runs at once,
-    # as it always has. In a signal trap, where Ruby raises ThreadError for a wait to enter the
-    # monitor, a log call (wait: false) runs at once only when it can enter without waiting and no
-    # call is pending, and is otherwise left on the queue of pending calls, which a thread started from
-    # the trap runs (see #start_runner). A trap that interrupted the thread inside the monitor must not
-    # run a call at once, since that thread may be in the middle of writing an entry to an appender,
-    # nor wait for it, since that thread does not go on until the trap returns: that thread runs the
-    # pending calls before it leaves the monitor, or else the started thread does, just after. Any
-    # other call made in a trap waits for the started thread to run it, so that the appenders flush,
-    # close, or reopen outside the trap, where they may lock a Mutex of their own, and returns its
-    # value.
-    def exclusively(wait: true, &)
+    # as it always has, without the pending calls, which may write to the appender in the middle of
+    # its write. Monitor#enter raises ThreadError in a trap, even when no other thread is inside, so
+    # it tells a trap without a check of its own, except when the trap interrupted the thread inside,
+    # which the monitor lets in again. The thread inside runs the calls that such a trap left before
+    # it leaves the monitor. Monitor#enter also raises ThreadError outside a trap, for a fiber when
+    # another fiber of its thread is inside, which is raised again, as before.
+    def exclusively
       if @monitor.mon_owned?
-        return @monitor.synchronize(&) unless TrapSafe.in_trap?
+        return TRAPPED if TrapSafe.in_trap?
 
-        return defer(wait: false, &)
+        return yield
       end
-      return defer(wait: true, &) if wait && TrapSafe.in_trap?
-      return defer(wait: false, &) unless enter
+
+      begin
+        @monitor.enter
+      rescue ThreadError
+        raise unless TrapSafe.in_trap?
+
+        return TRAPPED
+      end
 
       begin
         run_pending
-        result = yield
-        # The calls left meanwhile by a signal trap that interrupted this thread.
-        run_pending unless @pending.empty? || TrapSafe.in_trap?
-        result
+        yield
       ensure
-        @monitor.exit
-      end
-    end
-
-    # Enter the monitor and return true, or return false in a signal trap when it cannot be entered
-    # without waiting, or when calls are pending, which run first, outside the trap. Tells a trap
-    # only then, so that a log call that enters at once does not pay for it.
-    def enter
-      if @monitor.try_enter
-        return true if @pending.empty? || !TrapSafe.in_trap?
-
-        @monitor.exit
-        return false
-      end
-      return false if TrapSafe.in_trap?
-
-      @monitor.enter
-      true
-    end
-
-    # Leave the block on the queue of pending calls, for a thread started from the signal trap to run.
-    # Waits for it to be run, and returns its value, or raises what it raised, or returns nil at once.
-    def defer(wait:, &block)
-      result = nil
-      error  = nil
-      @pending << lambda do
-        result = block.call
-      rescue Exception => e
-        error = e
-        logger.error("Failed to complete a call made in a signal trap", e) unless wait
-      end
-      runner = start_runner
-      return unless wait
-
-      runner.join
-      raise error if error
-
-      result
-    end
-
-    # Start a thread that enters the monitor and runs the pending calls, unless one is running.
-    # Called in a signal trap, where a Mutex cannot be locked, so it relies on the runner clearing
-    # @runner before it checks, inside the monitor, for calls still pending: a call left after that
-    # check finds no runner and starts one. Two runners may run at once, rarely, which is harmless.
-    def start_runner
-      runner = @runner
-      return runner if runner&.alive?
-
-      @runner = Thread.new do
-        loop do
-          finished = @monitor.synchronize do
-            run_pending
-            @runner = nil
-            @pending.empty?
-          end
-          break if finished
+        begin
+          run_pending
+        ensure
+          @monitor.exit
         end
       end
     end
 
-    # Run the calls left by signal traps, in the order they were made. Called inside the monitor.
+    # Runs the block inside the monitor and returns its value, or, in a signal trap, runs it on a
+    # thread that the trap starts, as #outside_trap does.
+    def synchronize(&block)
+      result = exclusively(&block)
+      result.equal?(TRAPPED) ? outside_trap { exclusively(&block) } : result
+    end
+
+    # Leaves the block, given in a signal trap, on the queue of pending calls, and starts a thread to
+    # run them, unless one is running (see #start_runner). Never waits.
+    def defer(&block)
+      forget_parent_calls
+      @pending << block
+      start_runner
+    end
+
+    # Runs the block, given in a signal trap, on a thread that the trap starts, and returns its value,
+    # waiting at most TRAP_WAIT_SECONDS for it (see TrapSafe.hand_off). Does not wait when the trap
+    # interrupted the thread inside the monitor, since that thread cannot leave it before the trap
+    # returns. Outside the trap, the block enters the monitor and runs the pending calls first.
+    def outside_trap(&)
+      TrapSafe.hand_off(@monitor.mon_owned? ? 0 : TRAP_WAIT_SECONDS, &)
+    end
+
+    # Starts a thread that enters the monitor and runs the pending calls, unless one is running.
+    #
+    # Called in a signal trap, where a Mutex cannot be locked, after it left a call on the queue. The
+    # runner clears @runner, and only then checks for calls still pending, which it runs before it
+    # checks again. So a runner that this finds in @runner has not yet made that check, and runs the
+    # call left, and a call left after that check finds no runner and starts one. The runner waits
+    # until @runner holds it, so that it never clears it before. Two runners may run at once, rarely,
+    # which is harmless.
+    def start_runner
+      return if @runner&.alive?
+
+      started = Thread::Queue.new
+      @runner = Thread.new do
+        started.pop
+        loop do
+          @monitor.synchronize { run_pending }
+          @runner = nil
+          break if @pending.empty?
+
+          @runner = Thread.current
+        end
+      end
+      started << true
+    end
+
+    # Run the calls left by signal traps, in the order they were made. Called inside the monitor, on
+    # any thread, so it reports what a call raises instead of raising it.
     def run_pending
-      @pending.pop(timeout: 0)&.call until @pending.empty?
+      return if @pending.empty?
+
+      forget_parent_calls
+      while (call = @pending.pop(timeout: 0))
+        begin
+          call.call
+        rescue StandardError, SystemStackError => e
+          logger.error("Failed to complete a call made in a signal trap", e)
+        end
+      end
+    end
+
+    # In a forked child, forgets the calls left pending in the parent, which the parent runs, and the
+    # parent's runner, which the child does not have.
+    def forget_parent_calls
+      return if @pid == Process.pid
+
+      @pid    = Process.pid
+      @runner = nil
+      @pending.clear
     end
 
     def write(log)
       @processed_count += 1
       @appenders.log(log)
-    rescue SystemStackError => e
-      @appenders.logger.error("Failed to log a message: the stack overflowed", e)
-      false
+    end
+
+    # Returns [Integer] the number of calls left pending by signal traps in this process. In a forked
+    # child, those of the parent are not counted, before the child forgets them (see
+    # #forget_parent_calls). Changes nothing, so that it can run in a trap without the monitor.
+    def pending_count
+      @pid == Process.pid ? @pending.size : 0
     end
 
     def statistics
       {
-        queue_size:     @pending.size,
+        queue_size:     pending_count,
         capped:         false,
         max_queue_size: nil,
-        thread_active:  false,
+        thread_active:  @runner&.alive? || false,
         processed:      @processed_count,
         dropped:        0,
         appenders:      @appenders.stats
