@@ -1038,6 +1038,15 @@ class FilteredHttp < SemanticLogger::Appender::Http
 end
 ~~~
 
+An appender that inherits a `#batch` that its destination rejects, whatever the formatter, returns a
+reason of its own from `#batch_refusal`:
+
+~~~ruby
+def batch_refusal
+  "the server takes one entry per request. Add it without batch: true."
+end
+~~~
+
 Register the appender by passing an instance to `add_appender`:
 
 ~~~ruby

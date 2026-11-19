@@ -3,7 +3,8 @@ require "date"
 #
 # Note:
 # * Other than in very low volume environments it is recommended to rather use the Elasticsearch appender,
-#   since it supports bulk logging.
+#   since it supports bulk logging. This appender cannot be batched: with `batch: true`, add_appender raises
+#   ArgumentError (see #batch_refusal).
 #
 # Example:
 #   SemanticLogger.add_appender(
@@ -79,6 +80,22 @@ module SemanticLogger
       # Deletes all log data captured for a day.
       def delete_all(date = Date.today)
         delete(date.strftime(@request_path))
+      end
+
+      # Elasticsearch indexes a batch of documents only through its bulk API, which the :elasticsearch
+      # appender uses. The #batch inherited from Appender::Http posts the batch as a JSON array to the
+      # url's own path, such as `/`, which Elasticsearch rejects, so add_appender refuses to batch it.
+      #
+      # Answers only while that #batch is the one in use (see Subscriber#batch_defined_by?), so that a
+      # subclass with a #batch of its own, such as one that posts the batch to the bulk API, is batched
+      # as before. One whose #batch calls super still posts a JSON array, so it defines its own
+      # #batch_refusal.
+      def batch_refusal
+        return unless batch_defined_by?(Http)
+
+        "Elasticsearch indexes a batch of entries only through its bulk API, which this appender does not " \
+          "use. Use appender: :elasticsearch to send the entries in batches, or add this appender without " \
+          "batch: true."
       end
     end
   end

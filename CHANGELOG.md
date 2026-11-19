@@ -246,6 +246,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   say why from `#batch_refusal`. When `add_appender` fails after creating the appender, such as for
   one that it cannot batch, it closes the appender. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
+- `add_appender(appender: :elasticsearch_http, batch: true)` raises `ArgumentError`, and says to use
+  the `:elasticsearch` appender, which sends its entries in bulk requests, to send them in batches.
+  Before, it posted each batch as a JSON array to the url's own path, such as `/`, which
+  Elasticsearch rejects, since it indexes a batch only through its bulk API, so nothing was ever
+  indexed. A custom appender can refuse to be batched in the same way, with a reason of its own, by
+  returning it from `#batch_refusal`. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - The `:statsd` metric subscriber records metrics as soon as it is added. Before, it created its
   Statsd client only when reopened, such as after a fork, so in a process that did not fork, such as
   a single Puma or Sidekiq process, every metric failed with `NoMethodError` and was reported to the
