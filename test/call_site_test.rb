@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require_relative "signal_trap_helper"
 
 module SemanticLogger
   class CallSiteTest < Minitest::Test
@@ -182,6 +183,26 @@ module SemanticLogger
 
           with_skip_paths([File.basename(__FILE__)]) do
             refute_equal __FILE__, CallSite.capture&.path
+          end
+        end
+
+        describe "in a signal trap, where adding to the cache would lock a Mutex" do
+          include SignalTrapHelper
+
+          it "returns the frame that called it, without remembering whether its path is skipped" do
+            # New skip paths start a new cache.
+            with_skip_paths(["/not/a/path/in/a/trap/"]) do
+              call_site = in_signal_trap { Frames.helper }
+
+              assert_kind_of CallSite, call_site
+              assert_equal "/app/lib/audit_log.rb", call_site.path
+              cache = CallSite.send(:skip_cache, SemanticLogger.call_site_skip_paths)
+
+              assert_empty cache.keys
+              Frames.helper
+
+              refute_empty cache.keys
+            end
           end
         end
 

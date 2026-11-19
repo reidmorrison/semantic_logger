@@ -1,3 +1,7 @@
+# Loaded now rather than autoloaded, since #log writes with it on the calling thread when this is the
+# internal logger, which can be in a signal trap, where Ruby does not allow a require.
+require "semantic_logger/appender/text_output"
+
 # File appender
 #
 #   Writes log messages to a file or open iostream

@@ -163,15 +163,21 @@ module SemanticLogger
     # The frames of log calls come from a few files, Semantic Logger's own and the application's, so
     # the answer is remembered in the cache for each path, which is faster than matching the path
     # again. Without a cache, the path is matched each time.
+    #
+    # In a signal trap, the answer for a path not yet in the cache is not remembered, since writing to
+    # the cache locks a Mutex on CRuby, which Ruby does not allow there.
     def self.skip?(path, skip_paths, cache)
       return skip_path?(path, skip_paths) unless cache
 
       skipped = cache[path]
       return skipped unless skipped.nil?
 
+      skipped = skip_path?(path, skip_paths)
+      return skipped if TrapSafe.in_trap?
+
       # Bounded, since code evaluated at runtime can have a path of its own each time.
       cache.clear if cache.size >= MAX_CACHED_PATHS
-      cache[path] = skip_path?(path, skip_paths)
+      cache[path] = skipped
     end
     private_class_method :skip?
 

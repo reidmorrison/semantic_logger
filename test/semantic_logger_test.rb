@@ -1,4 +1,5 @@
 require_relative "test_helper"
+require_relative "signal_trap_helper"
 
 # A named class used as a logger cache key in the ".[]" tests.
 class CachedSample
@@ -65,6 +66,26 @@ class SemanticLoggerTest < Minitest::Test
           assert_same SemanticLogger[CachedSample], CachedSample.logger
         ensure
           CachedSample.instance_variable_set(:@semantic_logger, nil)
+        end
+
+        describe "in a signal trap, where adding to the cache would lock a Mutex" do
+          include SignalTrapHelper
+
+          it "returns a logger, which is cached by the time the trap returns" do
+            SemanticLogger.clear_logger_cache
+            logger = in_signal_trap { SemanticLogger[CachedSample] }
+
+            assert_instance_of SemanticLogger::Logger, logger
+            assert_same logger, SemanticLogger[CachedSample]
+          end
+
+          it "returns the logger already cached" do
+            cached = SemanticLogger[CachedSample]
+
+            in_trap = in_signal_trap { SemanticLogger[CachedSample] }
+
+            assert_same cached, in_trap
+          end
         end
       end
 
@@ -414,6 +435,30 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    # Runs the script in another Ruby, with this Semantic Logger, and returns what it printed, or fails
+    # once it has not exited within 20 seconds. Its output is read as it is printed, so that it cannot
+    # fill the pipe and block.
+    def run_ruby(script)
+      reader, writer = IO.pipe
+      pid            = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script,
+                                     out: writer, err: writer)
+      writer.close
+      output = Thread.new { reader.read }
+      waiter = Process.detach(pid)
+      unless waiter.join(20)
+        Process.kill("KILL", pid)
+
+        flunk "the process should exit within 20 seconds"
+      end
+
+      assert_predicate waiter.value, :success?, output.value
+      output.value
+    ensure
+      # Once the process has exited, the pipe is at its end.
+      output&.join(5)
+      reader&.close
+    end
+
     # Semantic Logger flushes the appenders in an at_exit hook, so these exit another Ruby.
     describe "the flush at exit" do
       # Logs 30 entries to an appender added with async: true, whose destination is down, and to
@@ -466,34 +511,62 @@ class SemanticLoggerTest < Minitest::Test
         RUBY
       end
 
-      # Runs the script in another Ruby, and returns what it printed last, parsed, or fails once it
-      # has not exited within 20 seconds.
-      def exit_after(script)
-        reader, writer = IO.pipe
-        pid            = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script,
-                                       out: writer, err: writer)
-        writer.close
-        waiter = Process.detach(pid)
-        unless waiter.join(20)
-          Process.kill("KILL", pid)
-
-          flunk "the process should exit within seconds"
-        end
-        output = reader.read
-
-        assert_predicate waiter.value, :success?, output
-        JSON.parse(output.lines.last, symbolize_names: true)
-      ensure
-        reader&.close
-      end
-
       it "exits within seconds during an outage, discarding the queued entries after one more write fails" do
-        result = exit_after(script)
+        result = JSON.parse(run_ruby(script).lines.last, symbolize_names: true)
 
         assert_operator result[:seconds], :<, 5
         assert_equal 1, result[:attempts_after_exit], "only the entry held should be written again"
         assert_equal 30, result[:failed]
         assert_equal 30, result[:written], "the other appender should write every entry"
+      end
+    end
+
+    # The first log call of a process builds the processor, and its internal logger, so these log in
+    # another Ruby.
+    describe "the first log call of a process, made in a signal trap" do
+      # Returns a script that runs the supplied code, then logs for the first time in a signal trap,
+      # then adds an appender, and prints what happened, as JSON.
+      def script(before_trap = "")
+        <<~RUBY
+          require "json"
+          require "semantic_logger"
+          #{before_trap}
+          result = nil
+          Signal.trap("USR1") do
+            SemanticLogger["Trap"].info("First entry")
+            result = "logged"
+          rescue StandardError => e
+            result = "\#{e.class}: \#{e.message}"
+          end
+          Process.kill("USR1", Process.pid)
+          deadline = Time.now + 5
+          sleep(0.01) until result || Time.now > deadline
+          SemanticLogger.flush
+          processed = SemanticLogger.stats[:processed]
+
+          require "semantic_logger/test/capture_log_events"
+          events = SemanticLogger::Test::CaptureLogEvents.new
+          SemanticLogger.add_appender(appender: events)
+          SemanticLogger["Trap"].info("After the trap")
+          SemanticLogger.flush
+          puts JSON.generate(result: result, processed: processed, written: events.events.map(&:message))
+        RUBY
+      end
+
+      it "logs, rather than raise building the processor" do
+        result = JSON.parse(run_ruby(script).lines.last, symbolize_names: true)
+
+        assert_equal "logged", result[:result]
+        assert_equal 1, result[:processed], "the entry should have reached the processor"
+        assert_equal ["After the trap"], result[:written]
+      end
+
+      it "reports an on_log subscriber that raises, rather than raise writing the report" do
+        output = run_ruby(script('SemanticLogger.on_log { |_log| raise "subscriber failed" }'))
+        result = JSON.parse(output.lines.last, symbolize_names: true)
+
+        assert_equal "logged", result[:result]
+        assert_includes output, "Exception calling :on_log subscriber"
       end
     end
 
