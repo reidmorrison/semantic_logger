@@ -803,6 +803,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   that are not valid UTF-8. A formatter that raises a `ScriptError`, such as `NotImplementedError`,
   now loses only that entry, as for any other error. Before, it stopped an appender added with
   `async: true` or `batch: true`, which then dropped every entry after it.
+- The `:tcp` appender, and the `:syslog` appender over TCP, keep the `handshake_timeout:` of their
+  `ssl:` option when they connect again after a reopen, such as the one that runs in the child
+  process after a fork, and no longer change the Hashes they are given. Net::TCPClient takes
+  `handshake_timeout:` out of the `ssl:` Hash it is given, which was the application's own Hash, so
+  after a reopen the TLS handshake timed out after `connect_timeout:` instead, and a frozen `ssl:`
+  Hash made `add_appender` raise `FrozenError`, with or without that key. The `:syslog` appender also
+  wrote the server from its `url:` into its `tcp_client:` Hash, which raised `FrozenError` for a
+  frozen one. Each connection now gets a copy of these options. Nor do the `:http` and `:graylog`
+  appenders change the Hashes they are given any more. The `:http` appender, and those built on it
+  (`:elasticsearch_http`, `:splunk_http`, `:loki`, and `metric: :signalfx`), added `use_ssl:` and
+  `verify_mode:` to the `ssl:` Hash for an `https` url, so a frozen one raised `FrozenError`, and an
+  appender for an `http` url given the same Hash used TLS. The `:graylog` appender added `protocol:`
+  and `facility:` to its `gelf_options:` Hash, so a frozen one raised `FrozenError`, and an appender
+  for a `tcp` url given the same Hash as one for a `udp` url sent over UDP.
 
 ## [5.2.0] 2026-10-30
 

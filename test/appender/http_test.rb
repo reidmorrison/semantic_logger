@@ -228,6 +228,39 @@ module Appender
         end
       end
 
+      describe "ssl:" do
+        # Returns [SemanticLogger::Appender::Http] an appender for an https url built with the given ssl: option,
+        # which connects to nothing.
+        def appender_with(ssl)
+          stub_http_start { SemanticLogger::Appender::Http.new(url: "https://localhost:8088/path", ssl: ssl) }
+        end
+
+        it "uses TLS for an https url, and leaves the Hash given as it is" do
+          ssl      = {ca_file: "ca.pem"}
+          appender = appender_with(ssl)
+
+          assert_predicate appender.http, :use_ssl?
+          assert_equal OpenSSL::SSL::VERIFY_PEER, appender.http.verify_mode
+          assert_equal "ca.pem", appender.http.ca_file
+          assert_equal({ca_file: "ca.pem"}, ssl)
+        end
+
+        it "accepts a frozen Hash" do
+          appender = appender_with({verify_mode: OpenSSL::SSL::VERIFY_NONE}.freeze)
+
+          assert_predicate appender.http, :use_ssl?
+          assert_equal OpenSSL::SSL::VERIFY_NONE, appender.http.verify_mode
+        end
+
+        it "does not use TLS for an http url given a Hash that another appender uses for an https url" do
+          ssl = {ca_file: "ca.pem"}
+          appender_with(ssl)
+          appender = stub_http_start { SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", ssl: ssl) }
+
+          refute_predicate appender.http, :use_ssl?
+        end
+      end
+
       describe "query parameters" do
         it "has no query when the url carries none" do
           assert_nil appender.query

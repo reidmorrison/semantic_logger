@@ -127,7 +127,7 @@ module SemanticLogger
       # After forking an active process call #reopen to re-open the handles to resources.
       def reopen
         close
-        @tcp_client = Net::TCPClient.new(**@tcp_client_args)
+        @tcp_client = Net::TCPClient.new(**tcp_client_options)
       end
 
       # Write the log using the specified protocol and server.
@@ -155,6 +155,13 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Hash] a copy of the options for a new Net::TCPClient (see Subscriber#copy_options), since it
+      # takes handshake_timeout: out of the ssl: Hash it is given: each client gets a copy of its own, which
+      # keeps the timeout for the next one, such as after a reopen.
+      def tcp_client_options
+        copy_options(@tcp_client_args)
+      end
 
       # Returns [SemanticLogger::Formatters::Default] formatter default for this Appender
       def default_formatter
