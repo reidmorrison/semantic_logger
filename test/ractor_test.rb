@@ -543,6 +543,16 @@ module SemanticLogger
         assert_equal ["Entry 0", "Entry 1", "Entry 2"], logs.map(&:message)
       end
 
+      it "only lets the main Ractor read the queue size" do
+        logs = logs_from_ractor do
+          SemanticLogger.queue_size
+        rescue ::Ractor::IsolationError => e
+          SemanticLogger["InRactor"].info("Rejected", error: e.message)
+        end
+
+        assert_match(/only be configured in the main Ractor/, logs.first.payload[:error])
+      end
+
       it "only lets the main Ractor add an appender" do
         logs = logs_from_ractor do
           SemanticLogger.add_appender(io: $stdout)

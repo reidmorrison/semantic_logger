@@ -378,7 +378,10 @@ module SemanticLogger
   # has returned.
   #
   # Returns the result of closing the appender, or true on the thread of an appender added with
-  # async: true or in batches, before the appender is closed.
+  # async: true or in batches, before the appender is closed. With sync!, in a signal trap, returns
+  # nil when it is not closed within SyncProcessor::TRAP_WAIT_SECONDS, such as when the trap
+  # interrupted a log call, which must return first: it is then removed and closed just after (see
+  # SyncProcessor#remove).
   def self.remove_appender(appender)
     return unless appender
 
@@ -445,7 +448,8 @@ module SemanticLogger
   # reopened: a flush after it returns once they have. One added with async: true or in batches has
   # a thread of its own; a batching one reopens at its next batch, or flush. That also lets this be
   # called from a signal trap. With sync!, the appenders without a thread of their own are reopened
-  # on the calling thread instead, so that it then cannot be called from a signal trap.
+  # on the calling thread instead, or, in a signal trap, on a thread that the trap starts and waits
+  # for, at most SyncProcessor::TRAP_WAIT_SECONDS (see SyncProcessor#flush).
   #
   # Note:
   #   Not all appender's implement reopen.
@@ -734,8 +738,11 @@ module SemanticLogger
   # able to write to the appenders fast enough. Either reduce the amount of
   # logging, increase the log level, reduce the number of appenders, or
   # look into speeding up the appenders themselves
+  #
+  # With sync!, entries are written on the calling thread, so only those logged in a signal trap
+  # wait, until another thread writes them (see SyncProcessor#queue_size).
   def self.queue_size
-    Logger.processor.queue.size
+    Logger.processor.queue_size
   end
 
   # Returns [Hash] operational statistics for the logging pipeline.

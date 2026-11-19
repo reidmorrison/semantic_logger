@@ -154,6 +154,14 @@ module SemanticLogger
         end
       end
 
+      describe "#queue_size" do
+        it "returns the size of the main pipeline queue" do
+          processor.queue.stub(:size, 3) do
+            assert_equal 3, processor.queue_size
+          end
+        end
+      end
+
       describe "#stats" do
         it "reports pipeline statistics including per-appender stats" do
           stats = processor.stats
