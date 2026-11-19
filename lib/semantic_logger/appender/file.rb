@@ -239,6 +239,18 @@ module SemanticLogger
         @file&.flush
       end
 
+      # Closes the log file, such as when the appender is removed, and forgets it, so that a write after
+      # it opens the file again, whatever the retry_count. An error closing it, such as EIO when the
+      # file's last writes did not reach a network file system, is reported rather than raised.
+      def close
+        @file&.close
+      rescue StandardError => e
+        logger.warn("Could not close the log file #{current_file_name}", e)
+      ensure
+        @file             = nil
+        @refused_retry_at = nil
+      end
+
       # See Subscriber#inspect.
       def inspect_details
         "file_name=#{file_name.inspect}"

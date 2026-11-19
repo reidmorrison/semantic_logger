@@ -406,6 +406,19 @@ module Appender
           assert_equal "client 3 built,producer 3 built,producer 3 shut down,client 3 closed", output
         end
 
+        it "leaves the clients and producers the parent built to it when closed in a child that has not reopened" do
+          output = with_fake_kafka do |kafka|
+            kafka.reopen
+            fake_kafka.events.clear
+            in_forked_child do
+              kafka.close
+              fake_kafka.events.join(",")
+            end
+          end
+
+          assert_equal "", output
+        end
+
         it "has no producer after a fork when building one fails, so that logging raises IOError" do
           output = with_fake_kafka do |kafka|
             kafka.delivery_threshold = -1

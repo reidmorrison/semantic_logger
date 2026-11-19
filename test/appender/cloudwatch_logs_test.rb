@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../forked_child_helper"
 
 # Unit Test for SemanticLogger::Appender::CloudwatchLogs
 module Appender
@@ -276,12 +277,113 @@ module Appender
         end
       end
 
+      describe "#reopen" do
+        include ForkedChildHelper
+
+        after do
+          # The mock client answers no request to send them.
+          appender.buffered_logs.clear
+          appender.close
+        end
+
+        def reopen
+          Aws::CloudWatchLogs::Client.stub(:new, mock_client) { appender.reopen }
+        end
+
+        it "shuts down the timer that it replaced, and keeps the buffered log messages" do
+          replaced = appender.task
+          appender.log(log_event)
+          reopen
+
+          refute_predicate replaced, :running?
+          assert_predicate appender.task, :running?
+          assert_equal 1, appender.buffered_logs.size
+        end
+
+        it "reports an error shutting down the timer that it replaced, rather than raising it" do
+          internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+          appender.logger = internal_logger
+          replaced        = appender.task
+          replaced.stub(:shutdown, -> { raise ThreadError }) { reopen }
+          report = internal_logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not shut down the timer that a reopen replaced", report.message
+          assert_instance_of ThreadError, report.exception
+          assert_predicate appender.task, :running?
+        ensure
+          replaced&.shutdown
+        end
+
+        it "keeps the client, timer, and buffered log messages it has when building the client fails" do
+          task = appender.task
+          appender.log(log_event)
+
+          Aws::CloudWatchLogs::Client.stub(:new, ->(*) { raise Aws::Errors::MissingRegionError }) do
+            assert_raises(Aws::Errors::MissingRegionError) { appender.reopen }
+          end
+
+          # Compared by id, since the mock client answers no other method.
+          assert_equal mock_client.__id__, appender.client.__id__
+          assert_same task, appender.task
+          assert_predicate task, :running?
+          assert_equal 1, appender.buffered_logs.size
+        end
+
+        it "in a forked child, forgets the timer and the buffered log messages it inherited" do
+          appender.log(log_event)
+          output = in_forked_child do
+            inherited = appender.task
+            reopen
+            JSON.generate(
+              inherited_running: inherited.running?,
+              replaced:          !appender.task.equal?(inherited),
+              buffered:          appender.buffered_logs.size
+            )
+          end
+
+          assert_equal({"inherited_running" => true, "replaced" => true, "buffered" => 0}, JSON.parse(output))
+          assert_equal 1, appender.buffered_logs.size
+        end
+      end
+
       describe "#close" do
+        include ForkedChildHelper
+
         it "shuts down the timer task" do
           assert_predicate appender.task, :running?
           appender.close
 
           refute_predicate appender.task, :running?
+        end
+
+        it "sends the buffered log messages, since removing the appender does not flush it" do
+          mock_client.expect(:put_log_events, Aws::CloudWatchLogs::Types::PutLogEventsResponse.new) do |**params|
+            params[:log_events].size == 1
+          end
+          appender.log(log_event)
+          appender.close
+
+          assert_mock mock_client
+          assert_empty appender.buffered_logs
+          refute_predicate appender.task, :running?
+        end
+
+        it "leaves the buffered log messages it inherited to the parent process in a child that has not reopened" do
+          appender.log(log_event)
+          output = in_forked_child do
+            internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+            appender.logger = internal_logger
+            appender.close
+            JSON.generate(buffered: appender.buffered_logs.size, reports: internal_logger.events.map(&:message))
+          end
+
+          assert_equal({"buffered" => 0, "reports" => []}, JSON.parse(output))
+          assert_equal 1, appender.buffered_logs.size
+          assert_predicate appender.task, :running?
+        ensure
+          appender.buffered_logs.clear
+          appender.close
         end
       end
     end

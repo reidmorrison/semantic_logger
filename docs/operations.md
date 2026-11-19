@@ -50,7 +50,9 @@ built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and `metric: :signa
 server a `close_notify`, which ends the connection for the parent too, and over TLS the server
 cannot read what the parent writes after the child has written to it. When one of them cannot
 connect in the child, such as while its server cannot be reached, it connects before it writes the
-next entry.
+next entry. They also leave the connection they inherited to the parent when they are closed in the
+child before they have reopened, such as when the child removes one with
+`SemanticLogger.remove_appender` before the thread that writes its entries has reopened it.
 (`:kafka` connects only when it delivers; when it cannot build a new producer in the child, such as
 for invalid options, logging to it raises `IOError` until it is reopened.)
 
@@ -61,7 +63,10 @@ pool, and before each request it finishes those idle for longer than its `http_i
 seconds by default), including the parent's. The MongoDB driver closes the parent's connections in the child, when the
 child uses its client, and when the child collects the client's connection pool, or exits. Over TLS,
 finishing or closing a connection sends the server a `close_notify`, which ends the connection for
-the parent too.
+the parent too. Closed in the child before it has reopened, `:cloudwatch_logs` leaves the buffered
+entries it inherited to the parent, which sends them. Closed in the child, even once it has reopened
+there, `:mongodb` forgets the client it inherited without closing it, since closing it would end
+the parent's sessions on the server; reopening it then connects a new client.
 
 An appender that cannot be reopened, such as `:udp` once its server's name no longer resolves, or
 `:http` while its server cannot be reached, is reported to the internal logger, as
@@ -95,6 +100,11 @@ did not fork (see [Log rotation](#log-rotation)).
    that writes them keeps running. That thread is only started again if it has stopped, such as
    after `async_max_retries`. After a fork, the child starts with an empty queue, since the parent
    process writes the entries it had queued.
+
+   Within the same process, the appenders close the file or the connection that a reopen replaces.
+   `:syslog` and `:graylog` over TCP, `:udp`, and `:rabbitmq` connect again before they close the
+   connection they had, and keep it when they cannot connect. `:cloudwatch_logs` shuts down the
+   timer that sends its buffered entries, and keeps those entries for the new timer.
 
    `reopen` only asks for the appenders to be reopened: each one is reopened by the thread that
    writes its entries, before it writes the next one, so that a file is never closed, nor a

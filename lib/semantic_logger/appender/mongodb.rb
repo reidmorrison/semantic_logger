@@ -109,7 +109,7 @@ module SemanticLogger
                      collection_max: nil,
                      **args,
                      &)
-        @client          = Mongo::Client.new(uri, logger: logger)
+        @uri             = uri
         @collection_name = collection_name
         @options         = {
           capped: true,
@@ -128,8 +128,28 @@ module SemanticLogger
 
       # After forking an active process call #reopen to re-open
       # open the handles to resources
+      #
+      # Opens the collection on the client again. Connects a new client first when the appender has none:
+      # when it is created, and after #close. After a fork, the child keeps the client it inherited, whose
+      # connections the MongoDB driver replaces itself.
       def reopen
-        @collection = client[@collection_name, @options]
+        connect unless @client
+        @collection = @client[@collection_name, @options]
+      end
+
+      # Closes the client's connections, and stops its monitoring threads, such as when the appender is
+      # removed, and forgets it, so that a reopen connects a new one. An error closing it is reported to
+      # the internal logger, rather than raised.
+      #
+      # In a forked child, it forgets the client built in the parent instead, without closing it, whether
+      # or not the child reopened: closing it would send the server an endSessions command for the
+      # parent's sessions that the client holds.
+      def close
+        closing = @client
+        @client = nil
+        closing.close if closing && @pid == ::Process.pid
+      rescue StandardError => e
+        logger.warn("Could not close the MongoDB client", e)
       end
 
       # Create the required capped collection.
@@ -207,6 +227,14 @@ module SemanticLogger
       end
 
       private
+
+      # Returns [Mongo::Client] a new client for the uri, after making it the appender's. Records the process
+      # that built it, which owns its sessions (see #close).
+      def connect
+        @client = Mongo::Client.new(@uri, logger: logger)
+        @pid    = ::Process.pid
+        @client
+      end
 
       def default_formatter
         SemanticLogger::Formatters::Raw.new

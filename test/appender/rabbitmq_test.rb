@@ -243,6 +243,19 @@ module Appender
           assert_equal({"published" => [["parent"], ["child"]], "closed" => [false, true]}, JSON.parse(output))
         end
 
+        it "leaves the connection it inherited to the parent when it is closed in a child that has not reopened" do
+          output = with_appender do |appender|
+            appender.log(log_with("parent"))
+            in_forked_child do
+              appender.close
+              appender.log(log_with("child"))
+              connections_json
+            end
+          end
+
+          assert_equal({"published" => [["parent"], ["child"]], "closed" => [false, false]}, JSON.parse(output))
+        end
+
         it "connects to publish in a child where it could not reopen, rather than publishing on the parent's channel" do
           output = with_appender do |appender|
             appender.log(log_with("parent"))

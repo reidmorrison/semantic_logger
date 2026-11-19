@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../forked_child_helper"
 
 # Unit Test for SemanticLogger::Appender::MongoDB
 module Appender
@@ -139,6 +140,57 @@ module Appender
           end
 
           assert_equal "Café ☕", appender.collection.find.first["message"]
+        end
+      end
+
+      describe "#close" do
+        include ForkedChildHelper
+
+        it "closes the client, and a reopen connects a new one" do
+          closed = appender.client
+          appender.close
+
+          assert_predicate closed, :closed?
+          assert_nil appender.client
+
+          appender.reopen
+          appender.info("after reopen")
+
+          refute_predicate appender.client, :closed?
+          assert_equal "after reopen", appender.collection.find.first["message"]
+        end
+
+        it "reports an error closing the client, rather than raising it" do
+          appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+          client          = appender.client
+          client.stub(:close, -> { raise Mongo::Error::OperationFailure, "closing" }) { appender.close }
+          report = appender.logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not close the MongoDB client", report.message
+          assert_equal "closing", report.exception.message
+          appender.reopen
+        ensure
+          client&.close
+        end
+
+        it "forgets the client it inherited in a forked child, without closing it, and a reopen connects a new one" do
+          inherited = appender.client
+          output    = in_forked_child do
+            appender.close
+            appender.reopen
+            appender.info("child")
+            JSON.generate(
+              inherited_closed: inherited.closed?,
+              new_client:       !appender.client.equal?(inherited),
+              stored:           appender.collection.find(message: "child").to_a.size
+            )
+          end
+          appender.info("parent")
+
+          assert_equal({"inherited_closed" => false, "new_client" => true, "stored" => 1}, JSON.parse(output))
+          refute_predicate inherited, :closed?
+          assert_equal 1, appender.collection.find(message: "parent").to_a.size
         end
       end
 

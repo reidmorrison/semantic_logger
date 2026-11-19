@@ -102,19 +102,40 @@ module SemanticLogger
         put_log_events while buffered_logs.size.positive?
       end
 
+      # Shuts down the timer, and sends the buffered log events, such as when the appender is removed,
+      # which does not flush it first. It has no timer when building the client failed as it was reopened
+      # after a fork.
+      #
+      # In a forked child that has not reopened, such as one that removes the appender before its reopen
+      # has run, it first forgets the timer and the buffered log events it inherited, which the parent
+      # sends (see #reopen), so that it sends only its own.
       def close
-        task.shutdown
+        forget_inherited
+        task&.shutdown
+        flush
       end
 
+      # Builds a new client, starts a new timer that sends the buffered log events every
+      # force_flush_interval_seconds, and then shuts down the timer it replaces, such as after a log
+      # rotation. The buffered log events are kept, for the new timer to send. When building the client
+      # fails, it raises, and keeps the client and timer it has. An error shutting down the replaced
+      # timer is reported to the internal logger, rather than raised.
+      #
+      # After a fork, the child starts with no buffered log events, since the parent sends those it
+      # had, and forgets the timer it inherited, without shutting it down: concurrent-ruby drops the
+      # parent's scheduled runs in the child, so that timer never runs there. When building the client
+      # fails in the child, the appender has no timer, and sends the buffered log events only once
+      # max_buffered_events are buffered, or it is flushed, until a reopen succeeds.
       def reopen
-        @buffered_logs = Concurrent::Array.new
-        @client = Aws::CloudWatchLogs::Client.new(client_kwargs)
-
-        @task = Concurrent::TimerTask.new(execution_interval: force_flush_interval_seconds,
-                                          interval_type:      :fixed_rate) do
+        forget_inherited
+        @client  = Aws::CloudWatchLogs::Client.new(client_kwargs)
+        replaced = @task
+        @task    = Concurrent::TimerTask.new(execution_interval: force_flush_interval_seconds,
+                                             interval_type:      :fixed_rate) do
           put_log_events
         end
         @task.execute
+        shut_down_replaced(replaced)
       end
 
       # Use JSON Formatter by default
@@ -129,6 +150,25 @@ module SemanticLogger
       end
 
       private
+
+      # Starts with no buffered log events, and no timer, in a process other than the one that buffered the
+      # log events and started the timer: when the appender is created, and in a child process after a fork,
+      # where it forgets those of the parent. Records the process. See #reopen.
+      def forget_inherited
+        return if @pid == ::Process.pid
+
+        @task          = nil
+        @buffered_logs = Concurrent::Array.new
+        @pid           = ::Process.pid
+      end
+
+      # Shuts down the timer that a reopen replaced, if any. Reports an error to the internal logger as a
+      # warning, rather than raising it, since the new timer already sends the buffered log events.
+      def shut_down_replaced(task)
+        task&.shutdown
+      rescue StandardError => e
+        logger.warn("Could not shut down the timer that a reopen replaced", e)
+      end
 
       # Returns [Hash] the PutLogEvents log event for the log message.
       def log_event(log)
