@@ -56,17 +56,29 @@ module SemanticLogger
         SemanticLogger.on_log(CAPTURE_CONTEXT)
       end
 
-      # Send an error notification to New Relic
+      # Send the log entry to the New Relic agent, which forwards it to New Relic Logs.
+      #
+      # Raises any error, as other appenders do, so that the asynchronous appender or the appenders
+      # that called it can count and report it (see #message_error?).
       def log(log)
         message      = format_log(log) # Generate the structured log
         json_message = Utils.to_json(message) # Convert the log to JSON, repairing any non UTF-8 data
         level        = log.level.to_s.upcase # Determine the log level
         self.class.log_newrelic(json_message, level)
         true
-      rescue StandardError => e
-        # Reported to the internal logger: this appender's own #warn would log the error through
-        # this method again, recursing until SystemStackError.
-        logger.warn("Could not log to New Relic", e)
+      end
+
+      # Every error that #log raises is one that writing the entry again cannot fix, so an
+      # asynchronous appender discards the entry, counts it and reports it, rather than backing off.
+      #
+      # The agent's LogEventAggregator#record only adds the entry to the agent's own buffer in this
+      # process, and rescues any StandardError of its own; the agent sends that buffer to New Relic
+      # later, on its own thread. So nothing here waits on New Relic, and an error comes either from
+      # the entry, when it cannot be formatted or converted to JSON, or from the agent not being
+      # available, such as before it has started, when NewRelic::Agent.agent is nil. Backing off for
+      # the latter would hold up every entry, and stop the worker thread after async_max_retries,
+      # dropping every entry after it, even once the agent has started.
+      def message_error?(_exception)
         true
       end
 
