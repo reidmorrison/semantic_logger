@@ -305,6 +305,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `server:` that is not `"host:port"`, such as one without a port, or an IPv6 address without
   brackets, now raises `ArgumentError`, which names the form to use, as the appender is added.
   Before, a missing port was taken as port 0.
+- When the `:udp` appender is reopened, such as after a fork, and cannot connect to its server, such
+  as for a host name that no longer resolves, it keeps the socket it had, which still sends to the
+  address it connected to. It raises the error as before, which `SemanticLogger.reopen` reports to
+  the internal logger. Before, it closed that socket first, and kept a new one that was not
+  connected, so every entry after it failed with `Errno::EDESTADDRREQ` until the next reopen.
 - `log_exception: :partial`, the default for `measure_*` blocks, no longer raises
   `Encoding::CompatibilityError` when the log message and the exception's message are in
   incompatible encodings, such as a UTF-8 message with accented letters and a binary exception message
