@@ -19,11 +19,6 @@ module SemanticLogger
                      :level, :level=, :formatter, :formatter=, :logger, :logger=, :console_stream,
                      :console_output?
 
-      # The logger that an appender added with `logger:` writes to (see Wrapper#wrapped_logger), so
-      # that it is found the same way whether or not the appender was added with async: true or in
-      # batches. #logger is the internal logger, as for every appender.
-      def_delegators :@appender, :wrapped_logger
-
       # Methods forwarded to the queue processor that owns the thread and queue.
       # Tuning options (max_queue_size, batch_size, non_blocking, ...) are set once at
       # construction via SemanticLogger.add_appender, so only the values that callers actually
@@ -92,9 +87,14 @@ module SemanticLogger
       #     Once stopped, messages are dropped when the queue is full, rather than block.
       #     -1: Retry indefinitely and never stop the thread (the pre-v5 behaviour).
       #     Default: 100
+      #
+      # The proxy also answers #wrapped_logger, the logger that the appender writes to, when the
+      # appender has one, such as one added with `logger:`, so that it is found the same way with or
+      # without async: true. The proxy of any other appender does not respond to it.
       def initialize(appender:, **args)
         @appender  = appender
         @processor = QueueProcessor.start(appender: appender, **args)
+        define_singleton_method(:wrapped_logger) { @appender.wrapped_logger } if appender.respond_to?(:wrapped_logger)
       end
 
       # Returns [String] the class and object address of this proxy, whether it batches, and the

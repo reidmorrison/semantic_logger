@@ -125,8 +125,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `#logger` of an appender added with `logger:` or `appender: :open_telemetry` returns its
   internal logger, the one it reports its own problems to, as for every other appender, and
   `#logger=` replaces that internal logger. Before, they returned and replaced the logger that the
-  appender writes to; a `logger:` appender's is now `#wrapped_logger`, which the appender that
-  `add_appender(logger: ..., async: true)` returns answers too. See the
+  appender writes to; a `logger:` appender's is now `#wrapped_logger`, which the appender returned
+  by `add_appender(logger: ..., async: true)` also answers. See the
   [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - `log_exception: :partial`, the default for `measure_*` blocks, now also adds each exception that
   caused the logged one to the message, as ` -- Cause: Class: message`, so that it names the same
