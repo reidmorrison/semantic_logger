@@ -60,6 +60,20 @@ module SemanticLogger
       false
     end
 
+    # Log the entry without waiting for another thread to leave this processor, for an appender that
+    # logs as it writes, or as it is flushed, such as Metric::Summary. On the thread inside this
+    # processor, such as one writing to or flushing that appender, it logs at once, as #log does, since
+    # the monitor lets it in again. Any other thread, such as the worker thread of that appender added
+    # with async: true, does not wait for the monitor, whose holder may be waiting for that thread, to
+    # flush it: the entry is left with the pending calls, which are written in order by whoever next
+    # enters the monitor, or the thread holding it as it leaves (see #defer). Returns true.
+    def log_aside(log)
+      return log(log) if @monitor.mon_owned?
+
+      defer { write(log) }
+      true
+    end
+
     # Returns [Hash] operational statistics for the logging pipeline.
     #
     # In synchronous mode messages are written inline on the calling thread, so the queue holds only

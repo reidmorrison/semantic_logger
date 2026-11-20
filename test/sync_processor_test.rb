@@ -151,6 +151,33 @@ module SemanticLogger
         end
       end
 
+      describe "#log_aside" do
+        let(:aside) { SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "aside" } }
+
+        it "logs at once on the thread inside it, such as an appender as it is flushed" do
+          sync   = processor
+          logged = aside
+          appender.define_singleton_method(:flush) { sync.log_aside(logged) }
+          sync.flush
+
+          assert_includes appender.events, aside
+        end
+
+        it "does not wait on another thread for the thread inside it, which writes the entry as it leaves" do
+          sync   = processor
+          logged = aside
+          handed = nil
+          appender.define_singleton_method(:flush) do
+            # Waits for another thread, as for the worker thread of an appender added with async: true.
+            handed = Thread.new { sync.log_aside(logged) }.join(5)&.value
+          end
+          sync.flush
+
+          assert handed, "log_aside on another thread waited for the thread inside the processor"
+          assert_includes appender.events, aside
+        end
+      end
+
       describe "#flush, #close, #reopen" do
         it "delegate to the appenders" do
           mock = Minitest::Mock.new

@@ -172,6 +172,14 @@ module SemanticLogger
       appenders.log_metrics(snapshot)
     end
 
+    # Log the entry without waiting for room on the full queue (see QueueProcessor#log_aside), for an
+    # appender that logs as it writes, or as it is flushed, such as Metric::Summary: it may run on the
+    # worker thread itself, or on a thread that the worker thread waits for, so that waiting for room
+    # would wait for ever.
+    def log_aside(log)
+      processor.log_aside(log)
+    end
+
     # Returns [Integer] the number of log messages waiting on the main pipeline queue.
     def queue_size
       queue.size

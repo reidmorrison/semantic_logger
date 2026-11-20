@@ -206,6 +206,13 @@ module SemanticLogger
       enqueued
     end
 
+    # Add a log message to the queue, as #log does, without making the calling thread wait for room on
+    # a full queue: once it is full, a new thread adds it, waiting for room (see Inbox#push_aside). So it
+    # can be called on a thread that the worker thread may be waiting for, or on the worker thread
+    # itself, such as by an appender that logs as it writes, or as it is flushed. A message that cannot
+    # be added, since the worker thread has stopped for good, is dropped and counted. Returns true.
+    def log_aside(log) = @inbox.push_aside([log], ->(rest) { rest.each { message_dropped } }) { !stopped? }
+
     # Flush all queued log entries to the appender.
     #  All queued log messages are written and then the appender is flushed.
     #

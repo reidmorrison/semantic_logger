@@ -1841,6 +1841,39 @@ class QueueProcessorTest < Minitest::Test
       end
     end
 
+    describe "#log_aside" do
+      it "does not wait for room on the full queue, even on the worker thread, and the message is still written" do
+        processor = start(max_queue_size: 1)
+        logged    = Queue.new
+        more      = [new_log(message: "second"), new_log(message: "third")]
+        appender.define_singleton_method(:log) do |log|
+          # The first message logs two more from the worker thread, as an appender that logs as it writes.
+          logged << more.map { |aside| processor.log_aside(aside) } if log.message == "first"
+          events << log
+        end
+        processor.log(new_log(message: "first"))
+
+        assert_equal [true, true], logged.pop(timeout: 5), "log_aside waited for room on its own full queue"
+        processor.flush
+        deadline = Time.now + 5
+        sleep(0.01) until appender.events.size == 3 || Time.now > deadline
+
+        assert_equal %w[first second third], appender.events.map(&:message)
+      end
+
+      it "drops the message, and counts it, once the worker thread has stopped" do
+        processor = build(max_queue_size: 1)
+        processor.log(new_log)
+        processor.instance_variable_set(:@stopped, true)
+
+        assert processor.log_aside(new_log)
+        deadline = Time.now + 5
+        sleep(0.01) until processor.dropped_count == 1 || Time.now > deadline
+
+        assert_equal 1, processor.dropped_count
+      end
+    end
+
     describe "#log on a thread that the worker thread may be waiting for" do
       it "drops the message at once when the queue is full, rather than wait for room first" do
         processor = start(max_queue_size: 1)
