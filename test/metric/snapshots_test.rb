@@ -444,6 +444,22 @@ module Metric
 
           assert_equal [4], snapshots.flat_map(&:points).map(&:value)
         end
+
+        it "asks the appender, once, to forget whatever else it carries over from the parent" do
+          forgotten = []
+          appender.define_singleton_method(:forget_parent_state) { forgotten << ::Process.pid }
+          written_in_child(daemon: false) { appender.reopen }
+
+          assert_equal [::Process.pid + 1], forgotten
+        end
+
+        it "does not ask the appender to forget it in a process started by Process.daemon" do
+          forgotten = []
+          appender.define_singleton_method(:forget_parent_state) { forgotten << ::Process.pid }
+          written_in_child(daemon: true) { appender.reopen }
+
+          assert_empty forgotten
+        end
       end
 
       describe "#reopen" do
