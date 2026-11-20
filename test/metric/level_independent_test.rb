@@ -60,7 +60,7 @@ module Metric
           assert_equal :counter, point.kind
           assert_equal "users.signup", point.name
           assert_equal 1, point.value
-          assert_equal({plan: "free"}, point.dimensions)
+          assert_equal({"plan" => "free"}, point.dimensions)
         end
 
         it "records the metric of a log call below the level, which logs nothing" do
@@ -71,7 +71,7 @@ module Metric
           assert_empty logs
           assert_equal 1, points.size
           assert_equal 4, point.value
-          assert_equal({plan: "free"}, point.dimensions)
+          assert_equal({"plan" => "free"}, point.dimensions)
         end
 
         it "records a duration given below the level as a histogram in seconds" do
@@ -128,6 +128,17 @@ module Metric
           assert_equal({}, point.dimensions)
         end
 
+        it "reads a Hash subclass below the level by Hash#key?, never by its own #key?" do
+          subclass  = Class.new(Hash) { def key?(*) = raise("key?") }
+          arguments = subclass[metric: "users.signup"]
+
+          refute logger.debug("Signed up", arguments)
+          refute logger.add(:debug, arguments)
+          refute logger.debug("Signed up", subclass["metric" => "users.signup"])
+
+          assert_equal [2], points.map(&:value)
+        end
+
         it "drops a negative metric_amount with one warning, and still logs the entry" do
           warnings = warnings_of do
             logger.info("Item removed", metric: "level_independent.negative", metric_amount: -1)
@@ -140,6 +151,28 @@ module Metric
           assert_equal(["level_independent.negative"] * 2, logs.map(&:metric))
           assert_equal 1, warnings.size
           assert_includes warnings.first, 'Dropped counter "level_independent.negative"'
+        end
+
+        it "records the metric of Logger#add below the level, as the level methods do" do
+          refute logger.add(:debug, "Signed up", {metric: "users.signup", metric_amount: 2})
+          refute logger.add(:debug, {metric: "users.signup"})
+          refute logger.add(:debug, "Signed up", "users.signup")
+
+          assert_empty logs
+          assert_equal [3], points.map(&:value)
+        end
+
+        it "records nothing, and never raises, when the processor is a stand-in without metric methods" do
+          stand_in = Object.new
+          stand_in.define_singleton_method(:log) { |_log| true }
+
+          SemanticLogger::Logger.stub(:processor, stand_in) do
+            assert logger.info("Signed up", metric: "users.signup")
+            refute logger.debug("Signed up", metric: "users.signup")
+            assert_equal :added, logger.measure_debug("Called supplier", metric: "supplier.call") { :added }
+          end
+
+          assert_empty points
         end
 
         it "records the metric of #backtrace below the level" do
@@ -173,7 +206,7 @@ module Metric
             assert_empty logs
             assert_equal :histogram, point.kind
             assert_equal "s", point.unit
-            assert_equal({name: "acme"}, point.dimensions)
+            assert_equal({"name" => "acme"}, point.dimensions)
             assert_operator point.value.min, :>=, 0.01
             assert_operator point.value.max, :<, 1
           end
@@ -215,7 +248,7 @@ module Metric
               params[:dimensions] = {name: "acme"}
             end
 
-            assert_equal [{name: "acme"}], points.map(&:dimensions)
+            assert_equal [{"name" => "acme"}], points.map(&:dimensions)
           end
 
           it "records the time when min_duration is not met" do
@@ -223,6 +256,16 @@ module Metric
 
             assert_empty logs
             assert_equal 1, points.first.value.count
+          end
+
+          it "records nothing below the level when the block adds the metric to the options" do
+            result = logger.measure_debug("Called supplier", {user: "jack"}) do |params|
+              params[:metric] = "supplier.call"
+              :added
+            end
+
+            assert_equal :added, result
+            assert_empty points
           end
 
           it "yields the params, and records nothing, without a metric" do

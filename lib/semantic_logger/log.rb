@@ -237,11 +237,18 @@ module SemanticLogger
     # For a log call below the log level, which builds no entry, but whose metric is recorded (see
     # Base#record_log_metric). Never raises, so it can read untrusted data.
     def self.metric_arguments(hash)
-      return unless HASH_KEY.bind_call(hash, :metric)
+      return unless metric?(hash)
 
       arguments = METRIC_KEYS.map { |key| hash[key] if HASH_KEY.bind_call(hash, key) && argument?(key, hash[key]) }
       arguments if arguments.first
     end
+
+    # Returns [true|false] whether the Hash of a log call has a :metric key, as .metric_arguments and
+    # #extract_arguments read it: the exact Symbol key, by Hash#key? itself, never a subclass's own
+    # #key?, so that a HashWithIndifferentAccess with only the String "metric" has none. The cheap
+    # check made below the log level before the metric is read (see Base#record_metric_below_level).
+    # A plain Hash is asked directly, which is faster than through HASH_KEY.
+    def self.metric?(hash) = hash.instance_of?(Hash) ? hash.key?(:metric) : HASH_KEY.bind_call(hash, :metric)
 
     # Returns [Array(Symbol, Object, String|nil)] the kind, value, and unit of the metric that a log
     # entry with this duration and metric amount records (see Base#record_log_metric): with a duration,
@@ -250,7 +257,15 @@ module SemanticLogger
     def self.metric_measurement(duration, metric_amount)
       return [:counter, metric_amount.nil? ? 1 : metric_amount, nil] if duration.nil?
 
-      [:histogram, duration.is_a?(Numeric) ? duration.fdiv(1000) : duration, "s"]
+      [:histogram, duration_seconds(duration), "s"]
+    end
+
+    # Returns a duration in milliseconds, the unit of the duration of a log entry and of the
+    # `duration:` of Base#time, in seconds, the unit that every duration metric records. Any other
+    # value is returned as it is, for the metric's Validator to drop (see Metric::Validator). Raises
+    # when the Numeric does: its callers report that as a failure of the metric call.
+    def self.duration_seconds(duration)
+      duration.is_a?(Numeric) ? duration.fdiv(1000) : duration
     end
 
     # Extract the arguments from a Hash Payload
