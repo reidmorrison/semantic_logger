@@ -133,6 +133,74 @@ module Metric
           assert_equal([[:counter, nil], [:histogram, "s"], [:histogram, "ms"]], merged.map { |p| [p.kind, p.unit] })
           assert_equal 2, merged.points[1].value.count
         end
+
+        it "merges the points of one series within the earlier snapshot too" do
+          earlier = snapshot(
+            0, 60,
+            new_point(kind: :counter, name: "a", value: 1),
+            new_point(kind: :counter, name: "a", value: 2)
+          )
+          merged = earlier.merge(snapshot(60, 120, new_point(kind: :counter, name: "a", value: 4)))
+
+          assert_equal [7], merged.map(&:value)
+        end
+
+        it "adds the records dropped, keeping the earliest first name dropped" do
+          earlier = SemanticLogger::Metric::Snapshot.new(
+            start_time: Time.at(0), end_time: Time.at(60),
+            dropped_by_name_limit: 2, first_name_dropped: "x", dropped_by_conflict: {"a" => 1},
+            dropped_by_internal_conflict: {"p" => 1}
+          )
+          later = SemanticLogger::Metric::Snapshot.new(
+            start_time: Time.at(60), end_time: Time.at(120),
+            dropped_by_name_limit: 3, first_name_dropped: "y", dropped_by_conflict: {"a" => 2, "b" => 1},
+            dropped_by_internal_conflict: {"p" => 2}
+          )
+          merged = earlier.merge(later)
+
+          assert_equal 5, merged.dropped_by_name_limit
+          assert_equal "x", merged.first_name_dropped
+          assert_equal({"a" => 3, "b" => 1}, merged.dropped_by_conflict)
+          assert_predicate merged.dropped_by_conflict, :frozen?
+          assert_equal({"p" => 3}, merged.dropped_by_internal_conflict)
+          assert_predicate merged.dropped_by_internal_conflict, :frozen?
+          assert_equal "y", snapshot(0, 60).merge(later).first_name_dropped
+        end
+      end
+
+      describe "records dropped" do
+        it "has none by default" do
+          snapshot = snapshot(0, 60)
+
+          assert_equal 0, snapshot.dropped_by_name_limit
+          assert_nil snapshot.first_name_dropped
+          assert_equal({}, snapshot.dropped_by_conflict)
+          assert_equal({}, snapshot.dropped_by_internal_conflict)
+          refute_predicate snapshot, :dropped?
+        end
+
+        it "keeps a frozen copy of the records of internal metrics dropped by conflict" do
+          counts   = {"processed" => 1}
+          snapshot = SemanticLogger::Metric::Snapshot.new(start_time: Time.at(0), end_time: Time.at(60),
+                                                          dropped_by_internal_conflict: counts)
+          counts["b"] = 1
+
+          assert_equal({"processed" => 1}, snapshot.dropped_by_internal_conflict)
+          assert_predicate snapshot.dropped_by_internal_conflict, :frozen?
+          assert_predicate snapshot, :dropped?
+        end
+
+        it "keeps a frozen copy of the records dropped by conflict" do
+          counts   = {"a" => 1}
+          snapshot = SemanticLogger::Metric::Snapshot.new(start_time: Time.at(0), end_time: Time.at(60),
+                                                          dropped_by_conflict: counts)
+          counts["b"] = 1
+
+          assert_equal({"a" => 1}, snapshot.dropped_by_conflict)
+          assert_predicate snapshot.dropped_by_conflict, :frozen?
+          assert_predicate snapshot, :dropped?
+          assert_predicate snapshot, :empty?
+        end
       end
 
       describe "#without_internal" do
@@ -147,6 +215,22 @@ module Metric
           assert_equal %w[a], external.map(&:name)
           assert_equal snapshot.start_time, external.start_time
           assert_equal snapshot.end_time, external.end_time
+        end
+
+        it "keeps the records dropped" do
+          snapshot = SemanticLogger::Metric::Snapshot.new(
+            start_time: Time.at(0), end_time: Time.at(60),
+            points:     [new_point(kind: :counter, name: "processed", value: 1, internal: true)],
+            dropped_by_name_limit: 1, first_name_dropped: "x", dropped_by_conflict: {"a" => 1},
+            dropped_by_internal_conflict: {"processed" => 1}
+          )
+          external = snapshot.without_internal
+
+          assert_empty external
+          assert_equal 1, external.dropped_by_name_limit
+          assert_equal "x", external.first_name_dropped
+          assert_equal({"a" => 1}, external.dropped_by_conflict)
+          assert_equal({"processed" => 1}, external.dropped_by_internal_conflict)
         end
 
         it "returns itself without internal points" do

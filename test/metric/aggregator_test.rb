@@ -55,6 +55,13 @@ module Metric
         it "returns true" do
           assert aggregator.record(:counter, "jobs.done", 1)
         end
+
+        it "drops an amount that would make a Float sum non-finite, keeping the sum" do
+          aggregator.record(:counter, "bytes", Float::MAX)
+
+          refute aggregator.record(:counter, "bytes", Float::MAX)
+          assert_equal Float::MAX, point.value
+        end
       end
 
       describe "#record histogram" do
@@ -77,21 +84,73 @@ module Metric
       end
 
       describe "series identity" do
-        it "keeps a name used with two kinds as two series" do
+        it "keeps the first kind of a name and drops records of another, counting them" do
           aggregator.record(:counter, "job", 1)
-          aggregator.record(:histogram, "job", 1)
 
-          assert_equal %i[counter histogram], points.map(&:kind)
+          refute aggregator.record(:histogram, "job", 1)
+          refute aggregator.record(:histogram, "job", 2)
+          snapshot = aggregator.collect(end_time)
+
+          assert_equal [:counter], snapshot.map(&:kind)
+          assert_equal({"job" => 2}, snapshot.dropped_by_conflict)
+          assert_predicate snapshot.dropped_by_conflict, :frozen?
+          assert_predicate snapshot, :dropped?
         end
 
-        it "keeps two units of a name as two series" do
+        it "keeps the first unit of a name and drops records of another, counting them" do
           aggregator.record(:histogram, "upload", 1, unit: "By")
           aggregator.record(:histogram, "upload", 2, unit: "KiBy")
           aggregator.record(:histogram, "upload", 3)
           aggregator.record(:histogram, "upload", 4, unit: "By")
-          by_unit = points.to_h { |point| [point.unit, point.value.count] }
+          snapshot = aggregator.collect(end_time)
+          point    = point(snapshot)
 
-          assert_equal({"By" => 2, "KiBy" => 1, nil => 1}, by_unit)
+          assert_equal "By", point.unit
+          assert_equal 2, point.value.count
+          assert_equal({"upload" => 2}, snapshot.dropped_by_conflict)
+        end
+
+        it "lets the next interval start with another kind or unit" do
+          aggregator.record(:counter, "job", 1)
+          aggregator.collect(end_time)
+          aggregator.record(:histogram, "job", 1, unit: "s")
+          snapshot = aggregator.collect(Time.at(1_120))
+
+          assert_equal([[:histogram, "s"]], snapshot.map { |point| [point.kind, point.unit] })
+          refute_predicate snapshot, :dropped?
+        end
+
+        it "treats internal: nil as false" do
+          aggregator.record(:counter, "processed", 1, internal: nil)
+          aggregator.record(:counter, "processed", 2, internal: false)
+          aggregator.record(:counter, "processed", 3)
+          point = point()
+
+          assert_equal 6, point.value
+          refute_predicate point, :internal?
+        end
+
+        it "makes Symbol and String names one metric with a frozen String name" do
+          aggregator.record(:counter, :jobs, 1)
+          aggregator.record(:counter, +"jobs", 2)
+          point = point()
+
+          assert_equal 3, point.value
+          assert_equal "jobs", point.name
+          assert_predicate point.name, :frozen?
+        end
+
+        it "counts conflicts of internal metrics apart from those of application metrics" do
+          aggregator.record(:counter, "processed", 1)
+          aggregator.record(:counter, "processed", 1, internal: true)
+          aggregator.record(:histogram, "processed", 1)
+          aggregator.record(:histogram, "processed", 1, internal: true)
+          aggregator.record(:histogram, "processed", 1, internal: true)
+          snapshot = aggregator.collect(end_time)
+
+          assert_equal({"processed" => 1}, snapshot.dropped_by_conflict)
+          assert_equal({"processed" => 2}, snapshot.dropped_by_internal_conflict)
+          assert_predicate snapshot.dropped_by_internal_conflict, :frozen?
         end
 
         it "keeps internal and application metrics with the same name apart" do
@@ -118,7 +177,7 @@ module Metric
           point = point()
 
           assert_equal 2, point.value
-          assert_equal({a: 1, b: 2}, point.dimensions)
+          assert_equal({"a" => 1, "b" => 2}, point.dimensions)
         end
 
         it "keeps a series per set of dimensions" do
@@ -127,7 +186,28 @@ module Metric
           aggregator.record(:counter, "jobs", 3, dimensions: {queue: "a"})
           by_queue = points.to_h { |point| [point.dimensions, point.value] }
 
-          assert_equal({{queue: "a"} => 4, {queue: "b"} => 2}, by_queue)
+          assert_equal({{"queue" => "a"} => 4, {"queue" => "b"} => 2}, by_queue)
+        end
+
+        it "makes Symbol and String keys and Symbol values one series with String keys" do
+          aggregator.record(:counter, "jobs", 1, dimensions: {region: "eu"})
+          aggregator.record(:counter, "jobs", 1, dimensions: {"region" => "eu"})
+          aggregator.record(:counter, "jobs", 1, dimensions: {region: :eu})
+          aggregator.record(:counter, "jobs", 1, dimensions: {"region" => :eu})
+          point = point()
+
+          assert_equal 4, point.value
+          assert_equal({"region" => "eu"}, point.dimensions)
+        end
+
+        it "keeps other scalar values as they are" do
+          dimensions = {code: 200, ratio: 0.5, ok: true, failed: false, none: nil}
+          aggregator.record(:counter, "jobs", 1, dimensions: dimensions)
+          aggregator.record(:counter, "jobs", 1, dimensions: {code: "200"})
+
+          assert_equal [{"code" => 200, "ratio" => 0.5, "ok" => true, "failed" => false, "none" => nil},
+                        {"code" => "200"}],
+                       points.map(&:dimensions)
         end
 
         it "keeps a frozen copy, not the caller's Hash" do
@@ -136,11 +216,74 @@ module Metric
           aggregator.record(:counter, "jobs", 1, dimensions: dimensions)
           dimensions[:queue] = "b"
           value << "x"
+          aggregator.record(:counter, "jobs", 1, dimensions: {queue: "a"})
+          point = point()
+          kept  = point.dimensions
+
+          assert_equal 2, point.value
+          assert_equal({"queue" => "a"}, kept)
+          assert_predicate kept, :frozen?
+          assert_predicate kept.keys.first, :frozen?
+          assert_predicate kept["queue"], :frozen?
+        end
+
+        it "keeps a frozen copy of an Array of scalars" do
+          list = [+"a", :b, 1]
+          aggregator.record(:counter, "jobs", 1, dimensions: {list: list})
+          list.first << "x"
+          list << 2
+          aggregator.record(:counter, "jobs", 1, dimensions: {list: ["a", "b", 1]})
+          point = point()
+          kept  = point.dimensions["list"]
+
+          assert_equal 2, point.value
+          assert_equal ["a", "b", 1], kept
+          assert_predicate kept, :frozen?
+          assert_predicate kept.first, :frozen?
+        end
+
+        it "converts other values to frozen Strings" do
+          nested = {a: [1]}
+          aggregator.record(:counter, "jobs", 1, dimensions: {nested: nested, list: [[1]], nan: Float::NAN, 1 => :x})
+          nested[:a] << 2
+          aggregator.record(:counter, "jobs", 1, dimensions: {nested: {a: [1]}, list: [[1]], nan: Float::NAN, 1 => :x})
+          point = point()
+          kept  = point.dimensions
+
+          assert_equal 2, point.value
+          assert_equal({"nested" => {a: [1]}.to_s, "list" => "[[1]]", "nan" => "NaN", "1" => "x"}, kept)
+          assert(kept.values.all?(&:frozen?))
+        end
+
+        it "never raises converting a value to text" do
+          deep = []
+          10_000.times { deep = [deep] }
+          to_s_raises = Object.new
+          def to_s_raises.to_s = raise(ArgumentError, "broken")
+          to_s_nil = Object.new
+          def to_s_nil.to_s = nil
+          dimensions = {deep: deep, raises: to_s_raises, nil: to_s_nil, basic: BasicObject.new, {a: 1} => 1}
+
+          assert aggregator.record(:counter, "jobs", 1, dimensions: dimensions)
           kept = point.dimensions
 
-          assert_equal({queue: "a"}, kept)
-          assert_predicate kept, :frozen?
-          assert_predicate kept[:queue], :frozen?
+          assert_equal "Object", kept["raises"]
+          assert_equal "Object", kept["nil"]
+          assert_equal "BasicObject", kept["basic"]
+          assert_equal({a: 1}.inspect, kept.keys.last)
+          assert_kind_of String, kept["deep"]
+          assert(kept.all? { |key, value| key.frozen? && value.frozen? })
+        end
+
+        it "finds the series again when the caller changes the Hash it passed in" do
+          dimensions = {queue: "a"}
+          aggregator.record(:counter, "jobs", 1, dimensions: dimensions)
+          dimensions[:queue] = "b"
+          aggregator.record(:counter, "jobs", 1, dimensions: dimensions)
+          aggregator.record(:counter, "jobs", 1, dimensions: {queue: "a"})
+          by_queue = points.to_h { |point| [point.dimensions, point.value] }
+
+          assert_equal({{"queue" => "a"} => 2, {"queue" => "b"} => 1}, by_queue)
         end
 
         it "gives a point without dimensions a frozen empty Hash" do
@@ -165,17 +308,37 @@ module Metric
           aggregator.record(:counter, "jobs", 1)
           points = points()
 
-          assert_equal [{}, {id: 1}, {id: 2}, {"otel.metric.overflow" => true}], points.map(&:dimensions)
+          assert_equal [{}, {"id" => 1}, {"id" => 2}, {"otel.metric.overflow" => true}], points.map(&:dimensions)
           assert_equal [2, 2, 1, 2], points.map(&:value)
           assert_equal [false, false, false, true], points.map(&:overflow?)
         end
 
+        it "counts the series without dimensions when it comes after the limit is reached" do
+          3.times { |i| aggregator.record(:counter, "jobs", 1, dimensions: {id: i}) }
+          aggregator.record(:counter, "jobs", 1)
+          aggregator.record(:counter, "jobs", 1, dimensions: {})
+          points = points()
+
+          assert_equal [{"id" => 0}, {"id" => 1}, {"id" => 2}, {"otel.metric.overflow" => true}],
+                       points.map(&:dimensions)
+          assert_equal 2, points.last.value
+        end
+
         it "limits each metric on its own" do
           4.times { |i| aggregator.record(:counter, "a", 1, dimensions: {id: i}) }
-          4.times { |i| aggregator.record(:histogram, "a", i, dimensions: {id: i}) }
-          4.times { |i| aggregator.record(:counter, "b", 1, dimensions: {id: i}) }
+          4.times { |i| aggregator.record(:histogram, "b", i, dimensions: {id: i}) }
+          4.times { |i| aggregator.record(:counter, "c", 1, dimensions: {id: i}) }
 
           assert_equal 12, points.size
+        end
+
+        it "counts dimensions given in two ways as one series" do
+          aggregator.record(:counter, "jobs", 1, dimensions: {id: "1"})
+          aggregator.record(:counter, "jobs", 1, dimensions: {"id" => :"1"})
+          aggregator.record(:counter, "jobs", 1, dimensions: {id: "2"})
+          aggregator.record(:counter, "jobs", 1, dimensions: {id: "3"})
+
+          refute(points.any?(&:overflow?))
         end
 
         it "adds dimensions given as the overflow dimensions to the overflow series" do
@@ -201,14 +364,68 @@ module Metric
         end
       end
 
+      describe "name limit" do
+        let(:aggregator) { SemanticLogger::Metric::Aggregator.new(name_limit: 2, now: start_time) }
+
+        it "drops records of names beyond the limit, counting them and naming the first" do
+          aggregator.record(:counter, "a", 1)
+          aggregator.record(:histogram, "b", 1)
+
+          refute aggregator.record(:counter, "c", 1)
+          refute aggregator.record(:counter, "d", 1)
+          refute aggregator.record(:counter, "c", 1)
+          assert aggregator.record(:counter, "a", 1)
+          snapshot = aggregator.collect(end_time)
+
+          assert_equal %w[a b], snapshot.map(&:name)
+          assert_equal 3, snapshot.dropped_by_name_limit
+          assert_equal "c", snapshot.first_name_dropped
+          assert_predicate snapshot.first_name_dropped, :frozen?
+          assert_predicate snapshot, :dropped?
+        end
+
+        it "does not count internal metrics" do
+          aggregator.record(:counter, "a", 1)
+          aggregator.record(:counter, "b", 1)
+          aggregator.record(:counter, "semantic_logger.log.processed", 1, internal: true)
+          snapshot = aggregator.collect(end_time)
+
+          assert_equal 3, snapshot.size
+          refute_predicate snapshot, :dropped?
+        end
+
+        it "starts counting again in the next interval" do
+          3.times { |i| aggregator.record(:counter, "name#{i}", 1) }
+          aggregator.collect(end_time)
+          aggregator.record(:counter, "name2", 1)
+          snapshot = aggregator.collect(Time.at(1_120))
+
+          assert_equal %w[name2], snapshot.map(&:name)
+          assert_equal 0, snapshot.dropped_by_name_limit
+          assert_nil snapshot.first_name_dropped
+        end
+
+        it "defaults to 2000" do
+          assert_equal 2000, SemanticLogger::Metric::Aggregator.new.name_limit
+        end
+      end
+
       describe "input it ignores" do
         it "ignores values that are not finite real Numerics" do
-          [Float::NAN, Float::INFINITY, -Float::INFINITY, Complex(1, 1), nil, "1", :one].each do |value|
+          [Float::NAN, Float::INFINITY, -Float::INFINITY, Rational(10**400), Complex(1, 1), nil, "1"].each do |value|
             refute aggregator.record(:counter, "jobs", value), value.inspect
-            refute aggregator.record(:histogram, "jobs", value), value.inspect
+            refute aggregator.record(:histogram, "latency", value), value.inspect
           end
 
           assert_empty aggregator.collect(end_time)
+        end
+
+        it "ignores an Integer too large for a Float in a histogram only" do
+          refute aggregator.record(:histogram, "latency", 10**400)
+          assert aggregator.record(:counter, "jobs", 10**400)
+          assert aggregator.record(:counter, "jobs", 1)
+
+          assert_equal (10**400) + 1, point.value
         end
 
         it "ignores an unknown kind" do
@@ -225,6 +442,19 @@ module Metric
           aggregator.record(:counter, "jobs", -1)
 
           assert_equal(-1, point.value)
+        end
+      end
+
+      describe "an error while recording" do
+        it "is not taken for a signal trap, and leaves the Mutex unlocked" do
+          broken = -> { raise(ThreadError, "not from a lock") }
+
+          SemanticLogger::Metric::Aggregator::Sum.stub(:new, broken) do
+            assert_raises(ThreadError) { aggregator.record(:counter, "jobs", 1) }
+          end
+
+          assert aggregator.record(:counter, "jobs", 1)
+          assert_equal 1, point.value
         end
       end
 
@@ -291,7 +521,7 @@ module Metric
           point = point()
 
           assert_equal 2, point.value
-          assert_equal({queue: "a"}, point.dimensions)
+          assert_equal({"queue" => "a"}, point.dimensions)
         end
 
         it "queues the record and adds it on the next record" do
