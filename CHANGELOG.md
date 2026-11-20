@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [5.3.0] 2026-11-20
 
 ### Added
 
@@ -103,6 +103,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   it is discarded, and only those after it are written again, rather than the batch split up and
   written again in parts. See
   [Custom appenders](https://logger.reidmorrison.com/config.html#custom-appenders).
+- `Log#capture(key, value)` and `Log#captured(key)` keep an object with a log entry for an
+  appender's own use, such as state of the logging thread captured by an `on_log` subscriber, where
+  formatters do not write it, unlike `Log#set_context`. See
+  [Helper methods](https://logger.reidmorrison.com/log.html#helper-methods).
 
 ### Changed
 
@@ -286,8 +290,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   thread, which makes room, can itself be waiting for room on that appender's full queue, or for that
   appender to flush, and then so did every thread that logged.
 - `add_appender` raises `ArgumentError` when it would batch an appender whose formatter cannot
-  format a batch, such as a formatter block given to `:http`, `:loki`, or `metric: :signalfx` with
-  `batch: true`, and says what to do instead. Before, it added the appender, but every batch failed
+  format a batch, such as `formatter: :default` or a Proc given to `:http`, `:loki`, or
+  `metric: :signalfx` with `batch: true`, and now also a formatter block (see the entry on blocks
+  below), and says what to do instead. Before, it added the appender, but every batch failed
   on the appender's worker thread, which backed off and tried again, so nothing was ever written,
   and once its queue was full, logging blocked, unless it was added with `non_blocking: true`. The
   error names the formatter. A custom appender whose `#batch` formats each entry with `format_log`
@@ -316,7 +321,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - A block given to `add_appender` formats the entries of an appender or metric subscriber named by a
   Symbol, such as `add_appender(appender: :tcp, server: "localhost:514") { |log| log.message }`, as
   it does for `io:`, `file_name:`, and `logger:`, taking precedence over `formatter:`. Before, the
-  block was ignored, and the appender used its `formatter:` or its default formatter.
+  block was ignored, and the appender used its `formatter:` or its default formatter, so what such an
+  appender sends changes. With `batch: true`, `:http`, `:loki`, and `metric: :signalfx` raise
+  `ArgumentError` for such a block (see above). Remove the block to keep the output of v5.2. See the
+  [v5.3 upgrade notes](https://logger.reidmorrison.com/upgrading.html).
 - The `:elasticsearch` and `:opensearch` appenders accept `metrics: true`, to also index metric-only
   entries: a metric without a message or an exception. Before, `metrics:` was passed on to the
   Elasticsearch or OpenSearch client, and those appenders always left metric-only entries out.
@@ -543,8 +551,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - When an async or batching appender's destination fails, the message (or batch) being written is
   now counted as `failed` in `SemanticLogger.stats` and reported to the internal logger, as a message
   whose content cannot be written already was. Before, it was discarded without being counted, and
-  the docs said it was retried. Delivery is unchanged: the worker thread backs off, then carries on
-  with the messages queued meanwhile. See
+  the docs said it was retried. An entry or batch that the destination took none of is now sent again
+  before it is counted, and one that never reached it is not counted (see the entry on sending again
+  under Changed). See
   [Retry a failing appender](https://logger.reidmorrison.com/operations.html#retry-a-failing-appender).
 - The test helpers now call each `on_log` subscriber once per log event. Before, they called it twice
   when capturing the events of every class: with `semantic_logger_events` or
@@ -818,7 +827,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `batch: true` such entries were counted as `processed` in `SemanticLogger.stats`, a batch that the
   server rejected for one entry lost every other entry with it, and while the server was unavailable,
   such as Loki restarting, the worker thread kept sending, and losing, each entry or batch at once.
-  Now a 4xx other than 408 and 429 discards the entries straight away. A batch the server rejects for
+  Now a 4xx other than 408 and 429 discards the entry straight away, and a batch the server rejects for
   the entries it holds, with a 400, 413, or 422, is first split up and sent again in parts, so that the
   entries in the parts the server accepts are written; one it rejects whatever it holds, such as with
   a 401, 403, or 404 for a wrong password or url, is discarded at once, with one report. Any other
@@ -843,7 +852,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   while its server cannot be reached. Before, the error from the appender's own `#reopen` also kept
   the thread that writes its entries from starting in the child, so they waited on its queue for
   ever, and once that queue was full every log call blocked. The thread is now started, and the error
-  is still reported to the internal logger, as `Failed to re-open appender`. The same goes for
+  is still reported, by that thread to the appender's internal logger, as
+  `Async: Failed to reopen the appender`. The same goes for
   `SemanticLogger.reopen(force: true)` within the same process, once that thread has stopped.
 - A log call waiting for room on the full queue of an appender added with `async: true` or in
   batches no longer waits for ever once the thread that writes its entries gives up after
