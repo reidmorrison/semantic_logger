@@ -1,10 +1,13 @@
 # Loaded now rather than autoloaded, since .logger builds one on first use, which can be the first log
 # call of the process, made in a signal trap, where Ruby does not allow a require.
 require "semantic_logger/appender/io"
+require "semantic_logger/metric/processor_methods"
 
 module SemanticLogger
   # Thread that submits and processes log requests
   class Processor < Appender::Async
+    include Metric::ProcessorMethods
+
     # Allow the internal logger to be overridden from its default of $stderr
     #   Can be replaced with another Ruby logger or Rails logger, but never to
     #   SemanticLogger::Logger itself since it is for reporting problems
@@ -157,6 +160,18 @@ module SemanticLogger
       true
     end
 
+    # Give the snapshot of metrics to the metric appenders, on the worker thread, between writes,
+    # without waiting for it (see Appender::Async#log_metrics).
+    #
+    # Called on the worker thread itself, such as by an appender that removes a metric appender as it
+    # writes (see Metric::Collector#removing), it gives them the snapshot at once, since nothing else
+    # writes to them then, so that one being removed is given it before it is closed.
+    def log_metrics(snapshot)
+      return super unless processor.worker_thread?
+
+      appenders.log_metrics(snapshot)
+    end
+
     # Returns [Integer] the number of log messages waiting on the main pipeline queue.
     def queue_size
       queue.size
@@ -211,7 +226,8 @@ module SemanticLogger
 
     # Close the appender, then remove it from the list, on the worker thread, unless it is no longer
     # listed: a close of every appender (see #close), or another removal, already closed it. Its
-    # removal is then no longer pending.
+    # removal is then no longer pending. Once a metric appender is removed, the collector is told, so
+    # that it stops collecting when that was the last one (see Metric::Collector#check).
     #
     # Reports an error rather than raise it to the worker thread, as Appenders#close does, whatever
     # its class, since one that is not a StandardError would stop the worker thread for good. Except
@@ -230,6 +246,7 @@ module SemanticLogger
       ensure
         appenders.delete(appender)
         @pending_removals.delete(appender)
+        Metric.collector.check if appender.metrics_interval
       end
     end
 

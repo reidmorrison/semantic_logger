@@ -22,11 +22,16 @@ module SemanticLogger
     class CaptureLogEvents < SemanticLogger::Subscriber
       attr_accessor :events
 
+      # Returns [Array<SemanticLogger::Metric::Snapshot>] the snapshots of metrics given to it while it
+      # stands in for the processor (see #log_metrics).
+      attr_reader :snapshots
+
       # By default collect all log levels, and collect metric only log events.
       def initialize(level: :trace, metrics: true)
         super
-        @events  = []
-        @created = ObjectSpace::WeakMap.new
+        @events    = []
+        @snapshots = []
+        @created   = ObjectSpace::WeakMap.new
       end
 
       # Standing in for a logger, it runs the `on_log` subscribers for the log events it created, as a
@@ -43,8 +48,24 @@ module SemanticLogger
         logs.each { |log| self.log(log) }
       end
 
+      # Standing in for the processor, it takes the snapshot of metrics of each interval, which the
+      # processor would give to the metric appenders, and keeps it (see #snapshots).
+      def log_metrics(snapshot)
+        @snapshots << snapshot
+        true
+      end
+
+      # Returns [Numeric]: standing in for the processor, it takes the snapshots of metrics (see
+      # #log_metrics) at the default interval of a metric appender, so that the collector of metrics
+      # carries on collecting while it stands in, rather than stop as it would were the processor to
+      # have no metric appender (see Metric::Collector).
+      def shortest_metrics_interval
+        Metric::Snapshots::DEFAULT_INTERVAL
+      end
+
       def clear
         @events.clear
+        @snapshots.clear
       end
 
       # Returns [false]: standing in for the processor, it holds no lock, so another thread never

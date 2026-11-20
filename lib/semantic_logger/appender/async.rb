@@ -17,7 +17,7 @@ module SemanticLogger
       def_delegators :@appender,
                      :name, :should_log?, :filter, :host, :application, :environment,
                      :level, :level=, :formatter, :formatter=, :logger, :logger=, :console_stream,
-                     :console_output?
+                     :console_output?, :metrics_interval
 
       # Methods forwarded to the queue processor that owns the thread and queue.
       # Tuning options (max_queue_size, batch_size, non_blocking, ...) are set once at
@@ -104,6 +104,29 @@ module SemanticLogger
       def inspect
         address = Kernel.instance_method(:to_s).bind_call(self).delete_suffix(">")
         "#{address} batch=#{batch?} appender=#{appender.inspect}>"
+      end
+
+      # Hand the snapshot of metrics over to the worker thread, which gives it to the wrapped appender
+      # between writes, without waiting for it (see QueueProcessor#hand_over), so that a slow
+      # destination holds up nobody else. What the appender raises is reported, whatever its class,
+      # not raised on the worker thread, since it is no failure to write a log message: it backs off
+      # for none. Except a stack overflow, which is raised, as Appenders#log_metrics raises it, for
+      # the worker thread to hand over to a new one.
+      #
+      # When no worker thread runs, each snapshot handed over is given to the appender on a thread of
+      # its own (see QueueProcessor::Request#abandon), which may run while another one does, or while
+      # a new worker thread flushes, closes or reopens the appender: a metric appender takes each
+      # snapshot, and is flushed, closed and reopened, one call at a time, under a lock of its own
+      # (see Metric::Snapshots).
+      def log_metrics(snapshot)
+        processor.hand_over do
+          appender.log_metrics(snapshot)
+        rescue SystemStackError
+          raise
+        rescue Exception => e
+          processor.logger.error("Failed to write metrics to appender: #{name}", e)
+        end
+        true
       end
 
       # Re-open the wrapped appender and the queue processor, after a fork, or within the same

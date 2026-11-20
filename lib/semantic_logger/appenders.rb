@@ -94,6 +94,28 @@ module SemanticLogger
       end
     end
 
+    # Give the snapshot of metrics to every metric appender: each one with a metrics interval (see
+    # Subscriber#metrics_interval). An appender that fails is reported, and the others are still given
+    # it. A stack overflow is raised, as by #log.
+    def log_metrics(snapshot)
+      each do |appender|
+        next unless appender.metrics_interval
+
+        appender.log_metrics(snapshot)
+      rescue SystemStackError
+        raise
+      rescue Exception => e
+        logger.error "Failed to write metrics to appender: #{appender.name}", e
+      end
+      true
+    end
+
+    # Returns [Numeric|nil] the shortest metrics interval of the appenders, or nil when none is a
+    # metric appender (see Subscriber#metrics_interval). Takes no lock.
+    def shortest_metrics_interval
+      filter_map(&:metrics_interval).min
+    end
+
     # Flush every appender. An appender that fails is reported, and the others are still flushed.
     #
     # While the process exits, an appender that is skipped (see #process_exiting=) is first reported,
