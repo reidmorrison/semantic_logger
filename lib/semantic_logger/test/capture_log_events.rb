@@ -20,9 +20,10 @@ module SemanticLogger
     #     end
     #   end
     #
-    # It also captures the metric calls (`increment`, `time`, and `record`) in #metric_events, as they
-    # are made, before they are aggregated, whether or not a metric appender is present: when it stands
-    # in for a logger, as above, and when it stands in for the processor, as
+    # It also captures the metric calls (`increment`, `time`, and `record`), and the `metric:` of log
+    # and `measure_*` calls at every level, in #metric_events, as they are made, before they are
+    # aggregated, whether or not a metric appender is present: when it stands in for a logger, as
+    # above, and when it stands in for the processor, as
     # SemanticLogger::Test::Minitest#semantic_logger_metrics does.
     #
     #   user.stub(:logger, logger) { user.enable! }
@@ -97,6 +98,13 @@ module SemanticLogger
         true
       rescue StandardError => e
         @metric_validator.report_failure(kind, name, e)
+      end
+
+      # Returns [true]: it captures the metric calls whether or not a metric appender is present, so a
+      # log call that has a metric records it at every level (see Base#collecting_metrics?), when it
+      # stands in for a logger or for the processor.
+      def collecting_metrics?
+        true
       end
 
       # Discards the log events, snapshots, and metric calls captured.
