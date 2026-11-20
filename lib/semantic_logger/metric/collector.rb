@@ -179,22 +179,23 @@ module SemanticLogger
 
       # Runs the block, which flushes the processor (see SemanticLogger.flush), and returns its value, once
       # the metric appenders are given the metrics recorded so far, which they write as they are flushed.
-      # When they were given any, runs it again, so that the log entries that a metric appender writes as
-      # it is flushed, such as Metric::Summary, which reach the processor after the first flush began, are
-      # written and flushed too, such as by the flush at exit.
+      # The processor writes and flushes the log entries that a metric appender writes as it is flushed,
+      # such as Metric::Summary, before its flush returns (see Processor#log_aside), such as the flush at
+      # exit.
       def flushing
-        return yield unless deliver
-
-        yield
+        deliver
         yield
       end
 
       # Runs the block, which closes every appender, and returns its value, once the metric appenders are
-      # given the metrics recorded so far, and the processor flushed, so that they write them as they are
-      # flushed, and the log entries that a metric appender writes then, such as Metric::Summary, are
-      # written before the appenders are closed. Then stops collecting.
+      # given the metrics recorded so far, and the processor flushed while a metric appender is present,
+      # so that they write what they hold as they are flushed, and the log entries that a metric appender
+      # writes then, such as Metric::Summary, are written before the appenders are closed, even in a
+      # signal trap, where the metrics recorded since the last interval cannot be collected. Then stops
+      # collecting.
       def closing
-        Logger.processor.flush if deliver
+        deliver
+        Logger.processor.flush if @collecting
         yield
       ensure
         check

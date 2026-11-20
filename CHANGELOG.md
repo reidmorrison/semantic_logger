@@ -41,8 +41,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   of a histogram, with its `unit` and `dimensions`. For example:
   `SemanticLogger::Metric::Summary -- supplier.add_user -- {count: 1204, sum: 98.1, min: 0.012,
   max: 2.7, p50: 0.061, p95: 0.24, p99: 0.81, unit: "s"}`. `SemanticLogger.flush`, and so the flush
-  at exit, flushes the appenders again once the metric appenders have written what they hold, so that
-  the summary of the last partial interval is written too.
+  at exit, writes and flushes the entries that the summary writes as it is flushed, before it returns, so that
+  the summary of the last partial interval is written too. Its entries carry no tags of
+  the thread that writes them.
 
 ### Changed
 

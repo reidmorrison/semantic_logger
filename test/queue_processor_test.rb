@@ -1842,35 +1842,100 @@ class QueueProcessorTest < Minitest::Test
     end
 
     describe "#log_aside" do
-      it "does not wait for room on the full queue, even on the worker thread, and the message is still written" do
+      it "does not wait for room on the full queue, even on the worker thread, and the messages are still written" do
         processor = start(max_queue_size: 1)
         logged    = Queue.new
-        more      = [new_log(message: "second"), new_log(message: "third")]
+        more      = %w[second third fourth].map { |message| new_log(message: message) }
         appender.define_singleton_method(:log) do |log|
-          # The first message logs two more from the worker thread, as an appender that logs as it writes.
-          logged << more.map { |aside| processor.log_aside(aside) } if log.message == "first"
+          # The first message logs more from the worker thread, as an appender that logs as it writes.
+          logged << processor.log_aside(more) if log.message == "first"
           events << log
         end
         processor.log(new_log(message: "first"))
 
-        assert_equal [true, true], logged.pop(timeout: 5), "log_aside waited for room on its own full queue"
-        processor.flush
+        assert logged.pop(timeout: 5), "log_aside waited for room on its own full queue"
         deadline = Time.now + 5
-        sleep(0.01) until appender.events.size == 3 || Time.now > deadline
+        sleep(0.01) until appender.events.size == 4 || Time.now > deadline
 
-        assert_equal %w[first second third], appender.events.map(&:message)
+        assert_equal %w[first second third fourth], appender.events.map(&:message)
       end
 
-      it "drops the message, and counts it, once the worker thread has stopped" do
+      it "adds the messages on at most one thread once the queue is full" do
+        processor = build(max_queue_size: 1)
+        processor.log(new_log)
+        spawned = []
+        thread  = Thread.method(:new)
+
+        Thread.stub(:new, ->(*args, &block) { thread.call(*args, &block).tap { |added| spawned << added } }) do
+          assert processor.log_aside(Array.new(3) { new_log })
+        end
+
+        assert_equal 1, spawned.size
+      ensure
+        # Nothing makes room: the thread adding them ends once the worker thread has stopped.
+        processor.instance_variable_set(:@stopped, true)
+        spawned&.each { |added| added.join(5) }
+      end
+
+      it "drops the messages, and counts them, once the worker thread has stopped" do
         processor = build(max_queue_size: 1)
         processor.log(new_log)
         processor.instance_variable_set(:@stopped, true)
 
-        assert processor.log_aside(new_log)
+        assert processor.log_aside([new_log, new_log])
         deadline = Time.now + 5
-        sleep(0.01) until processor.dropped_count == 1 || Time.now > deadline
+        sleep(0.01) until processor.dropped_count == 2 || Time.now > deadline
 
-        assert_equal 1, processor.dropped_count
+        assert_equal 2, processor.dropped_count
+      end
+
+      describe "while the appender is flushed" do
+        it "writes and flushes the messages logged aside on the worker thread before the flush returns" do
+          processor = start
+          flushes   = []
+          aside     = [new_log(message: "aside")]
+          appender.define_singleton_method(:flush) do
+            flushes << events.map(&:message)
+            # Logs as it is flushed the first time, as a metric appender writes what it holds.
+            processor.log_aside(aside) if flushes.size == 1
+          end
+          processor.log(new_log(message: "queued"))
+
+          assert processor.flush
+          assert_equal [%w[queued], %w[queued aside]], flushes
+        end
+
+        it "writes those that a thread the worker thread waits for logs aside" do
+          processor = start
+          aside     = [new_log(message: "aside")]
+          logging   = nil
+          appender.define_singleton_method(:flush) do
+            # Waits for another thread that logs aside, as for the worker thread of an appender added
+            # with async: true.
+            logging ||= Thread.new { processor.log_aside(aside) }.join(5)
+          end
+
+          assert processor.flush
+          assert_equal %w[aside], appender.events.map(&:message)
+        end
+
+        it "flushes again at most Aside::FLUSHES times, then adds the rest to the queue" do
+          processor = start
+          flushes   = 0
+          appender.define_singleton_method(:flush) do
+            flushes += 1
+            # Logs aside every time it is flushed.
+            processor.log_aside([SemanticLogger::Log.new("User", :info).tap { |log| log.message = "again" }])
+          end
+
+          assert processor.flush
+          assert_equal SemanticLogger::QueueProcessor::Aside::FLUSHES + 1, flushes
+          # The last one logged aside is added to the queue, and written from there.
+          deadline = Time.now + 5
+          sleep(0.01) until appender.events.size > SemanticLogger::QueueProcessor::Aside::FLUSHES || Time.now > deadline
+
+          assert_equal SemanticLogger::QueueProcessor::Aside::FLUSHES + 1, appender.events.size
+        end
       end
     end
 

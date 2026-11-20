@@ -40,6 +40,21 @@ module Metric
           assert_equal :debug, summary.level
         end
 
+        it "writes :info entries when given level: nil, whatever the default level" do
+          SemanticLogger.stub(:default_level, :warn) do
+            summary = SemanticLogger.add_appender(metric: :summary, level: nil)
+
+            assert_equal :info, summary.level
+            assert_equal SemanticLogger::Levels.index(:info), summary.send(:level_index)
+          end
+        end
+
+        it "refuses filter:, since it takes no log entries" do
+          error = assert_raises(ArgumentError) { SemanticLogger.add_appender(metric: :summary, filter: /Test/) }
+
+          assert_includes error.message, "filter:"
+        end
+
         it "takes no log entries" do
           summary = SemanticLogger.add_appender(metric: :summary)
 
@@ -138,6 +153,17 @@ module Metric
           assert_equal(2, entries.count { |log| log.message == "users.signup" })
         end
 
+        it "writes no tags or named tags of the thread that writes them" do
+          SemanticLogger.add_appender(metric: :summary)
+          logger.increment("users.signup")
+          SemanticLogger.tagged("request", user: "jack") { SemanticLogger.flush }
+
+          log = entry("users.signup")
+
+          assert_empty log.tags
+          assert_empty log.named_tags
+        end
+
         it "writes nothing for an interval without metrics" do
           SemanticLogger.add_appender(metric: :summary)
           SemanticLogger.flush
@@ -183,6 +209,23 @@ module Metric
         ensure
           SemanticLogger.remove_appender(proxy) if proxy
         end
+
+        it "has its entries reach the log appenders in one flush, when added with async: true" do
+          async_captured = SemanticLogger::Test::CaptureLogEvents.new
+          proxy          = SemanticLogger.add_appender(appender: async_captured, async: true, batch: false)
+          SemanticLogger.add_appender(metric: :summary, async: true)
+          logger.increment("users.signup")
+          processor = SemanticLogger::Logger.processor
+          flush     = processor.method(:flush)
+          flushes   = 0
+          processor.stub(:flush, -> { (flushes += 1) && flush.call }) { SemanticLogger.flush }
+
+          assert_equal 1, flushes
+          refute_nil entry("users.signup")
+          refute_nil entry("users.signup", async_captured)
+        ensure
+          SemanticLogger.remove_appender(proxy) if proxy
+        end
       end
 
       # Semantic Logger flushes the appenders in an at_exit hook, so these exit another Ruby, in each
@@ -216,10 +259,19 @@ module Metric
 
               assert_includes output, '"message":"users.signup","payload":{"sum":4}'
             end
+
+            it "writes the last partial interval once closed, with #{library}, async: #{async}" do
+              output = run_ruby(library, script(async: async, ending: "SemanticLogger.close"))
+
+              assert_includes output, '"message":"users.signup","payload":{"sum":4}'
+            end
           end
 
-          it "writes the last partial interval once closed, with #{library}" do
-            output = run_ruby(library, script(async: false, ending: "SemanticLogger.close"))
+          it "writes the last partial interval when added with async: true, with #{library}" do
+            output = run_ruby(
+              library,
+              script(async: true).sub("add_appender(metric: :summary)", "add_appender(metric: :summary, async: true)")
+            )
 
             assert_includes output, '"message":"users.signup","payload":{"sum":4}'
           end

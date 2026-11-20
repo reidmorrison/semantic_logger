@@ -60,17 +60,25 @@ module SemanticLogger
       false
     end
 
-    # Log the entry without waiting for another thread to leave this processor, for an appender that
-    # logs as it writes, or as it is flushed, such as Metric::Summary. On the thread inside this
-    # processor, such as one writing to or flushing that appender, it logs at once, as #log does, since
-    # the monitor lets it in again. Any other thread, such as the worker thread of that appender added
-    # with async: true, does not wait for the monitor, whose holder may be waiting for that thread, to
-    # flush it: the entry is left with the pending calls, which are written in order by whoever next
-    # enters the monitor, or the thread holding it as it leaves (see #defer). Returns true.
-    def log_aside(log)
-      return log(log) if @monitor.mon_owned?
-
-      defer { write(log) }
+    # Log the entries, in order, without waiting for another thread to leave this processor, for an
+    # appender that logs as it writes, or as it is flushed, such as Metric::Summary. On the thread
+    # inside this processor, such as one writing to or flushing that appender, it logs them at once, as
+    # #log does, since the monitor lets it in again. Any other thread, such as the worker thread of that
+    # appender added with async: true, does not wait for the monitor, whose holder may be waiting for
+    # that thread, to flush it: the entries are left with the pending calls, which are written in order
+    # by whoever next enters the monitor, by a flush under way (see #flush), or by the thread holding it
+    # as it leaves (see #defer). Either way, it counts them as logged aside, inside the monitor, so
+    # that a flush under way flushes the appenders again (see #flush). Returns true.
+    def log_aside(logs)
+      if @monitor.mon_owned?
+        @aside_count += 1
+        logs.each { |log| log(log) }
+      else
+        defer do
+          @aside_count += 1
+          logs.each { |log| write(log) }
+        end
+      end
       true
     end
 
@@ -96,8 +104,15 @@ module SemanticLogger
     # returns its result, or raises what it raised. When it has not finished by then, such as when the
     # trap interrupted a call inside this processor, which cannot return before the trap does, it
     # returns nil and the flush runs just after.
+    #
+    # Once the appenders are flushed, when log entries were logged aside meanwhile, such as those that
+    # an appender logs as it is flushed (see #log_aside), they are flushed again, up to
+    # QueueProcessor::Aside::FLUSHES times, as the worker thread of a queue processor does, so that a
+    # flush, such as the flush at exit, flushes those too. Any other entry written meanwhile, such as
+    # one that an appender logs as it is flushed with a logger, does not flush them again. Returns the
+    # result of the last flush of the appenders.
     def flush
-      synchronize { @appenders.flush }
+      synchronize { flush_appenders }
     end
 
     # Close the appenders, as for #flush in a signal trap.
@@ -182,6 +197,7 @@ module SemanticLogger
       @monitor         = Monitor.new
       @appenders       = appenders || Appenders.new(self.class.logger.dup)
       @processed_count = 0
+      @aside_count     = 0
       @pending         = Thread::Queue.new
       @runner          = nil
       @pid             = Process.pid
@@ -307,6 +323,22 @@ module SemanticLogger
     def write(log)
       @processed_count += 1
       @appenders.log(log)
+    end
+
+    # Flush the appenders, then, while log entries were logged aside as they were flushed, or left
+    # pending meanwhile by another thread (see #log_aside), which are written first, flush them again,
+    # up to QueueProcessor::Aside::FLUSHES times. Called inside the monitor.
+    def flush_appenders
+      aside   = @aside_count
+      flushed = @appenders.flush
+      QueueProcessor::Aside::FLUSHES.times do
+        run_pending
+        break if @aside_count == aside
+
+        aside   = @aside_count
+        flushed = @appenders.flush
+      end
+      flushed
     end
 
     # Returns [Integer] the number of calls left pending by signal traps in this process. In a forked

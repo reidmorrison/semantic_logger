@@ -17,10 +17,12 @@ module SemanticLogger
     # keeping every digit before the decimal point. A percentile is an estimate, made within the bucket
     # of the histogram that holds it (see ExponentialHistogram#quantile).
     #
-    # It knows the level of the entries that it writes, and writes them through the processor (see
-    # Processor#log_aside), never waiting for it: it writes them on the processor's own thread, or, when
-    # added with async: true, on a thread that the processor's thread may be waiting for. It takes no
-    # log entries itself, and its entries carry no metric.
+    # It knows the level of the entries that it writes, :info unless given, which is its own fallback
+    # level (see #fallback_level), rather than the :trace of other appenders, and writes them through
+    # the processor (see Processor#log_aside), never waiting for it: it writes them on the processor's
+    # own thread, or, when added with async: true, on a thread that the processor's thread may be
+    # waiting for. It takes no log entries itself, and its entries carry no metric, nor the tags or
+    # named tags of the thread that writes them, which belong to whatever that thread was doing.
     class Summary < Subscriber
       include Snapshots
 
@@ -30,11 +32,15 @@ module SemanticLogger
       # The percentiles that it writes for a histogram, by payload key.
       PERCENTILES = {p50: 0.5, p95: 0.95, p99: 0.99}.freeze
 
+      # The level index of :info, its fallback level.
+      INFO_INDEX = Levels.index(:info)
+      private_constant :INFO_INDEX
+
       # Parameters:
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Level of the log entries that it writes. Each log appender writes those at or above its
       #     own level.
-      #     Default: :info
+      #     Default: :info, also when nil
       #
       #   interval: [Numeric]
       #     Seconds between the summaries that it writes.
@@ -43,16 +49,15 @@ module SemanticLogger
       #   internal_metrics: [true|false]
       #     Whether to write Semantic Logger's own metrics too.
       #     Default: false
-      #
-      #   application, environment, host: See SemanticLogger::Subscriber.
-      def initialize(level: :info, **args, &)
+      def initialize(level: nil, **args, &)
         super
       end
 
-      # Writes one log entry for each point of the snapshot.
+      # Writes one log entry for each point of the snapshot, handing them all to the processor at once,
+      # in order.
       def write_metrics(snapshot)
-        processor = Logger.processor
-        snapshot.each { |point| processor.log_aside(entry(point)) }
+        logs = snapshot.map { |point| entry(point) }
+        Logger.processor.log_aside(logs) unless logs.empty?
         true
       end
 
@@ -61,12 +66,22 @@ module SemanticLogger
       # Takes level:, the level of the log entries that it writes, which other metric appenders refuse.
       def refused_log_entry_options = super - [:level]
 
-      # Returns [Log] the log entry for the point.
+      # Returns [Log] the log entry for the point, without the tags or named tags of the thread that
+      # writes it.
       def entry(point)
-        log = Log.new(name, level)
+        log            = Log.new(name, level)
+        log.tags       = []
+        log.named_tags = {}
         log.assign(message: point.name, payload: payload(point))
         log
       end
+
+      # The level of its entries when it is given none, rather than the :trace of other appenders
+      # (see Subscriber#fallback_level).
+      def fallback_level = :info
+
+      # The index of #fallback_level, for the comparisons that use the index.
+      def fallback_level_index = INFO_INDEX
 
       def payload(point)
         payload              = point.counter? ? {sum: rounded(point.value)} : histogram_payload(point.value)
