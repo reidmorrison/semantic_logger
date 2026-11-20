@@ -69,6 +69,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   still written with it, but its metric is dropped, with a warning on the internal logger once per
   metric name.
 
+### Changed
+
+- `metric: :statsd` sends the metrics of each interval (`interval:`, 60 seconds by default) rather than
+  a packet per log entry, and no longer receives log entries. A counter is sent as one
+  `name:amount|c` packet per interval. StatsD has no histogram type, so a histogram is sent as one
+  timer packet per non-empty bucket, `name:midpoint|ms|@rate`, with 1 / the bucket's count as the
+  sample rate, so that the server weights it as that many timings; durations are sent in
+  milliseconds. The packets are sent without client-side sampling, as many as fit in each
+  1432-byte datagram. The series of a name that differ only by their dimensions are still sent
+  together under the name.
+
 ## [Unreleased]
 
 ### Fixed

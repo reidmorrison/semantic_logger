@@ -3,42 +3,56 @@ require "bigdecimal"
 
 module Metric
   class StatsdTest < Minitest::Test
-    # Records the calls made to the underlying statsd-ruby client.
+    # Stands in for a statsd-ruby client.
     class FakeStatsd
-      attr_reader :timings, :counts
       attr_accessor :namespace
-
-      def initialize
-        @timings = []
-        @counts  = []
-      end
-
-      def timing(metric, duration)
-        @timings << [metric, duration]
-      end
-
-      def count(metric, amount)
-        @counts << [metric, amount]
-      end
     end
 
     describe SemanticLogger::Metric::Statsd do
-      let(:metric) { "user/login" }
-      let(:fake) { FakeStatsd.new }
+      let(:server) do
+        socket = UDPSocket.new
+        socket.bind("127.0.0.1", 0)
+        socket
+      end
+      let(:url) { "udp://127.0.0.1:#{server.addr[1]}" }
+      let(:appender) { SemanticLogger::Metric::Statsd.new(url: url) }
+      let(:aggregator) { SemanticLogger::Metric::Aggregator.new }
 
-      let(:appender) do
-        appender = SemanticLogger::Metric::Statsd.new
-        appender.instance_variable_set(:@statsd, fake)
-        appender
+      after do
+        server.close
       end
 
-      def metric_log(metric: "user/login", duration: nil, metric_amount: nil, dimensions: nil, level: :info)
-        log               = SemanticLogger::Log.new("StatsdTest", level)
-        log.metric        = metric
-        log.duration      = duration
-        log.metric_amount = metric_amount
-        log.dimensions    = dimensions
-        log
+      # Returns [Array<String>] the datagrams received by the server, until none arrives for a moment.
+      def datagrams
+        received = []
+        received << server.recv(65_535) while server.wait_readable(0.2)
+        received
+      end
+
+      # Returns [Array<String>] the packets received by the server, one per line of each datagram.
+      def packets
+        datagrams.flat_map { |datagram| datagram.split("\n") }
+      end
+
+      # Writes what the aggregator recorded, and returns the packets received.
+      def write
+        appender.write_metrics(aggregator.collect)
+        packets
+      end
+
+      # A snapshot holding the points.
+      def snapshot(*points)
+        SemanticLogger::Metric::Snapshot.new(start_time: Time.now - 60, end_time: Time.now, points: points)
+      end
+
+      def counter(name, value, **args)
+        SemanticLogger::Metric::Snapshot::Point.new(kind: :counter, name: name, value: value, **args)
+      end
+
+      # The count of timings a timer packet stands for, as a StatsD server weights it.
+      def weight(packet)
+        rate = packet[/\|@(.*)\z/, 1]
+        rate ? (1.0 / Float(rate)).floor : 1
       end
 
       describe "#initialize" do
@@ -66,14 +80,10 @@ module Metric
           assert_equal ["::1"], hosts
         end
 
-        it "connects, so that it records metrics without a reopen" do
-          counts = []
-          ::Statsd.stub_any_instance(:count, ->(metric, amount) { counts << [metric, amount] }) do
-            subscriber = SemanticLogger::Metric::Statsd.new
-            subscriber.info(metric: "user/login")
-          end
+        it "connects, so that it sends metrics without a reopen" do
+          aggregator.record(:counter, "user/login", 1)
 
-          assert_equal [["user/login", 1]], counts
+          assert_equal ["user/login:1|c"], write
         end
 
         it "sets the namespace from the url path" do
@@ -86,6 +96,14 @@ module Metric
           subscriber = SemanticLogger::Metric::Statsd.new
 
           assert_nil subscriber.instance_variable_get(:@statsd).namespace
+        end
+
+        it "has an interval of 60 seconds by default" do
+          assert_equal 60, appender.metrics_interval
+        end
+
+        it "accepts an interval" do
+          assert_equal 10, SemanticLogger::Metric::Statsd.new(url: url, interval: 10).metrics_interval
         end
       end
 
@@ -133,116 +151,199 @@ module Metric
         end
       end
 
-      describe "#log" do
-        it "sends a timing when the log has a duration" do
-          appender.log(metric_log(duration: 200))
+      describe "log entries" do
+        it "takes none" do
+          log        = SemanticLogger::Log.new("StatsdTest", :info)
+          log.metric = "user/login"
 
-          assert_equal [[metric, 200]], fake.timings
-          assert_empty fake.counts
-        end
-
-        it "counts once by default" do
-          appender.log(metric_log)
-
-          assert_equal [[metric, 1]], fake.counts
-        end
-
-        it "counts the metric amount in a single packet" do
-          appender.log(metric_log(metric_amount: 3))
-
-          assert_equal [[metric, 3]], fake.counts
-        end
-
-        it "sends a large metric amount as a single packet" do
-          appender.log(metric_log(metric_amount: 3_000_000_000))
-
-          assert_equal [[metric, 3_000_000_000]], fake.counts
-        end
-
-        it "counts a negative metric amount" do
-          appender.log(metric_log(metric_amount: -2))
-
-          assert_equal [[metric, -2]], fake.counts
-        end
-
-        it "rounds a fractional metric amount" do
-          appender.log(metric_log(metric_amount: 2.9))
-
-          assert_equal [[metric, 3]], fake.counts
-        end
-
-        it "sends nothing for a zero metric amount" do
-          appender.log(metric_log(metric_amount: 0))
-
-          assert_empty fake.counts
-        end
-
-        it "ignores a metric amount that is not finite" do
-          appender.log(metric_log(metric_amount: Float::INFINITY))
-          appender.log(metric_log(metric_amount: Float::NAN))
-
-          assert_empty fake.counts
-        end
-
-        it "ignores a BigDecimal metric amount that is not finite" do
-          appender.log(metric_log(metric_amount: BigDecimal("Infinity")))
-          appender.log(metric_log(metric_amount: BigDecimal("-Infinity")))
-          appender.log(metric_log(metric_amount: BigDecimal("NaN")))
-
-          assert_empty fake.counts
-        end
-
-        it "counts a finite BigDecimal metric amount" do
-          appender.log(metric_log(metric_amount: BigDecimal("2.5")))
-
-          assert_equal [[metric, 3]], fake.counts
+          refute appender.should_log?(log)
         end
       end
 
-      describe "#should_log?" do
-        it "is true for a metric without dimensions" do
-          assert appender.should_log?(metric_log)
+      describe "a counter" do
+        it "is sent as one count packet for the interval" do
+          3.times { aggregator.record(:counter, "user/login", 2) }
+
+          assert_equal ["user/login:6|c"], write
         end
 
-        it "is false without a metric" do
-          refute appender.should_log?(metric_log(metric: nil))
+        it "is sent with the namespace of the url" do
+          appender.url = "#{url}/my_app"
+          appender.reopen
+          aggregator.record(:counter, "user/login", 1)
+
+          assert_equal ["my_app.user/login:1|c"], write
         end
 
-        it "is true when the metric has dimensions" do
-          assert appender.should_log?(metric_log(dimensions: {action: "login"}))
+        it "replaces the characters reserved by StatsD in its name, as statsd-ruby does" do
+          aggregator.record(:counter, "Billing::user:login|x@y", 1)
+
+          assert_equal ["Billing.user_login_x_y:1|c"], write
+        end
+
+        it "sends a large amount as a single packet" do
+          aggregator.record(:counter, "user/login", 3_000_000_000)
+
+          assert_equal ["user/login:3000000000|c"], write
+        end
+
+        it "rounds a fractional amount, after adding the amounts up" do
+          aggregator.record(:counter, "user/login", 1.4)
+          aggregator.record(:counter, "user/login", 1.4)
+
+          assert_equal ["user/login:3|c"], write
+        end
+
+        it "sends nothing for a zero amount" do
+          aggregator.record(:counter, "user/login", 0)
+
+          assert_empty write
+        end
+
+        it "sends nothing for an amount that is not finite" do
+          appender.write_metrics(
+            snapshot(
+              counter("a", Float::INFINITY), counter("b", Float::NAN),
+              counter("c", BigDecimal("Infinity")), counter("d", BigDecimal("NaN"))
+            )
+          )
+
+          assert_empty packets
+        end
+
+        it "counts a finite BigDecimal amount" do
+          appender.write_metrics(snapshot(counter("user/login", BigDecimal("2.5"))))
+
+          assert_equal ["user/login:3|c"], packets
+        end
+
+        it "adds up the series that differ only by their dimensions, sending the name once" do
+          aggregator.record(:counter, "user/login", 2, dimensions: {action: "login"})
+          aggregator.record(:counter, "user/login", 3, dimensions: {action: "logout"})
+          aggregator.record(:counter, "user/login", 1)
+
+          assert_equal ["user/login:6|c"], write
         end
       end
 
-      describe "a metric with dimensions" do
-        it "is counted under its name alone" do
-          appender.info(metric: metric, metric_amount: 2, dimensions: {action: "login"})
+      describe "a histogram" do
+        it "sends a duration in milliseconds, a single timing without a sample rate" do
+          aggregator.record(:histogram, "supplier.add_user", 0.25, unit: "s")
 
-          assert_equal [[metric, 2]], fake.counts
+          assert_equal ["supplier.add_user:250|ms"], write
         end
 
-        it "is timed under its name alone" do
-          appender.info(metric: metric, duration: 200, dimensions: {action: "login"})
+        it "sends the values of any other unit as they were recorded" do
+          aggregator.record(:histogram, "upload.size", 1500, unit: "By")
+          aggregator.record(:histogram, "order.items", 3)
 
-          assert_equal [[metric, 200]], fake.timings
+          assert_equal ["upload.size:1500|ms", "order.items:3|ms"], write
         end
 
-        it "can be left out with a filter" do
-          appender.filter = ->(log) { !log.dimensions? }
-          appender.info(metric: metric, dimensions: {action: "login"})
-          appender.info(metric: metric)
+        it "sends one packet per bucket, at its midpoint, with a sample rate of 1 / its count" do
+          # 1.1 and 1.15 share the bucket (1.0905, 1.1892], narrowed to the minimum: (1.1, 1.1892].
+          # 2.0 is alone in the bucket (1.8340, 2.0].
+          [1.1, 1.15, 1.15, 2.0].each { |value| aggregator.record(:histogram, "order.items", value) }
 
-          assert_equal [[metric, 1]], fake.counts
+          assert_equal ["order.items:1.1446|ms|@0.3333333333", "order.items:1.917|ms"], write
+        end
+
+        it "sends the zero bucket, and the negative ones" do
+          [-4.0, 0, 0].each { |value| aggregator.record(:histogram, "balance", value) }
+
+          # The negative bucket [-4.0, -3.66...) is narrowed to the minimum only.
+          assert_equal ["balance:-3.83401|ms", "balance:0|ms|@0.5"], write
+        end
+
+        it "has a sample rate whose inverse, truncated, is the count of the bucket" do
+          [2, 3, 7, 160, 3125, 6250, 100_000].each do |count|
+            count.times { aggregator.record(:histogram, "order.items", 5) }
+            packet = write.first
+
+            assert_equal count, weight(packet), packet
+          end
+        end
+
+        it "merges the series that differ only by their dimensions, sending each bucket once" do
+          aggregator.record(:histogram, "supplier.add_user", 0.25, unit: "s", dimensions: {supplier: "a"})
+          aggregator.record(:histogram, "supplier.add_user", 0.25, unit: "s", dimensions: {supplier: "b"})
+
+          assert_equal ["supplier.add_user:250|ms|@0.5"], write
+        end
+
+        it "sends every bucket packet, without the client sampling them" do
+          values = Array.new(2_000) { |i| (i % 400) + 1 }
+          values.each { |value| aggregator.record(:histogram, "order.items", value) }
+          buckets = aggregator.collect.points.first.value.each_bucket.count
+          values.each { |value| aggregator.record(:histogram, "order.items", value) }
+          # statsd-ruby sends a packet with a sample rate only when rand < rate.
+          SemanticLogger::Metric::Statsd::Datagrams.stub_any_instance(:rand, 1.0) do
+            appender.write_metrics(aggregator.collect)
+          end
+          sent = packets
+
+          assert_equal buckets, sent.size
+          assert_equal(values.size, sent.sum { |packet| weight(packet) })
+        end
+
+        it "sends as many packets as fit in each datagram" do
+          values = Array.new(2_000) { |i| (i % 400) + 1 }
+          values.each { |value| aggregator.record(:histogram, "order.items", value) }
+          appender.write_metrics(aggregator.collect)
+          received = datagrams
+
+          assert_operator received.size, :>, 1
+          received.each do |datagram|
+            assert_operator datagram.bytesize, :<=, SemanticLogger::Metric::Statsd::Datagrams::DATAGRAM_SIZE
+            assert(datagram.split("\n").all? { |line| line.match?(/\Aorder\.items:[\d.]+\|ms(\|@0\.\d+)?\z/) })
+          end
+          # Each datagram but the last is full: the next packet would not have fitted in it.
+          received.each_cons(2) do |datagram, following|
+            next_packet = following.split("\n").first
+
+            assert_operator datagram.bytesize + 1 + next_packet.bytesize, :>,
+                            SemanticLogger::Metric::Statsd::Datagrams::DATAGRAM_SIZE
+          end
         end
       end
 
-      describe "options" do
-        it "applies the filter: and level: given to add_appender" do
-          filter     = ->(log) { !log.dimensions? }
-          subscriber = SemanticLogger::Appender.factory(metric: :statsd, filter: filter, level: :warn)
+      describe "Semantic Logger's own metrics" do
+        let(:internal) do
+          counter("semantic_logger.log.processed", 5, dimensions: {appender: "Io"}, internal: true)
+        end
 
-          refute subscriber.should_log?(metric_log(level: :info))
-          refute subscriber.should_log?(metric_log(level: :warn, dimensions: {action: "login"}))
-          assert subscriber.should_log?(metric_log(level: :warn))
+        it "are not sent by default" do
+          appender.log_metrics(snapshot(internal, counter("user/login", 1)))
+          appender.flush
+
+          assert_equal ["user/login:1|c"], packets
+        end
+
+        it "are sent with internal_metrics: true" do
+          subscriber = SemanticLogger::Metric::Statsd.new(url: url, internal_metrics: true)
+          subscriber.log_metrics(snapshot(internal, counter("user/login", 1)))
+          subscriber.flush
+
+          assert_equal ["semantic_logger.log.processed:5|c", "user/login:1|c"], packets
+        end
+      end
+
+      describe "added with add_appender" do
+        after do
+          SemanticLogger.appenders.dup.each do |added|
+            SemanticLogger.remove_appender(added) if added.metrics_interval
+          end
+        end
+
+        it "sends the metrics recorded by a logger as they are flushed" do
+          SemanticLogger.add_appender(metric: :statsd, url: url)
+          logger = SemanticLogger["StatsdTest"]
+          logger.increment("users.signup", 2)
+          logger.increment("users.signup", dimensions: {department: "clothing"})
+          logger.time("supplier.add_user", duration: 125)
+          SemanticLogger.flush
+
+          assert_equal ["users.signup:3|c", "supplier.add_user:125|ms"], packets
         end
       end
     end
