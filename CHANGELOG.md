@@ -90,6 +90,21 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   is recorded as the largest Float. Semantic Logger's own metrics are recorded
   only with `internal_metrics: true`.
 
+### Changed
+
+- `metric: :signalfx` is a metric appender: it no longer takes log entries, and once per `interval:`
+  (default 60 seconds) posts the metrics of that interval to `v2/datapoint` in one request, with the
+  end of the interval as the timestamp. Each counter series is sent as a `counter` datapoint of what
+  was added in the interval. Each histogram series is sent as the counters `<name>.count` and
+  `<name>.sum`, and the gauges `<name>` (the mean), `<name>.min`, `<name>.max`, `<name>.p50`,
+  `<name>.p95`, and `<name>.p99`; durations in milliseconds, as before. A name with a `/` and no
+  dimensions is still sent as `Application.counter` and `Application.average` (with
+  `Application.sum`, `Application.min`, and so on), with the `class` and `action` dimensions taken from
+  the name; any other name is sent as it is, with `/` as `.`, so a dotted name such as `users.signup`
+  is no longer sent with the class `Unknown`. `internal_metrics: true` adds Semantic Logger's own
+  metrics. The `dimensions:` option, which listed the named tags to send, raises `ArgumentError`, since
+  named tags are never part of a metric's series, and `SemanticLogger::Formatters::Signalfx` is removed.
+
 ## [Unreleased]
 
 ### Fixed

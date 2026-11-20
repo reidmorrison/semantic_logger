@@ -314,7 +314,7 @@ module SemanticLogger
       # Subscriber#batch_refusal.
       #
       # Answers only while that #batch is the one in use (see Subscriber#batch_defined_by?). A
-      # subclass that replaces it answers for its own, as Loki and Signalfx do, and is otherwise
+      # subclass that replaces it answers for its own, as Loki does, and is otherwise
       # batched with any formatter, as before, such as one whose #batch formats each log message with
       # #format_log. One whose #batch calls super, or that a prepended module wraps, still formats the
       # whole batch with #format_batch, so it defines its own #batch_refusal, which returns
