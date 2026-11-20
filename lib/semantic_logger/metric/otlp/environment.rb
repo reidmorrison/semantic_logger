@@ -10,8 +10,9 @@ module SemanticLogger
       #
       # A variable of the metrics signal, such as OTEL_EXPORTER_OTLP_METRICS_HEADERS, replaces its
       # generic one, such as OTEL_EXPORTER_OTLP_HEADERS, as a whole. A variable that is empty, or holds
-      # only blanks, counts as not set. Each value is parsed, and any problem with it reported, once,
-      # when it is first asked for.
+      # only blanks, counts as not set, as does one that is not valid UTF-8, which is reported by its
+      # name only. Each value is parsed, and any problem with it reported, once, when it is first asked
+      # for.
       #
       # See https://opentelemetry.io/docs/specs/otel/protocol/exporter/ and
       # https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
@@ -19,14 +20,20 @@ module SemanticLogger
         # A header name: an HTTP token (RFC 9110).
         HEADER_NAME = /\A[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z/
 
-        # Characters that a header value cannot hold (RFC 9110): controls other than a tab.
-        HEADER_VALUE_INVALID = /[\x00-\x08\x0A-\x1F\x7F]/
+        # Characters that a header value cannot hold: anything other than a tab and the printable ASCII
+        # characters. RFC 9110 lets a value hold bytes above 0x7F too, but gives them no meaning, and
+        # Net::HTTP would send the UTF-8 of a decoded value as it is.
+        HEADER_VALUE_INVALID = /[^\t\x20-\x7E]/
 
         # The compression of each value of OTEL_EXPORTER_OTLP_COMPRESSION that it knows: true for gzip.
         COMPRESSIONS = {"gzip" => true, "none" => false}.freeze
 
-        # Milliseconds in a second, to convert the timeouts.
+        # Milliseconds in a second, to convert the timeout.
         MILLISECONDS = 1000.0
+
+        # The timeout when it is not set, or ignored (see #timeout?).
+        UNSET = Object.new.freeze
+        private_constant :UNSET
 
         # Parameters:
         #   logger: [SemanticLogger::Logger]
@@ -59,15 +66,17 @@ module SemanticLogger
           @headers   = text ? parse_headers(name, text).freeze : {}.freeze
         end
 
-        # Returns [true|false] whether a valid timeout is set (see #timeout).
+        # Returns [true|false] whether the timeout is set, to a value that can be used (see #timeout).
         def timeout?
-          !timeout_setting.empty?
+          !timeout_seconds.equal?(UNSET)
         end
 
-        # Returns [Float|nil] the timeout in seconds, nil for no limit, given in milliseconds, 0 meaning no
-        # limit. A value that is not a whole number of milliseconds is ignored and reported.
+        # Returns [Float|nil] the timeout, in seconds; nil when it is 0, meaning no limit, or when it is
+        # not set (see #timeout?). It is given in whole milliseconds; a value that is not is ignored and
+        # reported.
         def timeout
-          timeout_setting.first
+          seconds = timeout_seconds
+          seconds unless seconds.equal?(UNSET)
         end
 
         # Returns [true|false|nil] whether to compress the requests with gzip, nil when not set. A value
@@ -93,25 +102,23 @@ module SemanticLogger
 
         attr_reader :logger
 
-        # Returns [Array] the timeout in seconds, nil for no limit, in a one element Array; empty when not
-        # set, or invalid.
-        def timeout_setting
-          @timeout_setting ||=
-            begin
-              name, text = signal_value("TIMEOUT")
-              text ? parse_timeout(name, text) : []
-            end
+        # Returns [Float|nil|UNSET] the timeout in seconds, nil for no limit, UNSET when not set or ignored.
+        def timeout_seconds
+          return @timeout_seconds if defined?(@timeout_seconds)
+
+          name, text       = signal_value("TIMEOUT")
+          @timeout_seconds = text ? parse_timeout(name, text) : UNSET
         end
 
         def parse_timeout(name, text)
           text = text.strip
           unless text.match?(/\A\d+\z/)
             logger.warn("Ignoring #{name}=#{text.inspect}: not a whole number of milliseconds")
-            return []
+            return UNSET
           end
 
           milliseconds = Integer(text, 10)
-          [milliseconds.zero? ? nil : milliseconds / MILLISECONDS]
+          milliseconds.zero? ? nil : milliseconds / MILLISECONDS
         end
 
         def parse_compression(name, text)
@@ -193,10 +200,28 @@ module SemanticLogger
           [name, value(name)]
         end
 
-        # Returns [String|nil] the value of the environment variable, nil when it is not set or blank.
+        # Returns [String|nil] the value of the environment variable, as UTF-8, nil when it is not set,
+        # blank, or not valid UTF-8. A value that is not valid UTF-8 is reported once, by the name of the
+        # variable only, since its value may hold a credential.
         def value(name)
           text = ENV.fetch(name, nil)
-          text unless text.nil? || text.strip.empty?
+          return if text.nil?
+
+          text = text.dup.force_encoding(Encoding::UTF_8)
+          unless text.valid_encoding?
+            report_invalid_encoding(name)
+            return
+          end
+
+          text unless text.strip.empty?
+        end
+
+        def report_invalid_encoding(name)
+          @invalid_encodings ||= []
+          return if @invalid_encodings.include?(name)
+
+          @invalid_encodings << name
+          logger.warn("Ignoring #{name}: its value is not valid UTF-8")
         end
       end
     end

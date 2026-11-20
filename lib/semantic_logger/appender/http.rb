@@ -98,6 +98,26 @@ module SemanticLogger
         end
       end
 
+      # The headers that the appender sends with each request, before those given with `header:`, which
+      # replace them, compared in any case (see #replace_header). On Ruby v2.0 and greater, Net::HTTP.new
+      # already uses a persistent connection if the server allows it.
+      DEFAULT_HEADERS = {
+        "Accept"       => "application/json",
+        "Content-Type" => "application/json",
+        "Connection"   => "keep-alive",
+        "Keep-Alive"   => "300"
+      }.freeze
+
+      # The headers that the appender, or Net::HTTP for it, sets or relies on itself, besides
+      # DEFAULT_HEADERS, whatever its options (see #reserved_header?): Content-Encoding, which it sets
+      # when it compresses the body (see `compress:`) and which describes the body otherwise too; and
+      # Accept-Encoding, which Net::HTTP sets itself, and decodes a compressed response only when it
+      # did.
+      RESERVED_HEADERS = %w[Content-Encoding Accept-Encoding].freeze
+
+      # The header that the appender sets itself while it sends basic authentication (see `username:`).
+      BASIC_AUTH_HEADER = "Authorization".freeze
+
       # Describes a valid url in the error raised for an invalid one.
       URL_FORMAT_HINT = "Should be similar to: 'http://hostname:port/path'".freeze
 
@@ -211,13 +231,7 @@ module SemanticLogger
         @read_timeout     = read_timeout
         @continue_timeout = continue_timeout
 
-        # On Ruby v2.0 and greater, Net::HTTP.new already uses a persistent connection if the server allows it
-        @header = {
-          "Accept"       => "application/json",
-          "Content-Type" => "application/json",
-          "Connection"   => "keep-alive",
-          "Keep-Alive"   => "300"
-        }
+        @header = DEFAULT_HEADERS.dup
         header&.each { |name, value| replace_header(name, value) }
         replace_header("Content-Encoding", "gzip") if @compress
 
@@ -366,6 +380,22 @@ module SemanticLogger
       # exception alone, as for #wrote_nothing?.
       def not_sent?(exception)
         NOT_SENT_ERRORS.any? { |error_class| exception.is_a?(error_class) }
+      end
+
+      # Whether the header of that name, compared in any case, since HTTP header names are
+      # case-insensitive, is one that the appender sets or relies on itself, so that a header added
+      # from elsewhere, such as from the environment, must not replace it: one of DEFAULT_HEADERS
+      # (Accept, Content-Type, Connection, and Keep-Alive), of RESERVED_HEADERS (Content-Encoding and
+      # Accept-Encoding), or Authorization while it sends basic authentication, which replaces that
+      # header (see `username:`). A header given with `header:` still replaces any of them, as before.
+      def reserved_header?(name)
+        name = name.to_s
+        return true if DEFAULT_HEADERS.each_key.any? { |reserved| reserved.casecmp?(name) }
+        return true if RESERVED_HEADERS.any? { |reserved| reserved.casecmp?(name) }
+
+        return false unless username
+
+        BASIC_AUTH_HEADER.casecmp?(name)
       end
 
       # Returns [String] the scheme, host, and any non-default port of the url. Safe to log.

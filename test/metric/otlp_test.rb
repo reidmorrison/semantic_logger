@@ -886,6 +886,77 @@ module Metric
             assert_match(/OTEL_EXPORTER_OTLP_HEADERS at position\(s\) 2, 3, 4, 5, 6/, warnings.first)
             refute_match(/secret/, warnings.first)
           end
+
+          it "leaves out a value that is not printable ASCII once percent-decoded, without its text" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "good=1,x-utf8=secret%C3%A9,x-del=secret%7F,x-tab=a%09b"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "1", request["good"]
+            assert_equal "a\tb", request["x-tab"]
+            assert_nil request["x-utf8"]
+            assert_nil request["x-del"]
+            assert_equal 1, warnings.size
+            assert_match(/OTEL_EXPORTER_OTLP_HEADERS at position\(s\) 2, 3:/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "leaves out the headers that the appender sets itself, in any case, warning with their names only" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] =
+              "content-type=secret-type,CONTENT-ENCODING=secret-gzip,accept=secret-accept,x-team=core"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "application/json", request["Content-Type"]
+            assert_equal "application/json", request["Accept"]
+            assert_nil request["Content-Encoding"]
+            assert_equal "core", request["x-team"]
+            assert_equal 1, warnings.size
+            assert_match(/content-type, CONTENT-ENCODING, accept/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "leaves out Accept-Encoding, so that Net::HTTP still decodes a compressed response" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "Accept-Encoding=secret-br"
+            request = requests(on: new_logged_appender).first
+
+            refute_equal "secret-br", request["Accept-Encoding"]
+            assert request.decode_content
+            assert_equal 1, warnings.size
+            assert_match(/header\(s\) Accept-Encoding of/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "leaves out Authorization while the appender sends basic authentication" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "authorization=Bearer%20secret"
+            request = requests(on: new_logged_appender(url: "http://user:pw@localhost:4318")).first
+
+            assert_equal "Basic #{['user:pw'].pack('m0')}", request["Authorization"]
+            assert_equal 1, warnings.size
+            assert_match(/header\(s\) authorization of/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "sends Authorization when the appender does not send basic authentication" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "authorization=Bearer%20ENV"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "Bearer ENV", request["Authorization"]
+            assert_empty warnings
+          end
+
+          it "lets a header given win over the appender's own and the environment's, without a warning" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "accept=env"
+            request = requests(on: new_logged_appender(header: {"Accept" => "given"})).first
+
+            assert_equal "given", request["Accept"]
+            assert_empty warnings
+          end
+
+          it "sends the headers of the environment to a url: given too" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "api-key=abc"
+            request = requests(on: new_appender(url: "http://collector.example.com:4318", header: {})).first
+
+            assert_equal "abc", request["api-key"]
+          end
         end
 
         describe "timeout" do
@@ -905,12 +976,20 @@ module Metric
             assert_in_delta 0.5, new_appender.read_timeout
           end
 
-          it "lets a timeout given win" do
+          it "is not used when only read_timeout: is given, which keeps the default open_timeout" do
             ENV["OTEL_EXPORTER_OTLP_TIMEOUT"] = "2500"
             appender = new_appender(read_timeout: 7)
 
             assert_equal 7, appender.read_timeout
-            assert_in_delta 2.5, appender.open_timeout
+            assert_in_delta 2.0, appender.open_timeout
+          end
+
+          it "is not used when only open_timeout: is given, which keeps the default read_timeout, even for 0" do
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"] = "0"
+            appender = new_appender(open_timeout: 3)
+
+            assert_equal 3, appender.open_timeout
+            assert_in_delta 1.0, appender.read_timeout
           end
 
           it "has no limit for 0" do
@@ -970,6 +1049,30 @@ module Metric
           end
         end
 
+        describe "a value that is not valid UTF-8" do
+          OTEL_ENV.each do |name|
+            it "ignores #{name}, warning once with its name only" do
+              ENV[name] = "secret\xFF=1".b
+              appender  = new_logged_appender
+
+              assert_equal ["Ignoring #{name}: its value is not valid UTF-8"], warnings
+              assert_equal "http://localhost:4318", appender.url
+              assert_in_delta 2.0, appender.open_timeout
+              refute appender.compress
+              refute(appender.header.keys.any? { |key| key.start_with?("secret") })
+              refute(appender.resource_attributes.keys.any? { |key| key.start_with?("secret") })
+            end
+          end
+
+          it "uses the generic variable when the metrics one is not valid UTF-8" do
+            ENV["OTEL_EXPORTER_OTLP_METRICS_TIMEOUT"] = "\xFF".b
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"]         = "500"
+
+            assert_in_delta 0.5, new_logged_appender.read_timeout
+            assert_equal ["Ignoring OTEL_EXPORTER_OTLP_METRICS_TIMEOUT: its value is not valid UTF-8"], warnings
+          end
+        end
+
         describe "resource attributes" do
           it "adds those of OTEL_RESOURCE_ATTRIBUTES, percent-decoded, as Strings" do
             ENV["OTEL_RESOURCE_ATTRIBUTES"] = "service.version=1.2.3, team = a%2Cb%3Dc ,count=2"
@@ -1015,6 +1118,25 @@ module Metric
 
             assert_equal({"stringValue" => "1.2.3"}, resource["service.version"])
             assert_equal({"stringValue" => "given"}, resource["team"])
+          end
+
+          it "leaves out process.pid, so that each process sends its own, warning with its key only" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "process.pid=12345,team=core"
+            appender = new_logged_appender
+
+            refute appender.resource_attributes.key?("process.pid")
+            assert_equal ["Ignoring process.pid in OTEL_RESOURCE_ATTRIBUTES: each process sends its own"], warnings
+            resource = resource_of(appender)
+
+            assert_equal({"intValue" => Process.pid.to_s}, resource["process.pid"])
+            assert_equal({"stringValue" => "core"}, resource["team"])
+          end
+
+          it "keeps the process.pid of resource_attributes:" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "process.pid=1"
+            resource = resource_of(new_logged_appender(resource_attributes: {"process.pid" => 42}))
+
+            assert_equal({"intValue" => "42"}, resource["process.pid"])
           end
 
           it "is ignored as a whole when an entry is malformed, with a warning" do
