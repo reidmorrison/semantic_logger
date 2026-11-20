@@ -34,6 +34,9 @@ module SemanticLogger
     #
     # It reports the records that the Aggregator dropped in each interval (see #report_dropped).
     #
+    # It asks each snapshot to redact the dimensions whose keys are sensitive, when there are
+    # sensitive keys, before any metric appender is given it (see #redact).
+    #
     # Only the main Ractor collects: the processor of any other one drops its metric calls.
     class Collector
       # Seconds the thread waits before it asks the processor again for the interval, when asking failed.
@@ -244,13 +247,25 @@ module SemanticLogger
       end
 
       # Returns [Snapshot|nil] the snapshot collected up to `now`, with Semantic Logger's own metrics
-      # (see InternalMetrics#record), or nil in a signal trap. Each collection of the process runs here,
-      # by the thread or a flush.
+      # (see InternalMetrics#record), its dimensions redacted (see #redact), or nil in a signal trap. Each
+      # collection of the process runs here, by the thread or a flush.
       def collect(now)
         safely { @internal_metrics.record(@aggregator) }
-        @aggregator.collect(now)
+        redact(@aggregator.collect(now))
       rescue ThreadError
         nil
+      end
+
+      # Returns [Snapshot|nil] the snapshot with the value of each dimension whose key is sensitive replaced
+      # (see SemanticLogger.sensitive_keys= and Snapshot#redact), so that no metric appender is given one,
+      # or the snapshot itself without sensitive keys. Once per collection rather than per record, so that
+      # it costs once per series. Returns nil, after reporting it, when redacting fails, rather than
+      # deliver what may hold a sensitive value.
+      def redact(snapshot)
+        redactor = SemanticLogger.redactor
+        return snapshot unless redactor
+
+        safely { snapshot.redact(redactor) }
       end
 
       # Discards what was recorded, and starts a new interval now. In a signal trap, where the

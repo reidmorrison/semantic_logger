@@ -56,6 +56,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   one, and reports a partial success on the internal logger. A 502 or 504 from a proxy in front of
   the receiver may come after the receiver stored the snapshot, which sending it again then counts
   twice.
+- `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
+  appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension
+  whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the
+  process in a metric. It is applied once per interval, as the metrics are collected, so it costs once
+  per series rather than per call; series that differed only by the value of a sensitive dimension are
+  merged into one.
 
 ### Changed
 
