@@ -37,10 +37,10 @@ end
 # Automatically reopen appenders in the child process after a fork.
 # Enabled by default; opt out with `SemanticLogger.reopen_on_fork = false`.
 # Skipped on platforms without `Process._fork` (e.g. JRuby), which cannot fork.
-if Process.respond_to?(:_fork)
-  require "semantic_logger/core_ext/process"
-  Process.singleton_class.prepend(SemanticLogger::CoreExt::Process)
-end
+# Loaded on every platform, since it also answers whether this process is a daemon (see
+# SemanticLogger::CoreExt::Process.daemon?).
+require "semantic_logger/core_ext/process"
+Process.singleton_class.prepend(SemanticLogger::CoreExt::Process) if Process.respond_to?(:_fork)
 
 # json 2.8.0 through 3.0.x warn about each binary String they write as UTF-8. Drop that warning
 # when it comes from Semantic Logger serializing log data, which it writes the same way with

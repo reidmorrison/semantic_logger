@@ -108,12 +108,22 @@ module SemanticLogger
 
       # Hand the snapshot of metrics over to the worker thread, which gives it to the wrapped appender
       # between writes, without waiting for it (see QueueProcessor#hand_over), so that a slow
-      # destination holds up nobody else. What the appender raises is reported, not raised on the
-      # worker thread, since it is no failure to write a log message: it backs off for none.
+      # destination holds up nobody else. What the appender raises is reported, whatever its class,
+      # not raised on the worker thread, since it is no failure to write a log message: it backs off
+      # for none. Except a stack overflow, which is raised, as Appenders#log_metrics raises it, for
+      # the worker thread to hand over to a new one.
+      #
+      # When no worker thread runs, each snapshot handed over is given to the appender on a thread of
+      # its own (see QueueProcessor::Request#abandon), which may run while another one does, or while
+      # a new worker thread flushes, closes or reopens the appender: a metric appender takes each
+      # snapshot, and is flushed, closed and reopened, one call at a time, under a lock of its own
+      # (see Metric::Snapshots).
       def log_metrics(snapshot)
         processor.hand_over do
           appender.log_metrics(snapshot)
-        rescue StandardError => e
+        rescue SystemStackError
+          raise
+        rescue Exception => e
           processor.logger.error("Failed to write metrics to appender: #{name}", e)
         end
         true

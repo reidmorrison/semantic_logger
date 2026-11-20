@@ -48,8 +48,7 @@ module SemanticLogger
 
       # If appender implements #batch, then it should use the batch proxy by default,
       # unless the appender opts out of batching by default (e.g. the HTTP appender).
-      # A metric appender, one with a metrics interval, takes no log entries, so is never batched by default.
-      batch    = true if batch.nil? && batchable_by_default?(appender)
+      batch    = true if batch.nil? && appender.respond_to?(:batch) && appender.batch_by_default?
 
       if batch == true
         refusal = appender.batch_refusal
@@ -83,13 +82,6 @@ module SemanticLogger
       close_created(appender) if created
       raise
     end
-
-    # Whether the appender is batched unless told otherwise: one that implements #batch and opts in (see
-    # Subscriber#batch_by_default?), other than a metric appender (see Subscriber#metrics_interval).
-    def self.batchable_by_default?(appender)
-      appender.metrics_interval.nil? && appender.respond_to?(:batch) && appender.batch_by_default?
-    end
-    private_class_method :batchable_by_default?
 
     # Closes the appender that .build created, since .factory failed after creating it, such as when the appender
     # cannot be batched, and nothing else holds it, yet it may have opened its destination, such as a connection.

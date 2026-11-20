@@ -112,7 +112,7 @@ module SemanticLogger
 
     # Returns [Numeric|nil] the shortest metrics interval of the appenders, or nil when none is a
     # metric appender (see Subscriber#metrics_interval). Takes no lock.
-    def metrics_interval
+    def shortest_metrics_interval
       filter_map(&:metrics_interval).min
     end
 

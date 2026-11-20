@@ -37,6 +37,7 @@ require_relative "in_memory_appender_helper"
 require_relative "backtrace_cleaner_fixtures"
 require_relative "exception_fixtures"
 require_relative "deprecation_check"
+require_relative "metrics_thread_check"
 require "amazing_print"
 
 # Add Semantic Logger helpers for Minitest
