@@ -27,6 +27,11 @@ module Metric
         agent_calls { appender.write_metrics(snapshot) }
       end
 
+      # A snapshot of the interval holding the points.
+      def snapshot_of(*points)
+        SemanticLogger::Metric::Snapshot.new(start_time: start_time, end_time: start_time + 60, points: points)
+      end
+
       # Returns the value given to record_metric for the only histogram written.
       def recorded_value
         calls = written
@@ -45,6 +50,31 @@ module Metric
         assert_equal 10, SemanticLogger::Metric::NewRelic.new(interval: 10).metrics_interval
       end
 
+      {
+        level:     "whatever the log level",
+        filter:    "every metric recorded is written",
+        formatter: "the format of its destination"
+      }.each_pair do |option, replacement|
+        it "refuses #{option}:, which was for the log entries it no longer takes" do
+          error = assert_raises(ArgumentError) { SemanticLogger::Metric::NewRelic.new(option => :info) }
+
+          assert_includes error.message, "#{option}:"
+          assert_includes error.message, replacement
+        end
+      end
+
+      it "refuses a formatter block" do
+        error = assert_raises(ArgumentError) { SemanticLogger::Metric::NewRelic.new(&:name) }
+
+        assert_includes error.message, "formatter block"
+      end
+
+      it "refuses batch: true" do
+        error = assert_raises(ArgumentError) { SemanticLogger::Appender.factory(metric: :new_relic, batch: true) }
+
+        assert_includes error.message, "nothing to batch"
+      end
+
       describe "counters" do
         it "increments by the sum of the amounts" do
           aggregator.record(:counter, "User/authenticated", 1)
@@ -58,6 +88,43 @@ module Metric
           aggregator.record(:counter, "Cart/items", 2)
 
           assert_equal [[:increment_metric, "Custom/Cart/items", 3.5]], written
+        end
+
+        it "increments by a sum beyond the range of a 64-bit Integer as a Float" do
+          aggregator.record(:counter, "Cart/items", 2**62)
+          aggregator.record(:counter, "Cart/items", 2**62)
+
+          assert_equal [[:increment_metric, "Custom/Cart/items", 2.0**63]], written
+        end
+
+        it "leaves out, with a warning, a sum beyond the range of a Float" do
+          point    = SemanticLogger::Metric::Snapshot::Point.new(kind: :counter, name: "Cart/items", value: Float::INFINITY)
+          snapshot = snapshot_of(point)
+          messages = []
+          calls    = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            calls = agent_calls { appender.write_metrics(snapshot) }
+          end
+
+          assert_empty calls
+          assert_equal 1, messages.size
+          assert_includes messages.first, "Custom/Cart/items"
+        end
+
+        it "warns once for each name whose sum is beyond the range of a Float, whatever the intervals" do
+          point    = SemanticLogger::Metric::Snapshot::Point.new(kind: :counter, name: "Cart/items", value: Float::INFINITY)
+          other    = SemanticLogger::Metric::Snapshot::Point.new(kind: :counter, name: "Cart/other", value: Float::NAN)
+          messages = []
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            agent_calls do
+              appender.write_metrics(snapshot_of(point))
+              appender.write_metrics(snapshot_of(point, other))
+            end
+          end
+
+          assert_equal 2, messages.size
+          assert_includes messages.first, "Custom/Cart/items"
+          assert_includes messages.last, "Custom/Cart/other"
         end
 
         it "increments once per name, by the sum of the series of every dimension set" do
@@ -141,12 +208,74 @@ module Metric
           assert_in_delta 14.0, value[:sum_of_squares], 14.0 * 0.1
         end
 
-        it "records a counter and a histogram of the same name each with its own call" do
-          # Names that only the prefix makes the same: the Aggregator keeps one kind per name.
+        it "records a New Relic name with the kind it was first given, when the prefix makes two names one" do
+          # The Aggregator keeps one kind per name, but these are two names until the prefix is added.
           aggregator.record(:counter, "User/login", 1)
           aggregator.record(:histogram, "Custom/User/login", 0.25, unit: "s")
 
-          assert_equal %i[increment_metric record_metric], written.map(&:first).sort
+          assert_equal [[:increment_metric, "Custom/User/login", 1]], written
+        end
+
+        it "records a name with the unit it was first given, when a merged snapshot has another" do
+          first = SemanticLogger::Metric::Aggregator.new(now: start_time)
+          first.record(:histogram, "Upload/size", 2.0, unit: "s")
+          aggregator.record(:histogram, "Upload/size", 1500, unit: "By")
+          snapshot = first.collect(start_time + 30).merge(aggregator.collect(start_time + 60))
+          calls    = agent_calls { appender.write_metrics(snapshot) }
+
+          assert_equal 1, calls.size
+          assert_equal 1, calls.first[2][:count]
+          assert_in_delta 2.0, calls.first[2][:total]
+        end
+
+        it "merges the histograms of a name without changing those of the snapshot" do
+          aggregator.record(:histogram, "Order/value", 1.0, dimensions: {store: "a"})
+          aggregator.record(:histogram, "Order/value", 2.0, dimensions: {store: "b"})
+          aggregator.record(:histogram, "Order/value", 4.0, dimensions: {store: "c"})
+          snapshot = aggregator.collect(start_time + 60)
+          calls    = agent_calls { appender.write_metrics(snapshot) }
+
+          assert_equal 3, calls.first[2][:count]
+          assert_equal([1, 1, 1], snapshot.points.map { |point| point.value.count })
+        end
+
+        it "asks the histogram for its sum of squares" do
+          aggregator.record(:histogram, "Order/value", 3.0)
+          calls = SemanticLogger::Metric::ExponentialHistogram.stub_any_instance(:sum_of_squares, 12.5) { written }
+
+          assert_in_delta 12.5, calls.first[2][:sum_of_squares]
+        end
+
+        it "records nothing for an empty histogram" do
+          empty = SemanticLogger::Metric::ExponentialHistogram.new
+          point = SemanticLogger::Metric::Snapshot::Point.new(kind: :histogram, name: "Order/value", value: empty)
+
+          assert_empty(agent_calls { appender.write_metrics(snapshot_of(point)) })
+        end
+
+        it "records a sum of squares beyond the range of a Float as the largest Float" do
+          aggregator.record(:histogram, "Order/value", 1e200)
+          messages = []
+          value    = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) { value = recorded_value }
+
+          assert_equal 1, value[:count]
+          assert_in_delta 1e200, value[:total], 1e200 * 0.1
+          assert_equal Float::MAX, value[:sum_of_squares]
+          assert_empty messages
+        end
+
+        it "leaves out, with a warning, a histogram whose total is beyond the range of a Float" do
+          aggregator.record(:histogram, "Order/value", Float::MAX)
+          aggregator.record(:histogram, "Order/value", Float::MAX)
+          aggregator.record(:counter, "Orders/placed", 1)
+          messages = []
+          calls    = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) { calls = written }
+
+          assert_equal [[:increment_metric, "Custom/Orders/placed", 1]], calls
+          assert_equal 1, messages.size
+          assert_includes messages.first, "Custom/Order/value"
         end
       end
 
