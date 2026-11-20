@@ -857,9 +857,11 @@ module SemanticLogger
 
   # @formatter:off
   module Metric
+    autoload :Aggregator,           "semantic_logger/metric/aggregator"
     autoload :ExponentialHistogram, "semantic_logger/metric/exponential_histogram"
     autoload :NewRelic,             "semantic_logger/metric/new_relic"
     autoload :Signalfx,             "semantic_logger/metric/signalfx"
+    autoload :Snapshot,             "semantic_logger/metric/snapshot"
     autoload :Statsd,               "semantic_logger/metric/statsd"
   end
 
