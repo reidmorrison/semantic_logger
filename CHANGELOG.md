@@ -79,6 +79,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   together under the name. A line break, or a character that is not ASCII (or an invalid byte), in a metric name is
   sent as `_`, whatever the name's encoding. It takes no log entries, so its `level:`, `filter:`, and `formatter:` options, and a formatter
   block, raise `ArgumentError`, as does `batch: true`.
+- The `:new_relic` metric subscriber records the metrics of each interval (`interval:`, 60 seconds by
+  default) rather than one call per log entry: a counter with one `increment_metric` by the sum of its
+  amounts, and a histogram with one `record_metric` of its count, total, min, max, and sum of squares
+  (estimated from its buckets), durations in seconds. The series of a metric with dimensions are still
+  merged under its name alone. It takes no log entries, so its `level:`, `filter:`, and `formatter:`
+  options, and a formatter block, raise `ArgumentError`, as does `batch: true`; the `prefix:` rule is
+  unchanged. A counter whose sum, or a histogram whose total, is beyond the range of a Float is left
+  out of its interval, with a warning on the internal logger once per name; a sum of squares beyond it
+  is recorded as the largest Float. Semantic Logger's own metrics are recorded
+  only with `internal_metrics: true`.
 
 ## [Unreleased]
 
