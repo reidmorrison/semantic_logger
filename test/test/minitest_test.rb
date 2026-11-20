@@ -128,4 +128,75 @@ class MinitestHelpersTest < Minitest::Test
       end
     end
   end
+
+  class Signup
+    include SemanticLogger::Loggable
+
+    def call(plan)
+      logger.increment("users.signup", dimensions: {plan: plan})
+      logger.time("users.signup.time") { logger.info("Signed up") }
+      logger.record("users.signup.size", 2048, unit: "By")
+    end
+  end
+
+  describe "semantic_logger_metrics" do
+    it "captures every metric call, and returns them" do
+      metrics = semantic_logger_metrics { Signup.new.call("free") }
+
+      assert_equal %w[users.signup users.signup.time users.signup.size], metrics.map(&:name)
+      assert_equal %i[counter histogram histogram], metrics.map(&:kind)
+    end
+
+    it "captures only the supplied class's metric calls" do
+      metrics = semantic_logger_metrics(klass: Signup) do
+        Signup.new.call("free")
+        SemanticLogger["Other"].increment("other")
+      end
+
+      assert_equal %w[users.signup users.signup.time users.signup.size], metrics.map(&:name)
+    end
+
+    it "keeps semantic_logger_events returning the log events only" do
+      events = semantic_logger_events { Signup.new.call("free") }
+
+      assert_equal ["Signed up"], events.map(&:message)
+    end
+  end
+
+  describe "assert_metric" do
+    let(:metrics) { semantic_logger_metrics { Signup.new.call("free") } }
+
+    it "returns the matching metric" do
+      metric = assert_metric(metrics, name: "users.signup", kind: :counter, value: 1, dimensions: {plan: "free"})
+
+      assert_equal "users.signup", metric.name
+    end
+
+    it "matches a Symbol name, a Class, a Range, a Regexp, and :nil" do
+      assert_metric(metrics, name: :"users.signup.time", kind: :histogram, value: Float, unit: "s")
+      assert_metric(metrics, name: /\.size\z/, value: 1024..4096, unit: "By", dimensions: :nil)
+    end
+
+    it "accepts a single metric" do
+      assert_metric(metrics.first, name: "users.signup")
+    end
+
+    it "fails, listing the metrics captured, when none matches" do
+      error = assert_raises(Minitest::Assertion) do
+        assert_metric(metrics, name: "users.signup", value: 2)
+      end
+
+      assert_includes error.message, "No metric matching #{{name: 'users.signup', value: 2}.inspect} was captured"
+      assert_includes error.message, "Captured 3 metric(s)"
+      assert_includes error.message, "users.signup.size"
+    end
+
+    it "fails when nothing was captured" do
+      assert_raises(Minitest::Assertion) { assert_metric([], name: "users.signup") }
+    end
+
+    it "raises ArgumentError for an attribute that a metric does not have" do
+      assert_raises(ArgumentError) { metrics.first.matches?(level: :info) }
+    end
+  end
 end

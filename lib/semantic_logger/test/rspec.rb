@@ -24,6 +24,13 @@ module SemanticLogger
     #   expect { User.new.enable! }.to(
     #     log_semantic_logger_event(level: :info, message: "User enabled")
     #   )
+    #
+    # Likewise for metric calls (`increment`, `time`, and `record`):
+    #
+    #   metrics = capture_semantic_logger_metrics { Signup.new.call(user) }
+    #   expect(metrics).to include(a_semantic_logger_metric(name: "users.signup", kind: :counter, value: 1))
+    #
+    #   expect { Signup.new.call(user) }.to record_semantic_logger_metric(name: "users.signup")
     module RSpec
       # Attributes that may be asserted on a single log event. The keys map
       # directly onto SemanticLogger::Log attributes, except for the
@@ -184,6 +191,133 @@ module SemanticLogger
         def captured_inspect
           @events.map { |event| "  #{event.to_h.inspect}" }.join("\n")
         end
+      end
+
+      # Matches a single SemanticLogger::Test::MetricEvent, a metric call captured
+      # by CaptureLogEvents, against a set of expectations, which it asks the metric
+      # call to match (see MetricEvent#matches?).
+      class MetricMatcher
+        include ::RSpec::Matchers::Composable
+
+        def initialize(**expected)
+          unknown = expected.keys - MetricEvent.members
+          raise ArgumentError, "Unknown metric attribute(s): #{unknown.join(', ')}" unless unknown.empty?
+
+          @expected = expected
+        end
+
+        def matches?(metric)
+          @metric = metric
+          metric.is_a?(MetricEvent) && metric.matches?(**@expected)
+        end
+
+        def description
+          "be a semantic logger metric matching #{@expected.inspect}"
+        end
+
+        def failure_message
+          "expected metric to #{description}.\nMetric: #{metric_inspect}"
+        end
+
+        def failure_message_when_negated
+          "expected metric not to #{description}.\nMetric: #{metric_inspect}"
+        end
+
+        private
+
+        def metric_inspect
+          @metric.is_a?(MetricEvent) ? @metric.to_h.inspect : @metric.inspect
+        end
+      end
+
+      # Matches a block, asserting that it makes at least one metric call that
+      # matches the supplied expectations.
+      class RecordMetricMatcher
+        include ::RSpec::Matchers::Composable
+
+        def initialize(capture, on:, expected:)
+          @capture = capture
+          @on      = on
+          @matcher = MetricMatcher.new(**expected)
+        end
+
+        def matches?(block)
+          @metrics = @capture.call(@on, &block)
+          @metrics.any? { |metric| @matcher.matches?(metric) }
+        end
+
+        def supports_block_expectations?
+          true
+        end
+
+        def description
+          "record a semantic logger metric matching #{@matcher.description}"
+        end
+
+        def failure_message
+          "expected the block to #{description}.\n" \
+            "Captured #{@metrics.size} metric(s):\n#{captured_inspect}"
+        end
+
+        def failure_message_when_negated
+          "expected the block not to #{description}, but it did.\n" \
+            "Captured #{@metrics.size} metric(s):\n#{captured_inspect}"
+        end
+
+        private
+
+        def captured_inspect
+          @metrics.map { |metric| "  #{metric.to_h.inspect}" }.join("\n")
+        end
+      end
+
+      # Returns [Array<SemanticLogger::Test::MetricEvent>] the metric calls
+      # (`increment`, `time`, and `record`) captured whilst running the supplied
+      # block, as they were made, before they are aggregated, whether or not a
+      # metric appender is present.
+      #
+      #   metrics = capture_semantic_logger_metrics { Signup.new.call(user) }
+      #   expect(metrics).to include(a_semantic_logger_metric(name: "users.signup", kind: :counter, value: 1))
+      #
+      # Pass a class to capture only the metric calls made through that class's logger.
+      def capture_semantic_logger_metrics(klass = nil, &block)
+        logger = SemanticLogger::Test::CaptureLogEvents.new
+
+        if klass
+          allow(klass).to receive(:logger).and_return(logger)
+          block.call
+        else
+          stub_processor(logger, &block)
+        end
+
+        logger.metric_events
+      end
+
+      # Matcher for a single captured metric call. An expected value may be :nil,
+      # a Class, a Range, a Regexp, or any value to compare with (see
+      # SemanticLogger::Test::MetricEvent#matches?).
+      #
+      #   expect(metrics.first).to be_a_semantic_logger_metric(name: "users.signup", kind: :counter)
+      def be_a_semantic_logger_metric(**expected)
+        MetricMatcher.new(**expected)
+      end
+
+      # Composable alias, for use inside other matchers:
+      #
+      #   expect(metrics).to include(a_semantic_logger_metric(name: "users.signup"))
+      def a_semantic_logger_metric(**expected)
+        MetricMatcher.new(**expected)
+      end
+
+      # Block matcher asserting that the block makes a matching metric call.
+      #
+      #   expect { Signup.new.call(user) }.to(
+      #     record_semantic_logger_metric(name: "users.signup", kind: :counter, value: 1)
+      #   )
+      #
+      # Pass `on:` to capture only one class's metric calls.
+      def record_semantic_logger_metric(on: nil, **expected)
+        RecordMetricMatcher.new(method(:capture_semantic_logger_metrics), on: on, expected: expected)
       end
 
       # Returns [Array<SemanticLogger::Log>] the log events captured whilst

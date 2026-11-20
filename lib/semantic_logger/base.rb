@@ -140,6 +140,101 @@ module SemanticLogger
     # Backward compatibility
     alias benchmark measure
 
+    # Metrics: increment, time, and record.
+    #
+    # They do not depend on the log level, and log nothing. Once a metric appender is present, such as
+    # `SemanticLogger.add_appender(metric: :statsd)`, each call is aggregated on the calling thread, and
+    # the metric appenders are given what was recorded in each interval. Without one, they return at
+    # once.
+    #
+    # Their dimensions are only the ones given: the tags and named tags, those of a child logger
+    # returned by `#tagged` included, are never added to them, since each new value of a dimension
+    # starts another series.
+    #
+    # Like log calls, they never raise. A metric with a name that is not a non-empty String or Symbol,
+    # a value that is not a finite real Numeric, a negative counter amount, or dimensions that are not
+    # a Hash, is dropped, with a warning on the internal logger once per metric name and problem. A
+    # Symbol name is recorded as a String.
+
+    # Adds `amount` to the counter `name`.
+    #
+    #   logger.increment("users.signup")
+    #   logger.increment("cart.items_added", 3, dimensions: {department: "clothing"})
+    #
+    # Parameters:
+    #   name [String|Symbol]
+    #     Name of the counter.
+    #   amount [Integer|Float]
+    #     Amount to add, zero or more. A negative amount is dropped.
+    #     Default: 1
+    #   dimensions [Hash]
+    #     Dimensions of the series to add it to.
+    #
+    # Returns [true|false] whether it was recorded: false without a metric appender, or when dropped.
+    def increment(name, amount = 1, dimensions: nil)
+      record_metric(:counter, name, amount, unit: nil, dimensions: dimensions)
+    end
+
+    # Records how long the block takes, in seconds, in the histogram `name`, with the unit "s", and
+    # returns the block's result. The time is recorded however the block ends: when it raises, which
+    # is then raised again, and when it returns or breaks out early.
+    #
+    #   logger.time("supplier.add_user") { supplier.add_user(user) }
+    #
+    # Or, without a block, records a duration measured elsewhere, given in milliseconds like the
+    # `duration:` of a log call:
+    #
+    #   logger.time("sidekiq.queue.latency", duration: latency_ms)
+    #
+    # With a block, `duration:` is ignored. Without either, nothing is recorded, as for any duration
+    # that is not a Numeric.
+    #
+    # Parameters:
+    #   name [String|Symbol]
+    #     Name of the histogram.
+    #   duration [Numeric]
+    #     Milliseconds to record, without a block.
+    #   dimensions [Hash]
+    #     Dimensions of the series to record it in.
+    #
+    # Returns the block's result. Without a block, [true|false] whether it was recorded.
+    def time(name, duration: nil, dimensions: nil)
+      unless block_given?
+        seconds = duration.is_a?(Numeric) ? duration.fdiv(1000) : duration
+        return record_metric(:histogram, name, seconds, unit: "s", dimensions: dimensions)
+      end
+
+      start = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+      begin
+        yield
+      ensure
+        seconds = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - start
+        record_metric(:histogram, name, seconds, unit: "s", dimensions: dimensions)
+      end
+    end
+
+    # Records `value` in the histogram `name`, such as a size or a count of items, whose distribution
+    # (count, sum, minimum, maximum, and percentiles) the metric appenders write.
+    #
+    #   logger.record("order.items", order.items.size)
+    #   logger.record("upload.size", file.size, unit: "By")
+    #
+    # Parameters:
+    #   name [String|Symbol]
+    #     Name of the histogram.
+    #   value [Numeric]
+    #     Value to record. May be negative.
+    #   unit [String]
+    #     Unit of the values, in the notation of OpenTelemetry (UCUM), such as "By" for bytes or "s" for
+    #     seconds. Part of the identity of the series, so that values in two units are never combined.
+    #   dimensions [Hash]
+    #     Dimensions of the series to record it in.
+    #
+    # Returns [true|false] whether it was recorded: false without a metric appender, or when dropped.
+    def record(name, value, unit: nil, dimensions: nil)
+      record_metric(:histogram, name, value, unit: unit, dimensions: dimensions)
+    end
+
     # Log a thread backtrace
     def backtrace(thread: Thread.current,
                   level: :warn,
@@ -327,6 +422,16 @@ module SemanticLogger
       else
         self.level = level
       end
+    end
+
+    # Every metric call (see #increment) ends here: asks the processor to record it, which drops it at
+    # once without a metric appender (see Metric::Collector#record).
+    #
+    # kind: :counter or :histogram.
+    #
+    # Returns [true|false] whether it was recorded.
+    def record_metric(kind, name, value, unit:, dimensions:)
+      Logger.processor.record_metric(kind, name, value, unit: unit, dimensions: dimensions)
     end
 
     # Return the level index for fast comparisons, resolved in the same order as `#level`.

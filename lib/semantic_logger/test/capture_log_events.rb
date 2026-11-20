@@ -19,6 +19,15 @@ module SemanticLogger
     #       end
     #     end
     #   end
+    #
+    # It also captures the metric calls (`increment`, `time`, and `record`) in #metric_events, as they
+    # are made, before they are aggregated, whether or not a metric appender is present: when it stands
+    # in for a logger, as above, and when it stands in for the processor, as
+    # SemanticLogger::Test::Minitest#semantic_logger_metrics does.
+    #
+    #   user.stub(:logger, logger) { user.enable! }
+    #   assert metric = logger.metric_events.first
+    #   assert_equal "users.enabled", metric.name
     class CaptureLogEvents < SemanticLogger::Subscriber
       attr_accessor :events
 
@@ -26,12 +35,17 @@ module SemanticLogger
       # stands in for the processor (see #log_metrics).
       attr_reader :snapshots
 
+      # Returns [Array<SemanticLogger::Test::MetricEvent>] the metric calls captured.
+      attr_reader :metric_events
+
       # By default collect all log levels, and collect metric only log events.
       def initialize(level: :trace, metrics: true)
         super
-        @events    = []
-        @snapshots = []
-        @created   = ObjectSpace::WeakMap.new
+        @events           = []
+        @snapshots        = []
+        @metric_events    = []
+        @metric_validator = Metric::Validator.new
+        @created          = ObjectSpace::WeakMap.new
       end
 
       # Standing in for a logger, it runs the `on_log` subscribers for the log events it created, as a
@@ -63,9 +77,25 @@ module SemanticLogger
         Metric::Snapshots::DEFAULT_INTERVAL
       end
 
+      # Captures the metric call, standing in for a logger (see Base#increment) or for the processor
+      # (see Processor#record_metric). Drops the ones that would not be recorded, after warning about
+      # them, as the processor does (see Metric::Validator), so that a test sees just what would be
+      # recorded.
+      #
+      # Returns [true|false] whether it was captured.
+      def record_metric(kind, name, value, unit: nil, dimensions: nil)
+        name = @metric_validator.accept(kind, name, value, dimensions)
+        return false unless name
+
+        @metric_events << MetricEvent.new(kind: kind, name: name, value: value, unit: unit, dimensions: dimensions)
+        true
+      end
+
+      # Discards the log events, snapshots, and metric calls captured.
       def clear
         @events.clear
         @snapshots.clear
+        @metric_events.clear
       end
 
       # Returns [false]: standing in for the processor, it holds no lock, so another thread never

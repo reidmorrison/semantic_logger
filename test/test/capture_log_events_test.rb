@@ -11,6 +11,12 @@ class CaptureLogEventsTest < Minitest::Test
     def disable!
       logger.info(metric: "User/disabled")
     end
+
+    def sign_up!
+      logger.increment(:"users.signup", dimensions: {plan: "free"})
+      logger.time("users.signup.time") { :signed_up }
+      logger.record("users.signup.size", 2048, unit: "By")
+    end
   end
 
   describe "SemanticLogger::Test::CaptureLogEvents" do
@@ -69,6 +75,77 @@ class CaptureLogEventsTest < Minitest::Test
 
       assert_equal %w[first second], capture_logger.events.map(&:message)
       assert_equal %i[info info], capture_logger.events.map(&:level)
+    end
+
+    describe "metric calls" do
+      def assert_captured(metric_events)
+        expected = [
+          [:counter, "users.signup", nil, {plan: "free"}],
+          [:histogram, "users.signup.time", "s", nil],
+          [:histogram, "users.signup.size", "By", nil]
+        ]
+
+        actual = metric_events.map { |metric| [metric.kind, metric.name, metric.unit, metric.dimensions] }
+
+        assert_equal expected, actual
+        assert_equal 1, metric_events[0].value
+        assert_kind_of Float, metric_events[1].value
+        assert_equal 2048, metric_events[2].value
+      end
+
+      it "are captured when it stands in for a logger" do
+        user.stub(:logger, capture_logger) { user.sign_up! }
+
+        assert_captured capture_logger.metric_events
+        assert_empty capture_logger.events
+      end
+
+      it "are captured when it stands in for the processor" do
+        SemanticLogger::Logger.stub(:processor, capture_logger) { user.sign_up! }
+
+        assert_captured capture_logger.metric_events
+      end
+
+      it "are captured without a metric appender, and whatever the level" do
+        capture_logger.level = :fatal
+        capture_logger.increment("users.signup")
+
+        assert_equal ["users.signup"], capture_logger.metric_events.map(&:name)
+      end
+
+      it "are frozen, with a frozen copy of the dimensions" do
+        dimensions = {plan: "free"}
+        capture_logger.increment("users.signup", dimensions: dimensions)
+        metric = capture_logger.metric_events.first
+        dimensions[:plan] = "paid"
+
+        assert_predicate metric, :frozen?
+        assert_predicate metric.dimensions, :frozen?
+        assert_equal({plan: "free"}, metric.dimensions)
+      end
+
+      it "drops the ones that would not be recorded, warning once" do
+        warnings = []
+        capture_logger.logger.stub(:warn, ->(message) { warnings << message }) do
+          SemanticLogger::Logger.stub(:processor, capture_logger) do
+            refute capture_logger.increment("users.signup", -1)
+            refute capture_logger.increment("users.signup", -1)
+            refute capture_logger.record("order.total", Float::NAN)
+          end
+        end
+
+        assert_empty capture_logger.metric_events
+        assert_equal 2, warnings.size
+      end
+
+      it "are cleared with the events" do
+        capture_logger.info("a message")
+        capture_logger.increment("users.signup")
+        capture_logger.clear
+
+        assert_empty capture_logger.events
+        assert_empty capture_logger.metric_events
+      end
     end
 
     describe "on_log subscribers" do

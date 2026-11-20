@@ -3,6 +3,7 @@
 require "semantic_logger/metric/exponential_histogram"
 require "semantic_logger/metric/snapshot"
 require "semantic_logger/metric/aggregator"
+require "semantic_logger/metric/validator"
 
 module SemanticLogger
   module Metric
@@ -13,6 +14,9 @@ module SemanticLogger
     # the metric names whose dropped records it has reported. It collects only while a metric appender
     # is present, one whose #metrics_interval is not nil (see Metric::Snapshots): otherwise #record
     # returns at once, so that a metric call costs nothing without one.
+    #
+    # Before it records a metric, it asks its Validator whether to drop it, such as a negative counter
+    # amount, which warns once on the internal logger.
     #
     # Its thread ticks at the shortest metrics interval of the appenders, which it asks the processor
     # for at each tick (see Metric::ProcessorMethods#shortest_metrics_interval), and hands the snapshot
@@ -36,8 +40,9 @@ module SemanticLogger
       # reported for each.
       REPORTED_CONFLICTS_LIMIT = 1000
 
-      def initialize(aggregator: Aggregator.new)
+      def initialize(aggregator: Aggregator.new, validator: Validator.new)
         @aggregator                  = aggregator
+        @validator                   = validator
         @collecting                  = false
         @thread                      = nil
         @lock                        = Mutex.new
@@ -53,13 +58,15 @@ module SemanticLogger
       # Returns [Thread|nil] the thread that collects at each interval, while it runs.
       def thread = @thread&.alive? ? @thread : nil
 
-      # Records the value (see Aggregator#record) while collecting. Otherwise returns false at once.
-      # Never locks a Mutex in a signal trap, and never raises.
+      # Records the value (see Aggregator#record) while collecting, unless the Validator drops it (see
+      # Validator#accept). Otherwise returns false, at once when not collecting. Never locks a Mutex in a
+      # signal trap, and never raises.
       #
       # In a forked child that was not reopened, such as one forked while SemanticLogger.reopen_on_fork
       # is false, first discards the series inherited from the parent (see #renew_after_fork).
       def record(kind, name, value, unit: nil, dimensions: nil, internal: false)
         return false unless @collecting
+        return false unless (name = @validator.accept(kind, name, value, dimensions))
 
         renew_after_fork unless @pid == ::Process.pid
         @aggregator.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal)

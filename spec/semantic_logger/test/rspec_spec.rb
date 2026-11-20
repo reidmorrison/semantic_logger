@@ -17,6 +17,17 @@ class RSpecMatcherUser
   end
 end
 
+# Sample application class that makes metric calls.
+class RSpecMatcherSignup
+  include SemanticLogger::Loggable
+
+  def call(plan)
+    logger.increment("users.signup", dimensions: {plan: plan})
+    logger.time("users.signup.time") { :signed_up }
+    logger.record("users.signup.size", 2048, unit: "By")
+  end
+end
+
 RSpec.describe SemanticLogger::Test::RSpec do
   let(:user) { RSpecMatcherUser.new }
 
@@ -159,6 +170,94 @@ RSpec.describe SemanticLogger::Test::RSpec do
       expect { user.disable! }.to(
         log_semantic_logger_event(metric: "User/disabled")
       )
+    end
+  end
+
+  describe "#capture_semantic_logger_metrics" do
+    let(:signup) { RSpecMatcherSignup.new }
+
+    it "captures every metric call" do
+      metrics = capture_semantic_logger_metrics { signup.call("free") }
+
+      expect(metrics.map(&:name)).to eq(%w[users.signup users.signup.time users.signup.size])
+    end
+
+    it "captures only the supplied class's metric calls" do
+      metrics = capture_semantic_logger_metrics(RSpecMatcherSignup) do
+        signup.call("free")
+        SemanticLogger["Other"].increment("other")
+      end
+
+      expect(metrics.map(&:name)).to eq(%w[users.signup users.signup.time users.signup.size])
+    end
+
+    it "restores the original processor afterwards" do
+      capture_semantic_logger_metrics { signup.call("free") }
+
+      expect(SemanticLogger::Logger.processor).not_to be_a(SemanticLogger::Test::CaptureLogEvents)
+    end
+  end
+
+  describe "be_a_semantic_logger_metric" do
+    let(:metrics) { capture_semantic_logger_metrics { RSpecMatcherSignup.new.call("free") } }
+
+    it "matches a metric call" do
+      expect(metrics.first).to be_a_semantic_logger_metric(
+        name: "users.signup", kind: :counter, value: 1, dimensions: {plan: "free"}
+      )
+    end
+
+    it "matches a Class, a Range, a Regexp, and :nil" do
+      expect(metrics[1]).to be_a_semantic_logger_metric(name: /time/, kind: :histogram, value: Float, unit: "s")
+      expect(metrics[2]).to be_a_semantic_logger_metric(value: 1024..4096, dimensions: :nil)
+    end
+
+    it "does not match when an attribute differs" do
+      expect(metrics.first).not_to be_a_semantic_logger_metric(name: "users.signup", value: 2)
+    end
+
+    it "explains a mismatch" do
+      matcher = be_a_semantic_logger_metric(value: 2)
+
+      expect(matcher.matches?(metrics.first)).to be(false)
+      expect(matcher.failure_message).to include("users.signup")
+    end
+
+    it "rejects an unknown attribute" do
+      expect { be_a_semantic_logger_metric(level: :info) }.to raise_error(ArgumentError, /level/)
+    end
+  end
+
+  describe "a_semantic_logger_metric" do
+    it "composes inside other matchers" do
+      metrics = capture_semantic_logger_metrics { RSpecMatcherSignup.new.call("free") }
+
+      expect(metrics).to include(a_semantic_logger_metric(name: "users.signup", kind: :counter, value: 1))
+    end
+  end
+
+  describe "record_semantic_logger_metric" do
+    let(:signup) { RSpecMatcherSignup.new }
+
+    it "matches when the block makes a matching metric call" do
+      expect { signup.call("free") }.to record_semantic_logger_metric(name: "users.signup", value: 1)
+    end
+
+    it "scopes capture to a class with on:" do
+      expect { signup.call("free") }.to(
+        record_semantic_logger_metric(on: RSpecMatcherSignup, name: "users.signup.size", unit: "By")
+      )
+    end
+
+    it "does not match when no metric call matches" do
+      expect { signup.call("free") }.not_to record_semantic_logger_metric(name: "users.left")
+    end
+
+    it "lists the metric calls captured when it fails" do
+      matcher = record_semantic_logger_metric(name: "users.left")
+
+      expect(matcher.matches?(-> { signup.call("free") })).to be(false)
+      expect(matcher.failure_message).to include("Captured 3 metric(s)")
     end
   end
 end
