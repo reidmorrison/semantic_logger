@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The HTTP appenders (`:http`, `:elasticsearch_http`, `:splunk_http`, `:loki`, and
+  `metric: :signalfx`) compare header names in any case: a header given with `header:` in another case,
+  such as `"content-type"`, replaces the default one rather than being sent beside it, which Net::HTTP
+  reported as a duplicated header under `-W`; and the token header of `:splunk_http` and
+  `metric: :signalfx` replaces one given in any case.
+
 ## [5.3.0] 2026-11-20
 
 ### Added
