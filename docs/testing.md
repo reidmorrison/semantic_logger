@@ -277,6 +277,29 @@ expect { ApiClient.new.call }.to(
 )
 ~~~
 
+## Metrics
+
+The same helpers capture the metric calls (`increment`, `time`, `record`, and the `metric:` of log
+and `measure_*` calls) as they are made, whether or not a metric appender is present, and whatever
+the log level. `semantic_logger_metrics` and `assert_metric` for Minitest:
+
+~~~ruby
+metrics = semantic_logger_metrics { Signup.new.call(user) }
+assert_metric(metrics, name: "users.signup", kind: :counter, value: 1)
+assert_metric(metrics, name: "supplier.add_user", kind: :histogram, unit: "s", value: Float)
+~~~
+
+`capture_semantic_logger_metrics`, `a_semantic_logger_metric`, `be_a_semantic_logger_metric`, and
+`record_semantic_logger_metric` for RSpec:
+
+~~~ruby
+expect { Signup.new.call(user) }.to(
+  record_semantic_logger_metric(name: "users.signup", kind: :counter, value: 1)
+)
+~~~
+
+See [Test metrics](metrics.html#test-metrics) for the details.
+
 ## Other test frameworks
 
 The same approach works anywhere: replace the logger with a
@@ -304,7 +327,8 @@ SemanticLogger::Logger.stub(:processor, logger) do
 end
 ~~~
 
-Either way, the captured events are available as `logger.events`.
+Either way, the captured events are available as `logger.events`, and the metric calls as
+`logger.metric_events`.
 
 If you add helper methods for another framework like the Minitest ones, a pull request would be
 welcome.

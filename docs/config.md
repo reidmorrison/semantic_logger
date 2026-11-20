@@ -638,7 +638,7 @@ The block returns what the appender writes. For `io:`, `file_name:`, and `logger
 as a String: `io:` and `file_name:` write it followed by a newline, and `logger:` passes it to the
 wrapped logger.
 
-A block works the same way for an appender or metric subscriber named by a Symbol. It takes the
+A block works the same way for an appender named by a Symbol. It takes the
 place of the formatter the appender uses by default, so it returns what that formatter returns: a
 String for the text and JSON destinations, such as `:tcp`, `:udp`, `:http`, and `:syslog` with its
 default local url, and a Hash for those that store a document, such as `:elasticsearch` and
@@ -646,16 +646,17 @@ default local url, and a Hash for those that store a document, such as `:elastic
 builds the whole request body or syslog packet, so a block would have to build it too: use a
 formatter class instead, such as a subclass of `SemanticLogger::Formatters::Loki` or
 `SemanticLogger::Formatters::Syslog` (see [Formatter as a class](#formatter-as-a-class)). A metric
-subscriber formats a metric: `metric: :new_relic` expects the metric name, `metric: :signalfx` the
-JSON body it posts, and `metric: :statsd` does not use a formatter, so it never calls the block.
+appender, such as `metric: :statsd` or `metric: :signalfx`, takes no log entries, so it takes no
+formatter: a block, or `formatter:`, given to one raises an `ArgumentError` (see
+[Metrics](metrics.html#add-a-metric-appender)).
 
 ~~~ruby
 SemanticLogger.add_appender(file_name: "development.log") { |log| "#{log.name} -- #{log.message}" }
 SemanticLogger.add_appender(appender: :tcp, server: "localhost:514") { |log| "#{log.level} #{log.message}" }
 ~~~
 
-A block formats one entry at a time, so it cannot format the single request that `:http`, `:loki`,
-and `metric: :signalfx` send for a whole batch when added with `batch: true`: those need a formatter
+A block formats one entry at a time, so it cannot format the single request that `:http` and
+`:loki` send for a whole batch when added with `batch: true`: those need a formatter
 that implements `#batch(logs, logger)`, such as the one each uses by default. `add_appender` raises
 an `ArgumentError` for a block, or any other formatter that cannot format a batch, given to one of
 them with `batch: true`. Add it without `batch: true` to send one request for each entry, formatted
