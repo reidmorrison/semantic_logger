@@ -366,9 +366,8 @@ class AppenderTest < Minitest::Test
         end
 
         {
-          SemanticLogger::Appender::Http   => {appender: :http, url: "http://localhost:8088/path"},
-          SemanticLogger::Appender::Loki   => {appender: :loki, url: "http://localhost:3100"},
-          SemanticLogger::Metric::Signalfx => {metric: :signalfx, token: "TEST"}
+          SemanticLogger::Appender::Http => {appender: :http, url: "http://localhost:8088/path"},
+          SemanticLogger::Appender::Loki => {appender: :loki, url: "http://localhost:3100"}
         }.each_pair do |appender_class, options|
           it "raises ArgumentError for #{options.values.first.inspect} with batch: true and a formatter block" do
             error = assert_raises(ArgumentError) { factory(**options, batch: true, &block) }
@@ -389,7 +388,7 @@ class AppenderTest < Minitest::Test
                 logs.each { |log| written << format_log(log) }
               end
             end
-            appender = stub_http_start { subclass.new(**options.except(:appender, :metric), &block) }
+            appender = stub_http_start { subclass.new(**options.except(:appender), &block) }
             added    = factory(options.keys.first => appender, batch: true)
             log      = SemanticLogger::Log.new("Test", :info).tap { |entry| entry.message = "hello" }
             added.log(log)
@@ -540,7 +539,7 @@ class AppenderTest < Minitest::Test
 
         it "leaves open an appender instance given as appender: or metric:, which the caller holds" do
           appender = factory(appender: :http, url: "http://localhost:8088/path", &block)
-          metric   = factory(metric: :signalfx, token: "TEST", &block)
+          metric   = factory(metric: :signalfx, token: "TEST")
           closed   = []
           [[:appender, appender], [:metric, metric]].each do |option, instance|
             instance.stub(:close, -> { closed << option }) do

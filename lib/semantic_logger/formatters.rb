@@ -8,7 +8,6 @@ module SemanticLogger
     autoload :Raw,           "semantic_logger/formatters/raw"
     autoload :OneLine,       "semantic_logger/formatters/one_line"
     autoload :OpenTelemetry, "semantic_logger/formatters/open_telemetry"
-    autoload :Signalfx,      "semantic_logger/formatters/signalfx"
     autoload :Syslog,        "semantic_logger/formatters/syslog"
     autoload :Fluentd,       "semantic_logger/formatters/fluentd"
     autoload :Logfmt,        "semantic_logger/formatters/logfmt"
