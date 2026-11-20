@@ -34,6 +34,16 @@ module SemanticLogger
       def internal_metrics?
         appenders.internal_metrics?
       end
+
+      # Yields each queue of the pipeline, by the object that owns it, which keeps its counts for as long
+      # as it lives, with its name and its cumulative counts (see Subscriber#queue_log_counts): first the main
+      # queue, owned by this processor, whose name is nil, then that of each appender with a queue of its
+      # own (see Appenders#each_queue_log_counts). Takes no lock. Read for Semantic Logger's own metrics (see
+      # Metric::InternalMetrics).
+      def each_queue_log_counts(&)
+        yield self, nil, queue_log_counts
+        appenders.each_queue_log_counts(&)
+      end
     end
   end
 end

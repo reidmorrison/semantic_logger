@@ -122,6 +122,15 @@ module SemanticLogger
       any?(&:internal_metrics?)
     end
 
+    # Yields each appender with a queue of its own, added with async: true or in batches, with its name
+    # and the cumulative counts of its queue (see Subscriber#queue_log_counts). Takes no lock.
+    def each_queue_log_counts
+      each do |appender|
+        counts = appender.queue_log_counts
+        yield appender, appender.name, counts if counts
+      end
+    end
+
     # Flush every appender. An appender that fails is reported, and the others are still flushed.
     #
     # While the process exits, an appender that is skipped (see #process_exiting=) is first reported,

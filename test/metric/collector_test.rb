@@ -4,8 +4,8 @@ require_relative "../forked_child_helper"
 
 module Metric
   class CollectorTest < Minitest::Test
-    # Stands in for the processor of a collector: answers the metrics interval it is given, and keeps
-    # the snapshots it is given.
+    # Stands in for the processor of a collector: answers the metrics interval it is given, that no
+    # metric appender writes Semantic Logger's own metrics, and keeps the snapshots it is given.
     class FakeProcessor
       attr_accessor :shortest_metrics_interval
       attr_reader :snapshots, :logger
@@ -19,6 +19,8 @@ module Metric
       def log_metrics(snapshot)
         @snapshots << snapshot
       end
+
+      def internal_metrics? = false
     end
 
     describe SemanticLogger::Metric::Collector do
@@ -355,6 +357,24 @@ module Metric
 
             assert_equal ["after"], processor.snapshots.pop(timeout: 0).points.map(&:name)
           end
+        end
+
+        it "has its own metrics counted afresh when collecting starts again, not while it goes on" do
+          internal  = SemanticLogger::Metric::InternalMetrics.new
+          collector = SemanticLogger::Metric::Collector.new(internal_metrics: internal)
+          restarts  = []
+          internal.stub(:baseline, ->(restart: false) { restarts << restart }) do
+            with_processor(collector: collector) do
+              collector.start
+              collector.start
+              processor.shortest_metrics_interval = nil
+              collector.check
+              processor.shortest_metrics_interval = 60
+              collector.start
+            end
+          end
+
+          assert_equal [true, false, true], restarts
         end
 
         it "stops collecting at a tick that finds no interval, and collects again once started" do

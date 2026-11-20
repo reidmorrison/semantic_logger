@@ -87,6 +87,14 @@ module SemanticLogger
       false
     end
 
+    # Returns [Hash|nil] the cumulative counts of the log entries that this appender's own queue has
+    # finished with (see Appender::Async#queue_log_counts), or nil for an appender without a queue of its own,
+    # which the main queue writes to. Read for Semantic Logger's own metrics (see
+    # Metric::InternalMetrics).
+    def queue_log_counts
+      nil
+    end
+
     # The console stream this appender writes to, if any.
     # Returns one of :stdout, :stderr, or nil when not writing to a console stream.
     def console_stream

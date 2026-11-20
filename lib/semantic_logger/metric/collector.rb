@@ -98,19 +98,21 @@ module SemanticLogger
       # interval now, rather than the one it was waiting for.
       #
       # Recording starts with a new interval, without what was recorded before collecting stopped. Semantic
-      # Logger's own metrics are counted from now on, when the appender writes them and none did before
-      # (see InternalMetrics#baseline).
+      # Logger's own metrics are counted from now on, when the appender writes them and none did before,
+      # forgetting any counts read before collecting stopped (see InternalMetrics#baseline).
       #
       # While already collecting, it does not start a new interval: the appender added is given the
       # snapshot of the current interval at its end, which holds what was recorded since it started,
       # before the appender was added.
       def start
+        restarted = false
         exclusively do
-          restart_interval unless @collecting
+          restarted = !@collecting
+          restart_interval if restarted
           @collecting = true
           spawn unless @thread&.alive?
         end
-        safely { @internal_metrics.baseline }
+        safely { @internal_metrics.baseline(restart: restarted) }
         wake
         true
       end
@@ -119,7 +121,11 @@ module SemanticLogger
       # appender was removed, or the appenders closed: when there is none, it stops collecting at once,
       # and its thread ends (see #interval_or_stop). Wakes the thread up either way, so that it ticks at
       # the interval now. When asking fails, it carries on collecting.
+      #
+      # First, once no metric appender writes Semantic Logger's own metrics, its InternalMetrics forget
+      # the counts they read (see InternalMetrics#check).
       def check
+        safely { @internal_metrics.check }
         return unless @collecting
 
         safely { interval_or_stop }
@@ -205,7 +211,7 @@ module SemanticLogger
       # the lock and queue inherited from the parent, which a thread of the parent may have held, and
       # forgets the parent's thread. Replaces the Aggregator rather than reset it, which locks its
       # Mutex, so that it takes no lock. Replaces its InternalMetrics too (see InternalMetrics#for_child),
-      # keeping the totals they read in a child started by Process.daemon.
+      # keeping the counts they read in a child started by Process.daemon.
       #
       # The pid is changed last, so that another thread of the child that checks it meanwhile renews
       # too, rather than record into the parent's Aggregator. Two threads of the child that renew at
