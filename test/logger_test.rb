@@ -392,88 +392,29 @@ class LoggerTest < Minitest::Test
     end
 
     describe "a negative metric_amount" do
-      # The deprecation is reported once per process, so each test starts as if it had not been yet.
-      before { SemanticLogger::Log.instance_variable_set(:@negative_metric_amount_reported, nil) }
-      after { SemanticLogger::Log.instance_variable_set(:@negative_metric_amount_reported, nil) }
-
-      it "is still logged, with a deprecation warning at the line of the log call" do
-        line = __LINE__ + 2
-        assert_deprecated(/#{Regexp.escape(__FILE__)}:#{line}: warning: .*negative metric_amount is deprecated/) do
-          logger.info("Item removed", metric: "cart/items", metric_amount: -1)
-        end
-
-        assert log = logger.events.last
-        assert_equal "cart/items", log.metric
-        assert_equal(-1, log.metric_amount)
+      # Warnings about dropped metrics go to the internal logger.
+      def warnings_of(&)
+        warnings = []
+        SemanticLogger::Logger.processor.logger.stub(:warn, ->(message) { warnings << message }, &)
+        warnings
       end
 
-      it "is reported for a metric-only entry" do
-        assert_deprecated(/negative metric_amount is deprecated/) do
-          logger.info(metric: "cart/items", metric_amount: -5)
+      it "is still logged with its entry, but its metric is dropped with one warning" do
+        warnings = warnings_of do
+          logger.info("Item removed", metric: "logger_test/negative", metric_amount: -1)
+          logger.info(metric: "logger_test/negative", metric_amount: -5)
         end
 
-        assert_equal(-5, logger.events.last.metric_amount)
-      end
-
-      it "is reported for a measure call" do
-        assert_deprecated(/negative metric_amount is deprecated/) do
-          logger.measure_info("Item removed", metric: "cart/items", metric_amount: -2) { :done }
-        end
-
-        assert_equal(-2, logger.events.last.metric_amount)
-      end
-
-      it "is not reported without a metric, and is still reported for a later one with a metric" do
-        refute_deprecated { logger.info("Balance", metric_amount: -10) }
-
-        assert_deprecated(/negative metric_amount is deprecated/) do
-          logger.info(metric: "cart/items", metric_amount: -1)
-        end
-      end
-
-      it "is reported for a Hash returned by the block" do
-        assert_deprecated(/negative metric_amount is deprecated/) do
-          logger.info("Item removed") { {metric: "cart/items", metric_amount: -3} }
-        end
-
-        assert_equal(-3, logger.events.last.metric_amount)
-      end
-
-      it "is reported only once, however many log calls give one" do
-        _, warnings = deprecations_of { 3.times { logger.info(metric: "cart/items", metric_amount: -1) } }
-
+        assert_equal([-1, -5], logger.events.map(&:metric_amount))
+        assert_equal(["logger_test/negative"] * 2, logger.events.map(&:metric))
+        assert_empty logger.metric_events
         assert_equal 1, warnings.size
-        assert_equal 3, logger.events.size
+        assert_includes warnings.first, 'Dropped counter "logger_test/negative"'
       end
 
-      it "is reported once deprecation warnings are turned on" do
-        enabled              = Warning[:deprecated]
-        Warning[:deprecated] = false
-        logger.info(metric: "cart/items", metric_amount: -1)
-        Warning[:deprecated] = enabled
-
-        assert_deprecated(/negative metric_amount is deprecated/) do
-          logger.info(metric: "cart/items", metric_amount: -1)
-        end
-      ensure
-        Warning[:deprecated] = enabled
-      end
-
-      it "is not reported for zero or a positive amount" do
+      it "is not reported as deprecated" do
         refute_deprecated do
-          logger.info(metric: "cart/items", metric_amount: 0)
-          logger.info(metric: "cart/items", metric_amount: 0.0)
-          logger.info(metric: "cart/items", metric_amount: 2)
-          logger.info(metric: "cart/items")
-        end
-
-        assert_equal 4, logger.events.size
-      end
-
-      it "is not reported for an amount that is not a real number" do
-        refute_deprecated do
-          logger.backtrace(metric: "cart/items", metric_amount: "-1")
-          logger.info(metric: "cart/items", metric_amount: -Float::INFINITY)
+          warnings_of { logger.info(metric: "logger_test/negative", metric_amount: -1) }
         end
       end
     end

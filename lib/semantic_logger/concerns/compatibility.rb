@@ -44,6 +44,8 @@ module SemanticLogger
           log_internal(level, index, message, progname, &)
           true
         else
+          # Below the level, its metric is recorded as by the level methods (see Base#info).
+          record_metric_below_level(message, progname, nil)
           false
         end
       end

@@ -25,6 +25,18 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   matchers `be_a_semantic_logger_metric` and `a_semantic_logger_metric`, and the block matcher
   `record_semantic_logger_metric`.
 
+### Changed
+
+- Once a metric appender is present, the `metric:` of a log call, a `measure_*` call, or `backtrace`
+  is recorded at every level, and whether or not its `min_duration:` is met: as a histogram of its
+  `duration:` in seconds when it has one, otherwise as a counter of its `metric_amount:` (1 by
+  default), with its `dimensions:`. Below the level, a `measure_*` call with a `metric:` times its
+  block. The log entry itself still follows the log level, and is written as before. Without a metric
+  appender, nothing changes. `SemanticLogger::Test::CaptureLogEvents` captures these metrics too.
+- A negative `metric_amount` with a `metric:` is no longer reported as deprecated: the log entry is
+  still written with it, but its metric is dropped, with a warning on the internal logger once per
+  metric name.
+
 ## [Unreleased]
 
 ### Fixed

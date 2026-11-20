@@ -14,6 +14,13 @@ module SemanticLogger
         Metric.collector.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal)
       end
 
+      # Returns [true|false] whether the collector of the process collects the metrics recorded, while a
+      # metric appender is present (see Metric::Collector#collecting?). Asked by a log call that has a
+      # metric, before it reads it (see Base#collecting_metrics?).
+      def collecting_metrics?
+        Metric.collector.collecting?
+      end
+
       # Returns [Numeric|nil] the shortest metrics interval of the appenders, or nil when none is a
       # metric appender (see Appenders#shortest_metrics_interval). Takes no lock. The collector asks it
       # at each tick, and stops collecting once it is nil (see Metric::Collector). Named apart from an
