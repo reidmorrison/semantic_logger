@@ -4,6 +4,7 @@ require "semantic_logger/metric/exponential_histogram"
 require "semantic_logger/metric/snapshot"
 require "semantic_logger/metric/aggregator"
 require "semantic_logger/metric/validator"
+require "semantic_logger/metric/internal_metrics"
 
 module SemanticLogger
   module Metric
@@ -17,6 +18,9 @@ module SemanticLogger
     #
     # Before it records a metric, it asks its Validator whether to drop it, such as a negative counter
     # amount, which warns once on the internal logger.
+    #
+    # At each collection it first asks its InternalMetrics to record Semantic Logger's own metrics,
+    # which they do only while a metric appender writes them.
     #
     # Its thread ticks at the shortest metrics interval of the appenders, which it asks the processor
     # for at each tick (see Metric::ProcessorMethods#shortest_metrics_interval), and hands the snapshot
@@ -40,9 +44,10 @@ module SemanticLogger
       # reported for each.
       REPORTED_CONFLICTS_LIMIT = 1000
 
-      def initialize(aggregator: Aggregator.new, validator: Validator.new)
+      def initialize(aggregator: Aggregator.new, validator: Validator.new, internal_metrics: InternalMetrics.new)
         @aggregator                  = aggregator
         @validator                   = validator
+        @internal_metrics            = internal_metrics
         @collecting                  = false
         @thread                      = nil
         @lock                        = Mutex.new
@@ -92,7 +97,9 @@ module SemanticLogger
       # appender was added. Wakes the thread up, so that it starts the next interval on the shortest
       # interval now, rather than the one it was waiting for.
       #
-      # Recording starts with a new interval, without what was recorded before collecting stopped.
+      # Recording starts with a new interval, without what was recorded before collecting stopped. Semantic
+      # Logger's own metrics are counted from now on, when the appender writes them and none did before
+      # (see InternalMetrics#baseline).
       #
       # While already collecting, it does not start a new interval: the appender added is given the
       # snapshot of the current interval at its end, which holds what was recorded since it started,
@@ -103,6 +110,7 @@ module SemanticLogger
           @collecting = true
           spawn unless @thread&.alive?
         end
+        safely { @internal_metrics.baseline }
         wake
         true
       end
@@ -174,7 +182,8 @@ module SemanticLogger
 
       # Called by SemanticLogger.reopen. In a forked child, discards the series inherited from the
       # parent, which the parent delivers itself, unless the child was started by Process.daemon (see
-      # CoreExt::Process.daemon?), and starts a thread of its own while collecting. In the same process,
+      # CoreExt::Process.daemon?), and likewise counts Semantic Logger's own metrics from now on (see
+      # InternalMetrics#for_child), and starts a thread of its own while collecting. In the same process,
       # starts the thread again while collecting, when it has ended.
       #
       # Takes no lock, so that it can be called in a signal trap, such as one that forks.
@@ -195,7 +204,8 @@ module SemanticLogger
       # In a forked child: replaces the Aggregator, unless the child was started by Process.daemon, and
       # the lock and queue inherited from the parent, which a thread of the parent may have held, and
       # forgets the parent's thread. Replaces the Aggregator rather than reset it, which locks its
-      # Mutex, so that it takes no lock.
+      # Mutex, so that it takes no lock. Replaces its InternalMetrics too (see InternalMetrics#for_child),
+      # keeping the totals they read in a child started by Process.daemon.
       #
       # The pid is changed last, so that another thread of the child that checks it meanwhile renews
       # too, rather than record into the parent's Aggregator. Two threads of the child that renew at
@@ -203,16 +213,20 @@ module SemanticLogger
       # second replaces it is lost: a tiny race, only in the first moments of a child that was not
       # reopened, which is accepted rather than take a lock here, where none can be taken in a trap.
       def renew_after_fork
-        @aggregator = new_aggregator unless CoreExt::Process.daemon?
-        @lock       = Mutex.new
-        @wakeup     = Thread::Queue.new
-        @thread     = nil
-        @pid        = ::Process.pid
+        kept              = CoreExt::Process.daemon?
+        @aggregator       = new_aggregator unless kept
+        @internal_metrics = safely(@internal_metrics) { @internal_metrics.for_child(keep: kept) }
+        @lock             = Mutex.new
+        @wakeup           = Thread::Queue.new
+        @thread           = nil
+        @pid              = ::Process.pid
       end
 
-      # Returns [Snapshot|nil] the snapshot collected up to `now`, or nil in a signal trap. Each collection
-      # of the process runs here, by the thread or a flush.
+      # Returns [Snapshot|nil] the snapshot collected up to `now`, with Semantic Logger's own metrics
+      # (see InternalMetrics#record), or nil in a signal trap. Each collection of the process runs here,
+      # by the thread or a flush.
       def collect(now)
+        safely { @internal_metrics.record(@aggregator) }
         @aggregator.collect(now)
       rescue ThreadError
         nil

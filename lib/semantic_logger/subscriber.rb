@@ -80,6 +80,13 @@ module SemanticLogger
       nil
     end
 
+    # Returns [true|false] whether this appender writes Semantic Logger's own metrics (see
+    # Metric::InternalMetrics), which only a metric appender added with `internal_metrics: true` does
+    # (see Metric::Snapshots).
+    def internal_metrics?
+      false
+    end
+
     # The console stream this appender writes to, if any.
     # Returns one of :stdout, :stderr, or nil when not writing to a console stream.
     def console_stream

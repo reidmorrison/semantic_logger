@@ -28,6 +28,12 @@ module SemanticLogger
       def shortest_metrics_interval
         appenders.shortest_metrics_interval
       end
+
+      # Returns [true|false] whether any appender writes Semantic Logger's own metrics (see
+      # Appenders#internal_metrics?). Takes no lock.
+      def internal_metrics?
+        appenders.internal_metrics?
+      end
     end
   end
 end

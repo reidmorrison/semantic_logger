@@ -24,6 +24,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   unit:, dimensions:)` asserts that one of them matches. RSpec: `capture_semantic_logger_metrics`, the
   matchers `be_a_semantic_logger_metric` and `a_semantic_logger_metric`, and the block matcher
   `record_semantic_logger_metric`.
+- Semantic Logger's own metrics, for a metric appender added with `internal_metrics: true`: the counter
+  `semantic_logger.log.processed` (unit `{log_record}`) counts the log entries that each queue has
+  finished with in each interval, with the dimension `appender` (`"main"` for the main queue, otherwise
+  the name of an appender added with `async: true` or in batches, as `"<name>#2"` for a second one with
+  the same name) and, for the entries dropped because a queue was full or discarded because they could
+  not be written, `error.type` set to `"dropped"` or `"failed"`, as OpenTelemetry counts the log records
+  of its own processors. They are read from `SemanticLogger.stats` at each collection, only while a
+  metric appender writes them, so logging pays nothing for them. Metric appenders without the option
+  never see them.
 
 ### Changed
 

@@ -116,6 +116,12 @@ module SemanticLogger
       filter_map(&:metrics_interval).min
     end
 
+    # Returns [true|false] whether any appender writes Semantic Logger's own metrics (see
+    # Subscriber#internal_metrics?), which are then recorded (see Metric::InternalMetrics). Takes no lock.
+    def internal_metrics?
+      any?(&:internal_metrics?)
+    end
+
     # Flush every appender. An appender that fails is reported, and the others are still flushed.
     #
     # While the process exits, an appender that is skipped (see #process_exiting=) is first reported,
