@@ -139,7 +139,9 @@ module SemanticLogger
       #     Password for basic Authentication.
       #
       #   header: [Hash]
-      #     Custom HTTP headers to send with each request.
+      #     Custom HTTP headers to send with each request. Each one replaces the default header of the
+      #     same name, compared in any case, such as "content-type" for Content-Type. A header set later
+      #     through #header, or written to it directly by a subclass, is not compared in any case.
       #     Default: {} ( do not send any custom headers)
       #     Example: {"Authorization" => "Bearer BEARER_TOKEN"}
       #
@@ -215,8 +217,9 @@ module SemanticLogger
           "Content-Type" => "application/json",
           "Connection"   => "keep-alive",
           "Keep-Alive"   => "300"
-        }.merge(header)
-        @header["Content-Encoding"] = "gzip" if @compress
+        }
+        header&.each { |name, value| replace_header(name, value) }
+        replace_header("Content-Encoding", "gzip") if @compress
 
         uri     = parse_url(@url)
         @server = uri.host
@@ -378,6 +381,15 @@ module SemanticLogger
       end
 
       private
+
+      # Sets the header of that name, replacing one whose name differs from it only in case, since HTTP
+      # header names are case-insensitive: otherwise both would be kept, and Net::HTTP would send only
+      # one of them, reporting the other as duplicated under -W. The name is kept as given, a String or
+      # a Symbol.
+      def replace_header(name, value)
+        @header.delete_if { |existing, _value| existing.to_s.casecmp?(name.to_s) }
+        @header[name] = value
+      end
 
       # Returns [Net::HTTP] a new connection, not yet started, after making it the appender's. Records
       # the process that built it, which owns its connection (see #reopen).

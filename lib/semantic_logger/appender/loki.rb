@@ -46,8 +46,9 @@ module SemanticLogger
       #     Default: 'loki/api/v1/push'
       #
       #   header: [Hash]
-      #     HTTP headers to send with every request, such as X-Scope-OrgID, merged over the
-      #     headers of the HTTP appender, whose Content-Type is already application/json.
+      #     HTTP headers to send with every request, such as X-Scope-OrgID, each replacing the header of
+      #     the HTTP appender with the same name, compared in any case, whose Content-Type is already
+      #     application/json.
       #     Default: {'Content-Type' => 'application/json'}
       #
       #   formatter: [Object|Proc|Symbol|Hash]

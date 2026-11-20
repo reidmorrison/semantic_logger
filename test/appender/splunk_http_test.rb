@@ -80,6 +80,18 @@ module Appender
         end
       end
 
+      it "sends its token as the only Authorization header, over one given in another case" do
+        appender = stub_http_start do
+          SemanticLogger::Appender::SplunkHttp.new(
+            url: "http://localhost:8088/path", token: "token", header: {"authorization" => "Bearer other"}
+          )
+        end
+
+        matching = appender.header.select { |name, _| name.casecmp?("authorization") }
+
+        assert_equal({"Authorization" => "Splunk token"}, matching)
+      end
+
       describe "batch: true" do
         it "can be batched with its default formatter, which is the appender itself" do
           assert_same appender, appender.formatter

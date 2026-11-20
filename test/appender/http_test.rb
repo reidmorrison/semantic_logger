@@ -974,6 +974,89 @@ module Appender
         end
       end
 
+      describe "headers" do
+        it "replaces a default header with one given in another case, keeping only the one given" do
+          stub_http_start do
+            appender = SemanticLogger::Appender::Http.new(
+              url:    "http://localhost:8088/path",
+              header: {"content-type" => "application/x-ndjson", "accept" => "*/*"}
+            )
+
+            assert_equal "application/x-ndjson", appender.header["content-type"]
+            assert_equal "*/*", appender.header["accept"]
+            refute appender.header.key?("Content-Type")
+            refute appender.header.key?("Accept")
+            assert_equal "keep-alive", appender.header["Connection"]
+          end
+        end
+
+        it "keeps the name of a header as given, such as a Symbol" do
+          stub_http_start do
+            appender = SemanticLogger::Appender::Http.new(url:    "http://localhost:8088/path",
+                                                          header: {"content-type": "text/plain"})
+
+            assert_equal "text/plain", appender.header[:"content-type"]
+            refute appender.header.key?("Content-Type")
+          end
+        end
+
+        it "sends only its own headers when header: is nil" do
+          stub_http_start do
+            appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", header: nil)
+
+            assert_equal "application/json", appender.header["Content-Type"]
+          end
+        end
+
+        it "keeps one of the headers given in several cases, the last one" do
+          stub_http_start do
+            appender = SemanticLogger::Appender::Http.new(
+              url:    "http://localhost:8088/path",
+              header: {"X-Token" => "first", "x-token" => "last"}
+            )
+
+            assert_equal({"x-token" => "last"}, appender.header.select { |name, _| name.casecmp?("x-token") })
+          end
+        end
+
+        it "sets the Content-Encoding of compressed requests over one given in another case" do
+          stub_http_start do
+            appender = SemanticLogger::Appender::Http.new(
+              url:      "http://localhost:8088/path",
+              compress: true,
+              header:   {"content-encoding" => "deflate"}
+            )
+
+            matching = appender.header.select { |name, _| name.casecmp?("content-encoding") }
+
+            assert_equal({"Content-Encoding" => "gzip"}, matching)
+          end
+        end
+
+        it "sends a header given in another case without a duplicated header warning" do
+          verbose = $VERBOSE
+          stub_http_start do
+            request  = nil
+            appender = SemanticLogger::Appender::Http.new(url:    "http://localhost:8088/path",
+                                                          header: {"content-type" => "text/plain"})
+            $VERBOSE = true
+            _out, err = capture_io do
+              appender.http.stub(:request, lambda { |r|
+                request = r
+                http_success
+              }) do
+                appender.info(log_message)
+              end
+            end
+
+            refute_match(/duplicated HTTP header/, err)
+            assert_equal "text/plain", request["Content-Type"]
+          ensure
+            $VERBOSE = verbose
+          end
+        end
+      end
+
       # We need to use a valid address that doesn't resolve to a localhost
       # address in order to check the proxy.  Net::HTTP uses URI::Generic#find_proxy
       # to determine the proxy to use, which will return nil if the hostname resolves
