@@ -2147,7 +2147,7 @@ destination can keep a different subset of the logs in a different format:
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. A [block given to `add_appender`](config.html#formatter-as-a-block-or-proc) takes its place. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
-| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`, which default to `true` until v6, and warn when it is not supplied. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
+| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`, which default to `true`, which a later v6 release changes, and warn when it is not supplied. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
 
 For example, write only warnings and above to a file, formatted as JSON:
 
@@ -2538,7 +2538,8 @@ SemanticLogger.add_appender(
 
 The query is applied after the request path, so it also works for the appenders built on top of the
 HTTP appender (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:otlp` and `:signalfx`
-metric appenders), each of which appends its own path to the url:
+metric appenders), each of which appends its own path to the url. (`:otlp` appends `/v1/metrics`
+only to `url:`; it posts to an `endpoint:` as it is.) For example:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -2741,7 +2742,7 @@ a lookup failed, the IPv6 addresses are looked up after any failure.
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it sends them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
 
 Customize the message with a formatter:
 
@@ -3487,7 +3488,7 @@ SemanticLogger.add_appender(
 
 Pass `metrics: true` to also publish metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it publishes them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
 
 ### RabbitMQ (AMQP)
 
@@ -3506,7 +3507,7 @@ SemanticLogger.add_appender(
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it sends them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
 
 When it is reopened, such as with `SemanticLogger.reopen(force: true)`, it connects to RabbitMQ again,
 publishes the next entries on a new channel, and closes the connection it replaced. When it cannot
@@ -3700,7 +3701,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`payload?`|`true`/`false`|Whether the event carries a non-empty payload.|
 |`dimensions?`|`true`/`false`|Whether the event has a metric with dimensions, a `Hash` that is not empty. The formatters write the dimensions only then.|
 |`payload_to_s`|`String` or `nil`|The payload rendered with `inspect`, or `nil` when absent.|
-|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Its metric is recorded for the metric appenders, which take no log entries; log appenders leave the entry out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp` until v6. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
+|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Its metric is recorded for the metric appenders, which take no log entries; log appenders leave the entry out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp`, which a later v6 release changes. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
 |`duration_to_s`|`String` or `nil`|The duration in milliseconds as a short string, for example `"12ms"`. `nil` when there is no duration.|
 |`duration_human`|`String` or `nil`|The duration in human readable form, scaling up to seconds, minutes, hours, or days as needed.|
 |`level_to_s`|`String`|The level as a single upper-case character, for example `"I"` for `:info`.|
@@ -4117,7 +4118,9 @@ SemanticLogger.add_appender(
 ~~~
 
 Each snapshot is posted as one `ExportMetricsServiceRequest` to `<url>/v1/metrics`: counters as
-monotonic sums, and histograms as base-2 exponential histograms, both with delta temporality. The
+monotonic sums, and histograms as base-2 exponential histograms, both with delta temporality. A
+histogram that recorded a negative value is sent without its sum, as OTLP asks, since a receiver takes
+the sum as one that only grows. The
 instrumentation scope is `SemanticLogger`, with the gem's version. Each kind, name, and unit is sent
 as one OTLP metric, with a data point for each of its series, and Semantic Logger's own metrics are
 kept apart from the application's. A snapshot that merges several intervals, during an outage, may
@@ -4131,10 +4134,14 @@ hold one name in two units: each is sent as a metric of its own.
 | `host:` | The `host.name` of the resource. Default: `SemanticLogger.host`. |
 | `environment:` | The `deployment.environment.name` of the resource, left out when there is none. Default: `SemanticLogger.environment`. |
 | `resource_attributes:` | More attributes of the resource, which replace those above with the same key. |
-| `header:`, `compress:`, `ssl:`, `proxy_url:`, `open_timeout:`, `read_timeout:`, ... | The options of the [HTTP appender](appenders.html#http). |
+| `header:`, `compress:`, `ssl:`, `proxy_url:`, `open_timeout:`, `read_timeout:`, ... | The options of the [HTTP appender](appenders.html#https). |
 
 Every request also has the `process.pid` of the process that sends it, so that the deltas of each
 process, such as the forked workers of one application on one host, are kept apart.
+
+It connects to the receiver when it is added, as every appender built on the HTTP appender does, so
+`add_appender` raises, such as with `Errno::ECONNREFUSED`, while the receiver cannot be reached.
+Once it is added, a snapshot that could not be sent follows [Outages](#intervals-flushes-and-outages).
 
 Of the [OpenTelemetry exporter environment variables](https://opentelemetry.io/docs/specs/otel/protocol/exporter/),
 it reads `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, and
@@ -4274,8 +4281,10 @@ merged, since `a/b` is then sent as `Application`.)
 A value beyond the range of a Float, such as the sum of a histogram of huge values, is left out,
 with a warning. Each of these warnings is made once per metric name, on the internal logger.
 
-A snapshot that the server asks to send again later (408, 429, or 503), or that could not reach
-it, is sent with the next one (see [Outages](#intervals-flushes-and-outages)).
+It connects to the ingest url when it is added, as every appender built on the HTTP appender does,
+so `add_appender` raises, such as with `Errno::ECONNREFUSED`, while it cannot be reached. Once it is
+added, a snapshot that the server asks to send again later (408, 429, or 503), or that could not
+reach it, is sent with the next one (see [Outages](#intervals-flushes-and-outages)).
 
 ### Summary log entries
 
@@ -4371,9 +4380,9 @@ class MyMetrics < SemanticLogger::Subscriber
     exception.is_a?(MyClient::Unavailable)
   end
 
+  # Writes the snapshots it holds first, with super, then flushes the client that they were given to.
   def flush
-    @client.flush
-    super
+    super.tap { @client.flush }
   end
 end
 
@@ -4382,7 +4391,10 @@ SemanticLogger.add_appender(metric: MyMetrics.new(client: client, interval: 10))
 
 An appender that defines its own `initialize` passes the `interval:` and `internal_metrics:`
 options on to `super`; one that defines its own `flush`, `close`, or `reopen` calls `super` from it,
-so that a flush writes what the appender holds, and a forked child discards what it inherited.
+so that a flush writes what the appender holds, and a forked child discards what it inherited. A
+`flush` or `close` calls `super` first, then flushes or closes its client, so that the snapshots
+that `super` writes reach the client before it is flushed or closed, and returns what `super`
+returns.
 `metrics_retryable?` should answer true only when the destination stored none of the snapshot,
 otherwise writing it again counts its points twice; an appender that writes a snapshot in more than
 one request must answer false for a failure of any request after the first.
@@ -7158,7 +7170,13 @@ then wait on that thread's own queue, which can stop all logging while the queue
 
 ### Upgrading to Semantic Logger v6
 
-v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes.
+v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes, the only changes in
+`6.0.0.beta1`. The other changes planned for v6 come in a later v6 release: metric-only entries
+left out by default by the `:kafka`, `:rabbitmq`, and `:udp` appenders, an `ArgumentError` for
+options given with an appender instance, `pid` and `thread` written as structured metadata by
+default by the `:loki` appender, and the removal of the `:sentry`, `:new_relic`, and `:splunk`
+appenders and of the Elasticsearch `type:` option. Until then, each of these behaves, and warns, as
+it does in v5.3 (see [Upgrading to Semantic Logger v5.3](#upgrading-to-semantic-logger-v53)).
 
 #### Metrics no longer depend on the log level
 
@@ -7268,9 +7286,10 @@ include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapsho
 
 #### Rails Semantic Logger
 
-`rails_semantic_logger` v6 sends `sidekiq.queue.latency` with
-`logger.time("sidekiq.queue.latency", duration: latency_ms)`, a histogram of durations, rather than
-as the `metric_amount` of a log entry, which a counter would add up. Upgrade it with this gem.
+A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with
+`logger.time("sidekiq.queue.latency", duration: latency_ms)`, a histogram of durations. Until then,
+`rails_semantic_logger` 5.x sends it as the `metric_amount` of a log entry, which v6 records as a
+counter of milliseconds, adding up the latencies of the interval.
 
 ### Upgrading to Semantic Logger v5.3
 

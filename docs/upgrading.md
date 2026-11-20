@@ -61,7 +61,13 @@ then wait on that thread's own queue, which can stop all logging while the queue
 
 ### Upgrading to Semantic Logger v6
 
-v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes.
+v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes, the only changes in
+`6.0.0.beta1`. The other changes planned for v6 come in a later v6 release: metric-only entries
+left out by default by the `:kafka`, `:rabbitmq`, and `:udp` appenders, an `ArgumentError` for
+options given with an appender instance, `pid` and `thread` written as structured metadata by
+default by the `:loki` appender, and the removal of the `:sentry`, `:new_relic`, and `:splunk`
+appenders and of the Elasticsearch `type:` option. Until then, each of these behaves, and warns, as
+it does in v5.3 (see [Upgrading to Semantic Logger v5.3](#upgrading-to-semantic-logger-v53)).
 
 #### Metrics no longer depend on the log level
 
@@ -171,9 +177,10 @@ include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapsho
 
 #### Rails Semantic Logger
 
-`rails_semantic_logger` v6 sends `sidekiq.queue.latency` with
-`logger.time("sidekiq.queue.latency", duration: latency_ms)`, a histogram of durations, rather than
-as the `metric_amount` of a log entry, which a counter would add up. Upgrade it with this gem.
+A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with
+`logger.time("sidekiq.queue.latency", duration: latency_ms)`, a histogram of durations. Until then,
+`rails_semantic_logger` 5.x sends it as the `metric_amount` of a log entry, which v6 records as a
+counter of milliseconds, adding up the latencies of the interval.
 
 ### Upgrading to Semantic Logger v5.3
 

@@ -393,7 +393,9 @@ SemanticLogger.add_appender(
 ~~~
 
 Each snapshot is posted as one `ExportMetricsServiceRequest` to `<url>/v1/metrics`: counters as
-monotonic sums, and histograms as base-2 exponential histograms, both with delta temporality. The
+monotonic sums, and histograms as base-2 exponential histograms, both with delta temporality. A
+histogram that recorded a negative value is sent without its sum, as OTLP asks, since a receiver takes
+the sum as one that only grows. The
 instrumentation scope is `SemanticLogger`, with the gem's version. Each kind, name, and unit is sent
 as one OTLP metric, with a data point for each of its series, and Semantic Logger's own metrics are
 kept apart from the application's. A snapshot that merges several intervals, during an outage, may
@@ -407,10 +409,14 @@ hold one name in two units: each is sent as a metric of its own.
 | `host:` | The `host.name` of the resource. Default: `SemanticLogger.host`. |
 | `environment:` | The `deployment.environment.name` of the resource, left out when there is none. Default: `SemanticLogger.environment`. |
 | `resource_attributes:` | More attributes of the resource, which replace those above with the same key. |
-| `header:`, `compress:`, `ssl:`, `proxy_url:`, `open_timeout:`, `read_timeout:`, ... | The options of the [HTTP appender](appenders.html#http). |
+| `header:`, `compress:`, `ssl:`, `proxy_url:`, `open_timeout:`, `read_timeout:`, ... | The options of the [HTTP appender](appenders.html#https). |
 
 Every request also has the `process.pid` of the process that sends it, so that the deltas of each
 process, such as the forked workers of one application on one host, are kept apart.
+
+It connects to the receiver when it is added, as every appender built on the HTTP appender does, so
+`add_appender` raises, such as with `Errno::ECONNREFUSED`, while the receiver cannot be reached.
+Once it is added, a snapshot that could not be sent follows [Outages](#intervals-flushes-and-outages).
 
 Of the [OpenTelemetry exporter environment variables](https://opentelemetry.io/docs/specs/otel/protocol/exporter/),
 it reads `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, and
@@ -550,8 +556,10 @@ merged, since `a/b` is then sent as `Application`.)
 A value beyond the range of a Float, such as the sum of a histogram of huge values, is left out,
 with a warning. Each of these warnings is made once per metric name, on the internal logger.
 
-A snapshot that the server asks to send again later (408, 429, or 503), or that could not reach
-it, is sent with the next one (see [Outages](#intervals-flushes-and-outages)).
+It connects to the ingest url when it is added, as every appender built on the HTTP appender does,
+so `add_appender` raises, such as with `Errno::ECONNREFUSED`, while it cannot be reached. Once it is
+added, a snapshot that the server asks to send again later (408, 429, or 503), or that could not
+reach it, is sent with the next one (see [Outages](#intervals-flushes-and-outages)).
 
 ### Summary log entries
 
@@ -647,9 +655,9 @@ class MyMetrics < SemanticLogger::Subscriber
     exception.is_a?(MyClient::Unavailable)
   end
 
+  # Writes the snapshots it holds first, with super, then flushes the client that they were given to.
   def flush
-    @client.flush
-    super
+    super.tap { @client.flush }
   end
 end
 
@@ -658,7 +666,10 @@ SemanticLogger.add_appender(metric: MyMetrics.new(client: client, interval: 10))
 
 An appender that defines its own `initialize` passes the `interval:` and `internal_metrics:`
 options on to `super`; one that defines its own `flush`, `close`, or `reopen` calls `super` from it,
-so that a flush writes what the appender holds, and a forked child discards what it inherited.
+so that a flush writes what the appender holds, and a forked child discards what it inherited. A
+`flush` or `close` calls `super` first, then flushes or closes its client, so that the snapshots
+that `super` writes reach the client before it is flushed or closed, and returns what `super`
+returns.
 `metrics_retryable?` should answer true only when the destination stored none of the snapshot,
 otherwise writing it again counts its points twice; an appender that writes a snapshot in more than
 one request must answer false for a failure of any request after the first.
