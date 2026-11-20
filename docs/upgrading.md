@@ -3,7 +3,7 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.3 OpenTelemetry log record changes.
+  v6 level-independent metrics.
 ---
 
 
@@ -59,6 +59,122 @@ Warning.extend(SemanticLoggerDeprecations)
 Do not log them through Semantic Logger itself: a warning reported on its background thread would
 then wait on that thread's own queue, which can stop all logging while the queue is full.
 
+### Upgrading to Semantic Logger v6
+
+v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes.
+
+#### Metrics no longer depend on the log level
+
+Once a metric appender is added, such as `add_appender(metric: :statsd)`, the `metric:` of a log
+call or a `measure_*` call is recorded at every level, and whether or not its `min_duration:` is
+met. In v5 it was sent only with a log entry that was logged. The log entry itself still follows
+the log level and filters, as before.
+
+So a metric on a `:debug` or `:trace` call, which stayed dormant under an `:info` level in v5, is
+now recorded, and a `measure_*` call with a `min_duration:` and a `metric:` now records every
+duration, not only those over the minimum. Expect higher counts for such metrics, and remove a
+`metric:` that should not be recorded. To time code for metrics alone, use the new metric calls,
+which log nothing:
+
+~~~ruby
+logger.increment("users.signup")
+logger.time("supplier.add_user") { supplier.add_user(user) }
+logger.time("sidekiq.queue.latency", duration: latency_ms)
+logger.record("upload.size", file.size, unit: "By")
+~~~
+
+Below the level, a `measure_*` call times its block for its metric only when the `metric:` is in its
+options before the call: a metric that the block adds to the options is recorded only when the level
+passes. See [Metrics](metrics.html#metrics-on-log-and-measure-calls).
+
+Without a metric appender, nothing changes: a `metric:` is only part of its log entry.
+
+#### Metric appenders write once per interval, and take no log entries
+
+The `:statsd`, `:new_relic`, and `:signalfx` metric appenders no longer receive log entries. Metrics
+are aggregated in the process, and each metric appender is given a snapshot of each interval,
+`interval:` seconds, 60 by default, which it sends at once:
+
+* `:statsd` sends one counter packet per metric name per interval, rather than one per call, and a
+  histogram as one timer packet per bucket, with a sample rate. See
+  [StatsD](metrics.html#statsd).
+* `:new_relic` records a counter with one `increment_metric` per interval, and a histogram with one
+  pre-aggregated `record_metric`, rather than one call per log entry. See
+  [New Relic](metrics.html#new-relic).
+* `:signalfx` posts one request per interval, with a counter for each counter series, and for each
+  histogram the counters `<name>.count` and `<name>.sum` and the gauges `<name>` (the mean),
+  `<name>.min`, `<name>.max`, `<name>.p50`, `<name>.p95`, and `<name>.p99`. See
+  [SignalFx](metrics.html#signalfx).
+
+Pass `interval: 10`, for example, to send more often. `SemanticLogger.flush`, and the flush at exit,
+sends what was recorded so far.
+
+#### Options that now raise `ArgumentError`
+
+A metric appender takes no log entries, so the options for log entries raise `ArgumentError` when
+given to `:statsd`, `:new_relic`, `:signalfx`, `:otlp`, or a custom metric appender:
+
+| Option | Instead |
+|--------|---------|
+| `level:` | Remove it: metrics are recorded whatever the log level. `:summary` keeps `level:`, the level of the entries it writes. |
+| `filter:` | Remove it: every metric recorded is written. To keep a metric away from an appender, do not record it, or record it under another name. A filter such as `->(log) { !log.dimensions? }`, which kept the metrics with dimensions out of `:statsd` or `:new_relic`, is no longer needed to keep the counts apart: they record the series of a metric together, under its name. |
+| `formatter:`, or a formatter block | Remove it: each appender writes metrics in the format of its destination. To change what is sent, write a [custom metric appender](metrics.html#write-a-custom-metric-appender). |
+| `batch: true` | Remove it: there are no log entries to batch, and each interval is already sent at once. |
+| `dimensions:` of `:signalfx` | Remove it: it listed the named tags to send as dimensions, but named tags are never part of a metric's series. Give the dimensions to the metric call, such as `logger.increment("filters", dimensions: {plan: "premium"})`. |
+
+An option given as `nil` sets nothing, so it is not refused.
+
+#### `SemanticLogger::Formatters::Signalfx` has been removed
+
+`:signalfx` builds its request itself. Remove a `formatter:` that named or subclassed
+`SemanticLogger::Formatters::Signalfx`; to send something else, write a
+[custom metric appender](metrics.html#write-a-custom-metric-appender).
+
+#### SignalFx metric names
+
+In v5, a metric without dimensions whose name had no `/`, such as `users.signup`, was sent as
+`Application.counter` (or `Application.average` for a duration), with the dimensions
+`class: "Unknown"` and `action: "users.signup"`. It is now sent under its own name, `users.signup`,
+so move the charts and detectors that matched it on `Application.counter` with `class: "Unknown"`
+to the new name. A metric with dimensions is still sent under its own name, and one without
+dimensions whose name has a `/`, such as `Common/User/authorize`, is still sent as
+`Application.counter` and `Application.average`, with `class` and `action` dimensions taken from
+its name.
+
+A histogram's mean is now sent with the gauges `<name>.min`, `<name>.max`, and the percentiles, and
+its count as the counter `<name>.count` (`Application.counter` for a `Class/action` name), so a
+counter you record as `<name>.count` is added to the count of the histogram `<name>`, and a counter
+you record as `<name>.max`, for example, keeps the gauge `<name>.max` of the histogram with the same
+dimensions out of the request, with a warning on the internal logger.
+
+#### Metric dimensions are redacted
+
+`SemanticLogger.sensitive_keys=` now also redacts the dimensions of the metrics given to the metric
+appenders: the value of a dimension whose key is sensitive is replaced, such as with
+`"[FILTERED]"`, and the series that differed only by that value are merged into one. Keys are never
+replaced. See [Metric dimensions](security.html#metric-dimensions).
+
+#### Negative metric amounts are dropped
+
+A negative `metric_amount`, deprecated in v5.3, is now dropped: the log entry is still written with
+it, but its metric is not recorded, and the internal logger warns once per metric name. So is a
+negative amount given to `logger.increment`. Count what goes down as a metric of its own, such as
+`cart.items_removed`. v6.0 has no gauge for a value that goes up and down.
+
+#### Custom metric subscribers
+
+A metric subscriber of your own that implements `#log`, as in v5, is a log appender in v6: it still
+receives the log entries that pass its level and filters, so its metrics still follow the log level,
+and it is never given the metrics of `increment`, `time`, and `record`. To receive every metric,
+include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapshot)` instead. See
+[Write a custom metric appender](metrics.html#write-a-custom-metric-appender).
+
+#### Rails Semantic Logger
+
+`rails_semantic_logger` v6 sends `sidekiq.queue.latency` with
+`logger.time("sidekiq.queue.latency", duration: latency_ms)`, a histogram of durations, rather than
+as the `metric_amount` of a log entry, which a counter would add up. Upgrade it with this gem.
+
 ### Upgrading to Semantic Logger v5.3
 
 #### OpenTelemetry log records
@@ -112,7 +228,7 @@ the OpenTelemetry `Logger#on_emit` (`severity_text:`, `severity_number:`, `times
 The appender no longer sends metric-only entries, such as `logger.info(metric: "users/signup")`,
 which have a metric but no message and no exception. It sent each one as a log record with no body,
 its metric in the attributes, never as an OpenTelemetry metric. Metric-only entries are meant for the
-[metric subscribers](metrics.html#send-metrics-to-a-backend), and most log appenders leave them out.
+[metric subscribers](metrics.html#metric-appenders), and most log appenders leave them out.
 To keep sending them as log records, add the appender with `metrics: true`:
 
 ~~~ruby
@@ -123,7 +239,7 @@ SemanticLogger.add_appender(appender: :open_telemetry, metrics: true)
 
 Unlike the other log appenders, `:kafka`, `:rabbitmq`, and `:udp` send metric-only entries by
 default: entries such as `logger.info(metric: "users/signup")`, which have a metric but no message and
-no exception, and are meant for the [metric subscribers](metrics.html#send-metrics-to-a-backend). v6
+no exception, and are meant for the [metric subscribers](metrics.html#metric-appenders). v6
 leaves them out by default, as the other log appenders do. Until then, adding one of these appenders
 without `metrics:` still sends them, and reports a
 [deprecation warning](#seeing-deprecation-warnings). Pass `metrics:` to choose:
@@ -156,7 +272,8 @@ logger.info(message: "Item removed", metric: "cart/items_removed")
 ~~~
 
 To record a value that goes up and down, such as the number of items in a cart, a `gauge` is planned
-for the metrics API of v6.
+for the metrics API of v6. (It is not in v6.0; see
+[Negative metric amounts are dropped](#negative-metric-amounts-are-dropped).)
 
 #### Choose where Loki writes `pid` and `thread`
 
@@ -447,6 +564,9 @@ off. See [Upgrading to v5.3](rails.html#upgrading-to-v53) for details.
   SemanticLogger.add_appender(metric: :statsd, filter: ->(log) { !log.dimensions? })
   SemanticLogger.add_appender(metric: :new_relic, filter: ->(log) { !log.dimensions? })
   ~~~
+
+  In v6 a metric appender takes no `filter:`; see
+  [Options that now raise `ArgumentError`](#options-that-now-raise-argumenterror).
 * A `measure_*` call now keeps its `dimensions:` option, which it used to drop. So the `:signalfx`
   metric subscriber sends a metric measured with dimensions as it sends any metric with dimensions:
   under its own name, such as `supplier.add_user` for `metric: "supplier/add_user"`, with those
@@ -468,6 +588,9 @@ off. See [Upgrading to v5.3](rails.html#upgrading-to-v53) for details.
   of the named tags it forwards. `log.dimensions?`, and so a filter on it, as above, still counts
   dimensions whose values are all blank, such as `{state: ""}`, as dimensions; only empty ones, such
   as `{}`, count as none.
+
+  In v6, `:signalfx` takes no `dimensions:` option, nor a filter, and sends a dotted name without
+  dimensions under its own name; see [SignalFx metric names](#signalfx-metric-names).
 * A `tagged` block now restores the tags and named tags that it found when it exits, instead of
   popping the ones it pushed, as `silence` and `with_level` blocks already did. This only changes code
   that pushes or pops tags with `push_tags` and `pop_tags`, or `push_named_tags` and

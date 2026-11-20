@@ -264,7 +264,9 @@ end
 
 ### Record a metric
 
-Attach a `metric` name to feed dashboards. See [Metrics](metrics.html):
+Attach a `metric` name to feed dashboards. Once a metric appender is added, the duration is
+recorded as a metric at every level, and whether or not `min_duration` is met, while the log entry
+still follows the log level. See [Metrics](metrics.html):
 
 ~~~ruby
 logger.measure_info("Called external interface", metric: "Supplier/inquiry") do
@@ -272,8 +274,14 @@ logger.measure_info("Called external interface", metric: "Supplier/inquiry") do
 end
 ~~~
 
+To time code for a metric without logging it, use `logger.time` instead:
+
+~~~ruby
+logger.time("supplier.inquiry") { supplier.inquiry }
+~~~
+
 Add `dimensions` to break the metric down, such as by supplier. See
-[Break a metric down with dimensions](metrics.html#step-3-break-a-metric-down-with-dimensions):
+[Dimensions](metrics.html#dimensions):
 
 ~~~ruby
 logger.measure_info("Called external interface",
@@ -301,7 +309,8 @@ The second argument to a measure call is a Hash of options:
 
 - `:min_duration` [Float]: only log if the block takes longer than this many milliseconds. Default
   `0.0` (always log).
-- `:metric` [String]: notify metric subscribers with this metric name.
+- `:metric` [String]: record the duration as a metric with this name, once a metric appender is
+  added, at every level. It must be in the options before the call to be timed below the level.
 - `:dimensions` [Hash]: key/value labels that break the metric down, such as `{supplier: "acme"}`.
 - `:payload` [Hash]: an optional payload to log with the entry.
 - `:exception` [Exception]: an exception to log along with the duration.

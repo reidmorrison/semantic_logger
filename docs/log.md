@@ -79,8 +79,8 @@ situational field.
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
 |`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`, and the log call did not pass `call_site: false`. See [The call site](#the-call-site).|
-|`metric`|`String`|The metric name, present for metric and `measure_*` calls. See [Metrics](metrics.html).|
-|`metric_amount`|`Numeric`|Amount to add to a counter metric, for example the quantity purchased. A counter adds 1 when it is `nil`. A negative amount is still logged, but once a metric appender is present its metric is dropped, with a warning on the internal logger, see [Negative metric amounts](upgrading.html#negative-metric-amounts).|
+|`metric`|`String`|The metric name, present for log and `measure_*` calls given a `metric:`. See [Metrics](metrics.html#metrics-on-log-and-measure-calls).|
+|`metric_amount`|`Numeric`|Amount to add to a counter metric, for example the quantity purchased. A counter adds 1 when it is `nil`. A negative amount is still logged, but once a metric appender is present its metric is dropped, with a warning on the internal logger, see [Negative metric amounts are dropped](upgrading.html#negative-metric-amounts-are-dropped).|
 |`dimensions`|`Hash`|Dimensions (key/value labels) supplied for a metric.|
 
 ### The call site
@@ -116,7 +116,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`payload?`|`true`/`false`|Whether the event carries a non-empty payload.|
 |`dimensions?`|`true`/`false`|Whether the event has a metric with dimensions, a `Hash` that is not empty. The formatters write the dimensions only then.|
 |`payload_to_s`|`String` or `nil`|The payload rendered with `inspect`, or `nil` when absent.|
-|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Metric subscribers receive these; log appenders leave them out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp` until v6. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
+|`metric_only?`|`true`/`false`|`true` when the event has a metric but no message and no exception. Its metric is recorded for the metric appenders, which take no log entries; log appenders leave the entry out unless their `metrics` option is true, the default only for `:kafka`, `:rabbitmq`, and `:udp` until v6. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders).|
 |`duration_to_s`|`String` or `nil`|The duration in milliseconds as a short string, for example `"12ms"`. `nil` when there is no duration.|
 |`duration_human`|`String` or `nil`|The duration in human readable form, scaling up to seconds, minutes, hours, or days as needed.|
 |`level_to_s`|`String`|The level as a single upper-case character, for example `"I"` for `:info`.|

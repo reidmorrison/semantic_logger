@@ -177,6 +177,11 @@ These are written as they are, so keep secrets out of them:
 * Any other object, which is written the way the formatter writes it. For some objects that
   includes all of their attributes: for example a JSON formatter writes an Active Record model with
   `as_json`. Log a Hash of the values you need instead.
+* The keys of the dimensions of the metrics that the metric appenders write, from
+  `logger.increment`, `time`, and `record`, or the `metric:` of a log call: only the values of
+  sensitive keys are replaced (see [Metric dimensions](#metric-dimensions)). A dimension should hold
+  only a small, fixed set of values, never a secret (see
+  [Keep the values of each dimension bounded](metrics.html#keep-the-values-of-each-dimension-bounded)).
 
 To change text in messages, rewrite the message in a logger's `filter` or in an `on_log` subscriber;
 see [Filtering](config.html#filtering). Do not redact in an appender's `filter`: every appender writes
