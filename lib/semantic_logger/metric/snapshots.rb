@@ -314,6 +314,14 @@ module SemanticLogger
         @held_snapshot = nil
         @kept_snapshot = nil
         @resends       = 0
+        forget_parent_state
+      end
+
+      # In a forked child, other than one started by Process.daemon, forgets whatever else the appender
+      # carries from one snapshot to the next, which the parent carries on with itself. Called by
+      # #forget_parent_snapshots, holding the lock of the snapshots, before any snapshot is written in the
+      # child. Does nothing, unless the appender overrides it.
+      def forget_parent_state
       end
     end
   end

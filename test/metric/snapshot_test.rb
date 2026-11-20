@@ -203,6 +203,46 @@ module Metric
         end
       end
 
+      describe "#merged_by" do
+        it "adds counters and merges histograms of the same key, whatever their dimensions" do
+          first  = histogram(1, 2)
+          merged = snapshot(
+            0, 60,
+            new_point(kind: :counter, name: "a", value: 1, dimensions: {x: 1}),
+            new_point(kind: :counter, name: "a", value: 2.5, dimensions: {x: 2}),
+            new_point(kind: :histogram, name: "b", unit: "s", value: first, dimensions: {x: 1}),
+            new_point(kind: :histogram, name: "b", unit: "s", value: histogram(1000))
+          ).merged_by(&:name)
+
+          assert_equal %w[a b], merged.keys
+          assert_equal [:counter, nil, 3.5], merged["a"]
+          assert_equal [:histogram, "s"], merged["b"].first(2)
+          assert_equal 3, merged["b"][2].count
+          assert_equal 2, first.count
+          assert_predicate first, :frozen?
+        end
+
+        it "keeps the kind and unit of the first point of a key, leaving out the others" do
+          merged = snapshot(
+            0, 60,
+            new_point(kind: :histogram, name: "a", unit: "s", value: histogram(1)),
+            new_point(kind: :counter, name: "a", value: 1),
+            new_point(kind: :histogram, name: "a", unit: "ms", value: histogram(1)),
+            new_point(kind: :histogram, name: "a", unit: "s", value: histogram(2))
+          ).merged_by(&:name)
+
+          assert_equal [:histogram, "s"], merged["a"].first(2)
+          assert_equal 2, merged["a"][2].count
+        end
+
+        it "gives the point's own value for a key of one point" do
+          value  = histogram(1)
+          merged = snapshot(0, 60, new_point(kind: :histogram, name: "a", value: value)).merged_by(&:name)
+
+          assert_same value, merged["a"][2]
+        end
+      end
+
       describe "#without_internal" do
         it "drops the internal points" do
           snapshot = snapshot(

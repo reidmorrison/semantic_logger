@@ -168,6 +168,29 @@ module SemanticLogger
         )
       end
 
+      # Returns [Hash] for each key that the block gives for a point, such as its name, the kind, unit and
+      # value of its points merged: the sum of their counter values, or one histogram merging theirs. The
+      # first point of a key gives it its kind and unit: a point of the same key with another kind or unit,
+      # possible only once snapshots of several intervals are merged, is left out, as the Aggregator leaves
+      # out a record of a name with another kind or unit within one interval.
+      #
+      # For a destination that keys its metrics by less than the identity of a series (see Point#identity).
+      # A histogram is copied once, when a second point merges into it, so that the points are not
+      # changed: a value that is still frozen is the point's own.
+      def merged_by
+        merged = {}
+        @points.each do |point|
+          key    = yield(point)
+          metric = merged[key]
+          if metric.nil?
+            merged[key] = [point.kind, point.unit, point.value]
+          elsif metric[0] == point.kind && metric[1] == point.unit
+            metric[2] = merged_value(metric[2], point)
+          end
+        end
+        merged
+      end
+
       # Returns this snapshot without Semantic Logger's own metrics, itself when it holds none.
       def without_internal
         return self unless @points.any?(&:internal?)
@@ -191,6 +214,13 @@ module SemanticLogger
 
       def frozen(value)
         value.frozen? ? value : value.dup.freeze
+      end
+
+      # The value merged so far for a key of #merged_by, with that of the point.
+      def merged_value(value, point)
+        return value + point.value if point.counter?
+
+        (value.frozen? ? value.dup : value).merge(point.value)
       end
 
       def add_counts(counts, more)

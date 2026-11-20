@@ -105,6 +105,37 @@ module Metric
         it "accepts an interval" do
           assert_equal 10, SemanticLogger::Metric::Statsd.new(url: url, interval: 10).metrics_interval
         end
+
+        {
+          level:     "whatever the log level",
+          filter:    "every metric recorded is written",
+          formatter: "the format of its destination"
+        }.each_pair do |option, replacement|
+          it "refuses #{option}:, which was for the log entries it no longer takes" do
+            error = assert_raises(ArgumentError) do
+              SemanticLogger::Metric::Statsd.new(url: url, option => :info)
+            end
+
+            assert_includes error.message, "#{option}:"
+            assert_includes error.message, replacement
+          end
+        end
+
+        it "refuses a formatter block" do
+          error = assert_raises(ArgumentError) do
+            SemanticLogger::Metric::Statsd.new(url: url, &:name)
+          end
+
+          assert_includes error.message, "formatter block"
+        end
+
+        it "refuses batch: true" do
+          error = assert_raises(ArgumentError) do
+            SemanticLogger::Appender.factory(metric: :statsd, url: url, batch: true)
+          end
+
+          assert_includes error.message, "nothing to batch"
+        end
       end
 
       describe "#reopen" do
@@ -181,6 +212,56 @@ module Metric
           assert_equal ["Billing.user_login_x_y:1|c"], write
         end
 
+        it "replaces a line break in its name, which would split the packet" do
+          aggregator.record(:counter, "user\nlogin\r", 1)
+
+          assert_equal ["user_login_:1|c"], write
+        end
+
+        it "replaces each character of its name that is not ASCII, sending the datagram once" do
+          aggregator.record(:counter, "caf\u00e9.ma\u00f1ana", 1)
+          appender.write_metrics(aggregator.collect)
+
+          # statsd-ruby sends a datagram again, up to 5 times, unless the socket wrote as many bytes as it has
+          # characters.
+          assert_equal ["caf_.ma_ana:1|c"], datagrams
+        end
+
+        it "replaces each byte of a binary name that is not ASCII" do
+          appender.write_metrics(snapshot(counter("caf\xC3\xA9".b, 1)))
+
+          assert_equal ["caf__:1|c"], packets
+        end
+
+        it "replaces each invalid byte of a UTF-8 name, rather than raise" do
+          appender.write_metrics(snapshot(counter("caf\xFF::login".dup.force_encoding(Encoding::UTF_8), 1)))
+
+          assert_equal ["caf_.login:1|c"], packets
+        end
+
+        it "sends a name in an encoding that is not ASCII compatible as ASCII" do
+          appender.write_metrics(snapshot(counter("Billing::caf\u00e9:login".encode(Encoding::UTF_16LE), 1)))
+
+          assert_equal ["Billing.caf__login:1|c"], packets
+        end
+
+        it "builds the name to send once for each name" do
+          built = []
+          ascii = SemanticLogger::Metric::Statsd::Datagrams.instance_method(:ascii)
+          spy   = lambda do |name|
+            built << name
+            ascii.bind_call(self, name)
+          end
+          [1, 2, 4, 8].each { |value| aggregator.record(:histogram, "order.items", value) }
+          aggregator.record(:counter, "user/login", 1)
+
+          SemanticLogger::Metric::Statsd::Datagrams.stub_any_instance(:ascii, spy) do
+            assert_equal 5, write.size
+          end
+
+          assert_equal ["order.items", "user/login"], built
+        end
+
         it "sends a large amount as a single packet" do
           aggregator.record(:counter, "user/login", 3_000_000_000)
 
@@ -192,6 +273,72 @@ module Metric
           aggregator.record(:counter, "user/login", 1.4)
 
           assert_equal ["user/login:3|c"], write
+        end
+
+        it "adds the fraction left over by rounding to the amount of its next interval" do
+          sent = Array.new(5) do
+            aggregator.record(:counter, "user/login", 0.4)
+            write
+          end
+
+          assert_equal [[], ["user/login:1|c"], [], ["user/login:1|c"], []], sent
+        end
+
+        it "forgets the fraction left over of a name that the next interval does not have" do
+          aggregator.record(:counter, "user/login", 0.4)
+          write
+          aggregator.record(:counter, "user/logout", 1)
+          write
+          aggregator.record(:counter, "user/login", 0.4)
+
+          assert_empty write
+        end
+
+        it "carries the fractions it carried before when sending fails" do
+          aggregator.record(:counter, "user/login", 0.3)
+          write
+          aggregator.record(:counter, "user/login", 0.3)
+          failed = aggregator.collect
+
+          SemanticLogger::Metric::Statsd::Datagrams.stub_any_instance(:flush, -> { raise IOError, "boom" }) do
+            assert_raises(IOError) { appender.write_metrics(failed) }
+          end
+          aggregator.record(:counter, "user/login", 0.3)
+
+          # 0.3 + 0.3, rather than the fraction left over by the failed interval: 0.6 - 1 + 0.3.
+          assert_equal ["user/login:1|c"], write
+        end
+
+        it "forgets the fractions left over in the parent process once forked" do
+          aggregator.record(:counter, "user/login", 0.4)
+          write
+          ::Process.stub(:pid, ::Process.pid + 1) do
+            SemanticLogger::CoreExt::Process.stub(:daemon?, false) do
+              appender.log_metrics(snapshot(counter("user/login", 0.4)))
+              appender.flush
+            end
+          end
+
+          assert_empty packets
+        end
+
+        it "keeps the fractions left over in a process started by Process.daemon" do
+          aggregator.record(:counter, "user/login", 0.4)
+          write
+          ::Process.stub(:pid, ::Process.pid + 1) do
+            SemanticLogger::CoreExt::Process.stub(:daemon?, true) do
+              appender.log_metrics(snapshot(counter("user/login", 0.4)))
+              appender.flush
+            end
+          end
+
+          assert_equal ["user/login:1|c"], packets
+        end
+
+        it "sends a sum beyond the range of a 64-bit Integer as it is" do
+          appender.write_metrics(snapshot(counter("user/login", 2**70)))
+
+          assert_equal ["user/login:#{2**70}|c"], packets
         end
 
         it "sends nothing for a zero amount" do
@@ -271,6 +418,30 @@ module Metric
           assert_equal ["supplier.add_user:250|ms|@0.5"], write
         end
 
+        it "sends a value in fixed-point notation, without an exponent" do
+          aggregator.record(:histogram, "tiny", 0.00001234)
+          aggregator.record(:histogram, "huge", 1.5e20)
+          sent = write
+
+          assert_equal 2, sent.size
+          sent.each { |packet| assert_match(/\A(tiny|huge):\d+(\.\d*[1-9])?\|ms\z/, packet) }
+          assert_in_delta 1.5e20, Float(sent.last[/:(\d+)\|/, 1]), 1e15, sent.last
+        end
+
+        it "sends the midpoint of a bucket near the largest Float, without adding its bounds up" do
+          aggregator.record(:histogram, "huge", Float::MAX)
+
+          assert_match(/\Ahuge:\d{309}\|ms\z/, write.first)
+        end
+
+        it "leaves out a bucket whose midpoint in milliseconds is beyond the range of a Float" do
+          aggregator.record(:histogram, "slowest", Float::MAX, unit: "s")
+          aggregator.record(:histogram, "slow", 0.25, unit: "s")
+          aggregator.record(:counter, "user/login", 1)
+
+          assert_equal ["slow:250|ms", "user/login:1|c"], write
+        end
+
         it "sends every bucket packet, without the client sampling them" do
           values = Array.new(2_000) { |i| (i % 400) + 1 }
           values.each { |value| aggregator.record(:histogram, "order.items", value) }
@@ -304,6 +475,49 @@ module Metric
             assert_operator datagram.bytesize + 1 + next_packet.bytesize, :>,
                             SemanticLogger::Metric::Statsd::Datagrams::DATAGRAM_SIZE
           end
+        end
+      end
+
+      describe "a metric name" do
+        it "is sent with the kind and unit it was first given, when a merged snapshot has another" do
+          histogram = SemanticLogger::Metric::ExponentialHistogram.new
+          histogram.record(0.25)
+          points = [
+            counter("user/login", 2),
+            SemanticLogger::Metric::Snapshot::Point.new(kind: :histogram, name: "user/login", value: histogram),
+            SemanticLogger::Metric::Snapshot::Point.new(kind: :histogram, name: "a", value: histogram, unit: "s"),
+            SemanticLogger::Metric::Snapshot::Point.new(kind: :histogram, name: "a", value: histogram, unit: "By"),
+            counter("user/login", 1, dimensions: {action: "login"})
+          ]
+          appender.write_metrics(snapshot(*points))
+
+          assert_equal ["user/login:3|c", "a:250|ms"], packets
+        end
+
+        it "merges histograms without changing those of the snapshot" do
+          aggregator.record(:histogram, "order.items", 1, dimensions: {store: "a"})
+          aggregator.record(:histogram, "order.items", 2, dimensions: {store: "b"})
+          aggregator.record(:histogram, "order.items", 4, dimensions: {store: "c"})
+          collected = aggregator.collect
+          appender.write_metrics(collected)
+
+          assert_equal 3, packets.size
+          assert_equal([1, 1, 1], collected.points.map { |point| point.value.count })
+        end
+      end
+
+      describe "a failure" do
+        it "sends none of the packets, rather than those written before it" do
+          aggregator.record(:counter, "user/login", 1)
+          aggregator.record(:histogram, "order.items", 1)
+          collected = aggregator.collect
+          failing   = ->(*) { raise IOError, "boom" }
+
+          SemanticLogger::Metric::Statsd::Datagrams.stub_any_instance(:timer, failing) do
+            assert_raises(IOError) { appender.write_metrics(collected) }
+          end
+
+          assert_empty packets
         end
       end
 
