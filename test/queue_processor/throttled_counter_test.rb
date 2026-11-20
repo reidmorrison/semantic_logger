@@ -3,7 +3,12 @@ require_relative "../signal_trap_helper"
 
 class ThrottledCounterTest < Minitest::Test
   describe SemanticLogger::QueueProcessor::ThrottledCounter do
-    let(:reports) { [] }
+    # Created before each test, rather than by a let, which is not thread-safe: the thread that a
+    # signal trap starts reports to it while the test reads it, and when both called a let for the
+    # first time at once, each could create an Array of its own, so the test never saw the report.
+    before { @reports = [] }
+
+    attr_reader :reports
 
     def record(counter, count = 1, interval: 30)
       counter.record(count, interval: interval) { |unreported, seconds| reports << [unreported, seconds] }
