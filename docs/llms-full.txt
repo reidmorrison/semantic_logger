@@ -4954,6 +4954,76 @@ After they initialize, Rails Semantic Logger replaces the loggers of these libra
 
 ---
 
+## Upgrading to v5.3
+
+v5.3 requires Semantic Logger v5.3; see [Upgrading to Semantic Logger v5.3](upgrading.html#upgrading-to-semantic-logger-v53)
+for the changes there. It needs no configuration changes, but several log entries change. Review
+these before you upgrade if a log query, dashboard, or alert depends on them.
+
+### Exception backtraces are cleaned
+
+The backtraces of logged exceptions are now cleaned with `Rails.backtrace_cleaner`, as in Rails' own
+log: only your application's frames are written, relative to `Rails.root`. Error services, such as
+Sentry, still receive the full backtrace. To log full backtraces again, set the `BACKTRACE`
+environment variable, or turn cleaning off in `config/application.rb`:
+
+~~~ruby
+config.semantic_logger.backtrace_cleaner = nil
+~~~
+
+A request for a missing route, and the other exceptions in
+`ActionDispatch::ExceptionWrapper.silent_exceptions`, is now logged on one line, without the exception
+itself, when none of its frames is your application's. Semantic Logger's own error service appenders,
+such as `sentry_ruby`, therefore receive a message for it rather than an exception. See
+[Cleaning exception backtraces](#cleaning-exception-backtraces).
+
+### `config.filter_parameters` are redacted from every entry
+
+The keys in `config.filter_parameters` are now redacted from the payload, named tags, and context of
+every log entry, not only from the request parameters. A filter matches any key that contains it, so
+Rails' default filters also redact keys such as `email`, `max_tokens`, `cache_key`, and
+`api_key_id`. Rails' defaults do not match the `Authorization` or `Cookie` headers, so consider adding
+them. To turn redaction off:
+
+~~~ruby
+config.rails_semantic_logger.redact_filter_parameters = false
+~~~
+
+See [Redacting sensitive data](#redacting-sensitive-data).
+
+### Call sites are recorded in development
+
+In development, each entry now records the file, line, and method of the code behind it. The text
+formatters write it after the thread name, and the `:json` formatter as `file`, `line`, and `method`.
+In the Rails console it replaces capturing a backtrace for every entry. To turn it off:
+
+~~~ruby
+config.semantic_logger.call_site_level = nil
+~~~
+
+See [Source file name, line number, and method](#source-file-name-line-number-and-method).
+
+### Other log output changes
+
+* Active Record: SQL bind values that have no column name are keyed by position (`$1`, `$2`, ...),
+  as in Rails 8.2's own log, instead of all under a `nil` key. Update anything that matches
+  `payload.binds.nil`.
+* Active Job: the message of an enqueue that failed now closes its parentheses:
+  `Failed enqueuing MyJob (Job ID: 1a2b) to Sidekiq(default): RuntimeError (boom)`.
+* Action Controller: the `source` of a `Redirected to` entry, written when
+  `ActionDispatch.verbose_redirect_logs` is on, is now relative to `Rails.root` instead of an absolute
+  path.
+* `config.active_record.verbose_query_logs` and `config.active_job.verbose_enqueue_logs`, which new
+  Rails applications turn on in development, are now honored: query and enqueue entries gain a
+  `source` in their payload.
+* Rails 8.1+: open redirects and path relative redirects reported with `:notify` are now logged at
+  `:warn`. On Rails 8.2, CSRF failures are logged at `:warn` again.
+
+See the [CHANGELOG](https://github.com/reidmorrison/rails_semantic_logger/blob/main/CHANGELOG.md)
+for the full list, including Rails 8.2 support.
+
+---
+
 ## Upgrading to v5.1
 
 v5.1 requires Semantic Logger v5.1 and needs no configuration changes. Two behaviors differ.
@@ -6527,7 +6597,8 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
 * A named tag whose value is a Symbol, Time, or other object was sent as an empty value. It is now
   sent as its `#to_s`, or as JSON for a Hash, Array, `Struct`, or `Set`.
 * `code.file.path` and `code.line.number` are where the entry was logged, and are left out when the
-  entry did not capture a backtrace. The old body's `file` and `line` fell back to where a logged
+  entry has no call site (see `call_site_level`) and did not capture a backtrace. With a call site,
+  `code.function.name` names the method. The old body's `file` and `line` fell back to where a logged
   exception was raised, which is now in `exception.stacktrace`.
 
 A custom formatter given to this appender with `formatter:` must now return the keyword arguments for
@@ -6675,19 +6746,23 @@ one, so it is not reported.
 #### Batch an appender with a formatter that can format a batch
 
 `add_appender` now raises `ArgumentError` when it would batch an appender whose formatter cannot
-format a batch, such as a formatter block given to `:http`, `:loki`, or `metric: :signalfx` with
-`batch: true`. Before, it added the appender, but every batch failed on the appender's worker
-thread, which backed off and tried again, so nothing was ever written, and once its queue was full,
-logging blocked, unless it was added with `non_blocking: true`. Add the appender without
+format a batch, such as `formatter: :default` or a Proc given to `:http`, `:loki`, or
+`metric: :signalfx` with `batch: true`, or a formatter block, which v5.3 now uses (see
+[Other behaviour changes](#other-behaviour-changes)). Before, it added the appender, but every batch
+failed on the appender's worker thread, which backed off and tried again, so nothing was ever
+written, and once its queue was full, logging blocked, unless it was added with
+`non_blocking: true`. Add the appender without
 `batch: true`, or give it a formatter that implements `#batch(logs, logger)`, such as the one it
 uses by default:
 
 ~~~ruby
 # Before, nothing was ever sent:
-SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com", batch: true) { |log| log.message }
+SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com", batch: true,
+                            formatter: ->(log, _logger) { log.message })
 
 # After, one request for each entry:
-SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com") { |log| log.message }
+SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com",
+                            formatter: ->(log, _logger) { log.message })
 
 # Or one request for each batch, formatted by the default :json formatter:
 SemanticLogger.add_appender(appender: :http, url: "https://logs.example.com", batch: true)
@@ -6776,6 +6851,14 @@ end
 
 To trace the method instead, use OpenTelemetry's `tracer.in_span`, or the method tracer of an APM
 agent.
+
+#### Rails: cleaned backtraces, redaction, and call sites by default
+
+If you use [rails_semantic_logger](rails.html), its v5.3 release requires Semantic Logger v5.3 and
+turns on three of its new features by default: exception backtraces are cleaned with
+`Rails.backtrace_cleaner`, the keys in `config.filter_parameters` are redacted from every log entry,
+and in development each entry records its call site. Each changes the log output and can be turned
+off. See [Upgrading to v5.3](rails.html#upgrading-to-v53) for details.
 
 #### Other behaviour changes
 
@@ -7038,6 +7121,36 @@ agent.
   error from an appender that cannot be reopened is reported by that thread, rather than raised from
   the proxy of an appender added with `async: true` or in batches, which now reports it to the
   appender's own internal logger, as `Async: Failed to reopen the appender`.
+* A block given to `add_appender` with an appender or metric subscriber named by a Symbol, such as
+  `add_appender(appender: :http, url: ...) { |log| log.message }`, now formats its entries, taking
+  precedence over `formatter:`, as it does for `io:`, `file_name:`, and `logger:`. v5.2 ignored it
+  and used the appender's `formatter:` or its default formatter, so what such an appender sends
+  changes. With `batch: true`, `:http`, `:loki`, and `metric: :signalfx` now raise `ArgumentError`
+  for it (see [Batch an appender with a formatter that can format a batch](#batch-an-appender-with-a-formatter-that-can-format-a-batch)),
+  where v5.2 sent batches formatted by the default formatter. Remove the block to keep the output
+  of v5.2.
+* Some appenders now check their settings as they are added, and raise there, rather than failing
+  each entry later:
+  * `add_appender(metric: :statsd, url: ...)` connects as it is added, so it raises when its `url:`
+    is not `udp://` or its host cannot be resolved, where v5.2 added it and then failed every
+    metric. Add it only where the Statsd host resolves.
+  * `add_appender(appender: :udp, server: ...)` raises `ArgumentError` for a `server:` that is not
+    `"host:port"`, such as one without a port. Write an IPv6 address in brackets, as
+    `"[::1]:8088"`.
+* `SemanticLogger::Processor.logger=` (and `SemanticLogger::SyncProcessor.logger=`) now raises
+  `ArgumentError` when given a `SemanticLogger::Logger`, whose reports of a failing appender went
+  back to that appender, failed again, and were reported again. Give it an appender, such as
+  `SemanticLogger::Appender::IO.new($stderr)`, or a Ruby or Rails `Logger`, which it now accepts.
+* `SemanticLogger.remove_appender` now waits, as `SemanticLogger.flush` does, until the messages
+  already logged are written and the appenders flushed, before it closes the appender, so it can
+  take as long as a flush. Called on the thread of an appender added with `async: true` or in
+  batches, it returns `true` at once, and the appender is closed shortly after. See
+  [Adding and removing appenders](config.html#adding-and-removing-appenders).
+* The `:open_telemetry` and `:new_relic_logs` appenders now keep the trace context they capture
+  with `Log#capture`, which formatters do not write, instead of in `log.context`. A custom formatter
+  or appender that read `log.context[:open_telemetry]` or `log.context[:new_relic_metadata]` reads
+  `log.captured(:open_telemetry)` or `log.captured(:new_relic_metadata)` instead, and an `on_log`
+  subscriber that set either key with `log.set_context` sets it with `log.capture`.
 
 ### Upgrading to Semantic Logger v5.2
 

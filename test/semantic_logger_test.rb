@@ -240,6 +240,9 @@ class SemanticLoggerTest < Minitest::Test
       before do
         @logger = SemanticLogger::Logger.processor.appenders.logger
         SemanticLogger::Logger.processor.appenders.logger = internal_logger
+        # Created here, since a let is not thread-safe: the appender's worker thread and the test
+        # could otherwise each create a Queue of their own on first use.
+        results
       end
 
       after do
