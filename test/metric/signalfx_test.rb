@@ -92,6 +92,51 @@ module Metric
           )
         end
 
+        it "leaves out a repeated or trailing / of a name" do
+          data = body(
+            snapshot(
+              [:counter, "Common//User/authorize/", 1],
+              [:counter, "Filter//count/", 2, {dimensions: {state: "FL"}}]
+            )
+          )
+
+          assert_equal(
+            [
+              datapoint("Application.counter", 1, {"class" => "Common::User", "action" => "authorize"}),
+              datapoint("Filter.count", 2, {"state" => "FL"})
+            ],
+            data["counter"]
+          )
+        end
+
+        it "sends a name with one part and a trailing / under that part, without a class" do
+          data = body(snapshot([:counter, "jobs/", 1]))
+
+          assert_equal({"counter" => [datapoint("jobs", 1)]}, data)
+        end
+
+        it "leaves out a series whose name holds nothing but /, warning once per name" do
+          messages = []
+          requests = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            requests = capture_requests do
+              appender.write_metrics(snapshot([:counter, "//", 1], [:counter, "jobs", 1]))
+              appender.write_metrics(snapshot([:counter, "//", 1]))
+            end
+          end
+
+          assert_equal 1, requests.size
+          assert_equal({"counter" => [datapoint("jobs", 1)]}, JSON.parse(requests.first.body))
+          assert_equal 1, messages.size
+          assert_includes messages.first, '"//"'
+        end
+
+        it "sends a sum beyond the range of a 64-bit Integer as a Float" do
+          data = body(snapshot([:counter, "jobs", 2**64]))
+
+          assert_equal({"counter" => [datapoint("jobs", 2.0**64)]}, data)
+        end
+
         it "sends a dotted name without dimensions under its own name, without a class" do
           data = body(snapshot([:counter, "users.signup", 1]))
 
@@ -228,6 +273,112 @@ module Metric
           )
         end
 
+        it "merges the histograms sent with the same name and dimensions, sending each gauge once" do
+          data = body(
+            snapshot(
+              [:histogram, "a/b", 1.0, {dimensions: {region: "us"}}],
+              [:histogram, "a.b", 3.0, {dimensions: {region: "us"}}],
+              [:histogram, "a.b", 5.0, {dimensions: {region: "us", state: ""}}]
+            )
+          )
+          sent = {"region" => "us"}
+
+          assert_equal [datapoint("a.b.count", 3, sent), datapoint("a.b.sum", 9.0, sent)], data["counter"]
+          gauges = data["gauge"].to_h { |point| [point["metric"], point] }
+
+          assert_equal data["gauge"].size, gauges.size
+          assert_in_delta 3.0, gauges["a.b"]["value"]
+          assert_in_delta 1.0, gauges["a.b.min"]["value"]
+          assert_in_delta 5.0, gauges["a.b.max"]["value"]
+        end
+
+        it "merges histograms without changing those of the snapshot" do
+          snapshot = snapshot(
+            [:histogram, "a.b", 1.0, {dimensions: {region: "us"}}],
+            [:histogram, "a.b", 3.0, {dimensions: {region: "us", state: ""}}]
+          )
+          body(snapshot)
+
+          assert_equal([1, 1], snapshot.points.map { |point| point.value.count })
+        end
+
+        it "sends a name with the unit it was first given, when a merged snapshot has another" do
+          earlier = SemanticLogger::Metric::Aggregator.new(now: start_time - 60)
+          earlier.record(:histogram, "upload", 2.0, unit: "s")
+          aggregator.record(:histogram, "upload", 1500, unit: "By")
+          merged   = earlier.collect(start_time).merge(aggregator.collect(end_time))
+          messages = []
+          data     = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            data = body(merged)
+            body(merged)
+          end
+
+          assert_equal [datapoint("upload.count", 1), datapoint("upload.sum", 2000.0)], data["counter"]
+          assert_equal 1, messages.size
+          assert_includes messages.first, '"upload" with the unit "By"'
+        end
+
+        it "leaves out a gauge with the name and dimensions of a counter, warning once per name" do
+          messages = []
+          data     = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            data = body(snapshot([:counter, "latency.max", 7], [:histogram, "latency", 2.0]))
+            body(snapshot([:counter, "latency.max", 7], [:histogram, "latency", 2.0]))
+          end
+          gauges = data["gauge"].map { |point| point["metric"] }
+
+          assert_includes data["counter"], datapoint("latency.max", 7)
+          refute_includes gauges, "latency.max"
+          assert_includes gauges, "latency.min"
+          assert_equal 1, messages.size
+          assert_includes messages.first, "latency.max"
+        end
+
+        it "sends one gauge of each name and dimensions, the first one" do
+          messages = []
+          data     = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            data = body(snapshot([:histogram, "latency", 2.0], [:histogram, "latency.min", 9.0]))
+          end
+          mins = data["gauge"].select { |point| point["metric"] == "latency.min" }
+
+          assert_equal 1, mins.size
+          assert_in_delta 2.0, mins.first["value"]
+          assert_equal data["gauge"].size, data["gauge"].map { |point| point["metric"] }.uniq.size
+          assert_equal 1, messages.size
+          assert_includes messages.first, "latency.min"
+        end
+
+        it "leaves out, with a warning, a value beyond the range of a Float" do
+          messages = []
+          data     = nil
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            data = body(snapshot([:histogram, "huge", 1e308], [:histogram, "huge", 1e308]))
+          end
+          metrics = (data["counter"] + data["gauge"]).map { |point| point["metric"] }
+
+          assert_includes metrics, "huge.count"
+          assert_includes metrics, "huge.max"
+          refute_includes metrics, "huge.sum"
+          refute_includes metrics, "huge"
+          assert_equal 1, messages.size
+          assert_includes messages.first, "huge.sum"
+        end
+
+        it "warns once for each name beyond the range of a Float, whatever the intervals" do
+          messages = []
+          appender.logger.stub(:warn, ->(message) { messages << message }) do
+            body(snapshot([:histogram, "huge", 1e308], [:histogram, "huge", 1e308]))
+            body(snapshot([:histogram, "huge", 1e308], [:histogram, "huge", 1e308]))
+            body(snapshot([:histogram, "large", 1e308], [:histogram, "large", 1e308]))
+          end
+
+          assert_equal 2, messages.size
+          assert_includes messages.last, "large.sum"
+          refute_includes messages.last, "huge"
+        end
+
         it "sends the snapshot end time, in ms, as the timestamp of every datapoint" do
           data = body(snapshot([:counter, "jobs", 1], [:histogram, "latency", 0.5, {unit: "s"}]))
 
@@ -288,6 +439,87 @@ module Metric
           error = assert_raises(ArgumentError) { build_appender(dimensions: %i[region]) }
 
           assert_includes error.message, "dimensions: option of the :signalfx metric appender was removed"
+          assert_includes error.message, "logger.increment(name, dimensions: {...})"
+        end
+
+        {
+          level:     "whatever the log level",
+          filter:    "every metric recorded is written",
+          formatter: "the format of its destination"
+        }.each_pair do |option, replacement|
+          it "refuses #{option}:, which was for the log entries it no longer takes" do
+            error = assert_raises(ArgumentError) { build_appender(option => :info) }
+
+            assert_includes error.message, "#{option}:"
+            assert_includes error.message, replacement
+          end
+        end
+
+        it "refuses a formatter block" do
+          error = assert_raises(ArgumentError) do
+            stub_http_start { SemanticLogger::Metric::Signalfx.new(token: "TEST", &:name) }
+          end
+
+          assert_includes error.message, "formatter block"
+        end
+
+        it "refuses batch: true" do
+          error = assert_raises(ArgumentError) do
+            stub_http_start { SemanticLogger::Appender.factory(metric: :signalfx, token: "TEST", batch: true) }
+          end
+
+          assert_includes error.message, "nothing to batch"
+        end
+
+        it "sends nothing for a snapshot whose series are all left out" do
+          requests = appender.logger.stub(:warn, nil) do
+            capture_requests { appender.write_metrics(snapshot([:counter, "/", 1])) }
+          end
+
+          assert_empty requests
+        end
+
+        describe "when writing fails" do
+          # A snapshot of the minute from the time, holding the counter "jobs" with the amount.
+          def interval(time, amount)
+            point = SemanticLogger::Metric::Snapshot::Point.new(kind: :counter, name: "jobs", value: amount)
+            SemanticLogger::Metric::Snapshot.new(start_time: time, end_time: time + 60, points: [point])
+          end
+
+          # Returns [Array<Integer>] the amount of "jobs" in each request sent for two snapshots, the first
+          # answered with the response, the second accepted.
+          def sent_after(response)
+            response.instance_variable_set(:@read, true)
+            first    = interval(start_time, 1)
+            second   = interval(end_time, 2)
+            requests = []
+            answers  = [response, http_success]
+            appender.logger.stub(:warn, nil) do
+              appender.logger.stub(:error, nil) do
+                appender.http.stub(:request, lambda { |request|
+                  requests << request
+                  answers.shift
+                }) do
+                  appender.log_metrics(first)
+                  appender.log_metrics(second)
+                end
+              end
+            end
+            requests.map { |request| JSON.parse(request.body)["counter"].first["value"] }
+          end
+
+          it "sends a snapshot that the server asks to send again later with the next one" do
+            assert_equal [1, 3], sent_after(Net::HTTPServiceUnavailable.new("1.1", "503", "Service Unavailable"))
+          end
+
+          it "discards a snapshot that the server rejects" do
+            assert_equal [1, 2], sent_after(Net::HTTPBadRequest.new("1.1", "400", "Bad Request"))
+          end
+
+          it "keeps a snapshot that could not be sent, since the server could not be reached" do
+            assert appender.metrics_retryable?(Errno::ECONNREFUSED.new)
+            refute appender.metrics_retryable?(RuntimeError.new("boom"))
+          end
         end
       end
 
