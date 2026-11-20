@@ -11,7 +11,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `metric: :signalfx`) compare header names in any case: a header given with `header:` in another case,
   such as `"content-type"`, replaces the default one rather than being sent beside it, which Net::HTTP
   reported as a duplicated header under `-W`; and the token header of `:splunk_http` and
-  `metric: :signalfx` replaces one given in any case.
+  `metric: :signalfx` replaces one given in any case. A header set later through `#header`, or written
+  to it directly by a custom subclass, is still kept as written.
 
 ## [5.3.0] 2026-11-20
 

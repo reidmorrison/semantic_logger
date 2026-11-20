@@ -140,7 +140,8 @@ module SemanticLogger
       #
       #   header: [Hash]
       #     Custom HTTP headers to send with each request. Each one replaces the default header of the
-      #     same name, compared in any case, such as "content-type" for Content-Type.
+      #     same name, compared in any case, such as "content-type" for Content-Type. A header set later
+      #     through #header, or written to it directly by a subclass, is not compared in any case.
       #     Default: {} ( do not send any custom headers)
       #     Example: {"Authorization" => "Bearer BEARER_TOKEN"}
       #
@@ -217,8 +218,8 @@ module SemanticLogger
           "Connection"   => "keep-alive",
           "Keep-Alive"   => "300"
         }
-        header.each { |name, value| set_header(name, value) }
-        set_header("Content-Encoding", "gzip") if @compress
+        header&.each { |name, value| replace_header(name, value) }
+        replace_header("Content-Encoding", "gzip") if @compress
 
         uri     = parse_url(@url)
         @server = uri.host
@@ -383,10 +384,10 @@ module SemanticLogger
 
       # Sets the header of that name, replacing one whose name differs from it only in case, since HTTP
       # header names are case-insensitive: otherwise both would be kept, and Net::HTTP would send only
-      # one of them, reporting the other as duplicated under -W. The name given is the one kept.
-      def set_header(name, value)
-        name = name.to_s
-        @header.delete_if { |existing, _value| existing.to_s.casecmp?(name) }
+      # one of them, reporting the other as duplicated under -W. The name is kept as given, a String or
+      # a Symbol.
+      def replace_header(name, value)
+        @header.delete_if { |existing, _value| existing.to_s.casecmp?(name.to_s) }
         @header[name] = value
       end
 

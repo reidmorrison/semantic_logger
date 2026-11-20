@@ -88,7 +88,7 @@ module SemanticLogger
 
         super(url: url, formatter: formatter, **args, &)
 
-        set_header("X-SF-TOKEN", token)
+        replace_header("X-SF-TOKEN", token)
         # Built from the parsed path, not the supplied url, so that a query string in the
         # url stays at the end of the request uri. See Appender::Http#uri_with_query.
         @full_path = "#{@path.end_with?('/') ? @path : "#{@path}/"}#{END_POINT}"

@@ -110,7 +110,7 @@ module SemanticLogger
         super(compress: compress, **args, &)
 
         # Put splunk auth token in the header of every HTTP post.
-        set_header("Authorization", "Splunk #{token}")
+        replace_header("Authorization", "Splunk #{token}")
       end
 
       # Returns [String] JSON to send to Splunk.

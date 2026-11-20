@@ -990,6 +990,24 @@ module Appender
           end
         end
 
+        it "keeps the name of a header as given, such as a Symbol" do
+          stub_http_start do
+            appender = SemanticLogger::Appender::Http.new(url:    "http://localhost:8088/path",
+                                                          header: {"content-type": "text/plain"})
+
+            assert_equal "text/plain", appender.header[:"content-type"]
+            refute appender.header.key?("Content-Type")
+          end
+        end
+
+        it "sends only its own headers when header: is nil" do
+          stub_http_start do
+            appender = SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", header: nil)
+
+            assert_equal "application/json", appender.header["Content-Type"]
+          end
+        end
+
         it "keeps one of the headers given in several cases, the last one" do
           stub_http_start do
             appender = SemanticLogger::Appender::Http.new(
@@ -1016,11 +1034,11 @@ module Appender
         end
 
         it "sends a header given in another case without a duplicated header warning" do
+          verbose = $VERBOSE
           stub_http_start do
             request  = nil
             appender = SemanticLogger::Appender::Http.new(url:    "http://localhost:8088/path",
                                                           header: {"content-type" => "text/plain"})
-            verbose  = $VERBOSE
             $VERBOSE = true
             _out, err = capture_io do
               appender.http.stub(:request, lambda { |r|
