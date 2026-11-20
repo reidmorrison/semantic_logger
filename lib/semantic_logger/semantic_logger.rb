@@ -356,6 +356,8 @@ module SemanticLogger
     Logger.processor.start
     # And the thread that receives the entries logged in other Ractors (Ruby 4.0 and later).
     RactorReceiver.start if RactorSupport.enabled?
+    # And the collection of metrics, for a metric appender.
+    Metric.collector.start if appender&.metrics_interval
     appender
   end
 
@@ -382,27 +384,26 @@ module SemanticLogger
   # nil when it is not closed within SyncProcessor::TRAP_WAIT_SECONDS, such as when the trap
   # interrupted a log call, which must return first: it is then removed and closed just after (see
   # SyncProcessor#remove).
+  #
+  # A metric appender (see Metric::Snapshots) first writes the metrics recorded so far, and once the
+  # last one is removed, metrics are no longer collected (see Metric::Collector#removing).
   def self.remove_appender(appender)
     return unless appender
 
-    Logger.processor.remove(appender)
+    Metric.collector.removing(appender) { Logger.processor.remove(appender) }
   end
 
   # Clear out all previously registered appenders
   #
   # Like .close, returns false at once, without closing them, on the thread of an appender added with
   # async: true or in batches.
-  def self.clear_appenders!
-    Logger.processor.close
-  end
+  def self.clear_appenders! = close
 
   # Returns [SemanticLogger::Subscriber] a copy of the list of active
   # appenders for debugging etc.
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
-  def self.appenders
-    Logger.processor.appenders
-  end
+  def self.appenders = Logger.processor.appenders
 
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.
@@ -418,18 +419,29 @@ module SemanticLogger
   #  Returns false at once, without flushing, on the thread of an appender added with async: true or
   #  in batches, such as by that appender as it writes, since the processor's thread waits for that
   #  thread to flush the appender. The first such call is reported to the internal logger.
+  #
+  #  First the metrics recorded since the last interval are given to the metric appenders, which then
+  #  write what they hold as they are flushed, so that the flush at exit writes the last partial
+  #  interval. Not in a signal trap, where they cannot be collected: the next flush or interval
+  #  delivers them.
   def self.flush
-    return Logger.processor.flush if !RactorSupport.enabled? || RactorSupport.other_ractor?
+    return Logger.processor.flush if RactorSupport.other_ractor?
 
-    RactorReceiver.flush
+    Metric.collector.deliver
+    RactorSupport.enabled? ? RactorReceiver.flush : Logger.processor.flush
   end
 
   # Close all appenders and flush any outstanding messages.
   #
   # Like .flush, returns false at once, without closing them, on the thread of an appender added with
   # async: true or in batches.
+  #
+  # The metric appenders first write the metrics recorded so far, and metrics are no longer collected
+  # once they are closed (see Metric::Collector#closing).
   def self.close
-    Logger.processor.close
+    return Logger.processor.close if RactorSupport.other_ractor?
+
+    Metric.collector.closing { Logger.processor.close }
   end
 
   # Re-open any open file handles etc. to resources.
@@ -458,6 +470,7 @@ module SemanticLogger
     return if !force && @reopened_pid == ::Process.pid
 
     Logger.processor.reopen
+    Metric.collector.reopen
     RactorReceiver.reopen if RactorSupport.enabled?
     @reopened_pid = ::Process.pid
   end
@@ -862,6 +875,7 @@ module SemanticLogger
     autoload :NewRelic,             "semantic_logger/metric/new_relic"
     autoload :Signalfx,             "semantic_logger/metric/signalfx"
     autoload :Snapshot,             "semantic_logger/metric/snapshot"
+    autoload :Snapshots,            "semantic_logger/metric/snapshots"
     autoload :Statsd,               "semantic_logger/metric/statsd"
   end
 

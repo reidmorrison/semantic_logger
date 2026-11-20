@@ -79,6 +79,18 @@ module CoreExt
           end
           assert_equal 1, calls
         end
+
+        it "tells the metric collector to keep its metrics, before it reopens" do
+          calls = []
+
+          SemanticLogger::Metric.collector.stub(:daemonized, -> { calls << :daemonized }) do
+            SemanticLogger.stub(:reopen, -> { calls << :reopen }) do
+              ForkStub.new(0).daemon
+            end
+          end
+
+          assert_equal %i[daemonized reopen], calls
+        end
       end
     end
 

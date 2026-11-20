@@ -22,7 +22,34 @@ module SemanticLogger
     # Add an appender. In a signal trap, as for #flush, which returns nil instead of the appender when
     # it is not added in time. SemanticLogger.add_appender adds to the appenders directly instead.
     def add(**args, &block)
-      synchronize { @appenders.add(**args, &block) }
+      appender = synchronize { @appenders.add(**args, &block) }
+      Metric.collector.start if appender&.metrics_interval
+      appender
+    end
+
+    # Records the metric with the collector of the process (see Metric::Collector#record), which
+    # returns at once unless a metric appender is present.
+    def record_metric(kind, name, value, unit: nil, dimensions: nil)
+      Metric.collector.record(kind, name, value, unit: unit, dimensions: dimensions)
+    end
+
+    # Gives the snapshot of metrics to the metric appenders on the calling thread (see
+    # Appenders#log_metrics), or, in a signal trap, as for #log, just after, on another thread.
+    def log_metrics(snapshot)
+      logged = exclusively { @appenders.log_metrics(snapshot) }
+      return logged unless logged.equal?(TRAPPED)
+
+      defer { @appenders.log_metrics(snapshot) }
+      true
+    rescue SystemStackError => e
+      @appenders.logger.error("Failed to write metrics: the stack overflowed", e)
+      false
+    end
+
+    # Returns [Numeric|nil] the shortest metrics interval of the appenders (see
+    # Appenders#metrics_interval). Never enters the monitor.
+    def metrics_interval
+      @appenders.metrics_interval
     end
 
     # Logs on the calling thread, which belongs to the application, so a stack overflow while

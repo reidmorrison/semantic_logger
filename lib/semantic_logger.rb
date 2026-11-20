@@ -25,6 +25,7 @@ require "semantic_logger/sync_processor"
 require "semantic_logger/logger"
 require "semantic_logger/debug_as_trace_logger"
 require "semantic_logger/semantic_logger"
+require "semantic_logger/metric/collector"
 
 # Logging from Ractors other than the main one (experimental), on Ruby 4.0 and later.
 if SemanticLogger::RactorSupport.enabled?

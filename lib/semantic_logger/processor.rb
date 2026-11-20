@@ -157,6 +157,12 @@ module SemanticLogger
       true
     end
 
+    # Records the metric with the collector of the process (see Metric::Collector#record), which
+    # returns at once unless a metric appender is present.
+    def record_metric(kind, name, value, unit: nil, dimensions: nil)
+      Metric.collector.record(kind, name, value, unit: unit, dimensions: dimensions)
+    end
+
     # Returns [Integer] the number of log messages waiting on the main pipeline queue.
     def queue_size
       queue.size

@@ -41,8 +41,14 @@ module SemanticLogger
 
       # `Process.daemon` does not route through `_fork`, so reopen explicitly. Once
       # it returns, the caller is running as the daemon (child) process.
+      #
+      # The daemon keeps the metrics recorded before it was started (see Metric::Collector#daemonized),
+      # since the process that started it exits without delivering them, unlike the parent of a fork.
       def daemon(...)
-        Process.pause_for_fork { super }.tap { SemanticLogger.reopen if SemanticLogger.reopen_on_fork? }
+        Process.pause_for_fork { super }.tap do
+          SemanticLogger::Metric.collector.daemonized
+          SemanticLogger.reopen if SemanticLogger.reopen_on_fork?
+        end
       end
     end
   end
