@@ -171,6 +171,12 @@ RSpec.describe SemanticLogger::Test::RSpec do
         log_semantic_logger_event(metric: "User/disabled")
       )
     end
+
+    it "describes its expectations once" do
+      matcher = log_semantic_logger_event(level: :info)
+
+      expect(matcher.description).to eq("log a semantic logger event matching #{{level: :info}.inspect}")
+    end
   end
 
   describe "#capture_semantic_logger_metrics" do
@@ -258,6 +264,12 @@ RSpec.describe SemanticLogger::Test::RSpec do
 
       expect(matcher.matches?(-> { signup.call("free") })).to be(false)
       expect(matcher.failure_message).to include("Captured 3 metric(s)")
+    end
+
+    it "describes its expectations once" do
+      matcher = record_semantic_logger_metric(name: "users.left")
+
+      expect(matcher.description).to eq("record a semantic logger metric matching #{{name: 'users.left'}.inspect}")
     end
   end
 end

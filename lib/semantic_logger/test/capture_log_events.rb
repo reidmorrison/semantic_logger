@@ -82,13 +82,21 @@ module SemanticLogger
       # them, as the processor does (see Metric::Validator), so that a test sees just what would be
       # recorded.
       #
+      # Semantic Logger's own metrics (`internal: true`) are not captured. Like the processor, it never
+      # raises: a metric call that fails as it is captured, such as one whose dimensions raise as they
+      # are read, is reported once for its name and not captured.
+      #
       # Returns [true|false] whether it was captured.
-      def record_metric(kind, name, value, unit: nil, dimensions: nil)
-        name = @metric_validator.accept(kind, name, value, dimensions)
-        return false unless name
+      def record_metric(kind, name, value, unit: nil, dimensions: nil, internal: false)
+        return false if internal
 
-        @metric_events << MetricEvent.new(kind: kind, name: name, value: value, unit: unit, dimensions: dimensions)
+        accepted = @metric_validator.accept(kind, name, value, dimensions)
+        return false unless accepted
+
+        @metric_events << MetricEvent.new(kind: kind, name: accepted, value: value, unit: unit, dimensions: dimensions)
         true
+      rescue StandardError => e
+        @metric_validator.report_failure(kind, name, e)
       end
 
       # Discards the log events, snapshots, and metric calls captured.

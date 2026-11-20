@@ -15,9 +15,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   metric appenders are given what was recorded in each interval; without one, they return at once.
   Like log calls they never raise: a negative counter amount, a value that is NaN, Infinite, or not a
   Numeric, or a name that is not a String or Symbol, is dropped, with a warning on the internal logger
-  once per metric name.
+  once per metric name, as is a call that fails as it is recorded.
 - `SemanticLogger::Test::CaptureLogEvents` captures these metric calls in `metric_events`, as they are
-  made, both when it stands in for a logger and for the processor. Minitest:
+  made, both when it stands in for a logger and for the processor, with their dimensions as they are
+  recorded (String keys, Symbol values as Strings); an expected `dimensions:` is compared the same way,
+  so `dimensions: {plan: "free"}` matches. Minitest:
   `semantic_logger_metrics { ... }` returns them, and `assert_metric(metrics, name:, kind:, value:,
   unit:, dimensions:)` asserts that one of them matches. RSpec: `capture_semantic_logger_metrics`, the
   matchers `be_a_semantic_logger_metric` and `a_semantic_logger_metric`, and the block matcher

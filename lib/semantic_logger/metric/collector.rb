@@ -60,7 +60,10 @@ module SemanticLogger
 
       # Records the value (see Aggregator#record) while collecting, unless the Validator drops it (see
       # Validator#accept). Otherwise returns false, at once when not collecting. Never locks a Mutex in a
-      # signal trap, and never raises.
+      # signal trap, and never raises: when the Aggregator raises, such as for a dimension value without
+      # #hash, returns false after reporting it once for the metric name (see #report_failure). When it
+      # fails itself, a defect, it reports that once for every metric name (see
+      # Validator#report_collector_failure).
       #
       # In a forked child that was not reopened, such as one forked while SemanticLogger.reopen_on_fork
       # is false, first discards the series inherited from the parent (see #renew_after_fork).
@@ -69,7 +72,20 @@ module SemanticLogger
         return false unless (name = @validator.accept(kind, name, value, dimensions))
 
         renew_after_fork unless @pid == ::Process.pid
-        @aggregator.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal)
+        begin
+          @aggregator.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal)
+        rescue StandardError => e
+          report_failure(kind, name, e)
+        end
+      rescue StandardError => e
+        @validator.report_collector_failure(kind, name, e)
+      end
+
+      # Reports, once for each metric name, that recording the metric raised `exception` (see
+      # Validator#report_failure), and returns false. Also asked by SemanticLogger::Base, when the
+      # processor raises as it is asked to record a metric. Never raises.
+      def report_failure(kind, name, exception)
+        @validator.report_failure(kind, name, exception)
       end
 
       # Starts collecting, and the thread that collects at each interval unless it runs, since a metric

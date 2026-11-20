@@ -77,7 +77,13 @@ module SemanticLogger
         end
 
         def description
-          "be a semantic logger event matching #{full_expectations.inspect}"
+          "be a semantic logger event matching #{expectations}"
+        end
+
+        # Returns [String] the expectations it matches a log event against, for the description of a
+        # matcher that asks it.
+        def expectations
+          full_expectations.inspect
         end
 
         def failure_message
@@ -173,7 +179,7 @@ module SemanticLogger
         end
 
         def description
-          "log a semantic logger event matching #{@matcher.description}"
+          "log a semantic logger event matching #{@matcher.expectations}"
         end
 
         def failure_message
@@ -212,7 +218,13 @@ module SemanticLogger
         end
 
         def description
-          "be a semantic logger metric matching #{@expected.inspect}"
+          "be a semantic logger metric matching #{expectations}"
+        end
+
+        # Returns [String] the expectations it matches a metric call against, for the description of a
+        # matcher that asks it.
+        def expectations
+          @expected.inspect
         end
 
         def failure_message
@@ -251,7 +263,7 @@ module SemanticLogger
         end
 
         def description
-          "record a semantic logger metric matching #{@matcher.description}"
+          "record a semantic logger metric matching #{@matcher.expectations}"
         end
 
         def failure_message

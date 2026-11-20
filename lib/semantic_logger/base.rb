@@ -152,9 +152,9 @@ module SemanticLogger
     # starts another series.
     #
     # Like log calls, they never raise. A metric with a name that is not a non-empty String or Symbol,
-    # a value that is not a finite real Numeric, a negative counter amount, or dimensions that are not
-    # a Hash, is dropped, with a warning on the internal logger once per metric name and problem. A
-    # Symbol name is recorded as a String.
+    # a value that is not a real Numeric finite as a Float, a negative counter amount, or dimensions
+    # that are not a Hash, is dropped, with a warning on the internal logger once per metric name and
+    # problem, as is one that fails as it is recorded. A Symbol name is recorded as a String.
 
     # Adds `amount` to the counter `name`.
     #
@@ -200,7 +200,11 @@ module SemanticLogger
     # Returns the block's result. Without a block, [true|false] whether it was recorded.
     def time(name, duration: nil, dimensions: nil)
       unless block_given?
-        seconds = duration.is_a?(Numeric) ? duration.fdiv(1000) : duration
+        begin
+          seconds = duration.is_a?(Numeric) ? duration.fdiv(1000) : duration
+        rescue StandardError => e
+          return report_metric_failure(:histogram, name, e)
+        end
         return record_metric(:histogram, name, seconds, unit: "s", dimensions: dimensions)
       end
 
@@ -427,11 +431,26 @@ module SemanticLogger
     # Every metric call (see #increment) ends here: asks the processor to record it, which drops it at
     # once without a metric appender (see Metric::Collector#record).
     #
+    # Never raises, so that a metric call, like a log call, never fails the application, and #time never
+    # replaces the exception of its block: when the processor raises, such as a stand-in for it in a
+    # test, the failure is reported once for the metric name (see Metric::Collector#report_failure).
+    #
     # kind: :counter or :histogram.
     #
     # Returns [true|false] whether it was recorded.
     def record_metric(kind, name, value, unit:, dimensions:)
       Logger.processor.record_metric(kind, name, value, unit: unit, dimensions: dimensions)
+    rescue StandardError => e
+      report_metric_failure(kind, name, e)
+    end
+
+    # Reports, once for the metric name, that the metric call failed with `exception` (see
+    # Metric::Collector#report_failure), and returns false, the result of the metric call. Never raises.
+    def report_metric_failure(kind, name, exception)
+      Metric.collector.report_failure(kind, name, exception)
+    rescue StandardError
+      # Such as outside the main Ractor, which has no collector: reporting it is best effort.
+      false
     end
 
     # Return the level index for fast comparisons, resolved in the same order as `#level`.

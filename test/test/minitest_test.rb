@@ -195,6 +195,16 @@ class MinitestHelpersTest < Minitest::Test
       assert_raises(Minitest::Assertion) { assert_metric([], name: "users.signup") }
     end
 
+    it "matches name: :nil only when the name is nil" do
+      refute metrics.first.matches?(name: :nil)
+      assert SemanticLogger::Test::MetricEvent.new(kind: :counter, name: nil, value: 1).matches?(name: :nil)
+    end
+
+    it "matches dimensions given with Symbol or String keys, and Symbol values" do
+      assert_metric(metrics, name: "users.signup", dimensions: {"plan" => "free"})
+      assert_metric(metrics, name: "users.signup", dimensions: {plan: :free})
+    end
+
     it "raises ArgumentError for an attribute that a metric does not have" do
       assert_raises(ArgumentError) { metrics.first.matches?(level: :info) }
     end

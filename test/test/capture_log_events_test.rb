@@ -80,7 +80,7 @@ class CaptureLogEventsTest < Minitest::Test
     describe "metric calls" do
       def assert_captured(metric_events)
         expected = [
-          [:counter, "users.signup", nil, {plan: "free"}],
+          [:counter, "users.signup", nil, {"plan" => "free"}],
           [:histogram, "users.signup.time", "s", nil],
           [:histogram, "users.signup.size", "By", nil]
         ]
@@ -113,15 +113,51 @@ class CaptureLogEventsTest < Minitest::Test
         assert_equal ["users.signup"], capture_logger.metric_events.map(&:name)
       end
 
-      it "are frozen, with a frozen copy of the dimensions" do
-        dimensions = {plan: "free"}
+      it "are frozen, with the dimensions as they are recorded" do
+        dimensions = {plan: "free", tier: :gold}
         capture_logger.increment("users.signup", dimensions: dimensions)
         metric = capture_logger.metric_events.first
         dimensions[:plan] = "paid"
 
         assert_predicate metric, :frozen?
         assert_predicate metric.dimensions, :frozen?
-        assert_equal({plan: "free"}, metric.dimensions)
+        assert_equal({"plan" => "free", "tier" => "gold"}, metric.dimensions)
+        assert metric.matches?(dimensions: {plan: "free", tier: :gold})
+        assert metric.matches?(dimensions: {"plan" => "free", "tier" => "gold"})
+        refute metric.matches?(dimensions: {plan: "paid", tier: :gold})
+      end
+
+      it "has the name frozen, and no dimensions for an empty Hash, as they are recorded" do
+        capture_logger.increment(+"users.signup", dimensions: {})
+        metric = capture_logger.metric_events.first
+
+        assert_predicate metric.name, :frozen?
+        assert_nil metric.dimensions
+        assert metric.matches?(dimensions: {})
+        assert metric.matches?(dimensions: :nil)
+        with_plan = SemanticLogger::Test::MetricEvent.new(kind: :counter, name: "a", value: 1,
+                                                          dimensions: {plan: "free"})
+
+        refute with_plan.matches?(dimensions: {})
+      end
+
+      it "does not capture Semantic Logger's own metrics" do
+        refute capture_logger.record_metric(:counter, "semantic_logger.log.processed", 1, internal: true)
+        assert_empty capture_logger.metric_events
+      end
+
+      it "drops, without raising, a metric that fails as it is captured" do
+        # Dimensions that raise as they are read, so that capturing them raises.
+        dimensions = Class.new(Hash) { def each_pair(*) = raise(NoMethodError, "each_pair") }[plan: "free"]
+        warnings   = []
+        capture_logger.logger.stub(:warn, ->(message) { warnings << message }) do
+          SemanticLogger::Logger.stub(:processor, capture_logger) do
+            refute capture_logger.increment("users.signup", dimensions: dimensions)
+          end
+        end
+
+        assert_empty capture_logger.metric_events
+        assert_includes warnings.first, 'Failed to record counter "users.signup"'
       end
 
       it "drops the ones that would not be recorded, warning once" do

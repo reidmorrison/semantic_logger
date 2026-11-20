@@ -49,14 +49,81 @@ module Metric
         assert_equal [:warn], internal_logger.events.map(&:level).uniq
       end
 
-      it "drops a value that is not a finite real Numeric, for every kind" do
-        [Float::NAN, Float::INFINITY, -Float::INFINITY, Complex(1, 2), "1", nil].each do |value|
+      it "drops a value that is not a real Numeric finite as a Float, for every kind" do
+        [Float::NAN, Float::INFINITY, -Float::INFINITY, Rational(10**400), Complex(1, 2), "1", nil].each do |value|
           assert_nil accept(:counter, "count", value)
           assert_nil accept(:histogram, "size", value)
         end
 
         assert_equal 2, warnings.size
-        assert_includes warnings.first, "its value NaN is not a finite real Numeric"
+        assert_includes warnings.first, "its value NaN is not a real Numeric that is finite as a Float"
+      end
+
+      it "drops an Integer histogram value too large for a Float, but not an Integer counter amount" do
+        assert_nil accept(:histogram, "size", 10**400)
+        assert_equal "count", accept(:counter, "count", 10**400)
+      end
+
+      it "warns once about a Symbol name and the same String" do
+        assert_nil accept(:counter, :jobs, -1)
+        assert_nil accept(:counter, "jobs", -1)
+
+        assert_equal 1, warnings.size
+      end
+
+      it "reports a failure once per metric name, and returns false" do
+        error = NoMethodError.new("undefined method 'hash'")
+        result = SemanticLogger::Logger.stub(:processor, processor) do
+          [validator.report_failure(:counter, "jobs", error), validator.report_failure(:counter, :jobs, error)]
+        end
+
+        assert_equal [false, false], result
+        assert_equal 1, warnings.size
+        assert_includes warnings.first, %(Failed to record counter "jobs": NoMethodError: "undefined method 'hash'")
+      end
+
+      it "reports a failure of the collector once for every metric name" do
+        error = ArgumentError.new("renew")
+        result = SemanticLogger::Logger.stub(:processor, processor) do
+          [validator.report_collector_failure(:counter, "jobs", error),
+           validator.report_collector_failure(:histogram, "users.signup", error),
+           validator.report_failure(:counter, "jobs", error)]
+        end
+
+        assert_equal [false, false, false], result
+        assert_equal 2, warnings.size
+        assert_includes warnings.first, %(Failed to record counter "jobs", in the metrics collector: ArgumentError)
+        assert_includes warnings.last, %(Failed to record counter "jobs": ArgumentError)
+      end
+
+      it "warns later when building the warning failed" do
+        error = RuntimeError.new("boom")
+        calls = 0
+        error.define_singleton_method(:message) { (calls += 1) == 1 ? raise("message") : "boom" }
+        SemanticLogger::Logger.stub(:processor, processor) do
+          validator.report_failure(:counter, "jobs", error)
+          validator.report_failure(:counter, "jobs", error)
+        end
+
+        assert_equal 1, warnings.size
+        assert_includes warnings.first, %(Failed to record counter "jobs": RuntimeError: "boom")
+      end
+
+      describe ".recordable_value?" do
+        it "is the predicate the Aggregator asks too" do
+          assert SemanticLogger::Metric::Validator.recordable_value?(:counter, 10**400)
+          refute SemanticLogger::Metric::Validator.recordable_value?(:histogram, 10**400)
+          refute SemanticLogger::Metric::Validator.recordable_value?(:histogram, Float::NAN)
+          assert SemanticLogger::Metric::Validator.recordable_value?(:histogram, Rational(1, 3))
+          refute SemanticLogger::Metric::Validator.recordable_value?(:counter, "1")
+        end
+
+        it "never raises, for a Numeric that does" do
+          value = Class.new(Numeric) { def real? = raise("real?") }.new
+
+          refute SemanticLogger::Metric::Validator.recordable_value?(:histogram, value)
+          refute SemanticLogger::Metric::Aggregator.new.record(:histogram, "size", value)
+        end
       end
 
       it "drops a name that is not a non-empty String or Symbol, warning once per class" do

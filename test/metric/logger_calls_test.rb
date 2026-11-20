@@ -36,6 +36,27 @@ module Metric
         end
       end
 
+      describe "when the processor raises" do
+        let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+        let(:processor) do
+          failing = Struct.new(:logger).new(internal_logger)
+          failing.define_singleton_method(:record_metric) { |*, **| raise "boom" }
+          failing
+        end
+
+        it "returns false, reporting it once per metric name" do
+          SemanticLogger::Logger.stub(:processor, processor) do
+            refute logger.increment("logger_calls.failing_processor")
+            refute logger.increment("logger_calls.failing_processor")
+            assert_equal 42, logger.time("logger_calls.failing_processor") { 42 }
+          end
+          warnings = internal_logger.events.map(&:message)
+
+          assert_equal 1, warnings.size
+          assert_includes warnings.first, 'Failed to record counter "logger_calls.failing_processor": RuntimeError'
+        end
+      end
+
       describe "with a metric appender" do
         before do
           SemanticLogger.add_appender(metric: appender)
@@ -59,7 +80,7 @@ module Metric
             logger.increment("cart.items_added", 1, dimensions: {department: "shoes"})
             values = points.to_h { |point| [point.dimensions, point.value] }
 
-            assert_equal({{department: "clothing"} => 5.5, {department: "shoes"} => 1}, values)
+            assert_equal({{"department" => "clothing"} => 5.5, {"department" => "shoes"} => 1}, values)
           end
 
           it "records a Symbol name as a String" do
@@ -129,8 +150,20 @@ module Metric
             point = points.first
 
             assert_equal "s", point.unit
-            assert_equal({queue: "default"}, point.dimensions)
+            assert_equal({"queue" => "default"}, point.dimensions)
             assert_in_delta 1.5, point.value.sum
+          end
+
+          it "returns false, reporting it, for a duration that raises as it is converted to seconds" do
+            duration = Class.new(Numeric) { def fdiv(*) = raise(ArgumentError, "fdiv") }.new
+            warnings = []
+
+            SemanticLogger::Logger.processor.logger.stub(:warn, ->(message) { warnings << message }) do
+              refute logger.time("logger_calls.failing_duration", duration: duration)
+            end
+
+            assert_empty points
+            assert_includes warnings.first, 'Failed to record histogram "logger_calls.failing_duration": ArgumentError'
           end
 
           it "times the block, ignoring duration:, when given both" do
@@ -189,6 +222,31 @@ module Metric
           end
 
           assert_equal [{}], points.map(&:dimensions)
+        end
+
+        describe "when recording raises" do
+          # Dimensions that raise as they are read, so that the Aggregator raises.
+          let(:dimensions) { Class.new(Hash) { def each_pair(*) = raise(NoMethodError, "each_pair") }[plan: "free"] }
+
+          it "returns false, reporting it once per metric name" do
+            warnings = []
+            SemanticLogger::Logger.processor.logger.stub(:warn, ->(message) { warnings << message }) do
+              # A name of its own, since the collector reports once per name for the whole process.
+              refute logger.increment("logger_calls.failing", dimensions: dimensions)
+              refute logger.increment(:"logger_calls.failing", dimensions: dimensions)
+            end
+
+            assert_equal 1, warnings.size
+            assert_includes warnings.first, 'Failed to record counter "logger_calls.failing": NoMethodError'
+          end
+
+          it "raises the exception of the block timed, not the one of recording" do
+            without_warnings do
+              assert_raises(ArgumentError) do
+                logger.time("logger_calls.failing_time", dimensions: dimensions) { raise ArgumentError, "boom" }
+              end
+            end
+          end
         end
 
         it "can be called on an appender, which inherits them" do
