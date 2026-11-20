@@ -87,13 +87,56 @@ module Metric
         assert_predicate original.points.first, :overflow?
       end
 
-      it "keeps String keys when the redactor fails" do
-        failing  = SemanticLogger::Redactor.new(->(_name) { raise ArgumentError, "boom" })
-        redacted = SemanticLogger::Logger.processor.logger.stub(:warn, nil) do
-          snapshot(counter(1, {"password" => "a"})).redact(failing)
-        end
+      it "leaves Semantic Logger's own metrics alone" do
+        point    = Point.new(kind: :counter, name: "semantic_logger.log.processed", value: 1,
+                             dimensions: {"password" => "a"}, internal: true)
+        original = snapshot(point)
 
-        assert_equal({"redaction_failed" => "ArgumentError"}, redacted.points.first.dimensions)
+        assert_same original, original.redact(redactor)
+      end
+
+      it "raises what the sensitive keys raise without a block, rather than return a value in their place" do
+        failing = SemanticLogger::Redactor.new(->(_name) { raise ArgumentError, "boom" })
+
+        assert_raises(ArgumentError) { snapshot(counter(1, {"password" => "a"})).redact(failing) }
+      end
+
+      it "leaves out only the points that cannot be redacted, yielding what each raised" do
+        failing  = SemanticLogger::Redactor.new(->(name) { name == "password" || raise(ArgumentError, "boom") })
+        internal = Point.new(kind: :counter, name: "semantic_logger.log.processed", value: 1,
+                             dimensions: {"region" => "eu"}, internal: true)
+        errors   = []
+        redacted = snapshot(
+          counter(1, {"plan" => "free"}),
+          counter(2, {"password" => "a"}),
+          counter(3, {"password" => "b"}),
+          histogram({"region" => "eu"}, 1),
+          internal
+        ).redact(failing) { |error| errors << error }
+
+        assert_equal [ArgumentError, ArgumentError], errors.map(&:class)
+        assert_equal([[{"password" => "[FILTERED]"}, 5], [internal.dimensions, 1]],
+                     redacted.points.map { |point| [point.dimensions, point.value] })
+        assert_includes redacted.points, internal
+      end
+
+      it "normalizes a replacement as the Aggregator normalizes a dimension value" do
+        filter = Object.new
+        def filter.filter_param(name, _value) = (name == "password" ? :filtered : nil)
+        original = snapshot(counter(1, {"password" => "a"}), counter(2, {"password" => "b"}))
+        redacted = original.redact(SemanticLogger::Redactor.new(filter))
+        point    = redacted.points.first
+
+        assert_equal 1, redacted.size
+        assert_equal({"password" => "filtered"}, point.dimensions)
+        assert_predicate point.dimensions["password"], :frozen?
+        assert_equal 3, point.value
+      end
+
+      it "keeps the order of the dimensions" do
+        redacted = snapshot(counter(1, {"plan" => "free", "password" => "a", "region" => "eu"})).redact(redactor)
+
+        assert_equal %w[plan password region], redacted.points.first.dimensions.keys
       end
 
       it "sees the redacted dimensions in merged_by and merge" do
@@ -198,16 +241,80 @@ module Metric
         assert_same snapshot, SemanticLogger::Metric.collector.send(:redact, snapshot)
       end
 
-      it "delivers nothing, and reports it, when redacting the snapshot fails" do
-        snapshot = Object.new
-        def snapshot.redact(_redactor) = raise(ArgumentError, "boom")
-        errors   = []
-        result   = SemanticLogger::Logger.processor.logger.stub(:error, ->(message, _e = nil) { errors << message }) do
-          SemanticLogger::Metric.collector.send(:redact, snapshot)
+      it "reports once, and delivers only the points it could redact, when the sensitive keys raise" do
+        SemanticLogger.sensitive_keys = lambda do |name|
+          %w[password plan].include?(name) ? name == "password" : raise(ArgumentError, "boom #{name}")
+        end
+        logger.increment("users.signup", dimensions: {password: "a"})
+        logger.increment("users.signup", dimensions: {plan: "free"})
+        logger.increment("users.signup", dimensions: {region: "eu"})
+        logger.increment("users.signup", dimensions: {region: "us"})
+        errors    = []
+        report    = ->(message, _exception = nil) { errors << message }
+        delivered = SemanticLogger::Logger.processor.logger.stub(:error, report) do
+          SemanticLogger::Metric.collector.deliver
         end
 
-        assert_nil result
-        assert_equal ["Failed to collect metrics"], errors
+        assert delivered
+        assert_equal [{"password" => "[FILTERED]"}, {"plan" => "free"}], points.map(&:dimensions)
+        assert_equal 1, errors.size
+        assert_match(/\ARedacting the dimensions of metrics raised ArgumentError .*, so 2 of the \d+ metric series /,
+                     errors.first)
+        refute_match(/boom/, errors.first)
+      end
+
+      it "redacts a sensitive key nested in a dimension value before it becomes text" do
+        logger.increment("users.signup", dimensions: {user: {password: "s3cret", name: "jo"}, token: "abc"})
+        logger.increment("users.signup", dimensions: {user: {password: "other", name: "jo"}, token: "def"})
+
+        result = points.map { |point| [point.dimensions, point.value] }
+
+        assert_equal [[{"user" => {password: "[FILTERED]", name: "jo"}.inspect, "token" => "[FILTERED]"}, 2]], result
+        refute_match(/s3cret|other/, result.inspect)
+      end
+
+      it "redacts a nested dimension value with the sensitive keys at the time it is recorded" do
+        SemanticLogger.sensitive_keys = nil
+        logger.increment("users.signup", dimensions: {user: {password: "a"}})
+        SemanticLogger.sensitive_keys = %i[password]
+        logger.increment("users.signup", dimensions: {user: {password: "a"}})
+
+        assert_equal [{"user" => {password: "a"}.inspect}, {"user" => {password: "[FILTERED]"}.inspect}],
+                     points.map(&:dimensions)
+      end
+
+      it "does not ask the sensitive keys about scalar dimensions as they are recorded" do
+        asked = []
+        SemanticLogger.sensitive_keys = lambda do |name|
+          asked << name
+          false
+        end
+        logger.increment("users.signup", dimensions: {plan: "free", count: 1})
+        logger.increment("users.signup", dimensions: {plan: "free", count: 1})
+
+        assert_empty asked
+        assert_equal [{"plan" => "free", "count" => 1}], points.map(&:dimensions)
+        refute_empty asked
+      end
+
+      it "still gives the interval, the records dropped, and its own metrics when redacting fails itself" do
+        internal = Point.new(kind: :counter, name: "semantic_logger.log.processed", value: 1, internal: true)
+        snapshot = Snapshot.new(start_time: Time.at(0), end_time: Time.at(60), dropped_by_name_limit: 2,
+                                first_name_dropped: "x",
+                                points: [Point.new(kind: :counter, name: "a", value: 1,
+                                                   dimensions: {"password" => "a"}), internal])
+        errors   = []
+        report   = ->(message, _exception = nil) { errors << message }
+        # A Snapshot is frozen, so it cannot be stubbed: a stand-in whose #redact raises instead.
+        failing  = Class.new(SimpleDelegator) { def redact(_redactor) = raise(ArgumentError, "boom") }.new(snapshot)
+        result   = SemanticLogger::Logger.processor.logger.stub(:error, report) do
+          SemanticLogger::Metric.collector.send(:redact, failing)
+        end
+
+        assert_equal [internal], result.points
+        assert_equal [Time.at(0), Time.at(60), 2, "x"],
+                     [result.start_time, result.end_time, result.dropped_by_name_limit, result.first_name_dropped]
+        assert_match(/so 2 of the 2 metric series/, errors.first)
       end
     end
   end

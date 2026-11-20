@@ -61,7 +61,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the
   process in a metric. It is applied once per interval, as the metrics are collected, so it costs once
   per series rather than per call; series that differed only by the value of a sensitive dimension are
-  merged into one.
+  merged into one. Only values are replaced, never keys. A dimension value that is a structure, such as
+  a Hash, is redacted at any depth as it is recorded, before it becomes text. A series whose dimensions
+  cannot be redacted, such as when the sensitive keys raise, is never delivered; the others are, and
+  how many were left out is reported once per interval.
 
 ### Changed
 

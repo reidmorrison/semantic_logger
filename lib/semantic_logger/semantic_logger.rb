@@ -189,7 +189,12 @@ module SemanticLogger
   #
   # The dimensions of the metrics given to the metric appenders are redacted too, once per interval
   # as each snapshot is collected, so that it costs once per series rather than per metric call:
-  # series that differed only by the value of a sensitive dimension become one series.
+  # series that differed only by the value of a sensitive dimension become one series. Only values are
+  # replaced, never keys. A dimension value that is a structure, such as a Hash, is redacted at any
+  # depth as it is recorded, before it becomes text. A series whose dimensions cannot be redacted is
+  # never delivered, and how many were left out is reported once per interval to the internal logger.
+  # Until collected, sensitive values are held in memory, and count toward the limit of series per
+  # metric: never use them as dimensions.
   #
   # Each entry is redacted once, on the thread that writes it to the appenders, before any of them
   # writes it, so the keys must be thread safe. `on_log` subscribers and logger filters run before,
