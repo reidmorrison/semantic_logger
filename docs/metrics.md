@@ -408,8 +408,11 @@ hold one name in two units: each is sent as a metric of its own.
 | `application:` | The `service.name` of the resource. Default: `OTEL_SERVICE_NAME`, or else `SemanticLogger.application`. |
 | `host:` | The `host.name` of the resource. Default: `SemanticLogger.host`. |
 | `environment:` | The `deployment.environment.name` of the resource, left out when there is none. Default: `SemanticLogger.environment`. |
-| `resource_attributes:` | More attributes of the resource, which replace those above with the same key. |
-| `header:`, `compress:`, `ssl:`, `proxy_url:`, `open_timeout:`, `read_timeout:`, ... | The options of the [HTTP appender](appenders.html#https). |
+| `resource_attributes:` | More attributes of the resource, which replace those above with the same key, and those of `OTEL_RESOURCE_ATTRIBUTES`. |
+| `header:` | Headers to send with each request, such as one with credentials. Default: `OTEL_EXPORTER_OTLP_METRICS_HEADERS`, or else `OTEL_EXPORTER_OTLP_HEADERS`; a header given wins over one of the environment with the same name, in any case. |
+| `compress:` | `true` to compress each request with gzip. Default: `true` when `OTEL_EXPORTER_OTLP_METRICS_COMPRESSION`, or else `OTEL_EXPORTER_OTLP_COMPRESSION`, is `gzip`, otherwise `false`. |
+| `open_timeout:`, `read_timeout:` | Seconds to wait to connect, and for each read of the response. Default: `OTEL_EXPORTER_OTLP_METRICS_TIMEOUT`, or else `OTEL_EXPORTER_OTLP_TIMEOUT`, in milliseconds (`0` for no limit), or else those of the HTTP appender. |
+| `ssl:`, `proxy_url:`, ... | The other options of the [HTTP appender](appenders.html#https). |
 
 Every request also has the `process.pid` of the process that sends it, so that the deltas of each
 process, such as the forked workers of one application on one host, are kept apart.
@@ -419,11 +422,32 @@ It connects to the receiver when it is added, as every appender built on the HTT
 Once it is added, a snapshot that could not be sent follows [Outages](#intervals-flushes-and-outages).
 
 Of the [OpenTelemetry exporter environment variables](https://opentelemetry.io/docs/specs/otel/protocol/exporter/),
-it reads `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, and
-`OTEL_SERVICE_NAME`. It does not yet read `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_RESOURCE_ATTRIBUTES`,
-`OTEL_EXPORTER_OTLP_TIMEOUT`, or `OTEL_EXPORTER_OTLP_COMPRESSION`, nor their `_METRICS_` forms: give
-`header:`, `resource_attributes:`, the timeouts, and `compress: true` instead. Reading them is a
-planned follow-up.
+it reads those below, each only when the matching option is not given. An empty variable counts as
+not set, and the `_METRICS_` form of a variable replaces its generic form as a whole, without merging.
+
+| Variable | Sets |
+|----------|------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `url:` |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `endpoint:` |
+| `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_METRICS_HEADERS` | `header:`, as `name=value` pairs separated by commas, trimmed and percent-decoded, such as `api-key=abc%3D,x-team=core`. |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_METRICS_TIMEOUT` | `open_timeout:` and `read_timeout:`, in whole milliseconds; `0` means no limit. |
+| `OTEL_EXPORTER_OTLP_COMPRESSION`, `OTEL_EXPORTER_OTLP_METRICS_COMPRESSION` | `compress:`: `true` for `gzip`, `false` for `none`, in any case. |
+| `OTEL_SERVICE_NAME` | `application:` |
+| `OTEL_RESOURCE_ATTRIBUTES` | Attributes of the resource, as `key=value` pairs separated by commas, trimmed and percent-decoded, each value a String. |
+
+The attributes of the resource come from, highest first: `resource_attributes:`; `application:`,
+`host:`, and `environment:` when given, and `OTEL_SERVICE_NAME`; `OTEL_RESOURCE_ATTRIBUTES`; then
+`SemanticLogger.application`, `.host`, and `.environment`.
+
+A value it cannot use is ignored, with a warning on the internal logger: a timeout that is not a
+whole number of milliseconds, or a compression other than `gzip` or `none`. A malformed header entry,
+such as one without `=`, with a name that is not a valid header name, or with a value that holds a
+line break, is left out, and the warning names its position only, never its text, since a header may
+hold credentials. A malformed `OTEL_RESOURCE_ATTRIBUTES` is ignored as a whole, as the OpenTelemetry
+specification asks.
+
+OTLP's timeout bounds a whole export, while the HTTP appender bounds connecting and each read of the
+response instead, so a request can take somewhat longer than the timeout in all.
 
 **Responses.** A snapshot that the receiver asks to send again (408, 429, 502, 503, or 504), or that
 could not be sent since the receiver could not be reached, is sent again with the next one (see

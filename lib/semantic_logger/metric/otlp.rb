@@ -32,6 +32,7 @@ module SemanticLogger
       include SemanticLogger::Metric::Snapshots
 
       autoload :Encoder, "semantic_logger/metric/otlp/encoder"
+      autoload :Environment, "semantic_logger/metric/otlp/environment"
 
       # Base url of an OTLP/HTTP receiver, when neither `url:` nor `endpoint:` is given, nor set in the
       # environment.
@@ -79,6 +80,11 @@ module SemanticLogger
       #     More attributes of the resource, which replace those above with the same key.
       #     Example: {"service.version" => "1.2.3"}
       #
+      #   The resource also holds the attributes of ENV["OTEL_RESOURCE_ATTRIBUTES"]. Highest first:
+      #   `resource_attributes:`; `application:`, `host:`, and `environment:` when given, and
+      #   ENV["OTEL_SERVICE_NAME"]; ENV["OTEL_RESOURCE_ATTRIBUTES"]; then the defaults of
+      #   SemanticLogger.application, .host, and .environment.
+      #
       #   interval: [Numeric]
       #     Seconds between requests.
       #     Default: 60
@@ -89,21 +95,35 @@ module SemanticLogger
       #
       # The other options are those of Appender::Http, such as `header:` for the headers of each request,
       # such as one with credentials, `compress: true` to send the requests compressed with gzip, `ssl:`,
-      # `proxy_url:`, and the timeouts.
+      # `proxy_url:`, and the timeouts. These take defaults from the environment too, each from the
+      # variable of the metrics signal, or else from the generic one (see Otlp::Environment):
+      #
+      #   header: from OTEL_EXPORTER_OTLP_METRICS_HEADERS or OTEL_EXPORTER_OTLP_HEADERS, as `name=value`
+      #     pairs separated by commas, percent-decoded. A header given wins over one of the environment
+      #     with the same name, in any case.
+      #
+      #   compress: true when OTEL_EXPORTER_OTLP_METRICS_COMPRESSION or OTEL_EXPORTER_OTLP_COMPRESSION is
+      #     "gzip", false when it is "none".
+      #
+      #   open_timeout:, read_timeout: from OTEL_EXPORTER_OTLP_METRICS_TIMEOUT or OTEL_EXPORTER_OTLP_TIMEOUT,
+      #     in milliseconds, 0 meaning no limit (see #otel_timeouts).
       #
       # Every request also holds the `process.pid` of the process that sends it, so that the deltas of
       # each process, such as forked workers of the same application on the same host, are kept apart.
       def initialize(url: nil, endpoint: nil, application: nil, resource_attributes: nil, **args, &)
         raise(ArgumentError, "Supply either url: or endpoint:, not both") if url && endpoint
 
-        endpoint ||= env("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") unless url
-        url      ||= env("OTEL_EXPORTER_OTLP_ENDPOINT") || DEFAULT_URL
-        application ||= env("OTEL_SERVICE_NAME")
+        otel          = Environment.new(logger)
+        endpoint    ||= otel.endpoint unless url
+        url         ||= otel.base_url || DEFAULT_URL
+        application ||= otel.service_name
+        args[:header]   = otel_header(otel, args[:header] || {})
+        args[:compress] = otel.compress if !args.key?(:compress) && !otel.compress.nil?
 
-        super(url: endpoint || url, application: application, **args, &)
+        super(url: endpoint || url, application: application, **otel_timeouts(otel).merge(args), &)
 
         @full_path           = endpoint ? @path : "#{@path.delete_suffix('/')}/#{METRICS_PATH}"
-        @resource_attributes = resource(resource_attributes).freeze
+        @resource_attributes = resource(otel.resource_attributes, resource_attributes).freeze
       end
 
       # Posts the snapshot in one request. Returns true once the server accepted it, and raises when it
@@ -168,18 +188,38 @@ module SemanticLogger
         nil
       end
 
-      # Returns [Hash] the attributes of the resource, with String keys.
-      def resource(extra)
+      # Returns [Hash] the attributes of the resource, with String keys: those of OTEL_RESOURCE_ATTRIBUTES
+      # (from_env) replace the defaults, the application, host, and environment given (including the
+      # service name of OTEL_SERVICE_NAME) replace them, and those of `resource_attributes:` (extra)
+      # replace all of them.
+      def resource(from_env, extra)
         attributes = {"service.name" => application, "host.name" => host}
         attributes["deployment.environment.name"] = environment if environment
+        attributes.merge!(from_env)
+        attributes.merge!(
+          {"service.name" => @application, "host.name" => @host, "deployment.environment.name" => @environment}.compact
+        )
         extra&.each { |key, value| attributes[key.to_s] = value }
         attributes
       end
 
-      # Returns [String|nil] the value of the environment variable, nil when it is not set or blank.
-      def env(name)
-        value = ENV.fetch(name, nil)
-        value unless value.nil? || value.strip.empty?
+      # Returns [Hash] the headers given, and those of the environment whose name none given has, in any
+      # case, since HTTP header names are case-insensitive.
+      def otel_header(otel, given)
+        names = given.keys.map { |name| name.to_s.downcase }
+        otel.headers.reject { |name, _value| names.include?(name.downcase) }.merge(given)
+      end
+
+      # Returns [Hash] the Appender::Http timeouts that the timeout of the environment sets, none when it
+      # sets none. OTLP's timeout bounds the whole export, but Net::HTTP has no such deadline, so it
+      # bounds each wait on the server instead: connecting (open_timeout) and each read of the response
+      # (read_timeout). A request can therefore take somewhat longer than the timeout in all. The
+      # continue_timeout is left as it is: it applies only to a request sent with
+      # "Expect: 100-continue", which this appender never sends.
+      def otel_timeouts(otel)
+        return {} unless otel.timeout?
+
+        {open_timeout: otel.timeout, read_timeout: otel.timeout}
       end
     end
   end
