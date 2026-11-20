@@ -34,6 +34,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   metric appender writes them, so logging pays nothing for them. Metric appenders without the option
   never see them.
 
+- `SemanticLogger.add_appender(metric: :summary)` writes the metrics of each interval (`interval:`,
+  60 seconds by default) as log entries, one per series, at `level:` (`:info` by default), so that
+  every log appender writes them with its own formatter: the message is the metric name, and the
+  payload holds the `sum` of a counter, or the `count`, `sum`, `min`, `max`, `p50`, `p95`, and `p99`
+  of a histogram, with its `unit` and `dimensions`. For example:
+  `SemanticLogger::Metric::Summary -- supplier.add_user -- {count: 1204, sum: 98.1, min: 0.012,
+  max: 2.7, p50: 0.061, p95: 0.24, p99: 0.81, unit: "s"}`. `SemanticLogger.flush`, and so the flush
+  at exit, writes and flushes the entries that the summary writes as it is flushed, before it returns, so that
+  the summary of the last partial interval is written too. Its entries carry no tags of
+  the thread that writes them.
+
 ### Changed
 
 - Once a metric appender is present, the `metric:` of a log call, a `measure_*` call, or `backtrace`

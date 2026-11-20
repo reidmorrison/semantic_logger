@@ -47,13 +47,15 @@ module SemanticLogger
 
       # Called by the worker thread: run this command on the appender, or this task, then reply.
       # Returns false once message processing must stop (:close). A command it does not know is
-      # yielded to the block, for the caller to report, and otherwise ignored.
-      def run(appender)
+      # yielded to the block, for the caller to report, and otherwise ignored. A flush asks `aside`,
+      # when given, to flush the appender, which then also writes and flushes the messages logged aside
+      # meanwhile (see Aside#flush).
+      def run(appender, aside = nil)
         case command
         when Proc
           reply { command.call }
         when :flush
-          reply { appender.flush }
+          reply { aside ? aside.flush { appender.flush } : appender.flush }
         when :close
           reply { appender.close }
           return false
