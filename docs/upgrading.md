@@ -355,6 +355,14 @@ end
 To trace the method instead, use OpenTelemetry's `tracer.in_span`, or the method tracer of an APM
 agent.
 
+#### Rails: cleaned backtraces, redaction, and call sites by default
+
+If you use [rails_semantic_logger](rails.html), its v5.3 release requires Semantic Logger v5.3 and
+turns on three of its new features by default: exception backtraces are cleaned with
+`Rails.backtrace_cleaner`, the keys in `config.filter_parameters` are redacted from every log entry,
+and in development each entry records its call site. Each changes the log output and can be turned
+off. See [Upgrading to v5.3](rails.html#upgrading-to-v53) for details.
+
 #### Other behaviour changes
 
 * The `:loki` formatter now writes a payload key named like one of its own structured metadata

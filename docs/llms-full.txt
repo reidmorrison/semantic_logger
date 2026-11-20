@@ -4954,6 +4954,76 @@ After they initialize, Rails Semantic Logger replaces the loggers of these libra
 
 ---
 
+## Upgrading to v5.3
+
+v5.3 requires Semantic Logger v5.3; see [Upgrading to Semantic Logger v5.3](upgrading.html#upgrading-to-semantic-logger-v53)
+for the changes there. It needs no configuration changes, but several log entries change. Review
+these before you upgrade if a log query, dashboard, or alert depends on them.
+
+### Exception backtraces are cleaned
+
+The backtraces of logged exceptions are now cleaned with `Rails.backtrace_cleaner`, as in Rails' own
+log: only your application's frames are written, relative to `Rails.root`. Error services, such as
+Sentry, still receive the full backtrace. To log full backtraces again, set the `BACKTRACE`
+environment variable, or turn cleaning off in `config/application.rb`:
+
+~~~ruby
+config.semantic_logger.backtrace_cleaner = nil
+~~~
+
+A request for a missing route, and the other exceptions in
+`ActionDispatch::ExceptionWrapper.silent_exceptions`, is now logged on one line, without the exception
+itself, when none of its frames is your application's. Semantic Logger's own error service appenders,
+such as `sentry_ruby`, therefore receive a message for it rather than an exception. See
+[Cleaning exception backtraces](#cleaning-exception-backtraces).
+
+### `config.filter_parameters` are redacted from every entry
+
+The keys in `config.filter_parameters` are now redacted from the payload, named tags, and context of
+every log entry, not only from the request parameters. A filter matches any key that contains it, so
+Rails' default filters also redact keys such as `email`, `max_tokens`, `cache_key`, and
+`api_key_id`. Rails' defaults do not match the `Authorization` or `Cookie` headers, so consider adding
+them. To turn redaction off:
+
+~~~ruby
+config.rails_semantic_logger.redact_filter_parameters = false
+~~~
+
+See [Redacting sensitive data](#redacting-sensitive-data).
+
+### Call sites are recorded in development
+
+In development, each entry now records the file, line, and method of the code behind it. The text
+formatters write it after the thread name, and the `:json` formatter as `file`, `line`, and `method`.
+In the Rails console it replaces capturing a backtrace for every entry. To turn it off:
+
+~~~ruby
+config.semantic_logger.call_site_level = nil
+~~~
+
+See [Source file name, line number, and method](#source-file-name-line-number-and-method).
+
+### Other log output changes
+
+* Active Record: SQL bind values that have no column name are keyed by position (`$1`, `$2`, ...),
+  as in Rails 8.2's own log, instead of all under a `nil` key. Update anything that matches
+  `payload.binds.nil`.
+* Active Job: the message of an enqueue that failed now closes its parentheses:
+  `Failed enqueuing MyJob (Job ID: 1a2b) to Sidekiq(default): RuntimeError (boom)`.
+* Action Controller: the `source` of a `Redirected to` entry, written when
+  `ActionDispatch.verbose_redirect_logs` is on, is now relative to `Rails.root` instead of an absolute
+  path.
+* `config.active_record.verbose_query_logs` and `config.active_job.verbose_enqueue_logs`, which new
+  Rails applications turn on in development, are now honored: query and enqueue entries gain a
+  `source` in their payload.
+* Rails 8.1+: open redirects and path relative redirects reported with `:notify` are now logged at
+  `:warn`. On Rails 8.2, CSRF failures are logged at `:warn` again.
+
+See the [CHANGELOG](https://github.com/reidmorrison/rails_semantic_logger/blob/main/CHANGELOG.md)
+for the full list, including Rails 8.2 support.
+
+---
+
 ## Upgrading to v5.1
 
 v5.1 requires Semantic Logger v5.1 and needs no configuration changes. Two behaviors differ.
@@ -6781,6 +6851,14 @@ end
 
 To trace the method instead, use OpenTelemetry's `tracer.in_span`, or the method tracer of an APM
 agent.
+
+#### Rails: cleaned backtraces, redaction, and call sites by default
+
+If you use [rails_semantic_logger](rails.html), its v5.3 release requires Semantic Logger v5.3 and
+turns on three of its new features by default: exception backtraces are cleaned with
+`Rails.backtrace_cleaner`, the keys in `config.filter_parameters` are redacted from every log entry,
+and in development each entry records its call site. Each changes the log output and can be turned
+off. See [Upgrading to v5.3](rails.html#upgrading-to-v53) for details.
 
 #### Other behaviour changes
 
