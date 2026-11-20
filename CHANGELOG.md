@@ -80,6 +80,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   sent as `_`, whatever the name's encoding. It takes no log entries, so its `level:`, `filter:`, and `formatter:` options, and a formatter
   block, raise `ArgumentError`, as does `batch: true`.
 
+### Changed
+
+- The `:new_relic` metric subscriber records the metrics of each interval (`interval:`, 60 seconds by
+  default) rather than one call per log entry: a counter with one `increment_metric` by the sum of its
+  amounts, and a histogram with one `record_metric` of its count, total, min, max, and sum of squares
+  (estimated from its buckets), durations in seconds. The series of a metric with dimensions are still
+  merged under its name alone. It takes no log entries, so its `level:`, `filter:`, and `formatter:`
+  options no longer apply; the `prefix:` rule is unchanged. Semantic Logger's own metrics are recorded
+  only with `internal_metrics: true`.
+
 ## [Unreleased]
 
 ### Fixed
