@@ -281,6 +281,22 @@ module Metric
           assert_in_delta (2**70).to_f, metric("huge").dig("sum", "dataPoints", 0, "asDouble")
         end
 
+        it "sends an exact Integer sum that has grown beyond 64 bits as asDouble" do
+          3.times { aggregator.record(:counter, "bytes.total", 2**62) }
+
+          point = metric("bytes.total").dig("sum", "dataPoints", 0)
+
+          refute point.key?("asInt")
+          assert_in_delta (3 * (2**62)).to_f, point["asDouble"]
+        end
+
+        it "leaves out an Integer sum beyond the range of a Float" do
+          aggregator.record(:counter, "astronomical", 10**400)
+          aggregator.record(:counter, "users.signup", 1)
+
+          assert_equal(["users.signup"], metrics.map { |metric| metric["name"] })
+        end
+
         it "has the unit" do
           aggregator.record(:counter, "bytes.sent", 10, unit: "By")
 
@@ -311,6 +327,85 @@ module Metric
 
           assert_equal 1, metrics.size
           assert_equal({"free" => "1", "premium" => "2", nil => "4"}, by_plan)
+        end
+      end
+
+      describe "names" do
+        def point(kind, name, value, **args)
+          SemanticLogger::Metric::Snapshot::Point.new(kind: kind, name: name, value: value, **args)
+        end
+
+        def histogram(value)
+          histogram = SemanticLogger::Metric::ExponentialHistogram.new
+          histogram.record(value)
+          histogram
+        end
+
+        def built(*points)
+          SemanticLogger::Metric::Snapshot.new(start_time: start_time, end_time: end_time, points: points)
+        end
+
+        it "sends one metric per name, the Aggregator keeping the first kind and unit of each" do
+          aggregator.record(:counter, "jobs", 1, unit: "{job}")
+          aggregator.record(:histogram, "jobs", 2.0)
+          aggregator.record(:counter, "jobs", 1, unit: "s")
+          aggregator.record(:counter, :jobs, 1, unit: "{job}")
+
+          metrics = self.metrics
+
+          assert_equal 1, metrics.size
+          assert_equal "{job}", metrics.first["unit"]
+          assert_equal "2", metrics.first.dig("sum", "dataPoints", 0, "asInt")
+        end
+
+        it "sends each unit of one name as a metric of its own, in a merged snapshot" do
+          aggregator.record(:counter, "jobs", 1, unit: "{job}")
+          first = aggregator.collect(end_time)
+          aggregator.record(:counter, "jobs", 2, unit: "s")
+          aggregator.record(:counter, "jobs", 3, unit: "s", dimensions: {"queue" => "a"})
+          merged  = first.merge(aggregator.collect(end_time + 60))
+          metrics = metrics(merged)
+
+          assert_equal(%w[jobs jobs], metrics.map { |metric| metric["name"] })
+          by_unit = metrics.to_h do |metric|
+            [metric["unit"], metric.dig("sum", "dataPoints").map { |data_point| data_point["asInt"] }]
+          end
+
+          assert_equal({"{job}" => %w[1], "s" => %w[2 3]}, by_unit)
+        end
+
+        it "sends each kind of one name as a metric of its own, in a snapshot built otherwise" do
+          snapshot = built(
+            point(:counter, "jobs", 1, unit: "{job}"),
+            point(:histogram, "jobs", histogram(2.0)),
+            point(:counter, "jobs", 3, unit: "{job}", dimensions: {"queue" => "a"})
+          )
+          metrics = metrics(snapshot)
+
+          assert_equal 2, metrics.size
+          assert_equal(%w[1 3], metrics.first.dig("sum", "dataPoints").map { |data_point| data_point["asInt"] })
+          assert_equal "1", metrics.last.dig("exponentialHistogram", "dataPoints", 0, "count")
+        end
+
+        it "sends Semantic Logger's own metrics under their own names, apart from the application's" do
+          name = SemanticLogger::Metric::InternalMetrics::NAME
+          aggregator.record(:counter, "log.processed", 7)
+          aggregator.record(:counter, name, 5, dimensions: {appender: "File"}, internal: true)
+
+          by_name = metrics(on: new_appender(internal_metrics: true)).to_h do |metric|
+            [metric["name"], metric.dig("sum", "dataPoints", 0, "asInt")]
+          end
+
+          assert_equal({"log.processed" => "7", name => "5"}, by_name)
+        end
+
+        it "sends both Semantic Logger's own points and an application's of one name, as two metrics" do
+          name     = SemanticLogger::Metric::InternalMetrics::NAME
+          snapshot = built(point(:counter, name, 7), point(:counter, name, 5, internal: true))
+          metrics  = metrics(snapshot)
+
+          assert_equal([name, name], metrics.map { |metric| metric["name"] })
+          assert_equal(%w[7 5], metrics.map { |metric| metric.dig("sum", "dataPoints", 0, "asInt") })
         end
       end
 
@@ -365,6 +460,14 @@ module Metric
           assert_in_delta 4.0, point["max"]
         end
 
+        it "leaves out the sum once a negative value was recorded, as OTLP asks" do
+          [-3, 4].each { |value| aggregator.record(:histogram, "temperature", value) }
+          point = data_point("temperature")
+
+          assert_equal "2", point["count"]
+          refute point.key?("sum")
+        end
+
         it "leaves out empty buckets" do
           aggregator.record(:histogram, "zeros", 0)
           point = data_point("zeros")
@@ -384,7 +487,7 @@ module Metric
           assert_in_delta Float::MAX, point["max"]
         end
 
-        it "leaves out the sum, min, and max of an empty histogram" do
+        it "has a sum of zero, and leaves out the min and max, of an empty histogram" do
           histogram = SemanticLogger::Metric::ExponentialHistogram.new
           point     = SemanticLogger::Metric::Snapshot::Point.new(kind: :histogram, name: "empty", value: histogram)
           snapshot  = SemanticLogger::Metric::Snapshot.new(start_time: start_time, end_time: end_time, points: [point])
@@ -400,7 +503,8 @@ module Metric
 
       describe "dimensions" do
         # Given to the encoder as they are, in a point built here: the Aggregator would first normalize
-        # them to Strings and scalars (see Aggregator.normalize_dimensions).
+        # them to Strings, scalars, and Arrays of scalars (see Aggregator.normalize_dimensions), so the
+        # rest only checks that the encoder does not fail on a snapshot built otherwise.
         let(:dimensions) do
           point = SemanticLogger::Metric::Snapshot::Point.new(
             kind: :counter, name: "calls", value: 1, dimensions: dimension_values
@@ -443,15 +547,10 @@ module Metric
               "nil"         => {},
               "array"       => {
                 "arrayValue" => {
-                  "values" => [
-                    {"stringValue" => "a"}, {"intValue" => "1"},
-                    {"arrayValue" => {"values" => [{"boolValue" => true}]}}
-                  ]
+                  "values" => [{"stringValue" => "a"}, {"intValue" => "1"}, {"stringValue" => "[true]"}]
                 }
               },
-              "hash"        => {
-                "kvlistValue" => {"values" => [{"key" => "region", "value" => {"stringValue" => "us"}}]}
-              },
+              "hash"        => {"stringValue" => {region: "us"}.inspect},
               "other"       => {"stringValue" => Time.at(0).utc.to_s},
               "string.key"  => {"stringValue" => "kept"}
             },
@@ -459,18 +558,39 @@ module Metric
           )
         end
 
-        describe "nested too deeply" do
+        describe "nested deeply" do
           let(:dimension_values) do
             nested = ["bottom"]
             12.times { nested = [nested] }
             {deep: nested}
           end
 
-          it "sends the inspect of the rest as a String" do
-            value = dimensions["deep"]
-            8.times { value = value.dig("arrayValue", "values", 0) }
+          it "sends an Array within an Array as the String of its inspect" do
+            value = dimensions["deep"].dig("arrayValue", "values", 0)
 
-            assert_equal "[[[[[\"bottom\"]]]]]", value["stringValue"]
+            assert_equal SemanticLogger::Utils.safe_inspect(dimension_values[:deep].first), value["stringValue"]
+          end
+        end
+
+        describe "as normalized by the Aggregator" do
+          let(:dimensions) do
+            aggregator.record(:counter, "calls", 1, dimensions: dimension_values)
+            attributes(metric("calls").dig("sum", "dataPoints", 0, "attributes"))
+          end
+
+          let(:dimension_values) do
+            {plan: :free, ids: [1, "a", :b], nested: {region: "us"}, nan: Float::NAN, big: 2**64}
+          end
+
+          it "maps each value to an AnyValue" do
+            assert_equal({"stringValue" => "free"}, dimensions["plan"])
+            assert_equal(
+              {"arrayValue" => {"values" => [{"intValue" => "1"}, {"stringValue" => "a"}, {"stringValue" => "b"}]}},
+              dimensions["ids"]
+            )
+            assert dimensions["nested"].key?("stringValue")
+            assert dimensions["nan"].key?("stringValue")
+            assert_equal({"stringValue" => (2**64).to_s}, dimensions["big"])
           end
         end
 
@@ -539,15 +659,47 @@ module Metric
           assert_empty(capture_logger.events.reject { |event| event.level == :trace })
         end
 
-        it "raises for a request the server rejects, and does not send it again" do
+        it "reports a partial success whose fields are not what OTLP says, without raising" do
+          [
+            {rejectedDataPoints: "many", errorMessage: "odd count"},
+            {rejectedDataPoints: [1], errorMessage: {detail: "a Hash"}},
+            {rejectedDataPoints: 2.0},
+            {rejectedDataPoints: nil, errorMessage: 42}
+          ].each { |partial| assert write(response: success({partialSuccess: partial}.to_json)) }
+
+          messages = capture_logger.events.select { |event| event.level == :warn }.map(&:message)
+
+          assert_equal 4, messages.size
+          assert_includes messages[0], "rejected 0 metric data point(s): \"odd count\""
+          assert_includes messages[1], "rejected 0 metric data point(s)"
+          assert_includes messages[2], "rejected 2 metric data point(s)"
+          assert_includes messages[3], "rejected 0 metric data point(s): \"42\""
+        end
+
+        it "reads a rejectedDataPoints String in base 10 only" do
+          [{rejectedDataPoints: "010"}, {rejectedDataPoints: "0x10", errorMessage: "hex"}].each do |partial|
+            assert write(response: success({partialSuccess: partial}.to_json))
+          end
+
+          messages = capture_logger.events.select { |event| event.level == :warn }.map(&:message)
+
+          assert_equal 2, messages.size
+          assert_includes messages[0], "rejected 10 metric data point(s)"
+          assert_includes messages[1], "rejected 0 metric data point(s): \"hex\""
+        end
+
+        it "reports nothing for a partialSuccess that is not a Hash, or a body nested too deeply" do
+          [{partialSuccess: "none"}.to_json, "[1]", "#{'[' * 200}#{']' * 200}"].each do |body|
+            assert write(response: success(body))
+          end
+
+          assert_empty(capture_logger.events.reject { |event| event.level == :trace })
+        end
+
+        it "raises for a request the server rejects" do
           assert_raises(SemanticLogger::Appender::Http::ResponseError) do
             write(response: failure(Net::HTTPBadRequest, 400, "bad request"))
           end
-          aggregator.record(:counter, "users.signup", 1)
-          second = body
-
-          assert_equal "1", second.dig("resourceMetrics", 0, "scopeMetrics", 0, "metrics", 0, "sum", "dataPoints", 0,
-                                       "asInt")
         end
 
         it "raises for a 500, which the server may have stored" do
@@ -556,53 +708,109 @@ module Metric
           end
         end
 
-        [[Net::HTTPTooManyRequests, 429], [Net::HTTPServiceUnavailable, 503]].each do |response_class, code|
-          it "sends a snapshot again with the next one after a #{code}" do
-            refute write(response: failure(response_class, code))
-            assert_equal :warn, capture_logger.events.last.level
+        describe "#metrics_retryable?" do
+          def response_error(response_class, code)
+            write(response: failure(response_class, code))
 
-            next_start = end_time
+            flunk "Expected a ResponseError"
+          rescue SemanticLogger::Appender::Http::ResponseError => e
+            e
+          end
+
+          [
+            [Net::HTTPRequestTimeOut, 408], [Net::HTTPTooManyRequests, 429], [Net::HTTPBadGateway, 502],
+            [Net::HTTPServiceUnavailable, 503], [Net::HTTPGatewayTimeOut, 504]
+          ].each do |response_class, code|
+            it "is true after a #{code}, which OTLP/HTTP retries" do
+              assert appender.metrics_retryable?(response_error(response_class, code))
+            end
+          end
+
+          [
+            [Net::HTTPBadRequest, 400], [Net::HTTPUnauthorized, 401], [Net::HTTPInternalServerError, 500],
+            [Net::HTTPNotImplemented, 501]
+          ].each do |response_class, code|
+            it "is false after a #{code}" do
+              refute appender.metrics_retryable?(response_error(response_class, code))
+            end
+          end
+
+          it "is true when the server cannot be reached" do
+            assert appender.metrics_retryable?(Errno::ECONNREFUSED.new)
+          end
+
+          it "is false for any other error" do
+            refute appender.metrics_retryable?(RuntimeError.new("boom"))
+          end
+        end
+
+        describe "sent again" do
+          let(:options) { {interval: 1} }
+
+          # Gives the snapshot to the appender, as the collector does, the server answering with the
+          # response, or raising it when it is an exception. Returns what #log_metrics returns.
+          def deliver(snapshot, response: success)
+            @requests = []
+            appender.http.stub(:request, lambda { |request|
+              @requests << request
+              raise response if response.is_a?(Exception)
+
+              response
+            }) do
+              appender.stub(:logger, capture_logger) { appender.log_metrics(snapshot) }
+            end
+          end
+
+          # Returns [Hash] the data point of the single request sent.
+          def sent_point
+            assert_equal 1, @requests.size
+            JSON.parse(@requests.first.body).dig(
+              "resourceMetrics", 0, "scopeMetrics", 0, "metrics", 0, "sum", "dataPoints", 0
+            )
+          end
+
+          {
+            "503"                  => -> { failure(Net::HTTPServiceUnavailable, 503) },
+            "502"                  => -> { failure(Net::HTTPBadGateway, 502) },
+            "504"                  => -> { failure(Net::HTTPGatewayTimeOut, 504) },
+            "a refused connection" => -> { Errno::ECONNREFUSED.new }
+          }.each_pair do |reason, response|
+            it "merges a snapshot into the next one after #{reason}" do
+              refute deliver(snapshot, response: instance_exec(&response))
+              assert_equal :warn, capture_logger.events.last.level
+
+              aggregator.record(:counter, "users.signup", 2)
+
+              assert deliver(aggregator.collect(end_time + 60))
+              point = sent_point
+
+              assert_equal "3", point["asInt"]
+              assert_equal "1700000000123456789", point["startTimeUnixNano"]
+              assert_equal "1700000120123456789", point["timeUnixNano"]
+            end
+          end
+
+          it "discards a snapshot that the server rejected" do
+            refute deliver(snapshot, response: failure(Net::HTTPBadRequest, 400))
+            assert_equal :error, capture_logger.events.last.level
+
             aggregator.record(:counter, "users.signup", 2)
-            later = aggregator.collect(next_start + 60)
-            point = body(later).dig("resourceMetrics", 0, "scopeMetrics", 0, "metrics", 0, "sum", "dataPoints", 0)
 
-            assert_equal "3", point["asInt"]
-            assert_equal "1700000000123456789", point["startTimeUnixNano"]
-            assert_equal "1700000120123456789", point["timeUnixNano"]
-          end
-        end
-
-        it "sends a snapshot again when the server cannot be reached" do
-          refute write(response: Errno::ECONNREFUSED.new)
-          aggregator.record(:counter, "users.signup", 2)
-
-          assert_equal "3", metrics(aggregator.collect(end_time + 60)).first.dig("sum", "dataPoints", 0, "asInt")
-        end
-
-        it "gives up after MAX_RESENDS, discarding the snapshot" do
-          unavailable = failure(Net::HTTPServiceUnavailable, 503)
-          SemanticLogger::Metric::Otlp::MAX_RESENDS.times do |n|
-            aggregator.record(:counter, "users.signup", 1)
-
-            refute write(aggregator.collect(end_time + n), response: unavailable)
-          end
-          aggregator.record(:counter, "users.signup", 1)
-          assert_raises(SemanticLogger::Appender::Http::ResponseError) do
-            write(aggregator.collect(end_time + 10), response: unavailable)
+            assert deliver(aggregator.collect(end_time + 60))
+            assert_equal "2", sent_point["asInt"]
           end
 
-          aggregator.record(:counter, "users.signup", 1)
+          it "sends what it kept on flush" do
+            refute deliver(snapshot, response: failure(Net::HTTPServiceUnavailable, 503))
+            @requests = []
+            appender.http.stub(:request, lambda { |request|
+              @requests << request
+              success
+            }) do
+              appender.stub(:logger, capture_logger) { appender.flush }
+            end
 
-          assert_equal "1", metrics(aggregator.collect(end_time + 20)).first.dig("sum", "dataPoints", 0, "asInt")
-        end
-
-        it "starts counting again once a snapshot is sent" do
-          unavailable = failure(Net::HTTPServiceUnavailable, 503)
-          (SemanticLogger::Metric::Otlp::MAX_RESENDS + 2).times do |n|
-            aggregator.record(:counter, "users.signup", 1)
-            snapshot = aggregator.collect(end_time + n)
-
-            n.even? ? refute(write(snapshot, response: unavailable)) : assert(write(snapshot))
+            assert_equal "1", sent_point["asInt"]
           end
         end
       end

@@ -16,11 +16,16 @@
 # with delta temporality. See Otlp::Encoder.
 #
 # Responses:
-# As for Appender::Http. A snapshot that the server asked to send again later (408, 429, or 503), or
-# that could not be sent since the server could not be reached, is kept and sent with the next
-# snapshot, merged with it, up to MAX_RESENDS times; it is then discarded, as is a snapshot that
-# fails for any other reason, which is reported on the internal logger. A partial success, where the
-# server stored only some of the data points, is reported on the internal logger, and not sent again.
+# As for Appender::Http, except that a 502 or 504 is retryable too, as OTLP/HTTP requires. A snapshot
+# that the server asked to send again later (408, 429, 502, 503, or 504), or that could not be sent
+# since the server could not be reached, is kept and sent with the next snapshot, merged with it (see
+# #metrics_retryable? and Metric::Snapshots); a snapshot that fails for any other reason is discarded,
+# and reported on the internal logger. A partial success, where the server stored only some of the
+# data points, is reported on the internal logger, and not sent again.
+#
+# A 502 or 504 from a proxy or load balancer in front of the receiver may come after the receiver
+# stored the snapshot, such as when its answer took longer than the proxy waits. Sending it again, as
+# OTLP/HTTP requires, then counts its data points twice.
 module SemanticLogger
   module Metric
     class Otlp < SemanticLogger::Appender::Http
@@ -35,8 +40,9 @@ module SemanticLogger
       # Path of the metrics requests, under the path of the base url.
       METRICS_PATH = "v1/metrics".freeze
 
-      # Most snapshots in a row that are kept to be sent again with the next one (see #write_metrics).
-      MAX_RESENDS = 3
+      # Status codes of the responses, besides those of Appender::Http::ResponseError#retry_later?, after
+      # which OTLP/HTTP has a request sent again (see #metrics_retryable?).
+      RETRYABLE_CODES = [502, 504].freeze
 
       # Returns [String] the path that the metrics are posted to.
       attr_reader :full_path
@@ -98,63 +104,67 @@ module SemanticLogger
 
         @full_path           = endpoint ? @path : "#{@path.delete_suffix('/')}/#{METRICS_PATH}"
         @resource_attributes = resource(resource_attributes).freeze
-        @unsent              = nil
-        @resends             = 0
       end
 
-      # Posts the snapshot, merged with the one that it is sending again, if any. Returns true once the
-      # server accepted it.
-      #
-      # When the server stored none of it, and it is worth sending again later (see
-      # Appender::Http#wrote_nothing?), it is kept and reported on the internal logger, rather than
-      # raised, up to MAX_RESENDS times in a row. Raises any other error, after which the snapshot is
-      # discarded.
+      # Posts the snapshot in one request. Returns true once the server accepted it, and raises when it
+      # did not, or could not be reached (see #metrics_retryable?).
       def write_metrics(snapshot)
-        snapshot = @unsent.merge(snapshot) if @unsent
-        @unsent  = nil
         resource = resource_attributes.merge("process.pid" => ::Process.pid) { |_key, given, _pid| given }
         body     = Encoder.call(snapshot, resource)
         logger.trace(body)
         post(body, full_path)
-        @resends = 0
-        true
-      rescue StandardError => e
-        raise unless wrote_nothing?(e) && @resends < MAX_RESENDS
+      end
 
-        @resends += 1
-        @unsent   = snapshot
-        logger.warn("Could not send metrics to #{redacted_url}, sending them again with the next ones", e)
-        false
+      # Whether the snapshot that raised the exception is sent again with the next one (see
+      # Metric::Snapshots#metrics_retryable?): the server asked to send it again later, or it was
+      # never sent (see Appender::Http#wrote_nothing?), so that the server stored none of it; or the
+      # server answered 502 or 504, which OTLP/HTTP retries too (see RETRYABLE_CODES), although a
+      # proxy may answer either after the receiver behind it stored the snapshot, which is then
+      # counted twice.
+      def metrics_retryable?(exception)
+        return true if wrote_nothing?(exception)
+
+        exception.is_a?(ResponseError) && RETRYABLE_CODES.include?(exception.code)
       end
 
       private
 
       # Reports a partial success, where the server stored only some of the data points, from the body of
-      # a 2xx response, on the internal logger. They are not sent again. Returns true.
+      # a 2xx response, on the internal logger. They are not sent again. Returns true, whatever the
+      # body holds: a rejectedDataPoints that is not a number counts as 0, and an errorMessage that is
+      # not a String is reported as its text.
       def accepted(response)
         partial = partial_success(response.body)
         return true unless partial
 
-        rejected = partial["rejectedDataPoints"].to_i
+        rejected = rejected_count(partial["rejectedDataPoints"]) || 0
         message  = partial["errorMessage"]
-        return true if rejected.zero? && (message.nil? || message.empty?)
+        message  = message.nil? ? "" : message.to_s
+        return true if rejected.zero? && message.empty?
 
         logger.warn(
           "#{redacted_url} rejected #{rejected} metric data point(s): " \
-          "#{message.to_s[0, MAX_LOGGED_RESPONSE_BODY].inspect}"
+          "#{message[0, MAX_LOGGED_RESPONSE_BODY].inspect}"
         )
         true
       end
 
+      # Returns [Integer] the rejectedDataPoints of a partialSuccess: an Integer, or a String of decimal
+      # digits, as the Protobuf JSON mapping writes an int64; 0 for anything else.
+      def rejected_count(value)
+        count = value.is_a?(String) ? Integer(value, 10, exception: false) : Integer(value, exception: false)
+        count || 0
+      end
+
       # Returns [Hash|nil] the partialSuccess of an ExportMetricsServiceResponse, nil when the body has
-      # none, or is not JSON.
+      # none, or cannot be parsed as JSON, for any reason.
       def partial_success(body)
         return if body.nil? || body.empty?
 
         partial = JSON.parse(body)
         partial = partial["partialSuccess"] if partial.is_a?(Hash)
         partial if partial.is_a?(Hash)
-      rescue JSON::ParserError
+      rescue StandardError
         nil
       end
 

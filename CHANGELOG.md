@@ -52,8 +52,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   `deployment.environment.name`, and `process.pid`). It reads `OTEL_EXPORTER_OTLP_ENDPOINT`,
   `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, and `OTEL_SERVICE_NAME` when the matching option is not
   given, takes the options of the HTTP appender, such as `header:` and `compress:`, sends a snapshot
-  that the receiver asks to send later (408, 429, 503) or cannot be reached with the next one, and
-  reports a partial success on the internal logger.
+  that the receiver asks to send later (408, 429, 502, 503, 504) or cannot be reached with the next
+  one, and reports a partial success on the internal logger. A 502 or 504 from a proxy in front of
+  the receiver may come after the receiver stored the snapshot, which sending it again then counts
+  twice.
 
 ### Changed
 
