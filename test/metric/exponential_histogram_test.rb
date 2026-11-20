@@ -20,6 +20,13 @@ module Metric
         hist
       end
 
+      # An empty histogram lowered to `scale`.
+      def at_scale(scale)
+        hist = SemanticLogger::Metric::ExponentialHistogram.new
+        hist.send(:downscale, hist.scale - scale)
+        hist
+      end
+
       def exact_quantile(sorted, probability)
         sorted[[(probability * sorted.size).ceil - 1, 0].max]
       end
@@ -114,10 +121,9 @@ module Metric
         end
 
         it "holds every value between its bounds at every scale" do
-          rng  = Random.new(7)
-          hist = SemanticLogger::Metric::ExponentialHistogram.new
+          rng = Random.new(7)
           (SemanticLogger::Metric::ExponentialHistogram::MIN_SCALE..3).each do |scale|
-            hist.instance_variable_set(:@scale, scale)
+            hist   = at_scale(scale)
             values = Array.new(2_000) { Math.exp(rng.rand(-700.0..700.0)) } + [Float::MIN, Float::MAX]
             values.each do |value|
               index = hist.send(:index_of, value)
@@ -128,6 +134,25 @@ module Metric
               assert_operator value, :<=, upper, "scale #{scale}, #{value}"
             end
           end
+        end
+
+        it "finds the same bucket as the exact index next to every boundary at every scale" do
+          (SemanticLogger::Metric::ExponentialHistogram::MIN_SCALE..3).each do |scale|
+            hist = at_scale(scale)
+            (-40..40).each do |index|
+              boundary = hist.send(:lower_boundary, index)
+              next unless boundary >= Float::MIN && boundary < Float::MAX
+
+              [boundary.prev_float, boundary, boundary.next_float, boundary * 1.0000001].each do |value|
+                assert_equal hist.send(:exact_index_of, value), hist.send(:index_of, value), "scale #{scale}, #{value}"
+              end
+            end
+          end
+        end
+
+        it "records an Integer like the Float it converts to" do
+          assert_equal recorded(3.0).positive.offset, recorded(3).positive.offset
+          assert_equal recorded(1 << 70).positive.offset, recorded(2.0**70).positive.offset
         end
       end
 
@@ -237,6 +262,35 @@ module Metric
           assert_nil histogram.quantile(0.5)
         end
 
+        it "estimates a bucket whose lower boundary underflows to zero" do
+          hist = recorded(-1.0, 5e-324, 1e300)
+          hist.send(:downscale, hist.scale - SemanticLogger::Metric::ExponentialHistogram::MIN_SCALE)
+
+          assert_predicate hist.send(:lower_boundary, hist.positive.low), :zero?
+          lower, upper, count = hist.each_bucket.to_a[1]
+
+          assert_operator lower, :>, 0.0
+          assert_operator lower, :<=, 5e-324
+          assert_operator upper, :>=, 5e-324
+          assert_equal 1, count
+          assert_in_delta(-1.0, hist.quantile(0))
+          [0, 0.25, 0.5, 0.75, 1].each do |probability|
+            assert_includes(-1.0..1e300, hist.quantile(probability))
+          end
+        end
+
+        it "keeps subnormal bucket bounds around the subnormal values they hold" do
+          [5e-324, 1e-310, 2.5e-320].each do |value|
+            hist = recorded(value, 1.0)
+            lower, upper, = hist.each_bucket.first
+
+            assert_operator lower, :>, 0.0
+            assert_operator lower, :<=, value
+            assert_operator upper, :>=, value
+            assert_equal value, hist.quantile(0)
+          end
+        end
+
         it "rejects a quantile outside 0..1" do
           [-0.1, 1.1, Float::NAN, nil, Complex(0.5, 0)].each do |probability|
             assert_raises(ArgumentError) { histogram.quantile(probability) }
@@ -280,14 +334,77 @@ module Metric
           assert_equal [2, 1, 1, 1, 2, 2], histogram.explicit_bucket_counts(bounds)
         end
 
-        it "places a value on a bound in the bucket it closes" do
+        it "places a lone value on a bound in the bucket it closes" do
           histogram.record(0.1)
 
           assert_equal [0, 0, 0, 1, 0, 0], histogram.explicit_bucket_counts(bounds)
         end
 
+        it "is exact on bounds that are bucket boundaries" do
+          [4.0, 4.0.next_float, 8.0, 8.5].each { |value| histogram.record(value) }
+
+          assert_equal [1, 2, 1], histogram.explicit_bucket_counts([4.0, 8.0])
+        end
+
+        it "counts a bucket that a bound falls inside above that bound" do
+          # 5.0 is inside the bucket (2**(18/8), 2**(19/8)], whose values cannot be told apart.
+          [5.0, 6.0].each { |value| histogram.record(value) }
+
+          assert_equal [0, 2], histogram.explicit_bucket_counts([5.0])
+        end
+
         it "returns zeros when empty" do
           assert_equal [0] * 6, histogram.explicit_bucket_counts(bounds)
+        end
+      end
+
+      describe "#sum_of_squares" do
+        it "is exact when every value is the same" do
+          4.times { histogram.record(3.0) }
+
+          assert_in_delta 36.0, histogram.sum_of_squares
+        end
+
+        it "estimates the sum of squares from the bucket midpoints" do
+          rng    = Random.new(3)
+          values = Array.new(10_000) { lognormal(rng, 40.0, 0.9) }
+          values.each { |value| histogram.record(value) }
+          exact = values.sum { |value| value * value }
+
+          assert_in_delta exact, histogram.sum_of_squares, exact * 0.01
+        end
+
+        it "counts negative values and zeros" do
+          [-2.0, 0, 2.0].each { |value| histogram.record(value) }
+
+          assert_in_delta 8.0, histogram.sum_of_squares, 8.0 * 0.1
+        end
+
+        it "is never below sum**2 / count" do
+          [1.0, 1.05, 1.08].each { |value| histogram.record(value) }
+
+          assert_operator histogram.sum_of_squares, :>=, (histogram.sum**2) / histogram.count
+        end
+
+        it "does not raise when the sum is not a number" do
+          histogram.merge(recorded(Float::MAX, Float::MAX)).merge(recorded(-Float::MAX, -Float::MAX))
+
+          assert_predicate histogram.sum, :nan?
+          assert_operator histogram.sum_of_squares, :>, 0.0
+        end
+
+        it "is 0.0 when empty" do
+          assert_in_delta 0.0, histogram.sum_of_squares
+        end
+      end
+
+      describe "#sum" do
+        it "becomes Infinity when the values add up past Float::MAX, leaving the rest right" do
+          2.times { histogram.record(Float::MAX) }
+
+          assert_equal Float::INFINITY, histogram.sum
+          assert_equal 2, histogram.count
+          assert_equal Float::MAX, histogram.max
         end
       end
 
@@ -346,6 +463,26 @@ module Metric
           assert_equal 1, recorded(1.0).merge(recorded).count
         end
 
+        it "keeps its scale when the other histogram holds only zeros" do
+          zeros = recorded(0, 0)
+          zeros.send(:scale=, SemanticLogger::Metric::ExponentialHistogram::MIN_SCALE)
+          one = recorded(1.0, 3.0)
+          one.merge(zeros)
+
+          assert_equal 3, one.scale
+          assert_equal 2, one.zero_count
+          assert_equal recorded(1.0, 3.0).positive.counts, one.positive.counts
+        end
+
+        it "never lowers the scale below the minimum" do
+          low  = recorded(5e-324)
+          high = recorded(Float::MAX)
+          low.merge(high)
+
+          assert_operator low.scale, :>=, SemanticLogger::Metric::ExponentialHistogram::MIN_SCALE
+          assert_equal recorded(5e-324, Float::MAX).scale, low.scale
+        end
+
         it "merges into an empty histogram" do
           other = recorded(-5.0, 7.0)
           histogram.merge(other)
@@ -368,6 +505,36 @@ module Metric
           assert_predicate histogram.negative, :frozen?
           assert_raises(FrozenError) { histogram.record(2.0) }
           assert_raises(FrozenError) { histogram.merge(recorded(2.0)) }
+        end
+
+        it "clones a frozen histogram with frozen buckets" do
+          histogram.record(1.0)
+          histogram.record(-1.0)
+          copy = histogram.freeze.clone
+
+          assert_predicate copy, :frozen?
+          assert_predicate copy.positive, :frozen?
+          assert_predicate copy.positive.counts, :frozen?
+          assert_predicate copy.negative.counts, :frozen?
+          assert_raises(FrozenError) { copy.positive.increment(0) }
+        end
+
+        it "clones frozen buckets with frozen counts" do
+          histogram.record(1.0)
+          copy = histogram.positive.freeze.clone
+
+          assert_predicate copy, :frozen?
+          assert_predicate copy.counts, :frozen?
+        end
+
+        it "clones an unfrozen histogram into an independent one" do
+          histogram.record(1.0)
+          copy = histogram.clone
+          copy.record(1.0)
+
+          refute_predicate copy.positive.counts, :frozen?
+          assert_equal [1], histogram.positive.counts
+          assert_equal [2], copy.positive.counts
         end
 
         it "returns an independent copy of a frozen histogram" do
