@@ -32,6 +32,7 @@ module SemanticLogger
       include SemanticLogger::Metric::Snapshots
 
       autoload :Encoder, "semantic_logger/metric/otlp/encoder"
+      autoload :Environment, "semantic_logger/metric/otlp/environment"
 
       # Base url of an OTLP/HTTP receiver, when neither `url:` nor `endpoint:` is given, nor set in the
       # environment.
@@ -43,6 +44,9 @@ module SemanticLogger
       # Status codes of the responses, besides those of Appender::Http::ResponseError#retry_later?, after
       # which OTLP/HTTP has a request sent again (see #metrics_retryable?).
       RETRYABLE_CODES = [502, 504].freeze
+
+      # The attribute of the resource that holds the pid of the process that sends each request.
+      PID_ATTRIBUTE = "process.pid".freeze
 
       # Returns [String] the path that the metrics are posted to.
       attr_reader :full_path
@@ -79,6 +83,12 @@ module SemanticLogger
       #     More attributes of the resource, which replace those above with the same key.
       #     Example: {"service.version" => "1.2.3"}
       #
+      #   The resource also holds the attributes of ENV["OTEL_RESOURCE_ATTRIBUTES"], other than
+      #   `process.pid` (see below). Highest first:
+      #   `resource_attributes:`; `application:`, `host:`, and `environment:` when given, and
+      #   ENV["OTEL_SERVICE_NAME"]; ENV["OTEL_RESOURCE_ATTRIBUTES"]; then the defaults of
+      #   SemanticLogger.application, .host, and .environment.
+      #
       #   interval: [Numeric]
       #     Seconds between requests.
       #     Default: 60
@@ -89,27 +99,48 @@ module SemanticLogger
       #
       # The other options are those of Appender::Http, such as `header:` for the headers of each request,
       # such as one with credentials, `compress: true` to send the requests compressed with gzip, `ssl:`,
-      # `proxy_url:`, and the timeouts.
+      # `proxy_url:`, and the timeouts. These take defaults from the environment too, each from the
+      # variable of the metrics signal, or else from the generic one (see Otlp::Environment):
+      #
+      #   header: from OTEL_EXPORTER_OTLP_METRICS_HEADERS or OTEL_EXPORTER_OTLP_HEADERS, as `name=value`
+      #     pairs separated by commas, percent-decoded. A header given wins over one of the environment
+      #     with the same name, in any case. A header of the environment that Appender::Http sets or
+      #     relies on itself (see Appender::Http#reserved_header?), such as Content-Type, is left out,
+      #     with a warning (see #add_otel_header). The headers of the environment, which often hold
+      #     credentials, are sent to whatever url the appender posts to, including a `url:` or
+      #     `endpoint:` given, as the OpenTelemetry specification asks; `header: {}` does not stop them,
+      #     so to send none, do not set these variables for the process.
+      #
+      #   compress: true when OTEL_EXPORTER_OTLP_METRICS_COMPRESSION or OTEL_EXPORTER_OTLP_COMPRESSION is
+      #     "gzip", false when it is "none".
+      #
+      #   open_timeout:, read_timeout: from OTEL_EXPORTER_OTLP_METRICS_TIMEOUT or OTEL_EXPORTER_OTLP_TIMEOUT,
+      #     in milliseconds, 0 meaning no limit, only when neither option is given, so that one given
+      #     keeps the default of Appender::Http for the other (see #otel_timeouts).
       #
       # Every request also holds the `process.pid` of the process that sends it, so that the deltas of
       # each process, such as forked workers of the same application on the same host, are kept apart.
       def initialize(url: nil, endpoint: nil, application: nil, resource_attributes: nil, **args, &)
         raise(ArgumentError, "Supply either url: or endpoint:, not both") if url && endpoint
 
-        endpoint ||= env("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") unless url
-        url      ||= env("OTEL_EXPORTER_OTLP_ENDPOINT") || DEFAULT_URL
-        application ||= env("OTEL_SERVICE_NAME")
+        otel          = Environment.new(logger)
+        endpoint    ||= otel.endpoint unless url
+        url         ||= otel.base_url || DEFAULT_URL
+        application ||= otel.service_name
+        args[:header]   = given_header = args[:header] || {}
+        args[:compress] = otel.compress if !args.key?(:compress) && !otel.compress.nil?
 
-        super(url: endpoint || url, application: application, **args, &)
+        super(url: endpoint || url, application: application, **otel_timeouts(otel, args).merge(args), &)
 
+        add_otel_header(otel.headers, given_header)
         @full_path           = endpoint ? @path : "#{@path.delete_suffix('/')}/#{METRICS_PATH}"
-        @resource_attributes = resource(resource_attributes).freeze
+        @resource_attributes = resource(otel.resource_attributes, resource_attributes).freeze
       end
 
       # Posts the snapshot in one request. Returns true once the server accepted it, and raises when it
       # did not, or could not be reached (see #metrics_retryable?).
       def write_metrics(snapshot)
-        resource = resource_attributes.merge("process.pid" => ::Process.pid) { |_key, given, _pid| given }
+        resource = resource_attributes.merge(PID_ATTRIBUTE => ::Process.pid) { |_key, given, _pid| given }
         body     = Encoder.call(snapshot, resource)
         logger.trace(body)
         post(body, full_path)
@@ -168,18 +199,66 @@ module SemanticLogger
         nil
       end
 
-      # Returns [Hash] the attributes of the resource, with String keys.
-      def resource(extra)
+      # Returns [Hash] the attributes of the resource, with String keys: those of OTEL_RESOURCE_ATTRIBUTES
+      # (from_env) replace the defaults, the application, host, and environment given (including the
+      # service name of OTEL_SERVICE_NAME) replace them, and those of `resource_attributes:` (extra)
+      # replace all of them. The process.pid of OTEL_RESOURCE_ATTRIBUTES is left out, with a warning,
+      # since every process of a deployment shares its environment: the pid of the process that sends
+      # each request keeps their deltas apart (see #write_metrics).
+      def resource(from_env, extra)
         attributes = {"service.name" => application, "host.name" => host}
         attributes["deployment.environment.name"] = environment if environment
+        if from_env.key?(PID_ATTRIBUTE)
+          logger.warn("Ignoring #{PID_ATTRIBUTE} in OTEL_RESOURCE_ATTRIBUTES: each process sends its own")
+        end
+        attributes.merge!(from_env.except(PID_ATTRIBUTE))
+        attributes.merge!(
+          {"service.name" => @application, "host.name" => @host, "deployment.environment.name" => @environment}.compact
+        )
         extra&.each { |key, value| attributes[key.to_s] = value }
         attributes
       end
 
-      # Returns [String|nil] the value of the environment variable, nil when it is not set or blank.
-      def env(name)
-        value = ENV.fetch(name, nil)
-        value unless value.nil? || value.strip.empty?
+      # Adds the headers of the environment (from_env) to those that Appender::Http sends, except those
+      # whose name, in any case, since HTTP header names are case-insensitive, is that of a header
+      # given, which wins, or of one that Appender::Http sets or relies on itself (see
+      # Appender::Http#reserved_header?), which is kept; the names of those left out for it are reported
+      # in one warning, never their values.
+      def add_otel_header(from_env, given)
+        given_names = given.keys.map { |name| name.to_s.downcase }
+        added       = {}
+        refused     = []
+        from_env.each do |name, value|
+          next if given_names.include?(name.downcase)
+
+          if reserved_header?(name)
+            refused << name
+          else
+            added[name] = value
+          end
+        end
+        unless refused.empty?
+          logger.warn(
+            "Ignoring the header(s) #{refused.join(', ')} of the OTEL exporter headers variable: " \
+            "the appender sets them itself"
+          )
+        end
+        added.each { |name, value| replace_header(name, value) }
+      end
+
+      # Returns [Hash] the open_timeout: and read_timeout: of Appender::Http that the timeout of the
+      # environment sets (see Environment#timeout), both to it, only when neither is given (args), so
+      # that one given keeps the default of Appender::Http for the other.
+      #
+      # OTLP's timeout bounds the whole export, but Net::HTTP has no such deadline, so it bounds each
+      # wait on the server instead: connecting (open_timeout) and each read of the response
+      # (read_timeout). A request can therefore take somewhat longer than the timeout in all. The
+      # continue_timeout is left out: it applies only to a request sent with "Expect: 100-continue",
+      # which the :otlp appender never sends.
+      def otel_timeouts(otel, args)
+        return {} if args.key?(:open_timeout) || args.key?(:read_timeout) || !otel.timeout?
+
+        {open_timeout: otel.timeout, read_timeout: otel.timeout}
       end
     end
   end

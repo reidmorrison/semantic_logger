@@ -3,7 +3,13 @@ require_relative "../test_helper"
 module Metric
   class OtlpTest < Minitest::Test
     # The ENV variables that the appender reads, cleared around each test.
-    OTEL_ENV = %w[OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_METRICS_ENDPOINT OTEL_SERVICE_NAME].freeze
+    OTEL_ENV = %w[
+      OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_METRICS_ENDPOINT OTEL_SERVICE_NAME
+      OTEL_EXPORTER_OTLP_HEADERS OTEL_EXPORTER_OTLP_METRICS_HEADERS
+      OTEL_EXPORTER_OTLP_TIMEOUT OTEL_EXPORTER_OTLP_METRICS_TIMEOUT
+      OTEL_EXPORTER_OTLP_COMPRESSION OTEL_EXPORTER_OTLP_METRICS_COMPRESSION
+      OTEL_RESOURCE_ATTRIBUTES
+    ].freeze
 
     describe SemanticLogger::Metric::Otlp do
       let(:start_time) { Time.at(1_700_000_000, 123_456_789, :nsec) }
@@ -811,6 +817,337 @@ module Metric
             end
 
             assert_equal "1", sent_point["asInt"]
+          end
+        end
+      end
+
+      describe "environment variables" do
+        before do
+          aggregator.record(:counter, "users.signup", 1)
+        end
+
+        # Creates the appender, capturing what it reports on its internal logger.
+        def new_logged_appender(**args)
+          SemanticLogger::Metric::Otlp.stub_any_instance(:logger, capture_logger) { new_appender(**args) }
+        end
+
+        def warnings
+          capture_logger.events.select { |event| event.level == :warn }.map(&:message)
+        end
+
+        def resource_of(appender)
+          attributes(body(on: appender).dig("resourceMetrics", 0, "resource", "attributes"))
+        end
+
+        describe "headers" do
+          it "sends the headers of OTEL_EXPORTER_OTLP_HEADERS, trimmed and percent-decoded" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = " api-key = a%3Db%2Cc ,X-Two=2%20two"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "a=b,c", request["api-key"]
+            assert_equal "2 two", request["X-Two"]
+            assert_empty warnings
+          end
+
+          it "takes OTEL_EXPORTER_OTLP_METRICS_HEADERS instead of OTEL_EXPORTER_OTLP_HEADERS, not merged" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"]         = "a=1,b=2"
+            ENV["OTEL_EXPORTER_OTLP_METRICS_HEADERS"] = "b=3"
+            request = requests(on: new_appender).first
+
+            assert_nil request["a"]
+            assert_equal "3", request["b"]
+          end
+
+          it "ignores an empty OTEL_EXPORTER_OTLP_METRICS_HEADERS" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"]         = "a=1"
+            ENV["OTEL_EXPORTER_OTLP_METRICS_HEADERS"] = ""
+
+            assert_equal "1", requests(on: new_appender).first["a"]
+          end
+
+          it "lets a header given win over one of the environment with the same name, in any case" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "authorization=Bearer%20ENV,x-other=1"
+            appender = new_appender(header: {"Authorization" => "Bearer GIVEN"})
+            request  = requests(on: appender).first
+
+            assert_equal "Bearer GIVEN", request["Authorization"]
+            assert_equal "1", request["x-other"]
+            assert_equal(1, appender.header.keys.count { |name| name.casecmp?("authorization") })
+          end
+
+          it "leaves out the malformed entries, and warns once without their text" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] =
+              "good=1,nosecret-sep,bad%ZZ=secret-one,x-two=secret%0D%0Atwo,=secret-three,bad name=secret-four"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "1", request["good"]
+            assert_nil request["x-two"]
+            assert_equal 1, warnings.size
+            assert_match(/OTEL_EXPORTER_OTLP_HEADERS at position\(s\) 2, 3, 4, 5, 6/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "leaves out a value that is not printable ASCII once percent-decoded, without its text" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "good=1,x-utf8=secret%C3%A9,x-del=secret%7F,x-tab=a%09b"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "1", request["good"]
+            assert_equal "a\tb", request["x-tab"]
+            assert_nil request["x-utf8"]
+            assert_nil request["x-del"]
+            assert_equal 1, warnings.size
+            assert_match(/OTEL_EXPORTER_OTLP_HEADERS at position\(s\) 2, 3:/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "leaves out the headers that the appender sets itself, in any case, warning with their names only" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] =
+              "content-type=secret-type,CONTENT-ENCODING=secret-gzip,accept=secret-accept,x-team=core"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "application/json", request["Content-Type"]
+            assert_equal "application/json", request["Accept"]
+            assert_nil request["Content-Encoding"]
+            assert_equal "core", request["x-team"]
+            assert_equal 1, warnings.size
+            assert_match(/content-type, CONTENT-ENCODING, accept/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "leaves out Accept-Encoding, so that Net::HTTP still decodes a compressed response" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "Accept-Encoding=secret-br"
+            request = requests(on: new_logged_appender).first
+
+            refute_equal "secret-br", request["Accept-Encoding"]
+            assert request.decode_content
+            assert_equal 1, warnings.size
+            assert_match(/header\(s\) Accept-Encoding of/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "leaves out Authorization while the appender sends basic authentication" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "authorization=Bearer%20secret"
+            request = requests(on: new_logged_appender(url: "http://user:pw@localhost:4318")).first
+
+            assert_equal "Basic #{['user:pw'].pack('m0')}", request["Authorization"]
+            assert_equal 1, warnings.size
+            assert_match(/header\(s\) authorization of/, warnings.first)
+            refute_match(/secret/, warnings.first)
+          end
+
+          it "sends Authorization when the appender does not send basic authentication" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "authorization=Bearer%20ENV"
+            request = requests(on: new_logged_appender).first
+
+            assert_equal "Bearer ENV", request["Authorization"]
+            assert_empty warnings
+          end
+
+          it "lets a header given win over the appender's own and the environment's, without a warning" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "accept=env"
+            request = requests(on: new_logged_appender(header: {"Accept" => "given"})).first
+
+            assert_equal "given", request["Accept"]
+            assert_empty warnings
+          end
+
+          it "sends the headers of the environment to a url: given too" do
+            ENV["OTEL_EXPORTER_OTLP_HEADERS"] = "api-key=abc"
+            request = requests(on: new_appender(url: "http://collector.example.com:4318", header: {})).first
+
+            assert_equal "abc", request["api-key"]
+          end
+        end
+
+        describe "timeout" do
+          it "sets the open and read timeouts from OTEL_EXPORTER_OTLP_TIMEOUT, in milliseconds" do
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"] = "2500"
+            appender = new_appender
+
+            assert_in_delta 2.5, appender.open_timeout
+            assert_in_delta 2.5, appender.read_timeout
+            assert_in_delta 1.0, appender.continue_timeout
+          end
+
+          it "takes OTEL_EXPORTER_OTLP_METRICS_TIMEOUT instead of OTEL_EXPORTER_OTLP_TIMEOUT" do
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"]         = "2500"
+            ENV["OTEL_EXPORTER_OTLP_METRICS_TIMEOUT"] = "500"
+
+            assert_in_delta 0.5, new_appender.read_timeout
+          end
+
+          it "is not used when only read_timeout: is given, which keeps the default open_timeout" do
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"] = "2500"
+            appender = new_appender(read_timeout: 7)
+
+            assert_equal 7, appender.read_timeout
+            assert_in_delta 2.0, appender.open_timeout
+          end
+
+          it "is not used when only open_timeout: is given, which keeps the default read_timeout, even for 0" do
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"] = "0"
+            appender = new_appender(open_timeout: 3)
+
+            assert_equal 3, appender.open_timeout
+            assert_in_delta 1.0, appender.read_timeout
+          end
+
+          it "has no limit for 0" do
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"] = "0"
+            appender = new_appender
+
+            assert_nil appender.open_timeout
+            assert_nil appender.read_timeout
+          end
+
+          ["-1", "1.5", "10s", "abc"].each do |value|
+            it "ignores #{value.inspect}, and warns" do
+              ENV["OTEL_EXPORTER_OTLP_METRICS_TIMEOUT"] = value
+              appender = new_logged_appender
+
+              assert_in_delta 2.0, appender.open_timeout
+              assert_in_delta 1.0, appender.read_timeout
+              assert_equal 1, warnings.size
+              assert_match(/Ignoring OTEL_EXPORTER_OTLP_METRICS_TIMEOUT/, warnings.first)
+            end
+          end
+        end
+
+        describe "compression" do
+          ["gzip", " GZip "].each do |value|
+            it "compresses with gzip for #{value.inspect}" do
+              ENV["OTEL_EXPORTER_OTLP_COMPRESSION"] = value
+              appender = new_appender
+
+              assert appender.compress
+              assert_equal "gzip", requests(on: appender).first["Content-Encoding"]
+            end
+          end
+
+          it "takes OTEL_EXPORTER_OTLP_METRICS_COMPRESSION instead of OTEL_EXPORTER_OTLP_COMPRESSION" do
+            ENV["OTEL_EXPORTER_OTLP_COMPRESSION"]         = "gzip"
+            ENV["OTEL_EXPORTER_OTLP_METRICS_COMPRESSION"] = "none"
+            appender = new_appender
+
+            refute appender.compress
+            assert_nil requests(on: appender).first["Content-Encoding"]
+          end
+
+          it "lets compress: given win" do
+            ENV["OTEL_EXPORTER_OTLP_COMPRESSION"] = "gzip"
+
+            refute new_appender(compress: false).compress
+          end
+
+          it "ignores an unknown compression, and warns" do
+            ENV["OTEL_EXPORTER_OTLP_COMPRESSION"] = "br"
+            appender = new_logged_appender
+
+            refute appender.compress
+            assert_equal ['Ignoring OTEL_EXPORTER_OTLP_COMPRESSION="br": the compression is neither gzip nor none'],
+                         warnings
+          end
+        end
+
+        describe "a value that is not valid UTF-8" do
+          OTEL_ENV.each do |name|
+            it "ignores #{name}, warning once with its name only" do
+              ENV[name] = "secret\xFF=1".b
+              appender  = new_logged_appender
+
+              assert_equal ["Ignoring #{name}: its value is not valid UTF-8"], warnings
+              assert_equal "http://localhost:4318", appender.url
+              assert_in_delta 2.0, appender.open_timeout
+              refute appender.compress
+              refute(appender.header.keys.any? { |key| key.start_with?("secret") })
+              refute(appender.resource_attributes.keys.any? { |key| key.start_with?("secret") })
+            end
+          end
+
+          it "uses the generic variable when the metrics one is not valid UTF-8" do
+            ENV["OTEL_EXPORTER_OTLP_METRICS_TIMEOUT"] = "\xFF".b
+            ENV["OTEL_EXPORTER_OTLP_TIMEOUT"]         = "500"
+
+            assert_in_delta 0.5, new_logged_appender.read_timeout
+            assert_equal ["Ignoring OTEL_EXPORTER_OTLP_METRICS_TIMEOUT: its value is not valid UTF-8"], warnings
+          end
+        end
+
+        describe "resource attributes" do
+          it "adds those of OTEL_RESOURCE_ATTRIBUTES, percent-decoded, as Strings" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "service.version=1.2.3, team = a%2Cb%3Dc ,count=2"
+            resource = resource_of(new_logged_appender)
+
+            assert_equal({"stringValue" => "1.2.3"}, resource["service.version"])
+            assert_equal({"stringValue" => "a,b=c"}, resource["team"])
+            assert_equal({"stringValue" => "2"}, resource["count"])
+            assert_empty warnings
+          end
+
+          it "replaces the defaults of Semantic Logger" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] =
+              "service.name=env-app,host.name=env-host,deployment.environment.name=env-environment"
+            resource = SemanticLogger.stub(:environment, "production") { resource_of(new_appender) }
+
+            assert_equal({"stringValue" => "env-app"}, resource["service.name"])
+            assert_equal({"stringValue" => "env-host"}, resource["host.name"])
+            assert_equal({"stringValue" => "env-environment"}, resource["deployment.environment.name"])
+            assert_equal({"intValue" => Process.pid.to_s}, resource["process.pid"])
+          end
+
+          it "is replaced by the application, host, and environment given" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] =
+              "service.name=env-app,host.name=env-host,deployment.environment.name=env-environment"
+            resource = resource_of(new_appender(application: "shop", host: "web1", environment: "production"))
+
+            assert_equal({"stringValue" => "shop"}, resource["service.name"])
+            assert_equal({"stringValue" => "web1"}, resource["host.name"])
+            assert_equal({"stringValue" => "production"}, resource["deployment.environment.name"])
+          end
+
+          it "has its service.name replaced by OTEL_SERVICE_NAME" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "service.name=env-app"
+            ENV["OTEL_SERVICE_NAME"]        = "service-app"
+
+            assert_equal({"stringValue" => "service-app"}, resource_of(new_appender)["service.name"])
+          end
+
+          it "is replaced by resource_attributes:" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "service.version=1.2.3,team=env"
+            resource = resource_of(new_appender(resource_attributes: {team: "given"}))
+
+            assert_equal({"stringValue" => "1.2.3"}, resource["service.version"])
+            assert_equal({"stringValue" => "given"}, resource["team"])
+          end
+
+          it "leaves out process.pid, so that each process sends its own, warning with its key only" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "process.pid=12345,team=core"
+            appender = new_logged_appender
+
+            refute appender.resource_attributes.key?("process.pid")
+            assert_equal ["Ignoring process.pid in OTEL_RESOURCE_ATTRIBUTES: each process sends its own"], warnings
+            resource = resource_of(appender)
+
+            assert_equal({"intValue" => Process.pid.to_s}, resource["process.pid"])
+            assert_equal({"stringValue" => "core"}, resource["team"])
+          end
+
+          it "keeps the process.pid of resource_attributes:" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "process.pid=1"
+            resource = resource_of(new_logged_appender(resource_attributes: {"process.pid" => 42}))
+
+            assert_equal({"intValue" => "42"}, resource["process.pid"])
+          end
+
+          it "is ignored as a whole when an entry is malformed, with a warning" do
+            ENV["OTEL_RESOURCE_ATTRIBUTES"] = "service.version=1.2.3,broken,=x,bad=%ZZ"
+            resource = resource_of(new_logged_appender)
+
+            refute resource.key?("service.version")
+            assert_equal(
+              ["Ignoring OTEL_RESOURCE_ATTRIBUTES: the entries at position(s) 2, 3, 4 are not a valid key=value"],
+              warnings
+            )
           end
         end
       end
