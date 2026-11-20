@@ -70,6 +70,13 @@ module SemanticLogger
       stats.equal?(TRAPPED) ? statistics : stats
     end
 
+    # Returns [Hash] the cumulative counts of the log entries written since startup: processed:, and
+    # dropped:, always 0, as for #stats. Never enters the monitor. Read for Semantic Logger's own
+    # metrics (see Metric::InternalMetrics).
+    def queue_log_counts
+      {processed: @processed_count, dropped: 0}
+    end
+
     # Flush the appenders. In a signal trap, a thread that the trap starts flushes them, after the
     # entries logged in the trap before, and the trap waits for it, at most TRAP_WAIT_SECONDS, then
     # returns its result, or raises what it raised. When it has not finished by then, such as when the

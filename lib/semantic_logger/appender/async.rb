@@ -17,7 +17,7 @@ module SemanticLogger
       def_delegators :@appender,
                      :name, :should_log?, :filter, :host, :application, :environment,
                      :level, :level=, :formatter, :formatter=, :logger, :logger=, :console_stream,
-                     :console_output?, :metrics_interval
+                     :console_output?, :metrics_interval, :internal_metrics?
 
       # Methods forwarded to the queue processor that owns the thread and queue.
       # Tuning options (max_queue_size, batch_size, non_blocking, ...) are set once at
@@ -140,6 +140,13 @@ module SemanticLogger
       # writes anything.
       def reopen
         processor.reopen
+      end
+
+      # Returns [Hash] the cumulative counts of the log entries that the queue has finished with since
+      # startup: processed:, dropped: and failed:, as for #stats. Takes no lock, so that it can be read
+      # in a signal trap. Read for Semantic Logger's own metrics (see Metric::InternalMetrics).
+      def queue_log_counts
+        {processed: processed_count, dropped: dropped_count, failed: failed_count}
       end
 
       # Returns [Hash] operational statistics for this appender.
