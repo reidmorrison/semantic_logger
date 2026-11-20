@@ -34,6 +34,9 @@ module SemanticLogger
     #
     # It reports the records that the Aggregator dropped in each interval (see #report_dropped).
     #
+    # It asks each snapshot to redact the dimensions whose keys are sensitive, when there are
+    # sensitive keys, before any metric appender is given it (see #redact).
+    #
     # Only the main Ractor collects: the processor of any other one drops its metric calls.
     class Collector
       # Seconds the thread waits before it asks the processor again for the interval, when asking failed.
@@ -244,12 +247,53 @@ module SemanticLogger
       end
 
       # Returns [Snapshot|nil] the snapshot collected up to `now`, with Semantic Logger's own metrics
-      # (see InternalMetrics#record), or nil in a signal trap. Each collection of the process runs here,
-      # by the thread or a flush.
+      # (see InternalMetrics#record), its dimensions redacted (see #redact), or nil in a signal trap. Each
+      # collection of the process runs here, by the thread or a flush.
       def collect(now)
         safely { @internal_metrics.record(@aggregator) }
-        @aggregator.collect(now)
+        redact(@aggregator.collect(now))
       rescue ThreadError
+        nil
+      end
+
+      # Returns [Snapshot] the snapshot with the value of each dimension whose key is sensitive replaced
+      # (see SemanticLogger.sensitive_keys= and Snapshot#redact), so that no metric appender is given one,
+      # or the snapshot itself without sensitive keys. Once per collection rather than per record, so that
+      # it costs once per series. A structure given as a dimension value, such as a Hash, was redacted as
+      # it was recorded, before it became text (see Aggregator.text).
+      #
+      # A point that cannot be redacted, such as when the sensitive keys raise, is never delivered: it
+      # is left out (see Snapshot#redact), the others are delivered, and how many were left out is
+      # reported once for the interval, with the first error. Should redacting the snapshot raise
+      # itself, a defect, only Semantic Logger's own metrics are delivered (see Snapshot#only_internal),
+      # and the records dropped in the interval are still reported. Only the error's class and where it
+      # was raised are reported, since its message could hold the value being redacted.
+      def redact(snapshot)
+        redactor = SemanticLogger.redactor
+        return snapshot unless redactor
+
+        failed = 0
+        error  = nil
+        redacted = snapshot.redact(redactor) do |exception|
+          failed += 1
+          error ||= exception
+        end
+        report_redaction_failure(snapshot, failed, error) if error
+        redacted
+      rescue StandardError => e
+        report_redaction_failure(snapshot, snapshot.size, e)
+        snapshot.only_internal
+      end
+
+      def report_redaction_failure(snapshot, failed, exception)
+        where = exception.backtrace&.first
+        report(
+          :error,
+          "Redacting the dimensions of metrics raised #{Utils.exception_name(exception)}" \
+          "#{" (#{where})" if where}, so #{failed} of the #{snapshot.size} metric series from " \
+          "#{snapshot.start_time} to #{snapshot.end_time} were not delivered"
+        )
+      rescue StandardError
         nil
       end
 

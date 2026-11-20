@@ -6389,6 +6389,31 @@ When an entry cannot be redacted, for example because a Proc raises an error, th
 with `{redaction_failed: "ErrorClass"}`, never written as it is. The error's class, and where it was
 raised, are reported to the internal logger, but not its message, which could hold the value.
 
+#### Metric dimensions
+
+The dimensions of the metrics given to metric appenders, from `increment`, `time`, `record`, and the
+`metric:` of log calls, are redacted too: the value of a dimension whose key is sensitive is replaced,
+such as with `[FILTERED]`. Only values are replaced, never the keys. This happens once per interval,
+as the metrics of the interval are collected, so it costs once per series rather than per call, and
+series that differed only by the value of a sensitive dimension are merged into one. A dimension value
+that is itself a structure, such as a Hash, is written as text, so its sensitive keys are redacted at
+any depth as it is recorded, with the sensitive keys of that moment. Semantic Logger's own metrics are
+left as they are.
+
+Until the interval is collected, a sensitive dimension value is held in memory as it was given, and
+each distinct value is a series of its own, counting toward the limit of series per metric: values
+beyond it go to the overflow series. Never use a sensitive value, such as a password or a user's
+email address, as a dimension: redaction is a safety net, not a way to record one.
+
+When a metric's dimensions cannot be redacted, for example because a Proc raises an error, that
+series is never delivered, while the others of the interval are. How many series were left out, and
+the first error's class and where it was raised, are reported once per interval to the internal
+logger.
+
+Metrics that a metric appender already holds when `sensitive_keys` is first assigned, such as those it
+merges until its own interval has passed, are delivered as they were collected: assign the sensitive
+keys before adding metric appenders.
+
 #### With Rails
 
 [rails_semantic_logger](https://github.com/reidmorrison/rails_semantic_logger) sets
