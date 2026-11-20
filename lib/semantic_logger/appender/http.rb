@@ -521,7 +521,7 @@ module SemanticLogger
         http = @http || build_http
         http.start unless http.started?
         response = http.request(request)
-        return true if response.is_a?(Net::HTTPSuccess)
+        return accepted(response) if response.is_a?(Net::HTTPSuccess)
 
         raise ResponseError.new(
           "Bad HTTP response from: #{redacted_url} code: #{response.code}, " \
@@ -532,6 +532,13 @@ module SemanticLogger
       rescue RuntimeError => e
         reconnect unless not_sent?(e)
         raise e
+      end
+
+      # Returns true, for a request that the server accepted, answering with a 2xx status. A subclass
+      # whose server reports in the body of such a response that it stored only part of the request
+      # reads it here, as Metric::Otlp does for an OTLP partial success.
+      def accepted(_response)
+        true
       end
 
       # Connects again after a request failed. A failure to connect is reported to the internal

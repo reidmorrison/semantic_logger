@@ -44,6 +44,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   at exit, writes and flushes the entries that the summary writes as it is flushed, before it returns, so that
   the summary of the last partial interval is written too. Its entries carry no tags of
   the thread that writes them.
+- `add_appender(metric: :otlp)` sends the metrics of each interval to an OpenTelemetry collector, or
+  any other OTLP/HTTP receiver, as OTLP/JSON posted to `<url>/v1/metrics` (default
+  `http://localhost:4318`), without any OpenTelemetry gems: counters as monotonic sums and histograms
+  as base-2 exponential histograms, both with delta temporality. `endpoint:` gives the full url
+  instead, and `resource_attributes:` adds to the resource (`service.name`, `host.name`,
+  `deployment.environment.name`, and `process.pid`). It reads `OTEL_EXPORTER_OTLP_ENDPOINT`,
+  `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, and `OTEL_SERVICE_NAME` when the matching option is not
+  given, takes the options of the HTTP appender, such as `header:` and `compress:`, sends a snapshot
+  that the receiver asks to send later (408, 429, 503) or cannot be reached with the next one, and
+  reports a partial success on the internal logger.
 
 ### Changed
 
