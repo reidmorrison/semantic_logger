@@ -338,7 +338,7 @@ classDiagram
     FBase ..> Log : reads
 ```
 
-The smaller appenders (`Bugsnag`, `Honeybadger`, `CloudwatchLogs`, `Kafka`, `Rabbitmq`, `Sentry`,
+The smaller appenders (`Bugsnag`, `Honeybadger`, `CloudwatchLogs`, `Kafka`, `Rabbitmq`, `SentryRuby`,
 `OpenTelemetry`, and others) are left out of the diagram to keep it legible. They are all direct
 `Subscriber` subclasses like the appenders shown above.
 

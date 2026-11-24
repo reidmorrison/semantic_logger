@@ -16,7 +16,7 @@ description: >-
 
 Semantic Logger reports the use of a deprecated appender or option as a Ruby deprecation warning, the
 same way that Ruby reports its own, naming the line of your application that used it, and what to use
-instead:
+instead. For example, v5 reported:
 
 ~~~
 config/initializers/logging.rb:12: warning: SemanticLogger: SemanticLogger::Appender::Sentry (appender: :sentry) is deprecated and will be removed in v6. It depends on the end-of-life sentry-raven gem. Use appender: :sentry_ruby instead.
@@ -61,13 +61,10 @@ then wait on that thread's own queue, which can stop all logging while the queue
 
 ### Upgrading to Semantic Logger v6
 
-v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes, the only changes in
-`6.0.0.beta1`. The other changes planned for v6 come in a later v6 release: metric-only entries
-left out by default by the `:kafka`, `:rabbitmq`, and `:udp` appenders, an `ArgumentError` for
-options given with an appender instance, `pid` and `thread` written as structured metadata by
-default by the `:loki` appender, and the removal of the `:sentry`, `:new_relic`, and `:splunk`
-appenders and of the Elasticsearch `type:` option. Until then, each of these behaves, and warns, as
-it does in v5.3 (see [Upgrading to Semantic Logger v5.3](#upgrading-to-semantic-logger-v53)).
+v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes, and the removal of what v5
+deprecated, each in a section below. Before upgrading, run your application, or its tests, on the
+latest v5 with deprecation warnings on (see [Seeing deprecation warnings](#seeing-deprecation-warnings)),
+and fix each one that it reports.
 
 #### Metrics no longer depend on the log level
 
