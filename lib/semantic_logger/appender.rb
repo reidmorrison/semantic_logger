@@ -97,11 +97,10 @@ module SemanticLogger
     # writes to the caller's own `io:` or `logger:`: closing the one for `logger:` closes that logger, and the stream
     # it writes to, such as $stdout.
     #
-    # It adds one destination, the first of file_name:, io:, logger:, appender:, and metric: that is given, in that
-    # order, and ignores any other, see .report_ignored_destinations.
+    # It adds one destination, one of file_name:, io:, logger:, appender:, and metric:, and raises ArgumentError when
+    # given more than one, see .check_one_destination.
     def self.build(io: nil, file_name: nil, appender: nil, metric: nil, logger: nil, **args, &)
-      # Named in the order of the if / elsif chain below, which adds the first one given: keep the two in step.
-      report_ignored_destinations(file_name: file_name, io: io, logger: logger, appender: appender, metric: metric)
+      check_one_destination(file_name: file_name, io: io, logger: logger, appender: appender, metric: metric)
 
       if file_name
         [SemanticLogger::Appender::File.new(file_name, **args, &), true]
@@ -186,21 +185,18 @@ module SemanticLogger
     end
     private_class_method :subscriber_instance
 
-    # Reports a deprecation warning when .build is given more than one of the destinations, in the order in which it
-    # takes the first one, naming the one that it uses and the others, which it ignores, since v6 raises ArgumentError
-    # for them. A destination given as nil, or false, is not one, as .build has always taken it, so that a caller can
-    # pass on settings of which only one is set, such as `file_name: options[:file_name], io: options[:io]`, and v6
-    # must not raise for it either. Remove in v6, raising ArgumentError in its place.
-    def self.report_ignored_destinations(**destinations)
-      used, *ignored = destinations.filter_map { |name, value| "#{name}:" if value }
-      return if ignored.empty?
+    # Raises ArgumentError when .build is given more than one of the destinations, naming them. A destination given as
+    # nil, or false, is not one, as .build has always taken it, so that a caller can pass on settings of which only one
+    # is set, such as `file_name: options[:file_name], io: options[:io]`.
+    def self.check_one_destination(**destinations)
+      given = destinations.filter_map { |name, value| "#{name}:" if value }
+      return if given.size < 2
 
-      Deprecation.warn(
-        "add_appender adds one destination, so it uses #{used} and ignores #{word_list(ignored)}, " \
-        "and v6 raises ArgumentError when given more than one. Call add_appender once for each destination."
-      )
+      raise(ArgumentError,
+            "add_appender adds one destination, but was given #{word_list(given)}. " \
+            "Call add_appender once for each destination.")
     end
-    private_class_method :report_ignored_destinations
+    private_class_method :check_one_destination
 
     # Returns [String] the words as a list in a sentence, such as "a", "a and b", or "a, b, and c".
     def self.word_list(words)

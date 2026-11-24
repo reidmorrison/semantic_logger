@@ -234,6 +234,14 @@ SemanticLogger.add_appender(appender: MyAppender.new, level: :warn)
 SemanticLogger.add_appender(appender: MyAppender.new(level: :warn))
 ~~~
 
+#### More than one destination raises `ArgumentError`
+
+`add_appender` adds one destination. Given more than one of `file_name:`, `io:`, `logger:`,
+`appender:`, and `metric:`, it now raises `ArgumentError`, which v5.3 reported as a deprecation
+warning while it added only the first. Call `add_appender` once for each destination. A destination
+given as `nil` is still not one. `appender: :wrapper`, which only worked with `logger:`, now raises
+too: leave it out, since `logger:` already adds the wrapper.
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

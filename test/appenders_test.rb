@@ -103,11 +103,8 @@ class AppendersTest < Minitest::Test
         assert_includes appenders, appender
       end
 
-      # :wrapper can only be added with logger:, which add_appender takes as the destination instead.
-      it "adds a :wrapper appender from logger:, warning that appender: is ignored" do
-        appender = assert_deprecated(/it uses logger: and ignores appender:,/) do
-          appenders.add(appender: :wrapper, logger: Logger.new($stdout))
-        end
+      it "adds a Wrapper appender from logger:" do
+        appender = appenders.add(logger: Logger.new($stdout))
 
         assert_kind_of SemanticLogger::Appender::Wrapper, appender, -> { appender.ai }
         assert_includes appenders, appender

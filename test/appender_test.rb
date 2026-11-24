@@ -96,80 +96,32 @@ class AppenderTest < Minitest::Test
 
       describe "with more than one destination" do
         let(:io) { StringIO.new }
-        let(:file_name) { File.join(Dir.tmpdir, "semantic_logger_appender_test_#{Process.pid}.log") }
 
-        after do
-          FileUtils.rm_f(file_name)
+        it "raises naming them, and says to add each destination on its own" do
+          error = assert_raises(ArgumentError) { SemanticLogger::Appender.factory(appender: InMemoryAppender.new, io: io) }
+
+          assert_equal "add_appender adds one destination, but was given io: and appender:. " \
+                       "Call add_appender once for each destination.", error.message
         end
 
-        it "adds the first destination, and warns naming it and the one it ignores, at the line that supplied them" do
-          subscriber = InMemoryAppender.new
-          line       = __LINE__ + 3
-          warning    = /appender_test\.rb:#{line}: warning: SemanticLogger: .* it uses io: and ignores appender:,/
-          appender   = assert_deprecated(warning) do
-            SemanticLogger::Appender.factory(appender: subscriber, io: io)
+        it "names each destination given" do
+          error = assert_raises(ArgumentError) do
+            build(metric: :statsd, appender: InMemoryAppender.new, logger: Logger.new(io), io: io)
           end
+
+          assert_includes error.message, "but was given io:, logger:, appender:, and metric:."
+        end
+
+        it "creates nothing, such as the file for file_name:" do
+          SemanticLogger::Appender::File.stub(:new, ->(*) { flunk "created the file appender" }) do
+            assert_raises(ArgumentError) { build(file_name: "never.log", logger: Logger.new(io)) }
+          end
+        end
+
+        it "accepts a destination that is nil or false, which is not given" do
+          appender = build(file_name: nil, io: io, logger: false, appender: nil, metric: nil)
 
           assert_instance_of SemanticLogger::Appender::IO, appender
-        end
-
-        it "says that v6 raises ArgumentError for them, and to add each destination on its own" do
-          message = "add_appender adds one destination, so it uses file_name: and ignores io:, and v6 raises " \
-                    "ArgumentError when given more than one. Call add_appender once for each destination."
-          appender = assert_deprecated(/SemanticLogger: #{Regexp.escape(message)}$/) do
-            build(io: io, file_name: file_name)
-          end
-
-          assert_instance_of SemanticLogger::Appender::File, appender
-        ensure
-          appender&.close
-        end
-
-        it "takes file_name:, io:, logger:, appender:, and metric: in that order, naming each one it ignores" do
-          wrapped = Logger.new(io)
-          warning = /it uses io: and ignores logger:, appender:, and metric:,/
-          appender = assert_deprecated(warning) do
-            build(metric: :statsd, appender: InMemoryAppender.new, logger: wrapped, io: io)
-          end
-
-          assert_instance_of SemanticLogger::Appender::IO, appender
-
-          appender = assert_deprecated(/it uses logger: and ignores appender: and metric:,/) do
-            build(metric: InMemoryMetricsAppender.new, appender: :bugsnag, logger: wrapped)
-          end
-
-          assert_same wrapped, appender.wrapped_logger
-
-          appender = assert_deprecated(/it uses appender: and ignores metric:,/) do
-            build(metric: :statsd, appender: :bugsnag)
-          end
-
-          assert_instance_of SemanticLogger::Appender::Bugsnag, appender
-        end
-
-        it "does not warn for a destination that is nil or false, which is not given" do
-          appender = refute_deprecated { build(file_name: nil, io: io, logger: false, appender: nil, metric: nil) }
-
-          assert_instance_of SemanticLogger::Appender::IO, appender
-        end
-
-        it "says that it created the appender for file_name:, which it adds rather than the logger: it ignores" do
-          appender, created = assert_deprecated(/it uses file_name: and ignores logger:,/) do
-            built(file_name: file_name, logger: Logger.new(io))
-          end
-
-          assert_instance_of SemanticLogger::Appender::File, appender
-          assert created
-        end
-
-        it "hands the other options and the block to the destination that it adds" do
-          formatter = ->(log, _logger) { log.message }
-          appender  = assert_deprecated(/it uses io: and ignores appender:,/) do
-            build(appender: InMemoryAppender.new, io: io, level: :warn, &formatter)
-          end
-
-          assert_equal :warn, appender.level
-          assert_same formatter, appender.formatter
         end
       end
 
@@ -556,28 +508,6 @@ class AppenderTest < Minitest::Test
           assert_raises(ArgumentError) { factory(logger: Logger.new(io), batch: true) }
 
           refute_predicate io, :closed?
-        end
-
-        it "closes the appender that it created for file_name:, though also given logger:, which it ignores" do
-          file_name = File.join(Dir.tmpdir, "semantic_logger_appender_test_#{Process.pid}.log")
-          io        = StringIO.new
-          closed    = []
-
-          SemanticLogger::Appender::File.stub_any_instance(:close, -> { closed << self }) do
-            assert_deprecated(/it uses file_name: and ignores logger:,/) do
-              error = assert_raises(ArgumentError) do
-                factory(file_name: file_name, logger: Logger.new(io), batch: true)
-              end
-
-              assert_includes error.message, "does not support batching"
-            end
-          end
-
-          assert_equal 1, closed.size
-          assert_instance_of SemanticLogger::Appender::File, closed.first
-          refute_predicate io, :closed?
-        ensure
-          FileUtils.rm_f(file_name)
         end
       end
 
