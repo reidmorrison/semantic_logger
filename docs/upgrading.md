@@ -175,6 +175,12 @@ and it is never given the metrics of `increment`, `time`, and `record`. To recei
 include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapshot)` instead. See
 [Write a custom metric appender](metrics.html#write-a-custom-metric-appender).
 
+#### The `:sentry` appender has been removed
+
+`appender: :sentry`, which depended on the end-of-life `sentry-raven` gem and was deprecated in
+v5.1, has been removed. Use `appender: :sentry_ruby` with the `sentry-ruby` gem instead, as shown
+in [Replace the `:sentry` appender with `:sentry_ruby`](#replace-the-sentry-appender-with-sentry_ruby).
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

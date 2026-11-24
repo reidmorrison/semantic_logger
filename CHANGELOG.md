@@ -144,6 +144,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 - `SemanticLogger::Formatters::Signalfx`: the `:signalfx` metric appender builds its requests from
   the snapshot of each interval itself, and takes no formatter.
+- `appender: :sentry` (`SemanticLogger::Appender::Sentry`), deprecated in v5.1: it depended on the
+  end-of-life `sentry-raven` gem. Use `appender: :sentry_ruby`.
 
 ## [Unreleased]
 

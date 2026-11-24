@@ -3343,9 +3343,6 @@ Use the `sentry-ruby` gem and the corresponding appender:
 SemanticLogger.add_appender(appender: :sentry_ruby)
 ~~~
 
-> **Deprecated:** the older `appender: :sentry` (backed by the end-of-life `sentry-raven` gem) still
-> works but is deprecated and will be removed in v6. Switch to `appender: :sentry_ruby`.
-
 Each entry is sent with the Sentry context of the thread (or fiber) that logged it: the user, tags,
 contexts, breadcrumbs, trace, and event processors that `sentry-ruby`, `sentry-rails`, or the
 application set for it, such as with `Sentry.set_user`. The request itself (its url, headers, and
@@ -7318,6 +7315,12 @@ receives the log entries that pass its level and filters, so its metrics still f
 and it is never given the metrics of `increment`, `time`, and `record`. To receive every metric,
 include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapshot)` instead. See
 [Write a custom metric appender](metrics.html#write-a-custom-metric-appender).
+
+#### The `:sentry` appender has been removed
+
+`appender: :sentry`, which depended on the end-of-life `sentry-raven` gem and was deprecated in
+v5.1, has been removed. Use `appender: :sentry_ruby` with the `sentry-ruby` gem instead, as shown
+in [Replace the `:sentry` appender with `:sentry_ruby`](#replace-the-sentry-appender-with-sentry_ruby).
 
 #### Rails Semantic Logger
 

@@ -59,7 +59,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * Splunk
 * MongoDB
 * Honeybadger (exceptions and events)
-* Sentry (both with legacy `sentry-raven` and modern `sentry-ruby` gem)
+* Sentry
 * HTTP
 * TCP
 * UDP
@@ -104,7 +104,6 @@ and are therefore not automatically included by this gem:
 - Elasticsearch Appender: gem 'elasticsearch'
 - OpenSearch Appender: gem 'opensearch-ruby'
 - Kafka Appender: gem 'ruby-kafka'
-- Legacy Sentry Appender: gem 'sentry-raven' (deprecated)
 - Sentry Appender: gem 'sentry-ruby'
 - OpenTelemetry Appender: gem 'opentelemetry-logs-sdk' (plus an exporter, e.g. 'opentelemetry-exporter-otlp-logs')
 

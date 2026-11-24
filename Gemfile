@@ -44,9 +44,7 @@ gem "nokogiri"
 gem "splunk-sdk-ruby"
 # [optional] Statsd metrics
 gem "statsd-ruby"
-# [optional] legacy Sentry appender
-gem "sentry-raven"
-# [optional] new Sentry appender
+# [optional] Sentry appender
 gem "sentry-ruby"
 # [optional] Syslog appender: syslog for a local syslog daemon (a bundled gem since Ruby 3.4),
 # syslog_protocol for a remote syslogd over TCP or UDP

@@ -76,7 +76,6 @@ Minitest/AssertTruthy:
   Exclude:
     - 'test/appender/honeybadger_test.rb'
     - 'test/appender/new_relic_logs_test.rb'
-    - 'test/appender/sentry_test.rb'
     - 'test/base_test.rb'
     - 'test/formatters/syslog_cee_test.rb'
     - 'test/logger_test.rb'
