@@ -52,7 +52,8 @@ module SemanticLogger
     end
 
     # Implement the log level calls
-    #   logger.debug(message, hash|exception=nil, &block)
+    #   logger.debug(message, exception=nil, &block)
+    #   logger.debug(message, field: value, ..., &block)
     #
     # Implement the log level query
     #   logger.debug?
@@ -72,7 +73,7 @@ module SemanticLogger
     #
     #   exception
     #     [Exception] Optional exception to be logged
-    #     Allows both an exception and a payload to be logged
+    #     Kept for compatibility: to log an exception with a payload, pass it as `exception:`
     #     Default: nil
     #
     # Examples:

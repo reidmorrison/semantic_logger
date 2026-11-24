@@ -365,9 +365,10 @@ and build dashboards on them without parsing log text. The fields that make up a
 [Log Event](log.html).
 
 A few names are log arguments rather than payload fields: `duration` above sets the entry's duration,
-and `exception`, `metric`, and `min_duration` (see below) do what their names say. To log a Hash
-that your code did not write out itself, such as request parameters or a parsed JSON body, pass it
-as `payload:`, so that none of its keys can be taken for one of those arguments:
+and so do `message`, `exception`, `backtrace`, `call_site`, `min_duration`, `log_exception`,
+`on_exception_level`, `metric`, `metric_amount`, and `dimensions` for what their names say. To log a
+Hash that your code did not write out itself, such as request parameters or a parsed JSON body, pass
+it as `payload:`, so that none of its keys can be taken for one of those arguments:
 
 ~~~ruby
 logger.info("Webhook received", payload: JSON.parse(body), account_id: account.id)
@@ -407,14 +408,15 @@ Putting the pieces together, every level method accepts either of these forms:
 
 ~~~ruby
 logger.info(message, exception, &block)
-logger.info(message, **fields, &block)
+logger.info(message, field: value, ..., &block)
 ~~~
 
 - `message`: the text message. Optional only when a block is supplied.
 - `exception`: a Ruby exception. To log fields along with it, pass it as `exception:` instead.
-- `**fields`: the payload fields, written as keyword arguments, and the log arguments described
-  below, such as `exception:`, `duration:`, `metric:`, and `payload:`.
-- `&block`: evaluated only when the level is active; its return value becomes the message.
+- `field: value, ...`: the payload fields, written out as keyword arguments, and the log arguments
+  described below, such as `exception:`, `duration:`, `metric:`, and `payload:`.
+- `&block`: evaluated only when the level is active. A String it returns is added to the message,
+  and a Hash it returns is merged in as fields, as shown below.
 
 The message can also be passed as `message:`, so that the whole call is keyword arguments:
 
@@ -438,8 +440,9 @@ logger.debug(message: "Order Load", duration: 0.4, call_site: query_location)
 logger.info(message: "Started GET /orders", call_site: false)
 ~~~
 
-A key such as `duration` or `exception` is only used as an argument when its value is valid for it;
-otherwise it is logged as part of the payload. Any other keys supplied alongside `payload:` are
+A key such as `duration` or `backtrace` is only used as an argument when its value is valid for it;
+otherwise it is logged as part of the payload. `message`, `exception`, and `metric` take any value:
+an `exception:` that is not an Exception is logged as an `ArgumentError` naming it. Any other keys supplied alongside `payload:` are
 merged into it, and win over its values of the same name. Data your code did not write out itself
 always goes in `payload:`; see [Logging untrusted hashes](security.html#logging-untrusted-hashes).
 
@@ -1651,8 +1654,9 @@ in the `\uXXXX` form: the C1 control characters (U+0080 to U+009F), the line and
 separators (U+2028, U+2029), at which editors and some log viewers start a new line, and the
 bidirectional controls (U+202A to U+202E, U+2066 to U+2069), such as the right-to-left override that
 can make logged text read backwards. The option is **disabled by default** to preserve the existing
-human readable output. Without it, the `:one_line` formatter still removes every line break, so each
-of its entries stays on one line, but it writes the other control characters as supplied:
+human readable output. Without it, the `:one_line` formatter still removes line breaks (line feeds, carriage
+returns, vertical tabs, form feeds, U+0085, U+2028, and U+2029), so each of its entries stays on one
+line, but it writes the other control characters as supplied:
 
 ```ruby
 # Text appender that escapes control characters in untrusted data:
@@ -6255,9 +6259,9 @@ SemanticLogger.add_appender(file_name: "production.log", formatter: {default: {e
 See [Escaping Control Characters](config.html#escaping-control-characters) for
 details.
 
-The `:one_line` formatter always removes line breaks (including U+0085, U+2028, and
-U+2029) from every field, so each entry stays on a single line and a newline cannot
-forge another entry. It still writes ANSI escape sequences and bidirectional controls
+The `:one_line` formatter always removes line feeds, carriage returns, vertical tabs,
+form feeds, and the Unicode line breaks U+0085, U+2028, and U+2029 from every text field,
+so each entry stays on a single line and a newline cannot forge another entry. It still writes ANSI escape sequences and bidirectional controls
 as supplied, so enable `escape_control_chars` with it too when its output may be
 viewed in a terminal or log viewer.
 
@@ -6282,6 +6286,8 @@ Semantic Logger only uses such a key as an argument when its value is valid for 
 `duration` must be a finite real number, `backtrace` an Array of Strings, and `on_exception_level` a
 valid level. Any other value stays in the payload as data, and a `nil` value is ignored, so an
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
+`message`, `exception`, and `metric` take any value, so untrusted data can still set them: an
+`exception` that is not an Exception is logged as an `ArgumentError` naming it.
 A valid `backtrace` also sets where the entry is recorded as logged: its file name, line number, and,
 with [`call_site_level`](config.html#recording-where-each-entry-was-logged), its method. A
 `call_site` key can only leave out the recorded call site, with `false`: the values that set one are
@@ -6304,8 +6310,8 @@ The same goes for a logging block: return the untrusted data as `payload:`, as i
 A hash returned from a block is otherwise checked the same way as one passed with the call, and
 never replaces a value the log call supplied. A key is only used as an argument when
 its value is valid for it and the log entry does not have that argument yet: an empty `message`
-counts as none, and a backtrace captured at the `backtrace_level` counts as supplied. Its `payload`
-is only used when it is a Hash. Every other key, including an argument the entry already has, is
+counts as none, and a backtrace captured at the `backtrace_level` counts as supplied. A `payload`
+that is not a Hash, such as the Array that `JSON.parse` can return, is logged under a `payload` key. Every other key, including an argument the entry already has, is
 added to the payload without replacing the log call's values, and wins over the block's own
 `payload` values of the same name. The caller's own payload Hash is left unchanged.
 

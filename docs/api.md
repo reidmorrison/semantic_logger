@@ -146,9 +146,10 @@ and build dashboards on them without parsing log text. The fields that make up a
 [Log Event](log.html).
 
 A few names are log arguments rather than payload fields: `duration` above sets the entry's duration,
-and `exception`, `metric`, and `min_duration` (see below) do what their names say. To log a Hash
-that your code did not write out itself, such as request parameters or a parsed JSON body, pass it
-as `payload:`, so that none of its keys can be taken for one of those arguments:
+and so do `message`, `exception`, `backtrace`, `call_site`, `min_duration`, `log_exception`,
+`on_exception_level`, `metric`, `metric_amount`, and `dimensions` for what their names say. To log a
+Hash that your code did not write out itself, such as request parameters or a parsed JSON body, pass
+it as `payload:`, so that none of its keys can be taken for one of those arguments:
 
 ~~~ruby
 logger.info("Webhook received", payload: JSON.parse(body), account_id: account.id)
@@ -188,14 +189,15 @@ Putting the pieces together, every level method accepts either of these forms:
 
 ~~~ruby
 logger.info(message, exception, &block)
-logger.info(message, **fields, &block)
+logger.info(message, field: value, ..., &block)
 ~~~
 
 - `message`: the text message. Optional only when a block is supplied.
 - `exception`: a Ruby exception. To log fields along with it, pass it as `exception:` instead.
-- `**fields`: the payload fields, written as keyword arguments, and the log arguments described
-  below, such as `exception:`, `duration:`, `metric:`, and `payload:`.
-- `&block`: evaluated only when the level is active; its return value becomes the message.
+- `field: value, ...`: the payload fields, written out as keyword arguments, and the log arguments
+  described below, such as `exception:`, `duration:`, `metric:`, and `payload:`.
+- `&block`: evaluated only when the level is active. A String it returns is added to the message,
+  and a Hash it returns is merged in as fields, as shown below.
 
 The message can also be passed as `message:`, so that the whole call is keyword arguments:
 
@@ -219,8 +221,9 @@ logger.debug(message: "Order Load", duration: 0.4, call_site: query_location)
 logger.info(message: "Started GET /orders", call_site: false)
 ~~~
 
-A key such as `duration` or `exception` is only used as an argument when its value is valid for it;
-otherwise it is logged as part of the payload. Any other keys supplied alongside `payload:` are
+A key such as `duration` or `backtrace` is only used as an argument when its value is valid for it;
+otherwise it is logged as part of the payload. `message`, `exception`, and `metric` take any value:
+an `exception:` that is not an Exception is logged as an `ArgumentError` naming it. Any other keys supplied alongside `payload:` are
 merged into it, and win over its values of the same name. Data your code did not write out itself
 always goes in `payload:`; see [Logging untrusted hashes](security.html#logging-untrusted-hashes).
 
