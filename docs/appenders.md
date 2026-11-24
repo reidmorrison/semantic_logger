@@ -616,8 +616,9 @@ the next when one cannot be connected to, in the order given, or shuffled for ea
 | `ssl:` | `true`, or the parameters of an `OpenSSL::SSL::SSLContext`, such as `ca_file:`, plus `handshake_timeout:`, the seconds to wait for the TLS handshake (default `connect_timeout:`). The server's certificate and host name are verified unless the parameters say otherwise. |
 
 The appender connects when it is added. When it cannot, such as when the server is down as the
-application starts, it reports that to the internal logger rather than raising, and connects again
-at the next write. The same holds when it is reopened, such as after a fork.
+application starts, it reports that to the internal logger rather than raising, and connects at the
+next write. When it is reopened, such as after a log rotation, and cannot connect, it reports that
+too, and keeps the connection it has, if any.
 
 The appender connects to each server once. When it cannot connect to any of them, or the TLS
 handshake fails, such as for a certificate that does not verify, it writes nothing, and writes the
@@ -695,6 +696,9 @@ The default packet size is 1024 bytes:
 ~~~ruby
 SemanticLogger.add_appender(appender: :syslog, url: "tcp://myloghost:514", max_size: 2048)
 ~~~
+
+As with the [TCP appender](#tcp-appender-ssl), a server that cannot be connected to as the appender is added is
+reported to the internal logger rather than raised, and the next write connects.
 
 `max_size` also applies when `formatter:` names the `:syslog` or `:syslog_cee` formatter. A
 formatter passed as an instance uses its own `max_size`, which also defaults to 1024 bytes:

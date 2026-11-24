@@ -49,7 +49,7 @@ module Appender
           report = internal_logger.events.last
 
           assert_equal :warn, report.level
-          assert_equal "Could not connect, so the next write connects again", report.message
+          assert_equal "Could not connect: the next write connects, if it has no connection", report.message
           assert_instance_of SemanticLogger::Appender::TcpConnection::ConnectError, report.exception
           refute_predicate appender.tcp_client, :connected?
           lost = SemanticLogger::Log.new("TcpTest", :info)

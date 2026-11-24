@@ -163,7 +163,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   by timing out, is written again after the back-off. A host name is connected to over IPv4 or IPv6.
 - The `:tcp` appender, and the `:syslog` appender over TCP, report to the internal logger when they
   cannot connect as they are added, or reopened, rather than raising, so that a server that is down
-  does not stop the application from starting. The next write connects again.
+  does not stop the application from starting. They keep the connection they have, if any; with none,
+  the next write connects.
 
 ### Removed
 

@@ -109,14 +109,15 @@ module SemanticLogger
 
       # Connects to the server again, and then closes the connection it replaces, such as after a log rotation,
       # or a fork, reporting an error closing it rather than raising it. When it cannot connect, such as when the
-      # appender is added while the server is down, it reports that too, and keeps the connection it has: the next
-      # write connects again, and the back-off writes the entry again while it cannot. After a fork, the connection
-      # inherited from the parent is left to it (see TcpConnection).
+      # appender is added while the server is down, it reports that too, and keeps the connection it has, if any. When
+      # it has none, as when it is added, or after a fork, the next write connects, and the back-off writes the entry
+      # again while it cannot. After a fork, the connection inherited from the parent is left to it (see
+      # TcpConnection).
       def reopen
         error = tcp_client.reopen
         logger.warn("Could not close the connection that a reopen replaced", error) if error
       rescue TcpConnection::ConnectError => e
-        logger.warn("Could not connect, so the next write connects again", e)
+        logger.warn("Could not connect: the next write connects, if it has no connection", e)
       end
 
       # Writes the entry, connecting first when the appender has no connection.
