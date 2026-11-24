@@ -50,6 +50,12 @@ SemanticLogger.add_appender(file_name: "production.log", formatter: {default: {e
 See [Escaping Control Characters](config.html#escaping-control-characters) for
 details.
 
+The `:one_line` formatter always removes line breaks (including U+0085, U+2028, and
+U+2029) from every field, so each entry stays on a single line and a newline cannot
+forge another entry. It still writes ANSI escape sequences and bidirectional controls
+as supplied, so enable `escape_control_chars` with it too when its output may be
+viewed in a terminal or log viewer.
+
 The record-framed network appenders are already safe by default:
 
 * The **TCP** and **UDP** appenders default to the JSON formatter.
@@ -88,9 +94,10 @@ Symbol key it spells:
 logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true), account_id: account.id)
 ~~~
 
-A hash returned from a logging block, such as
-`logger.debug("Webhook received") { JSON.parse(body, symbolize_names: true) }`, is checked the
-same way, and never replaces a value the log call supplied. A key is only used as an argument when
+The same goes for a logging block: return the untrusted data as `payload:`, as in
+`logger.debug("Webhook received") { {payload: JSON.parse(body, symbolize_names: true)} }`.
+A hash returned from a block is otherwise checked the same way as one passed with the call, and
+never replaces a value the log call supplied. A key is only used as an argument when
 its value is valid for it and the log entry does not have that argument yet: an empty `message`
 counts as none, and a backtrace captured at the `backtrace_level` counts as supplied. Its `payload`
 is only used when it is a Hash. Every other key, including an argument the entry already has, is

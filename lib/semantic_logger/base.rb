@@ -66,6 +66,8 @@ module SemanticLogger
     #
     #   payload
     #     [Hash|Exception] Optional hash payload or an exception to be logged
+    #     Its keys can also be log arguments (duration, metric, exception, ...), so a Hash
+    #     the caller did not write out itself belongs in `payload:` (see docs/security.md).
     #     Default: nil
     #
     #   exception
