@@ -146,6 +146,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   the snapshot of each interval itself, and takes no formatter.
 - `appender: :sentry` (`SemanticLogger::Appender::Sentry`), deprecated in v5.1: it depended on the
   end-of-life `sentry-raven` gem. Use `appender: :sentry_ruby`.
+- `appender: :new_relic` (`SemanticLogger::Appender::NewRelic`), deprecated in v5.1: it sent
+  `:error` and `:fatal` entries to New Relic as error events. Use `appender: :new_relic_logs`. The
+  `:new_relic` metric appender, `add_appender(metric: :new_relic)`, is unchanged.
 
 ## [Unreleased]
 

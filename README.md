@@ -95,8 +95,7 @@ and are therefore not automatically included by this gem:
 - MongoDB Appender: gem 'mongo' 1.9.2 or above
 - Honeybadger Appender: gem 'honeybadger'
 - HoneybadgerInsights Appender: gem 'honeybadger'
-- NewRelic Appender: gem 'newrelic_rpm'
-- NewRelicLogs Appender: gem 'newrelic_rpm'
+- New Relic Logs Appender: gem 'newrelic_rpm'
 - Syslog Appender to a local syslog daemon: gem 'syslog' (a bundled gem since Ruby 3.4)
 - Syslog Appender to a remote syslog server over TCP or UDP: gem 'syslog_protocol' 0.9.2 or above
 - Syslog Appender to a remote syslog server over TCP: gem 'net_tcp_client'
