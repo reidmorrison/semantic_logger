@@ -18,6 +18,7 @@ module SemanticLogger
     autoload :NewRelicLogs,        "semantic_logger/appender/new_relic_logs"
     autoload :Opensearch,          "semantic_logger/appender/opensearch"
     autoload :OpenTelemetry,       "semantic_logger/appender/open_telemetry"
+    autoload :Otlp,                "semantic_logger/appender/otlp"
     autoload :Rabbitmq,            "semantic_logger/appender/rabbitmq"
     autoload :SplunkHttp,          "semantic_logger/appender/splunk_http"
     autoload :Syslog,              "semantic_logger/appender/syslog"

@@ -891,9 +891,14 @@ module SemanticLogger
   end
 
   module Otlp
+    autoload :Environment,          "semantic_logger/otlp/environment"
+    autoload :Exporter,             "semantic_logger/otlp/exporter"
     autoload :Protobuf,             "semantic_logger/otlp/protobuf"
     autoload :Protocol,             "semantic_logger/otlp/protocol"
     autoload :Schema,               "semantic_logger/otlp/schema"
+    autoload :Signal,               "semantic_logger/otlp/signal"
+    autoload :TraceContext,         "semantic_logger/otlp/trace_context"
+    autoload :Values,               "semantic_logger/otlp/values"
   end
 
   module Reporters

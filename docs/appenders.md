@@ -104,6 +104,7 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
 | [New Relic Logs](#new-relic-logs) | `appender: :new_relic_logs` | `newrelic_rpm` |
+| [OpenTelemetry over OTLP/HTTP](#otlp) | `appender: :otlp` | |
 | [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
 | [Logstash](#logstash) | `logger:` | `logstash-logger` |
 | [logentries.com](#logentriescom) | `appender: :tcp` | |
@@ -1059,6 +1060,73 @@ The appender hands each entry to the agent, which sends it to New Relic on its o
 agent's log forwarding must be on (`application_logging.forwarding.enabled`). Each entry
 carries the agent's linking metadata of the thread that logged it, such as `trace.id` and
 `entity.name`, so that New Relic shows it with its trace.
+
+### OpenTelemetry over OTLP/HTTP {#otlp}
+
+Send log entries to an OpenTelemetry collector, or any other receiver of OTLP/HTTP, such as Grafana
+Alloy, Datadog, Honeycomb, or New Relic's OTLP endpoint, as OTLP log records. It needs no OpenTelemetry
+gems, nor the `google-protobuf` gem: Semantic Logger writes OTLP's binary Protobuf encoding
+(`http/protobuf`, the default) or its JSON encoding (`http/json`) itself.
+
+~~~ruby
+SemanticLogger.add_appender(appender: :otlp)
+
+SemanticLogger.add_appender(
+  appender:            :otlp,
+  url:                 "https://otlp.example.com",
+  header:              {"Authorization" => "Bearer TOKEN"},
+  resource_attributes: {"service.version" => "1.2.3"}
+)
+~~~
+
+It is batched by default: each batch of entries is posted as one `ExportLogsServiceRequest` to
+`<url>/v1/logs`. Its resource is that of the [`metric: :otlp` appender](metrics.html#opentelemetry-otlp):
+`service.name`, `host.name`, `deployment.environment.name`, and the `process.pid` of the process that
+sends it, so that each forked worker reports its own. Each logger name in the batch is an
+instrumentation scope of its own, such as `MyApp::Orders`, holding the records it logged.
+
+Each entry is a log record with the time it was logged, its level as the severity number and text,
+such as `9` and `info`, its message as the body, and the attributes of the
+[`:open_telemetry` appender](#opentelemetry) below, except that:
+
+- a value keeps its structure: a Hash is sent as a map and an Array as an array, at any depth, up to
+  20 structures deep, and an array may mix types, such as `[1, "two"]`;
+- the logger's name is the scope of the record, so it is not the `semantic_logger.name` attribute;
+- the process id is in the resource, so it is not the `process.pid` attribute.
+
+For example, `logger.info("Charged", order: {id: 42, items: ["book"]})` has the attribute `order` as a
+map holding `id` and `items`, rather than its JSON as text.
+
+**Traces.** Each record is linked to the trace it was logged in. When the `opentelemetry-api` gem is
+loaded, as it is by any OpenTelemetry instrumentation, the appender captures the span that is current
+on the thread that logs the entry, and sends its trace id, span id, and sampled flag. It never requires
+the gem itself. Without it, or outside a span, it takes the trace from the named tags `trace_id` and
+`span_id`, when the application sets them as hex text, such as from a `traceparent` header:
+
+~~~ruby
+SemanticLogger.named_tagged(trace_id: "5b8efff798038103d269b633813fc60c", span_id: "eee19b7ec3c1b174") do
+  logger.info("Created user")
+end
+~~~
+
+A `trace_id` that is not 32 hex digits, or a `span_id` that is not 16, or either all zeros, is sent as
+an ordinary attribute instead.
+
+| Option | Description |
+|--------|-------------|
+| `url:` | Base url of the receiver; the entries are posted to `v1/logs` under its path. Default: `OTEL_EXPORTER_OTLP_ENDPOINT`, or else `http://localhost:4318`. |
+| `endpoint:` | The full url to post the entries to, used as it is, instead of `url:`. Default: `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, unless `url:` is given. |
+| `protocol:` | `"http/protobuf"` or `"http/json"`. Default: `OTEL_EXPORTER_OTLP_LOGS_PROTOCOL`, or else `OTEL_EXPORTER_OTLP_PROTOCOL`, or else `"http/protobuf"`. |
+| `application:`, `host:`, `environment:`, `resource_attributes:` | The resource, as for the [`metric: :otlp` appender](metrics.html#opentelemetry-otlp). |
+| `header:`, `compress:`, `ssl:`, `open_timeout:`, `read_timeout:` | As for the [`metric: :otlp` appender](metrics.html#opentelemetry-otlp), with defaults from the same variables, in their `_LOGS_` form, such as `OTEL_EXPORTER_OTLP_LOGS_HEADERS`. |
+| `formatter:` | `SemanticLogger::Formatters::Otlp`, or a subclass of it. Any other formatter, or a formatter block, raises `ArgumentError`, since the appender sends what it returns as a log record. |
+| `level:`, `filter:`, `metrics:`, `batch_size:`, ... | As for any [HTTP appender](#https). |
+
+It reads the same [environment variables](metrics.html#opentelemetry-otlp) as `metric: :otlp`, each in
+its `_LOGS_` form, such as `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, which replaces the generic form as a
+whole, other than `OTEL_METRIC_EXPORT_INTERVAL`. A partial success, where the receiver stored only some
+of the records, is reported on the internal logger; the rest are not sent again. Any other response
+is handled as by the [HTTP appender](#when-the-server-does-not-accept-a-request).
 
 ### OpenTelemetry
 

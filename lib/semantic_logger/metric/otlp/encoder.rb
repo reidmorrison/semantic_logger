@@ -35,9 +35,7 @@ module SemanticLogger
         SCOPE_NAME = "SemanticLogger".freeze
 
         # The range of an sfixed64 or int64: an Integer outside it is not an intValue or asInt.
-        INT64_RANGE = (-(2**63)..((2**63) - 1))
-
-        NANOSECONDS = 1_000_000_000
+        INT64_RANGE = SemanticLogger::Otlp::Values::INT64_RANGE
 
         # Returns [String] the JSON of the request for the snapshot.
         #
@@ -168,27 +166,12 @@ module SemanticLogger
           end
         end
 
-        # Returns [Float|String] the Float, or how the Protobuf JSON mapping writes one that is not
-        # finite, which JSON cannot hold as a number.
-        def self.double(value)
-          if value.finite? then value
-          elsif value.nan? then "NaN"
-          elsif value.positive? then "Infinity"
-          else
-            "-Infinity"
-          end
-        end
+        # See SemanticLogger::Otlp::Values.
+        def self.double(value) = SemanticLogger::Otlp::Values.double(value)
 
-        # Returns [String] decimal nanoseconds since the epoch of a Time, or of a Numeric in seconds.
-        def self.nanoseconds(time)
-          (time.to_r * NANOSECONDS).to_i.to_s
-        end
+        def self.nanoseconds(time) = SemanticLogger::Otlp::Values.nanoseconds(time)
 
-        # Returns [String] the text of a String, Symbol, or other object, in valid UTF-8.
-        def self.text(value)
-          value = value.is_a?(Symbol) ? value.name : value.to_s
-          Utils.encode_utf8_string(value)
-        end
+        def self.text(value) = SemanticLogger::Otlp::Values.text(value)
 
         private_class_method :metrics, :metric, :data_point, :number_value, :histogram, :buckets,
                              :attributes, :any_value, :double, :nanoseconds, :text

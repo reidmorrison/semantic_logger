@@ -1152,7 +1152,8 @@ module Metric
 
             assert_equal "http/protobuf", appender.protocol.name
             assert_equal 1, warnings.size
-            assert_match(%r{OTEL_EXPORTER_OTLP_PROTOCOL=grpc: the :otlp appender sends OTLP/HTTP only}, warnings.first)
+            assert_match(%r{OTEL_EXPORTER_OTLP_PROTOCOL=grpc: the :otlp metric appender sends OTLP/HTTP only},
+                         warnings.first)
           end
 
           it "ignores a protocol it does not know, and warns" do
