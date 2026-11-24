@@ -44,8 +44,8 @@ After a fork, that is the child's own thread, which reopens the appender before 
 
 In the child, the appenders that keep a connection open to their server leave the one they inherited
 to the parent, without closing it or writing to it, and connect again: `:http` and the appenders
-built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and `metric: :signalfx`), `:tcp`,
-`:syslog` and `:graylog` over TCP, `:kafka`, and `:rabbitmq`. Closing a TLS connection sends the
+built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, `metric: :otlp`, and
+`metric: :signalfx`), `:tcp`, `:syslog` and `:graylog` over TCP, `:kafka`, and `:rabbitmq`. Closing a TLS connection sends the
 server a `close_notify`, which ends the connection for the parent too, and over TLS the server
 cannot read what the parent writes after the child has written to it. When one of them cannot
 connect in the child, such as while its server cannot be reached, it connects before it writes the
@@ -479,7 +479,9 @@ only those logged in a signal trap that another thread has yet to write.
 
 For a fuller operational picture, including per-appender queues, use `SemanticLogger.stats`. It
 returns a Hash describing the main pipeline and every appender, handy for exporting Semantic Logger's
-own health to a monitoring system such as Prometheus or statsd:
+own health to a monitoring system such as Prometheus or statsd. A metric appender added with
+`internal_metrics: true` sends the counts of the log entries processed, dropped, and failed for you
+(see [Internal metrics](metrics.html#internal-metrics)).
 
 ~~~ruby
 SemanticLogger.stats

@@ -3,7 +3,10 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased (6.0.0)]
+## [6.0.0.beta1] 2026-11-20
+
+See [Upgrading to Semantic Logger v6](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v6)
+and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Added
 
@@ -33,7 +36,6 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   of its own processors. They are read from `SemanticLogger.stats` at each collection, only while a
   metric appender writes them, so logging pays nothing for them. Metric appenders without the option
   never see them.
-
 - `SemanticLogger.add_appender(metric: :summary)` writes the metrics of each interval (`interval:`,
   60 seconds by default) as log entries, one per series, at `level:` (`:info` by default), so that
   every log appender writes them with its own formatter: the message is the metric name, and the
@@ -65,6 +67,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   a Hash, is redacted at any depth as it is recorded, before it becomes text. A series whose dimensions
   cannot be redacted, such as when the sensitive keys raise, is never delivered; the others are, and
   how many were left out is reported once per interval.
+- A custom metric appender is a `Subscriber` that includes `SemanticLogger::Metric::Snapshots` and
+  implements `write_metrics(snapshot)`, and optionally `metrics_retryable?(exception)` and the private
+  `forget_parent_state`. `Metric::Snapshot#merged_by { |point| key }` merges the points of a snapshot
+  by a key such as the name, for a destination that keys its metrics by less than a series.
+  `SemanticLogger::Test::CaptureLogEvents#snapshots` holds the snapshots given to it when it stands in
+  for the processor. See
+  [Write a custom metric appender](https://logger.reidmorrison.com/metrics.html#write-a-custom-metric-appender).
 
 ### Changed
 
@@ -109,15 +118,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   the name; any other name is sent as it is, with `/` as `.`, so a dotted name such as `users.signup`
   is no longer sent with the class `Unknown`. `internal_metrics: true` adds Semantic Logger's own
   metrics. The `dimensions:` option, which listed the named tags to send, raises `ArgumentError`, since
-  named tags are never part of a metric's series, and `SemanticLogger::Formatters::Signalfx` is removed.
-  `level:`, `filter:`, `formatter:`, a formatter block, and `batch: true` raise `ArgumentError` too. A
-  leading, trailing, or repeated `/` in a name is left out, and a series whose name is then empty is not
-  sent, with a warning. A counter named as one of the names a histogram is sent as, such as
-  `latency.count` for the histogram `latency`, is added to that counter; a gauge with the name and
-  dimensions of a datapoint already sent in the request, such as the gauge `latency.max` and a counter
-  `latency.max`, is left out, with a warning. A value beyond the range of a Float is left out, with a
-  warning. Each warning is made once per metric name. A snapshot that the server asks to send again later (408, 429, 503), or that could not
+  named tags are never part of a metric's series, as do `level:`, `filter:`, `formatter:`, a formatter
+  block, and `batch: true`. A leading, trailing, or repeated `/` in a name is left out, and a series
+  whose name is then empty is not sent, with a warning. A counter named as one of the names a histogram
+  is sent as, such as `latency.count` for the histogram `latency`, is added to that counter; a gauge
+  with the name and dimensions of a datapoint already sent in the request, such as the gauge
+  `latency.max` and a counter `latency.max`, is left out, with a warning. A value beyond the range of a
+  Float is left out, with a warning. Each warning is made once per metric name. A snapshot that the
+  server asks to send again later (408, 429, 503), or that could not
   reach it, is sent with the next one.
+
+### Removed
+
+- `SemanticLogger::Formatters::Signalfx`: the `:signalfx` metric appender builds its requests from
+  the snapshot of each interval itself, and takes no formatter.
 
 ## [Unreleased]
 

@@ -37,7 +37,7 @@ SemanticLogger.add_appender(appender: :elasticsearch, url: "http://localhost:920
 SemanticLogger.add_appender(logger: Logger.new($stdout))
 
 # A metrics destination (see the Metrics guide)
-SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
+SemanticLogger.add_appender(metric: :otlp, url: "http://localhost:4318")
 ~~~
 
 Pass one of these keywords to each call, and call `add_appender` once for each destination, see
@@ -61,7 +61,7 @@ destination can keep a different subset of the logs in a different format:
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. A [block given to `add_appender`](config.html#formatter-as-a-block-or-proc) takes its place. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
-| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`, which default to `true` until v6, and warn when it is not supplied. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
+| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`, which default to `true`, which a later v6 release changes, and warn when it is not supplied. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
 
 For example, write only warnings and above to a file, formatted as JSON:
 
@@ -131,7 +131,8 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [Apache Kafka](#apache-kafka) | `appender: :kafka` | `ruby-kafka` |
 | [RabbitMQ](#rabbitmq-amqp) | `appender: :rabbitmq` | `bunny` |
 
-For metrics destinations such as Statsd, SignalFx, and New Relic, see [Metrics](metrics.html).
+For metrics destinations such as OpenTelemetry (OTLP), StatsD, SignalFx, and New Relic, see
+[Metrics](metrics.html#metric-appenders).
 
 > **Tip:** To ensure no log messages are lost, prefer TCP over UDP. Because of Semantic Logger's
 > asynchronous design, the performance difference between the two will not impact your application.
@@ -450,8 +451,9 @@ SemanticLogger.add_appender(
 ~~~
 
 The query is applied after the request path, so it also works for the appenders built on top of the
-HTTP appender (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:signalfx` metrics appender),
-each of which appends its own path to the url:
+HTTP appender (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:otlp` and `:signalfx`
+metric appenders), each of which appends its own path to the url. (`:otlp` appends `/v1/metrics`
+only to `url:`; it posts to an `endpoint:` as it is.) For example:
 
 ~~~ruby
 SemanticLogger.add_appender(
@@ -496,8 +498,11 @@ SemanticLogger.add_appender(
 #### When the server does not accept a request
 
 An entry is written once the server answers its request with a 2xx status. The HTTP appender, and
-those built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`, and the `:signalfx` metrics
-appender), handle any other answer by its status:
+the log appenders built on it (`:elasticsearch_http`, `:splunk_http`, and `:loki`), handle any other
+answer by its status, as below. The `:otlp` and `:signalfx` metric appenders send each interval's
+metrics in one request, and keep a request that the server asked to send again, or could not be
+reached for, to send with the next interval instead; see
+[Intervals, flushes, and outages](metrics.html#intervals-flushes-and-outages).
 
 * A 4xx other than 408 and 429, such as `400 Bad Request` or `401 Unauthorized`, rejects the request
   itself, so sending it again cannot succeed. With `async: true` or `batch: true`, its entries are
@@ -651,7 +656,7 @@ a lookup failed, the IPv6 addresses are looked up after any failure.
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it sends them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
 
 Customize the message with a formatter:
 
@@ -1397,7 +1402,7 @@ SemanticLogger.add_appender(
 
 Pass `metrics: true` to also publish metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it publishes them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
 
 ### RabbitMQ (AMQP)
 
@@ -1416,7 +1421,7 @@ SemanticLogger.add_appender(
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
 exception. Without `metrics:`, it sends them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since v6 leaves them out by default.
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
 
 When it is reopened, such as with `SemanticLogger.reopen(force: true)`, it connects to RabbitMQ again,
 publishes the next entries on a new channel, and closes the connection it replaced. When it cannot
