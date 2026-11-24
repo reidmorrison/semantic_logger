@@ -13,7 +13,7 @@ module SemanticLogger
         if deprecated_klass
           SemanticLogger::Deprecation.warn(
             "semantic_logger_events with the class as its argument is deprecated, and v6 takes it only as klass:. " \
-            "Use semantic_logger_events(klass: #{deprecated_klass.inspect}) instead."
+            "Pass the class as klass: instead."
           )
         end
         logger = SemanticLogger::Test::CaptureLogEvents.new

@@ -3,7 +3,7 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.3 OpenTelemetry log record changes.
+  v5.4 deprecation of the positional class of semantic_logger_events.
 ---
 
 

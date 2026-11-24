@@ -44,7 +44,7 @@ class MinitestHelpersTest < Minitest::Test
 
     it "warns that the class as its argument is deprecated, at the line that passed it, and still captures" do
       line    = __LINE__ + 3
-      warning = /minitest_test\.rb:#{line}: warning: SemanticLogger: .*klass: MinitestHelpersTest::User\) instead/
+      warning = /minitest_test\.rb:#{line}: warning: SemanticLogger: .*Pass the class as klass: instead\./
       events  = assert_deprecated(warning) do
         semantic_logger_events(User) { User.new.enable! }
       end
