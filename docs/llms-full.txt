@@ -7168,7 +7168,7 @@ then wait on that thread's own queue, which can stop all logging while the queue
 
 ### Upgrading to Semantic Logger v6
 
-v6 is in beta (`6.0.0.beta1`). These notes cover its metrics changes, and the removal of what v5
+v6 is not released yet. These notes cover its metrics changes, and the removal of what v5
 deprecated, each in a section below. Before upgrading, run your application, or its tests, on the
 latest v5 with deprecation warnings on (see [Seeing deprecation warnings](#seeing-deprecation-warnings)),
 and fix each one that it reports.
