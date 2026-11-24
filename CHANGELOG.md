@@ -13,6 +13,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   reported as a duplicated header under `-W`; and the token header of `:splunk_http` and
   `metric: :signalfx` replaces one given in any case. A header set later through `#header`, or written
   to it directly by a custom subclass, is still kept as written.
+- The `:one_line` formatter also removes vertical tabs and form feeds from every text field, since most
+  terminals move down a line at them, so that untrusted text cannot break an entry over two lines.
 
 ## [5.3.0] 2026-11-20
 
