@@ -4072,7 +4072,10 @@ Once a metric appender is present, the metric is recorded:
 * as a histogram of its `duration:` in seconds, with the unit `"s"`, when it has a duration, as a
   `measure_*` call always does, the same as `logger.time`;
 * otherwise as a counter of its `metric_amount:`, 1 by default, the same as `logger.increment`;
-* with its `dimensions:`;
+* with its `dimensions:`, plus `"error.type"`, the class name of the exception, when the block of a
+  `measure_*` call raises, so that failed calls are a series of their own, as the OpenTelemetry
+  semantic conventions name it, unless its dimensions already have one. The log entry keeps its own
+  dimensions;
 * **at every level**, whether or not the log entry is logged, and whether or not its
   `min_duration:` is met, or a filter rejects the entry. The log entry itself still follows the log
   level and filters, and is written as before.
@@ -7403,6 +7406,14 @@ A negative `metric_amount`, deprecated in v5.3, is now dropped: the log entry is
 it, but its metric is not recorded, and the internal logger warns once per metric name. So is a
 negative amount given to `logger.increment`. Count what goes down as a metric of its own, such as
 `cart.items_removed`. v6.0 has no gauge for a value that goes up and down.
+
+#### A failed `measure_*` call adds `error.type` to its metric
+
+When the block of a `measure_*` call that has a `metric:` raises, its metric gets the dimension
+`"error.type"`, the class name of the exception, as the OpenTelemetry semantic conventions name it,
+unless its `dimensions:` already have one. Failed calls are then a series of their own: the totals
+across series are unchanged, but a chart or alert that selects the series by all of its dimensions
+no longer counts the failures. The log entry keeps its own dimensions.
 
 #### Custom metric subscribers
 

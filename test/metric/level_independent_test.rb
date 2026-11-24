@@ -218,6 +218,33 @@ module Metric
 
             assert_empty logs
             assert_equal 1, points.first.value.count
+            assert_equal({"error.type" => "ArgumentError"}, points.first.dimensions)
+          end
+
+          it "adds error.type to the metric, not the log entry, when the block raises at the level" do
+            assert_raises(ArgumentError) do
+              logger.measure_info("Called supplier", metric: "supplier.call", dimensions: {name: "acme"}) do
+                raise ArgumentError, "boom"
+              end
+            end
+            logger.measure_info("Called supplier", metric: "supplier.call", dimensions: {name: "acme"}) { :ok }
+
+            assert_equal [{name: "acme"}] * 2, logs.map(&:dimensions)
+            assert_equal [{"name" => "acme", "error.type" => "ArgumentError"}, {"name" => "acme"}],
+                         points.map(&:dimensions)
+          end
+
+          it "keeps an error.type given, and adds none for an exception given rather than raised" do
+            assert_raises(ArgumentError) do
+              logger.measure_info("Called", metric: "a", dimensions: {"error.type" => "timeout"}) do
+                raise ArgumentError
+              end
+            end
+            assert_raises(ArgumentError) do
+              logger.measure_info("Called", metric: "b", duration: 5, exception: ArgumentError.new("given"))
+            end
+
+            assert_equal [{"error.type" => "timeout"}, {}], points.map(&:dimensions)
           end
 
           it "records the time below the level when the block breaks out early" do

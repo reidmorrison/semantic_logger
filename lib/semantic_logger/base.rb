@@ -486,11 +486,28 @@ module SemanticLogger
     end
 
     # Records the metric of the log entry, when it has one, whether or not the entry is logged: also
-    # when its min_duration is not met, or a filter rejects it.
-    def record_metric_of(log)
+    # when its min_duration is not met, or a filter rejects it. `raised` is what the block of a measure
+    # call raised, if anything (see #measure_dimensions).
+    def record_metric_of(log, raised = nil)
       return unless log.metric && collecting_metrics?
 
-      record_log_metric(log.metric, log.metric_amount, log.duration, log.dimensions)
+      record_log_metric(log.metric, log.metric_amount, log.duration, measure_dimensions(log.dimensions, raised))
+    end
+
+    # Name of the dimension that holds the class of the exception that failed a measured operation, as
+    # the semantic conventions of OpenTelemetry name it.
+    ERROR_TYPE = "error.type".freeze
+    private_constant :ERROR_TYPE
+
+    # Returns [Hash|nil] the dimensions of the metric of a measure call, with ERROR_TYPE added, as the
+    # class name of the exception that its block raised, so that the failed calls are a series of their
+    # own, unless the dimensions already have one. As they are when its block did not raise, such as for
+    # an exception given as `exception:`. The log entry keeps its own dimensions.
+    def measure_dimensions(dimensions, raised)
+      return dimensions unless raised
+      return dimensions if dimensions && (dimensions.key?(ERROR_TYPE) || dimensions.key?(ERROR_TYPE.to_sym))
+
+      (dimensions || {}).merge(ERROR_TYPE => Utils.exception_name(raised))
     end
 
     # Records the metric of a log call, whose kind, value, and unit the Log knows (see
@@ -533,22 +550,27 @@ module SemanticLogger
         return
       end
 
-      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      start  = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      raised = nil
       begin
         block.call(params)
+      rescue Exception => e
+        raised = e
+        raise
       ensure
-        record_measure_metric(options, 1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start))
+        record_measure_metric(options, 1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start), raised)
       end
     end
 
-    # Records the metric of a measure call that took the duration, in milliseconds. Its options are read
-    # once the block has returned, since the block can change them, as #measure_internal does.
-    def record_measure_metric(options, duration)
+    # Records the metric of a measure call that took the duration, in milliseconds, whose block raised
+    # `raised`, if anything (see #measure_dimensions). Its options are read once the block has returned,
+    # since the block can change them, as #measure_internal does.
+    def record_measure_metric(options, duration, raised = nil)
       metric = measure_option(options, :metric)
       return unless metric
 
       record_log_metric(metric, measure_option(options, :metric_amount), duration,
-                        measure_option(options, :dimensions))
+                        measure_dimensions(measure_option(options, :dimensions), raised))
     end
 
     # Return the level index for fast comparisons, resolved in the same order as `#level`.
@@ -719,6 +741,7 @@ module SemanticLogger
     # ignored (see Log.argument?) and its default is used instead.
     def measure_internal(level, index, message, params)
       exception = nil
+      raised    = nil
       # Single parameter is a hash
       if params.empty? && message.is_a?(Hash)
         params  = message
@@ -735,6 +758,7 @@ module SemanticLogger
         end
       rescue Exception => e
         exception = e
+        raised    = e
       ensure
         # Must use ensure block otherwise a `return` in the yield above will skip the log entry
         log = new_log(level, index)
@@ -766,7 +790,7 @@ module SemanticLogger
           on_exception_level: measure_option(params, :on_exception_level),
           call_site:          measure_option(params, :call_site)
         )
-        record_metric_of(log)
+        record_metric_of(log, raised)
 
         # Log level may change during assign due to :on_exception_level
         self.log(log) if should_log && should_log?(log)
