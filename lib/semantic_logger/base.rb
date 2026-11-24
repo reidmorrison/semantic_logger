@@ -393,24 +393,6 @@ module SemanticLogger
       meets_log_level?(log) && !filtered?(log)
     end
 
-    # Returns [true|false] whether the metric calls of this logger are collected: true once a metric
-    # appender is present (see Processor#collecting_metrics?). Without one, a metric call returns at
-    # once, so code that builds costly dimensions for a metric, such as by parsing a statement, can ask
-    # first and skip it:
-    #
-    #   if logger.collecting_metrics?
-    #     logger.time("db.client.operation.duration", duration: ms, dimensions: dimensions_of(sql))
-    #   end
-    #
-    # Also asked before the metric of a log call is read, so that a log call without a metric appender
-    # costs what it did before metrics were collected. A processor without the method, such as a
-    # stand-in for it in a test written for 5.x that answers only #log, collects nothing; a test logger
-    # (see SemanticLogger::Test::CaptureLogEvents) always collects.
-    def collecting_metrics?
-      processor = Logger.processor
-      processor.respond_to?(:collecting_metrics?) && processor.collecting_metrics?
-    end
-
     protected
 
     # Only assigned to when building a child logger via `#tagged` (see #tagged_child).
@@ -490,6 +472,19 @@ module SemanticLogger
     rescue StandardError
       # Such as outside the main Ractor, which has no collector: reporting it is best effort.
       false
+    end
+
+    # Returns [true|false] whether the metric calls are collected: true once a metric appender is present
+    # (see Processor#collecting_metrics?), in the main Ractor only. Asked before the metric of a log call
+    # is read, so that a log call without a metric appender costs what it did before metrics were
+    # collected. Public on a Logger (see Logger#collecting_metrics?), but not on an appender, which a test
+    # can stand in for the processor with.
+    #
+    # A processor without the method, such as a stand-in for it in a test written for 5.x that answers
+    # only #log, collects nothing.
+    def collecting_metrics?
+      processor = Logger.processor
+      processor.respond_to?(:collecting_metrics?) && processor.collecting_metrics?
     end
 
     # Records the metric of the log entry, when it has one, whether or not the entry is logged: also

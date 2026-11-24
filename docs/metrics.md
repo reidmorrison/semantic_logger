@@ -178,8 +178,8 @@ if logger.collecting_metrics?
 end
 ~~~
 
-`collecting_metrics?` is `true` once a metric appender is present, and always for a test logger
-(see [Testing](testing.html)).
+`collecting_metrics?` answers for the whole process: `true` once a metric appender is present, in the
+main Ractor only, and always for a test logger (see [Testing](testing.html)).
 
 ### They never raise
 

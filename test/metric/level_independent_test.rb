@@ -188,6 +188,15 @@ module Metric
           SemanticLogger::Logger.stub(:processor, Object.new) do
             refute_predicate logger, :collecting_metrics?
           end
+          assert_respond_to logger, :collecting_metrics?
+          refute_respond_to InMemoryAppender.new, :collecting_metrics?
+        end
+
+        it "collects nothing, and never recurses, when an appender stands in for the processor" do
+          SemanticLogger::Logger.stub(:processor, InMemoryAppender.new) do
+            assert logger.info("Signed up", metric: "users.signup")
+            refute_predicate logger, :collecting_metrics?
+          end
         end
 
         describe "measure" do
