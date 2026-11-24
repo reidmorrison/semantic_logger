@@ -92,24 +92,55 @@ module SemanticLogger
           @compress  = text && parse_compression(name, text)
         end
 
-        # Returns [Hash] the TLS options of Appender::Http (`ssl:`) that the certificate variables set,
-        # none when none is set: `ca_file:`, the file of trusted certificates to verify the server with,
-        # from CERTIFICATE, and `cert:` and `key:`, the client's certificate and private key, read from
-        # the PEM files of CLIENT_CERTIFICATE and CLIENT_KEY. Each file is read when first asked for.
-        #
-        # Raises ArgumentError, naming the variable and its file, for a file that cannot be read, or
-        # that does not hold a PEM certificate or private key: every request would fail without it.
-        def ssl
-          return @ssl if defined?(@ssl)
+        # The certificate variables below each name a file, which is read only when asked for, so that a
+        # variable whose option the appender was given, and so does not ask for, is never read. Each
+        # raises ArgumentError, naming the variable and its file, for a file that cannot be read, or
+        # that does not hold what it should: every request would fail without it.
 
-          ssl = {}
+        # Returns [String|nil] the path of CERTIFICATE, the PEM file of trusted certificates to verify
+        # the server with, nil when not set.
+        def ca_file
+          return @ca_file if defined?(@ca_file)
+
           name, path = signal_value("CERTIFICATE")
-          ssl[:ca_file] = readable_file(name, path) if path
-          name, path = signal_value("CLIENT_CERTIFICATE")
-          ssl[:cert] = read_pem(name, path, "certificate") { |pem| OpenSSL::X509::Certificate.new(pem) } if path
-          name, path = signal_value("CLIENT_KEY")
-          ssl[:key] = read_pem(name, path, "private key") { |pem| OpenSSL::PKey.read(pem) } if path
-          @ssl = ssl.freeze
+          @ca_file   = path && read_pem(name, path, "certificate") do
+            OpenSSL::X509::Store.new.add_file(path)
+            path
+          end
+        end
+
+        # Returns [Hash] the client's certificate and private key, as the `cert:` and `key:` of `ssl:`, from
+        # the PEM files of CLIENT_CERTIFICATE and CLIENT_KEY; none when neither is set. Raises ArgumentError
+        # when only one of them is set, or the key is not the private key of the certificate, such as when
+        # one is of the signal and the other generic, since every request would then fail. An encrypted
+        # key raises, rather than asking for its pass phrase on a terminal: the specification has no
+        # variable for one.
+        def client_identity
+          return @client_identity if defined?(@client_identity)
+
+          cert_name, cert_path = signal_value("CLIENT_CERTIFICATE")
+          key_name, key_path   = signal_value("CLIENT_KEY")
+          return @client_identity = {}.freeze if cert_path.nil? && key_path.nil?
+
+          missing = cert_path.nil? ? "CLIENT_CERTIFICATE" : "CLIENT_KEY" unless cert_path && key_path
+          if missing
+            raise(ArgumentError,
+                  "#{cert_path ? cert_name : key_name} is set without OTEL_EXPORTER_OTLP_METRICS_#{missing} or " \
+                  "OTEL_EXPORTER_OTLP_#{missing}: a client certificate needs both")
+          end
+
+          cert = read_pem(cert_name, cert_path, "certificate") { OpenSSL::X509::Certificate.new(File.read(cert_path)) }
+          key  = read_pem(key_name, key_path, "private key, without a pass phrase") do
+            key = OpenSSL::PKey.read(File.read(key_path), "")
+            raise(OpenSSL::PKey::PKeyError, "it holds a public key") unless private_key?(key)
+
+            key
+          end
+          unless cert.check_private_key(key)
+            raise(ArgumentError, "#{key_name} does not hold the private key of the certificate of #{cert_name}")
+          end
+
+          @client_identity = {cert: cert, key: key}.freeze
         end
 
         # Returns [Float|nil] the seconds between exports of OTEL_METRIC_EXPORT_INTERVAL, given in
@@ -165,18 +196,27 @@ module SemanticLogger
           end
         end
 
-        # Returns [String] the path of the file, raising ArgumentError, naming the variable, when it is
-        # not a file that can be read.
-        def readable_file(name, path)
-          return path if File.file?(path) && File.readable?(path)
+        # Returns [true|false] whether the key holds its private part. A key of a type without #private?, such as
+        # Ed25519, is asked for its private part instead.
+        def private_key?(key)
+          return key.private? if key.respond_to?(:private?)
 
-          raise(ArgumentError, "#{name}: cannot read the file #{path.inspect}")
+          key.private_to_der
+          true
+        rescue OpenSSL::PKey::PKeyError
+          false
         end
 
-        # Returns what the block makes of the text of the PEM file, raising ArgumentError, naming the
-        # variable, the file, and what it should hold, when it cannot be read, or the block cannot parse it.
+        # Returns what the block makes of the PEM file, raising ArgumentError, naming the variable and the
+        # file, when it is not a file that can be read, or, saying what it should hold, when the block
+        # cannot parse it.
         def read_pem(name, path, what)
-          yield(File.read(readable_file(name, path)))
+          unless File.file?(path) && File.readable?(path)
+            raise(ArgumentError,
+                  "#{name}: cannot read the file #{path.inspect}")
+          end
+
+          yield
         rescue OpenSSL::OpenSSLError, SystemCallError, IOError => e
           raise(ArgumentError, "#{name}: the file #{path.inspect} does not hold a PEM #{what}: #{e.message}")
         end

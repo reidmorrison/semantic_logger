@@ -1042,6 +1042,11 @@ module Metric
         end
 
         describe "certificates" do
+          # The certificate variables apply to an https url only.
+          def new_appender(url: "https://otlp.example.com", **args)
+            super
+          end
+
           # Writes a self-signed certificate and its key to PEM files in a temporary directory, which
           # the block is given, with the paths of the certificate and the key.
           def with_pem_files
@@ -1090,8 +1095,9 @@ module Metric
 
           it "lets a key of ssl: given win, keeping the others" do
             with_pem_files do |cert_path, key_path, _cert|
-              ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"] = cert_path
-              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]  = key_path
+              ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"]        = cert_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = cert_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]         = key_path
               options = new_appender(ssl: {ca_file: "/etc/ssl/given.pem"}).ssl_options
 
               assert_equal "/etc/ssl/given.pem", options[:ca_file]
@@ -1099,8 +1105,107 @@ module Metric
             end
           end
 
-          it "sets no ssl: options when no variable is set" do
-            assert_empty new_appender.ssl_options
+          it "does not read a variable whose option ssl: gives, nor any when ssl: is nil or false" do
+            ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"]        = "/no/such/ca.pem"
+            ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = "/no/such/cert.pem"
+            ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]         = "/no/such/key.pem"
+
+            key = OpenSSL::PKey::RSA.new(2048)
+            options = new_appender(ssl: {ca_file: "/etc/ssl/given.pem", key: key}).ssl_options
+
+            assert_equal({ca_file: "/etc/ssl/given.pem", key: key}, options.slice(:ca_file, :cert, :key))
+            assert_equal({cert_store: :given},
+                         new_appender(ssl: {cert_store: :given, cert: nil}).ssl_options.slice(:ca_file, :cert_store))
+            refute new_appender(url: "http://localhost:4318", ssl: nil).ssl_options
+            refute new_appender(url: "http://localhost:4318", ssl: false).ssl_options
+            assert_empty new_appender(url: "http://localhost:4318").ssl_options
+          end
+
+          it "raises ArgumentError for a client certificate without a key, or a key that is not its own" do
+            with_pem_files do |cert_path, key_path, _cert|
+              ENV["OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE"] = cert_path
+              error = assert_raises(ArgumentError) { new_appender }
+
+              assert_includes error.message,
+                              "set without OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY or OTEL_EXPORTER_OTLP_CLIENT_KEY"
+
+              other = File.join(File.dirname(key_path), "other.pem")
+              File.write(other, OpenSSL::PKey::RSA.new(2048).to_pem)
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"] = other
+              error = assert_raises(ArgumentError) { new_appender }
+
+              assert_includes error.message, "does not hold the private key of the certificate"
+
+              File.write(other, OpenSSL::PKey.read(File.read(key_path)).public_to_pem)
+              error = assert_raises(ArgumentError) { new_appender }
+
+              assert_includes error.message, "it holds a public key"
+            end
+          end
+
+          it "takes an Ed25519 client certificate and key, whose key has no private?" do
+            key = begin
+              OpenSSL::PKey.generate_key("ED25519")
+            rescue OpenSSL::PKey::PKeyError, NotImplementedError, NoMethodError
+              skip "Ed25519 is not supported by this OpenSSL"
+            end
+            name = OpenSSL::X509::Name.parse("/CN=otlp-ed25519")
+            cert = OpenSSL::X509::Certificate.new
+            cert.version    = 2
+            cert.serial     = 1
+            cert.subject    = name
+            cert.issuer     = name
+            cert.public_key = key
+            cert.not_before = Time.now
+            cert.not_after  = Time.now + 3600
+            cert.sign(key, nil)
+            Dir.mktmpdir do |dir|
+              File.write(cert_path = File.join(dir, "cert.pem"), cert.to_pem)
+              File.write(key_path = File.join(dir, "key.pem"), key.private_to_pem)
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = cert_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]         = key_path
+
+              assert_equal cert.to_der, new_appender.ssl_options[:cert].to_der
+            end
+          end
+
+          it "takes the client certificate and key from the variables only as a pair" do
+            with_pem_files do |cert_path, key_path, _cert|
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = cert_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]         = key_path
+              given   = OpenSSL::X509::Certificate.new(File.read(cert_path))
+              options = new_appender(ssl: {cert: given}).ssl_options
+
+              assert_same given, options[:cert]
+              refute options.key?(:key)
+            end
+          end
+
+          it "raises ArgumentError for a trusted certificates file that is not PEM, or an encrypted key" do
+            with_pem_files do |cert_path, key_path, _cert|
+              Dir.mktmpdir do |dir|
+                not_pem = File.join(dir, "ca.pem")
+                File.write(not_pem, "not a certificate")
+                ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"] = not_pem
+                error = assert_raises(ArgumentError) { new_appender }
+
+                assert_match(/OTEL_EXPORTER_OTLP_CERTIFICATE: the file .* not hold a PEM certificate/, error.message)
+
+                ENV.delete("OTEL_EXPORTER_OTLP_CERTIFICATE")
+                encrypted = File.join(dir, "encrypted.pem")
+                File.write(encrypted,
+                           OpenSSL::PKey.read(File.read(key_path)).export(OpenSSL::Cipher.new("aes-128-cbc"), "secret"))
+                ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = cert_path
+                ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]         = encrypted
+                error = assert_raises(ArgumentError) { new_appender }
+
+                assert_match(/OTEL_EXPORTER_OTLP_CLIENT_KEY: .* without a pass phrase/, error.message)
+              end
+            end
+          end
+
+          it "sets no certificate options when no variable is set" do
+            assert_empty new_appender.ssl_options.slice(:ca_file, :cert, :key)
           end
 
           it "raises ArgumentError for a file that cannot be read, naming the variable" do
@@ -1111,14 +1216,15 @@ module Metric
           end
 
           it "raises ArgumentError for a client certificate or key that is not PEM, naming the variable" do
-            with_pem_files do |_cert_path, key_path, _cert|
+            with_pem_files do |cert_path, key_path, _cert|
               ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = key_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]         = key_path
               error = assert_raises(ArgumentError) { new_appender }
 
               assert_match(/OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE: the file .* not hold a PEM certificate/,
                            error.message)
 
-              ENV.delete("OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE")
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = cert_path
               File.write(key_path, "not a key")
               ENV["OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY"] = key_path
               error = assert_raises(ArgumentError) { new_appender }
@@ -1169,10 +1275,12 @@ module Metric
           OTEL_ENV.each do |name|
             it "ignores #{name}, warning once with its name only" do
               ENV[name] = "secret\xFF=1".b
-              appender  = new_logged_appender
+              # The certificate variables are read for an https url only.
+              url       = name.match?(/CERTIFICATE|CLIENT_KEY/) ? "https://localhost:4318" : nil
+              appender  = new_logged_appender(url: url)
 
               assert_equal ["Ignoring #{name}: its value is not valid UTF-8"], warnings
-              assert_equal "http://localhost:4318", appender.url
+              assert_equal url || "http://localhost:4318", appender.url
               assert_in_delta 2.0, appender.open_timeout
               refute appender.compress
               refute(appender.header.keys.any? { |key| key.start_with?("secret") })

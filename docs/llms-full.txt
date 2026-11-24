@@ -4172,10 +4172,14 @@ percent-decoded, is left out, and the warning names its position only, never its
 may hold credentials. A malformed `OTEL_RESOURCE_ATTRIBUTES` is ignored as a whole, as the
 OpenTelemetry specification asks.
 
-A key of `ssl:` given wins over the certificate variable that sets it, and the others still apply. A
-certificate file that cannot be read, or that does not hold a PEM certificate or key, raises
-`ArgumentError` from `add_appender`, naming the variable and the file, since every request would fail
-without it.
+The certificate variables apply to an `https` url only. A `ca_file:`, `ca_path:`, or `cert_store:`
+given in `ssl:` wins over the certificate variable, and a `cert:` or `key:` given over both client
+variables, which are taken only as a pair; a variable whose option is given is not read. A
+certificate file that cannot be read, or that does not hold PEM certificates, one of the client
+variables without the other, or a key that is public, not the private key of its certificate, or has
+a pass phrase, raises `ArgumentError` from `add_appender`, naming the variables, since every request
+would fail without it. Only the first certificate of the client certificate file, the client's own,
+is sent.
 
 OTLP's timeout bounds a whole export, while the HTTP appender bounds connecting and each read of the
 response instead, so a request can take somewhat longer than the timeout in all.

@@ -48,6 +48,13 @@ module SemanticLogger
       # The attribute of the resource that holds the pid of the process that sends each request.
       PID_ATTRIBUTE = "process.pid".freeze
 
+      # The options of `ssl:` that say which certificates to trust, so that the certificate variable
+      # neither replaces nor adds to them, such as by loading its file into a shared `cert_store:`.
+      TRUST_OPTIONS = %i[ca_file ca_path cert_store].freeze
+
+      # An https url, whose connection the certificate variables apply to.
+      HTTPS = /\Ahttps:/i
+
       # Returns [String] the path that the metrics are posted to.
       attr_reader :full_path
 
@@ -114,10 +121,15 @@ module SemanticLogger
       #   compress: true when OTEL_EXPORTER_OTLP_METRICS_COMPRESSION or OTEL_EXPORTER_OTLP_COMPRESSION is
       #     "gzip", false when it is "none".
       #
-      #   ssl: `ca_file:` from OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE or OTEL_EXPORTER_OTLP_CERTIFICATE,
-      #     and `cert:` and `key:` from the PEM files of OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE and
-      #     _CLIENT_KEY, or else OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE and _CLIENT_KEY, each only when the
-      #     `ssl:` given has no such key. A file that cannot be read raises ArgumentError.
+      #   ssl: for an https url only: `ca_file:` from OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE or
+      #     OTEL_EXPORTER_OTLP_CERTIFICATE, unless `ssl:` has a `ca_file:`, `ca_path:`, or `cert_store:`; and
+      #     `cert:` and `key:` from the PEM files of OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE and
+      #     _CLIENT_KEY, or else OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE and _CLIENT_KEY, as a pair, unless
+      #     `ssl:` has either. A variable whose option is given is not read. ArgumentError is raised for a
+      #     file that cannot be read or parsed, for one of the client variables without the other, and for
+      #     a key that is public, or not the certificate's. The client certificate file holds the
+      #     client's own certificate first; any others in it are not sent. `ssl:` given as nil or false
+      #     reads none of them.
       #
       #   open_timeout:, read_timeout: from OTEL_EXPORTER_OTLP_METRICS_TIMEOUT or OTEL_EXPORTER_OTLP_TIMEOUT,
       #     in milliseconds, 0 meaning no limit, only when neither option is given, so that one given
@@ -137,7 +149,7 @@ module SemanticLogger
         args[:header]   = given_header = args[:header] || {}
         args[:compress] = otel.compress if !args.key?(:compress) && !otel.compress.nil?
         args[:interval] = otel.export_interval if args[:interval].nil? && otel.export_interval
-        args[:ssl]      = otel_ssl(otel.ssl, args.fetch(:ssl, {})) unless otel.ssl.empty?
+        args[:ssl]      = otel_ssl(otel, args.fetch(:ssl, {})) if HTTPS.match?((endpoint || url).to_s)
 
         super(url: endpoint || url, application: application, **otel_timeouts(otel, args).merge(args), &)
 
@@ -255,12 +267,18 @@ module SemanticLogger
         added.each { |name, value| replace_header(name, value) }
       end
 
-      # Returns [Hash|nil] the `ssl:` options given, after the TLS options of the environment (from_env,
-      # see Environment#ssl) for the keys not given, which win. Nil when `ssl: nil` is given.
-      def otel_ssl(from_env, given)
-        return if given.nil?
+      # Returns [Hash|nil|false] the `ssl:` options given, with the TLS options of the environment for
+      # those not given: `ca_file:` (see Environment#ca_file), unless `ssl:` says which certificates to
+      # trust otherwise (see TRUST_OPTIONS), and `cert:` and `key:` (see Environment#client_identity), as a
+      # pair, unless `ssl:` gives either. An `ssl:` given that is not a Hash, such as nil, is returned as it
+      # is, without reading any variable. Only asked for an https url.
+      def otel_ssl(otel, given)
+        return given unless given.is_a?(Hash)
 
-        from_env.reject { |key, _value| given.key?(key) || given.key?(key.to_s) }.merge(given)
+        ssl = {}
+        ssl[:ca_file] = otel.ca_file unless TRUST_OPTIONS.any? { |option| given.key?(option) }
+        ssl.merge!(otel.client_identity) unless given.key?(:cert) || given.key?(:key)
+        ssl.compact.merge(given)
       end
 
       # Returns [Hash] the open_timeout: and read_timeout: of Appender::Http that the timeout of the
