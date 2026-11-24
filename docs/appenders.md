@@ -615,6 +615,10 @@ the next when one cannot be connected to, in the order given, or shuffled for ea
 | `keepalive:` | Whether to turn on TCP keepalive. Default: true. |
 | `ssl:` | `true`, or the parameters of an `OpenSSL::SSL::SSLContext`, such as `ca_file:`, plus `handshake_timeout:`, the seconds to wait for the TLS handshake (default `connect_timeout:`). The server's certificate and host name are verified unless the parameters say otherwise. |
 
+The appender connects when it is added. When it cannot, such as when the server is down as the
+application starts, it reports that to the internal logger rather than raising, and connects again
+at the next write. The same holds when it is reopened, such as after a fork.
+
 The appender connects to each server once. When it cannot connect to any of them, or the TLS
 handshake fails, such as for a certificate that does not verify, it writes nothing, and writes the
 entry again after its back-off, without counting it as failed, so that an outage loses no entries

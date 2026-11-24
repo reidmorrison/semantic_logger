@@ -39,13 +39,24 @@ module Appender
           assert_includes error.message, "retry_count: it does not retry by itself"
         end
 
-        it "raises when it cannot connect, as it is added" do
+        it "reports, rather than raises, that it cannot connect as it is added, and connects at the next write" do
           port = listener.addr[1]
           listener.close
-
-          assert_raises(SemanticLogger::Appender::TcpConnection::ConnectError) do
+          internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+          appender        = SemanticLogger::Processor.stub(:logger, internal_logger) do
             SemanticLogger::Appender::Tcp.new(server: "127.0.0.1:#{port}")
           end
+          report = internal_logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not connect, so the next write connects again", report.message
+          assert_instance_of SemanticLogger::Appender::TcpConnection::ConnectError, report.exception
+          refute_predicate appender.tcp_client, :connected?
+          lost = SemanticLogger::Log.new("TcpTest", :info)
+          lost.message = "lost"
+          assert_raises(SemanticLogger::Appender::TcpConnection::ConnectError) { appender.log(lost) }
+        ensure
+          appender&.close
         end
       end
 
@@ -154,13 +165,11 @@ module Appender
         it "connects in the child when a reopen there cannot, rather than writing through the parent's connection" do
           tls_appender.log(log_with("before"))
           output = in_forked_child do
-            error = Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) do
-              tls_appender.reopen
-            rescue SemanticLogger::Appender::TcpConnection::ConnectError => e
-              e
-            end
+            internal_logger     = SemanticLogger::Test::CaptureLogEvents.new
+            tls_appender.logger = internal_logger
+            Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) { tls_appender.reopen }
             tls_appender.log(log_with("child"))
-            error.class.name
+            internal_logger.events.last.exception.class.name
           end
           tls_appender.log(log_with("after"))
 

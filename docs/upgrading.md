@@ -303,6 +303,9 @@ What changes:
 * **Timeouts.** A negative `connect_timeout:`, `write_timeout:`, or `handshake_timeout:`, such as `-1`,
   still waits as long as it takes, and an option given as `nil` takes its default. `connect_timeout:`
   also bounds the look-up of a host name, which `Net::TCPClient` left unbounded.
+* **Starting while the server is down.** When it cannot connect as it is added, or reopened, it
+  reports that to the internal logger rather than raising, so the application still starts; the
+  next write connects again.
 * **IPv6.** A host name is connected to at any of its addresses, IPv4 or IPv6, and an IPv6 address
   can be given in brackets, as in `"[::1]:514"`.
 * **Errors.** A connection that fails raises

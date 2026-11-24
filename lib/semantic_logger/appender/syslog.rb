@@ -181,7 +181,8 @@ module SemanticLogger
       # open the handles to resources
       #
       # Over TCP, it connects again, and then closes the connection it replaces, such as after a log rotation.
-      # When connecting fails, it raises, and keeps the connection it has. After a fork, the connection inherited
+      # When connecting fails, it reports that to the internal logger, keeps the connection it has, and the next
+      # write connects again. After a fork, the connection inherited
       # from the parent is left to it (see TcpConnection). Over UDP, it closes the socket it replaces, which in a
       # forked child is only the child's copy.
       def reopen
@@ -190,8 +191,7 @@ module SemanticLogger
           method = ::Syslog.opened? ? :reopen : :open
           ::Syslog.send(method, application, options, facility)
         when :tcp
-          error = @remote_syslog.reopen
-          logger.warn("Could not close the connection to the syslog server that a reopen replaced", error) if error
+          reopen_tcp
         when :udp
           replaced       = @remote_syslog
           @remote_syslog = UDPSocket.new
@@ -293,6 +293,16 @@ module SemanticLogger
         end
 
         TcpConnection.new(**options, server: "#{@server}:#{@port}")
+      end
+
+      # Connects to the syslog server again, and closes the connection that it replaces. Reports, rather than raises,
+      # a failure to connect, keeping the connection it has, so that the next write connects again, behind the back-off
+      # while it cannot, and an error closing the connection it replaced.
+      def reopen_tcp
+        error = @remote_syslog.reopen
+        logger.warn("Could not close the connection to the syslog server that a reopen replaced", error) if error
+      rescue TcpConnection::ConnectError => e
+        logger.warn("Could not connect to the syslog server, so the next write connects again", e)
       end
 
       # Closes the given UDP socket, if any: the one that a reopen replaced, when replaced: is true. Reports an

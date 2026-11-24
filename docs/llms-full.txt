@@ -2699,6 +2699,10 @@ the next when one cannot be connected to, in the order given, or shuffled for ea
 | `keepalive:` | Whether to turn on TCP keepalive. Default: true. |
 | `ssl:` | `true`, or the parameters of an `OpenSSL::SSL::SSLContext`, such as `ca_file:`, plus `handshake_timeout:`, the seconds to wait for the TLS handshake (default `connect_timeout:`). The server's certificate and host name are verified unless the parameters say otherwise. |
 
+The appender connects when it is added. When it cannot, such as when the server is down as the
+application starts, it reports that to the internal logger rather than raising, and connects again
+at the next write. The same holds when it is reopened, such as after a fork.
+
 The appender connects to each server once. When it cannot connect to any of them, or the TLS
 handshake fails, such as for a certificate that does not verify, it writes nothing, and writes the
 entry again after its back-off, without counting it as failed, so that an outage loses no entries
@@ -7420,6 +7424,9 @@ What changes:
 * **Timeouts.** A negative `connect_timeout:`, `write_timeout:`, or `handshake_timeout:`, such as `-1`,
   still waits as long as it takes, and an option given as `nil` takes its default. `connect_timeout:`
   also bounds the look-up of a host name, which `Net::TCPClient` left unbounded.
+* **Starting while the server is down.** When it cannot connect as it is added, or reopened, it
+  reports that to the internal logger rather than raising, so the application still starts; the
+  next write connects again.
 * **IPv6.** A host name is connected to at any of its addresses, IPv4 or IPv6, and an IPv6 address
   can be given in brackets, as in `"[::1]:514"`.
 * **Errors.** A connection that fails raises
