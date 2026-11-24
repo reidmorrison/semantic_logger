@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [6.0.0.beta1] 2026-11-20
+## [6.0.0] Unreleased
 
 See [Upgrading to Semantic Logger v6](https://logger.reidmorrison.com/upgrading.html#upgrading-to-semantic-logger-v6)
 and [Metrics](https://logger.reidmorrison.com/metrics.html).
