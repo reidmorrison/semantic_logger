@@ -4,10 +4,6 @@ require_relative "../test_helper"
 module Appender
   class LokiTest < Minitest::Test
     describe SemanticLogger::Appender::Loki do
-      # The appender builds its formatter without structured_metadata:, which keeps pid and thread
-      # as labels, with a deprecation warning that test/formatters/loki_test.rb asserts.
-      allow_deprecation(/The :loki formatter writes pid and thread as stream labels by default/)
-
       let(:http_success) { Net::HTTPSuccess.new("1.1", "200", "OK") }
       let(:log_message) { "AppenderLokiTest log message" }
 
@@ -103,29 +99,25 @@ module Appender
           SemanticLogger.remove_appender(raised)
         end
 
-        it "warns, naming the line that added it, when its formatter is not given structured_metadata:" do
-          line     = __LINE__ + 4
-          warning  = /loki_test\.rb:#{line}: warning: SemanticLogger: The :loki formatter writes pid/
-          appender = assert_deprecated(warning) do
+        it "writes pid and thread as structured metadata by default, without a warning" do
+          appender = refute_deprecated do
             Net::HTTP.stub_any_instance(:start, true) do
               SemanticLogger.add_appender(appender: :loki, url: "http://localhost:3100")
             end
           end
 
-          assert_empty appender.formatter.structured_metadata
+          assert_equal %i[pid thread], appender.formatter.structured_metadata
         ensure
           SemanticLogger.remove_appender(appender)
         end
 
-        it "builds the Loki formatter with structured_metadata:, without a warning" do
-          appender = refute_deprecated do
-            Net::HTTP.stub_any_instance(:start, true) do
-              SemanticLogger.add_appender(appender: :loki, url: "http://localhost:3100",
-                                          formatter: {loki: {structured_metadata: %i[pid thread]}})
-            end
+        it "builds the Loki formatter with structured_metadata:" do
+          appender = Net::HTTP.stub_any_instance(:start, true) do
+            SemanticLogger.add_appender(appender: :loki, url: "http://localhost:3100",
+                                        formatter: {loki: {structured_metadata: []}})
           end
 
-          assert_equal %i[pid thread], appender.formatter.structured_metadata
+          assert_empty appender.formatter.structured_metadata
         ensure
           SemanticLogger.remove_appender(appender)
         end

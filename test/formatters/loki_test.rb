@@ -8,10 +8,6 @@ module SemanticLogger
       MOCK_LOGGER = Struct.new(:host, :application, :name, :environment)
 
       describe SemanticLogger::Formatters::Loki do
-        # The formatter is built without structured_metadata: in most tests, which keeps pid and
-        # thread as labels, with a deprecation warning that "structured_metadata:" asserts.
-        allow_deprecation(/The :loki formatter writes pid and thread as stream labels by default/)
-
         let(:log_time) { Time.utc(2017, 1, 14, 8, 32, 5.375276) }
         let(:level) { :debug }
         let(:thread_name) { "thread-#{Thread.current.object_id}" }
@@ -34,8 +30,10 @@ module SemanticLogger
           MOCK_LOGGER.new("test_host", "test_app", "TestLogger", "test")
         end
 
+        # Most tests keep pid and thread as labels, so that they cover every label; "structured_metadata:"
+        # covers the default, which writes both to the structured metadata.
         let(:formatter) do
-          SemanticLogger::Formatters::Loki.new
+          SemanticLogger::Formatters::Loki.new(structured_metadata: [])
         end
 
         let(:parsed_output) { JSON.parse(formatter.call(log, logger)) }
@@ -445,7 +443,7 @@ module SemanticLogger
                   @level_conversions = (@level_conversions || 0) + 1 if value == :debug
                   super
                 end
-              end.new
+              end.new(structured_metadata: [])
               log.named_tags = {level: "warn"}
               output         = JSON.parse(counting.call(log, logger))["streams"][0]["stream"]
 
@@ -669,7 +667,7 @@ module SemanticLogger
               e.set_backtrace(%w[o1])
               log.exception = e
             end
-            formatter = SemanticLogger::Formatters::Loki.new(escape_control_chars: true)
+            formatter = SemanticLogger::Formatters::Loki.new(structured_metadata: [], escape_control_chars: true)
             values    = JSON.parse(formatter.call(log, logger))["streams"].first["values"].first
 
             assert_equal "o1\nCause: ArgumentError: in\\nner\ni1\\e[2J", values[2]["stack_trace"]
@@ -1053,7 +1051,7 @@ module SemanticLogger
             end
 
             describe "with a lower limit" do
-              let(:formatter) { Loki.new(max_label_names_per_series: 1) }
+              let(:formatter) { Loki.new(structured_metadata: [], max_label_names_per_series: 1) }
 
               it "writes each moved label as a String, as Loki accepts structured metadata" do
                 log.tags       = %w[a b]
@@ -1126,8 +1124,8 @@ module SemanticLogger
             end
 
             it "keeps the labels within the limits of a Loki tenant that raises them" do
-              formatter      = Loki.new(max_label_names_per_series: 30, max_label_name_length: 2048,
-                                        max_label_value_length: 4096)
+              formatter      = Loki.new(structured_metadata: [], max_label_names_per_series: 30,
+                                        max_label_name_length: 2048, max_label_value_length: 4096)
               log.named_tags = nine_named_tags.merge("tag10" => "t10", "n" * 1025 => "x", :value => "v" * 2049)
               output         = JSON.parse(formatter.call(log, logger))["streams"][0]
 
@@ -1137,7 +1135,9 @@ module SemanticLogger
 
             it "raises for a limit that is not an Integer of 1 or more" do
               [nil, "15", -1, 0, 1.5].each do |limit|
-                error = assert_raises(ArgumentError) { Loki.new(max_label_value_length: limit) }
+                error = assert_raises(ArgumentError) do
+                  Loki.new(structured_metadata: [], max_label_value_length: limit)
+                end
 
                 assert_match(/max_label_value_length must be an Integer of 1 or more/, error.message)
               end
@@ -1166,7 +1166,7 @@ module SemanticLogger
                   def loki_value(value)
                     Utils.structure?(value) ? "[REDACTED]" : super
                   end
-                end.new(max_label_names_per_series: 7)
+                end.new(structured_metadata: [], max_label_names_per_series: 7)
               end
 
               it "converts the values of the labels and of the structured metadata with it" do
@@ -1221,7 +1221,7 @@ module SemanticLogger
                   end
                 end
               end
-              let(:formatter) { subclass.new }
+              let(:formatter) { subclass.new(structured_metadata: []) }
 
               it "writes the named tags and the context as labels" do
                 log.named_tags = {tenant: "acme"}
@@ -1248,7 +1248,7 @@ module SemanticLogger
               end
 
               it "moves the labels past Loki's limits to its structured metadata, its own label too" do
-                formatter      = subclass.new(max_label_names_per_series: 7)
+                formatter      = subclass.new(structured_metadata: [], max_label_names_per_series: 7)
                 log.named_tags = {tenant: "acme"}
                 log.context    = {zone: "a"}
                 log.payload    = {user: "u"}
@@ -1259,7 +1259,7 @@ module SemanticLogger
               end
 
               it "moves a named tag whose name its own label under a Symbol has, numbered, past the limits" do
-                formatter      = subclass.new(max_label_names_per_series: 7)
+                formatter      = subclass.new(structured_metadata: [], max_label_names_per_series: 7)
                 log.named_tags = {pid: "1", tenant: "acme"}
                 output         = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
 
@@ -1311,7 +1311,7 @@ module SemanticLogger
                     message
                     stream
                   end
-                end.new(max_label_names_per_series: 3)
+                end.new(structured_metadata: [], max_label_names_per_series: 3)
               end
 
               it "leaves out the labels past Loki's limits, which it has nowhere to write" do
@@ -1339,7 +1339,7 @@ module SemanticLogger
                   end
                 end
               end
-              let(:formatter) { subclass.new(max_label_names_per_series: 3) }
+              let(:formatter) { subclass.new(structured_metadata: [], max_label_names_per_series: 3) }
 
               it "writes the labels past Loki's limits to the copy, which the entry has" do
                 log.named_tags = {tenant: "acme", zone: "a"}
@@ -1371,7 +1371,7 @@ module SemanticLogger
                   end
                 end
               end
-              let(:formatter) { subclass.new }
+              let(:formatter) { subclass.new(structured_metadata: []) }
 
               it "keeps its name, and numbers a named tag or context key of that name" do
                 log.named_tags = {level: "warn", host: "db-1"}
@@ -1392,7 +1392,7 @@ module SemanticLogger
               end
 
               it "counts it toward Loki's limits, and moves it under its name" do
-                formatter = subclass.new(max_label_names_per_series: 4)
+                formatter = subclass.new(structured_metadata: [], max_label_names_per_series: 4)
                 output    = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
 
                 assert_equal %w[pid application environment host], output["stream"].keys
@@ -1410,14 +1410,14 @@ module SemanticLogger
                   end
                 end
               end
-              let(:formatter) { subclass.new }
+              let(:formatter) { subclass.new(structured_metadata: []) }
 
               it "numbers it when another label has its name" do
                 assert_equal({"level" => "debug", "level_2" => "DEBUG"}, output["stream"].slice("level", "level_2"))
               end
 
               it "counts it toward Loki's limits" do
-                formatter = subclass.new(max_label_names_per_series: 6)
+                formatter = subclass.new(structured_metadata: [], max_label_names_per_series: 6)
                 output    = JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0]
 
                 assert_equal %w[pid application environment host level thread], output["stream"].keys
@@ -1442,7 +1442,7 @@ module SemanticLogger
                   def labels
                     {"site" => "eu"}
                   end
-                end.new
+                end.new(structured_metadata: [])
               end
 
               it "writes the named tags and the context, and its own labels" do
@@ -1467,7 +1467,7 @@ module SemanticLogger
                       "values" => [[format_time(log), log.message]]
                     }
                   end
-                end.new(max_label_names_per_series: 1)
+                end.new(structured_metadata: [], max_label_names_per_series: 1)
               end
 
               it "writes its stream as it is" do
@@ -1493,10 +1493,6 @@ module SemanticLogger
             let(:output) { JSON.parse(formatter.call(log, logger), allow_duplicate_key: false)["streams"][0] }
             let(:labels) { output["stream"] }
             let(:structured_metadata) { output["values"][0][2] }
-            let(:warning) do
-              "The :loki formatter writes pid and thread as stream labels by default, which changes in v6."
-            end
-
             it "writes the pid and the thread as structured metadata, as Strings, instead of as labels" do
               assert_equal %w[application environment host level], labels.keys
               assert_equal({"pid" => Process.pid.to_s, "thread" => thread_name}, structured_metadata)
@@ -1526,39 +1522,32 @@ module SemanticLogger
               assert_equal({"thread" => thread_name}, output["values"][0][2])
             end
 
-            it "keeps both as labels with [], without a warning" do
-              formatter = refute_deprecated { Loki.new(structured_metadata: []) }
+            it "keeps both as labels with []" do
+              formatter = Loki.new(structured_metadata: [])
               output    = JSON.parse(formatter.call(log, logger))["streams"][0]
 
               assert_equal [Process.pid, thread_name], output["stream"].values_at("pid", "thread")
               assert_empty output["values"][0][2]
             end
 
-            it "does not warn when it names them" do
-              formatter = refute_deprecated { Loki.new(structured_metadata: %i[thread pid pid]) }
+            it "names each once" do
+              formatter = Loki.new(structured_metadata: %i[thread pid pid])
 
               assert_equal %i[pid thread], formatter.structured_metadata.sort
             end
 
-            it "warns that v6 writes them as structured metadata when it is not supplied, and keeps them as labels" do
-              line      = __LINE__ + 2
-              pattern   = /loki_test\.rb:#{line}: warning: SemanticLogger: #{Regexp.escape(warning)} /
-              formatter = assert_deprecated(pattern) { Loki.new }
+            it "writes both as structured metadata by default, without a warning" do
+              formatter = refute_deprecated { Loki.new }
+              output    = JSON.parse(formatter.call(log, logger))["streams"][0]
 
-              assert_empty formatter.structured_metadata
-              assert_equal Process.pid, JSON.parse(formatter.call(log, logger))["streams"][0]["stream"]["pid"]
+              assert_equal %i[pid thread], formatter.structured_metadata
+              refute output["stream"].key?("pid")
+              refute output["stream"].key?("thread")
+              assert_equal({"pid" => Process.pid.to_s, "thread" => thread_name}, output["values"][0][2])
             end
 
-            it "warns when it is nil, as when it is not supplied" do
-              assert_deprecated(/#{Regexp.escape(warning)}/) { Loki.new(structured_metadata: nil) }
-            end
-
-            it "says in the warning that structured metadata needs a Loki that accepts it" do
-              requirement = "needs a Loki that accepts it (schema v13 with allow_structured_metadata, the default " \
-                            "since Loki 3.0)"
-              docs        = "appenders.html#pid-and-thread-as-structured-metadata"
-
-              assert_deprecated(/#{Regexp.escape(requirement)}.*#{Regexp.escape(docs)}/) { Loki.new }
+            it "writes both as structured metadata when it is nil, as when it is not supplied" do
+              assert_equal %i[pid thread], refute_deprecated { Loki.new(structured_metadata: nil) }.structured_metadata
             end
 
             it "raises ArgumentError, naming :pid and :thread, for anything else" do

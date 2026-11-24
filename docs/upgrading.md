@@ -242,6 +242,25 @@ warning while it added only the first. Call `add_appender` once for each destina
 given as `nil` is still not one. `appender: :wrapper`, which only worked with `logger:`, now raises
 too: leave it out, since `logger:` already adds the wrapper.
 
+#### Loki writes `pid` and `thread` as structured metadata
+
+The `:loki` appender, and its formatter, now write the process id and the thread name as structured
+metadata by default, as Loki advises and as v5.3 warned, rather than as the stream labels `pid` and
+`thread`, which added a stream for every process restart and every thread. A query then filters on
+them after the stream selector, as in `{application="shop"} | thread="worker-1"`.
+
+Structured metadata needs a Loki with schema v13 and `allow_structured_metadata`, which is on by
+default since Loki 3.0. Any other Loki rejects every entry, so for one that does not accept it, keep
+them as labels:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
+                            formatter: {loki: {structured_metadata: []}})
+~~~
+
+A `structured_metadata: [:pid, :thread]` added to silence the v5.3 warning can stay, or be removed.
+See [pid and thread as structured metadata](appenders.html#pid-and-thread-as-structured-metadata).
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with
