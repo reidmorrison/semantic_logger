@@ -201,6 +201,14 @@ removed. Remove it: `:elasticsearch_http` now raises `ArgumentError` for it, and
 `:opensearch` hand it to their client gem with their other options. See
 [Remove the `type:` option from the Elasticsearch and OpenSearch appenders](#remove-the-type-option-from-the-elasticsearch-and-opensearch-appenders).
 
+#### `:sentry_ruby` takes the Sentry user and fingerprint from named tags only
+
+The `:sentry_ruby` appender no longer takes the Sentry user (`user_id`, `username`, `user_email`,
+`ip_address`, and `user`) or the `fingerprint` from the payload, as deprecated in v5.2, since the
+payload can hold untrusted data, such as a request body. They are sent with the rest of the payload,
+as extras. Set them with named tags, as shown in
+[Set the Sentry user and fingerprint with named tags](#set-the-sentry-user-and-fingerprint-with-named-tags).
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

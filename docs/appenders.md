@@ -1285,14 +1285,9 @@ Some logging context is also forwarded to Sentry, added to that of the thread:
 * Named tags are sent as Sentry tags. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/tags/>.
 * Unnamed tags are sent as the `:tag` tag, separated by commas.
-* Everything else from the payload and context is added to `extras`, including a value of the
-  wrong type for one of the keys above.
-
-> **Deprecated:** the `user` and `fingerprint` keys are also still taken from the payload, but that
-> is deprecated and will be removed in v6, since the payload often holds untrusted data, such as a
-> request body, that could set the user an error is reported for. Set them with named tags. The
-> named tags win over the payload, and a user field is only taken from the payload when it is a
-> String, Symbol, or Integer.
+* The payload and the rest of the context are added to `extras`. The user and fingerprint are never
+  taken from the payload, since it often holds untrusted data, such as a request body, that could
+  set the user an error is reported for.
 
 ~~~ruby
 SemanticLogger.tagged(transaction_name: "foo", user_id: 42, username: "joe", fingerprint: ["bar"], baz: "quz") do

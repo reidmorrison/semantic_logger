@@ -154,6 +154,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   `appender: :splunk_http`.
 - The `type:` option of the `:elasticsearch`, `:elasticsearch_http`, and `:opensearch` appenders,
   ignored and deprecated since v5.1: document `_type` has been unused since Elasticsearch 7.
+- `:sentry_ruby` no longer takes the Sentry user or fingerprint from the payload, deprecated in v5.2,
+  since the payload can hold untrusted data: it sends those keys with the rest of the payload, as
+  extras. Set them with named tags.
 
 ## [Unreleased]
 
