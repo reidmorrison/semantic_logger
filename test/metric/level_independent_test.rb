@@ -183,6 +183,13 @@ module Metric
           assert_equal [3], points.map(&:value)
         end
 
+        it "answers whether metrics are collected, publicly, so that a caller can skip building dimensions" do
+          assert_predicate logger, :collecting_metrics?
+          SemanticLogger::Logger.stub(:processor, Object.new) do
+            refute_predicate logger, :collecting_metrics?
+          end
+        end
+
         describe "measure" do
           it "records the time of the block when the level passes, and logs it" do
             result = logger.measure_info("Called supplier", metric: "supplier.call") { :added }
