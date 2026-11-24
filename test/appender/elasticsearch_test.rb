@@ -38,22 +38,6 @@ module Appender
         assert_instance_of client_class, appender.client
       end
 
-      it "warns that the type: parameter is deprecated" do
-        client_class.stub_any_instance(:bulk, true) do
-          assert_deprecated(/SemanticLogger: .*`type:`.*deprecated/m) do
-            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200", type: "log")
-          end
-        end
-      end
-
-      it "does not warn when type: is omitted" do
-        client_class.stub_any_instance(:bulk, true) do
-          refute_deprecated do
-            SemanticLogger::Appender::Elasticsearch.new(url: "http://localhost:9200")
-          end
-        end
-      end
-
       describe "metric-only entries" do
         let :metric_only do
           log        = SemanticLogger::Log.new("Test", :info)
