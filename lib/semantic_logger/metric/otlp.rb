@@ -91,7 +91,7 @@ module SemanticLogger
       #
       #   interval: [Numeric]
       #     Seconds between requests.
-      #     Default: 60
+      #     Default: ENV["OTEL_METRIC_EXPORT_INTERVAL"], in milliseconds, or else 60
       #
       #   internal_metrics: [true|false]
       #     Whether to send Semantic Logger's own metrics too.
@@ -114,9 +114,16 @@ module SemanticLogger
       #   compress: true when OTEL_EXPORTER_OTLP_METRICS_COMPRESSION or OTEL_EXPORTER_OTLP_COMPRESSION is
       #     "gzip", false when it is "none".
       #
+      #   ssl: `ca_file:` from OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE or OTEL_EXPORTER_OTLP_CERTIFICATE,
+      #     and `cert:` and `key:` from the PEM files of OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE and
+      #     _CLIENT_KEY, or else OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE and _CLIENT_KEY, each only when the
+      #     `ssl:` given has no such key. A file that cannot be read raises ArgumentError.
+      #
       #   open_timeout:, read_timeout: from OTEL_EXPORTER_OTLP_METRICS_TIMEOUT or OTEL_EXPORTER_OTLP_TIMEOUT,
       #     in milliseconds, 0 meaning no limit, only when neither option is given, so that one given
-      #     keeps the default of Appender::Http for the other (see #otel_timeouts).
+      #     keeps the default of Appender::Http for the other (see #otel_timeouts). Each bounds one wait,
+      #     connecting or one read of the response, not the whole export, so OTEL_METRIC_EXPORT_TIMEOUT,
+      #     which bounds the whole export, is not read.
       #
       # Every request also holds the `process.pid` of the process that sends it, so that the deltas of
       # each process, such as forked workers of the same application on the same host, are kept apart.
@@ -129,6 +136,8 @@ module SemanticLogger
         application ||= otel.service_name
         args[:header]   = given_header = args[:header] || {}
         args[:compress] = otel.compress if !args.key?(:compress) && !otel.compress.nil?
+        args[:interval] = otel.export_interval if args[:interval].nil? && otel.export_interval
+        args[:ssl]      = otel_ssl(otel.ssl, args.fetch(:ssl, {})) unless otel.ssl.empty?
 
         super(url: endpoint || url, application: application, **otel_timeouts(otel, args).merge(args), &)
 
@@ -244,6 +253,14 @@ module SemanticLogger
           )
         end
         added.each { |name, value| replace_header(name, value) }
+      end
+
+      # Returns [Hash|nil] the `ssl:` options given, after the TLS options of the environment (from_env,
+      # see Environment#ssl) for the keys not given, which win. Nil when `ssl: nil` is given.
+      def otel_ssl(from_env, given)
+        return if given.nil?
+
+        from_env.reject { |key, _value| given.key?(key) || given.key?(key.to_s) }.merge(given)
       end
 
       # Returns [Hash] the open_timeout: and read_timeout: of Appender::Http that the timeout of the

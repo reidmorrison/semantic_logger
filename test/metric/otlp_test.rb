@@ -8,7 +8,10 @@ module Metric
       OTEL_EXPORTER_OTLP_HEADERS OTEL_EXPORTER_OTLP_METRICS_HEADERS
       OTEL_EXPORTER_OTLP_TIMEOUT OTEL_EXPORTER_OTLP_METRICS_TIMEOUT
       OTEL_EXPORTER_OTLP_COMPRESSION OTEL_EXPORTER_OTLP_METRICS_COMPRESSION
-      OTEL_RESOURCE_ATTRIBUTES
+      OTEL_RESOURCE_ATTRIBUTES OTEL_METRIC_EXPORT_INTERVAL
+      OTEL_EXPORTER_OTLP_CERTIFICATE OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE
+      OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE
+      OTEL_EXPORTER_OTLP_CLIENT_KEY OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY
     ].freeze
 
     describe SemanticLogger::Metric::Otlp do
@@ -1009,6 +1012,119 @@ module Metric
               assert_in_delta 1.0, appender.read_timeout
               assert_equal 1, warnings.size
               assert_match(/Ignoring OTEL_EXPORTER_OTLP_METRICS_TIMEOUT/, warnings.first)
+            end
+          end
+        end
+
+        describe "export interval" do
+          it "sets interval: from OTEL_METRIC_EXPORT_INTERVAL, in milliseconds" do
+            ENV["OTEL_METRIC_EXPORT_INTERVAL"] = "15000"
+
+            assert_in_delta 15.0, new_appender.metrics_interval
+          end
+
+          it "lets interval: given win" do
+            ENV["OTEL_METRIC_EXPORT_INTERVAL"] = "15000"
+
+            assert_equal 5, new_appender(interval: 5).metrics_interval
+          end
+
+          ["0", "-1", "1.5", "60s"].each do |value|
+            it "ignores #{value.inspect}, and warns" do
+              ENV["OTEL_METRIC_EXPORT_INTERVAL"] = value
+              appender = new_logged_appender
+
+              assert_equal 60, appender.metrics_interval
+              assert_equal 1, warnings.size
+              assert_match(/Ignoring OTEL_METRIC_EXPORT_INTERVAL/, warnings.first)
+            end
+          end
+        end
+
+        describe "certificates" do
+          # Writes a self-signed certificate and its key to PEM files in a temporary directory, which
+          # the block is given, with the paths of the certificate and the key.
+          def with_pem_files
+            key  = OpenSSL::PKey::RSA.new(2048)
+            name = OpenSSL::X509::Name.parse("/CN=otlp-test")
+            cert = OpenSSL::X509::Certificate.new
+            cert.version    = 2
+            cert.serial     = 1
+            cert.subject    = name
+            cert.issuer     = name
+            cert.public_key = key.public_key
+            cert.not_before = Time.now
+            cert.not_after  = Time.now + 3600
+            cert.sign(key, OpenSSL::Digest.new("SHA256"))
+            Dir.mktmpdir do |dir|
+              cert_path = File.join(dir, "cert.pem")
+              key_path  = File.join(dir, "key.pem")
+              File.write(cert_path, cert.to_pem)
+              File.write(key_path, key.to_pem)
+              yield cert_path, key_path, cert
+            end
+          end
+
+          it "sets the ca_file:, cert:, and key: of ssl: from the certificate variables" do
+            with_pem_files do |cert_path, key_path, cert|
+              ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"]        = cert_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = cert_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]         = key_path
+              options = new_appender(url: "https://otlp.example.com").ssl_options
+
+              assert_equal cert_path, options[:ca_file]
+              assert_equal cert.to_der, options[:cert].to_der
+              assert_kind_of OpenSSL::PKey::RSA, options[:key]
+              assert options[:use_ssl]
+            end
+          end
+
+          it "takes the METRICS variables instead of the generic ones" do
+            with_pem_files do |cert_path, _key_path, _cert|
+              ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"]         = "/no/such/file.pem"
+              ENV["OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE"] = cert_path
+
+              assert_equal cert_path, new_appender.ssl_options[:ca_file]
+            end
+          end
+
+          it "lets a key of ssl: given win, keeping the others" do
+            with_pem_files do |cert_path, key_path, _cert|
+              ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"] = cert_path
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_KEY"]  = key_path
+              options = new_appender(ssl: {ca_file: "/etc/ssl/given.pem"}).ssl_options
+
+              assert_equal "/etc/ssl/given.pem", options[:ca_file]
+              assert_kind_of OpenSSL::PKey::RSA, options[:key]
+            end
+          end
+
+          it "sets no ssl: options when no variable is set" do
+            assert_empty new_appender.ssl_options
+          end
+
+          it "raises ArgumentError for a file that cannot be read, naming the variable" do
+            ENV["OTEL_EXPORTER_OTLP_CERTIFICATE"] = "/no/such/file.pem"
+            error = assert_raises(ArgumentError) { new_appender }
+
+            assert_match(%r{OTEL_EXPORTER_OTLP_CERTIFICATE: cannot read the file "/no/such/file.pem"}, error.message)
+          end
+
+          it "raises ArgumentError for a client certificate or key that is not PEM, naming the variable" do
+            with_pem_files do |_cert_path, key_path, _cert|
+              ENV["OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"] = key_path
+              error = assert_raises(ArgumentError) { new_appender }
+
+              assert_match(/OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE: the file .* not hold a PEM certificate/,
+                           error.message)
+
+              ENV.delete("OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE")
+              File.write(key_path, "not a key")
+              ENV["OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY"] = key_path
+              error = assert_raises(ArgumentError) { new_appender }
+
+              assert_match(/OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY: the file .* not hold a PEM private key/,
+                           error.message)
             end
           end
         end
