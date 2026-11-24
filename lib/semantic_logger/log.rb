@@ -95,6 +95,10 @@ module SemanticLogger
     HASH_KEY = Utils.make_shareable(Hash.instance_method(:key?))
     private_constant :HASH_KEY
 
+    # The log arguments that make up the metric of a log entry (see .metric_arguments).
+    METRIC_KEYS = %i[metric metric_amount duration dimensions].freeze
+    private_constant :METRIC_KEYS
+
     # Returns [String] the name that identifies the thread in a log entry: the thread's own name,
     # or its object id when it has none, which Ruby never reuses within a process.
     def self.thread_name_for(thread) = thread.name || thread.object_id.to_s
@@ -142,7 +146,6 @@ module SemanticLogger
       self.metric        = metric
       self.metric_amount = metric_amount
       self.dimensions    = dimensions
-      Log.negative_metric_amount_deprecated if counted_negative_amount?
 
       if exception
         unless exception.is_a?(Exception)
@@ -208,34 +211,10 @@ module SemanticLogger
       added          = args.delete(:payload)
       assigned, kept = args.partition { |key, value| block_attribute?(key, value) }
       assigned.each { |key, value| public_send(:"#{key}=", value) }
-      # Once per process, so that #assign having reported it already does no harm.
-      Log.negative_metric_amount_deprecated if counted_negative_amount?
       # An argument this entry already has wins over the block's :payload, like the block's other keys.
       added        = merge_payload(kept.to_h, added) unless kept.empty?
       self.payload = merge_payload(payload, added)
       self
-    end
-
-    # Reports, once per process, that a log call gave a negative metric amount, which is deprecated:
-    # a metric counts upward, and v6 drops a negative amount. The entry is still logged with it.
-    #
-    # Only once, so that a negative amount in a loop does not report a warning for each log call, and
-    # only once deprecation warnings are on, so that turning them on later still reports it. Not from
-    # a Ractor other than the main one, which cannot record that it was reported. Two threads that
-    # report at the same moment can each report it, which costs a second warning at worst. Remove in
-    # v6, where the metrics API drops a negative amount instead.
-    #
-    # Internal: called by #assign and #assign_hash only (@api private).
-    def self.negative_metric_amount_deprecated
-      return if !Warning[:deprecated] || RactorSupport.other_ractor? || @negative_metric_amount_reported
-
-      @negative_metric_amount_reported = true
-      Deprecation.warn(
-        "A negative metric_amount is deprecated: a metric counts upward, and v6 drops a negative amount. " \
-        "Count what goes down as a metric of its own, such as \"cart/items_removed\". " \
-        "This is reported for the first negative amount only. See " \
-        "https://logger.reidmorrison.com/upgrading.html#negative-metric-amounts"
-      )
     end
 
     # Returns [true|false] whether the value can be used as the log argument named by the key.
@@ -249,6 +228,44 @@ module SemanticLogger
 
       validator = ARGUMENT_VALIDATORS[key]
       validator.nil? || validator.call(value)
+    end
+
+    # Returns [Array(Object, Numeric, Numeric, Hash)|nil] the metric, metric_amount, duration, and
+    # dimensions that the Hash of a log call supplies, each nil when it does not supply it, just as
+    # #extract_arguments would extract them, or nil when it supplies no metric.
+    #
+    # For a log call below the log level, which builds no entry, but whose metric is recorded (see
+    # Base#record_log_metric). Never raises, so it can read untrusted data.
+    def self.metric_arguments(hash)
+      return unless metric?(hash)
+
+      arguments = METRIC_KEYS.map { |key| hash[key] if HASH_KEY.bind_call(hash, key) && argument?(key, hash[key]) }
+      arguments if arguments.first
+    end
+
+    # Returns [true|false] whether the Hash of a log call has a :metric key, as .metric_arguments and
+    # #extract_arguments read it: the exact Symbol key, by Hash#key? itself, never a subclass's own
+    # #key?, so that a HashWithIndifferentAccess with only the String "metric" has none. The cheap
+    # check made below the log level before the metric is read (see Base#record_metric_below_level).
+    # A plain Hash is asked directly, which is faster than through HASH_KEY.
+    def self.metric?(hash) = hash.instance_of?(Hash) ? hash.key?(:metric) : HASH_KEY.bind_call(hash, :metric)
+
+    # Returns [Array(Symbol, Object, String|nil)] the kind, value, and unit of the metric that a log
+    # entry with this duration and metric amount records (see Base#record_log_metric): with a duration,
+    # in milliseconds, a :histogram of it in seconds, with the unit "s"; otherwise a :counter of the
+    # metric amount, 1 when there is none. The metric amount of an entry with a duration is not recorded.
+    def self.metric_measurement(duration, metric_amount)
+      return [:counter, metric_amount.nil? ? 1 : metric_amount, nil] if duration.nil?
+
+      [:histogram, duration_seconds(duration), "s"]
+    end
+
+    # Returns a duration in milliseconds, the unit of the duration of a log entry and of the
+    # `duration:` of Base#time, in seconds, the unit that every duration metric records. Any other
+    # value is returned as it is, for the metric's Validator to drop (see Metric::Validator). Raises
+    # when the Numeric does: its callers report that as a failure of the metric call.
+    def self.duration_seconds(duration)
+      duration.is_a?(Numeric) ? duration.fdiv(1000) : duration
     end
 
     # Extract the arguments from a Hash Payload
@@ -533,13 +550,6 @@ module SemanticLogger
     end
 
     private
-
-    # Returns [true|false] whether this entry gives a metric a negative amount, which is deprecated (see
-    # .negative_metric_amount_deprecated): whether it has a metric and a metric amount that is a real
-    # number below zero. Also for a measure_* entry, since SignalFx adds its amount to a counter too.
-    # Without a metric no metric subscriber receives the amount. Costs a nil check when there is no
-    # metric. Never raises, since Base#backtrace passes its metric_amount to #assign without checking it.
-    def counted_negative_amount? = metric && REAL_NUMBER.call(metric_amount) && metric_amount.negative?
 
     # Returns the kept payload with the keys of the added one that it does not have, so that a kept
     # value is never replaced. A String and a Symbol key of the same name, such as "account_id" from

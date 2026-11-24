@@ -54,6 +54,11 @@ module SemanticLogger
       false
     end
 
+    # Returns [false]: only the main Ractor collects metrics, for now.
+    def collecting_metrics?
+      false
+    end
+
     # Returns the internal logger, to report problems logging in this Ractor, such as an on_log
     # subscriber that raised. It writes to this Ractor's $stderr.
     def logger

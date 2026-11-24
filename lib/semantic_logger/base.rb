@@ -101,6 +101,8 @@ module SemanticLogger
             log_internal(:#{level}, #{index}, message, payload, exception, &block)
             true
           else
+            # Records its metric, when it has one (see #record_metric_below_level).
+            record_metric_below_level(message, payload, exception)
             false
           end
         end
@@ -109,21 +111,24 @@ module SemanticLogger
           level_index <= #{index}
         end
 
-        def measure_#{level}(message, params = {}, &block)
+        # no_params: whether params was left out, so that below the level, a call without params
+        # checks only whether its message is a Hash of options that could carry a metric.
+        #
+        # Below the level, the metric is recorded only when the options have a metric: value before
+        # the call; one that the block adds to them is not, so that a call without one never times
+        # its block.
+        def measure_#{level}(message, params = (no_params = true; {}), &block)
           if level_index <= #{index}
             measure_internal(:#{level}, #{index}, message, params, &block)
-          else
-            block.call(params) if block
+          elsif no_params ? message.is_a?(Hash) : params.is_a?(Hash) && (params.key?(:metric) || message.is_a?(Hash))
+            measure_below_level(message, params, &block)
+          elsif block
+            block.call(params)
           end
         end
 
-        def benchmark_#{level}(message, params = {}, &block)
-          if level_index <= #{index}
-            measure_internal(:#{level}, #{index}, message, params, &block)
-          else
-            block.call(params) if block
-          end
-        end
+        # Backward compatibility
+        alias benchmark_#{level} measure_#{level}
       METHODS
     end
 
@@ -132,6 +137,8 @@ module SemanticLogger
       index = Levels.index(level)
       if level_index <= index
         measure_internal(level, index, message, params, &block)
+      elsif message.is_a?(Hash) || (params.is_a?(Hash) && params.key?(:metric))
+        measure_below_level(message, params, &block)
       elsif block
         yield(params)
       end
@@ -155,6 +162,15 @@ module SemanticLogger
     # a value that is not a real Numeric finite as a Float, a negative counter amount, or dimensions
     # that are not a Hash, is dropped, with a warning on the internal logger once per metric name and
     # problem, as is one that fails as it is recorded. A Symbol name is recorded as a String.
+    #
+    # The `metric:` of a log call, a `measure_*` call, or `#backtrace` is recorded the same way, once a
+    # metric appender is present, at every level and whether or not its `min_duration:` is met: as a
+    # histogram of its `duration:` in seconds when it has one, as a measure call does, otherwise as a
+    # counter of its `metric_amount:`, 1 by default, with its `dimensions:`. Its log entry still follows
+    # the log level. Below the level, a measure call times its block only when its options have a
+    # `metric:` before the call, so a metric that the block adds to them is recorded only when the level
+    # passes; likewise a logging block is not called, so the metric of a Hash it returns is recorded
+    # only when the level passes.
 
     # Adds `amount` to the counter `name`.
     #
@@ -201,7 +217,7 @@ module SemanticLogger
     def time(name, duration: nil, dimensions: nil)
       unless block_given?
         begin
-          seconds = duration.is_a?(Numeric) ? duration.fdiv(1000) : duration
+          seconds = Log.duration_seconds(duration)
         rescue StandardError => e
           return report_metric_failure(:histogram, name, e)
         end
@@ -248,7 +264,10 @@ module SemanticLogger
                   metric_amount: nil)
       # The entry has the name, tags, and named tags of the thread whose backtrace it logs.
       log = new_log(level, nil, thread)
-      return false unless meets_log_level?(log)
+      unless meets_log_level?(log)
+        record_log_metric(metric, metric_amount, nil, nil) if metric && collecting_metrics?
+        return false
+      end
 
       backtrace = thread == Thread.current ? Utils.extract_backtrace(caller) : thread.backtrace
       if backtrace
@@ -256,15 +275,13 @@ module SemanticLogger
         message << backtrace.join("\n")
       end
 
-      if log.assign(message:       message,
-                    backtrace:     backtrace,
-                    payload:       payload,
-                    metric:        metric,
-                    metric_amount: metric_amount) && !filtered?(log)
-        self.log(log)
-      else
-        false
-      end
+      should_log = log.assign(message:       message,
+                              backtrace:     backtrace,
+                              payload:       payload,
+                              metric:        metric,
+                              metric_amount: metric_amount)
+      record_metric_of(log)
+      should_log && !filtered?(log) ? self.log(log) : false
     end
 
     # Add the tags or named tags to the list of tags to log for this thread whilst the supplied block is active.
@@ -453,6 +470,83 @@ module SemanticLogger
       false
     end
 
+    # Returns [true|false] whether the metric calls are collected, once a metric appender is present
+    # (see Processor#collecting_metrics?). Asked before the metric of a log call is read, so that a log
+    # call without a metric appender costs what it did before metrics were collected.
+    #
+    # A processor without the method, such as a stand-in for it in a test written for 5.x that answers
+    # only #log, collects nothing.
+    def collecting_metrics?
+      processor = Logger.processor
+      processor.respond_to?(:collecting_metrics?) && processor.collecting_metrics?
+    end
+
+    # Records the metric of the log entry, when it has one, whether or not the entry is logged: also
+    # when its min_duration is not met, or a filter rejects it.
+    def record_metric_of(log)
+      return unless log.metric && collecting_metrics?
+
+      record_log_metric(log.metric, log.metric_amount, log.duration, log.dimensions)
+    end
+
+    # Records the metric of a log call, whose kind, value, and unit the Log knows (see
+    # Log.metric_measurement).
+    def record_log_metric(metric, metric_amount, duration, dimensions)
+      kind, value, unit = Log.metric_measurement(duration, metric_amount)
+      record_metric(kind, metric, value, unit: unit, dimensions: dimensions)
+    end
+
+    # Records the metric of a log call below the log level, which logs nothing, while metrics are
+    # collected. The one check made below the level, by the level methods and Compatibility#add: only
+    # the Hash that #log_internal would extract the arguments from can carry a metric, when it has a
+    # :metric key (see Log.metric?), read as #log_internal would (see Log.metric_arguments). A call
+    # without one costs a few type checks. A logging block is not called, so a metric it returns is
+    # not recorded.
+    def record_metric_below_level(message, payload, exception)
+      return unless exception.nil?
+
+      arguments = payload.nil? ? message : (payload if message)
+      return unless arguments.is_a?(Hash) && Log.metric?(arguments) && collecting_metrics?
+
+      metric, metric_amount, duration, dimensions = Log.metric_arguments(arguments)
+      record_log_metric(metric, metric_amount, duration, dimensions) if metric
+    end
+
+    # A measure call below the log level, given a Hash that can carry a metric: returns the result of
+    # the block, as when no metric is given. While metrics are collected, and when a metric is
+    # given, it times the block, or takes the duration given without one, and records the metric,
+    # as #measure_internal would. The time is recorded however the block ends, and what it raises is
+    # raised again.
+    def measure_below_level(message, params, &block)
+      return block&.call(params) unless collecting_metrics?
+
+      options = message.is_a?(Hash) && params.respond_to?(:empty?) && params.empty? ? message : params
+      return block&.call(params) unless options.is_a?(Hash) && measure_option(options, :metric)
+
+      unless block
+        duration = measure_option(options, :duration)
+        record_measure_metric(options, duration) if duration
+        return
+      end
+
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      begin
+        block.call(params)
+      ensure
+        record_measure_metric(options, 1_000.0 * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start))
+      end
+    end
+
+    # Records the metric of a measure call that took the duration, in milliseconds. Its options are read
+    # once the block has returned, since the block can change them, as #measure_internal does.
+    def record_measure_metric(options, duration)
+      metric = measure_option(options, :metric)
+      return unless metric
+
+      record_log_metric(metric, measure_option(options, :metric_amount), duration,
+                        measure_option(options, :dimensions))
+    end
+
     # Return the level index for fast comparisons, resolved in the same order as `#level`.
     def level_index
       (@with_level_used && with_level_index) || @level_index || fallback_level_index
@@ -590,6 +684,7 @@ module SemanticLogger
 
       # Add result of block to message or payload if not nil
       apply_block_result(log, &block) if block
+      record_metric_of(log)
 
       # Log level may change during assign due to :on_exception_level
       self.log(log) if should_log && should_log?(log)
@@ -667,6 +762,7 @@ module SemanticLogger
           on_exception_level: measure_option(params, :on_exception_level),
           call_site:          measure_option(params, :call_site)
         )
+        record_metric_of(log)
 
         # Log level may change during assign due to :on_exception_level
         self.log(log) if should_log && should_log?(log)
