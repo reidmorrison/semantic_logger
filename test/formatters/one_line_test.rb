@@ -300,6 +300,19 @@ module SemanticLogger
 
             assert_includes output, "Order rejected -- first line second line third line"
           end
+
+          it "joins the lines of exception details that an ASCII line break separates with a space" do
+            detailed = Class.new(StandardError) do
+              def detailed_message(highlight: false, **)
+                "#{super}\nfirst\vsecond\fthird\rfourth"
+              end
+            end
+            log.exception = detailed.new("Order rejected")
+
+            output = SemanticLogger::Formatters::OneLine.new(log_exception_details: true).call(log, nil)
+
+            assert_includes output, "Order rejected -- first second third fourth"
+          end
         end
 
         describe "call" do

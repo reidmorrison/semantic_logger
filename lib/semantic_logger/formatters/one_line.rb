@@ -26,9 +26,9 @@ module SemanticLogger
       # Every line break, as a String#delete character set.
       LINE_BREAKS = "#{ASCII_LINE_BREAKS}#{UNICODE_LINE_BREAKS}".freeze
 
-      # A line break, with the white space around it, between two lines of exception details. A
-      # carriage return before a line feed is part of that white space.
-      DETAILS_LINE_BREAK = /\s*[\n#{UNICODE_LINE_BREAKS}]\s*/
+      # A line break, with the white space around it, between two lines of exception details. Any
+      # of LINE_BREAKS counts, so that one on its own, such as a form feed, still leaves a space.
+      DETAILS_LINE_BREAK = /\s*[#{LINE_BREAKS}]\s*/
 
       # Shortened before its line breaks are removed or escaped, as the other text formatters do
       # (see Default#shortened_thread_name), so that an escape is never cut in two.
