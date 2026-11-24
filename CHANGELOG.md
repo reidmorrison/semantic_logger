@@ -95,7 +95,7 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   `SemanticLogger::Formatters::Otlp`, or a subclass of it.
 - `SemanticLogger.safe_dimension_keys`, the metric dimension keys that are never redacted, matched
   exactly, so that a sensitive key such as `:name` or `:type` does not redact OpenTelemetry attribute
-  names such as `messaging.destination.name` or `error.type`. A library adds its own:
+  names such as `messaging.destination.name`. `error.type` is always safe. A library adds its own:
   `SemanticLogger.safe_dimension_keys |= %w[http.route]`.
 - `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
   appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension

@@ -233,14 +233,17 @@ module SemanticLogger
   # sensitive key of :name or :type would otherwise match, as in "messaging.destination.name" or
   # "error.type", merging every series of a metric into one. Each key is matched exactly, as the
   # String it is in the dimensions, so a key that is not declared, such as "url.query", is still
-  # redacted when it is sensitive. They apply to metric dimensions only, never to a log entry's payload
-  # or named tags.
+  # redacted when it is sensitive. They apply to metric dimensions only, including those of a log entry
+  # with a metric, never to a log entry's payload or named tags. "error.type", the attribute of the
+  # OpenTelemetry semantic conventions that names the error of a failed operation, is always safe.
+  # Declare them before adding metric appenders, since a snapshot that an appender already holds keeps
+  # the redaction it was collected with.
   #
   # A library declares the keys of the metrics it records, once, adding to those already declared:
   #   SemanticLogger.safe_dimension_keys |= %w[http.request.method http.route http.response.status_code]
   #
   # keys: [Array<String|Symbol>]
-  #   Default: []
+  #   Default: ["error.type"]
   def self.safe_dimension_keys=(keys)
     Metric::DimensionRedactor.safe_keys = keys
   end

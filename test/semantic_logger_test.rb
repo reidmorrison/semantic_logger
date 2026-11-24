@@ -961,12 +961,16 @@ class SemanticLoggerTest < Minitest::Test
     describe ".safe_dimension_keys=" do
       after { SemanticLogger.safe_dimension_keys = [] }
 
-      it "holds the keys as frozen Strings, once each, and none by default" do
-        assert_equal [], SemanticLogger.safe_dimension_keys
-        SemanticLogger.safe_dimension_keys |= [:"http.route", "http.route", "error.type"]
+      it "holds the keys as frozen Strings, once each, always with error.type" do
+        assert_equal ["error.type"], SemanticLogger.safe_dimension_keys
+        SemanticLogger.safe_dimension_keys |= [:"http.route", "http.route", +"url.scheme"]
 
-        assert_equal %w[http.route error.type], SemanticLogger.safe_dimension_keys
+        assert_equal %w[error.type http.route url.scheme], SemanticLogger.safe_dimension_keys
         assert_predicate SemanticLogger.safe_dimension_keys, :frozen?
+        assert(SemanticLogger.safe_dimension_keys.all?(&:frozen?))
+        SemanticLogger.safe_dimension_keys = []
+
+        assert_equal ["error.type"], SemanticLogger.safe_dimension_keys
       end
 
       it "raises ArgumentError for a key that is not a String or Symbol" do
