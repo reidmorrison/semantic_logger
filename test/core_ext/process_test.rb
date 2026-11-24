@@ -71,6 +71,12 @@ module CoreExt
       end
 
       describe "#daemon" do
+        # Each test records that this process is a daemon, for the real pid or a stubbed one, so the record
+        # is put back afterwards: otherwise any later test, such as one that stubs the same pid to stand for
+        # a forked child, would see a daemon.
+        before { @daemon_pid = SemanticLogger::CoreExt::Process.instance_variable_get(:@daemon_pid) }
+        after { SemanticLogger::CoreExt::Process.instance_variable_set(:@daemon_pid, @daemon_pid) }
+
         it "reopens and returns the result of super" do
           calls = 0
 
@@ -78,6 +84,34 @@ module CoreExt
             assert_equal :daemonized, ForkStub.new(0).daemon
           end
           assert_equal 1, calls
+        end
+
+        it "records that the process is a daemon, before it reopens" do
+          daemon_when_reopened = nil
+
+          SemanticLogger.stub(:reopen, -> { daemon_when_reopened = SemanticLogger::CoreExt::Process.daemon? }) do
+            ::Process.stub(:pid, ::Process.pid + 1) do
+              refute_predicate SemanticLogger::CoreExt::Process, :daemon?
+
+              ForkStub.new(0).daemon
+
+              assert_predicate SemanticLogger::CoreExt::Process, :daemon?
+            end
+          end
+
+          assert daemon_when_reopened
+          refute_predicate SemanticLogger::CoreExt::Process, :daemon?, "a process forked from the daemon is not one"
+        end
+
+        it "records that the process is a daemon even when it does not reopen" do
+          SemanticLogger.reopen_on_fork = false
+          ::Process.stub(:pid, ::Process.pid + 2) do
+            ForkStub.new(0).daemon
+
+            assert_predicate SemanticLogger::CoreExt::Process, :daemon?
+          end
+        ensure
+          SemanticLogger.reopen_on_fork = nil
         end
       end
     end

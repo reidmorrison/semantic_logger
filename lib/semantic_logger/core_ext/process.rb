@@ -29,6 +29,19 @@ module SemanticLogger
         SemanticLogger::RactorSupport.enabled? ? SemanticLogger::RactorReceiver.pause(&) : yield
       end
 
+      # Returns [true|false] whether this process was started by Process.daemon. Unlike a forked child,
+      # whose parent carries on and reports what it holds, such as the metrics recorded so far, a
+      # daemon keeps what it inherited, since the process that started it exits without at_exit.
+      # Asked by those that hold such state (see Metric::Collector#reopen and Metric::Snapshots#reopen).
+      # False in a process forked from the daemon. Takes no lock.
+      def self.daemon? = @daemon_pid == ::Process.pid
+
+      # Called in the process that Process.daemon started, before it reopens (see #daemon).
+      def self.daemonized
+        @daemon_pid = ::Process.pid
+        nil
+      end
+
       # `_fork` runs in both the parent and the child. It returns 0 in the child
       # and the child's pid in the parent, so only reopen in the child. Reopening
       # in the parent would needlessly recreate its queue and worker thread,
@@ -41,8 +54,14 @@ module SemanticLogger
 
       # `Process.daemon` does not route through `_fork`, so reopen explicitly. Once
       # it returns, the caller is running as the daemon (child) process.
+      #
+      # It first records that the process is a daemon (see .daemon?), so that what it inherited, such
+      # as the metrics recorded before it was started, is kept, whether or not it reopens.
       def daemon(...)
-        Process.pause_for_fork { super }.tap { SemanticLogger.reopen if SemanticLogger.reopen_on_fork? }
+        Process.pause_for_fork { super }.tap do
+          Process.daemonized
+          SemanticLogger.reopen if SemanticLogger.reopen_on_fork?
+        end
       end
     end
   end

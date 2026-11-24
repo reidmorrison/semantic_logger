@@ -1,3 +1,5 @@
+require "semantic_logger/metric/processor_methods"
+
 module SemanticLogger
   # The SyncProcessor performs logging in the current thread.
   #
@@ -11,6 +13,8 @@ module SemanticLogger
   # TRAP_WAIT_SECONDS (see #outside_trap). Neither ever runs on the trap's thread, so that an appender
   # can lock a Mutex of its own as it writes, flushes, closes, or reopens, as a Ruby Logger does.
   class SyncProcessor
+    include Metric::ProcessorMethods
+
     # Seconds that a call other than a log call, such as a flush or a reopen, waits in a signal trap
     # for the thread that runs it. It may need a lock that the thread the trap interrupted holds.
     TRAP_WAIT_SECONDS = 1
@@ -22,7 +26,22 @@ module SemanticLogger
     # Add an appender. In a signal trap, as for #flush, which returns nil instead of the appender when
     # it is not added in time. SemanticLogger.add_appender adds to the appenders directly instead.
     def add(**args, &block)
-      synchronize { @appenders.add(**args, &block) }
+      appender = synchronize { @appenders.add(**args, &block) }
+      Metric.collector.start if appender&.metrics_interval
+      appender
+    end
+
+    # Gives the snapshot of metrics to the metric appenders on the calling thread (see
+    # Appenders#log_metrics), or, in a signal trap, as for #log, just after, on another thread.
+    def log_metrics(snapshot)
+      logged = exclusively { @appenders.log_metrics(snapshot) }
+      return logged unless logged.equal?(TRAPPED)
+
+      defer { @appenders.log_metrics(snapshot) }
+      true
+    rescue SystemStackError => e
+      @appenders.logger.error("Failed to write metrics: the stack overflowed", e)
+      false
     end
 
     # Logs on the calling thread, which belongs to the application, so a stack overflow while

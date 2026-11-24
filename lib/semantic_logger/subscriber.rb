@@ -73,6 +73,13 @@ module SemanticLogger
       super && (log.metric_only? ? metrics? : true)
     end
 
+    # Returns [Numeric|nil] the seconds between the snapshots of metrics that this appender writes, for
+    # a metric appender (see Metric::Snapshots), which is given them (see Appenders#log_metrics).
+    # Nil for any other appender, which is never given one.
+    def metrics_interval
+      nil
+    end
+
     # The console stream this appender writes to, if any.
     # Returns one of :stdout, :stderr, or nil when not writing to a console stream.
     def console_stream
