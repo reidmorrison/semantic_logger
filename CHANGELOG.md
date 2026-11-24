@@ -168,6 +168,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - `:sentry_ruby` no longer takes the Sentry user or fingerprint from the payload, deprecated in v5.2,
   since the payload can hold untrusted data: it sends those keys with the rest of the payload, as
   extras. Set them with named tags.
+- The positional class of the Minitest helper `semantic_logger_events`, deprecated in v5.4: pass it as
+  `klass:`.
 
 ## [Unreleased]
 
