@@ -49,8 +49,38 @@ module SemanticLogger
           refute record.key?(:body)
         end
 
-        it "keeps the structure of a payload, as a kvlistValue and an arrayValue" do
+        it "flattens a Hash of the payload or named tags into dotted attribute names, by default" do
+          log.payload    = {request: {address: {zip_code: "10001"}, items: [{sku: "a"}], empty: {}}, ratio: 0.5}
+          log.named_tags = {tenant: {id: 3}}
+
+          assert_equal({stringValue: "10001"}, attributes["request.address.zip_code"])
+          assert_equal({arrayValue: {values: [{kvlistValue: {values: [{key: "sku", value: {stringValue: "a"}}]}}]}},
+                       attributes["request.items"])
+          assert_equal({kvlistValue: {values: []}}, attributes["request.empty"])
+          assert_equal({intValue: "3"}, attributes["tenant.id"])
+          assert_equal({doubleValue: 0.5}, attributes["ratio"])
+          refute attributes.key?("request")
+        end
+
+        it "never lets a flattened name replace the entry's own attribute, and keeps the first of a collision" do
+          log.thread_name = "main"
+          log.payload     = {thread: {name: "forged"}, "a.b" => 1, a: {b: 2}}
+          warnings        = []
+          internal        = Object.new
+          internal.define_singleton_method(:warn) { |message| warnings << message }
+          appender.stub(:logger, internal) { record }
+
+          assert_equal({stringValue: "main"}, attributes["thread.name"])
+          assert_equal({stringValue: "forged"}, attributes["payload.thread.name"])
+          assert_equal({intValue: "1"}, attributes["a.b"])
+          assert_equal 1, warnings.size
+          assert_includes warnings.first, '"a.b"'
+        end
+
+        it "keeps the structure of a payload, as a kvlistValue and an arrayValue, with flatten: false" do
           log.payload = {order: {id: 7, items: [1, "two", nil, true]}, big: 2**70, ratio: 0.5}
+          formatter   = Otlp.new(flatten: false)
+          record      = formatter.call(log, appender)
 
           assert_equal(
             {
@@ -64,17 +94,18 @@ module SemanticLogger
                 ]
               }
             },
-            attributes["order"]
+            attributes(record)["order"]
           )
-          assert_equal({stringValue: (2**70).to_s}, attributes["big"])
-          assert_equal({doubleValue: 0.5}, attributes["ratio"])
+          assert_equal({stringValue: (2**70).to_s}, attributes(record)["big"])
+          assert_equal({doubleValue: 0.5}, attributes(record)["ratio"])
         end
 
         it "writes a structure nested too deeply as a placeholder, so that the JSON of the request can be written" do
-          deep = {}
+          deep  = {}
           inner = deep
           40.times { inner = inner[:a] = {} }
           log.payload = {deep: deep}
+          record      = Otlp.new(flatten: false).call(log, appender)
           request     = {resourceLogs: [{scopeLogs: [{logRecords: [record]}]}]}
           text        = SemanticLogger::Otlp::Protocol["http/json"].encode(request, :ExportLogsServiceRequest)
 
@@ -87,7 +118,9 @@ module SemanticLogger
 
           members = [{key: "x", value: {intValue: "1"}}, {key: "y", value: {intValue: "2"}}]
 
-          assert_equal({kvlistValue: {values: members}}, attributes["point"])
+          assert_equal({kvlistValue: {values: members}},
+                       attributes(Otlp.new(flatten: false).call(log, appender))["point"])
+          assert_equal({intValue: "2"}, attributes["point.y"])
         end
 
         it "names the entry's own fields as the OpenTelemetry formatter does" do

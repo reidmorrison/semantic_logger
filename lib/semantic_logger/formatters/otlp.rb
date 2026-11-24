@@ -10,9 +10,12 @@ module SemanticLogger
     #   traceId, spanId, flags:             the trace the entry was logged in (see Otlp::TraceContext).
     #
     # The attributes are named as by Formatters::OpenTelemetry, with these differences:
-    # - A value keeps its structure: a Hash is a kvlistValue and an Array an arrayValue, at any depth,
-    #   and an Array may mix types, since OTLP holds any of them, unlike the attributes that the
-    #   OpenTelemetry SDK accepts (see Otlp::Values.any_value).
+    # - A Hash in the payload or named tags is flattened, by default, into an attribute for each of its
+    #   values, its keys joined with ".", at any depth, as the OpenTelemetry semantic conventions name
+    #   attributes, so that every backend can query each value: `{request: {zip_code: "10001"}}` is the
+    #   attribute "request.zip_code". With `flatten: false` it is a kvlistValue. An Array stays an
+    #   arrayValue, a Hash within it a kvlistValue, and an Array may mix types, since OTLP holds any of
+    #   them, unlike the attributes that the OpenTelemetry SDK accepts (see Otlp::Values.any_value).
     # - The name of the logger is the instrumentation scope of the record, which the appender writes,
     #   so it is not the attribute `semantic_logger.name`.
     # - The process id is not the attribute `process.pid`: it is in the resource of every request,
@@ -24,6 +27,25 @@ module SemanticLogger
     class Otlp < OpenTelemetry
       # The SeverityNumber of each level.
       SEVERITY_NUMBERS = {trace: 1, debug: 5, info: 9, warn: 13, error: 17, fatal: 21}.freeze
+
+      # The most flattened keys that collided with another key that it warns about, once each.
+      MAX_COLLISION_WARNINGS = 100
+
+      # Returns [true|false] whether it flattens the Hashes of the payload and named tags.
+      attr_reader :flatten
+
+      # Parameters:
+      #   flatten: [true|false]
+      #     Whether to flatten each Hash of the payload and named tags into an attribute for each of its
+      #     values, its keys joined with "." (see the class).
+      #     Default: true
+      #
+      # The other options are those of Formatters::Base.
+      def initialize(flatten: true, **args)
+        super(**args)
+        @flatten = flatten
+        @warned  = {}
+      end
 
       # Returns [Hash] the LogRecord of the log entry.
       def call(log, logger)
@@ -72,6 +94,42 @@ module SemanticLogger
 
       def entry_attribute?(name)
         OTLP_ENTRY_ATTRIBUTES.key?(name)
+      end
+
+      # Adds the named tags or payload, flattened when #flatten is true: each Hash value is replaced with
+      # the values it holds, under its key and theirs joined with ".", at any depth, before the names are
+      # prefixed as Formatters::OpenTelemetry#add_logged does, so that a flattened name such as
+      # "thread.name" never replaces the entry's own attribute. When a flattened name is that of another
+      # key of the same Hash, such as the key "a.b" and {a: {b: 1}}, the first is kept, and the internal
+      # logger warns once for the name.
+      def add_logged(attributes, prefix, hash)
+        return super unless flatten
+
+        flat = {}
+        hash.each_pair do |key, value|
+          # A structure, such as a Struct, becomes a Hash or an Array, once, without cycles.
+          value = Utils.json_safe(value) if Utils.structure?(value)
+          add_flat(flat, SemanticLogger::Otlp::Values.text(key), value)
+        end
+        super(attributes, prefix, flat)
+      end
+
+      def add_flat(flat, name, value)
+        if value.is_a?(Hash) && !value.empty?
+          value.each_pair { |key, item| add_flat(flat, "#{name}.#{SemanticLogger::Otlp::Values.text(key)}", item) }
+        elsif flat.key?(name)
+          collided(name)
+        else
+          flat[name] = value
+        end
+      end
+
+      def collided(name)
+        return if @warned.key?(name) || @warned.size >= MAX_COLLISION_WARNINGS
+
+        @warned[name] = true
+        logger&.logger&.warn("Left out a value of the attribute #{name.inspect}, which another key of the same " \
+                             "Hash, once flattened, already has")
       end
 
       def add_trace(record, trace)

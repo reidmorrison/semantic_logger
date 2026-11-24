@@ -1089,13 +1089,24 @@ Each entry is a log record with the time it was logged, its level as the severit
 such as `9` and `info`, its message as the body, and the attributes of the
 [`:open_telemetry` appender](#opentelemetry) below, except that:
 
-- a value keeps its structure: a Hash is sent as a map and an Array as an array, at any depth, up to
-  20 structures deep, and an array may mix types, such as `[1, "two"]`;
+- a Hash in the payload or named tags is flattened into an attribute for each of its values, its
+  keys joined with `.`, at any depth, as the OpenTelemetry semantic conventions name attributes, so
+  that every backend can query each value. An Array is sent as an array, which may mix types, such
+  as `[1, "two"]`, and a Hash within it as a map;
 - the logger's name is the scope of the record, so it is not the `semantic_logger.name` attribute;
 - the process id is in the resource, so it is not the `process.pid` attribute.
 
-For example, `logger.info("Charged", order: {id: 42, items: ["book"]})` has the attribute `order` as a
-map holding `id` and `items`, rather than its JSON as text.
+For example, `logger.info("Charged", order: {id: 42, address: {zip_code: "10001"}})` has the
+attributes `order.id` and `order.address.zip_code`. A flattened name never replaces one of the
+entry's own attributes, such as `thread.name`: it is then prefixed with `payload.` or `named_tags.`.
+When two keys of the same Hash flatten to one name, such as the key `"a.b"` and `{a: {b: 1}}`, the
+first is kept, and the internal logger warns once for the name.
+
+To send each Hash as a map instead, up to 20 structures deep:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :otlp, formatter: SemanticLogger::Formatters::Otlp.new(flatten: false))
+~~~
 
 **Traces.** Each record is linked to the trace it was logged in. When the `opentelemetry-api` gem is
 loaded, as it is by any OpenTelemetry instrumentation, the appender captures the span that is current
