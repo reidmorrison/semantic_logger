@@ -17,7 +17,8 @@ module SemanticLogger
     # finite Float, true, false, nil) are kept as they are, Strings as frozen copies; an Array of
     # scalars becomes a frozen Array of them, normalized the same way; any other value (a Hash, a
     # non-finite Float, an object) becomes frozen text (see Aggregator.text), as does a key that
-    # is neither a String nor a Symbol. A series' dimensions therefore never change after it is
+    # is neither a String nor a Symbol. A structure becomes text only once the values of its sensitive
+    # keys are replaced (see SemanticLogger.sensitive_keys=). A series' dimensions therefore never change after it is
     # added, whatever the caller does to the Hash it passed in.
     #
     # Limits, per interval, so that a mistake in the application cannot exhaust memory:
@@ -226,9 +227,16 @@ module SemanticLogger
       # Frozen text for a value that is not a scalar, without ever raising: an Array or Hash through
       # Utils.safe_inspect (its #to_s is #inspect, which a deeply nested one would overflow the stack
       # with), anything else by #to_s. When that raises or does not return a String, its class name.
+      #
+      # A structure, such as a Hash, is first redacted with the sensitive keys, when there are any
+      # (see SemanticLogger.sensitive_keys= and Redactor#redact), since its text cannot be redacted
+      # afterwards. Only such values come here, and are never remembered (see .rememberable?), so it
+      # is redacted on every record, with the sensitive keys of the moment, and a scalar costs nothing more.
       def self.text(value)
         string =
           begin
+            redactor = SemanticLogger.redactor
+            value    = redactor.redact(value) if redactor
             case value
             when Array, Hash
               Utils.safe_inspect(value)

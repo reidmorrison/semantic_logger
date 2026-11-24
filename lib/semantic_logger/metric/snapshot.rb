@@ -81,6 +81,32 @@ module SemanticLogger
           Point.new(kind: @kind, name: @name, unit: @unit, dimensions: @dimensions, value: value, internal: @internal)
         end
 
+        # Returns a new point for the series whose dimensions are these with the value of each dimension
+        # whose key is sensitive replaced, as the redactor answers for that key (see
+        # Redactor#replacement_for), or itself when none is sensitive, or when it is one of Semantic
+        # Logger's own metrics or the overflow series, whose dimensions it chose itself. Only values are
+        # replaced, never keys. The dimensions are normalized again, as the Aggregator normalizes them
+        # (see Aggregator.normalize_dimensions), since a replacement can be any value.
+        #
+        # Raises what the redactor raises, so that a point is never given with a sensitive value (see
+        # Snapshot#redact, which leaves it out).
+        def redact(redactor)
+          return self if @internal || @dimensions.empty? || overflow?
+
+          redacted = nil
+          @dimensions.each_key do |key|
+            replacement = redactor.replacement_for(key)
+            next if replacement.nil?
+
+            redacted    ||= @dimensions.dup
+            redacted[key] = replacement
+          end
+          return self unless redacted
+
+          Point.new(kind: @kind, name: @name, unit: @unit, dimensions: Aggregator.normalize_dimensions(redacted),
+                    value: @value, internal: @internal)
+        end
+
         def inspect
           "#<#{self.class.name} #{@kind} #{@name.inspect}#{" (#{@unit})" if @unit} #{@dimensions.inspect}" \
             "#{' internal' if @internal}>"
@@ -149,18 +175,10 @@ module SemanticLogger
       # are merged (see Point#merge), those of a series in only one are kept as they are. The counts
       # of records dropped are added; the first name dropped is the earliest.
       def merge(later)
-        merged = {}
-        [@points, later.points].each do |points|
-          points.each do |point|
-            identity         = point.identity
-            earlier          = merged[identity]
-            merged[identity] = earlier ? earlier.merge(point) : point
-          end
-        end
         Snapshot.new(
           start_time:                   @start_time,
           end_time:                     later.end_time,
-          points:                       merged.values.freeze,
+          points:                       merged_points(@points, later.points),
           dropped_by_name_limit:        @dropped_by_name_limit + later.dropped_by_name_limit,
           first_name_dropped:           @first_name_dropped || later.first_name_dropped,
           dropped_by_conflict:          add_counts(@dropped_by_conflict, later.dropped_by_conflict),
@@ -195,15 +213,45 @@ module SemanticLogger
       def without_internal
         return self unless @points.any?(&:internal?)
 
-        Snapshot.new(
-          start_time:                   @start_time,
-          end_time:                     @end_time,
-          points:                       @points.reject(&:internal?).freeze,
-          dropped_by_name_limit:        @dropped_by_name_limit,
-          first_name_dropped:           @first_name_dropped,
-          dropped_by_conflict:          @dropped_by_conflict,
-          dropped_by_internal_conflict: @dropped_by_internal_conflict
-        )
+        with_points(@points.reject(&:internal?))
+      end
+
+      # Returns this snapshot with the value of each sensitive dimension of its points replaced (see
+      # Point#redact), or itself when none is sensitive. Points whose series become the same, such as
+      # two that differed only by the value of a sensitive dimension, are merged into one (see
+      # Point#merge), so that every point is still a series of its own, as #merged_by and #merge
+      # expect. Takes time in proportion to the number of series, however often each was recorded.
+      #
+      # A point that cannot be redacted, such as when the sensitive keys raise, is left out, never
+      # given with a sensitive value, and what it raised is yielded, so that the caller can count and
+      # report it; the other points are kept. Without a block, raises what the first one raised.
+      def redact(redactor)
+        redacted = nil
+        @points.each_with_index do |point, index|
+          new_point =
+            begin
+              point.redact(redactor)
+            rescue StandardError => e
+              raise unless block_given?
+
+              yield(e)
+              nil
+            end
+          next if redacted.nil? && new_point.equal?(point)
+
+          redacted ||= @points.first(index)
+          redacted << new_point if new_point
+        end
+        redacted ? with_points(merged_points(redacted)) : self
+      end
+
+      # Returns this snapshot with only Semantic Logger's own metrics (see Point#internal?), over the
+      # same interval and with the same counts of records dropped, such as for an interval whose
+      # application metrics cannot be delivered. Itself when it holds no other point.
+      def only_internal
+        return self if @points.all?(&:internal?)
+
+        with_points(@points.select(&:internal?))
       end
 
       def inspect
@@ -214,6 +262,34 @@ module SemanticLogger
 
       def frozen(value)
         value.frozen? ? value : value.dup.freeze
+      end
+
+      # Returns a copy of this snapshot, over the same interval and with the same counts of records
+      # dropped, holding `points` instead.
+      def with_points(points)
+        Snapshot.new(
+          start_time:                   @start_time,
+          end_time:                     @end_time,
+          points:                       points.freeze,
+          dropped_by_name_limit:        @dropped_by_name_limit,
+          first_name_dropped:           @first_name_dropped,
+          dropped_by_conflict:          @dropped_by_conflict,
+          dropped_by_internal_conflict: @dropped_by_internal_conflict
+        )
+      end
+
+      # Returns [Array<Point>] one point per series of the lists of points, those of the same series
+      # merged in order (see Point#merge).
+      def merged_points(*lists)
+        merged = {}
+        lists.each do |points|
+          points.each do |point|
+            identity         = point.identity
+            earlier          = merged[identity]
+            merged[identity] = earlier ? earlier.merge(point) : point
+          end
+        end
+        merged.values.freeze
       end
 
       # The value merged so far for a key of #merged_by, with that of the point.
