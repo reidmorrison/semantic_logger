@@ -221,16 +221,32 @@ module SemanticLogger
   end
 
   # Returns the sensitive keys, as supplied to .sensitive_keys=, or nil when there are none.
-  def self.sensitive_keys
-    @redactor&.sensitive_keys
-  end
+  def self.sensitive_keys = @redactor&.sensitive_keys
 
   # Internal: Returns [SemanticLogger::Redactor] the redactor for the sensitive keys, which each
   # entry is asked to redact itself with before it is written (see Appenders#log), or nil when
   # there are no sensitive keys.
-  def self.redactor
-    @redactor
+  def self.redactor = @redactor
+
+  # Sets the metric dimension keys that are never redacted, however the sensitive keys match them (see
+  # .sensitive_keys=), such as the attribute names of the OpenTelemetry semantic conventions, which a
+  # sensitive key of :name or :type would otherwise match, as in "messaging.destination.name" or
+  # "error.type", merging every series of a metric into one. Each key is matched exactly, as the
+  # String it is in the dimensions, so a key that is not declared, such as "url.query", is still
+  # redacted when it is sensitive. They apply to metric dimensions only, never to a log entry's payload
+  # or named tags.
+  #
+  # A library declares the keys of the metrics it records, once, adding to those already declared:
+  #   SemanticLogger.safe_dimension_keys |= %w[http.request.method http.route http.response.status_code]
+  #
+  # keys: [Array<String|Symbol>]
+  #   Default: []
+  def self.safe_dimension_keys=(keys)
+    Metric::DimensionRedactor.safe_keys = keys
   end
+
+  # Returns [Array<String>] the metric dimension keys that are never redacted (see .safe_dimension_keys=).
+  def self.safe_dimension_keys = Metric::DimensionRedactor.safe_keys
 
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
@@ -879,6 +895,7 @@ module SemanticLogger
   # @formatter:off
   module Metric
     autoload :Aggregator,           "semantic_logger/metric/aggregator"
+    autoload :DimensionRedactor,    "semantic_logger/metric/dimension_redactor"
     autoload :ExponentialHistogram, "semantic_logger/metric/exponential_histogram"
     autoload :NewRelic,             "semantic_logger/metric/new_relic"
     autoload :Otlp,                 "semantic_logger/metric/otlp"

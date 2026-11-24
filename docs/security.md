@@ -226,6 +226,19 @@ series is never delivered, while the others of the interval are. How many series
 the first error's class and where it was raised, are reported once per interval to the internal
 logger.
 
+A sensitive key matches any dimension key that holds it, so a key such as `:name` or `:type`, which
+an application may filter out of its parameters, also matches the attribute names of the
+OpenTelemetry semantic conventions, such as `messaging.destination.name` or `error.type`, and would
+merge every series of a metric into one. Declare the dimension keys whose values are never sensitive
+with `SemanticLogger.safe_dimension_keys`, which a library that records metrics adds its own keys
+to. Each is matched exactly, so a key that is not declared, such as `url.query`, is still redacted
+when it is sensitive. They apply to metric dimensions only, never to a log entry's payload or named
+tags:
+
+~~~ruby
+SemanticLogger.safe_dimension_keys |= %w[http.request.method http.route http.response.status_code]
+~~~
+
 Metrics that a metric appender already holds when `sensitive_keys` is first assigned, such as those it
 merges until its own interval has passed, are delivered as they were collected: assign the sensitive
 keys before adding metric appenders.

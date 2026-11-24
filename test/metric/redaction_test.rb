@@ -200,6 +200,18 @@ module Metric
         assert_equal [{"userPassword" => "[FILTERED]", "plan" => "free"}], recorded.map(&:dimensions)
       end
 
+      it "never redacts a dimension key declared safe, matched exactly" do
+        SemanticLogger.sensitive_keys = %i[name type]
+        SemanticLogger.safe_dimension_keys |= ["messaging.destination.name", :"error.type"]
+        logger.increment("jobs", dimensions: {"messaging.destination.name" => "default", "error.type" => "Oops",
+                                              "user.name" => "jack"})
+
+        assert_equal [{"messaging.destination.name" => "default", "error.type" => "Oops", "user.name" => "[FILTERED]"}],
+                     points.map(&:dimensions)
+      ensure
+        SemanticLogger.safe_dimension_keys = []
+      end
+
       it "redacts the metric: of a log call, at any level" do
         logger.info("Signed up", metric: "users.signup", dimensions: {password: "a"})
         logger.debug("Signed up", metric: "users.signup", dimensions: {password: "b"})

@@ -274,6 +274,7 @@ module SemanticLogger
 
         failed = 0
         error  = nil
+        redactor = DimensionRedactor.new(redactor)
         redacted = snapshot.redact(redactor) do |exception|
           failed += 1
           error ||= exception
