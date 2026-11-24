@@ -569,9 +569,9 @@ its name. A counter `Common/User/authorize` is sent as the counter `Application.
 `Application.p99`. Any other name, such as `users.signup`, is sent as it is.
 
 **Dimensions.** Each datapoint has the dimensions of its series, each value as text, and the
-`host`, `application`, and `environment` of the appender. These three replace a dimension of the
-same name that the metric has (keeping the metric's own is a planned follow-up), so do not name a
-dimension `host`, `application`, or `environment`. A dimension whose value is blank, `nil` or text
+`host`, `application`, and `environment` of the appender, unless the metric has a dimension of that
+name of its own, such as `dimensions: {host: "db1"}` for a metric about another host, which it keeps.
+A dimension whose value is blank, `nil` or text
 that is empty or only whitespace, is left out; dimensions that are all blank count as none.
 SignalFx itself accepts at most 36 dimensions on a datapoint, dimension names of up to 128
 characters, and values of up to 256 characters; Semantic Logger sends the dimensions as they are,

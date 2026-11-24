@@ -106,7 +106,8 @@ are aggregated in the process, and each metric appender is given a snapshot of e
   [New Relic](metrics.html#new-relic).
 * `:signalfx` posts one request per interval, with a counter for each counter series, and for each
   histogram the counters `<name>.count` and `<name>.sum` and the gauges `<name>` (the mean),
-  `<name>.min`, `<name>.max`, `<name>.p50`, `<name>.p95`, and `<name>.p99`. See
+  `<name>.min`, `<name>.max`, `<name>.p50`, `<name>.p95`, and `<name>.p99`. A metric's own dimension
+  named `host`, `application`, or `environment` is kept, rather than replaced by the appender's. See
   [SignalFx](metrics.html#signalfx).
 
 Pass `interval: 10`, for example, to send more often. `SemanticLogger.flush`, and the flush at exit,
