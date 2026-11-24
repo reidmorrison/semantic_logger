@@ -218,12 +218,15 @@ module SemanticLogger
     private_class_method :word_list
 
     # Returns [Class] the appender that the Symbol names, such as Appender::File for :file. Raises ArgumentError
-    # for one that v6 removed, saying what to use instead (see REMOVED), and for one that names no appender.
+    # when it names none: for one that v6 removed, saying what to use instead (see REMOVED), unless the application
+    # defined that class itself.
     def self.named(symbol)
-      removed = REMOVED[symbol]
-      raise(ArgumentError, removed) if removed
-
       SemanticLogger::Utils.constantize_symbol(symbol)
+    rescue ArgumentError
+      removed = REMOVED[symbol]
+      raise unless removed
+
+      raise(ArgumentError, removed)
     end
     private_class_method :named
   end

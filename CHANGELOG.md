@@ -171,15 +171,14 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - `SemanticLogger::Formatters::Signalfx`: the `:signalfx` metric appender builds its requests from
   the snapshot of each interval itself, and takes no formatter.
 - `appender: :sentry` (`SemanticLogger::Appender::Sentry`), deprecated in v5.1: it depended on the
-  end-of-life `sentry-raven` gem. Use `appender: :sentry_ruby`.
+  end-of-life `sentry-raven` gem. Use `appender: :sentry_ruby`. Adding it raises `ArgumentError`
+  naming its replacement, as do the two below.
 - `appender: :new_relic` (`SemanticLogger::Appender::NewRelic`), deprecated in v5.1: it sent
   `:error` and `:fatal` entries to New Relic as error events. Use `appender: :new_relic_logs`. The
   `:new_relic` metric appender, `add_appender(metric: :new_relic)`, is unchanged.
 - `appender: :splunk` (`SemanticLogger::Appender::Splunk`), deprecated in v5.2: its `splunk-sdk-ruby`
   gem was last released in 2015 and never verifies the server's certificate. Use
   `appender: :splunk_http`.
-- Adding `appender: :sentry`, `:new_relic`, or `:splunk` raises `ArgumentError` saying that it was
-  removed and naming its replacement.
 - The `type:` option of the `:elasticsearch`, `:elasticsearch_http`, and `:opensearch` appenders,
   ignored and deprecated since v5.1: document `_type` has been unused since Elasticsearch 7.
 - `:sentry_ruby` no longer takes the Sentry user or fingerprint from the payload, deprecated in v5.2,

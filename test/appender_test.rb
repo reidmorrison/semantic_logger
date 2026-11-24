@@ -37,6 +37,16 @@ class AppenderTest < Minitest::Test
           end
         end
 
+        it "builds a class of that name that the application defined itself" do
+          stand_in = Class.new(SemanticLogger::Subscriber) { def log(_log) = true }
+          SemanticLogger::Appender.const_set(:Splunk, stand_in)
+
+          assert_instance_of stand_in, build(appender: :splunk)
+        ensure
+          SemanticLogger::Appender.send(:remove_const, :Splunk) if SemanticLogger::Appender.const_defined?(:Splunk,
+                                                                                                           false)
+        end
+
         it "raises for a Symbol that names no appender" do
           error = assert_raises(ArgumentError) { build(appender: :no_such_appender) }
 
