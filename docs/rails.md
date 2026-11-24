@@ -34,7 +34,7 @@ of log destinations see [Appenders](appenders.html).
 
 ### Requirements
 
-Rails Semantic Logger v5 requires **Ruby 3.2 or later** and **Rails 7.2 or later**. For the exact
+Rails Semantic Logger v6 requires **Ruby 3.2 or later**, **Rails 7.2 or later**, and Semantic Logger v6. For the exact
 list of tested Ruby and Rails versions, see the
 [CI workflow](https://github.com/reidmorrison/rails_semantic_logger/blob/main/.github/workflows/ci.yml).
 
@@ -522,8 +522,8 @@ end
 ~~~
 
 The Rails `config.colorize_logging` setting does **not** affect appenders declared in the block; it
-only influences the deprecated default file appender (see
-[Deprecated configuration options](#deprecated-configuration-options)).
+only influences the default file appender, which is created when the application declares no
+appenders. Set it to `false` for a plain text `log/<environment>.log`.
 
 ### Named tags
 
@@ -774,16 +774,17 @@ Rails Semantic Logger v5.0.
 #### Sidekiq job lifecycle messages
 
 For every Sidekiq job, Rails Semantic Logger emits a `Start #perform` and a `Completed #perform`
-entry (with the `sidekiq.queue.latency` and `sidekiq.job.perform` metrics). On very high job volumes
-these can add noise and cost in log aggregation tools. To turn them off (the job still runs and any
-exceptions are still logged):
+entry. On very high job volumes these can add noise and cost in log aggregation tools. To turn them
+off (the job still runs, any exceptions are still logged, and its
+[metrics](#sidekiq-metrics) are still recorded):
 
 ~~~ruby
 # config/initializers/sidekiq.rb
 RailsSemanticLogger::Sidekiq::JobLogger.perform_messages = false
 ~~~
 
-This defaults to `true`, so the messages are emitted unless you opt out.
+This defaults to `true`, so the messages are emitted unless you opt out. It turns off only the log
+entries: the job's metrics do not depend on it.
 
 On Sidekiq 8, the standard Sidekiq setting has the same effect and is also honored:
 
@@ -792,6 +793,20 @@ Sidekiq.configure_server do |config|
   config[:skip_default_job_logging] = true
 end
 ~~~
+
+#### Sidekiq metrics
+
+Once a [metric appender](metrics.html) is added, each Sidekiq job records two histograms, in
+seconds, named after the OpenTelemetry conventions:
+
+| Metric | What it measures | Dimensions |
+|--------|------------------|------------|
+| `sidekiq.queue.duration` | How long the job waited in its queue, from when it was enqueued until it started. No OpenTelemetry convention covers it, so it is named after Sidekiq. | `messaging.system.name` (`sidekiq`), `messaging.destination.name` (the queue) |
+| `messaging.process.duration` | How long the job ran. | The same, plus `messaging.operation.name` (`process`), `messaging.sidekiq.job.class`, and `error.type`, the exception class, when the job raised |
+
+A job enqueued by a host whose clock is ahead records a queue duration of zero, and a job without an
+`enqueued_at` records none. `config.rails_semantic_logger.metrics = false` turns them off, with the
+other [Rails metrics](#metrics).
 
 #### Sidekiq job logging context
 
@@ -887,32 +902,60 @@ CustomControllerBase.include(SemanticLogger::Loggable)
 
 ---
 
-## Metrics (prototype)
+## Metrics
 
-> **Prototype:** metrics support and the metric names below are an early prototype and **subject to
-> change** in a future release. Do not hard-code these names into long-lived dashboards or alerts yet.
+Rails Semantic Logger records metrics for requests, database queries, jobs, views, mailers, and the
+cache, whatever is logged. They are named after the
+[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) where one
+exists, so dashboards built for those conventions work unchanged, and under the system that owns
+the event otherwise. Each histogram is in seconds.
 
-In addition to the structured log entry, Rails Semantic Logger attaches a Semantic Logger
-[metric](metrics.html) to each entry that is logged at `:info`, `:warn`, or `:error`. When the entry
-carries a duration (a request, query, render, job run, ...) the metric records that timing; otherwise
-it acts as an event counter. Wire up a metrics appender (StatsD, Prometheus, ...) and these flow
-through automatically alongside the logs.
+Nothing is sent until a [metric appender](metrics.html) is added, such as OTLP to a local
+OpenTelemetry Collector; until then a metric costs about 40 ns:
 
-Metric names follow `rails.<component>.<event>`, where `<component>` is the Rails component with its
-`action_`/`active_` prefix dropped:
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(file_name: "log/#{Rails.env}.log")
+  appenders.add(metric: :otlp)
+end
+~~~
 
-| Component | Metrics |
-| --- | --- |
-| Action Controller | `rails.controller.process_action`, `rails.controller.send_file`, `rails.controller.send_data`, `rails.controller.redirect_to`, `rails.controller.halted_callback`, `rails.controller.rescue_from_callback`, and the fragment-cache events (`rails.controller.write_fragment`, `read_fragment`, `exist_fragment`, `expire_fragment`, `expire_page`, `write_page`) |
-| Action View | `rails.view.render.template`, `rails.view.render.partial`, `rails.view.render.layout`, `rails.view.render.collection` |
-| Active Job | `rails.job.<event>` for every job event (`enqueue`, `enqueue_at`, `enqueue_all`, `perform_start`, `perform`, `enqueue_retry`, `retry_stopped`, `discard`, and the Rails 8.1 Continuation events `interrupt`, `resume`, `step_skipped`, `step_started`, `step`) |
-| Action Mailer | `rails.mailer.deliver` |
-| Solid Queue | `rails.solid_queue.<event>` for every Solid Queue event logged at info/warn/error (e.g. `rails.solid_queue.start_process`, `rails.solid_queue.thread_error`) |
+To record none of them, Sidekiq's included, set this in `config/application.rb` or
+`config/environments/*.rb`:
 
-Entries logged at `:debug` carry **no** metric. Because ActiveRecord logs SQL at `:debug`, there is
-currently no `rails.db`/`rails.record` SQL metric, and Action View render metrics are only emitted
-when rendered events are raised to `:info` (see
-[Re-enable Started, Processing, and Rendered messages](#re-enable-started-processing-and-rendered-messages)).
+~~~ruby
+config.rails_semantic_logger.metrics = false
+~~~
+
+| Metric | Kind | What it measures | Dimensions |
+|--------|------|------------------|------------|
+| `http.server.request.duration` | histogram | Each request, from the first middleware until its body is closed | `http.request.method`, `url.scheme`, `http.route` (`/articles/:id`), `http.response.status_code`, `error.type` |
+| `rails.action_controller.process_action.duration` | histogram | The controller action, without the middleware | `code.function.name` (`ArticlesController#show`), `http.response.status_code`, `error.type` |
+| `rails.action_controller.redirects` | counter | Redirects | `code.function.name`, `http.response.status_code` |
+| `rails.action_controller.halted_callbacks` | counter | Filter chains halted by a callback | `rails.action_controller.filter` |
+| `rails.action_controller.rescued_exceptions` | counter | Exceptions handled by `rescue_from` (Rails 8.1+) | `error.type` |
+| `rails.action_controller.unsafe_redirects` | counter | Open and path relative redirects reported with `:notify` (Rails 8.1+) | `rails.action_controller.redirect.kind` |
+| `rails.action_controller.csrf_events` | counter | CSRF checks that failed or fell back (Rails 8.2+) | `rails.action_controller.csrf.reason` |
+| `rails.action_controller.send_file.duration`, `send_data.duration`, `fragment_cache.duration` | histogram | Sending files and data, and fragment caching | `rails.cache.operation.name` (fragment cache) |
+| `rails.action_view.render.duration` | histogram | Each template, partial, layout, and collection rendered | `rails.action_view.render.kind`, `rails.action_view.template` (`articles/show.html.erb`) |
+| `db.client.operation.duration` | histogram | Each query sent to the database (not cached, schema, or explain queries) | `db.system.name`, `db.namespace`, `db.operation.name`, `error.type` |
+| `messaging.client.sent.messages` | counter | Jobs enqueued | `messaging.system.name` (`active_job`), `messaging.destination.name` (the queue), `messaging.active_job.job.class` |
+| `messaging.client.operation.duration` | histogram | Enqueuing, one job or several | `messaging.operation.name` (`enqueue`, `enqueue_at`, `enqueue_all`), the adapter, `error.type` |
+| `messaging.process.duration` | histogram | Each job performed | `messaging.system.name` (`active_job` or `sidekiq`), the queue, the job class, `error.type` |
+| `active_job.queue.duration` | histogram | How long a job waited in its queue from when it was due | The queue, the job class |
+| `active_job.retries`, `exhausted_retries`, `discards`, `interrupts`, `resumes` | counter | Retries, given-up retries, discards, and continuation interrupts and resumes | The queue, the job class, `error.type` |
+| `active_job.step.duration` | histogram | Each continuation step (Rails 8.1+) | `active_job.step.name`, `active_job.step.interrupted`, `error.type` |
+| `rails.action_mailer.delivery.duration`, `process.duration` | histogram | Delivering and building a mail | `rails.action_mailer.mailer` or `code.function.name`, `error.type` |
+| `rails.cache.operation.duration` | histogram | Each cache operation | `rails.cache.operation.name`, `rails.cache.store`, `rails.cache.hit` |
+| `solid_queue.operation.duration` | histogram | Each Solid Queue operation | `solid_queue.operation.name`, `error.type` |
+
+Sidekiq's own metrics are described in [Sidekiq metrics](#sidekiq-metrics). A job that Active Job
+runs on Sidekiq is recorded by both, under `messaging.system.name` `active_job` and `sidekiq`: sum
+one system or the other, never both.
+
+`error.type` is set only when the operation failed: the exception's class, or for a request the
+status code of a 5xx response. Every dimension has a small, fixed set of values, so no id, path, or
+SQL text becomes a series.
 
 ---
 
@@ -971,6 +1014,89 @@ After they initialize, Rails Semantic Logger replaces the loggers of these libra
 - Sidekiq (unless `replace_sidekiq_logger = false`)
 - Sidetiq
 - Solid Queue (unless `replace_solid_queue_logger = false`)
+
+---
+
+## Upgrading to v6
+
+v6 requires Semantic Logger v6; see [Upgrading to Semantic Logger v6](upgrading.html#upgrading-to-semantic-logger-v6)
+for the changes there. For a Rails application the largest change is the metrics: renamed after the
+OpenTelemetry conventions, and recorded apart from the logs.
+
+### The deprecated appender options are removed
+
+`config.rails_semantic_logger.format`, `ap_options`, `filter`, `console_logger`, and
+`add_file_appender` have warned since v5 and are gone: setting one raises `NoMethodError`. Declare
+the destinations in the [appenders block](#configuring-where-logs-go-the-appenders-block) instead:
+
+| Removed option | Instead |
+|----------------|---------|
+| `config.rails_semantic_logger.format = :json` | `appenders.add(file_name: "log/#{Rails.env}.log", formatter: :json)` |
+| `config.rails_semantic_logger.ap_options = {multiline: true}` | `formatter: {color: {ap: {multiline: true}}}` on the appender |
+| `config.rails_semantic_logger.filter = /MyClass/` | `filter: /MyClass/` on the appender |
+| `config.rails_semantic_logger.console_logger = false` | Declare your appenders, without an `add_console` one |
+| `config.rails_semantic_logger.add_file_appender = false` | Declare your appenders: declaring any replaces the default file appender |
+
+Without an appenders block nothing changes: Rails Semantic Logger writes `log/<environment>.log` in
+color (plain text when `config.colorize_logging` is `false`), and to the screen under `rails server`,
+Sidekiq, and `rails console`.
+
+If you set `add_file_appender = false` or `console_logger = false`, do not just delete the line:
+that brings back `log/<environment>.log`, or the screen output, which `console_logger` also turned off
+under `rails server` and Sidekiq. Move every appender into the appenders block instead, including
+those added with `config.semantic_logger.add_appender`. Declaring any appender there turns off the
+default file appender and the default screen appenders:
+
+~~~ruby
+# v5
+config.rails_semantic_logger.add_file_appender = false
+config.rails_semantic_logger.console_logger    = false
+config.semantic_logger.add_appender(io: $stdout, formatter: :json)
+
+# v6
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add(io: $stdout, formatter: :json)
+end
+~~~
+
+The default file appender no longer changes the formatter of the file and IO appenders that an
+application adds itself with `config.semantic_logger.add_appender`: each keeps the formatter it was
+given.
+
+`Rails.application.deprecators[:rails_semantic_logger]` is still registered, so configuration that
+silences it keeps working.
+
+### The metrics are renamed, and recorded apart from the logs
+
+The metrics take OpenTelemetry names where a convention exists, gain dimensions, and are recorded
+whatever is logged, so the log entries no longer carry a `metric`. Update any dashboard or alert
+that reads the old names; see [Metrics](#metrics) for the new ones:
+
+| v5 | v6 |
+|----|----|
+| `rails.controller.process_action` | `http.server.request.duration` for the whole request, and `rails.action_controller.process_action.duration` for the action |
+| `rails.controller.redirect_to`, `halted_callback`, `rescue_from_callback`, `open_redirect`, `unsafe_redirect`, `csrf_*` | `rails.action_controller.redirects`, `halted_callbacks`, `rescued_exceptions`, `unsafe_redirects`, `csrf_events` |
+| `rails.controller.send_file`, `send_data`, and the fragment cache events | `rails.action_controller.send_file.duration`, `send_data.duration`, `fragment_cache.duration` |
+| `rails.view.render.template`, `partial`, `layout`, `collection` | `rails.action_view.render.duration`, by `rails.action_view.render.kind` |
+| none | `db.client.operation.duration` and `rails.cache.operation.duration` |
+| `rails.job.enqueue`, `enqueue_at`, `enqueue_all` | `messaging.client.sent.messages` and `messaging.client.operation.duration` |
+| `rails.job.perform`, `perform_start` | `messaging.process.duration` and `active_job.queue.duration` |
+| `rails.job.enqueue_retry`, `retry_stopped`, `discard`, `interrupt`, `resume`, `step` | `active_job.retries`, `exhausted_retries`, `discards`, `interrupts`, `resumes`, `step.duration` |
+| `rails.mailer.deliver` | `rails.action_mailer.delivery.duration` |
+| `rails.solid_queue.<event>` | `solid_queue.operation.duration`, by `solid_queue.operation.name` |
+| `sidekiq.queue.latency`, the `metric_amount` of the `Start #perform` entry, in milliseconds | `sidekiq.queue.duration`, a histogram in seconds |
+| `sidekiq.job.perform`, the `duration` of the `Completed #perform` entry | `messaging.process.duration`, a histogram in seconds |
+
+v5 recorded a metric only with an entry logged at `:info` or above, so it recorded no render metric
+by default; v6 records every render, query, and job. Turning off the Sidekiq perform messages with
+`perform_messages = false` or `skip_default_job_logging` no longer turns off its metrics; set
+`config.rails_semantic_logger.metrics = false` for that.
+
+### `add_server` and `add_console` give only a stream or a file the color formatter
+
+A metric appender, which refuses a formatter in Semantic Logger v6, an appender instance, a logger
+(`logger:`), and an appender named by a Symbol (such as `appender: :syslog`) keep their own default
+formatter, so the last two no longer write colored text.
 
 ---
 
@@ -1092,7 +1218,7 @@ options (`format`, `add_file_appender`, `ap_options`, `filter`, `console_logger`
 `config.semantic_logger.add_appender(...)` calls. In v5 all of that lives in one place, the
 [appenders block](#configuring-where-logs-go-the-appenders-block).
 
-These v4 options still work in v5 but emit a deprecation warning and will be **removed in v6**.
+These v4 options still work in v5 but emit a deprecation warning, and were **removed in v6**.
 Migrate them as follows:
 
 | v4 | v5 |
@@ -1164,41 +1290,3 @@ anywhere:
 ~~~ruby
 SemanticLogger::Processor.instance.instance_variable_set(:@queue, Queue.new)
 ~~~
-
----
-
-## Deprecated configuration options
-
-The following options still function in v5 for backward compatibility but emit deprecation warnings
-and will be **removed in v6**. Each is replaced by the [appenders block](#configuring-where-logs-go-the-appenders-block).
-
-| Deprecated option | Replacement |
-|-------------------|-------------|
-| `config.rails_semantic_logger.format` | `formatter:` on each appender, e.g. `appenders.add(file_name: ..., formatter: :json)` |
-| `config.rails_semantic_logger.ap_options` | `formatter: {color: {ap: {...}}}` on the appender |
-| `config.rails_semantic_logger.filter` | `filter:` on the appender |
-| `config.rails_semantic_logger.console_logger` | Declare (or omit) an `add_console` appender |
-| `config.rails_semantic_logger.add_file_appender` | Declare appenders in the block (doing so already replaces the default file appender) |
-
-### Silencing the warnings until you migrate
-
-The gem registers its deprecator with the application as
-`Rails.application.deprecators[:rails_semantic_logger]`, so the standard Rails deprecation settings
-govern these warnings:
-
-~~~ruby
-# Hide them until you have migrated
-config.active_support.report_deprecations = false
-
-# Or silence only this gem's warnings, leaving the rest of the application's in place
-Rails.application.deprecators[:rails_semantic_logger].silenced = true
-
-# Or make them fatal, e.g. in config/environments/test.rb, so CI catches them
-config.active_support.deprecation = :raise
-~~~
-
-The warnings are recorded when the option is set and emitted once Rails has applied the settings
-above. Rails reads `config/environments/*.rb` well before it applies deprecation configuration, so
-warning from the option setter itself would land where none of these settings could reach it. Each
-option is reported once per boot, attributed to the place it was set. Options set later, from
-`config/initializers/*` or at runtime, warn immediately instead.
