@@ -100,7 +100,7 @@ module Appender
         def with_appender(**options)
           Bunny.stub(:new, new_bunny) do
             @appender = SemanticLogger::Appender::Rabbitmq.new(
-              queue_name: "test_queue", rabbitmq_host: "localhost", metrics: false,
+              queue_name: "test_queue", rabbitmq_host: "localhost",
               formatter: ->(log, _logger) { log.message }, **options
             )
             yield(@appender)
