@@ -614,6 +614,13 @@ other connection options, such as `connect_timeout:`, `write_timeout:`, and `ssl
 [`Net::TCPClient#initialize`](https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb)
 for them all and their defaults.
 
+v6 connects with a connection class of its own instead of Net::TCPClient, and takes only `server:`,
+`servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`, `write_timeout:`, `keepalive:`,
+and `ssl:`. So the others, such as `connect_retry_count:` and `retry_count:`, report a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), as do the same options in the
+`tcp_client:` Hash of the `:syslog` appender, where `server:` and `servers:` are deprecated too,
+since its `url:` gives the server.
+
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter
 such as `:default` or `:color`, enable `escape_control_chars` so a newline in the logged data cannot

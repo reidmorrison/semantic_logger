@@ -5,6 +5,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Deprecated
+
+- The connection options of the `:tcp` appender, and of the `tcp_client:` of the `:syslog` appender,
+  that v6 does not take, since it connects with a class of its own instead of `net_tcp_client`, report
+  a deprecation warning: `connect_retry_count:`, `connect_retry_interval:`, `retry_count:`,
+  `read_timeout:`, `buffered:`, `close_on_error:`, `on_connect:`, `proxy_server:`, a `policy:` other
+  than `:ordered` or `:random`, and the ignored `server:` and `servers:` of `tcp_client:`.
+
 ### Fixed
 
 - The HTTP appenders (`:http`, `:elasticsearch_http`, `:splunk_http`, `:loki`, and

@@ -3,7 +3,7 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.3 OpenTelemetry log record changes.
+  v5.4 deprecation of the TCP options that v6 does not take.
 ---
 
 
@@ -58,6 +58,32 @@ Warning.extend(SemanticLoggerDeprecations)
 
 Do not log them through Semantic Logger itself: a warning reported on its background thread would
 then wait on that thread's own queue, which can stop all logging while the queue is full.
+
+### Upgrading to Semantic Logger v5.4
+
+#### Remove the TCP options that v6 does not take
+
+The `:tcp` appender, and the `:syslog` appender over TCP, hand their connection options to
+`Net::TCPClient` from the `net_tcp_client` gem. v6 connects with a class of its own instead, which
+takes only `server:`, `servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`,
+`write_timeout:`, `keepalive:`, and `ssl:`, and raises `ArgumentError` for any other. So the others
+now report a [deprecation warning](#seeing-deprecation-warnings):
+
+| Option | Instead |
+|--------|---------|
+| `connect_retry_count:`, `connect_retry_interval:`, `retry_count:` | Remove it: v6 connects once per write, and the appender writes the entry again after its back-off; see `async_max_retries:` in [Operations](operations.html). |
+| `read_timeout:` | Remove it: the appenders never read. |
+| `buffered:`, `close_on_error:`, `on_connect:`, `proxy_server:` | Remove it. |
+| `policy:` other than `:ordered` or `:random` | Use `:ordered` or `:random`. |
+| `server:` or `servers:` in the `tcp_client:` of `:syslog` | Remove it: the `url:` gives the server, and these were ignored. |
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: :tcp, server: "logs:3300", connect_retry_count: 5, retry_count: 2)
+
+# After:
+SemanticLogger.add_appender(appender: :tcp, server: "logs:3300")
+~~~
 
 ### Upgrading to Semantic Logger v5.3
 

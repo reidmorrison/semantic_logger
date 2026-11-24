@@ -57,6 +57,8 @@ module SemanticLogger
       #     Specify custom parameters to pass into Net::TCPClient.new
       #     For a list of options see the net_tcp_client documentation:
       #       https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
+      #     v6 takes only policy: (:ordered or :random), connect_timeout:, write_timeout:, keepalive:, and
+      #     ssl:, so the others report a deprecation warning (see TcpClientOptions).
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
@@ -144,6 +146,11 @@ module SemanticLogger
         @tcp_client_options = tcp_client
 
         raise "Unknown protocol #{@protocol}!" unless %i[syslog tcp udp].include?(@protocol)
+
+        if @protocol == :tcp
+          TcpClientOptions.report_deprecated(tcp_client, ":syslog", server:  "the url gives the server",
+                                                                    servers: "the url gives the server")
+        end
 
         # The syslog gem, a bundled gem since Ruby 3.4, is only required when logging to a local syslog daemon.
         if @protocol == :syslog

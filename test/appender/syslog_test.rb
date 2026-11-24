@@ -86,10 +86,30 @@ module Appender
           assert_equal ["localhost:8514"], appender.remote_syslog.servers
         end
 
-        it "connects to the server in the url, rather than one given in tcp_client:" do
-          appender = appender_with({server: "otherhost:514"})
+        it "connects to the server in the url, rather than one given in tcp_client:, which is deprecated" do
+          appender = assert_deprecated(/:syslog appender's server: is deprecated.*server: the url gives the server/) do
+            appender_with({server: "otherhost:514"})
+          end
 
           assert_equal ["localhost:8514"], appender.remote_syslog.servers
+        end
+
+        it "warns, at the line that added it, that the retry options of tcp_client: are deprecated" do
+          line     = __LINE__ + 4
+          warning  = /syslog_test\.rb:#{line}: warning: SemanticLogger: The :syslog appender's retry_count: /
+          appender = assert_deprecated(warning) do
+            Net::TCPClient.stub_any_instance(:connect, nil) do
+              SemanticLogger.add_appender(appender: :syslog, url: "tcp://localhost:8514", tcp_client: {retry_count: 1})
+            end
+          end
+        ensure
+          SemanticLogger.remove_appender(appender) if appender
+        end
+
+        it "does not warn for the options that v6 keeps" do
+          refute_deprecated do
+            appender_with({connect_timeout: 3, write_timeout: 4, keepalive: true, policy: :random, ssl: nil})
+          end
         end
       end
 

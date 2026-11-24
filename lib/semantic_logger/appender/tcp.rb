@@ -25,14 +25,6 @@ module SemanticLogger
     #     server:   'server:3300',
     #   )
     #
-    # Example, with connection retry options:
-    #   SemanticLogger.add_appender(
-    #     appender:               :tcp,
-    #     server:                 'server:3300',
-    #     connect_retry_interval: 0.1,
-    #     connect_retry_count:    5
-    #   )
-    #
     # Example, with SSL enabled:
     #   SemanticLogger.add_appender(
     #     appender: :tcp,
@@ -49,9 +41,10 @@ module SemanticLogger
       # Net::TCPClient Parameters:
       #   Every keyword argument other than the appender parameters below goes to Net::TCPClient.new,
       #   which raises ArgumentError for a keyword it does not take. See Net::TCPClient#initialize for
-      #   them and their defaults, such as connect_timeout:, write_timeout:, connect_retry_count:,
-      #   retry_count:, policy:, and ssl:
+      #   them and their defaults, such as connect_timeout:, write_timeout:, policy:, and ssl:
       #     https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
+      #   v6 takes only server:, servers:, policy: (:ordered or :random), connect_timeout:, write_timeout:,
+      #   keepalive:, and ssl:, so the others report a deprecation warning (see TcpClientOptions).
       #
       #   :server [String]
       #     The server to connect to, as "host:port", such as 'localhost:2000' or '192.168.1.10:80'.
@@ -101,19 +94,12 @@ module SemanticLogger
       #     appender: :tcp,
       #     server:   'server:3300'
       #   )
-      #
-      # Example, with connection retry options:
-      #   SemanticLogger.add_appender(
-      #     appender:               :tcp,
-      #     server:                 'server:3300',
-      #     connect_retry_interval: 0.1,
-      #     connect_retry_count:    5
-      #   )
       def initialize(separator: "\n",
                      level: nil, formatter: nil, filter: nil, application: nil, environment: nil,
                      host: nil, metrics: false, **tcp_client_args, &)
         @separator       = separator
         @tcp_client_args = tcp_client_args
+        TcpClientOptions.report_deprecated(tcp_client_args, ":tcp")
 
         # Use the internal logger so that errors with remote logging are only written locally.
         Net::TCPClient.logger      = logger

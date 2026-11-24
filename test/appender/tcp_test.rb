@@ -21,6 +21,34 @@ module Appender
 
       let(:amessage) { "AppenderTcpTest log message" }
 
+      describe "options that v6 does not take" do
+        def appender_with(**options)
+          Net::TCPClient.stub_any_instance(:connect, true) do
+            SemanticLogger::Appender::Tcp.new(server: "localhost:8088", **options)
+          end
+        end
+
+        it "warns naming each one, with why" do
+          names  = "The :tcp appender's connect_retry_count:, retry_count:, read_timeout: are deprecated, " \
+                   "and v6 raises ArgumentError for them"
+          reason = "retry_count: the appender writes again after its back-off"
+          assert_deprecated(/#{Regexp.escape(names)}.*#{Regexp.escape(reason)}/) do
+            appender_with(connect_retry_count: 1, retry_count: 1, read_timeout: 2)
+          end
+        end
+
+        it "warns for a policy other than :ordered or :random" do
+          assert_deprecated(/policy: is deprecated.*not :ping_time/) { appender_with(policy: :ping_time) }
+        end
+
+        it "does not warn for the options that v6 keeps, or an option given as nil" do
+          refute_deprecated do
+            appender_with(connect_timeout: 3, write_timeout: 4, keepalive: true, policy: :ordered, ssl: nil,
+                          retry_count: nil)
+          end
+        end
+      end
+
       describe "ssl:" do
         # Returns [SemanticLogger::Appender::Tcp] an appender built with the given ssl: option, which connects to
         # nothing.
