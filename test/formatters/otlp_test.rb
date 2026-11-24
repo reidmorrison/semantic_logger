@@ -77,6 +77,33 @@ module SemanticLogger
           assert_includes warnings.first, '"a.b"'
         end
 
+        it "leaves out a nil value, so that it never takes the name of another" do
+          log.payload = {"a.b" => nil, a: {b: 2}}
+
+          assert_equal({intValue: "2"}, attributes["a.b"])
+        end
+
+        it "keeps the first of two values that have the same name once flattened and prefixed" do
+          log.payload = {thread: {name: "a"}, payload: {thread: {name: "b"}}}
+          warnings    = []
+          internal    = Object.new
+          internal.define_singleton_method(:warn) { |message| warnings << message }
+          appender.stub(:logger, internal) { record }
+
+          assert_equal({stringValue: "a"}, attributes["payload.thread.name"])
+          assert_equal 1, warnings.size
+        end
+
+        it "flattens in a subclass whose initialize does not call super" do
+          subclass = Class.new(Otlp) { def initialize = @trace = nil } # rubocop:disable Lint/MissingSuper
+          log.payload = {"a.b" => 1, a: {b: 2}}
+          internal    = Object.new
+          internal.define_singleton_method(:warn) { |_message| nil }
+          record = appender.stub(:logger, internal) { subclass.new.call(log, appender) }
+
+          assert_equal({intValue: "1"}, attributes(record)["a.b"])
+        end
+
         it "keeps the structure of a payload, as a kvlistValue and an arrayValue, with flatten: false" do
           log.payload = {order: {id: 7, items: [1, "two", nil, true]}, big: 2**70, ratio: 0.5}
           formatter   = Otlp.new(flatten: false)

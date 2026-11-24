@@ -3182,9 +3182,11 @@ such as `9` and `info`, its message as the body, and the attributes of the
 
 For example, `logger.info("Charged", order: {id: 42, address: {zip_code: "10001"}})` has the
 attributes `order.id` and `order.address.zip_code`. A flattened name never replaces one of the
-entry's own attributes, such as `thread.name`: it is then prefixed with `payload.` or `named_tags.`.
-When two keys of the same Hash flatten to one name, such as the key `"a.b"` and `{a: {b: 1}}`, the
-first is kept, and the internal logger warns once for the name.
+entry's own attributes, such as `thread.name`: that value alone is then prefixed with `payload.` or
+`named_tags.`. When two values of the same Hash get one name, such as the key `"a.b"` and
+`{a: {b: 1}}`, the first is kept, and the internal logger warns once for the name. Each value of a
+nested Hash is an attribute of its own, so a large payload makes many attributes, which a collector or
+backend may limit per record.
 
 To send each Hash as a map instead, up to 20 structures deep:
 
