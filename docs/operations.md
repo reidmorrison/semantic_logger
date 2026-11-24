@@ -356,7 +356,7 @@ batch that the destination fails is discarded, and counted as `failed`, rather t
 after a back-off. So is every message queued after that one, ahead of the flush or close, without
 being written: during an outage, each would take as long to fail as the first, such as up to the
 `open_timeout` (2 seconds by default) of an HTTP based appender whose server does not answer, or
-longer for an appender that retries on its own, such as `:tcp` with its `connect_retry_count`. Those
+longer for an appender that retries on its own, such as `:tcp` without `connect_retry_count: 0`. Those
 failures do not count towards `async_max_retries`. Once the flush or close has run, the messages
 queued after it are written as usual. A flush still waits while the first message is tried, and
 while a destination that takes the messages writes every one of them.

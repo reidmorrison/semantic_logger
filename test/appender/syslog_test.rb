@@ -87,9 +87,23 @@ module Appender
         end
 
         it "connects to the server in the url, rather than one given in tcp_client:, which is deprecated" do
-          appender = assert_deprecated(/:syslog appender's server: is deprecated.*server: the url gives the server/) do
+          appender = assert_deprecated(/:syslog appender's server: is deprecated.*server: it is ignored/) do
             appender_with({server: "otherhost:514"})
           end
+
+          assert_equal ["localhost:8514"], appender.remote_syslog.servers
+        end
+
+        it "warns that servers: in tcp_client: is deprecated, since it replaces the server of the url" do
+          appender = assert_deprecated(/servers: it replaces the server of the url, which v6 always connects to/) do
+            appender_with({servers: ["otherhost:514"]})
+          end
+
+          assert_equal ["otherhost:514"], appender.remote_syslog.servers
+        end
+
+        it "takes tcp_client: nil as no options" do
+          appender = refute_deprecated { appender_with(nil) }
 
           assert_equal ["localhost:8514"], appender.remote_syslog.servers
         end

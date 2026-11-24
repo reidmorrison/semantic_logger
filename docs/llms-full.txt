@@ -2683,8 +2683,10 @@ others or retrying.
 
 Net::TCPClient retries only after a network error, such as a refused, reset, or timed-out
 connection: it connects again up to `connect_retry_count:` times (default 10), and writes an entry
-again on a new connection up to `retry_count:` times (default 3). A write timeout, or an SSL error
-such as a certificate that does not verify, fails without a retry. The appender passes these and its
+again on a new connection up to `retry_count:` times (default 3), all on the appender's worker
+thread. A write timeout, or an SSL error such as a certificate that does not verify, fails without
+a retry. To have the appender's back-off retry instead, as v6 does, pass `connect_retry_count: 0`
+and `retry_count: 0`, which v6 also takes. The appender passes these and its
 other connection options, such as `connect_timeout:`, `write_timeout:`, and `ssl:`, to
 `Net::TCPClient.new`, which raises `ArgumentError` for a keyword it does not take; see
 [`Net::TCPClient#initialize`](https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb)
@@ -2692,10 +2694,11 @@ for them all and their defaults.
 
 v6 connects with a connection class of its own instead of Net::TCPClient, and takes only `server:`,
 `servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`, `write_timeout:`, `keepalive:`,
-and `ssl:`. So the others, such as `connect_retry_count:` and `retry_count:`, report a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), as do the same options in the
+and `ssl:`, plus `connect_retry_count: 0`, `retry_count: 0`, and `buffered: false`, which are what
+it does. So the other options and values report a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), as do the same ones in the
 `tcp_client:` Hash of the `:syslog` appender, where `server:` and `servers:` are deprecated too,
-since its `url:` gives the server.
+since v6 connects to the server of its `url:`.
 
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter
@@ -5844,7 +5847,7 @@ batch that the destination fails is discarded, and counted as `failed`, rather t
 after a back-off. So is every message queued after that one, ahead of the flush or close, without
 being written: during an outage, each would take as long to fail as the first, such as up to the
 `open_timeout` (2 seconds by default) of an HTTP based appender whose server does not answer, or
-longer for an appender that retries on its own, such as `:tcp` with its `connect_retry_count`. Those
+longer for an appender that retries on its own, such as `:tcp` without `connect_retry_count: 0`. Those
 failures do not count towards `async_max_retries`. Once the flush or close has run, the messages
 queued after it are written as usual. A flush still waits while the first message is tried, and
 while a destination that takes the messages writes every one of them.
@@ -6570,23 +6573,27 @@ then wait on that thread's own queue, which can stop all logging while the queue
 The `:tcp` appender, and the `:syslog` appender over TCP, hand their connection options to
 `Net::TCPClient` from the `net_tcp_client` gem. v6 connects with a class of its own instead, which
 takes only `server:`, `servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`,
-`write_timeout:`, `keepalive:`, and `ssl:`, and raises `ArgumentError` for any other. So the others
-now report a [deprecation warning](#seeing-deprecation-warnings):
+`write_timeout:`, `keepalive:`, and `ssl:`, plus the values of the options below that are what it
+does, and raises `ArgumentError` for any other. So the others now report a
+[deprecation warning](#seeing-deprecation-warnings):
 
 | Option | Instead |
 |--------|---------|
-| `connect_retry_count:`, `connect_retry_interval:`, `retry_count:` | Remove it: v6 connects once per write, and the appender writes the entry again after its back-off; see `async_max_retries:` in [Operations](operations.html). |
+| `connect_retry_count:`, `retry_count:` | Set it to `0`, which v6 also takes. v6 does not retry by itself: the appender writes the entry again after its back-off, see `async_max_retries:` in [Operations](operations.html). Do not just remove it on v5: Net::TCPClient would then retry up to 10 and 3 times, on the appender's worker thread. |
+| `connect_retry_interval:` | Remove it, or keep it only with `connect_retry_count: 0`. |
+| `buffered:` | Set it to `false`, which v6 also takes, or remove it. |
 | `read_timeout:` | Remove it: the appenders never read. |
-| `buffered:`, `close_on_error:`, `on_connect:`, `proxy_server:` | Remove it. |
-| `policy:` other than `:ordered` or `:random` | Use `:ordered` or `:random`. |
-| `server:` or `servers:` in the `tcp_client:` of `:syslog` | Remove it: the `url:` gives the server, and these were ignored. |
+| `close_on_error:`, `on_connect:`, `proxy_server:` | Remove it. |
+| `policy:` other than `:ordered` or `:random`, such as a Proc | Use `:ordered` or `:random`. |
+| `server:` in the `tcp_client:` of `:syslog` | Remove it: it is ignored, since the `url:` gives the server. |
+| `servers:` in the `tcp_client:` of `:syslog` | Give the server in the `url:`: `servers:` replaced the server of the url, and v6 always connects to the server of the url. |
 
 ~~~ruby
 # Before:
 SemanticLogger.add_appender(appender: :tcp, server: "logs:3300", connect_retry_count: 5, retry_count: 2)
 
-# After:
-SemanticLogger.add_appender(appender: :tcp, server: "logs:3300")
+# After, with the same behaviour in v5.4 and v6:
+SemanticLogger.add_appender(appender: :tcp, server: "logs:3300", connect_retry_count: 0, retry_count: 0)
 ~~~
 
 ### Upgrading to Semantic Logger v5.3

@@ -44,7 +44,9 @@ module SemanticLogger
       #   them and their defaults, such as connect_timeout:, write_timeout:, policy:, and ssl:
       #     https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
       #   v6 takes only server:, servers:, policy: (:ordered or :random), connect_timeout:, write_timeout:,
-      #   keepalive:, and ssl:, so the others report a deprecation warning (see TcpClientOptions).
+      #   keepalive:, and ssl:, plus connect_retry_count: 0, retry_count: 0, buffered: false, and
+      #   connect_retry_interval: with connect_retry_count: 0, so the others report a deprecation warning (see
+      #   TcpClientOptions).
       #
       #   :server [String]
       #     The server to connect to, as "host:port", such as 'localhost:2000' or '192.168.1.10:80'.
@@ -99,7 +101,6 @@ module SemanticLogger
                      host: nil, metrics: false, **tcp_client_args, &)
         @separator       = separator
         @tcp_client_args = tcp_client_args
-        TcpClientOptions.report_deprecated(tcp_client_args, ":tcp")
 
         # Use the internal logger so that errors with remote logging are only written locally.
         Net::TCPClient.logger      = logger
@@ -107,6 +108,7 @@ module SemanticLogger
 
         super(level: level, formatter: formatter, filter: filter, application: application,
               environment: environment, host: host, metrics: metrics, &)
+        TcpClientOptions.report_deprecated(tcp_client_args, ":tcp")
         reopen
       end
 
