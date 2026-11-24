@@ -176,6 +176,7 @@ module SemanticLogger
     #
     #   logger.increment("users.signup")
     #   logger.increment("cart.items_added", 3, dimensions: {department: "clothing"})
+    #   logger.increment("messaging.client.sent.messages", unit: "{message}")
     #
     # Parameters:
     #   name [String|Symbol]
@@ -183,12 +184,15 @@ module SemanticLogger
     #   amount [Integer|Float]
     #     Amount to add, zero or more. A negative amount is dropped.
     #     Default: 1
+    #   unit [String]
+    #     Unit of what it counts, in the notation of OpenTelemetry (UCUM), such as "{message}", or "By"
+    #     for bytes. Part of the identity of the series, as for #record.
     #   dimensions [Hash]
     #     Dimensions of the series to add it to.
     #
     # Returns [true|false] whether it was recorded: false without a metric appender, or when dropped.
-    def increment(name, amount = 1, dimensions: nil)
-      record_metric(:counter, name, amount, unit: nil, dimensions: dimensions)
+    def increment(name, amount = 1, unit: nil, dimensions: nil)
+      record_metric(:counter, name, amount, unit: unit, dimensions: dimensions)
     end
 
     # Records how long the block takes, in seconds, in the histogram `name`, with the unit "s", and

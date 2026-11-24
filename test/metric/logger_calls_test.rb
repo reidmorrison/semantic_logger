@@ -83,6 +83,13 @@ module Metric
             assert_equal({{"department" => "clothing"} => 5.5, {"department" => "shoes"} => 1}, values)
           end
 
+          it "records the unit given, as part of the series" do
+            logger.increment("messaging.client.sent.messages", unit: "{message}")
+            logger.increment("messaging.client.sent.messages", 2, unit: "{message}")
+
+            assert_equal([["{message}", 3]], points.map { |point| [point.unit, point.value] })
+          end
+
           it "records a Symbol name as a String" do
             logger.increment(:"users.signup")
 
