@@ -140,7 +140,8 @@ module SemanticLogger
         missing = cert_path.nil? ? "CLIENT_CERTIFICATE" : "CLIENT_KEY" unless cert_path && key_path
         if missing
           raise(ArgumentError,
-                "#{cert_path ? cert_name : key_name} is set without OTEL_EXPORTER_OTLP_#{signal.variable}_#{missing} or " \
+                "#{cert_path ? cert_name : key_name} is set without " \
+                "OTEL_EXPORTER_OTLP_#{signal.variable}_#{missing} or " \
                 "OTEL_EXPORTER_OTLP_#{missing}: a client certificate needs both")
         end
 

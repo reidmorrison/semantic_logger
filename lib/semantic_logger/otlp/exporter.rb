@@ -10,6 +10,10 @@ module SemanticLogger
     #
     # It knows nothing about the messages of a signal beyond the names that Signal gives it.
     module Exporter
+      # Status codes of the responses, besides those of Appender::Http::ResponseError#retry_later?,
+      # after which OTLP/HTTP has a request sent again (see #wrote_nothing?).
+      RETRYABLE_CODES = [502, 504].freeze
+
       # Base url of an OTLP/HTTP receiver, when neither `url:` nor `endpoint:` is given, nor set in the
       # environment.
       DEFAULT_URL = "http://localhost:4318".freeze
@@ -127,6 +131,15 @@ module SemanticLogger
         add_otel_header(otel.headers, given_header)
         @full_path           = endpoint ? @path : "#{@path.delete_suffix('/')}/#{otlp_signal.path}"
         @resource_attributes = resource(otel.resource_attributes, resource_attributes).freeze
+      end
+
+      # Whether the request that raised the exception stored nothing on the server and is worth sending
+      # again (see Appender::Http#wrote_nothing?), or the server answered 502 or 504, which OTLP/HTTP
+      # retries too (see RETRYABLE_CODES), although a proxy may answer either after the receiver behind
+      # it stored the request, whose data is then stored twice.
+      def wrote_nothing?(exception)
+        super || (exception.is_a?(SemanticLogger::Appender::Http::ResponseError) &&
+                  RETRYABLE_CODES.include?(exception.code))
       end
 
       private

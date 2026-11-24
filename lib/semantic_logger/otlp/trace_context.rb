@@ -13,13 +13,45 @@ module SemanticLogger
       # Keeps the hex trace id, hex span id, and trace flags of the current span on the entry, when the
       # OpenTelemetry API is loaded and its current span is valid. Registered with SemanticLogger.on_log,
       # so that it runs on the thread that logs, from a constant, so that it is registered once.
-      CAPTURE = lambda do |log|
+      # Shareable, so that entries logged in a Ractor other than the main one are linked too (see
+      # Logger.subscribe).
+      CAPTURE = Utils.make_shareable(lambda do |log|
         next unless defined?(::OpenTelemetry::Trace)
 
         context = ::OpenTelemetry::Trace.current_span.context
         next unless context.valid?
 
         log.capture(KEY, [context.hex_trace_id, context.hex_span_id, context.trace_flags.sampled? ? 1 : 0])
+      rescue StandardError
+        # Such as in a Ractor whose OpenTelemetry API cannot be reached: the record is then linked
+        # through the named tags, if any, rather than the log call failing.
+        nil
+      end)
+
+      # The appenders that use CAPTURE, so that it is subscribed while there is any (see .register).
+      @users = 0
+      @mutex = Mutex.new
+
+      # Subscribes CAPTURE with SemanticLogger.on_log, for an appender that links its records to traces,
+      # unless another already did. Each appender that registers must unregister once closed.
+      def self.register
+        @mutex.synchronize do
+          # Subscribed each time, which subscribes it once, so that an appender added after the subscribers
+          # were cleared, such as by Logger.clear_subscribers, subscribes it again.
+          SemanticLogger.on_log(CAPTURE)
+          @users += 1
+        end
+      end
+
+      # Unsubscribes CAPTURE once no appender that registered uses it, so that no log call captures a
+      # trace context that no appender reads.
+      def self.unregister
+        @mutex.synchronize do
+          next if @users.zero?
+
+          @users -= 1
+          SemanticLogger::Logger.unsubscribe(CAPTURE) if @users.zero?
+        end
       end
 
       # The named tags that hold the ids, when the application sets them.

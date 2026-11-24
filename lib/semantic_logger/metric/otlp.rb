@@ -37,10 +37,6 @@ module SemanticLogger
 
       autoload :Encoder, "semantic_logger/metric/otlp/encoder"
 
-      # Status codes of the responses, besides those of Appender::Http::ResponseError#retry_later?, after
-      # which OTLP/HTTP has a request sent again (see #metrics_retryable?).
-      RETRYABLE_CODES = [502, 504].freeze
-
       # Create an OTLP/HTTP metric appender.
       #
       # Parameters:
@@ -71,15 +67,10 @@ module SemanticLogger
       end
 
       # Whether the snapshot that raised the exception is sent again with the next one (see
-      # Metric::Snapshots#metrics_retryable?): the server asked to send it again later, or it was
-      # never sent (see Appender::Http#wrote_nothing?), so that the server stored none of it; or the
-      # server answered 502 or 504, which OTLP/HTTP retries too (see RETRYABLE_CODES), although a
-      # proxy may answer either after the receiver behind it stored the snapshot, which is then
-      # counted twice.
+      # Metric::Snapshots#metrics_retryable?), as any OTLP request is (see
+      # SemanticLogger::Otlp::Exporter#wrote_nothing?).
       def metrics_retryable?(exception)
-        return true if wrote_nothing?(exception)
-
-        exception.is_a?(ResponseError) && RETRYABLE_CODES.include?(exception.code)
+        wrote_nothing?(exception)
       end
     end
   end

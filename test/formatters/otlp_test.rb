@@ -110,6 +110,13 @@ module SemanticLogger
           refute attributes.key?("process.pid")
         end
 
+        it "sends a payload key named as the logger name or process id attribute as it is" do
+          log.payload = {"process.pid" => 5, "semantic_logger.name" => "mine"}
+
+          assert_equal({intValue: "5"}, attributes["process.pid"])
+          assert_equal({stringValue: "mine"}, attributes["semantic_logger.name"])
+        end
+
         it "writes an exception" do
           log.exception = RuntimeError.new("boom")
 

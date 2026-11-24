@@ -58,13 +58,21 @@ module SemanticLogger
           add_logged(attributes, PAYLOAD_PREFIX, log.payload.is_a?(Hash) ? log.payload : {payload: log.payload})
         end
         add_entry(attributes)
-        attributes.delete(NAME)
-        attributes.delete(PROCESS_PID)
         add_exception(attributes)
         attributes
       end
 
       private
+
+      # The attributes of the entry that it writes: not the logger's name, which is the scope of the
+      # record, nor the pid, which the resource of each request holds, so that a payload or named tag key
+      # of either name is sent as it is.
+      OTLP_ENTRY_ATTRIBUTES = ENTRY_ATTRIBUTES.except(NAME, PROCESS_PID).freeze
+      private_constant :OTLP_ENTRY_ATTRIBUTES
+
+      def entry_attribute?(name)
+        OTLP_ENTRY_ATTRIBUTES.key?(name)
+      end
 
       def add_trace(record, trace)
         record[:traceId] = trace.trace_id

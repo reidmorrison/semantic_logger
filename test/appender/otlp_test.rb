@@ -23,15 +23,18 @@ module Appender
 
       after do
         @saved_env.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
-        SemanticLogger::Logger.subscribers&.delete(SemanticLogger::Otlp::TraceContext::CAPTURE)
+        # Close the appenders that the test made, so that each unregisters the trace capture.
+        @made&.each(&:close)
       end
 
       def new_appender(**args, &)
-        stub_http_start do
+        appender = stub_http_start do
           SemanticLogger::Appender::Otlp.stub_any_instance(:logger, capture_logger) do
             SemanticLogger::Appender::Otlp.new(**args, &)
           end
         end
+        (@made ||= []) << appender
+        appender
       end
 
       def warnings
@@ -83,10 +86,33 @@ module Appender
         end
       end
 
-      it "registers the capture of the current span" do
-        appender
+      it "captures the current span while any :otlp appender is open" do
+        capture = SemanticLogger::Otlp::TraceContext::CAPTURE
+        first   = new_appender
+        second  = new_appender
 
-        assert_includes SemanticLogger::Logger.subscribers, SemanticLogger::Otlp::TraceContext::CAPTURE
+        assert_equal 1, SemanticLogger::Logger.subscribers.count(capture)
+        first.close
+        first.close
+
+        assert_includes SemanticLogger::Logger.subscribers, capture
+        second.close
+
+        refute_includes SemanticLogger::Logger.subscribers, capture
+        stub_http_start { post([entry("A", :info, "again")], on: second) }
+
+        assert_includes SemanticLogger::Logger.subscribers, capture
+        SemanticLogger::Logger.clear_subscribers
+        third = new_appender
+
+        assert_includes SemanticLogger::Logger.subscribers, capture
+        third.close
+      end
+
+      it "makes the capture of the current span shareable, for entries logged in other Ractors" do
+        skip "Ractors are not supported" unless defined?(Ractor.shareable?)
+
+        assert Ractor.shareable?(SemanticLogger::Otlp::TraceContext::CAPTURE)
       end
 
       describe "request" do
@@ -187,6 +213,13 @@ module Appender
                                              response: success(body, content_type: "application/x-protobuf"))
 
           assert_includes warnings.first, "rejected 3 log record(s)"
+        end
+
+        it "sends a batch again after a 502 or 504, as OTLP/HTTP asks" do
+          [502, 504].each do |code|
+            assert appender.wrote_nothing?(SemanticLogger::Appender::Http::ResponseError.new("x", code: code))
+          end
+          refute appender.wrote_nothing?(SemanticLogger::Appender::Http::ResponseError.new("x", code: 500))
         end
 
         it "takes a record that the binary encoding cannot write as a message error" do

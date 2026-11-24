@@ -3209,8 +3209,11 @@ an ordinary attribute instead.
 It reads the same [environment variables](metrics.html#opentelemetry-otlp) as `metric: :otlp`, each in
 its `_LOGS_` form, such as `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, which replaces the generic form as a
 whole, other than `OTEL_METRIC_EXPORT_INTERVAL`. A partial success, where the receiver stored only some
-of the records, is reported on the internal logger; the rest are not sent again. Any other response
-is handled as by the [HTTP appender](#when-the-server-does-not-accept-a-request).
+of the records, is reported on the internal logger; the rest are not sent again. A `502 Bad Gateway`
+or `504 Gateway Timeout` is sent again after the back-off, as OTLP/HTTP asks and as `metric: :otlp`
+does, unlike the other HTTP appenders: a proxy may answer either after the receiver stored the
+records, which are then stored twice. Any other response is handled as by the
+[HTTP appender](#when-the-server-does-not-accept-a-request).
 
 ### OpenTelemetry
 

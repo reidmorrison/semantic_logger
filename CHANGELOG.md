@@ -90,8 +90,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   of the sender), and attribute values keep their structure, a Hash as a map and an Array as an
   array. A record is linked to the span current when it was logged, when the `opentelemetry-api` gem
   is loaded, or else to the `trace_id` and `span_id` named tags. It takes the options of
-  `metric: :otlp` and reads the same variables in their `OTEL_EXPORTER_OTLP_LOGS_*` form. Its
-  formatter is `SemanticLogger::Formatters::Otlp`, or a subclass of it.
+  `metric: :otlp` and reads the same variables in their `OTEL_EXPORTER_OTLP_LOGS_*` form, and sends a
+  batch again after a 502 or 504, as OTLP/HTTP asks. Its formatter is
+  `SemanticLogger::Formatters::Otlp`, or a subclass of it.
 - `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
   appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension
   whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the
