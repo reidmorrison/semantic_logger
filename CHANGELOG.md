@@ -89,6 +89,26 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   out of its interval, with a warning on the internal logger once per name; a sum of squares beyond it
   is recorded as the largest Float. Semantic Logger's own metrics are recorded
   only with `internal_metrics: true`.
+- `metric: :signalfx` is a metric appender: it no longer takes log entries, and once per `interval:`
+  (default 60 seconds) posts the metrics of that interval to `v2/datapoint` in one request, with the
+  end of the interval as the timestamp. Each counter series is sent as a `counter` datapoint of what
+  was added in the interval. Each histogram series is sent as the counters `<name>.count` and
+  `<name>.sum`, and the gauges `<name>` (the mean), `<name>.min`, `<name>.max`, `<name>.p50`,
+  `<name>.p95`, and `<name>.p99`; durations in milliseconds, as before. A name with a `/` and no
+  dimensions is still sent as `Application.counter` and `Application.average` (with
+  `Application.sum`, `Application.min`, and so on), with the `class` and `action` dimensions taken from
+  the name; any other name is sent as it is, with `/` as `.`, so a dotted name such as `users.signup`
+  is no longer sent with the class `Unknown`. `internal_metrics: true` adds Semantic Logger's own
+  metrics. The `dimensions:` option, which listed the named tags to send, raises `ArgumentError`, since
+  named tags are never part of a metric's series, and `SemanticLogger::Formatters::Signalfx` is removed.
+  `level:`, `filter:`, `formatter:`, a formatter block, and `batch: true` raise `ArgumentError` too. A
+  leading, trailing, or repeated `/` in a name is left out, and a series whose name is then empty is not
+  sent, with a warning. A counter named as one of the names a histogram is sent as, such as
+  `latency.count` for the histogram `latency`, is added to that counter; a gauge with the name and
+  dimensions of a datapoint already sent in the request, such as the gauge `latency.max` and a counter
+  `latency.max`, is left out, with a warning. A value beyond the range of a Float is left out, with a
+  warning. Each warning is made once per metric name. A snapshot that the server asks to send again later (408, 429, 503), or that could not
+  reach it, is sent with the next one.
 
 ## [Unreleased]
 
