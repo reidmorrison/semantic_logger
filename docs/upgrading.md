@@ -182,6 +182,21 @@ and it is never given the metrics of `increment`, `time`, and `record`. To recei
 include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapshot)` instead. See
 [Write a custom metric appender](metrics.html#write-a-custom-metric-appender).
 
+#### Send log entries to OpenTelemetry with `appender: :otlp`
+
+`appender: :otlp` sends log entries to an OpenTelemetry collector, or any other OTLP/HTTP receiver,
+without any OpenTelemetry gems, and is the documented way to send them to OpenTelemetry (see
+[OpenTelemetry over OTLP/HTTP](appenders.html#otlp)). Replace `appender: :open_telemetry`, which
+needs the OpenTelemetry logs SDK and its exporter, with it:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :otlp)
+~~~
+
+It reads the standard `OTEL_EXPORTER_OTLP_*` variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT`, so
+`OpenTelemetry::SDK.configure` is no longer needed for logging. A Hash in the payload is flattened
+into dotted attribute names, such as `order.address.zip_code`, rather than sent as JSON text.
+
 #### `metric: :otlp` sends http/protobuf by default
 
 In `6.0.0.beta1`, `metric: :otlp` sent OTLP/JSON. It now sends OTLP's binary Protobuf encoding by

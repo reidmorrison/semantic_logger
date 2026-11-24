@@ -821,7 +821,7 @@ What each formatter writes for a metric on an entry with a message:
 | `:json`, `:raw`, `:fluentd`, `:syslog_cee`, `:new_relic_logs` | `metric`, `metric_amount`, and `dimensions` |
 | `:ecs` | `metric`, `metric_amount`, and `dimensions`, under its namespace, `semantic_logger` by default, or in `labels` when it has none |
 | `:loki` | `metric`, `metric_value`, and `dimensions` (as JSON), in the structured metadata |
-| `:open_telemetry` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes, and a `semantic_logger.dimensions.<key>` attribute for each dimension |
+| `:otlp` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes, and a `semantic_logger.dimensions.<key>` attribute for each dimension |
 | `:default`, `:color`, `:one_line`, `:pattern`, `:syslog`, `:logfmt` | None; only the duration is shown |
 
 An appender writes what its formatter writes. For example `:elasticsearch`, `:opensearch`,
