@@ -276,6 +276,12 @@ messages = semantic_logger_events(klass: ApiClient) { ApiClient.new.call }
 
 The RSpec helper `capture_semantic_logger_events(ApiClient)` is unchanged.
 
+#### `metric: :splunk_observability`
+
+SignalFx is now Splunk Observability Cloud, so its metric appender can also be added as
+`metric: :splunk_observability`. `metric: :signalfx` adds the same appender, and keeps working. See
+[Splunk Observability Cloud (SignalFx)](metrics.html#signalfx).
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

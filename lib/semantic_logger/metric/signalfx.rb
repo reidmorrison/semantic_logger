@@ -1,10 +1,12 @@
-# Forward application metrics to SignalFx (Splunk Observability Cloud).
+# Forward application metrics to Splunk Observability Cloud, formerly SignalFx.
 #
 # Example:
 #   SemanticLogger.add_appender(
-#     metric: :signalfx,
+#     metric: :splunk_observability,
 #     token:  'SIGNALFX_ORG_ACCESS_TOKEN'
 #   )
+#
+# `metric: :signalfx` adds the same appender.
 module SemanticLogger
   module Metric
     # A metric appender (see Metric::Snapshots): once per interval it posts the snapshot of the metrics

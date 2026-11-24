@@ -885,6 +885,7 @@ module SemanticLogger
     autoload :Signalfx,             "semantic_logger/metric/signalfx"
     autoload :Snapshot,             "semantic_logger/metric/snapshot"
     autoload :Snapshots,            "semantic_logger/metric/snapshots"
+    autoload :SplunkObservability,  "semantic_logger/metric/splunk_observability"
     autoload :Statsd,               "semantic_logger/metric/statsd"
     autoload :Summary,              "semantic_logger/metric/summary"
   end

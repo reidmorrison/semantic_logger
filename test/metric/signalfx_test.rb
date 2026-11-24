@@ -531,6 +531,14 @@ module Metric
           requests.first
         end
 
+        it "is added as metric: :splunk_observability, its current name, or :signalfx" do
+          %i[splunk_observability signalfx].each do |name|
+            appender = stub_http_start { SemanticLogger::Appender.factory(metric: name, token: "TEST", async: false) }
+
+            assert_instance_of SemanticLogger::Metric::Signalfx, appender
+          end
+        end
+
         it "posts to the datapoint endpoint, with the token" do
           appender = build_appender(url: "https://ingest.signalfx.com")
           request  = capture_request(appender)
