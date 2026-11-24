@@ -7318,6 +7318,9 @@ verifying the server's certificate) and was deprecated in v5.2, has been removed
 Collector with `appender: :splunk_http` instead, as shown in
 [Replace the `:splunk` appender with `:splunk_http`](#replace-the-splunk-appender-with-splunk_http).
 
+Adding any of these three appenders raises `ArgumentError`, saying that it was removed and naming its
+replacement.
+
 #### The Elasticsearch and OpenSearch `type:` option has been removed
 
 The `type:` option of the `:elasticsearch`, `:elasticsearch_http`, and `:opensearch` appenders, ignored
