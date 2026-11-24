@@ -152,6 +152,14 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - The `:loki` appender and formatter write `pid` and `thread` as structured metadata by default, as
   v5.3 warned, rather than as stream labels. That needs a Loki that accepts structured metadata; for
   any other, keep them as labels with `formatter: {loki: {structured_metadata: []}}`.
+- The `:tcp` appender, and the `:syslog` appender over TCP, connect with
+  `SemanticLogger::Appender::TcpConnection` instead of `net_tcp_client`. They take `server:`,
+  `servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`, `write_timeout:`, `keepalive:`,
+  and `ssl:`, plus `connect_retry_count: 0`, `retry_count: 0`, and `buffered: false`, and raise
+  `ArgumentError` for any other option, as v5.4 warned. They connect to each server once, and write an
+  entry that could not connect again after the appender's back-off, without counting it as failed; a
+  write that fails before any of it was sent is written once more at once, on a new connection. A
+  host name is connected to over IPv4 or IPv6.
 
 ### Removed
 

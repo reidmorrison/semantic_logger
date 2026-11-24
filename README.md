@@ -98,7 +98,6 @@ and are therefore not automatically included by this gem:
 - New Relic Logs Appender: gem 'newrelic_rpm'
 - Syslog Appender to a local syslog daemon: gem 'syslog' (a bundled gem since Ruby 3.4)
 - Syslog Appender to a remote syslog server over TCP or UDP: gem 'syslog_protocol' 0.9.2 or above
-- Syslog Appender to a remote syslog server over TCP: gem 'net_tcp_client'
 - Elasticsearch Appender: gem 'elasticsearch'
 - OpenSearch Appender: gem 'opensearch-ruby'
 - Kafka Appender: gem 'ruby-kafka'

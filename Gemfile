@@ -37,8 +37,6 @@ gem "mongo"
 # gem 'newrelic_rpm'
 # [optional] Open Telemetry appender
 gem "opentelemetry-logs-sdk"
-# [optional] Net::TCP appender
-gem "net_tcp_client"
 # [optional] Statsd metrics
 gem "statsd-ruby"
 # [optional] Sentry appender
