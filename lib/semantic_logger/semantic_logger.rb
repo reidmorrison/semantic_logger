@@ -890,6 +890,12 @@ module SemanticLogger
     autoload :Summary,              "semantic_logger/metric/summary"
   end
 
+  module Otlp
+    autoload :Protobuf,             "semantic_logger/otlp/protobuf"
+    autoload :Protocol,             "semantic_logger/otlp/protocol"
+    autoload :Schema,               "semantic_logger/otlp/schema"
+  end
+
   module Reporters
     autoload :Minitest,          "semantic_logger/reporters/minitest"
   end

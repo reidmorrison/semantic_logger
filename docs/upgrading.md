@@ -173,6 +173,13 @@ and it is never given the metrics of `increment`, `time`, and `record`. To recei
 include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapshot)` instead. See
 [Write a custom metric appender](metrics.html#write-a-custom-metric-appender).
 
+#### `metric: :otlp` sends http/protobuf by default
+
+In `6.0.0.beta1`, `metric: :otlp` sent OTLP/JSON. It now sends OTLP's binary Protobuf encoding by
+default, as the OpenTelemetry specification asks, without the `google-protobuf` gem. Every OTLP/HTTP
+receiver accepts it. To keep sending OTLP/JSON, add `protocol: "http/json"`, or set
+`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/json`.
+
 #### The `:sentry` appender has been removed
 
 `appender: :sentry`, which depended on the end-of-life `sentry-raven` gem and was deprecated in

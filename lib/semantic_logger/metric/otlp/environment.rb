@@ -92,6 +92,17 @@ module SemanticLogger
           @compress  = text && parse_compression(name, text)
         end
 
+        # Returns [String|nil] the name of the OTLP/HTTP protocol to send with, such as "http/protobuf",
+        # nil when not set. "grpc", which the appender cannot send, is reported, and taken as
+        # "http/protobuf", the encoding of gRPC; any other value that SemanticLogger::Otlp::Protocol does
+        # not know is ignored and reported.
+        def protocol
+          return @protocol if defined?(@protocol)
+
+          name, text = signal_value("PROTOCOL")
+          @protocol  = text && parse_protocol(name, text.strip)
+        end
+
         # The certificate variables below each name a file, which is read only when asked for, so that a
         # variable whose option the appender was given, and so does not ask for, is never read. Each
         # raises ArgumentError, naming the variable and its file, for a file that cannot be read, or
@@ -184,6 +195,21 @@ module SemanticLogger
 
           milliseconds = Integer(text, 10)
           milliseconds.zero? ? nil : milliseconds / MILLISECONDS
+        end
+
+        def parse_protocol(name, text)
+          return text if SemanticLogger::Otlp::Protocol.known?(text)
+
+          if text == "grpc"
+            logger.warn(
+              "#{name}=grpc: the :otlp appender sends OTLP/HTTP only, so it sends http/protobuf, " \
+              "which needs the url of an OTLP/HTTP receiver, such as port 4318 rather than 4317 of gRPC"
+            )
+            return SemanticLogger::Otlp::Protocol::DEFAULT
+          end
+
+          logger.warn("Ignoring #{name}=#{text.inspect}: the protocol is neither http/protobuf nor http/json")
+          nil
         end
 
         def parse_export_interval(text)

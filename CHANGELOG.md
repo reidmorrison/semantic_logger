@@ -77,6 +77,12 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   that cannot be read or parsed, one client variable without the other, or a key that is public or
   not the certificate's, raises `ArgumentError` naming the variables.
   It reads `OTEL_METRIC_EXPORT_INTERVAL` (milliseconds) as the default of `interval:`.
+- `metric: :otlp` sends OTLP's binary Protobuf encoding (`http/protobuf`) by default, as the
+  OpenTelemetry specification asks, rather than the OTLP/JSON of `6.0.0.beta1`, written by Semantic
+  Logger itself, without the `google-protobuf` gem. `protocol: "http/json"`, or
+  `OTEL_EXPORTER_OTLP_[METRICS_]PROTOCOL=http/json`, sends OTLP/JSON. The environment's `grpc` sends
+  `http/protobuf`, with a warning, since the appender speaks OTLP/HTTP only. A partial success is read
+  from a response in either encoding.
 - `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
   appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension
   whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the

@@ -2,8 +2,10 @@ module SemanticLogger
   module Metric
     class Otlp < SemanticLogger::Appender::Http
       # Encodes a Metric::Snapshot as the body of an OTLP/HTTP metrics request: an
-      # ExportMetricsServiceRequest in the JSON encoding of OTLP (see
-      # https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding).
+      # ExportMetricsServiceRequest, built as the Hash of its JSON encoding (see
+      # https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding), which
+      # SemanticLogger::Otlp::Protocol writes as JSON, or in the binary Protobuf encoding, from the
+      # same Hash (see SemanticLogger::Otlp::Protobuf).
       #
       # It knows that mapping and nothing about where the request is sent: the appender gives it the
       # attributes of the resource.

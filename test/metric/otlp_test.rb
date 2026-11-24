@@ -12,6 +12,7 @@ module Metric
       OTEL_EXPORTER_OTLP_CERTIFICATE OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE
       OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE
       OTEL_EXPORTER_OTLP_CLIENT_KEY OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY
+      OTEL_EXPORTER_OTLP_PROTOCOL OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
     ].freeze
 
     describe SemanticLogger::Metric::Otlp do
@@ -30,7 +31,10 @@ module Metric
         @saved_env.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
       end
 
+      # Sends http/json unless the protocol is given, so that the tests read the body as JSON;
+      # `protocol: nil` takes it from the environment, or else the default, http/protobuf.
       def new_appender(**args)
+        args = {protocol: "http/json"}.merge(args)
         stub_http_start { SemanticLogger::Metric::Otlp.new(**args) }
       end
 
@@ -191,6 +195,91 @@ module Metric
           appender.http.stub(:request, success) do
             assert appender.write_metrics(snapshot)
           end
+        end
+      end
+
+      describe "protocol" do
+        before do
+          aggregator.record(:counter, "users.signup", 1)
+          aggregator.record(:histogram, "latency", 0.25, unit: "s", dimensions: {plan: "free"})
+        end
+
+        # Returns [String] the binary encoding of the request that the JSON appender sends for the
+        # snapshot, from the Hash that its body parses to.
+        def protobuf_of_json_body(snapshot)
+          json = JSON.parse(requests(snapshot).first.body, symbolize_names: true)
+          SemanticLogger::Otlp::Protobuf.encode(json, :ExportMetricsServiceRequest)
+        end
+
+        def warnings
+          capture_logger.events.select { |event| event.level == :warn }.map(&:message)
+        end
+
+        it "posts http/protobuf by default" do
+          protobuf = new_appender(protocol: nil)
+          snapshot = self.snapshot
+          request  = requests(snapshot, on: protobuf).first
+
+          assert_equal "http/protobuf", protobuf.protocol.name
+          assert_equal "application/x-protobuf", request["Content-Type"]
+          assert_equal "application/x-protobuf", request["Accept"]
+          assert_equal Encoding::BINARY, request.body.encoding
+          assert_equal protobuf_of_json_body(snapshot), request.body
+        end
+
+        it "posts http/json when asked" do
+          request = requests(on: new_appender(protocol: :"http/json")).first
+
+          assert_equal "application/json", request["Content-Type"]
+          assert_equal "application/json", request["Accept"]
+        end
+
+        it "lets a Content-Type given win" do
+          request = requests(on: new_appender(protocol: nil, header: {"content-type" => "application/custom"})).first
+
+          assert_equal "application/custom", request["Content-Type"]
+        end
+
+        it "refuses a protocol it does not know" do
+          error = assert_raises(ArgumentError) { new_appender(protocol: "grpc") }
+
+          assert_match(%r{protocol: must be one of "http/protobuf", "http/json", not: "grpc"}, error.message)
+        end
+
+        it "reads a protobuf partial success" do
+          body = SemanticLogger::Otlp::Protobuf.encode(
+            {partialSuccess: {rejectedDataPoints: "2", errorMessage: "bad unit"}}, :ExportMetricsServiceResponse
+          )
+          response = success(body)
+          response["Content-Type"] = "application/x-protobuf"
+
+          assert write(response: response, on: new_appender(protocol: nil))
+          assert_equal 1, warnings.size
+          assert_includes warnings.first, "rejected 2 metric data point(s): \"bad unit\""
+        end
+
+        it "reads a JSON partial success, whatever the protocol, when its content type is JSON" do
+          response = success({partialSuccess: {rejectedDataPoints: "3"}}.to_json)
+          response["Content-Type"] = "application/json; charset=utf-8"
+
+          assert write(response: response, on: new_appender(protocol: nil))
+          assert_includes warnings.first, "rejected 3 metric data point(s)"
+        end
+
+        it "reads a response without a content type in the encoding of its protocol" do
+          body = SemanticLogger::Otlp::Protobuf.encode({partialSuccess: {rejectedDataPoints: 4}},
+                                                       :ExportMetricsServiceResponse)
+
+          assert write(response: success(body), on: new_appender(protocol: nil))
+          assert_includes warnings.first, "rejected 4 metric data point(s)"
+        end
+
+        it "reports nothing for a protobuf body that cannot be read" do
+          response = success("\x0a\x07\x08".b)
+          response["Content-Type"] = "application/x-protobuf"
+
+          assert write(response: response, on: new_appender(protocol: nil))
+          assert_empty warnings
         end
       end
 
@@ -1016,6 +1105,46 @@ module Metric
           end
         end
 
+        describe "protocol" do
+          it "takes OTEL_EXPORTER_OTLP_PROTOCOL" do
+            ENV["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/json"
+
+            assert_equal "http/json", new_appender(protocol: nil).protocol.name
+          end
+
+          it "takes OTEL_EXPORTER_OTLP_METRICS_PROTOCOL instead of OTEL_EXPORTER_OTLP_PROTOCOL" do
+            ENV["OTEL_EXPORTER_OTLP_PROTOCOL"]         = "http/json"
+            ENV["OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"] = " http/protobuf "
+
+            assert_equal "http/protobuf", new_appender(protocol: nil).protocol.name
+          end
+
+          it "lets protocol: given win" do
+            ENV["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/json"
+
+            assert_equal "http/protobuf", new_appender(protocol: "http/protobuf").protocol.name
+          end
+
+          it "sends http/protobuf for grpc, and warns" do
+            ENV["OTEL_EXPORTER_OTLP_PROTOCOL"] = "grpc"
+            appender = new_logged_appender(protocol: nil)
+
+            assert_equal "http/protobuf", appender.protocol.name
+            assert_equal 1, warnings.size
+            assert_match(%r{OTEL_EXPORTER_OTLP_PROTOCOL=grpc: the :otlp appender sends OTLP/HTTP only}, warnings.first)
+          end
+
+          it "ignores a protocol it does not know, and warns" do
+            ENV["OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"] = "http/xml"
+            ENV["OTEL_EXPORTER_OTLP_PROTOCOL"]         = "http/json"
+            appender = new_logged_appender(protocol: nil)
+
+            assert_equal "http/protobuf", appender.protocol.name
+            assert_equal ['Ignoring OTEL_EXPORTER_OTLP_METRICS_PROTOCOL="http/xml": the protocol is neither ' \
+                          "http/protobuf nor http/json"], warnings
+          end
+        end
+
         describe "export interval" do
           it "sets interval: from OTEL_METRIC_EXPORT_INTERVAL, in milliseconds" do
             ENV["OTEL_METRIC_EXPORT_INTERVAL"] = "15000"
@@ -1277,7 +1406,7 @@ module Metric
               ENV[name] = "secret\xFF=1".b
               # The certificate variables are read for an https url only.
               url       = name.match?(/CERTIFICATE|CLIENT_KEY/) ? "https://localhost:4318" : nil
-              appender  = new_logged_appender(url: url)
+              appender  = new_logged_appender(url: url, protocol: nil)
 
               assert_equal ["Ignoring #{name}: its value is not valid UTF-8"], warnings
               assert_equal url || "http://localhost:4318", appender.url
