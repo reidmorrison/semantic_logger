@@ -30,9 +30,6 @@ class FormattersTest < Minitest::Test
     end
 
     describe "a message tagged UTF-8 with invalid bytes, as Rack decodes ?q=%1B%FF" do
-      # :loki is built without structured_metadata:, which keeps pid and thread as labels.
-      allow_deprecation(/The :loki formatter writes pid and thread as stream labels by default/)
-
       let(:appender) { SemanticLogger::Appender::IO.new($stdout) }
 
       %i[json raw fluentd ecs logfmt loki syslog_cee one_line].each do |name|
