@@ -503,11 +503,32 @@ module SemanticLogger
     # class name of the exception that its block raised, so that the failed calls are a series of their
     # own, unless the dimensions already have one. As they are when its block did not raise, such as for
     # an exception given as `exception:`. The log entry keeps its own dimensions.
+    #
+    # An exception class without a constant name, such as an anonymous one, or one with a temporary
+    # name, is named after its nearest superclass that has one, so that a class made for each call does
+    # not add a series each time.
     def measure_dimensions(dimensions, raised)
       return dimensions unless raised
       return dimensions if dimensions && (dimensions.key?(ERROR_TYPE) || dimensions.key?(ERROR_TYPE.to_sym))
 
-      (dimensions || {}).merge(ERROR_TYPE => Utils.exception_name(raised))
+      (dimensions || {}).merge(ERROR_TYPE => error_type(raised.class))
+    end
+
+    # A constant path, such as "Net::ReadTimeout", which a temporary name (Module#set_temporary_name)
+    # never is.
+    CONSTANT_PATH = /\A\p{Lu}[\p{Word}]*(?:::\p{Lu}[\p{Word}]*)*\z/
+    private_constant :CONSTANT_PATH
+
+    # Returns [String] the constant name of the exception class, or of its nearest superclass that has
+    # one. Reads it with Module#name itself, never a `name` that the class defines, which could raise.
+    def error_type(klass)
+      while klass
+        name = Module.instance_method(:name).bind_call(klass)
+        return name if name&.match?(CONSTANT_PATH)
+
+        klass = klass.superclass
+      end
+      "Exception"
     end
 
     # Records the metric of a log call, whose kind, value, and unit the Log knows (see

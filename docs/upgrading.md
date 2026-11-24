@@ -169,7 +169,8 @@ negative amount given to `logger.increment`. Count what goes down as a metric of
 
 When the block of a `measure_*` call that has a `metric:` raises, its metric gets the dimension
 `"error.type"`, the class name of the exception, as the OpenTelemetry semantic conventions name it,
-unless its `dimensions:` already have one. Failed calls are then a series of their own: the totals
+unless its `dimensions:` already have one (an anonymous exception class is named after its nearest
+named superclass). Failed calls are then a series of their own: the totals
 across series are unchanged, but a chart or alert that selects the series by all of its dimensions
 no longer counts the failures. The log entry keeps its own dimensions.
 
