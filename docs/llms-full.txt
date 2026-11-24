@@ -7355,6 +7355,20 @@ A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with
 `rails_semantic_logger` 5.x sends it as the `metric_amount` of a log entry, which v6 records as a
 counter of milliseconds, adding up the latencies of the interval.
 
+`rails_semantic_logger` 5.x adds `formatter: :color` to the appenders declared with `add_server` and
+`add_console`, which v6 refuses with an appender instance (see
+[Options given with an appender instance raise `ArgumentError`](#options-given-with-an-appender-instance-raise-argumenterror))
+and with a metric appender (see
+[Options that now raise `ArgumentError`](#options-that-now-raise-argumenterror)). Until its v6
+release, give such an appender `formatter: nil`, which sets nothing, so that it is not refused:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add_server(appender: MyAppender.new, formatter: nil)
+  appenders.add_server(metric: :statsd, formatter: nil)
+end
+~~~
+
 ### Upgrading to Semantic Logger v5.3
 
 #### OpenTelemetry log records
