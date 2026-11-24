@@ -3,6 +3,7 @@ require "semantic_logger/queue_processor/throttled_counter"
 require "semantic_logger/queue_processor/reporter"
 require "semantic_logger/queue_processor/backoff"
 require "semantic_logger/queue_processor/inbox"
+require "semantic_logger/queue_processor/aside"
 require "semantic_logger/queue_processor/held_write"
 require "semantic_logger/queue_processor/batch_failure"
 require "semantic_logger/queue_processor/reopener"
@@ -121,6 +122,11 @@ module SemanticLogger
       @inbox                          = Inbox.new(max_queue_size)
       @held                           = HeldWrite.new
 
+      # Writes the log messages logged aside as the appender is flushed, until the stack overflows.
+      @aside = Aside.new(@inbox, method(:message_dropped), -> { !@stack_overflow }, method(:write_message)) do
+        !stopped?
+      end
+
       return unless batch? && !appender.respond_to?(:batch)
 
       raise(ArgumentError, "#{appender.class.name} does not support batching. It must implement #batch")
@@ -206,8 +212,24 @@ module SemanticLogger
       enqueued
     end
 
+    # Add the log messages, in order, to the queue, as #log does, without making the calling thread
+    # wait for room on a full queue: once it is full, one new thread adds the rest, in order, waiting
+    # for room (see Inbox#push_aside). So it can be called on a thread that the worker thread may be
+    # waiting for, or on the worker thread itself, such as by an appender that logs as it writes, or
+    # as it is flushed. A message that cannot be added, since the worker thread has stopped for good,
+    # is dropped and counted.
+    #
+    # While the worker thread flushes the appender (see #flush), they are set aside instead, for it to
+    # write and flush before the flush returns, so that a flush, such as the flush at exit, also writes
+    # the messages that an appender logs as it is flushed, such as the summary of the last partial
+    # interval of Metric::Summary (see Aside). Returns true. Takes no lock.
+    def log_aside(logs) = @aside.log(logs)
+
     # Flush all queued log entries to the appender.
     #  All queued log messages are written and then the appender is flushed.
+    #
+    # The log messages logged aside while the appender is flushed (see #log_aside) are written, and
+    # the appender flushed again, before it returns (see Aside#flush).
     #
     # A flush or close does not wait out back-offs after the destination failed, nor each message
     # ahead of it failing in turn: submitting it ends the back-off under way, and until it has run, a
@@ -305,7 +327,8 @@ module SemanticLogger
       # Workaround CRuby crash on fork by recreating queue on reopen
       #   https://github.com/reidmorrison/semantic_logger/issues/103
       @inbox.recreate
-      # The parent process writes the messages it held to write again.
+      # The parent process writes the messages it held to write again, and those it set aside (see
+      # Aside#log).
       @held.release
       @thread&.kill if @thread&.alive?
       # A worker thread new to this process, which has not failed to write yet.
@@ -545,9 +568,7 @@ module SemanticLogger
     def run_command(request)
       return true if @stack_overflow
 
-      request.run(appender) do |command|
-        safe_log(:warn, "Async: Appender thread: Ignoring unknown command: #{command}")
-      end
+      request.run(appender, @aside) { safe_log(:warn, "Async: Appender thread: Ignoring unknown command: #{_1}") }
     rescue SystemStackError => e
       @stack_overflow = e
     end

@@ -151,6 +151,75 @@ module SemanticLogger
         end
       end
 
+      describe "#log_aside" do
+        let(:aside) { SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "aside" } }
+
+        it "logs at once on the thread inside it, such as an appender as it is flushed" do
+          sync   = processor
+          logged = [aside]
+          appender.define_singleton_method(:flush) { sync.log_aside(logged) }
+          sync.flush
+
+          assert_includes appender.events, aside
+        end
+
+        it "does not wait on another thread for the thread inside it, which writes the entries as it flushes" do
+          sync    = processor
+          logged  = [aside]
+          handed  = nil
+          flushed = []
+          appender.define_singleton_method(:flush) do
+            flushed << events.dup
+            # Waits for another thread, as for the worker thread of an appender added with async: true.
+            handed ||= Thread.new { sync.log_aside(logged) }.join(5)&.value
+          end
+          sync.flush
+
+          assert handed, "log_aside on another thread waited for the thread inside the processor"
+          assert_equal [[], [aside]], flushed, "the flush should write the entries, then flush them"
+        end
+
+        it "has a flush flush again once entries were logged aside as it flushed, at most FLUSHES times" do
+          sync    = processor
+          flushes = 0
+          appender.define_singleton_method(:flush) do
+            flushes += 1
+            sync.log_aside([SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "again" }])
+          end
+          sync.flush
+
+          assert_equal SemanticLogger::QueueProcessor::Aside::FLUSHES + 1, flushes
+          assert_equal SemanticLogger::QueueProcessor::Aside::FLUSHES + 1, appender.events.size
+        end
+
+        it "has a flush flush again once entries were logged aside on another thread as it flushed" do
+          sync    = processor
+          logged  = [aside]
+          flushes = 0
+          appender.define_singleton_method(:flush) do
+            flushes += 1
+            Thread.new { sync.log_aside(logged) }.join(5) if flushes == 1
+          end
+          sync.flush
+
+          assert_equal 2, flushes
+          assert_includes appender.events, aside
+        end
+
+        it "flushes once when an appender logs as it is flushed, other than aside" do
+          sync    = processor
+          flushes = 0
+          appender.define_singleton_method(:flush) do
+            flushes += 1
+            sync.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "logged" })
+          end
+          sync.flush
+
+          assert_equal 1, flushes
+          assert_equal 1, appender.events.size
+        end
+      end
+
       describe "#flush, #close, #reopen" do
         it "delegate to the appenders" do
           mock = Minitest::Mock.new

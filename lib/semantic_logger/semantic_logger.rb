@@ -422,13 +422,13 @@ module SemanticLogger
   #
   #  First the metrics recorded since the last interval are given to the metric appenders, which then
   #  write what they hold as they are flushed, so that the flush at exit writes the last partial
-  #  interval. Not in a signal trap, where they cannot be collected: the next flush or interval
-  #  delivers them.
+  #  interval, and the appenders are flushed again for the log entries written then, such as by the
+  #  :summary metric appender (see Metric::Collector#flushing). Not in a signal trap, where they cannot
+  #  be collected: the next flush or interval delivers them.
   def self.flush
     return Logger.processor.flush if RactorSupport.other_ractor?
 
-    Metric.collector.deliver
-    RactorSupport.enabled? ? RactorReceiver.flush : Logger.processor.flush
+    Metric.collector.flushing { RactorSupport.enabled? ? RactorReceiver.flush : Logger.processor.flush }
   end
 
   # Close all appenders and flush any outstanding messages.
@@ -877,6 +877,7 @@ module SemanticLogger
     autoload :Snapshot,             "semantic_logger/metric/snapshot"
     autoload :Snapshots,            "semantic_logger/metric/snapshots"
     autoload :Statsd,               "semantic_logger/metric/statsd"
+    autoload :Summary,              "semantic_logger/metric/summary"
   end
 
   module Reporters
