@@ -58,6 +58,18 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   one, and reports a partial success on the internal logger. A 502 or 504 from a proxy in front of
   the receiver may come after the receiver stored the snapshot, which sending it again then counts
   twice.
+- `metric: :otlp` also reads the OpenTelemetry exporter variables `OTEL_EXPORTER_OTLP_HEADERS`,
+  `OTEL_EXPORTER_OTLP_TIMEOUT` (milliseconds, for the open and read timeouts), and
+  `OTEL_EXPORTER_OTLP_COMPRESSION` (`gzip` or `none`), each replaced as a whole by its
+  `OTEL_EXPORTER_OTLP_METRICS_*` form, and `OTEL_RESOURCE_ATTRIBUTES`. A `header:`, timeout, or
+  `compress:` given wins (a header per name, in any case), as do `resource_attributes:`, and
+  `application:`, `host:`, `environment:`, or `OTEL_SERVICE_NAME` for the attributes they set. The
+  timeout applies only when neither `open_timeout:` nor `read_timeout:` is given. A header of the
+  environment that the HTTP appender sets itself, such as `Content-Type`, or `Authorization` while it
+  sends basic auth, and a `process.pid` resource attribute are left out, with a warning. A value it cannot use, including one that is not valid UTF-8, is ignored with
+  a warning on the internal logger, which never holds a header's value; a malformed header entry is
+  left out, and a malformed `OTEL_RESOURCE_ATTRIBUTES` is ignored as a whole. The headers of the
+  environment are sent to a `url:` or `endpoint:` given too, as the specification asks.
 - `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
   appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension
   whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the

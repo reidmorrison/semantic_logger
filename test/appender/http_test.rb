@@ -350,6 +350,42 @@ module Appender
         end
       end
 
+      describe "#reserved_header?" do
+        def new_http(**args)
+          stub_http_start { SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", **args) }
+        end
+
+        it "is true for the headers it sets itself, in any case" do
+          %w[Accept content-type CONNECTION Keep-Alive].each do |name|
+            assert appender.reserved_header?(name), name
+          end
+        end
+
+        it "is true for Content-Encoding, whether it compresses or not" do
+          assert appender.reserved_header?("content-encoding")
+          assert new_http(compress: true).reserved_header?("Content-Encoding")
+        end
+
+        it "is true for Accept-Encoding, which Net::HTTP sets to decode the response" do
+          assert appender.reserved_header?("ACCEPT-ENCODING")
+        end
+
+        it "is true for Authorization only while it sends basic authentication" do
+          refute appender.reserved_header?("Authorization")
+          assert new_http(username: "user", password: "pw").reserved_header?("authorization")
+          assert stub_http_start {
+            SemanticLogger::Appender::Http.new(url: "http://user:pw@localhost:8088/path")
+          }.reserved_header?("Authorization")
+        end
+
+        it "is false for any other header, such as one given" do
+          http = new_http(header: {"X-Team" => "core"})
+
+          refute http.reserved_header?("X-Team")
+          refute http.reserved_header?(:"api-key")
+        end
+      end
+
       describe "credentials" do
         let(:url) { "https://elastic:S3cr3t@logs.example.com:9200/path?dd-api-key=0123456789abcdef" }
         let(:appender) do
