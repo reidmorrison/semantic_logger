@@ -217,6 +217,23 @@ leave them out, as the other log appenders do, and as v5.3 warned. To keep sendi
 appender with `metrics: true`. A `metrics: false` added to silence the v5.3 warning can stay, or be
 removed. See [Choose `metrics:` for the `:kafka`, `:rabbitmq`, and `:udp` appenders](#choose-metrics-for-the-kafka-rabbitmq-and-udp-appenders).
 
+#### Options given with an appender instance raise `ArgumentError`
+
+`add_appender(appender: instance)` and `add_appender(metric: instance)` now raise `ArgumentError`
+when given a formatter block or an appender option, such as `level:`, `formatter:`, or `filter:`,
+which v5.3 ignored with a deprecation warning, since the instance was created with its own. Give
+them to `new` instead. The options of `add_appender` itself, `async:`, `batch:`, and the queue
+options, still apply to an instance, and an option given as `nil` sets nothing, so it is not
+refused:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: MyAppender.new, level: :warn)
+
+# After:
+SemanticLogger.add_appender(appender: MyAppender.new(level: :warn))
+~~~
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

@@ -176,64 +176,62 @@ class AppenderTest < Minitest::Test
       [[:appender, InMemoryAppender], [:metric, InMemoryMetricsAppender]].each do |option, subscriber_class|
         describe "with a Subscriber instance as #{option}:" do
           let(:subscriber) { subscriber_class.new }
-          let(:ignored) { "add_appender ignores" }
+          let(:refused) { "add_appender cannot apply" }
           let(:instance) { Regexp.escape("when #{option}: is a Subscriber instance (#{subscriber_class})") }
 
-          it "returns the instance, without a warning" do
-            result = refute_deprecated { build(option => subscriber) }
+          it "returns the instance" do
+            result = build(option => subscriber)
 
             assert_same subscriber, result
           end
 
-          it "warns that the block is ignored, at the line that supplied it, and returns the instance unchanged" do
+          it "raises for a formatter block, leaving the instance unchanged" do
             formatter = subscriber.formatter
-            line      = __LINE__ + 3
-            warning   = /appender_test\.rb:#{line}: warning: SemanticLogger: #{ignored} the formatter block /
-            result    = assert_deprecated(warning) do
+            error     = assert_raises(ArgumentError) do
               SemanticLogger::Appender.factory(option => subscriber) { |log, _logger| log.message }
             end
 
-            assert_same subscriber, result
+            assert_match(/\A#{refused} the formatter block #{instance}\./, error.message)
             assert_same formatter, subscriber.formatter
           end
 
-          it "says that v6 raises ArgumentError for the block, to set it on the instance, and what applies to it" do
+          it "says to set the block on the instance, and what applies to it" do
             advice = "Set it on the instance itself; only async:, batch:, and the queue options of add_appender " \
                      "apply to an instance."
-            assert_deprecated(/#{instance}, and v6 raises ArgumentError for it\. #{Regexp.escape(advice)}$/) do
-              build(option => subscriber) { |log, _logger| log.message }
-            end
+            error  = assert_raises(ArgumentError) { build(option => subscriber) { |log, _logger| log.message } }
+
+            assert_match(/#{instance}\. #{Regexp.escape(advice)}\z/, error.message)
           end
 
-          it "does not warn for the options that are nil, which set nothing" do
-            result = refute_deprecated { build(option => subscriber, level: nil, formatter: nil, filter: nil) }
+          it "accepts the options that are nil, which set nothing" do
+            result = build(option => subscriber, level: nil, formatter: nil, filter: nil)
 
             assert_same subscriber, result
           end
 
           it "names only the options that are not nil" do
-            assert_deprecated(/#{ignored} formatter: #{instance}, .* for it\. Set it /) do
-              build(option => subscriber, level: nil, formatter: :json)
-            end
+            error = assert_raises(ArgumentError) { build(option => subscriber, level: nil, formatter: :json) }
+
+            assert_match(/\A#{refused} formatter: #{instance}\. Set it /, error.message)
           end
 
           it "names a misspelled option of add_appender, and the options that apply to an instance" do
-            assert_deprecated(/#{ignored} max_queue: #{instance}, .*; only async:, batch:, and the queue options /) do
-              SemanticLogger::Appender.factory(option => subscriber, max_queue: 5)
-            end
+            error = assert_raises(ArgumentError) { SemanticLogger::Appender.factory(option => subscriber, max_queue: 5) }
+
+            assert_match(/\A#{refused} max_queue: #{instance}\. .*; only async:, batch:, and the queue options /,
+                         error.message)
           end
 
-          it "warns naming each option that is ignored, and returns the instance unchanged" do
+          it "raises naming each option, leaving the instance unchanged" do
             level     = subscriber.level
             formatter = subscriber.formatter
-            result    = assert_deprecated(
-              /#{ignored} level:, formatter:, filter:, application:, and metrics: #{instance}, .* for them\. Set them /
-            ) do
+            error     = assert_raises(ArgumentError) do
               build(option => subscriber, level: :fatal, formatter: :json, filter: /Other/, application: "Other",
                     metrics: true)
             end
 
-            assert_same subscriber, result
+            assert_match(/\A#{refused} level:, formatter:, filter:, application:, and metrics: #{instance}\. Set them /,
+                         error.message)
             assert_equal level, subscriber.level
             assert_same formatter, subscriber.formatter
             assert_nil subscriber.filter
@@ -241,10 +239,12 @@ class AppenderTest < Minitest::Test
             refute_predicate subscriber, :metrics?
           end
 
-          it "warns naming the block and the option that are ignored" do
-            assert_deprecated(/#{ignored} the formatter block and level: #{instance}, .* for them\. Set them /) do
+          it "names the block and the option that it cannot apply" do
+            error = assert_raises(ArgumentError) do
               build(option => subscriber, level: :fatal) { |log, _logger| log.message }
             end
+
+            assert_match(/\A#{refused} the formatter block and level: #{instance}\. Set them /, error.message)
           end
 
           it "applies the options of add_appender to the instance, without a warning" do

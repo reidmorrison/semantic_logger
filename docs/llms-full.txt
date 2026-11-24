@@ -1556,9 +1556,8 @@ SemanticLogger.add_appender(file_name: "development.log", formatter: formatter)
 ~~~
 
 An appender created with `new` and added as `appender:` or `metric:` already has its formatter, so
-`add_appender` ignores a block given with it, as it does `formatter:`, and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings); v6 raises an `ArgumentError`.
-Give the block, or `formatter:`, to `new` instead:
+`add_appender` raises an `ArgumentError` for a block given with it, as it does for `formatter:` and
+the other appender options. Give the block, or `formatter:`, to `new` instead:
 
 ~~~ruby
 appender = SemanticLogger::Appender::Tcp.new(server: "localhost:514") { |log| "#{log.level} #{log.message}" }
@@ -7331,6 +7330,23 @@ as `logger.info(metric: "users/signup")`, which have a metric but no message and
 leave them out, as the other log appenders do, and as v5.3 warned. To keep sending them, add the
 appender with `metrics: true`. A `metrics: false` added to silence the v5.3 warning can stay, or be
 removed. See [Choose `metrics:` for the `:kafka`, `:rabbitmq`, and `:udp` appenders](#choose-metrics-for-the-kafka-rabbitmq-and-udp-appenders).
+
+#### Options given with an appender instance raise `ArgumentError`
+
+`add_appender(appender: instance)` and `add_appender(metric: instance)` now raise `ArgumentError`
+when given a formatter block or an appender option, such as `level:`, `formatter:`, or `filter:`,
+which v5.3 ignored with a deprecation warning, since the instance was created with its own. Give
+them to `new` instead. The options of `add_appender` itself, `async:`, `batch:`, and the queue
+options, still apply to an instance, and an option given as `nil` sets nothing, so it is not
+refused:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: MyAppender.new, level: :warn)
+
+# After:
+SemanticLogger.add_appender(appender: MyAppender.new(level: :warn))
+~~~
 
 #### Rails Semantic Logger
 

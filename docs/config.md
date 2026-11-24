@@ -678,9 +678,8 @@ SemanticLogger.add_appender(file_name: "development.log", formatter: formatter)
 ~~~
 
 An appender created with `new` and added as `appender:` or `metric:` already has its formatter, so
-`add_appender` ignores a block given with it, as it does `formatter:`, and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings); v6 raises an `ArgumentError`.
-Give the block, or `formatter:`, to `new` instead:
+`add_appender` raises an `ArgumentError` for a block given with it, as it does for `formatter:` and
+the other appender options. Give the block, or `formatter:`, to `new` instead:
 
 ~~~ruby
 appender = SemanticLogger::Appender::Tcp.new(server: "localhost:514") { |log| "#{log.level} #{log.message}" }
