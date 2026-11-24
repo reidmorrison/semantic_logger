@@ -4,9 +4,18 @@ module SemanticLogger
       # Returns [Array<SemanticLogger::Log>] the log events from Semantic Logger
       # captured whilst executing the supplied block.
       #
+      # Pass `klass:` to capture only the log events of that class's logger. Passing the class
+      # positionally is deprecated, since v6 takes it only as `klass:`.
+      #
       # Notes:
       # - All log messages are returned regardless of the global default log level.
       def semantic_logger_events(deprecated_klass = nil, klass: deprecated_klass, silence: :trace, &block)
+        if deprecated_klass
+          SemanticLogger::Deprecation.warn(
+            "semantic_logger_events with the class as its argument is deprecated, and v6 takes it only as klass:. " \
+            "Use semantic_logger_events(klass: #{deprecated_klass.inspect}) instead."
+          )
+        end
         logger = SemanticLogger::Test::CaptureLogEvents.new
         if klass
           klass.stub(:logger, logger, &block)

@@ -59,6 +59,24 @@ Warning.extend(SemanticLoggerDeprecations)
 Do not log them through Semantic Logger itself: a warning reported on its background thread would
 then wait on that thread's own queue, which can stop all logging while the queue is full.
 
+### Upgrading to Semantic Logger v5.4
+
+#### Pass the class to `semantic_logger_events` as `klass:`
+
+The Minitest helper `semantic_logger_events` takes the class whose events to capture as the keyword
+`klass:`. Passing it positionally still works, but is deprecated, and reports a
+[deprecation warning](#seeing-deprecation-warnings), since v6 takes it only as `klass:`:
+
+~~~ruby
+# Before:
+messages = semantic_logger_events(ApiClient) { ApiClient.new.call }
+
+# After:
+messages = semantic_logger_events(klass: ApiClient) { ApiClient.new.call }
+~~~
+
+The RSpec helper `capture_semantic_logger_events(ApiClient)` is unchanged.
+
 ### Upgrading to Semantic Logger v5.3
 
 #### OpenTelemetry log records
