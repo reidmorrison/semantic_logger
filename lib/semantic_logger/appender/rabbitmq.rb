@@ -23,10 +23,7 @@ end
 #     password: 'my-secret-pass',
 #
 #     # All other options accepted by Bunny.new call
-#     vhost: 'production',
-#
-#     # Leave out metric-only entries, as v6 does by default:
-#     metrics: false
+#     vhost: 'production'
 #   )
 module SemanticLogger
   module Appender
@@ -74,8 +71,8 @@ module SemanticLogger
       #     Default: SemanticLogger.application
       #
       #   metrics: [Boolean]
-      #     Also send metrics only events to rabbitmq.
-      #     Default: true, with a deprecation warning when it is not supplied, since v6 changes it to false.
+      #     Also send metric-only entries to rabbitmq.
+      #     Default: false
       #
       # RabbitMQ Parameters:
       #
@@ -95,14 +92,14 @@ module SemanticLogger
       #   more parameters supported by Bunny: http://rubybunny.info/articles/connecting.html
       def initialize(queue_name: "semantic_logger", rabbitmq_host: nil,
                      level: nil, formatter: nil, filter: nil, application: nil, environment: nil,
-                     host: nil, metrics: METRICS_NOT_SUPPLIED, **args, &)
+                     host: nil, metrics: false, **args, &)
         @queue_name             = queue_name
         @rabbitmq_args          = args.dup
         @rabbitmq_args[:host]   = rabbitmq_host
         @rabbitmq_args[:logger] = logger
 
         super(level: level, formatter: formatter, filter: filter, application: application,
-              environment: environment, host: host, metrics: deprecated_metrics_default(metrics, :rabbitmq), &)
+              environment: environment, host: host, metrics: metrics, &)
         reopen
       end
 

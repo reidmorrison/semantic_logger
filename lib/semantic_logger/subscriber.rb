@@ -388,24 +388,5 @@ module SemanticLogger
     def metrics?
       @metrics
     end
-
-    # The default of the `metrics` option of the appenders that call #deprecated_metrics_default, so that it can tell
-    # an option that is not supplied from an explicit nil, which keeps meaning false. Remove in v6, with that method.
-    METRICS_NOT_SUPPLIED = Utils.make_shareable(Object.new.freeze)
-    private_constant :METRICS_NOT_SUPPLIED
-
-    # Returns [true|false|nil] the `metrics` option of an appender that sends metric-only entries unless told
-    # otherwise: true when it is not supplied, see METRICS_NOT_SUPPLIED, with a deprecation warning, since v6 leaves
-    # them out by default, as the other log appenders do, otherwise the option as it was supplied. Remove in v6, with
-    # the METRICS_NOT_SUPPLIED default of the appenders that call it.
-    def deprecated_metrics_default(metrics, appender)
-      return metrics unless METRICS_NOT_SUPPLIED.equal?(metrics)
-
-      Deprecation.warn(
-        "The #{appender.inspect} appender sends metric-only entries by default, which changes in v6. " \
-        "Add it with metrics: true to keep sending them, or metrics: false to leave them out."
-      )
-      true
-    end
   end
 end

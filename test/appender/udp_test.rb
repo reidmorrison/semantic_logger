@@ -93,29 +93,26 @@ module Appender
           log
         end
 
-        it "warns that the default changes in v6, and sends metric-only entries, when it is not supplied" do
-          line = __LINE__ + 2
-          udp  = assert_deprecated(/udp_test\.rb:#{line}: warning: SemanticLogger: The :udp appender sends/) do
-            SemanticLogger::Appender::Udp.new(server: "localhost:8088")
-          end
+        it "leaves metric-only entries out by default, without a warning" do
+          udp = refute_deprecated { SemanticLogger::Appender::Udp.new(server: "localhost:8088") }
+
+          refute udp.should_log?(metric_only)
+        ensure
+          udp&.close
+        end
+
+        it "leaves metric-only entries out with metrics: nil" do
+          udp = SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: nil)
+
+          refute udp.should_log?(metric_only)
+        ensure
+          udp&.close
+        end
+
+        it "sends metric-only entries with metrics: true" do
+          udp = SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: true)
 
           assert udp.should_log?(metric_only)
-        ensure
-          udp&.close
-        end
-
-        it "leaves metric-only entries out with metrics: false, without a warning" do
-          udp = refute_deprecated { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: false) }
-
-          refute udp.should_log?(metric_only)
-        ensure
-          udp&.close
-        end
-
-        it "leaves metric-only entries out with metrics: nil, without a warning, as before" do
-          udp = refute_deprecated { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: nil) }
-
-          refute udp.should_log?(metric_only)
         ensure
           udp&.close
         end

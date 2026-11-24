@@ -209,6 +209,14 @@ payload can hold untrusted data, such as a request body. They are sent with the 
 as extras. Set them with named tags, as shown in
 [Set the Sentry user and fingerprint with named tags](#set-the-sentry-user-and-fingerprint-with-named-tags).
 
+#### `:kafka`, `:rabbitmq`, and `:udp` leave out metric-only entries by default
+
+The `:kafka`, `:rabbitmq`, and `:udp` appenders no longer send metric-only entries by default, such
+as `logger.info(metric: "users/signup")`, which have a metric but no message and no exception: they
+leave them out, as the other log appenders do, and as v5.3 warned. To keep sending them, add the
+appender with `metrics: true`. A `metrics: false` added to silence the v5.3 warning can stay, or be
+removed. See [Choose `metrics:` for the `:kafka`, `:rabbitmq`, and `:udp` appenders](#choose-metrics-for-the-kafka-rabbitmq-and-udp-appenders).
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with
