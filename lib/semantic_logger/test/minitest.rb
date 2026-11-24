@@ -20,6 +20,50 @@ module SemanticLogger
         logger.events
       end
 
+      # Returns [Array<SemanticLogger::Test::MetricEvent>] the metric calls (`increment`, `time`, and
+      # `record`) captured whilst executing the supplied block, as they were made, before they are
+      # aggregated, whether or not a metric appender is present.
+      #
+      #   metrics = semantic_logger_metrics { Signup.new.call(user) }
+      #   assert_metric(metrics, name: "users.signup", kind: :counter, value: 1)
+      #
+      # Pass `klass:` to capture only the metric calls made through that class's logger.
+      def semantic_logger_metrics(klass: nil, &)
+        logger = SemanticLogger::Test::CaptureLogEvents.new
+        if klass
+          klass.stub(:logger, logger, &)
+        else
+          SemanticLogger::Logger.stub(:processor, logger, &)
+        end
+        logger.metric_events
+      end
+
+      # Verify that one of the captured metric calls has all the given attributes, and return it.
+      #
+      #   metrics = semantic_logger_metrics { Signup.new.call(user) }
+      #   assert_metric(metrics, name: "users.signup", kind: :counter, value: 1)
+      #   assert_metric(metrics, name: "supplier.add_user", kind: :histogram, unit: "s", value: Float)
+      #
+      # metrics: [Array<SemanticLogger::Test::MetricEvent>|SemanticLogger::Test::MetricEvent]
+      #   The metric calls captured, such as by #semantic_logger_metrics, or one of them.
+      #
+      # An expected value may be :nil, a Class, a Range, a Regexp, or any value to compare with (see
+      # SemanticLogger::Test::MetricEvent#matches?). An attribute that is not given is not checked.
+      def assert_metric(metrics, name:, kind: nil, value: nil, unit: nil, dimensions: nil)
+        metrics  = Array(metrics)
+        expected = {name: name, kind: kind, value: value, unit: unit, dimensions: dimensions}.compact
+        metric   = metrics.find { |captured| captured.matches?(**expected) }
+
+        failure = lambda do
+          captured = metrics.map { |captured_metric| "  #{captured_metric.to_h.inspect}" }
+          "No metric matching #{expected.inspect} was captured. Captured #{metrics.size} metric(s):\n" \
+            "#{captured.join("\n")}"
+        end
+
+        assert metric, failure # rubocop:disable Minitest/AssertWithExpectedArgument -- the message, as a Proc
+        metric
+      end
+
       # Verify a single log event has all the required attributes.
       def assert_semantic_logger_event(event, level: nil, name: nil, message: nil, message_includes: nil,
                                        payload: nil, payload_includes: nil,

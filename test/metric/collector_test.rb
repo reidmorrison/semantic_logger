@@ -447,6 +447,30 @@ module Metric
           assert(messages.all? { |message| message.include?("Give each metric name one kind and unit") })
         end
 
+        it "reports a failure of its own once for every metric name, apart from the failures of recording" do
+          aggregator = SemanticLogger::Metric::Aggregator.new
+          aggregator.define_singleton_method(:record) { |*, **| raise NoMethodError, "hash" }
+          collector = SemanticLogger::Metric::Collector.new(aggregator: aggregator)
+          with_processor(collector: collector) do
+            collector.start
+
+            refute collector.record(:counter, "jobs", 1)
+            collector.define_singleton_method(:renew_after_fork) { raise ArgumentError, "renew" }
+            collector.instance_variable_set(:@pid, -1)
+
+            refute collector.record(:counter, "jobs", 1)
+            refute collector.record(:counter, "users.signup", 1)
+          ensure
+            collector.instance_variable_set(:@pid, ::Process.pid)
+          end
+          messages = processor.logger.events.map(&:message)
+
+          assert_equal 2, messages.size
+          assert_includes messages.first, 'Failed to record counter "jobs": NoMethodError'
+          assert_includes messages.last, 'Failed to record counter "jobs", in the metrics collector: ArgumentError'
+          assert_includes messages.last, "This is a defect of Semantic Logger"
+        end
+
         it "reports, apart and as an error, the records of its own metrics dropped for another kind or unit" do
           with_processor do
             collector.start

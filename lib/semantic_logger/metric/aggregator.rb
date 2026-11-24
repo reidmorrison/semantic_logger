@@ -34,12 +34,12 @@ module SemanticLogger
     # and for any dimension set once `series_limit * 2` ways of writing them are remembered.
     #
     # It does not judge the values it is given: which values are recordable at all (such as
-    # negative counter amounts) is decided before they reach it. It only refuses what would make it
-    # raise or corrupt its series: an unknown kind, dimensions that are not a Hash, and a value
-    # that is not a real Numeric: for a histogram, one that is not finite as a Float; for a counter,
-    # a Float that is not finite, or a non-Integer that is not finite as a Float. A counter keeps an
-    # exact Integer sum, however large, while every amount is an Integer; an amount that would make
-    # a Float sum non-finite is dropped, keeping the sum it had.
+    # negative counter amounts) is decided before they reach it (see Validator). It only refuses what
+    # would make it raise or corrupt its series: an unknown kind, dimensions that are not a Hash, and
+    # a value that the Validator would not record either (see Validator.recordable_value?), which it
+    # asks rather than judge the value itself. A counter keeps an exact Integer sum, however large,
+    # while every amount is an Integer; an amount that would make a Float sum non-finite is dropped,
+    # keeping the sum it had.
     #
     # Thread-safe: one Mutex guards the series. In a signal trap, where a Mutex cannot be locked,
     # a record is queued instead and added by the next #record or #collect.
@@ -386,12 +386,8 @@ module SemanticLogger
 
       # Whether recording it is safe; see the class comment.
       def recordable?(kind, value, dimensions)
-        return false unless %i[counter histogram].include?(kind) && (dimensions.nil? || dimensions.is_a?(Hash))
-        return value.finite? if value.is_a?(Float)
-        # A counter sums Integers exactly, however large.
-        return true if value.is_a?(Integer) && kind == :counter
-
-        value.is_a?(Numeric) && value.real? && value.to_f.finite?
+        %i[counter histogram].include?(kind) && (dimensions.nil? || dimensions.is_a?(Hash)) &&
+          Validator.recordable_value?(kind, value)
       end
 
       # The instrument a record of this metric goes to, added if new; nil, counting the record as
