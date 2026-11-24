@@ -1094,7 +1094,8 @@ SemanticLogger.named_tagged(request_id: "abc") do
 end
 ~~~
 
-is sent as a record of the scope `UserService`, with the trace and span ids of that span, and:
+logged by the logger of `UserService`, is sent as a record of the scope `UserService`, with the trace
+and span ids of that span, and:
 
 ~~~
 body:       "Created user"
@@ -1125,7 +1126,12 @@ scope of the record, and the process id is in the resource, so neither is an att
 A Hash in the payload or named tags is flattened into an attribute for each of its values, its keys
 joined with `.`, at any depth, as the OpenTelemetry semantic conventions name attributes, so that
 every backend can query each value. An Array is sent as an array, which may mix types, such as
-`[1, "two"]`, and a Hash within it as a map. A `nil` value is left out. For example, `logger.info("Charged", order: {id: 42, address: {zip_code: "10001"}})` has the
+`[1, "two"]`, and a Hash within it as a map. A `nil` attribute value, or a `nil` value in a Hash, is
+left out. A String, Integer, Float, `true`, or `false` keeps its type; any other value, such as a
+Symbol or a Time, is sent as its text, as is an Integer beyond 64 bits, and a structure nested
+deeper than 20 levels is sent as a placeholder.
+
+For example, `logger.info("Charged", order: {id: 42, address: {zip_code: "10001"}})` has the
 attributes `order.id` and `order.address.zip_code`. A flattened name never replaces one of the
 entry's own attributes, such as `thread.name`: that value alone is then prefixed with `payload.` or
 `named_tags.`. When two values of the same Hash get one name, such as the key `"a.b"` and

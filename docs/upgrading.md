@@ -194,8 +194,17 @@ SemanticLogger.add_appender(appender: :otlp)
 ~~~
 
 It reads the standard `OTEL_EXPORTER_OTLP_*` variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT`, so
-`OpenTelemetry::SDK.configure` is no longer needed for logging. A Hash in the payload is flattened
-into dotted attribute names, such as `order.address.zip_code`, rather than sent as JSON text.
+`OpenTelemetry::SDK.configure` is no longer needed for logging. Its records differ from those of
+`:open_telemetry`, so check the dashboards and alerts that select on their attributes:
+
+* The logger's name is the instrumentation scope of the record, rather than the
+  `semantic_logger.name` attribute, and the `name:` and `version:` options are gone.
+* The process id is in the resource, rather than the `process.pid` attribute.
+* A Hash in the payload or named tags is flattened into dotted attribute names, such as
+  `order.address.zip_code`, rather than sent as JSON text.
+* An Array that mixes types keeps the type of each element, rather than sending each as text.
+* The named tags `trace_id` and `span_id`, when there is no current span, become the trace and span
+  ids of the record, rather than attributes.
 
 #### `metric: :otlp` sends http/protobuf by default
 
