@@ -39,9 +39,6 @@ gem "mongo"
 gem "opentelemetry-logs-sdk"
 # [optional] Net::TCP appender
 gem "net_tcp_client"
-# [optional] Splunk appender
-gem "nokogiri"
-gem "splunk-sdk-ruby"
 # [optional] Statsd metrics
 gem "statsd-ruby"
 # [optional] Sentry appender

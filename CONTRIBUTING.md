@@ -273,7 +273,6 @@ classDiagram
     class Wrapper
     class Elasticsearch
     class MongoDB
-    class Splunk
 
     Subscriber <|-- IO
     Subscriber <|-- File
@@ -284,7 +283,6 @@ classDiagram
     Subscriber <|-- Wrapper
     Subscriber <|-- Elasticsearch
     Subscriber <|-- MongoDB
-    Subscriber <|-- Splunk
     Http <|-- Loki
     Http <|-- SplunkHttp
 

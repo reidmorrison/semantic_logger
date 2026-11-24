@@ -149,6 +149,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - `appender: :new_relic` (`SemanticLogger::Appender::NewRelic`), deprecated in v5.1: it sent
   `:error` and `:fatal` entries to New Relic as error events. Use `appender: :new_relic_logs`. The
   `:new_relic` metric appender, `add_appender(metric: :new_relic)`, is unchanged.
+- `appender: :splunk` (`SemanticLogger::Appender::Splunk`), deprecated in v5.2: its `splunk-sdk-ruby`
+  gem was last released in 2015 and never verifies the server's certificate. Use
+  `appender: :splunk_http`.
 
 ## [Unreleased]
 

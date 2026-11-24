@@ -19,7 +19,6 @@ module SemanticLogger
     autoload :Opensearch,          "semantic_logger/appender/opensearch"
     autoload :OpenTelemetry,       "semantic_logger/appender/open_telemetry"
     autoload :Rabbitmq,            "semantic_logger/appender/rabbitmq"
-    autoload :Splunk,              "semantic_logger/appender/splunk"
     autoload :SplunkHttp,          "semantic_logger/appender/splunk_http"
     autoload :Syslog,              "semantic_logger/appender/syslog"
     autoload :Tcp,                 "semantic_logger/appender/tcp"
