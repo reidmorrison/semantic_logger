@@ -191,7 +191,7 @@ classDiagram
         +filter
         +level / level=
         +debug()/info()/warn()/error()...
-        +measure_*() / benchmark_*()
+        +measure_*()
         +tagged() / backtrace()
         #log_internal() #measure_internal()
     }

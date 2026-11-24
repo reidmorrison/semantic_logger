@@ -197,14 +197,8 @@ class MeasureTest < Minitest::Test
           end
         end
 
-        it ":dimensions with #benchmark_#{level}" do
-          assert_equal "result",
-                       appender.send(:"benchmark_#{level}", "hello world", metric: metric, dimensions: dimensions) {
-                         "result"
-                       }
-
-          assert log = appender.events.first
-          assert_equal dimensions, log.dimensions
+        it "has no #benchmark_#{level}, which was removed in v6" do
+          refute_respond_to appender, :"benchmark_#{level}"
         end
 
         it ":backtrace_level" do
@@ -301,12 +295,8 @@ class MeasureTest < Minitest::Test
           assert_equal dimensions, log.dimensions
         end
 
-        it ":dimensions with #benchmark(#{level})" do
-          assert_equal "result",
-                       appender.benchmark(level, "hello world", metric: metric, dimensions: dimensions) { "result" }
-
-          assert log = appender.events.first
-          assert_equal dimensions, log.dimensions
+        it "has no #benchmark, which was removed in v6" do
+          refute_respond_to appender, :benchmark
         end
 
         it ":backtrace_level" do
