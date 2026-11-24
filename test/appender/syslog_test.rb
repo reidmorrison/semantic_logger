@@ -70,12 +70,14 @@ module Appender
         end
 
         it "hands the options to its connection, with the server in the url, and leaves the Hashes given as they are" do
-          ssl        = {handshake_timeout: 2}.freeze
-          tcp_client = {connect_timeout: 3, keepalive: false, policy: :random, ssl: nil}.freeze
-          appender   = appender_with(tcp_client)
+          ssl        = {handshake_timeout: 2, verify_mode: OpenSSL::SSL::VERIFY_NONE}.freeze
+          tcp_client = {connect_timeout: 3, keepalive: false, policy: :random, ssl: ssl}.freeze
+          # Not connected, since the local server does not speak TLS.
+          appender   = SemanticLogger::Appender::TcpConnection.stub_any_instance(:reopen, nil) { appender_with(tcp_client) }
 
           assert_equal ["127.0.0.1:#{@listener.addr[1]}"], appender.remote_syslog.servers
-          assert_equal({handshake_timeout: 2}, ssl)
+          assert_equal({handshake_timeout: 2, verify_mode: OpenSSL::SSL::VERIFY_NONE}, ssl)
+          assert_equal({connect_timeout: 3, keepalive: false, policy: :random, ssl: ssl}, tcp_client)
         end
 
         it "raises ArgumentError for a server in tcp_client:, since the url gives the server" do
@@ -299,6 +301,36 @@ module Appender
         ensure
           appender&.close
           server&.close
+        end
+      end
+
+      describe "#wrote_nothing? and #not_sent?" do
+        it "over TCP, are true when it could not connect, and wrote_nothing? when nothing was sent" do
+          listener        = TCPServer.new("127.0.0.1", 0)
+          appender        = SemanticLogger::Appender::Syslog.new(url: "tcp://127.0.0.1:#{listener.addr[1]}")
+          connect_error   = SemanticLogger::Appender::TcpConnection::ConnectError.new("refused")
+          nothing_written = SemanticLogger::Appender::TcpConnection::NothingWritten.new("timed out")
+          write_error     = SemanticLogger::Appender::TcpConnection::WriteError.new("reset")
+
+          assert appender.wrote_nothing?(connect_error)
+          assert appender.not_sent?(connect_error)
+          assert appender.wrote_nothing?(nothing_written)
+          refute appender.not_sent?(nothing_written)
+          refute appender.wrote_nothing?(write_error)
+          refute appender.not_sent?(write_error)
+        ensure
+          appender&.close
+          listener&.close
+        end
+
+        it "over UDP, are false" do
+          appender = SemanticLogger::Appender::Syslog.new(url: "udp://127.0.0.1:514")
+          error    = Errno::ECONNREFUSED.new
+
+          refute appender.wrote_nothing?(error)
+          refute appender.not_sent?(error)
+        ensure
+          appender&.close
         end
       end
 

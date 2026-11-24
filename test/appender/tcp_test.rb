@@ -50,7 +50,7 @@ module Appender
       end
 
       describe "#wrote_nothing? and #not_sent?" do
-        it "are true when it could not connect, and false when a write failed" do
+        it "are true when it could not connect, wrote_nothing? when nothing was sent, and false after part was" do
           connect_error = SemanticLogger::Appender::TcpConnection::ConnectError.new("refused")
           write_error   = SemanticLogger::Appender::TcpConnection::WriteError.new("reset")
 
@@ -58,6 +58,11 @@ module Appender
           assert appender.not_sent?(connect_error)
           refute appender.wrote_nothing?(write_error)
           refute appender.not_sent?(write_error)
+
+          nothing_written = SemanticLogger::Appender::TcpConnection::NothingWritten.new("timed out")
+
+          assert appender.wrote_nothing?(nothing_written)
+          refute appender.not_sent?(nothing_written)
         end
       end
 

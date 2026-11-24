@@ -41,16 +41,20 @@ module SemanticLogger
       #     The order to try the servers in. Default: :ordered
       #
       #   connect_timeout: [Numeric]
-      #     Seconds to wait for a server to accept the connection. Default: 10
+      #     Seconds to wait for a server's host name to be looked up, and then for it to accept the connection; a
+      #     negative value waits as long as it takes.
+      #     Default: 10
       #
       #   write_timeout: [Numeric]
-      #     Seconds to wait for a write to complete. Default: 60
+      #     Seconds to wait for a write to complete; a negative value waits as long as it takes. Default: 60
       #
       #   keepalive: [true | false]
       #     Whether to turn on TCP keepalive. Default: true
       #
       #   ssl: [true | Hash]
       #     Connect over TLS: true, or OpenSSL::SSL::SSLContext parameters, plus handshake_timeout:.
+      #
+      #   A connection parameter given as nil takes its default.
       #
       # Appender Parameters:
       #   separator: [String]
@@ -123,10 +127,10 @@ module SemanticLogger
         logger.warn("Could not close the connection", error) if error
       end
 
-      # Whether nothing of the entry was written, since it could not connect, so that it is written again after
-      # the back-off. See Subscriber#wrote_nothing?.
+      # Whether nothing of the entry was written, since it could not connect, or the write failed before any of it
+      # was sent, so that it is written again after the back-off. See Subscriber#wrote_nothing?.
       def wrote_nothing?(exception)
-        tcp_client.not_connected?(exception)
+        tcp_client.nothing_sent?(exception)
       end
 
       # Whether the entry never reached the server, since it could not connect, so that an outage is not counted

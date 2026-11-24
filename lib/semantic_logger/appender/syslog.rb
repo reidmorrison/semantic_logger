@@ -156,9 +156,9 @@ module SemanticLogger
           @options ||= ::Syslog::LOG_PID | ::Syslog::LOG_CONS
         end
 
-        # The syslog formatters load the syslog_protocol gem that they use to build remote syslog packets.
         @remote_syslog = tcp_connection(tcp_client || {}) if @protocol == :tcp
 
+        # The syslog formatters load the syslog_protocol gem that they use to build remote syslog packets.
         if %i[tcp udp].include?(@protocol)
           # Reject an invalid facility when the appender is created, even with a formatter that ignores it.
           SemanticLogger::Formatters::Syslog.facility_number(@facility)
@@ -244,10 +244,10 @@ module SemanticLogger
         (@protocol == :udp && exception.is_a?(Errno::EMSGSIZE)) || super
       end
 
-      # Over TCP, whether nothing of the entry was written, since it could not connect, so that it is written again
-      # after the back-off. See Subscriber#wrote_nothing?.
+      # Over TCP, whether nothing of the entry was written, since it could not connect, or the write failed before
+      # any of it was sent, so that it is written again after the back-off. See Subscriber#wrote_nothing?.
       def wrote_nothing?(exception)
-        @protocol == :tcp && @remote_syslog.not_connected?(exception)
+        @protocol == :tcp && @remote_syslog.nothing_sent?(exception)
       end
 
       # Over TCP, whether the entry never reached the server, since it could not connect. See Subscriber#not_sent?.
@@ -284,8 +284,9 @@ module SemanticLogger
 
       # Returns [TcpConnection] the connection to the server in the url, with the options given as tcp_client:,
       # which does not connect until the appender is reopened. Raises ArgumentError for server: or servers:
-      # in them, since the url gives the server.
+      # in them, since the url gives the server. An option given as nil sets nothing.
       def tcp_connection(options)
+        options = options.compact
         if options.key?(:server) || options.key?(:servers)
           raise(ArgumentError,
                 "tcp_client: takes no server: or servers:, since the url gives the server: #{Utils.redacted_url(url)}")

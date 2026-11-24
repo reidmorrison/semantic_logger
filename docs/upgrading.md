@@ -297,8 +297,12 @@ What changes:
 * **Retries.** It connects to each server once, rather than up to 10 times, and writes an entry once,
   rather than up to 3 times. When it cannot connect, it writes the entry again after the appender's
   back-off, without counting it as failed, so the worker thread no longer waits on retries during an
-  outage. A write that fails before any of it was sent, such as on a connection that the server
-  closed while it was idle, is written once more at once, on a new connection.
+  outage. A write to a connection that the server reset or closed before any of it was sent, such as
+  one that was idle, is written once more at once, on a new connection; a write that otherwise fails
+  before any of it was sent, such as by timing out, is written again after the back-off instead.
+* **Timeouts.** A negative `connect_timeout:`, `write_timeout:`, or `handshake_timeout:`, such as `-1`,
+  still waits as long as it takes, and an option given as `nil` takes its default. `connect_timeout:`
+  also bounds the look-up of a host name, which `Net::TCPClient` left unbounded.
 * **IPv6.** A host name is connected to at any of its addresses, IPv4 or IPv6, and an IPv6 address
   can be given in brackets, as in `"[::1]:514"`.
 * **Errors.** A connection that fails raises

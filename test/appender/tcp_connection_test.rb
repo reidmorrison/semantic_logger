@@ -60,6 +60,32 @@ module Appender
           assert_raises(ArgumentError) { Connection.new(server: "localhost:1", connect_retry_interval: 0.5) }
         end
 
+        it "uses the default of each option given as nil" do
+          connection = Connection.new(server: "localhost:1", servers: nil, policy: nil, connect_timeout: nil,
+                                      write_timeout: nil, keepalive: nil, ssl: nil)
+
+          assert_in_delta 10.0, connection.instance_variable_get(:@connect_timeout)
+          assert_in_delta 60.0, connection.instance_variable_get(:@write_timeout)
+          assert connection.instance_variable_get(:@keepalive)
+          assert_equal :ordered, connection.instance_variable_get(:@policy)
+        end
+
+        it "waits as long as it takes for a negative timeout, as Net::TCPClient took -1" do
+          over_tls   = Connection.new(server: server_name, ssl: {handshake_timeout: -1})
+          connection = Connection.new(server: server_name, connect_timeout: -1, write_timeout: -1)
+
+          assert_nil over_tls.instance_variable_get(:@handshake_timeout)
+          assert_nil connection.instance_variable_get(:@connect_timeout)
+          assert_nil connection.instance_variable_get(:@write_timeout)
+          connection.write("waited\n")
+          accepted = listener.accept
+
+          assert_equal "waited\n", line(accepted)
+        ensure
+          connection&.close
+          accepted&.close
+        end
+
         it "raises ArgumentError without a server" do
           assert_raises(ArgumentError) { Connection.new }
         end
@@ -111,6 +137,20 @@ module Appender
           assert @connection.not_connected?(error)
         end
 
+        it "bounds both the look-up of the host name and the connection by connect_timeout:" do
+          timeouts    = nil
+          @connection = Connection.new(server: "a:1", connect_timeout: 3)
+
+          Socket.stub(:tcp, lambda { |*, **options|
+            timeouts = options
+            raise Errno::ECONNREFUSED
+          }) do
+            assert_raises(Connection::ConnectError) { @connection.reopen }
+          end
+
+          assert_equal({connect_timeout: 3, resolv_timeout: 3}, timeouts)
+        end
+
         it "tries the servers in a random order with policy: :random" do
           tried       = []
           @connection = Connection.new(servers: %w[a:1 b:1 c:1], policy: :random)
@@ -135,12 +175,18 @@ module Appender
       end
 
       describe "#write" do
-        it "connects, and writes the data" do
+        it "connects, and writes the data, without holding it back" do
           @connection = Connection.new(server: server_name)
           @connection.write("hello\n")
           accepted = listener.accept
 
           assert_equal "hello\n", line(accepted)
+          # JRuby sets TCP_NODELAY, but cannot read it back (ENOPROTOOPT).
+          unless defined?(JRUBY_VERSION)
+            socket = @connection.instance_variable_get(:@socket)
+
+            assert socket.getsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY).bool
+          end
         ensure
           accepted&.close
         end
@@ -185,6 +231,8 @@ module Appender
           end
           error = assert_raises(Connection::WriteError) { @connection.write("partial\n") }
 
+          refute_kind_of Connection::NothingWritten, error
+          refute @connection.nothing_sent?(error)
           refute @connection.not_connected?(error)
           refute_predicate @connection, :connected?
         end
@@ -195,19 +243,18 @@ module Appender
           assert_raises(Connection::ConnectError) { @connection.write("lost\n") }
         end
 
-        it "writes once more on a new connection when the write times out before any of the data was sent" do
+        it "raises WriteError, without writing again, when the write times out before any of the data was sent" do
           @connection = Connection.new(server: server_name, write_timeout: 0.1)
           @connection.reopen
           stalled = @connection.instance_variable_get(:@socket)
           stalled.define_singleton_method(:write_nonblock) { |*, **| :wait_writable }
           stalled.define_singleton_method(:wait_writable) { |*| nil }
-          @connection.write("again\n")
-          listener.accept.close
-          accepted = listener.accept
+          error = assert_raises(Connection::NothingWritten) { @connection.write("slow\n") }
 
-          assert_equal "again\n", line(accepted)
-        ensure
-          accepted&.close
+          assert_includes error.message, "timed out"
+          assert @connection.nothing_sent?(error), "the appender writes it again after its back-off"
+          refute @connection.not_connected?(error)
+          refute_predicate @connection, :connected?
         end
 
         it "raises WriteError when the write times out after part of the data was sent" do
@@ -241,6 +288,30 @@ module Appender
 
           assert_includes error.message, "OpenSSL::SSL::SSLError"
           assert @connection.not_connected?(error)
+        end
+
+        it "does not check the host name with verify_hostname: false, but does by default" do
+          store = OpenSSL::X509::Store.new
+          store.add_cert(TlsServer.context.cert)
+          @connection = Connection.new(server: "localhost:#{server.port}",
+                                       ssl:    {cert_store: store, verify_hostname: false})
+          @connection.write("trusted\n")
+
+          assert_equal ["trusted"], server.received(1, 1)
+
+          checked = Connection.new(server: "localhost:#{server.port}", ssl: {cert_store: store})
+          error   = assert_raises(Connection::ConnectError) { checked.reopen }
+
+          assert_match(/hostname|certificate verify failed/, error.message)
+        end
+
+        it "checks an IP address against the certificate" do
+          store = OpenSSL::X509::Store.new
+          store.add_cert(TlsServer.context.cert)
+          @connection = Connection.new(server: "127.0.0.1:#{server.port}", ssl: {cert_store: store})
+          @connection.write("by address\n")
+
+          assert_equal ["by address"], server.received(1, 1)
         end
 
         it "raises ConnectError when the handshake times out" do

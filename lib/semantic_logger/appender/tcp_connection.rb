@@ -10,8 +10,8 @@ module SemanticLogger
     #
     # It connects to each server once, in the order of its policy, and raises ConnectError when it cannot connect to
     # any of them. It does not retry by itself: the appender's back-off writes the entry again later (see
-    # #not_connected?), except that a write that fails before any of it was sent, such as on a connection that the
-    # server closed while it was idle, is written once more at once, on a new connection.
+    # #nothing_sent?), except that a write to a connection that the server reset or closed before any of it was
+    # sent, such as one that was idle, is written once more at once, on a new connection.
     #
     # A connection opened in another process, before a fork, belongs to that process: it is forgotten, and only the
     # child's copy of its file descriptor is closed, without a TLS shutdown, which would end the connection for the
@@ -26,6 +26,10 @@ module SemanticLogger
 
       # Raised when a write fails, after it may have sent part of the entry.
       class WriteError < Error; end
+
+      # Raised when a write fails before any of the entry was sent, such as when the server stopped reading until
+      # the write timed out: the appender can write it again later, since the server cannot have received any of it.
+      class NothingWritten < WriteError; end
 
       # The options of Net::TCPClient, which Semantic Logger used before v6, that it does not take, with why.
       RETRIES = "it does not retry by itself, so it takes only connect_retry_count: 0 and retry_count: 0: the " \
@@ -57,7 +61,14 @@ module SemanticLogger
 
       # The errors of writing to a connection.
       WRITE_ERRORS = [SystemCallError, IOError, ::IO::TimeoutError, OpenSSL::SSL::SSLError].freeze
-      private_constant :WRITE_ERRORS
+
+      # The errors of writing to a connection that is no longer usable: reset or closed by the server, such as one
+      # that was idle, or failed in the kernel, as ETIMEDOUT from keepalive (not the write timeout), after which a
+      # new connection may take the data at once. Not ::IO::TimeoutError, the write timeout, which would only wait
+      # as long again.
+      CLOSED_ERRORS = [Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, Errno::ENOTCONN, Errno::ETIMEDOUT,
+                       Errno::EHOSTUNREACH, Errno::ENETUNREACH, IOError, OpenSSL::SSL::SSLError].freeze
+      private_constant :WRITE_ERRORS, :CLOSED_ERRORS
 
       # [Array<String>] the servers, as "host:port", in the order given.
       attr_reader :servers
@@ -75,11 +86,12 @@ module SemanticLogger
       #     Default: :ordered
       #
       #   connect_timeout: [Numeric]
-      #     Seconds to wait for each server to accept the connection.
+      #     Seconds to wait for the addresses of each server's host name to be looked up, and then for it to accept
+      #     the connection; a negative value, such as -1, waits as long as it takes.
       #     Default: 10
       #
       #   write_timeout: [Numeric]
-      #     Seconds to wait for a write to complete.
+      #     Seconds to wait for a write to complete; a negative value waits as long as it takes.
       #     Default: 60
       #
       #   keepalive: [true | false]
@@ -95,23 +107,24 @@ module SemanticLogger
       #
       #   connect_retry_count: 0, retry_count: 0, buffered: false
       #     Taken, and ignored, since they are what it does, so that the options of Net::TCPClient that said so
-      #     still work. connect_retry_interval: is also ignored alongside connect_retry_count: 0. An option given as
-      #     nil sets nothing.
+      #     still work. connect_retry_interval: is also ignored alongside connect_retry_count: 0.
+      #
+      # An option given as nil sets nothing: its default is used.
       #
       # Raises ArgumentError for any other option, such as an option of Net::TCPClient that it does not take.
-      def initialize(server: nil, servers: nil, policy: :ordered, connect_timeout: 10, write_timeout: 60,
-                     keepalive: true, ssl: nil, **refused)
+      def initialize(server: nil, servers: nil, policy: nil, connect_timeout: nil, write_timeout: nil,
+                     keepalive: nil, ssl: nil, **refused)
         refuse(refused)
         @servers = Array(servers || server).map(&:to_s).freeze
         raise(ArgumentError, "Missing :server, or :servers") if @servers.empty?
 
         @endpoints         = @servers.map { |name| endpoint(name) }.freeze
-        @policy            = policy_option(policy)
-        @connect_timeout   = Float(connect_timeout)
-        @write_timeout     = Float(write_timeout)
-        @keepalive         = keepalive
+        @policy            = policy_option(policy || :ordered)
+        @connect_timeout   = timeout(connect_timeout, 10)
+        @write_timeout     = timeout(write_timeout, 60)
+        @keepalive         = keepalive.nil? || keepalive
         @ssl_params        = ssl_params(ssl)
-        @handshake_timeout = Float((ssl.is_a?(Hash) && ssl[:handshake_timeout]) || connect_timeout)
+        @handshake_timeout = timeout(ssl.is_a?(Hash) ? ssl[:handshake_timeout] : nil, @connect_timeout || -1)
         @socket            = nil
       end
 
@@ -127,9 +140,11 @@ module SemanticLogger
       end
 
       # Writes the data, connecting first when it has no connection, or the server closed the one it has. When the
-      # write fails before any of the data was sent, it connects again and writes it once more. Raises ConnectError
-      # when it cannot connect, and WriteError when the write fails, after closing the connection, so that the
-      # next write connects again.
+      # connection is no longer usable (see CLOSED_ERRORS) before any of the data was sent, it connects again and
+      # writes it once more; not after the write timeout, which would only wait as long again. Raises ConnectError
+      # when it cannot connect, NothingWritten (a WriteError) when the write fails before any of the data was sent,
+      # and WriteError when it fails after some was, after closing the connection, so that the next write connects
+      # again.
       def write(data)
         forget_inherited
         drop_socket if @socket && closed_by_peer?
@@ -137,13 +152,14 @@ module SemanticLogger
         begin
           reopen unless @socket
           sent     = 0
-          deadline = monotonic + @write_timeout
+          deadline = deadline_after(@write_timeout)
           sent += write_some(data.byteslice(sent..), deadline) while sent < data.bytesize
           sent
         rescue *WRITE_ERRORS => e
           drop_socket
-          if sent.to_i.positive? || retried
-            raise(WriteError, "Could not write to #{@servers.join(', ')}: #{e.class}: #{e.message}")
+          if sent.to_i.positive? || retried || !closed?(e)
+            raise(sent.to_i.positive? ? WriteError : NothingWritten,
+                  "Could not write to #{@servers.join(', ')}: #{e.class}: #{e.message}")
           end
 
           retried = true
@@ -166,10 +182,16 @@ module SemanticLogger
         !@socket.nil? && @pid == ::Process.pid
       end
 
-      # Whether the exception, raised by #write, says that nothing of the data was sent, since it could not
-      # connect: the appender can write it again later.
+      # Whether the exception, raised by #write, says that it could not connect, so that the data never reached the
+      # server.
       def not_connected?(exception)
         exception.is_a?(ConnectError)
+      end
+
+      # Whether the exception, raised by #write, says that none of the data was sent, since it could not connect,
+      # or the write failed before any of it was: the appender can write it again later.
+      def nothing_sent?(exception)
+        exception.is_a?(ConnectError) || exception.is_a?(NothingWritten)
       end
 
       private
@@ -202,6 +224,24 @@ module SemanticLogger
         [match[:ipv6] || match[:host], match[:port].to_i]
       end
 
+      # Whether the error says that the server reset or closed the connection, rather than that the write timed out,
+      # as ::IO::TimeoutError, an IOError, does.
+      def closed?(error)
+        !error.is_a?(::IO::TimeoutError) && CLOSED_ERRORS.any? { |closed| error.is_a?(closed) }
+      end
+
+      # Returns [Float | nil] the timeout in seconds, the default when it is nil, or nil, no limit, when it is
+      # negative, as Net::TCPClient took -1.
+      def timeout(value, default)
+        seconds = Float(value.nil? ? default : value)
+        seconds.negative? ? nil : seconds
+      end
+
+      # Returns [Float | nil] when a wait of the timeout ends, or nil when it has no limit.
+      def deadline_after(timeout)
+        timeout && (monotonic + timeout)
+      end
+
       def policy_option(policy)
         return policy if POLICIES.include?(policy)
 
@@ -232,8 +272,11 @@ module SemanticLogger
       end
 
       def connect_to(host, port)
-        socket = Socket.tcp(host, port, connect_timeout: @connect_timeout)
+        # The look-up is bounded too, so that a DNS server that does not answer cannot hold up the worker thread.
+        socket = Socket.tcp(host, port, connect_timeout: @connect_timeout, resolv_timeout: @connect_timeout)
         socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true) if @keepalive
+        # Each entry is written at once, as with Net::TCPClient's buffered: false, rather than held back for more.
+        socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, true)
         @ssl_params ? handshake(socket, host) : socket
       rescue Exception
         socket&.close
@@ -241,21 +284,25 @@ module SemanticLogger
       end
 
       # Returns [OpenSSL::SSL::SSLSocket] the socket, over TLS, once the handshake has completed within the
-      # handshake timeout, and the server's certificate matches the host, unless it is not verified.
+      # handshake timeout, and the server's certificate matches the host, unless the parameters turn off the
+      # verification of either. OpenSSL checks a host name given as the SSLSocket#hostname; an IP address, which is
+      # not sent as the server name, is checked after the handshake.
       def handshake(socket, host)
         context = OpenSSL::SSL::SSLContext.new
         context.set_params(@ssl_params)
         ssl            = OpenSSL::SSL::SSLSocket.new(socket, context)
         ssl.sync_close = true
         ssl.hostname   = host unless ip_address?(host)
-        deadline       = monotonic + @handshake_timeout
+        deadline       = deadline_after(@handshake_timeout)
         loop do
           result = ssl.connect_nonblock(exception: false)
           break unless %i[wait_readable wait_writable].include?(result)
 
           wait(socket, result, deadline, "TLS handshake")
         end
-        ssl.post_connection_check(host) if context.verify_mode == OpenSSL::SSL::VERIFY_PEER
+        if context.verify_hostname && (context.verify_mode.to_i & OpenSSL::SSL::VERIFY_PEER).nonzero?
+          ssl.post_connection_check(host)
+        end
         ssl
       end
 
@@ -269,9 +316,10 @@ module SemanticLogger
         end
       end
 
+      # Waits for the IO to be ready, until the deadline, or as long as it takes when there is none.
       def wait(io, ready, deadline, action)
-        remaining = deadline - monotonic
-        ready_in  = remaining.positive? && io.public_send(ready, remaining)
+        remaining = deadline && (deadline - monotonic)
+        ready_in  = (remaining.nil? || remaining.positive?) && io.public_send(ready, remaining)
         raise(::IO::TimeoutError, "The #{action} timed out") unless ready_in
       end
 

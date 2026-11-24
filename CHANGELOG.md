@@ -158,8 +158,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   and `ssl:`, plus `connect_retry_count: 0`, `retry_count: 0`, and `buffered: false`, and raise
   `ArgumentError` for any other option, as v5.4 warned. They connect to each server once, and write an
   entry that could not connect again after the appender's back-off, without counting it as failed; a
-  write that fails before any of it was sent is written once more at once, on a new connection. A
-  host name is connected to over IPv4 or IPv6.
+  write to a connection that the server reset or closed before any of it was sent is written once
+  more at once, on a new connection, and one that otherwise failed before any of it was sent, such as
+  by timing out, is written again after the back-off. A host name is connected to over IPv4 or IPv6.
 
 ### Removed
 

@@ -610,18 +610,21 @@ the next when one cannot be connected to, in the order given, or shuffled for ea
 |--------|-------------|
 | `server:`, `servers:` | The server, or the servers to try in turn. |
 | `policy:` | `:ordered` (the default) or `:random`. |
-| `connect_timeout:` | Seconds to wait for a server to accept the connection. Default: 10. |
-| `write_timeout:` | Seconds to wait for a write to complete. Default: 60. |
+| `connect_timeout:` | Seconds to wait for a server's host name to be looked up, and then for it to accept the connection; a negative value waits as long as it takes. Default: 10. |
+| `write_timeout:` | Seconds to wait for a write to complete; a negative value waits as long as it takes, which can hold up the flush at exit while the server does not read. Default: 60. |
 | `keepalive:` | Whether to turn on TCP keepalive. Default: true. |
 | `ssl:` | `true`, or the parameters of an `OpenSSL::SSL::SSLContext`, such as `ca_file:`, plus `handshake_timeout:`, the seconds to wait for the TLS handshake (default `connect_timeout:`). The server's certificate and host name are verified unless the parameters say otherwise. |
 
 The appender connects to each server once. When it cannot connect to any of them, or the TLS
 handshake fails, such as for a certificate that does not verify, it writes nothing, and writes the
 entry again after its back-off, without counting it as failed, so that an outage loses no entries
-until `async_max_retries` (see [Operations](operations.html)). A write that fails before any of it was
-sent, such as on a connection that the server closed while it was idle, is written once more at
-once, on a new connection; one that fails after part of it was sent is not, so that the server never
-gets an entry twice, and is counted as failed.
+until `async_max_retries` (see [Operations](operations.html)). A write to a connection that the
+server reset or closed before any of it was sent, such as one that was idle, is written once more at
+once, on a new connection, as is one to a connection that failed, such as a host that became
+unreachable. One that otherwise fails before any of it was sent, such as by timing out, is written
+again after the back-off instead, so that the worker thread does not wait twice at once. One that fails after part of
+it was sent is not written again, so that the server never gets an entry twice, and is counted as
+failed.
 
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter
