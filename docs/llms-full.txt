@@ -4229,7 +4229,8 @@ timestamp:
 SemanticLogger.add_appender(metric: :splunk_observability, token: "SIGNALFX_ORG_ACCESS_TOKEN")
 ~~~
 
-`metric: :signalfx`, its former name, adds the same appender.
+`metric: :signalfx`, its former name, adds the same appender, which names itself
+`SemanticLogger::Metric::Signalfx` in its reports and errors, whichever name added it.
 
 | Option | Description |
 |--------|-------------|
