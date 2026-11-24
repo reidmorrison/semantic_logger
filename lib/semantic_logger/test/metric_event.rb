@@ -7,7 +7,7 @@ module SemanticLogger
     #   name:       [String] the name as it is recorded: frozen, a Symbol converted to a String (see
     #               Metric::Aggregator.metric_name).
     #   value:      [Numeric] the amount of a counter, or the value of a histogram: seconds for `time`.
-    #   unit:       [String|nil] "s" for `time`, otherwise the unit given to `record`.
+    #   unit:       [String|nil] "s" for `time`, otherwise the unit given to `increment` or `record`.
     #   dimensions: [Hash|nil] the dimensions given, as they are recorded: a frozen copy with String keys,
     #               and Symbol values as Strings (see Metric::Aggregator.normalize_dimensions). nil when
     #               none were given, or an empty Hash, which the recorder treats as none too.

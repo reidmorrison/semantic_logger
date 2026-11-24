@@ -10,7 +10,7 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Added
 
-- Every logger has `increment(name, amount = 1, dimensions: nil)` for a counter,
+- Every logger has `increment(name, amount = 1, unit: nil, dimensions: nil)` for a counter,
   `time(name, duration: nil, dimensions: nil) { ... }` for a histogram of durations in seconds (it
   times the block and returns its result, or records a `duration:` given in milliseconds), and
   `record(name, value, unit: nil, dimensions: nil)` for a histogram of any value. They do not depend
@@ -93,8 +93,6 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   `metric: :otlp` and reads the same variables in their `OTEL_EXPORTER_OTLP_LOGS_*` form, and sends a
   batch again after a 502 or 504, as OTLP/HTTP asks. Its formatter is
   `SemanticLogger::Formatters::Otlp`, or a subclass of it.
-- `increment` takes `unit:`, such as `"{message}"`, as `record` does, which the `:otlp` and
-  `:summary` metric appenders send.
 - `SemanticLogger.safe_dimension_keys`, the metric dimension keys that are never redacted, matched
   exactly, so that a sensitive key such as `:name` or `:type` does not redact OpenTelemetry attribute
   names such as `messaging.destination.name`. `error.type` is always safe. A library adds its own:

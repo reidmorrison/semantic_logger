@@ -4427,7 +4427,7 @@ SemanticLogger.add_appender(metric: :summary, interval: 300, level: :debug)
 
 Each entry is named `SemanticLogger::Metric::Summary`, its message is the metric name, and its
 payload holds the `sum` of a counter, or the `count`, `sum`, `min`, `max`, `p50`, `p95`, and `p99`
-of a histogram, with its `unit` and `dimensions` when it has them. Values are rounded to 3
+of a histogram, with the `unit` and `dimensions` of either when it has them. Values are rounded to 3
 significant digits, and the percentiles are estimates.
 
 Its `level:`, `:info` by default, is the level of the entries it writes, independent of
