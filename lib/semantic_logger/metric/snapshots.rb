@@ -172,10 +172,11 @@ module SemanticLogger
       end
 
       # Returns [true|false] whether the snapshot that #write_metrics failed to write, raising the
-      # exception, is worth writing again, with the next one: the destination stored none of it, and
-      # may take it later, such as one that asked for it to be sent again later, or one that it was
-      # never sent to (see Subscriber#not_sent?), which is kept for as long as it takes, rather than
-      # MAX_RESENDS times. Otherwise it is discarded.
+      # exception, is worth writing again, with the next one: a later write may succeed, such as when
+      # the destination asked for it to be sent again later, or it was never sent (see
+      # Subscriber#not_sent?), in which case it is kept for as long as it takes, rather than
+      # MAX_RESENDS times. Otherwise it is discarded. The appender decides whether writing it again
+      # can count its points twice, should the destination have stored some of it.
       #
       # False, since only the appender can tell. An appender that writes the snapshot in more than one
       # request must answer false for an error from any request after the first.
