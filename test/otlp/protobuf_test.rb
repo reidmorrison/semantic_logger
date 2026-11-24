@@ -137,6 +137,18 @@ module Otlp
         end
       end
 
+      describe "integers out of the range of their type" do
+        it "raises Error rather than writing another value" do
+          protobuf = SemanticLogger::Otlp::Protobuf
+
+          error = assert_raises(protobuf::Error) { protobuf.encode({asInt: 2**63}, :NumberDataPoint) }
+
+          assert_includes error.message, "out of the range of sfixed64"
+          assert_raises(protobuf::Error) { protobuf.encode({offset: 2**31}, :Buckets) }
+          assert_raises(protobuf::Error) { protobuf.encode({bucketCounts: [-1]}, :Buckets) }
+        end
+      end
+
       describe ".decode" do
         def decode(hex, message)
           SemanticLogger::Otlp::Protobuf.decode(bytes(hex), message)
@@ -166,6 +178,15 @@ module Otlp
 
         it "skips a field of another wire type than its message declares" do
           assert_equal({}, decode("0d 00000000", :ExportMetricsServiceResponse))
+        end
+
+        it "reads each value of a repeated field, and merges a message field written twice" do
+          assert_equal({"values" => [{"key" => "a"}, {"key" => "b"}]},
+                       decode("0a 03 0a 01 61 0a 03 0a 01 62", :KeyValueList))
+          assert_equal(
+            {"partialSuccess" => {"rejectedDataPoints" => 3, "errorMessage" => "x"}},
+            decode("0a 02 08 03 0a 03 12 01 78", :ExportMetricsServiceResponse)
+          )
         end
 
         it "reads an empty message" do

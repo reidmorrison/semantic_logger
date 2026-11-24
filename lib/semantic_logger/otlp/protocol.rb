@@ -50,20 +50,45 @@ module SemanticLogger
         protobuf? ? Protobuf.encode(request, message) : JSON.generate(request)
       end
 
-      # Returns [Hash|nil] the fields of a response body, the message of that name, with String keys, in
-      # the encoding that its content type names, or else in its own; nil when the body is empty, or
-      # cannot be read, for any reason.
+      # Returns [Hash] the headers that each request is sent with: its Content-Type, and an Accept of
+      # the same type, so that a response is written in it too, after those given, such as an Accept of
+      # another type, since a response is decoded by its own Content-Type. Raises ArgumentError for a
+      # Content-Type given, in any case, of another type, since the body would then not be what it says:
+      # the protocol, not a header, chooses the encoding.
+      def headers(given)
+        given.each_pair do |name, value|
+          next unless name.to_s.casecmp?("content-type")
+          # Only the media type, without parameters such as "; charset=utf-8".
+          next if value.to_s.split(";", 2).first.to_s.strip.casecmp?(content_type)
+
+          raise(ArgumentError,
+                "header: #{name} #{value.inspect} does not match the #{self.name} protocol, which sends " \
+                "#{content_type}. Choose the encoding with protocol: instead.")
+        end
+        {"Content-Type" => content_type, "Accept" => content_type}.merge(given)
+      end
+
+      # Returns [Hash|nil] the fields of the response body, as the message of that name, decoded by its
+      # Content-Type: JSON for a type that names JSON, protobuf for one that names protobuf, and otherwise,
+      # such as for no type, or a generic one from a proxy, JSON when the body starts with "{", else the
+      # encoding of the protocol. Nil for an empty body, or one that cannot be decoded, for any reason.
       def decode(body, content_type, message)
         return if body.nil? || body.empty?
 
-        fields = if content_type.to_s.include?("json") || (!content_type.to_s.include?("protobuf") && !protobuf?)
-                   JSON.parse(body)
-                 else
-                   Protobuf.decode(body, message)
-                 end
+        fields = json_body?(body, content_type.to_s.downcase) ? JSON.parse(body) : Protobuf.decode(body, message)
         fields if fields.is_a?(Hash)
       rescue StandardError
         nil
+      end
+
+      private
+
+      def json_body?(body, content_type)
+        return true if content_type.include?("json")
+        return false if content_type.include?("protobuf")
+
+        # Not after stripping: the binary encoding of a response starts with "\n", the tag of its field 1.
+        body.start_with?("{") || !protobuf?
       end
     end
   end

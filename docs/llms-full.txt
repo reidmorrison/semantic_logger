@@ -4116,7 +4116,7 @@ hold one name in two units: each is sent as a metric of its own.
 |--------|-------------|
 | `url:` | Base url of the receiver; the metrics are posted to `v1/metrics` under its path. Default: `OTEL_EXPORTER_OTLP_ENDPOINT`, or else `http://localhost:4318`. |
 | `endpoint:` | The full url to post the metrics to, used as it is, instead of `url:`. Default: `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, unless `url:` is given. |
-| `protocol:` | `"http/protobuf"` or `"http/json"`. Default: `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`, or else `OTEL_EXPORTER_OTLP_PROTOCOL`, or else `"http/protobuf"`. |
+| `protocol:` | `"http/protobuf"` or `"http/json"`. Default: `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`, or else `OTEL_EXPORTER_OTLP_PROTOCOL` (in any case), or else `"http/protobuf"`. A `Content-Type` given in `header:` of another type raises `ArgumentError`: choose the encoding with `protocol:`. |
 | `application:` | The `service.name` of the resource. Default: `OTEL_SERVICE_NAME`, or else `SemanticLogger.application`. |
 | `host:` | The `host.name` of the resource. Default: `SemanticLogger.host`. |
 | `environment:` | The `deployment.environment.name` of the resource, left out when there is none. Default: `SemanticLogger.environment`. |

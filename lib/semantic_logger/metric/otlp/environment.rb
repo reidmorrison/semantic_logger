@@ -198,6 +198,7 @@ module SemanticLogger
         end
 
         def parse_protocol(name, text)
+          text = text.downcase
           return text if SemanticLogger::Otlp::Protocol.known?(text)
 
           if text == "grpc"

@@ -234,10 +234,31 @@ module Metric
           assert_equal "application/json", request["Accept"]
         end
 
-        it "lets a Content-Type given win" do
-          request = requests(on: new_appender(protocol: nil, header: {"content-type" => "application/custom"})).first
+        it "raises for a Content-Type given that is not the protocol's, and takes one that is, in any case" do
+          error = assert_raises(ArgumentError) do
+            new_appender(protocol: nil, header: {"content-type" => "application/json"})
+          end
 
-          assert_equal "application/custom", request["Content-Type"]
+          assert_includes error.message, "does not match the http/protobuf protocol"
+          request = requests(on: new_appender(protocol: nil,
+                                              header:   {"content-type" => "Application/X-Protobuf"})).first
+
+          assert_equal "Application/X-Protobuf", request["Content-Type"]
+          assert new_appender(protocol: "http/json", header: {"Content-Type" => "application/json; charset=utf-8"})
+        end
+
+        it "reads a JSON response without a content type, whatever the protocol" do
+          assert write(response: success({partialSuccess: {rejectedDataPoints: "5"}}.to_json),
+                       on:       new_appender(protocol: nil))
+          assert_includes warnings.first, "rejected 5 metric data point(s)"
+        end
+
+        it "takes the protocol of the environment in any case" do
+          ENV["OTEL_EXPORTER_OTLP_PROTOCOL"] = "HTTP/JSON"
+
+          assert_equal "http/json", new_appender(protocol: nil).protocol.name
+        ensure
+          ENV.delete("OTEL_EXPORTER_OTLP_PROTOCOL")
         end
 
         it "refuses a protocol it does not know" do

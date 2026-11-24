@@ -161,7 +161,7 @@ module SemanticLogger
         url         ||= otel.base_url || DEFAULT_URL
         application ||= otel.service_name
         given_header    = args[:header] || {}
-        args[:header]   = protocol_header.merge(given_header)
+        args[:header]   = @protocol.headers(given_header)
         args[:compress] = otel.compress if !args.key?(:compress) && !otel.compress.nil?
         args[:interval] = otel.export_interval if args[:interval].nil? && otel.export_interval
         args[:ssl]      = otel_ssl(otel, args.fetch(:ssl, {})) if HTTPS.match?((endpoint || url).to_s)
@@ -230,11 +230,6 @@ module SemanticLogger
         fields  = protocol.decode(response.body, response["Content-Type"], :ExportMetricsServiceResponse)
         partial = fields && fields["partialSuccess"]
         partial if partial.is_a?(Hash)
-      end
-
-      # Returns [Hash] the Content-Type and Accept headers of the protocol, which a header given replaces.
-      def protocol_header
-        {"Content-Type" => protocol.content_type, "Accept" => protocol.content_type}
       end
 
       # Returns [Hash] the attributes of the resource, with String keys: those of OTEL_RESOURCE_ATTRIBUTES

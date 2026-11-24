@@ -35,6 +35,17 @@ module SemanticLogger
 
       UINT64_MASK = (2**64) - 1
 
+      # The values that each integer type can hold: one outside them raises Error, rather than being
+      # written as another value.
+      INT32_RANGE  = (-(2**31)..((2**31) - 1))
+      INT64_RANGE  = (-(2**63)..((2**63) - 1))
+      UINT32_RANGE = (0..((2**32) - 1))
+      UINT64_RANGE = (0..UINT64_MASK)
+      RANGES       = {
+        int32: INT32_RANGE, sint32: INT32_RANGE, enum: INT32_RANGE, int64: INT64_RANGE, sfixed64: INT64_RANGE,
+        uint32: UINT32_RANGE, fixed32: UINT32_RANGE, uint64: UINT64_RANGE, fixed64: UINT64_RANGE
+      }.freeze
+
       # The text of the doubles that JSON cannot hold as numbers, as the Protobuf JSON mapping writes them.
       DOUBLE_TEXT = {"NaN" => Float::NAN, "Infinity" => Float::INFINITY, "-Infinity" => -Float::INFINITY}.freeze
 
@@ -45,9 +56,12 @@ module SemanticLogger
       end
 
       # Returns [Hash] the fields of the message of that name that the binary encoding holds, with String
-      # keys, as JSON.parse would return them from the JSON encoding: a 64-bit integer as an Integer, and
-      # a field that the message does not have, or of another wire type than it declares, left out. A
-      # repeated field is read only when its every value is written apart, not packed.
+      # keys, as JSON.parse would return them from the JSON encoding: a 64-bit integer as an Integer, a
+      # repeated field as an Array of its values, and a field that the message does not have, or of
+      # another wire type than it declares, left out. A repeated field is read only when its every value
+      # is written apart, not packed. A field that is not repeated, and is written more than once, has
+      # its last value; one of a message has its fields merged, one level deep only, which is enough for
+      # the responses it reads.
       #
       # Raises Error when the bytes are not a valid encoding.
       def self.decode(bytes, message)
@@ -62,7 +76,15 @@ module SemanticLogger
           value       = reader.read(wire_type)
           next unless field && WIRE_TYPES.fetch(field.type, LENGTH_DELIMITED) == wire_type
 
-          result[name.to_s] = decoded_value(value, field)
+          decoded = decoded_value(value, field)
+          key     = name.to_s
+          if field.repeated
+            (result[key] ||= []) << decoded
+          elsif field.message? && result[key].is_a?(Hash)
+            result[key] = result[key].merge(decoded)
+          else
+            result[key] = decoded
+          end
         end
         result
       end
@@ -122,18 +144,18 @@ module SemanticLogger
         when :bool
           write_varint(buffer, value ? 1 : 0)
         when :int64, :uint64, :int32, :uint32, :enum
-          write_varint(buffer, integer(value) & UINT64_MASK)
+          write_varint(buffer, integer(value, type) & UINT64_MASK)
         when :sint32
-          number = integer(value)
-          write_varint(buffer, (number << 1) ^ (number >> 31))
+          number = integer(value, type)
+          write_varint(buffer, ((number << 1) ^ (number >> 31)) & 0xFFFF_FFFF)
         when :double
           buffer << [double(value)].pack("E")
         when :fixed64
-          buffer << [integer(value) & UINT64_MASK].pack("Q<")
+          buffer << [integer(value, type)].pack("Q<")
         when :sfixed64
-          buffer << [integer(value)].pack("q<")
+          buffer << [integer(value, type)].pack("q<")
         when :fixed32
-          buffer << [integer(value) & 0xFFFF_FFFF].pack("L<")
+          buffer << [integer(value, type)].pack("L<")
         else
           raise(Error, "unknown type #{type.inspect}")
         end
@@ -157,13 +179,17 @@ module SemanticLogger
       end
 
       # Returns [Integer] the Integer, or the Integer of a decimal String, as the JSON encoding writes a
-      # 64-bit integer.
-      def self.integer(value)
-        return value if value.is_a?(Integer)
+      # 64-bit integer, raising Error for one that the type cannot hold.
+      def self.integer(value, type)
+        number =
+          begin
+            value.is_a?(Integer) ? value : Integer(value, 10)
+          rescue ArgumentError, TypeError
+            raise(Error, "not an integer: #{value.inspect}")
+          end
+        raise(Error, "#{number} is out of the range of #{type}") unless RANGES.fetch(type).cover?(number)
 
-        Integer(value, 10)
-      rescue ArgumentError, TypeError
-        raise(Error, "not an integer: #{value.inspect}")
+        number
       end
 
       def self.double(value)
@@ -192,7 +218,7 @@ module SemanticLogger
           case field.type
           when :string then value.dup.force_encoding(Encoding::UTF_8)
           when :bool then value != 0
-          when :int64, :int32 then value >= 2**63 ? value - (2**64) : value
+          when :int64, :int32, :enum then value >= 2**63 ? value - (2**64) : value
           when :sint32 then (value >> 1) ^ -(value & 1)
           when :double then value.unpack1("E")
           when :fixed64 then value.unpack1("Q<")
