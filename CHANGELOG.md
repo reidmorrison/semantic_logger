@@ -87,8 +87,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   OTLP/HTTP receiver, as OTLP log records posted to `<url>/v1/logs`, in batches, without any
   OpenTelemetry gems or `google-protobuf`, as `http/protobuf` by default or `http/json`. Each logger
   name is an instrumentation scope, the resource is that of `metric: :otlp` (with the `process.pid`
-  of the sender), and attribute values keep their structure, a Hash as a map and an Array as an
-  array. A record is linked to the span current when it was logged, when the `opentelemetry-api` gem
+  of the sender), a Hash in the payload or named tags is flattened into dotted attribute names, such
+  as `order.address.zip_code` (`Formatters::Otlp.new(flatten: false)` sends it as a map), and an
+  Array is sent as an array. A record is linked to the span current when it was logged, when the `opentelemetry-api` gem
   is loaded, or else to the `trace_id` and `span_id` named tags. It takes the options of
   `metric: :otlp` and reads the same variables in their `OTEL_EXPORTER_OTLP_LOGS_*` form, and sends a
   batch again after a 502 or 504, as OTLP/HTTP asks. Its formatter is
