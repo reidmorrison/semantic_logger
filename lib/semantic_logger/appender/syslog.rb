@@ -184,6 +184,7 @@ module SemanticLogger
             server:  "it is ignored, since the url gives the server",
             servers: "it replaces the server of the url, which v6 always connects to: give that server in the url"
           )
+          logger.extend(TcpClientOptions::BenchmarkWithoutWarning) if TcpClientOptions.report_outdated_gem(":syslog")
         end
         reopen
       end

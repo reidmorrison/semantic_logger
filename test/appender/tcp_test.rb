@@ -60,6 +60,50 @@ module Appender
         end
       end
 
+      describe "net_tcp_client older than 2.3" do
+        let(:options) { SemanticLogger::Appender::TcpClientOptions }
+
+        it "warns that it calls the deprecated benchmark_* methods, and to update it" do
+          warning = /:tcp appender uses net_tcp_client 2\.2\.1, which calls the deprecated benchmark_\* .*to 2\.3\.0/
+          outdated = assert_deprecated(warning) { options.report_outdated_gem(":tcp", "2.2.1") }
+
+          assert outdated
+        end
+
+        it "does not warn for 2.3 or later" do
+          refute_deprecated do
+            refute options.report_outdated_gem(":tcp", "2.3.0")
+            refute options.report_outdated_gem(":tcp", "2.10.0")
+          end
+        end
+
+        it "gives benchmark_* methods that do not warn to a logger extended with BenchmarkWithoutWarning" do
+          logger = SemanticLogger::Test::CaptureLogEvents.new.extend(options::BenchmarkWithoutWarning)
+          result = refute_deprecated { logger.benchmark_debug("#write") { "written" } }
+
+          assert_equal "written", result
+          assert_equal "#write", logger.events.last.message
+          assert logger.events.last.duration
+        end
+
+        it "extends the appender's own logger, which it gives net_tcp_client, when it is outdated" do
+          built = options.stub(:report_outdated_gem, ->(name) { name == ":tcp" }) { appender }
+
+          assert_same built.logger, Net::TCPClient.logger
+          assert_kind_of options::BenchmarkWithoutWarning, built.logger
+        ensure
+          Net::TCPClient.logger = nil
+        end
+
+        it "leaves the appender's logger as it is with 2.3 or later" do
+          built = options.stub(:report_outdated_gem, false) { appender }
+
+          refute_kind_of options::BenchmarkWithoutWarning, built.logger
+        ensure
+          Net::TCPClient.logger = nil
+        end
+      end
+
       describe "ssl:" do
         # Returns [SemanticLogger::Appender::Tcp] an appender built with the given ssl: option, which connects to
         # nothing.

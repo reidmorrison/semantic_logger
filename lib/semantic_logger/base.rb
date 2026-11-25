@@ -120,12 +120,12 @@ module SemanticLogger
           end
         end
 
+        # Deprecated: use measure_#{level}, which takes the same arguments. Removed in v6.
         def benchmark_#{level}(message, params = {}, &block)
-          if level_index <= #{index}
-            measure_internal(:#{level}, #{index}, message, params, &block)
-          else
-            block.call(params) if block
-          end
+          SemanticLogger::Deprecation.warn(
+            "benchmark_#{level} is deprecated and removed in v6. Use measure_#{level}, which takes the same arguments."
+          )
+          measure_#{level}(message, params, &block)
         end
       METHODS
     end
@@ -140,8 +140,13 @@ module SemanticLogger
       end
     end
 
-    # Backward compatibility
-    alias benchmark measure
+    # Deprecated: use measure, which takes the same arguments. Removed in v6.
+    def benchmark(level, message, params = {}, &)
+      SemanticLogger::Deprecation.warn(
+        "benchmark is deprecated and removed in v6. Use measure, which takes the same arguments."
+      )
+      measure(level, message, params, &)
+    end
 
     # Log a thread backtrace
     def backtrace(thread: Thread.current,
