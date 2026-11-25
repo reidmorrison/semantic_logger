@@ -47,13 +47,14 @@ module SemanticLogger
                      formatter: nil,
                      **args,
                      &)
+        # Base#initialize (via Subscriber) overwrites @name with the class name,
+        # so call super first and then assign our own attributes.
+        super(formatter: formatter, **args, &)
+        # After super, so that options it refuses raise without the warning as well.
         Deprecation.warn(
           "SemanticLogger::Appender::OpenTelemetry (appender: :open_telemetry) is deprecated and will be removed " \
           "in v7. Use appender: :otlp, which sends log records over OTLP/HTTP without the OpenTelemetry gems."
         )
-        # Base#initialize (via Subscriber) overwrites @name with the class name,
-        # so call super first and then assign our own attributes.
-        super(formatter: formatter, **args, &)
 
         @name      = name
         @version   = version

@@ -210,8 +210,10 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Deprecated
 
-- `appender: :open_telemetry`, which writes through the OpenTelemetry logs SDK, warns that it is
-  deprecated and will be removed in v7: use `appender: :otlp`, which needs no OpenTelemetry gems.
+- `appender: :open_telemetry`, which writes through the OpenTelemetry logs SDK, is deprecated and will
+  be removed in v7: use `appender: :otlp`, which needs no OpenTelemetry gems. It warns while
+  deprecation warnings are on, see
+  [Seeing deprecation warnings](https://logger.reidmorrison.com/upgrading.html#seeing-deprecation-warnings).
 
 ### Removed
 
