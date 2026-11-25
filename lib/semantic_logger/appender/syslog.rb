@@ -57,6 +57,9 @@ module SemanticLogger
       #     Specify custom parameters to pass into Net::TCPClient.new
       #     For a list of options see the net_tcp_client documentation:
       #       https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
+      #     v6 takes only policy: (:ordered or :random), connect_timeout:, write_timeout:, keepalive:, and
+      #     ssl:, plus connect_retry_count: 0, retry_count: 0, buffered: false, and connect_retry_interval:
+      #     with connect_retry_count: 0, so the others report a deprecation warning (see TcpClientOptions).
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
@@ -141,7 +144,7 @@ module SemanticLogger
         @protocol           = (uri.scheme || :syslog).to_sym
         @port               = uri.port || 514
         @server             = "localhost" if @protocol == :syslog
-        @tcp_client_options = tcp_client
+        @tcp_client_options = tcp_client || {}
 
         raise "Unknown protocol #{@protocol}!" unless %i[syslog tcp udp].include?(@protocol)
 
@@ -175,6 +178,13 @@ module SemanticLogger
         end
 
         super(**args, &)
+        if @protocol == :tcp
+          TcpClientOptions.report_deprecated(
+            @tcp_client_options, ":syslog",
+            server:  "it is ignored, since the url gives the server",
+            servers: "it replaces the server of the url, which v6 always connects to: give that server in the url"
+          )
+        end
         reopen
       end
 

@@ -3,7 +3,8 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.4 deprecation of the positional class of semantic_logger_events.
+  v5.4 deprecations of the TCP options that v6 does not take and of the
+  positional class of semantic_logger_events.
 ---
 
 
@@ -60,6 +61,34 @@ Do not log them through Semantic Logger itself: a warning reported on its backgr
 then wait on that thread's own queue, which can stop all logging while the queue is full.
 
 ### Upgrading to Semantic Logger v5.4
+
+#### Remove the TCP options that v6 does not take
+
+The `:tcp` appender, and the `:syslog` appender over TCP, hand their connection options to
+`Net::TCPClient` from the `net_tcp_client` gem. v6 connects with a class of its own instead, which
+takes only `server:`, `servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`,
+`write_timeout:`, `keepalive:`, and `ssl:`, plus the values of the options below that are what it
+does, and raises `ArgumentError` for any other. So the others now report a
+[deprecation warning](#seeing-deprecation-warnings):
+
+| Option | Instead |
+|--------|---------|
+| `connect_retry_count:`, `retry_count:` | Set it to `0`, which v6 also takes. v6 does not retry by itself: the appender writes the entry again after its back-off, see `async_max_retries:` in [Operations](operations.html). Do not just remove it on v5: Net::TCPClient would then retry up to 10 and 3 times, on the appender's worker thread. |
+| `connect_retry_interval:` | Remove it, or keep it only with `connect_retry_count: 0`. |
+| `buffered:` | Set it to `false`, which v6 also takes, or remove it. |
+| `read_timeout:` | Remove it: the appenders never read. |
+| `close_on_error:`, `on_connect:`, `proxy_server:` | Remove it. |
+| `policy:` other than `:ordered` or `:random`, such as a Proc | Use `:ordered` or `:random`. |
+| `server:` in the `tcp_client:` of `:syslog` | Remove it: it is ignored, since the `url:` gives the server. |
+| `servers:` in the `tcp_client:` of `:syslog` | Give the server in the `url:`: `servers:` replaced the server of the url, and v6 always connects to the server of the url. |
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: :tcp, server: "logs:3300", connect_retry_count: 5, retry_count: 2)
+
+# After, with the same behaviour in v5.4 and v6:
+SemanticLogger.add_appender(appender: :tcp, server: "logs:3300", connect_retry_count: 0, retry_count: 0)
+~~~
 
 #### Pass the class to `semantic_logger_events` as `klass:`
 

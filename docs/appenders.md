@@ -607,12 +607,22 @@ others or retrying.
 
 Net::TCPClient retries only after a network error, such as a refused, reset, or timed-out
 connection: it connects again up to `connect_retry_count:` times (default 10), and writes an entry
-again on a new connection up to `retry_count:` times (default 3). A write timeout, or an SSL error
-such as a certificate that does not verify, fails without a retry. The appender passes these and its
+again on a new connection up to `retry_count:` times (default 3), all on the appender's worker
+thread. A write timeout, or an SSL error such as a certificate that does not verify, fails without
+a retry. To have the appender's back-off retry instead, as v6 does, pass `connect_retry_count: 0`
+and `retry_count: 0`, which v6 also takes. The appender passes these and its
 other connection options, such as `connect_timeout:`, `write_timeout:`, and `ssl:`, to
 `Net::TCPClient.new`, which raises `ArgumentError` for a keyword it does not take; see
 [`Net::TCPClient#initialize`](https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb)
 for them all and their defaults.
+
+v6 connects with a connection class of its own instead of Net::TCPClient, and takes only `server:`,
+`servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`, `write_timeout:`, `keepalive:`,
+and `ssl:`, plus `connect_retry_count: 0`, `retry_count: 0`, and `buffered: false`, which are what
+it does. So the other options and values report a
+[deprecation warning](upgrading.html#seeing-deprecation-warnings), as do the same ones in the
+`tcp_client:` Hash of the `:syslog` appender, where `server:` and `servers:` are deprecated too,
+since v6 connects to the server of its `url:`.
 
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter

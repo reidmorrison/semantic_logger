@@ -21,6 +21,45 @@ module Appender
 
       let(:amessage) { "AppenderTcpTest log message" }
 
+      describe "options that v6 does not take" do
+        def appender_with(**options)
+          Net::TCPClient.stub_any_instance(:connect, true) do
+            SemanticLogger::Appender::Tcp.new(server: "localhost:8088", **options)
+          end
+        end
+
+        it "warns naming each one, with why" do
+          names  = "The :tcp appender's connect_retry_count:, retry_count:, read_timeout: are deprecated, " \
+                   "and v6 raises ArgumentError for them"
+          reason = "retry_count: v6 does not retry by itself"
+          assert_deprecated(/#{Regexp.escape(names)}.*#{Regexp.escape(reason)}/) do
+            appender_with(connect_retry_count: 1, retry_count: 1, read_timeout: 2)
+          end
+        end
+
+        it "warns for a Proc policy" do
+          assert_deprecated(/policy: is deprecated.*not a Proc/) { appender_with(policy: ->(servers) { servers }) }
+        end
+
+        it "says to set the retry counts to 0, which v6 takes" do
+          assert_deprecated(/does not retry by itself, so it takes only connect_retry_count: 0 and retry_count: 0/) do
+            appender_with(retry_count: 3)
+          end
+        end
+
+        it "warns for connect_retry_interval: without connect_retry_count: 0" do
+          assert_deprecated(/connect_retry_interval: is deprecated/) { appender_with(connect_retry_interval: 0.1) }
+        end
+
+        it "does not warn for the options that v6 keeps, the values that it takes, or an option given as nil" do
+          refute_deprecated do
+            appender_with(connect_timeout: 3, write_timeout: 4, keepalive: true, policy: :ordered, ssl: nil,
+                          read_timeout: nil, connect_retry_count: 0, connect_retry_interval: 0.1, retry_count: 0,
+                          buffered: false)
+          end
+        end
+      end
+
       describe "ssl:" do
         # Returns [SemanticLogger::Appender::Tcp] an appender built with the given ssl: option, which connects to
         # nothing.
