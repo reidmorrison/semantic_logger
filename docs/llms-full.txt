@@ -5710,7 +5710,10 @@ than deleting and recreating the file. Example `logrotate` configuration for Lin
 
 ### Loggers that are replaced automatically
 
-After they initialize, Rails Semantic Logger replaces the loggers of these libraries when present:
+Rails Semantic Logger gives Rails and its components a Semantic Logger logger each: `Rails.logger`,
+and the loggers of Active Record, Action Controller, Action View, Action Mailer, Active Job, and
+Active Support's cache store, each named after its component, such as `ActiveRecord::Base`. After
+they initialize, it also replaces the loggers of these libraries when present:
 
 - Action Cable
 - Bugsnag
@@ -5723,6 +5726,50 @@ After they initialize, Rails Semantic Logger replaces the loggers of these libra
 - Sidekiq (unless `replace_sidekiq_logger = false`)
 - Sidetiq
 - Solid Queue (unless `replace_solid_queue_logger = false`)
+
+Each of these loggers is the one through which its component or library logs. The
+[metrics](#metrics) of Active Record, Action Controller, Action View, Action Mailer, Active Job, the
+cache store, Sidekiq, and Solid Queue are recorded through it too. Action Controller logs each
+controller's entries through that controller's own logger, named after it, such as
+`ArticlesController`, and only its metrics through `ActionController::Base`'s.
+
+Do not replace one of these loggers yourself, with a Ruby `Logger`, another logger that is not a
+Semantic Logger one, or `nil`, such as with `config.solid_queue.logger = Logger.new($stdout)`: that
+is not supported, and can break its log entries and its metrics.
+
+To log less from a component or library, set the level of its logger instead, such as in
+`config/initializers/logging.rb`:
+
+~~~ruby
+# No SQL queries, which are logged at :debug. Set as Active Record loads, rather than loading it early.
+ActiveSupport.on_load(:active_record) { logger.level = :info }
+
+SolidQueue.logger.level = :warn
+~~~
+
+For a controller, set the level of its own logger, in the controller:
+
+~~~ruby
+class ArticlesController < ApplicationController
+  logger.level = :warn
+end
+~~~
+
+Rails logs a line for each cache operation, such as `Cache read: <key>`, through the cache store's
+logger, which logs them at `:trace` rather than `:debug`, so that they do not appear at the usual
+`:debug`. To see them, set its level in a file under `config/initializers`, which Rails loads once
+Rails Semantic Logger has given the cache store its logger:
+
+~~~ruby
+ActiveSupport::Cache::Store.logger.level = :trace if Rails.env.development?
+~~~
+
+These lines show each cache key as it is: `config.filter_parameters` does not redact them. The errors
+that a cache store swallows, such as a lost connection to Redis or Memcached, are logged at
+`:error`.
+
+A logger's level applies to its log entries only: its metrics are recorded whatever it logs. To
+record no Rails metrics, set `config.rails_semantic_logger.metrics = false`.
 
 ---
 
