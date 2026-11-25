@@ -6,6 +6,15 @@ require "semantic_logger/appender/open_telemetry"
 module Appender
   class OpenTelemetryTest < Minitest::Test
     describe SemanticLogger::Appender::OpenTelemetry do
+      allow_deprecation(/appender: :open_telemetry\) is deprecated/)
+
+      it "is deprecated, naming appender: :otlp" do
+        ::OpenTelemetry.logger_provider = provider
+        assert_deprecated(/deprecated and will be removed in v7\. Use appender: :otlp/) do
+          SemanticLogger::Appender::OpenTelemetry.new
+        end
+      end
+
       let(:exporter) do
         ::OpenTelemetry::SDK::Logs::Export::InMemoryLogRecordExporter.new
       end
