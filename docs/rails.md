@@ -1073,12 +1073,13 @@ OpenTelemetry conventions, and recorded apart from the logs.
 ### The deprecated appender options are removed
 
 `config.rails_semantic_logger.format`, `ap_options`, `filter`, `console_logger`, and
-`add_file_appender` have warned since v5 and are gone: setting one raises `NoMethodError`. Declare
-the destinations in the [appenders block](#configuring-where-logs-go-the-appenders-block) instead:
+`add_file_appender` have warned since v5 and are gone: setting one raises `NoMethodError`, which names
+the `rails_semantic_logger:install` generator that converts them. Declare the destinations in the
+[appenders block](#configuring-where-logs-go-the-appenders-block) instead:
 
 | Removed option | Instead |
 |----------------|---------|
-| `config.rails_semantic_logger.format = :json` | `appenders.add(file_name: "log/#{Rails.env}.log", formatter: :json)` |
+| `config.rails_semantic_logger.format = :json` | `appenders.add(file_name: config.paths["log"].first, formatter: :json)` |
 | `config.rails_semantic_logger.ap_options = {multiline: true}` | `formatter: {color: {ap: {multiline: true}}}` on the appender |
 | `config.rails_semantic_logger.filter = /MyClass/` | `filter: /MyClass/` on the appender |
 | `config.rails_semantic_logger.console_logger = false` | Declare your appenders, without an `add_console` one |
@@ -1095,9 +1096,10 @@ existing application:
   `config.log_formatter`, and a `RAILS_LOG_TO_STDOUT` block that only sets the Rails logger. It keeps
   `config.log_level` and `config.log_tags`, which are used.
 * In each environment file that declares no appenders, unless `config/application.rb` declares them,
-  it writes an appenders block with today's defaults. The deployed environments also get commented-out
-  alternatives, such as JSON on standard out for a container. Since declarations from every file add
-  up, it writes no environment blocks at all when `config/application.rb` declares appenders.
+  it writes an appenders block with today's defaults, the log file at `config.paths["log"].first`.
+  The deployed environments also get commented-out alternatives: JSON on standard out for a
+  container, or text on standard out with the logs and metrics over OTLP to a Collector. Since
+  declarations from every file add up, it writes no environment blocks at all when `config/application.rb` declares appenders.
 * It applies the removed options to the lines of that block: `format`, `ap_options`, and `filter` to
   the default file appender, and `add_file_appender = false` or `console_logger = false` comment out
   the default lines they turned off. Top-level `config.semantic_logger.add_appender(...)` calls become
