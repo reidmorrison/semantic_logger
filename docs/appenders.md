@@ -496,11 +496,20 @@ SemanticLogger.add_appender(
 
 The HTTP appender, and every appender built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
 `:otlp`, and the `:otlp` and `:signalfx` metric appenders), connects to the server when it is added,
-and again when it is reopened, such as after a fork. When it cannot connect, since the host name does
-not resolve, the server cannot be reached, or it refuses the connection or does not accept it within
-`open_timeout`, such as while a collector is not listening yet as the application starts, it reports
-that to the internal logger rather than raising, and the next request connects. Any other failure,
-such as a server certificate that does not verify, still raises from `add_appender`.
+and again when it is reopened, such as after a fork. When it cannot connect, it reports that to the
+internal logger as `Could not connect`, rather than raising, and the next request connects. That is
+when the host name does not resolve, the server cannot be reached, or it refuses the connection, does
+not accept it within `open_timeout`, or resets it during the TLS handshake, such as while a collector
+is not listening yet as the application starts. It is also when the host name is misspelled, which
+then fails every request: check the internal logger when entries do not arrive. Any other failure,
+such as a server certificate that does not verify, or a server that closes the connection during the
+TLS handshake, still raises from `add_appender`.
+
+With `async: true` or `batch: true`, a request that could not connect is written again later, as
+described below. An appender added without either is written to by the thread that writes every
+appender's entries, or by the application's thread in sync mode, which discards the entry once it
+fails, and while its server cannot be reached, that thread waits up to `open_timeout` for each entry.
+Pass `async: true` or `batch: true` when the server may be down.
 
 #### When the server does not accept a request
 
@@ -534,7 +543,8 @@ reached for, to send with the next interval instead; see
 
 A request that the appender could not send, since it could not connect to the server (the name does
 not resolve, the server cannot be reached, or it refuses the connection or does not accept it within
-`open_timeout`), is sent again in the same way as a `503`, but without counting towards the 3 times:
+`open_timeout`, or, when the request starts the connection, the operating system timed out the
+connect, or the server reset it during the TLS handshake), is sent again in the same way as a `503`, but without counting towards the 3 times:
 the server has not answered it, so an outage loses no entries until the worker thread gives up. A
 request that failed once it was sent, such as one whose answer did not come within `read_timeout`,
 or whose connection was reset, is discarded instead, after the same back-off, since the server may

@@ -48,6 +48,14 @@ module SemanticLogger
       # Maximum number of bytes of an error response body to write to the internal logger.
       MAX_LOGGED_RESPONSE_BODY = 512
 
+      # Raised by a request when the appender could not start its connection, for one of the
+      # CONNECT_ERRORS that is not one of NOT_SENT_ERRORS, such as a TLS handshake that a load balancer
+      # with no server behind it reset, which is its cause. Since no request was sent on it, it is a
+      # SocketError, one of NOT_SENT_ERRORS, so that #not_sent? and #wrote_nothing? say so from its
+      # class alone, and the entries are written again rather than discarded.
+      class ConnectError < SocketError
+      end
+
       # Raised when the server answers a request with a status other than 2xx. Its message holds
       # the status code, the redacted url, and the start of the response body, for the internal
       # logger.
@@ -128,6 +136,19 @@ module SemanticLogger
       NOT_SENT_ERRORS = [
         SocketError, Net::OpenTimeout, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
         Errno::EADDRNOTAVAIL
+      ].freeze
+
+      # Errors raised by starting a connection when it could not connect, which #reopen reports rather
+      # than raises: NOT_SENT_ERRORS, plus those that, raised while sending a request, could mean that
+      # the server received it (see #not_sent?), but raised while starting a connection, before any
+      # request was sent, only mean that the server cannot be reached yet: a connect that the operating
+      # system timed out (with no open_timeout), a host or network that is down, a connection that was
+      # aborted, or one that a load balancer with no server behind it reset during the TLS handshake. A
+      # TLS failure, an OpenSSL::SSL::SSLError, is not one of them, whether a certificate that does not
+      # verify or a server that closed the connection during the handshake.
+      CONNECT_ERRORS = [
+        *NOT_SENT_ERRORS, Errno::ETIMEDOUT, Errno::EHOSTDOWN, Errno::ENETDOWN, Errno::ECONNABORTED, Errno::ECONNRESET,
+        EOFError
       ].freeze
 
       # Create HTTP(S) log appender
@@ -270,7 +291,7 @@ module SemanticLogger
 
       # Closes the connection, if it is open, and starts a new one, such as when the appender is added,
       # after a log rotation, or after a fork. When it cannot connect, such as while the server is not
-      # listening yet as the application starts (see NOT_SENT_ERRORS), it reports that to the internal
+      # listening yet as the application starts (see CONNECT_ERRORS), it reports that to the internal
       # logger rather than raising, so that add_appender still adds it, and the next request connects
       # (see #process_request). Any other failure, such as a certificate that does not verify, raises.
       #
@@ -282,9 +303,12 @@ module SemanticLogger
       # when the parent closes it.
       def reopen
         finish_connection
-        build_http.start
-      rescue *NOT_SENT_ERRORS => e
-        logger.warn("Could not connect to #{redacted_url}: the next request connects", e)
+        http = build_http
+        begin
+          http.start
+        rescue *CONNECT_ERRORS => e
+          logger.warn("Could not connect to #{redacted_url}: the next request connects", e)
+        end
       end
 
       # Closes the connection, if it is open, such as when the appender is removed, or add_appender
@@ -553,7 +577,7 @@ module SemanticLogger
         # A new one is built first when the appender has none, since #close forgot the one it
         # inherited in a forked child.
         http = @http || build_http
-        http.start unless http.started?
+        start_connection(http) unless http.started?
         response = http.request(request)
         return accepted(response) if response.is_a?(Net::HTTPSuccess)
 
@@ -566,6 +590,19 @@ module SemanticLogger
       rescue RuntimeError => e
         reconnect unless not_sent?(e)
         raise e
+      end
+
+      # Starts the connection for a request, when it is not started, such as the first request after
+      # the appender could not connect. A failure to connect that #not_sent? could not tell from one
+      # raised once a request was sent, such as Errno::ECONNRESET, raises a ConnectError instead. Not
+      # when Net::HTTP itself connects again within the request, such as after its keep_alive_timeout,
+      # which raises the error as it is.
+      def start_connection(http)
+        http.start
+      rescue *CONNECT_ERRORS => e
+        raise if not_sent?(e)
+
+        raise ConnectError, "Could not connect to #{redacted_url}: #{e.class}: #{e.message}"
       end
 
       # Returns true, for a request that the server accepted, answering with a 2xx status. A subclass

@@ -363,9 +363,15 @@ The HTTP appender, and every appender built on it (`:elasticsearch_http`, `:splu
 `:otlp`, and the `:otlp` and `:signalfx` metric appenders), no longer raise from `add_appender`, nor
 from a reopen, when they cannot connect, such as with `Errno::ECONNREFUSED` while a collector is not
 listening yet. They report it to the internal logger instead, and the next request connects, so the
-application still starts. A server certificate that does not verify, or any other failure, still
-raises. Code that rescued the connection error from `add_appender` to notice a server that is down
-no longer sees it.
+application still starts. That includes a host name that does not resolve, such as a misspelled
+`url:`, which no longer raises at start-up: look for `Could not connect` on the internal logger. A
+server certificate that does not verify, or any other failure, still raises. Code that rescued the
+connection error from `add_appender` to notice a server that is down no longer sees it.
+
+With `async: true` or `batch: true`, a request that starts the connection, such as the first one
+after the appender could not connect, and fails because the server reset it during the TLS handshake,
+or the operating system timed out the connect, is now written again later, as one the server refused
+is, rather than discarded; it raises `SemanticLogger::Appender::Http::ConnectError`.
 
 #### Rails Semantic Logger
 
