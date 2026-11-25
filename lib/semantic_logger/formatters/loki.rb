@@ -77,9 +77,8 @@ module SemanticLogger
       #     Structured metadata needs a Loki that accepts it, with schema v13 and
       #     `allow_structured_metadata`, which is on by default since Loki 3.0. Any other Loki
       #     rejects each entry that has structured metadata, which with `:pid` is every entry.
-      #     Default: neither, so that both are labels, with a deprecation warning, since Semantic
-      #     Logger v6 writes both to the structured metadata by default. Supply [] to keep both as
-      #     labels without it.
+      #     Default: both, [:pid, :thread]. Supply [] to keep both as labels, for a Loki that does not
+      #     accept structured metadata.
       #
       #   max_label_names_per_series: [Integer]
       #     The most labels that Loki accepts for a stream. Loki rejects the whole push, with every
@@ -513,22 +512,11 @@ module SemanticLogger
       end
 
       # Returns [Array<Symbol>] the labels to write to the structured metadata (see #initialize):
-      # none when the option is not supplied, with a deprecation warning, since v6 writes both
-      # there by default.
+      # both, STRUCTURED_METADATA, when the option is nil, as the :loki appender gives it by default.
       # Raises ArgumentError for anything but a list of STRUCTURED_METADATA, so that a mistake
       # surfaces here rather than as a label left where it was.
       def structured_metadata_option(labels)
-        if labels.nil?
-          Deprecation.warn(
-            "The :loki formatter writes pid and thread as stream labels by default, which changes in v6. " \
-            "Give it structured_metadata: [] to keep them as labels, or structured_metadata: [:pid, :thread] to " \
-            "write them as structured metadata, which needs a Loki that accepts it (schema v13 with " \
-            "allow_structured_metadata, the default since Loki 3.0), as in " \
-            "add_appender(appender: :loki, formatter: {loki: {structured_metadata: [:pid, :thread]}}). See " \
-            "https://logger.reidmorrison.com/appenders.html#pid-and-thread-as-structured-metadata"
-          )
-          return [].freeze
-        end
+        return STRUCTURED_METADATA if labels.nil?
         return labels.uniq.freeze if labels.is_a?(Array) && (labels - STRUCTURED_METADATA).empty?
 
         raise(ArgumentError, "structured_metadata must be a list of :pid and :thread, not #{labels.inspect}")

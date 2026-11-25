@@ -2971,20 +2971,19 @@ SemanticLogger.add_appender(
   url:       "https://logs-prod-001.grafana.net",
   username:  "grafana_username",
   password:  "grafana_token_here",
-  compress:  true,
-  formatter: {loki: {structured_metadata: [:pid, :thread]}}
+  compress:  true
 )
 ~~~
 
 Set the URL, username, and password to match your Loki instance. Set `compress: true` to compress the
 log messages. The ingestion path is appended to the url, so a query string on the url is kept and sent
-with every push. `structured_metadata:` writes the process id and the thread name as structured
-metadata rather than as labels, see
+with every push. It writes the process id and the thread name as structured metadata rather than as
+labels, which needs a Loki that accepts it, see
 [pid and thread as structured metadata](#pid-and-thread-as-structured-metadata).
 
-Each entry is a stream whose labels are `pid`, `host`, `application`, `environment`, `level`,
-`thread`, `tags` (as JSON), each named tag, and each value an `on_log` subscriber adds to the
-context, except `pid` and `thread` when they are structured metadata. Its line is the message. Its
+Each entry is a stream whose labels are `host`, `application`, `environment`, `level`, `tags` (as
+JSON), each named tag, and each value an `on_log` subscriber adds to the context, and `pid` and
+`thread` when they are kept as labels. Its line is the message. Its
 structured metadata holds each payload key, and these fields when the entry has the value:
 
 | Field | Value |
@@ -2993,7 +2992,7 @@ structured metadata holds each payload key, and these fields when the entry has 
 | `duration`, `duration_human` | The duration in milliseconds, from the `measure_*` methods, and as text. |
 | `exception_name`, `exception_message` | The class and message of the logged exception. |
 | `stack_trace` | Its backtrace, followed by each exception that caused it. |
-| `pid`, `thread` | The process id and the thread name, instead of as labels, when [`structured_metadata:`](#pid-and-thread-as-structured-metadata) names them. |
+| `pid`, `thread` | The process id and the thread name, unless [`structured_metadata:`](#pid-and-thread-as-structured-metadata) keeps them as labels. |
 
 Structured metadata holds only Strings, so a nested value in the payload is written as JSON, and any
 other value as its text. A payload key named like one of these fields is written with a `payload_`
@@ -3031,32 +3030,27 @@ whose values are many and keep changing, as `pid` and `thread` do: every process
 thread, adds a stream, which Loki indexes and stores on its own. Its documentation names process and
 thread ids as data for
 [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/)
-instead. The formatter's `structured_metadata:` option names the labels to write there instead,
-`:pid`, `:thread`, or both, where a query can still filter on them, as in
-`{application="shop"} | thread="worker-1"`, but a stream selector cannot:
+instead. So the formatter writes both there by default, where a query can still filter on them, as
+in `{application="shop"} | thread="worker-1"`, but a stream selector cannot.
+
+Structured metadata needs a Loki that accepts it: one with schema v13, and with
+`allow_structured_metadata`, which is on by default since Loki 3.0. Any other Loki rejects each
+entry that has structured metadata, which with `:pid` is every entry, rather than only those with a
+payload, a metric, a duration, or an exception. For such a Loki, keep both as labels with the
+formatter's `structured_metadata:` option, which names the labels to write as structured metadata:
+`:pid`, `:thread`, both (`[:pid, :thread]`, the default), or neither (`[]`):
 
 ~~~ruby
 SemanticLogger.add_appender(
   appender:  :loki,
   url:       "https://logs-prod-001.grafana.net",
-  formatter: {loki: {structured_metadata: [:pid, :thread]}}
+  formatter: {loki: {structured_metadata: []}}
 )
 ~~~
-
-Structured metadata needs a Loki that accepts it: one with schema v13, and with
-`allow_structured_metadata`, which is on by default since Loki 3.0. Any other Loki rejects each
-entry that has structured metadata, which with `:pid` is every entry, rather than only those with a
-payload, a metric, a duration, or an exception.
 
 A payload key named `pid` or `thread` is then written with the `payload_` prefix, as for the other
 fields above. A named tag or context key of that name is written as a label with a number added, as
 in `thread_2`, since Loki would otherwise show the structured metadata as `thread_extracted`.
-
-By default both are labels, as with `structured_metadata: []`. Semantic Logger v6 writes both as
-structured metadata by default, so building the formatter without `structured_metadata:`, as
-`appender: :loki` does unless it is given one with `formatter: {loki: {...}}`, reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings). Pass `structured_metadata: []` to
-keep them as labels without it.
 
 #### Loki's label limits
 
@@ -3088,7 +3082,6 @@ SemanticLogger.add_appender(
   url:       "https://logs-prod-001.grafana.net",
   formatter: {
     loki: {
-      structured_metadata:        [:pid, :thread],
       max_label_names_per_series: 30,
       max_label_name_length:      2048,
       max_label_value_length:     4096
@@ -7440,6 +7433,25 @@ SemanticLogger.add_appender(appender: MyAppender.new(level: :warn))
 warning while it added only the first. Call `add_appender` once for each destination. A destination
 given as `nil` is still not one. `appender: :wrapper`, which only worked with `logger:`, now raises
 too: leave it out, since `logger:` already adds the wrapper.
+
+#### Loki writes `pid` and `thread` as structured metadata
+
+The `:loki` appender, and its formatter, now write the process id and the thread name as structured
+metadata by default, as Loki advises and as v5.3 warned, rather than as the stream labels `pid` and
+`thread`, which added a stream for every process restart and every thread. A query then filters on
+them after the stream selector, as in `{application="shop"} | thread="worker-1"`.
+
+Structured metadata needs a Loki with schema v13 and `allow_structured_metadata`, which is on by
+default since Loki 3.0. Any other Loki rejects every entry, so for one that does not accept it, keep
+them as labels:
+
+~~~ruby
+SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana.net",
+                            formatter: {loki: {structured_metadata: []}})
+~~~
+
+A `structured_metadata: [:pid, :thread]` added to silence the v5.3 warning can stay, or be removed.
+See [pid and thread as structured metadata](appenders.html#pid-and-thread-as-structured-metadata).
 
 #### Rails Semantic Logger
 

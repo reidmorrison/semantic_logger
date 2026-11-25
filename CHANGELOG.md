@@ -147,6 +147,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - `add_appender` raises `ArgumentError` when given more than one of `file_name:`, `io:`, `logger:`,
   `appender:`, and `metric:`, rather than adding the first with a deprecation warning, as v5.3 did. A
   destination given as `nil` is not one.
+- The `:loki` appender and formatter write `pid` and `thread` as structured metadata by default, as
+  v5.3 warned, rather than as stream labels. That needs a Loki that accepts structured metadata; for
+  any other, keep them as labels with `formatter: {loki: {structured_metadata: []}}`.
 
 ### Removed
 
