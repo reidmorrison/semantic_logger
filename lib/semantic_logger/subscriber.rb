@@ -324,10 +324,10 @@ module SemanticLogger
     end
 
     # Returns [Hash] a copy of the supplied options, with a copy of each Hash among them, such as ssl:, for an
-    # appender to add its own settings to, or to give to a client it builds, which may change them:
-    # Net::TCPClient takes handshake_timeout: out of the ssl: Hash it is given. An appender never changes
-    # the Hashes it is given, which belong to the application: they can be frozen, or shared with another
-    # appender, and the next client the appender builds, such as after a reopen, needs them as they were.
+    # appender to add its own settings to, or to give to a client it builds, which may change them. An
+    # appender never changes the Hashes it is given, which belong to the application: they can be frozen, or
+    # shared with another appender, and the next client the appender builds, such as after a reopen, needs
+    # them as they were.
     def copy_options(options)
       options.transform_values { |value| value.is_a?(Hash) ? value.dup : value }
     end

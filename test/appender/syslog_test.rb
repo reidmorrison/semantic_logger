@@ -1,5 +1,4 @@
 require_relative "../test_helper"
-require "net/tcp_client"
 require_relative "../forked_child_helper"
 require_relative "../tls_server"
 require "syslog"
@@ -32,15 +31,15 @@ module Appender
       end
 
       it "handle remote syslog over TCP" do
-        message = nil
-        Net::TCPClient.stub_any_instance(:closed?, false) do
-          Net::TCPClient.stub_any_instance(:connect, nil) do
-            syslog_appender = SemanticLogger::Appender::Syslog.new(url: "tcp://localhost:88888", level: :debug)
-            syslog_appender.remote_syslog.stub(:write, proc { |data| message = data }) do
-              syslog_appender.debug "AppenderSyslogTest log message"
-            end
-          end
+        message  = nil
+        listener = TCPServer.new("127.0.0.1", 0)
+        syslog_appender = SemanticLogger::Appender::Syslog.new(url:   "tcp://127.0.0.1:#{listener.addr[1]}",
+                                                               level: :debug)
+        syslog_appender.remote_syslog.stub(:write, proc { |data| message = data }) do
+          syslog_appender.debug "AppenderSyslogTest log message"
         end
+        syslog_appender.close
+        listener.close
 
         # Facility user (1) and severity info (6): 1 * 8 + 6
         assert_match(/<14>(.*?)SemanticLogger::Appender::Syslog -- AppenderSyslogTest log message\r\n/, message)
@@ -58,38 +57,39 @@ module Appender
 
       describe "tcp_client:" do
         # Returns [SemanticLogger::Appender::Syslog] an appender over TCP built with the given tcp_client: option,
-        # which connects to nothing.
+        # connected to a local server.
         def appender_with(tcp_client)
-          Net::TCPClient.stub_any_instance(:connect, nil) do
-            SemanticLogger::Appender::Syslog.new(url: "tcp://localhost:8514", tcp_client: tcp_client)
-          end
+          @listener = TCPServer.new("127.0.0.1", 0)
+          @appender = SemanticLogger::Appender::Syslog.new(url:        "tcp://127.0.0.1:#{@listener.addr[1]}",
+                                                           tcp_client: tcp_client)
         end
 
-        it "keeps the ssl: handshake_timeout after a reopen, and leaves the Hashes given as they are" do
-          ssl        = {handshake_timeout: 2}
-          tcp_client = {connect_timeout: 3, ssl: ssl}
-          appender   = appender_with(tcp_client)
-
-          assert_in_delta 2.0, appender.remote_syslog.ssl_handshake_timeout
-
-          Net::TCPClient.stub_any_instance(:connect, nil) { appender.reopen }
-
-          assert_in_delta 2.0, appender.remote_syslog.ssl_handshake_timeout
-          assert_equal ["localhost:8514"], appender.remote_syslog.servers
-          assert_equal({connect_timeout: 3, ssl: {handshake_timeout: 2}}, tcp_client)
+        after do
+          @appender&.close
+          @listener&.close
         end
 
-        it "accepts frozen Hashes" do
-          appender = appender_with({connect_timeout: 3, ssl: {handshake_timeout: 2}.freeze}.freeze)
+        it "hands the options to its connection, with the server in the url, and leaves the Hashes given as they are" do
+          ssl        = {handshake_timeout: 2, verify_mode: OpenSSL::SSL::VERIFY_NONE}.freeze
+          tcp_client = {connect_timeout: 3, keepalive: false, policy: :random, ssl: ssl}.freeze
+          # Not connected, since the local server does not speak TLS.
+          appender   = SemanticLogger::Appender::TcpConnection.stub_any_instance(:reopen, nil) { appender_with(tcp_client) }
 
-          assert_in_delta 2.0, appender.remote_syslog.ssl_handshake_timeout
-          assert_equal ["localhost:8514"], appender.remote_syslog.servers
+          assert_equal ["127.0.0.1:#{@listener.addr[1]}"], appender.remote_syslog.servers
+          assert_equal({handshake_timeout: 2, verify_mode: OpenSSL::SSL::VERIFY_NONE}, ssl)
+          assert_equal({connect_timeout: 3, keepalive: false, policy: :random, ssl: ssl}, tcp_client)
         end
 
-        it "connects to the server in the url, rather than one given in tcp_client:" do
-          appender = appender_with({server: "otherhost:514"})
+        it "raises ArgumentError for a server in tcp_client:, since the url gives the server" do
+          error = assert_raises(ArgumentError) { appender_with({server: "otherhost:514"}) }
 
-          assert_equal ["localhost:8514"], appender.remote_syslog.servers
+          assert_includes error.message, "takes no server: or servers:"
+        end
+
+        it "raises ArgumentError for an option of Net::TCPClient that it does not take" do
+          error = assert_raises(ArgumentError) { appender_with({connect_retry_count: 3}) }
+
+          assert_includes error.message, "connect_retry_count:"
         end
       end
 
@@ -106,7 +106,7 @@ module Appender
         end
 
         after do
-          tls_appender.remote_syslog&.close
+          tls_appender.close
           server.close
         end
 
@@ -132,9 +132,9 @@ module Appender
         it "connects in the child when a reopen there cannot, rather than writing through the parent's connection" do
           tls_appender.log(log_with("before"))
           output = in_forked_child do
-            error = Net::TCPClient.stub(:new, ->(**) { raise Errno::ECONNREFUSED }) do
+            error = Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) do
               tls_appender.reopen
-            rescue Errno::ECONNREFUSED => e
+            rescue SemanticLogger::Appender::TcpConnection::ConnectError => e
               e
             end
             tls_appender.log(log_with("child"))
@@ -142,7 +142,7 @@ module Appender
           end
           tls_appender.log(log_with("after"))
 
-          assert_equal "Errno::ECONNREFUSED", output
+          assert_equal "SemanticLogger::Appender::TcpConnection::ConnectError", output
           assert_equal %w[before after], server.received(1, 2)
           assert_equal ["child", :closed], server.received(2, 2)
         end
@@ -232,8 +232,8 @@ module Appender
           tcp_appender
           connection = server.accept
 
-          Net::TCPClient.stub(:new, ->(**) { raise Errno::ECONNREFUSED }) do
-            assert_raises(Errno::ECONNREFUSED) { tcp_appender.reopen }
+          Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) do
+            assert_raises(SemanticLogger::Appender::TcpConnection::ConnectError) { tcp_appender.reopen }
           end
           tcp_appender.log(log_with("after"))
 
@@ -243,17 +243,14 @@ module Appender
         end
 
         it "reports an error closing the connection that a reopen replaced, rather than raising it" do
-          internal_logger       = SemanticLogger::Test::CaptureLogEvents.new
-          tcp_appender.logger   = internal_logger
-          replaced              = tcp_appender.remote_syslog
-          replaced.stub(:close, -> { raise Errno::ECONNRESET }) { tcp_appender.reopen }
+          internal_logger     = SemanticLogger::Test::CaptureLogEvents.new
+          tcp_appender.logger = internal_logger
+          Socket.stub_any_instance(:close, -> { raise Errno::ECONNRESET }) { tcp_appender.reopen }
           report = internal_logger.events.last
 
           assert_equal :warn, report.level
           assert_equal "Could not close the connection to the syslog server that a reopen replaced", report.message
           assert_instance_of Errno::ECONNRESET, report.exception
-        ensure
-          replaced&.close
         end
 
         it "closes its connection, and connects again for the next write" do
@@ -307,6 +304,36 @@ module Appender
         end
       end
 
+      describe "#wrote_nothing? and #not_sent?" do
+        it "over TCP, are true when it could not connect, and wrote_nothing? when nothing was sent" do
+          listener        = TCPServer.new("127.0.0.1", 0)
+          appender        = SemanticLogger::Appender::Syslog.new(url: "tcp://127.0.0.1:#{listener.addr[1]}")
+          connect_error   = SemanticLogger::Appender::TcpConnection::ConnectError.new("refused")
+          nothing_written = SemanticLogger::Appender::TcpConnection::NothingWritten.new("timed out")
+          write_error     = SemanticLogger::Appender::TcpConnection::WriteError.new("reset")
+
+          assert appender.wrote_nothing?(connect_error)
+          assert appender.not_sent?(connect_error)
+          assert appender.wrote_nothing?(nothing_written)
+          refute appender.not_sent?(nothing_written)
+          refute appender.wrote_nothing?(write_error)
+          refute appender.not_sent?(write_error)
+        ensure
+          appender&.close
+          listener&.close
+        end
+
+        it "over UDP, are false" do
+          appender = SemanticLogger::Appender::Syslog.new(url: "udp://127.0.0.1:514")
+          error    = Errno::ECONNREFUSED.new
+
+          refute appender.wrote_nothing?(error)
+          refute appender.not_sent?(error)
+        ensure
+          appender&.close
+        end
+      end
+
       describe "#message_error?" do
         it "is true over UDP for a log message too large to send as a datagram" do
           appender = SemanticLogger::Appender::Syslog.new(url: "udp://localhost:88888")
@@ -316,11 +343,13 @@ module Appender
         end
 
         it "is false over TCP, where the message is not sent as one datagram" do
-          Net::TCPClient.stub_any_instance(:connect, nil) do
-            appender = SemanticLogger::Appender::Syslog.new(url: "tcp://localhost:88888")
+          listener = TCPServer.new("127.0.0.1", 0)
+          appender = SemanticLogger::Appender::Syslog.new(url: "tcp://127.0.0.1:#{listener.addr[1]}")
 
-            refute appender.message_error?(Errno::EMSGSIZE.new)
-          end
+          refute appender.message_error?(Errno::EMSGSIZE.new)
+        ensure
+          appender&.close
+          listener&.close
         end
       end
 

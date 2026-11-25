@@ -54,9 +54,9 @@ module SemanticLogger
       #   tcp_client: [Hash]
       #     Default: {}
       #     Only used with the TCP protocol.
-      #     Specify custom parameters to pass into Net::TCPClient.new
-      #     For a list of options see the net_tcp_client documentation:
-      #       https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb
+      #     The options of the connection: policy:, connect_timeout:, write_timeout:, keepalive:, and ssl:
+      #     (see TcpConnection#initialize). The url gives the server, so server: and servers: raise
+      #     ArgumentError, as does any other option.
       #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
@@ -141,7 +141,6 @@ module SemanticLogger
         @protocol           = (uri.scheme || :syslog).to_sym
         @port               = uri.port || 514
         @server             = "localhost" if @protocol == :syslog
-        @tcp_client_options = tcp_client
 
         raise "Unknown protocol #{@protocol}!" unless %i[syslog tcp udp].include?(@protocol)
 
@@ -157,18 +156,9 @@ module SemanticLogger
           @options ||= ::Syslog::LOG_PID | ::Syslog::LOG_CONS
         end
 
-        # The net_tcp_client gem is required when logging over TCP.
-        # The syslog formatters load the syslog_protocol gem that they use to build remote syslog packets.
-        if @protocol == :tcp
-          begin
-            require "net/tcp_client"
-          rescue LoadError
-            raise LoadError,
-                  "Missing gem: net_tcp_client. This gem is required when logging over TCP. " \
-                  "To fix this error: gem install net_tcp_client"
-          end
-        end
+        @remote_syslog = tcp_connection(tcp_client || {}) if @protocol == :tcp
 
+        # The syslog formatters load the syslog_protocol gem that they use to build remote syslog packets.
         if %i[tcp udp].include?(@protocol)
           # Reject an invalid facility when the appender is created, even with a formatter that ignores it.
           SemanticLogger::Formatters::Syslog.facility_number(@facility)
@@ -191,26 +181,17 @@ module SemanticLogger
       # open the handles to resources
       #
       # Over TCP, it connects again, and then closes the connection it replaces, such as after a log rotation.
-      # When connecting fails, it raises, and keeps the connection it has. Over UDP, it closes the socket it
-      # replaces, which in a forked child is only the child's copy.
-      #
-      # Over TCP, a child process first forgets the client it inherited, without closing its connection, which
-      # belongs to the parent. The child closes only its own copy of the socket's file descriptor, which sends
-      # the server nothing, so that the server sees the connection end once the parent closes it, rather than
-      # once the child exits, or collects the client. When connecting fails in the child, such as while the
-      # server cannot be reached, the appender connects again on its next write, rather than writing through
-      # the parent's connection. Over TLS, both processes would then carry on the same TLS session, so that the
-      # server could not decrypt what the parent writes next.
+      # When connecting fails, it raises, and keeps the connection it has. After a fork, the connection inherited
+      # from the parent is left to it (see TcpConnection). Over UDP, it closes the socket it replaces, which in a
+      # forked child is only the child's copy.
       def reopen
         case @protocol
         when :syslog
           method = ::Syslog.opened? ? :reopen : :open
           ::Syslog.send(method, application, options, facility)
         when :tcp
-          forget_inherited
-          replaced = @remote_syslog
-          connect_tcp
-          close_remote_syslog(replaced, replaced: true)
+          error = @remote_syslog.reopen
+          logger.warn("Could not close the connection to the syslog server that a reopen replaced", error) if error
         when :udp
           replaced       = @remote_syslog
           @remote_syslog = UDPSocket.new
@@ -220,24 +201,23 @@ module SemanticLogger
         end
       end
 
-      # Closes the connection to a remote syslog server, such as when the appender is removed, and forgets it, so
-      # that the next write connects again over TCP, or opens a new socket over UDP. The local syslog is left
-      # open, since ::Syslog is shared by the whole process. An error closing it is reported to the internal
-      # logger, rather than raised.
-      #
-      # Over TCP, in a forked child that has not reopened, such as one that removes the appender before its
-      # reopen has run, it forgets the client it inherited instead, without closing its connection, which
-      # belongs to the parent (see #reopen).
+      # Closes the connection to a remote syslog server, such as when the appender is removed, so that the next
+      # write connects again over TCP, or opens a new socket over UDP. The local syslog is left open, since
+      # ::Syslog is shared by the whole process. An error closing it is reported to the internal logger, rather
+      # than raised.
       def close
-        forget_inherited if @protocol == :tcp
-        close_remote_syslog(@remote_syslog)
-      ensure
-        @remote_syslog = nil
+        case @protocol
+        when :tcp
+          error = @remote_syslog.close
+          logger.warn("Could not close the connection to the syslog server", error) if error
+        when :udp
+          close_remote_syslog(@remote_syslog)
+          @remote_syslog = nil
+        end
       end
 
       # Write the log using the specified protocol and server. Connects over TCP, or opens a socket over UDP,
-      # first when the appender has none: after #close, or over TCP when connecting failed as it was reopened
-      # after a fork.
+      # first when the appender has none, such as after #close.
       def log(log)
         case @protocol
         when :syslog
@@ -245,8 +225,7 @@ module SemanticLogger
           message = format_log(log).gsub "%", "%%"
           ::Syslog.log @level_map[log.level], message
         when :tcp
-          client = @remote_syslog || connect_tcp
-          client.retry_on_connection_failure { client.write("#{format_log(log)}\r\n") }
+          @remote_syslog.write("#{format_log(log)}\r\n")
         when :udp
           (@remote_syslog ||= UDPSocket.new).send(format_log(log), 0, @server, @port)
         else
@@ -263,6 +242,17 @@ module SemanticLogger
       # Over UDP, a log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.
       def message_error?(exception)
         (@protocol == :udp && exception.is_a?(Errno::EMSGSIZE)) || super
+      end
+
+      # Over TCP, whether nothing of the entry was written, since it could not connect, or the write failed before
+      # any of it was sent, so that it is written again after the back-off. See Subscriber#wrote_nothing?.
+      def wrote_nothing?(exception)
+        @protocol == :tcp && @remote_syslog.nothing_sent?(exception)
+      end
+
+      # Over TCP, whether the entry never reached the server, since it could not connect. See Subscriber#not_sent?.
+      def not_sent?(exception)
+        @protocol == :tcp && @remote_syslog.not_connected?(exception)
       end
 
       # Returns [SemanticLogger::Formatters::Base] default formatter for this Appender
@@ -292,42 +282,25 @@ module SemanticLogger
 
       private
 
-      # Returns [Net::TCPClient] a new client, connected to the server, after making it the appender's. Records
-      # the process that built it, which owns its connection (see #reopen).
-      def connect_tcp
-        @remote_syslog = Net::TCPClient.new(**tcp_client_options)
-        # Use the local logger for @remote_syslog so errors with the remote logger can be recorded locally.
-        @remote_syslog.logger = logger
-        @pid                  = ::Process.pid
-        @remote_syslog
+      # Returns [TcpConnection] the connection to the server in the url, with the options given as tcp_client:,
+      # which does not connect until the appender is reopened. Raises ArgumentError for server: or servers:
+      # in them, since the url gives the server. An option given as nil sets nothing.
+      def tcp_connection(options)
+        options = options.compact
+        if options.key?(:server) || options.key?(:servers)
+          raise(ArgumentError,
+                "tcp_client: takes no server: or servers:, since the url gives the server: #{Utils.redacted_url(url)}")
+        end
+
+        TcpConnection.new(**options, server: "#{@server}:#{@port}")
       end
 
-      # In a child process, forgets the TCP client built in the parent before a fork, and then closes the child's
-      # copy of its socket's file descriptor, without a TLS shutdown: SSLSocket#to_io is the TCPSocket under it.
-      # See #reopen.
-      def forget_inherited
-        return if @pid == ::Process.pid
-
-        inherited      = @remote_syslog
-        @remote_syslog = nil
-        socket         = inherited&.socket&.to_io
-        socket.close unless socket.nil? || socket.closed?
-      end
-
-      # Closes the given TCP client or UDP socket, if any: the one that a reopen replaced, when replaced: is true.
-      # Reports an error to the internal logger as a warning, rather than raising it.
+      # Closes the given UDP socket, if any: the one that a reopen replaced, when replaced: is true. Reports an
+      # error to the internal logger as a warning, rather than raising it.
       def close_remote_syslog(remote_syslog, replaced: false)
         remote_syslog&.close
       rescue StandardError => e
         logger.warn("Could not close the connection to the syslog server#{' that a reopen replaced' if replaced}", e)
-      end
-
-      # Returns [Hash] a copy of the options given as tcp_client: (see Subscriber#copy_options), with the server
-      # from the url, for a new Net::TCPClient, since it takes handshake_timeout: out of the ssl: Hash it is
-      # given: each client gets a copy of its own, which keeps the timeout for the next one, such as after a
-      # reopen.
-      def tcp_client_options
-        copy_options(@tcp_client_options).merge(server: "#{@server}:#{@port}")
       end
 
       # Returns the supplied formatter, with this appender's facility, level map, and

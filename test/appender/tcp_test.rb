@@ -6,48 +6,63 @@ require_relative "../tls_server"
 module Appender
   class TcpTest < Minitest::Test
     describe SemanticLogger::Appender::Tcp do
-      let(:appender) do
-        appender =
-          Net::TCPClient.stub_any_instance(:connect, true) do
-            SemanticLogger::Appender::Tcp.new(server: "localhost:8088")
-          end
-        appender.tcp_client.instance_eval do
-          def retry_on_connection_failure
-            yield
-          end
-        end
-        appender
+      # A server that accepts connections, without reading what they send.
+      def listener
+        @listener ||= TCPServer.new("127.0.0.1", 0)
+      end
+
+      def appender
+        @appender ||= SemanticLogger::Appender::Tcp.new(server: "127.0.0.1:#{listener.addr[1]}")
+      end
+
+      after do
+        @appender&.close
+        @listener&.close unless @listener&.closed?
       end
 
       let(:amessage) { "AppenderTcpTest log message" }
 
-      describe "ssl:" do
-        # Returns [SemanticLogger::Appender::Tcp] an appender built with the given ssl: option, which connects to
-        # nothing.
-        def appender_with(ssl)
-          Net::TCPClient.stub_any_instance(:connect, true) do
-            SemanticLogger::Appender::Tcp.new(server: "localhost:8088", ssl: ssl)
-          end
+      describe "connection options" do
+        it "hands them to its connection" do
+          appender = SemanticLogger::Appender::Tcp.new(servers: ["127.0.0.1:#{listener.addr[1]}"], connect_timeout: 3)
+
+          assert_equal ["127.0.0.1:#{listener.addr[1]}"], appender.tcp_client.servers
+        ensure
+          appender&.close
         end
 
-        it "keeps the handshake_timeout after a reopen, and leaves the Hash given as it is" do
-          ssl      = {handshake_timeout: 2, ca_file: "ca.pem"}
-          appender = appender_with(ssl)
+        it "raises ArgumentError for an option of Net::TCPClient that it does not take" do
+          error = assert_raises(ArgumentError) do
+            SemanticLogger::Appender::Tcp.new(server: "127.0.0.1:#{listener.addr[1]}", retry_count: 2)
+          end
 
-          assert_in_delta 2.0, appender.tcp_client.ssl_handshake_timeout
-
-          Net::TCPClient.stub_any_instance(:connect, true) { appender.reopen }
-
-          assert_in_delta 2.0, appender.tcp_client.ssl_handshake_timeout
-          assert_equal({handshake_timeout: 2, ca_file: "ca.pem"}, ssl)
+          assert_includes error.message, "retry_count: it does not retry by itself"
         end
 
-        it "accepts a frozen Hash" do
-          [{handshake_timeout: 2}.freeze, {ca_file: "ca.pem"}.freeze].each do |ssl|
-            appender = appender_with(ssl)
+        it "raises when it cannot connect, as it is added" do
+          port = listener.addr[1]
+          listener.close
 
-            assert_in_delta ssl.fetch(:handshake_timeout, 10.0), appender.tcp_client.ssl_handshake_timeout
+          assert_raises(SemanticLogger::Appender::TcpConnection::ConnectError) do
+            SemanticLogger::Appender::Tcp.new(server: "127.0.0.1:#{port}")
           end
+        end
+      end
+
+      describe "#wrote_nothing? and #not_sent?" do
+        it "are true when it could not connect, wrote_nothing? when nothing was sent, and false after part was" do
+          connect_error = SemanticLogger::Appender::TcpConnection::ConnectError.new("refused")
+          write_error   = SemanticLogger::Appender::TcpConnection::WriteError.new("reset")
+
+          assert appender.wrote_nothing?(connect_error)
+          assert appender.not_sent?(connect_error)
+          refute appender.wrote_nothing?(write_error)
+          refute appender.not_sent?(write_error)
+
+          nothing_written = SemanticLogger::Appender::TcpConnection::NothingWritten.new("timed out")
+
+          assert appender.wrote_nothing?(nothing_written)
+          refute appender.not_sent?(nothing_written)
         end
       end
 
@@ -139,9 +154,9 @@ module Appender
         it "connects in the child when a reopen there cannot, rather than writing through the parent's connection" do
           tls_appender.log(log_with("before"))
           output = in_forked_child do
-            error = Net::TCPClient.stub(:new, ->(**) { raise Errno::ECONNREFUSED }) do
+            error = Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) do
               tls_appender.reopen
-            rescue Errno::ECONNREFUSED => e
+            rescue SemanticLogger::Appender::TcpConnection::ConnectError => e
               e
             end
             tls_appender.log(log_with("child"))
@@ -149,7 +164,7 @@ module Appender
           end
           tls_appender.log(log_with("after"))
 
-          assert_equal "Errno::ECONNREFUSED", output
+          assert_equal "SemanticLogger::Appender::TcpConnection::ConnectError", output
           assert_equal %w[before after], server.received(1, 2)
           assert_equal ["child", :closed], server.received(2, 2)
         end

@@ -282,6 +282,34 @@ SignalFx is now Splunk Observability Cloud, so its metric appender can also be a
 `metric: :splunk_observability`. `metric: :signalfx` adds the same appender, and keeps working. See
 [Splunk Observability Cloud (SignalFx)](metrics.html#signalfx).
 
+#### The TCP appenders no longer use `net_tcp_client`
+
+The `:tcp` appender, and the `:syslog` appender over TCP, connect with a class of their own,
+`SemanticLogger::Appender::TcpConnection`, instead of `Net::TCPClient` from the `net_tcp_client` gem,
+which you can remove from your Gemfile unless your application uses it itself. They take only
+`server:`, `servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`, `write_timeout:`,
+`keepalive:`, and `ssl:`, plus `connect_retry_count: 0`, `retry_count: 0`, and `buffered: false`, which
+are what they do, and raise `ArgumentError` for any other option, as v5.4 warned. In the `tcp_client:`
+of `:syslog`, `server:` and `servers:` raise `ArgumentError` too: give the server in its `url:`.
+
+What changes:
+
+* **Retries.** It connects to each server once, rather than up to 10 times, and writes an entry once,
+  rather than up to 3 times. When it cannot connect, it writes the entry again after the appender's
+  back-off, without counting it as failed, so the worker thread no longer waits on retries during an
+  outage. A write to a connection that the server reset or closed before any of it was sent, such as
+  one that was idle, is written once more at once, on a new connection; a write that otherwise fails
+  before any of it was sent, such as by timing out, is written again after the back-off instead.
+* **Timeouts.** A negative `connect_timeout:`, `write_timeout:`, or `handshake_timeout:`, such as `-1`,
+  still waits as long as it takes, and an option given as `nil` takes its default. `connect_timeout:`
+  also bounds the look-up of a host name, which `Net::TCPClient` left unbounded.
+* **IPv6.** A host name is connected to at any of its addresses, IPv4 or IPv6, and an IPv6 address
+  can be given in brackets, as in `"[::1]:514"`.
+* **Errors.** A connection that fails raises
+  `SemanticLogger::Appender::TcpConnection::ConnectError`, and a write that fails raises
+  `TcpConnection::WriteError`, both a `SocketError`, rather than the errors of `Net::TCPClient`.
+* **Readers.** `Tcp#tcp_client` and `Syslog#remote_syslog` return the `TcpConnection`.
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

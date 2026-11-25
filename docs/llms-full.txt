@@ -2173,9 +2173,9 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | Destination | `add_appender` argument | Gem |
 |-------------|-------------------------|-----|
 | [HTTP(S)](#https) | `appender: :http` | |
-| [TCP (+SSL)](#tcp-appender-ssl) | `appender: :tcp` | `net_tcp_client` |
+| [TCP (+SSL)](#tcp-appender-ssl) | `appender: :tcp` | |
 | [UDP](#udp-appender) | `appender: :udp` | |
-| [Syslog](#syslog) | `appender: :syslog` | `syslog` (local, Ruby 3.4+), `syslog_protocol` (remote), `net_tcp_client` (TCP) |
+| [Syslog](#syslog) | `appender: :syslog` | `syslog` (local, Ruby 3.4+), `syslog_protocol` (remote) |
 
 **Centralized logging and log aggregators**
 
@@ -2190,9 +2190,9 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [New Relic Logs](#new-relic-logs) | `appender: :new_relic_logs` | `newrelic_rpm` |
 | [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
 | [Logstash](#logstash) | `logger:` | `logstash-logger` |
-| [logentries.com](#logentriescom) | `appender: :tcp` | `net_tcp_client` |
+| [logentries.com](#logentriescom) | `appender: :tcp` | |
 | [loggly.com](#logglycom) | `appender: :http` | |
-| [Papertrail](#papertrail) | `appender: :syslog` | `syslog_protocol`, `net_tcp_client` |
+| [Papertrail](#papertrail) | `appender: :syslog` | `syslog_protocol` |
 
 **Error and exception monitoring**
 
@@ -2685,20 +2685,30 @@ end
 SemanticLogger.add_appender(appender: :tcp, server: "localhost:8088", formatter: formatter)
 ~~~
 
-The `server:` is `"host:port"`. [Net::TCPClient](https://github.com/reidmorrison/net_tcp_client)
-connects over IPv4 only, so give an IPv4 address, or a host name that has one. Pass several servers
-as `servers:` to try the next when one cannot be connected to. Every host name is resolved before
-the first of them is connected to, so a name that does not resolve fails at once, without trying the
-others or retrying.
+The `server:` is `"host:port"`, with an IPv6 address in brackets, such as `"[::1]:8088"`. A host name
+is connected to at any of its addresses, IPv4 or IPv6. Pass several servers as `servers:` to try
+the next when one cannot be connected to, in the order given, or shuffled for each connection with
+`policy: :random`.
 
-Net::TCPClient retries only after a network error, such as a refused, reset, or timed-out
-connection: it connects again up to `connect_retry_count:` times (default 10), and writes an entry
-again on a new connection up to `retry_count:` times (default 3). A write timeout, or an SSL error
-such as a certificate that does not verify, fails without a retry. The appender passes these and its
-other connection options, such as `connect_timeout:`, `write_timeout:`, and `ssl:`, to
-`Net::TCPClient.new`, which raises `ArgumentError` for a keyword it does not take; see
-[`Net::TCPClient#initialize`](https://github.com/reidmorrison/net_tcp_client/blob/master/lib/net/tcp_client/tcp_client.rb)
-for them all and their defaults.
+| Option | Description |
+|--------|-------------|
+| `server:`, `servers:` | The server, or the servers to try in turn. |
+| `policy:` | `:ordered` (the default) or `:random`. |
+| `connect_timeout:` | Seconds to wait for a server's host name to be looked up, and then for it to accept the connection; a negative value waits as long as it takes. Default: 10. |
+| `write_timeout:` | Seconds to wait for a write to complete; a negative value waits as long as it takes, which can hold up the flush at exit while the server does not read. Default: 60. |
+| `keepalive:` | Whether to turn on TCP keepalive. Default: true. |
+| `ssl:` | `true`, or the parameters of an `OpenSSL::SSL::SSLContext`, such as `ca_file:`, plus `handshake_timeout:`, the seconds to wait for the TLS handshake (default `connect_timeout:`). The server's certificate and host name are verified unless the parameters say otherwise. |
+
+The appender connects to each server once. When it cannot connect to any of them, or the TLS
+handshake fails, such as for a certificate that does not verify, it writes nothing, and writes the
+entry again after its back-off, without counting it as failed, so that an outage loses no entries
+until `async_max_retries` (see [Operations](operations.html)). A write to a connection that the
+server reset or closed before any of it was sent, such as one that was idle, is written once more at
+once, on a new connection, as is one to a connection that failed, such as a host that became
+unreachable. One that otherwise fails before any of it was sent, such as by timing out, is written
+again after the back-off instead, so that the worker thread does not wait twice at once. One that fails after part of
+it was sent is not written again, so that the server never gets an entry twice, and is counted as
+failed.
 
 The TCP and UDP appenders separate records with a newline, so they default to the JSON formatter,
 which escapes embedded newlines and is safe with untrusted data. If you switch to a text formatter
@@ -2759,7 +2769,7 @@ Gemfile:
 SemanticLogger.add_appender(appender: :syslog)
 ~~~
 
-Log to a remote Syslog server over TCP (the `net_tcp_client` and `syslog_protocol` gems are required).
+Log to a remote Syslog server over TCP (the `syslog_protocol` gem is required).
 The default packet size is 1024 bytes:
 
 ~~~ruby
@@ -6506,7 +6516,7 @@ batch that the destination fails is discarded, and counted as `failed`, rather t
 after a back-off. So is every message queued after that one, ahead of the flush or close, without
 being written: during an outage, each would take as long to fail as the first, such as up to the
 `open_timeout` (2 seconds by default) of an HTTP based appender whose server does not answer, or
-longer for an appender that retries on its own, such as `:tcp` with its `connect_retry_count`. Those
+longer, such as up to the `connect_timeout` (10 seconds by default) of each server of `:tcp`. Those
 failures do not count towards `async_max_retries`. Once the flush or close has run, the messages
 queued after it are written as usual. A flush still waits while the first message is tried, and
 while a destination that takes the messages writes every one of them.
@@ -7476,6 +7486,34 @@ The RSpec helper `capture_semantic_logger_events(ApiClient)` is unchanged.
 SignalFx is now Splunk Observability Cloud, so its metric appender can also be added as
 `metric: :splunk_observability`. `metric: :signalfx` adds the same appender, and keeps working. See
 [Splunk Observability Cloud (SignalFx)](metrics.html#signalfx).
+
+#### The TCP appenders no longer use `net_tcp_client`
+
+The `:tcp` appender, and the `:syslog` appender over TCP, connect with a class of their own,
+`SemanticLogger::Appender::TcpConnection`, instead of `Net::TCPClient` from the `net_tcp_client` gem,
+which you can remove from your Gemfile unless your application uses it itself. They take only
+`server:`, `servers:`, `policy:` (`:ordered` or `:random`), `connect_timeout:`, `write_timeout:`,
+`keepalive:`, and `ssl:`, plus `connect_retry_count: 0`, `retry_count: 0`, and `buffered: false`, which
+are what they do, and raise `ArgumentError` for any other option, as v5.4 warned. In the `tcp_client:`
+of `:syslog`, `server:` and `servers:` raise `ArgumentError` too: give the server in its `url:`.
+
+What changes:
+
+* **Retries.** It connects to each server once, rather than up to 10 times, and writes an entry once,
+  rather than up to 3 times. When it cannot connect, it writes the entry again after the appender's
+  back-off, without counting it as failed, so the worker thread no longer waits on retries during an
+  outage. A write to a connection that the server reset or closed before any of it was sent, such as
+  one that was idle, is written once more at once, on a new connection; a write that otherwise fails
+  before any of it was sent, such as by timing out, is written again after the back-off instead.
+* **Timeouts.** A negative `connect_timeout:`, `write_timeout:`, or `handshake_timeout:`, such as `-1`,
+  still waits as long as it takes, and an option given as `nil` takes its default. `connect_timeout:`
+  also bounds the look-up of a host name, which `Net::TCPClient` left unbounded.
+* **IPv6.** A host name is connected to at any of its addresses, IPv4 or IPv6, and an IPv6 address
+  can be given in brackets, as in `"[::1]:514"`.
+* **Errors.** A connection that fails raises
+  `SemanticLogger::Appender::TcpConnection::ConnectError`, and a write that fails raises
+  `TcpConnection::WriteError`, both a `SocketError`, rather than the errors of `Net::TCPClient`.
+* **Readers.** `Tcp#tcp_client` and `Syslog#remote_syslog` return the `TcpConnection`.
 
 #### Rails Semantic Logger
 

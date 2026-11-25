@@ -22,6 +22,7 @@ module SemanticLogger
     autoload :SplunkHttp,          "semantic_logger/appender/splunk_http"
     autoload :Syslog,              "semantic_logger/appender/syslog"
     autoload :Tcp,                 "semantic_logger/appender/tcp"
+    autoload :TcpConnection,       "semantic_logger/appender/tcp_connection"
     autoload :TextOutput,          "semantic_logger/appender/text_output"
     autoload :Udp,                 "semantic_logger/appender/udp"
     autoload :Wrapper,             "semantic_logger/appender/wrapper"
