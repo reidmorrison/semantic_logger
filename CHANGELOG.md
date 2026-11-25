@@ -118,6 +118,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Changed
 
+- A `measure_*` call with a `metric:` whose block raises adds the dimension `"error.type"`, the
+  exception's class name, to its metric, unless its dimensions have one, as the OpenTelemetry semantic
+  conventions ask. The log entry keeps its own dimensions.
 - Once a metric appender is present, the `metric:` of a log call, a `measure_*` call, or `backtrace`
   is recorded at every level, and whether or not its `min_duration:` is met: as a histogram of its
   `duration:` in seconds when it has one, otherwise as a counter of its `metric_amount:` (1 by

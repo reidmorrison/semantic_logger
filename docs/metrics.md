@@ -291,7 +291,11 @@ Once a metric appender is present, the metric is recorded:
 * as a histogram of its `duration:` in seconds, with the unit `"s"`, when it has a duration, as a
   `measure_*` call always does, the same as `logger.time`;
 * otherwise as a counter of its `metric_amount:`, 1 by default, the same as `logger.increment`;
-* with its `dimensions:`;
+* with its `dimensions:`, plus `"error.type"`, the class name of the exception, when the block of a
+  `measure_*` call raises, so that failed calls are a series of their own, as the OpenTelemetry
+  semantic conventions name it, unless its dimensions already have one. An exception class without a
+  constant name, such as `Class.new(StandardError)`, is named after its nearest superclass that has
+  one, so that it does not add a series for each class. The log entry keeps its own dimensions;
 * **at every level**, whether or not the log entry is logged, and whether or not its
   `min_duration:` is met, or a filter rejects the entry. The log entry itself still follows the log
   level and filters, and is written as before.

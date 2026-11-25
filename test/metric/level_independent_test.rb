@@ -218,6 +218,66 @@ module Metric
 
             assert_empty logs
             assert_equal 1, points.first.value.count
+            assert_equal({"error.type" => "ArgumentError"}, points.first.dimensions)
+          end
+
+          it "adds error.type to the metric, not the log entry, when the block raises at the level" do
+            assert_raises(ArgumentError) do
+              logger.measure_info("Called supplier", metric: "supplier.call", dimensions: {name: "acme"}) do
+                raise ArgumentError, "boom"
+              end
+            end
+            logger.measure_info("Called supplier", metric: "supplier.call", dimensions: {name: "acme"}) { :ok }
+
+            assert_equal [{name: "acme"}] * 2, logs.map(&:dimensions)
+            assert_equal [{"name" => "acme", "error.type" => "ArgumentError"}, {"name" => "acme"}],
+                         points.map(&:dimensions)
+          end
+
+          it "names an anonymous exception class after its nearest named ancestor" do
+            2.times do
+              assert_raises(ArgumentError) do
+                logger.measure_info("Called", metric: "a") { raise Class.new(ArgumentError), "boom" }
+              end
+            end
+
+            assert_equal [{"error.type" => "ArgumentError"}], points.map(&:dimensions)
+          end
+
+          it "names a class with a constant name that is not ASCII after itself" do
+            unless LevelIndependentTest.const_defined?(:Ärger)
+              LevelIndependentTest.const_set(:Ärger,
+                                             Class.new(ArgumentError))
+            end
+            assert_raises(ArgumentError) do
+              logger.measure_info("Called", metric: "a") { raise LevelIndependentTest.const_get(:Ärger) }
+            end
+
+            assert_equal "Metric::LevelIndependentTest::Ärger", points.first.dimensions["error.type"]
+          end
+
+          it "never calls a name that the exception class defines, and skips a temporary name" do
+            raising_name = Class.new(ArgumentError) { def self.name = raise("its name raised") }
+            assert_raises(raising_name) { logger.measure_info("Called", metric: "a") { raise raising_name } }
+            if Module.method_defined?(:set_temporary_name)
+              temporary = Class.new(ArgumentError).tap { |klass| klass.set_temporary_name("error<1>") }
+              assert_raises(temporary) { logger.measure_info("Called", metric: "a") { raise temporary } }
+            end
+
+            assert_equal [{"error.type" => "ArgumentError"}], points.map(&:dimensions)
+          end
+
+          it "keeps an error.type given, and adds none for an exception given rather than raised" do
+            assert_raises(ArgumentError) do
+              logger.measure_info("Called", metric: "a", dimensions: {"error.type" => "timeout"}) do
+                raise ArgumentError
+              end
+            end
+            assert_raises(ArgumentError) do
+              logger.measure_info("Called", metric: "b", duration: 5, exception: ArgumentError.new("given"))
+            end
+
+            assert_equal [{"error.type" => "timeout"}, {}], points.map(&:dimensions)
           end
 
           it "records the time below the level when the block breaks out early" do
