@@ -9,8 +9,7 @@ module SemanticLogger
     # Example:
     #   SemanticLogger.add_appender(
     #     appender: :udp,
-    #     server:   'server:3300',
-    #     metrics:  false
+    #     server:   'server:3300'
     #   )
     class Udp < SemanticLogger::Subscriber
       # The host and port of a server, with an IPv6 address in brackets, as a URL writes it.
@@ -64,8 +63,8 @@ module SemanticLogger
       #           The Proc must return true or false.
       #
       #   metrics: [Boolean]
-      #     Send metrics only events over udp.
-      #     Default: true, with a deprecation warning when it is not supplied, since v6 changes it to false.
+      #     Also send metric-only entries over udp.
+      #     Default: false
       #
       # Limitations:
       # * UDP packet size is limited by the connected network and any routers etc
@@ -74,14 +73,13 @@ module SemanticLogger
       # Example:
       #   SemanticLogger.add_appender(
       #     appender: :udp,
-      #     server:   'server:3300',
-      #     metrics:  false
+      #     server:   'server:3300'
       #   )
-      def initialize(server:, udp_flags: 0, metrics: METRICS_NOT_SUPPLIED, **args, &)
+      def initialize(server:, udp_flags: 0, **args, &)
         @server    = server
         @udp_flags = udp_flags
 
-        super(metrics: deprecated_metrics_default(metrics, :udp), **args, &)
+        super(**args, &)
         reopen
       end
 

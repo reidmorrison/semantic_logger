@@ -93,29 +93,26 @@ module Appender
           log
         end
 
-        it "warns that the default changes in v6, and sends metric-only entries, when it is not supplied" do
-          line = __LINE__ + 2
-          udp  = assert_deprecated(/udp_test\.rb:#{line}: warning: SemanticLogger: The :udp appender sends/) do
-            SemanticLogger::Appender::Udp.new(server: "localhost:8088")
-          end
+        it "leaves metric-only entries out by default, without a warning" do
+          udp = refute_deprecated { SemanticLogger::Appender::Udp.new(server: "localhost:8088") }
+
+          refute udp.should_log?(metric_only)
+        ensure
+          udp&.close
+        end
+
+        it "leaves metric-only entries out with metrics: nil" do
+          udp = SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: nil)
+
+          refute udp.should_log?(metric_only)
+        ensure
+          udp&.close
+        end
+
+        it "sends metric-only entries with metrics: true" do
+          udp = SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: true)
 
           assert udp.should_log?(metric_only)
-        ensure
-          udp&.close
-        end
-
-        it "leaves metric-only entries out with metrics: false, without a warning" do
-          udp = refute_deprecated { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: false) }
-
-          refute udp.should_log?(metric_only)
-        ensure
-          udp&.close
-        end
-
-        it "leaves metric-only entries out with metrics: nil, without a warning, as before" do
-          udp = refute_deprecated { SemanticLogger::Appender::Udp.new(server: "localhost:8088", metrics: nil) }
-
-          refute udp.should_log?(metric_only)
         ensure
           udp&.close
         end
@@ -127,7 +124,7 @@ module Appender
         def received(family, address)
           receiver = UDPSocket.new(family)
           receiver.bind(address, 0)
-          udp = SemanticLogger::Appender::Udp.new(server: yield(receiver.local_address.ip_port), metrics: false)
+          udp = SemanticLogger::Appender::Udp.new(server: yield(receiver.local_address.ip_port))
           udp.info(amessage)
 
           assert receiver.wait_readable(5), "The server received nothing"
@@ -213,7 +210,7 @@ module Appender
           resolving("logs.example", "127.0.0.1", "::1") do
             unreachable(Socket::AF_INET, Socket::AF_INET6) do |sockets|
               error = assert_raises(Errno::ENETUNREACH) do
-                SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false)
+                SemanticLogger::Appender::Udp.new(server: "logs.example:8088")
               end
 
               assert_includes error.message, "family #{Socket::AF_INET}"
@@ -228,7 +225,7 @@ module Appender
           resolving("logs.example", "::1") do
             unreachable(Socket::AF_INET6) do
               error = assert_raises(Errno::ENETUNREACH) do
-                SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false)
+                SemanticLogger::Appender::Udp.new(server: "logs.example:8088")
               end
 
               assert_includes error.message, "family #{Socket::AF_INET6}"
@@ -244,7 +241,7 @@ module Appender
           asked = nil
           error = resolving("logs.example", "127.0.0.1", "::1", failures: {INET: temporary_error}) do |families|
             asked = families
-            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false) }
+            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088") }
           end
 
           assert_equal "getaddrinfo: Temporary failure in name resolution", error.message
@@ -255,7 +252,7 @@ module Appender
           asked = nil
           error = resolving("logs.example", failures: {INET6: temporary_error}) do |families|
             asked = families
-            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false) }
+            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088") }
           end
 
           assert_equal "getaddrinfo: Temporary failure in name resolution", error.message
@@ -269,7 +266,7 @@ module Appender
           failed = SocketError.new("getaddrinfo: Temporary failure in name resolution")
           error  = resolving("logs.example", failures: {INET: failed}) do |families|
             asked = families
-            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false) }
+            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088") }
           end
 
           assert_equal %i[INET INET6], asked
@@ -280,7 +277,7 @@ module Appender
           asked = nil
           error = resolving("logs.example", empty: true) do |families|
             asked = families
-            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false) }
+            assert_raises(SocketError) { SemanticLogger::Appender::Udp.new(server: "logs.example:8088") }
           end
 
           assert_equal "getaddrinfo: no address for logs.example", error.message
@@ -290,7 +287,7 @@ module Appender
         it "raises SocketError, as before, for a host name that does not resolve" do
           not_resolving do
             assert_raises(SocketError) do
-              SemanticLogger::Appender::Udp.new(server: "logs.example:8088", metrics: false)
+              SemanticLogger::Appender::Udp.new(server: "logs.example:8088")
             end
           end
         end
@@ -304,13 +301,13 @@ module Appender
         # An address in brackets is looked up as an IPv6 address only, which asks no resolver.
         it "raises SocketError for an IPv4 address in brackets" do
           assert_raises(SocketError) do
-            SemanticLogger::Appender::Udp.new(server: "[127.0.0.1]:8088", metrics: false)
+            SemanticLogger::Appender::Udp.new(server: "[127.0.0.1]:8088")
           end
         end
 
         it "raises ArgumentError for a server without a port" do
           error = assert_raises(ArgumentError) do
-            SemanticLogger::Appender::Udp.new(server: "localhost", metrics: false)
+            SemanticLogger::Appender::Udp.new(server: "localhost")
           end
 
           assert_includes error.message, '"localhost"'
@@ -319,7 +316,7 @@ module Appender
 
         it "raises ArgumentError for an IPv6 address without brackets, whose port cannot be told apart" do
           error = assert_raises(ArgumentError) do
-            SemanticLogger::Appender::Udp.new(server: "::1:8088", metrics: false)
+            SemanticLogger::Appender::Udp.new(server: "::1:8088")
           end
 
           assert_includes error.message, '"[::1]:8088"'
@@ -424,7 +421,7 @@ module Appender
           receiver = UDPSocket.new
           receiver.bind("127.0.0.1", 0)
           server   = "127.0.0.1:#{receiver.local_address.ip_port}"
-          udp      = SemanticLogger::Appender::Udp.new(server: server, metrics: false)
+          udp      = SemanticLogger::Appender::Udp.new(server: server)
           socket   = udp.socket
 
           udp.close

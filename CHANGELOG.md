@@ -139,6 +139,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   Float is left out, with a warning. Each warning is made once per metric name. A snapshot that the
   server asks to send again later (408, 429, 503), or that could not
   reach it, is sent with the next one.
+- The `:kafka`, `:rabbitmq`, and `:udp` appenders leave out metric-only entries by default, as the
+  other log appenders do and as v5.3 warned: add them with `metrics: true` to keep sending them.
 
 ### Removed
 

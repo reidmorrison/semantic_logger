@@ -130,23 +130,18 @@ module Appender
           log
         end
 
-        it "warns that the default changes in v6, and sends metric-only entries, when it is not supplied" do
-          line  = __LINE__ + 2
-          kafka = assert_deprecated(/kafka_test\.rb:#{line}: warning: SemanticLogger: The :kafka appender sends/) do
-            SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"])
-          end
+        it "leaves metric-only entries out by default, without a warning" do
+          kafka = refute_deprecated { SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"]) }
 
-          assert kafka.should_log?(metric_only)
+          refute kafka.should_log?(metric_only)
         ensure
           kafka&.close
         end
 
-        it "leaves metric-only entries out with metrics: false, without a warning" do
-          kafka = refute_deprecated do
-            SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: false)
-          end
+        it "sends metric-only entries with metrics: true" do
+          kafka = SemanticLogger::Appender::Kafka.new(seed_brokers: ["localhost:9092"], metrics: true)
 
-          refute kafka.should_log?(metric_only)
+          assert kafka.should_log?(metric_only)
         ensure
           kafka&.close
         end

@@ -24,7 +24,7 @@ class AppenderTest < Minitest::Test
 
         it "formats with the block, for an appender named by a Symbol" do
           formatter = ->(log, _logger) { log.message }
-          appender  = build(appender: :udp, server: "localhost:10514", metrics: false, &formatter)
+          appender  = build(appender: :udp, server: "localhost:10514", &formatter)
 
           assert_same formatter, appender.formatter
         ensure
@@ -516,7 +516,7 @@ class AppenderTest < Minitest::Test
           # Its #reopen closes the socket it replaces, of which there is none when it is created.
           SemanticLogger::Appender::Udp.stub_any_instance(:close, -> { closed << @socket if @socket }) do
             error = assert_raises(ArgumentError) do
-              factory(appender: :udp, server: "localhost:2000", metrics: false, batch: true)
+              factory(appender: :udp, server: "localhost:2000", batch: true)
             end
 
             assert_includes error.message, "does not support batching"

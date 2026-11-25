@@ -61,7 +61,7 @@ destination can keep a different subset of the logs in a different format:
 | `formatter` | How to format the output, for example `:default`, `:color`, or `:json`. A [block given to `add_appender`](config.html#formatter-as-a-block-or-proc) takes its place. See [Custom formatters](config.html#custom-formatters). |
 | `filter` | A `Regexp` or `Proc` selecting which entries this appender accepts. See [Filtering](config.html#filtering). |
 | `application`, `environment`, `host` | Override the global values for this appender only. |
-| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`, except for `:kafka`, `:rabbitmq`, and `:udp`, which default to `true`, which a later v6 release changes, and warn when it is not supplied. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
+| `metrics` | Whether to also write metric-only entries, which have a metric but no message and no exception. Defaults to `false`. See [Metrics in log appenders](metrics.html#metrics-in-log-appenders). |
 
 For example, write only warnings and above to a file, formatted as JSON:
 
@@ -638,7 +638,7 @@ SemanticLogger.add_appender(
 The UDP appender sends JSON or other formatted messages over UDP:
 
 ~~~ruby
-SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", metrics: false)
+SemanticLogger.add_appender(appender: :udp, server: "localhost:8088")
 ~~~
 
 The `server:` is `"host:port"`. Write an IPv6 address in brackets, as a URL does, such as
@@ -654,8 +654,7 @@ fails, rather than finding no address. On Ruby 3.2 and JRuby, whose `SocketError
 a lookup failed, the IPv6 addresses are looked up after any failure.
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
-exception. Without `metrics:`, it sends them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
+exception.
 
 Customize the message with a formatter:
 
@@ -666,7 +665,7 @@ formatter = Proc.new do |log, logger|
   h.to_json
 end
 
-SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", formatter: formatter, metrics: false)
+SemanticLogger.add_appender(appender: :udp, server: "localhost:8088", formatter: formatter)
 ~~~
 
 ### Syslog
@@ -1378,14 +1377,12 @@ Publish log entries to an Apache Kafka broker (requires the `ruby-kafka` gem):
 ~~~ruby
 SemanticLogger.add_appender(
   appender:     :kafka,
-  seed_brokers: ["kafka1:9092", "kafka2:9092"],
-  metrics:      false
+  seed_brokers: ["kafka1:9092", "kafka2:9092"]
 )
 ~~~
 
 Pass `metrics: true` to also publish metric-only entries, which have a metric but no message and no
-exception. Without `metrics:`, it publishes them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
+exception.
 
 ### RabbitMQ (AMQP)
 
@@ -1397,14 +1394,12 @@ SemanticLogger.add_appender(
   queue_name:    "semantic_logger",
   rabbitmq_host: "localhost",
   username:      "the-username",
-  password:      "the-password",
-  metrics:       false
+  password:      "the-password"
 )
 ~~~
 
 Pass `metrics: true` to also send metric-only entries, which have a metric but no message and no
-exception. Without `metrics:`, it sends them and reports a
-[deprecation warning](upgrading.html#seeing-deprecation-warnings), since a later v6 release leaves them out by default.
+exception.
 
 When it is reopened, such as with `SemanticLogger.reopen(force: true)`, it connects to RabbitMQ again,
 publishes the next entries on a new channel, and closes the connection it replaced. When it cannot

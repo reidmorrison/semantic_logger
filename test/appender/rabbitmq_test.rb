@@ -28,27 +28,23 @@ module Appender
           log
         end
 
-        it "warns that the default changes in v6, and sends metric-only entries, when it is not supplied" do
+        it "leaves metric-only entries out by default, without a warning" do
           Bunny.stub(:new, ->(*args) { FakeBunny.new(args) }) do
-            line      = __LINE__ + 3
-            pattern   = /rabbitmq_test\.rb:#{line}: warning: SemanticLogger: The :rabbitmq appender/
-            @appender = assert_deprecated(pattern) do
+            @appender = refute_deprecated do
               SemanticLogger::Appender::Rabbitmq.new(queue_name: "test_queue", rabbitmq_host: "localhost")
             end
           end
 
-          assert @appender.should_log?(metric_only)
+          refute @appender.should_log?(metric_only)
         end
 
-        it "leaves metric-only entries out with metrics: false, without a warning" do
+        it "sends metric-only entries with metrics: true" do
           Bunny.stub(:new, ->(*args) { FakeBunny.new(args) }) do
-            @appender = refute_deprecated do
-              SemanticLogger::Appender::Rabbitmq.new(queue_name: "test_queue", rabbitmq_host: "localhost",
-                                                     metrics: false)
-            end
+            @appender = SemanticLogger::Appender::Rabbitmq.new(queue_name: "test_queue", rabbitmq_host: "localhost",
+                                                               metrics: true)
           end
 
-          refute @appender.should_log?(metric_only)
+          assert @appender.should_log?(metric_only)
         end
       end
 
@@ -104,7 +100,7 @@ module Appender
         def with_appender(**options)
           Bunny.stub(:new, new_bunny) do
             @appender = SemanticLogger::Appender::Rabbitmq.new(
-              queue_name: "test_queue", rabbitmq_host: "localhost", metrics: false,
+              queue_name: "test_queue", rabbitmq_host: "localhost",
               formatter: ->(log, _logger) { log.message }, **options
             )
             yield(@appender)
