@@ -47,6 +47,8 @@ module SemanticLogger
       if stream && console_streams.include?(stream)
         logger.warn "Ignoring attempt to add a second #{stream} console appender since it " \
                     "would result in duplicate console output."
+        # Dropped, without closing the stream it writes to, so that it stops capturing the trace.
+        appender.release_trace_context if appender.respond_to?(:release_trace_context)
         return
       end
 

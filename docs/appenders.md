@@ -253,9 +253,6 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
     "tag1": "any named tags will be inside this named_tags tag",
     "tag2": "any named tags will be inside this named_tags tag"
   },
-  "trace_id": "32 hex digits of the trace the entry was logged in",
-  "span_id": "16 hex digits of its span",
-  "trace_flags": "01 when the span is sampled, 00 when not",
 
   "payload": {
     "field1": "any custom payload fields will be inside this payload tag",
@@ -271,7 +268,11 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
       "message": "Exception message",
       "stack_trace": ["line 1", "line 2"]
     }
-  }
+  },
+
+  "trace_id": "32 hex digits of the trace the entry was logged in",
+  "span_id": "16 hex digits of its span",
+  "trace_flags": "01 when the span is sampled, 00 when not"
 }
 ~~~
 
@@ -292,7 +293,8 @@ Notes:
   they are those of the span that was current on the thread that logged the entry. Without it, or
   outside a span, they are taken from the `trace_id` and `span_id` named tags, when they hold valid
   hex ids, and `trace_flags` is left out; the named tags are still written as they are. An entry
-  logged outside a trace has none of them.
+  logged outside a trace has none of them. The appenders that write `:json` by default, `:http`, `:tcp`,
+  `:udp`, `:kafka`, `:rabbitmq`, and `:cloudwatch_logs`, write them too.
 * To also log the detail Ruby adds to an exception's message, such as did_you_mean suggestions, as
   `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
   See [Exception details](config.html#exception-details).

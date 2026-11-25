@@ -194,8 +194,12 @@ module SemanticLogger
         end
 
         describe "trace" do
+          # Leaves CAPTURE subscribed for the appenders that other tests registered, as they need it.
           after do
-            SemanticLogger::Logger.subscribers&.delete(SemanticLogger::Otlp::TraceContext::CAPTURE)
+            trace_context = SemanticLogger::Otlp::TraceContext
+            next unless trace_context.instance_variable_get(:@owners).empty?
+
+            SemanticLogger::Logger.unsubscribe(trace_context::CAPTURE)
           end
 
           # Runs the block in a span with the ids, and the flags.

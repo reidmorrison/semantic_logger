@@ -2,12 +2,27 @@
 # logger that the processor builds on first use, which can be in a signal trap, where Ruby does not
 # allow a require.
 require "semantic_logger/formatters/default"
+# Loaded now too, since setting a formatter that writes the trace registers with it (see #formatter=),
+# which can be in a signal trap too, such as one that adds an appender.
+require "semantic_logger/otlp/trace_context"
 
 # Abstract Subscriber
 #
 #   Abstract base class for all appenders.
 module SemanticLogger
   class Subscriber < SemanticLogger::Base
+    # Builds the appender, and releases the capture of the trace that setting its formatter registered
+    # (see #formatter=) when its #initialize raises, such as for a file that cannot be opened, since an
+    # appender that was never built is never closed.
+    def self.new(...)
+      appender = allocate
+      appender.send(:initialize, ...)
+      appender
+    rescue Exception
+      appender&.release_trace_context
+      raise
+    end
+
     # Every appender has its own formatter
     attr_reader :formatter
     attr_writer :application, :environment, :host, :metrics
@@ -15,6 +30,17 @@ module SemanticLogger
     # A subscriber should implement flush if it can.
     def flush
       # NOOP
+    end
+
+    # Stops capturing the trace of each log call for this appender's formatter (see #formatter=), without
+    # closing it, for an appender that is dropped without being closed, such as one that add_appender
+    # built for the caller's own `io:` or `logger:`, whose destination it must leave open. Writing to it
+    # again captures it again. Trap-safe.
+    def release_trace_context
+      return unless @trace_context_registered
+
+      @trace_context_registered = false
+      SemanticLogger::Otlp::TraceContext.unregister(self)
     end
 
     # A subscriber should implement close if it can, and call super, so that it stops capturing the
@@ -349,14 +375,6 @@ module SemanticLogger
 
       SemanticLogger::Otlp::TraceContext.register(self)
       @trace_context_registered = true
-    end
-
-    # Stops capturing the trace for this appender (see Otlp::TraceContext.unregister).
-    def release_trace_context
-      return unless @trace_context_registered
-
-      @trace_context_registered = false
-      SemanticLogger::Otlp::TraceContext.unregister(self)
     end
 
     # Returns [Hash] a copy of the supplied options, with a copy of each Hash among them, such as ssl:, for an

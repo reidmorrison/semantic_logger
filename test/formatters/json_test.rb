@@ -68,6 +68,32 @@ module SemanticLogger
             refute parsed.key?("span_id")
           end
 
+          it "writes it from a subclass that replaces named_tags" do
+            subclass = Class.new(SemanticLogger::Formatters::Json) do
+              def named_tags
+                hash[:labels] = log.named_tags
+              end
+            end
+            log.capture(SemanticLogger::Otlp::TraceContext::KEY, [trace_id, span_id, 1])
+
+            assert_equal trace_id, JSON.parse(subclass.new.call(log, appender))["trace_id"]
+          end
+
+          it "leaves a trace_id that a subclass wrote" do
+            subclass = Class.new(SemanticLogger::Formatters::Json) do
+              def payload
+                hash[:trace_id] = "from-subclass"
+              end
+            end
+            log.capture(SemanticLogger::Otlp::TraceContext::KEY, [trace_id, span_id, 1])
+
+            parsed = JSON.parse(subclass.new.call(log, appender))
+
+            assert_equal "from-subclass", parsed["trace_id"]
+            refute parsed.key?("span_id")
+            refute parsed.key?("trace_flags")
+          end
+
           it "writes no trace for an entry logged outside one" do
             log.named_tags = {trace_id: "abc"}
 

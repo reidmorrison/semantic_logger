@@ -227,14 +227,14 @@ class SubscriberTest < Minitest::Test
         json.close
 
         refute trace_context.registered?(json)
-        refute_includes SemanticLogger::Logger.subscribers, capture
+        refute_includes Array(SemanticLogger::Logger.subscribers), capture
       end
 
       it "does not capture it for a formatter that does not write it" do
         appender = SemanticLogger::Appender::IO.new($stdout, formatter: :default)
 
         refute trace_context.registered?(appender)
-        refute_includes SemanticLogger::Logger.subscribers, capture
+        refute_includes Array(SemanticLogger::Logger.subscribers), capture
       end
 
       it "stops capturing it once given a formatter that does not write it, and captures it again for one that does" do
@@ -270,15 +270,61 @@ class SubscriberTest < Minitest::Test
         end
       end
 
+      # Waits for a change asked for in a signal trap, which a new thread applies.
+      def wait_for(deadline = Time.now + 5)
+        sleep(0.01) until yield || Time.now > deadline
+        yield
+      end
+
       it "registers and releases it in a signal trap" do
         appender = in_signal_trap { SemanticLogger::Appender::IO.new(StringIO.new, formatter: :json) }
 
         refute_kind_of Exception, appender
-        assert trace_context.registered?(appender)
+        assert(wait_for { trace_context.registered?(appender) })
         closed = in_signal_trap { appender.close || :closed }
 
         assert_equal :closed, closed
-        refute trace_context.registered?(appender)
+        assert(wait_for { !trace_context.registered?(appender) })
+      end
+
+      it "applies the changes asked for in a signal trap before those asked for after it" do
+        appender = SemanticLogger::Appender::IO.new(StringIO.new, formatter: :json)
+        # Held, so that the change asked for in the trap waits on the queue.
+        trace_context.instance_variable_get(:@mutex).synchronize do
+          in_signal_trap { appender.close }
+        end
+        appender.formatter = :json
+
+        assert trace_context.registered?(appender)
+      ensure
+        appender&.close
+      end
+
+      it "releases the appender that add_appender built for an io: when it fails afterwards" do
+        assert_raises(ArgumentError) { SemanticLogger.add_appender(io: StringIO.new, formatter: :json, batch: true) }
+        assert_empty trace_context.instance_variable_get(:@owners)
+      end
+
+      it "releases a second console appender, which add_appender drops" do
+        first = SemanticLogger.add_appender(io: $stdout, formatter: :default)
+        SemanticLogger.add_appender(io: $stdout, formatter: :json)
+
+        assert_empty trace_context.instance_variable_get(:@owners)
+      ensure
+        SemanticLogger.remove_appender(first) if first
+      end
+
+      it "releases it when the appender cannot be built" do
+        failing = Class.new(SemanticLogger::Appender::IO) do
+          def initialize(*, **)
+            super
+            raise IOError, "cannot open"
+          end
+        end
+
+        assert_raises(IOError) { failing.new(StringIO.new, formatter: :json) }
+        assert_empty trace_context.instance_variable_get(:@owners)
+        refute_includes Array(SemanticLogger::Logger.subscribers), capture
       end
     end
 

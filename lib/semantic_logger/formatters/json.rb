@@ -22,7 +22,9 @@ module SemanticLogger
 
       # Returns log messages in JSON format
       def call(log, logger)
-        Utils.to_json(super)
+        hash = super
+        trace_ids
+        Utils.to_json(hash)
       end
 
       # Returns a batch of log messages as a single JSON array.
@@ -30,14 +32,15 @@ module SemanticLogger
         "[#{logs.map { |log| call(log, logger) }.join(',')}]"
       end
 
-      # The trace that the entry was logged in, after its named tags.
-      def named_tags
-        super
-        trace
-      end
+      # The fields of the trace.
+      TRACE_FIELDS = %i[trace_id span_id trace_flags].freeze
 
-      # The trace id, span id, and trace flags of the entry, when it was logged in a trace.
-      def trace
+      # The trace id, span id, and trace flags of the entry, when it was logged in a trace. None of them
+      # when a field method of a subclass already wrote any, such as from a trace of its own, so that the
+      # three always belong to the same trace.
+      def trace_ids
+        return if TRACE_FIELDS.any? { |field| hash.key?(field) || hash.key?(field.name) }
+
         trace = SemanticLogger::Otlp::TraceContext.of(log)
         return unless trace
 

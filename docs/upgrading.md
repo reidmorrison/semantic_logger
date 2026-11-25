@@ -412,7 +412,8 @@ on the internal logger itself.
 #### `:json` writes the trace each entry was logged in
 
 The `:json` formatter, and `:fluentd`, which builds on it, add `trace_id`, `span_id`, and
-`trace_flags` to an entry logged in a trace: the span that was current, when the `opentelemetry-api`
+`trace_flags` to an entry logged in a trace. So do the appenders that write `:json` by default:
+`:http`, `:tcp`, `:udp`, `:kafka`, `:rabbitmq`, and `:cloudwatch_logs`. The fields come from the span that was current, when the `opentelemetry-api`
 gem is loaded, or else the `trace_id` and `span_id` named tags. The named tags are still written as
 before. See [JSON](appenders.html#json).
 
