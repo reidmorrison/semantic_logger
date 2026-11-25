@@ -446,9 +446,10 @@ process, such as the forked workers of one application on one host, are kept apa
 `resource_attributes:` can replace it; a `process.pid` in `OTEL_RESOURCE_ATTRIBUTES`, which every
 process shares, is left out, with a warning.
 
-It connects to the receiver when it is added, as every appender built on the HTTP appender does, so
-`add_appender` raises, such as with `Errno::ECONNREFUSED`, while the receiver cannot be reached.
-Once it is added, a snapshot that could not be sent follows [Outages](#intervals-flushes-and-outages).
+It connects to the receiver when it is added, as every appender built on the HTTP appender does.
+When it cannot, such as while the receiver is not listening yet as the application starts, it
+reports that to the internal logger rather than raising, and the next request connects. A snapshot
+that could not be sent follows [Outages](#intervals-flushes-and-outages).
 
 Of the [OpenTelemetry exporter environment variables](https://opentelemetry.io/docs/specs/otel/protocol/exporter/),
 it reads those below, each only when the matching option is not given. An empty variable counts as
@@ -640,9 +641,9 @@ merged, since `a/b` is then sent as `Application`.)
 A value beyond the range of a Float, such as the sum of a histogram of huge values, is left out,
 with a warning. Each of these warnings is made once per metric name, on the internal logger.
 
-It connects to the ingest url when it is added, as every appender built on the HTTP appender does,
-so `add_appender` raises, such as with `Errno::ECONNREFUSED`, while it cannot be reached. Once it is
-added, a snapshot that the server asks to send again later (408, 429, or 503), or that could not
+It connects to the ingest url when it is added, as every appender built on the HTTP appender does.
+When it cannot, it reports that to the internal logger rather than raising, and the next request
+connects. A snapshot that the server asks to send again later (408, 429, or 503), or that could not
 reach it, is sent with the next one (see [Outages](#intervals-flushes-and-outages)).
 
 ### Summary log entries

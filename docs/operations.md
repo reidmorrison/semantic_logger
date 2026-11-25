@@ -70,13 +70,14 @@ entries it inherited to the parent, which sends them. Closed in the child, even 
 there, `:mongodb` forgets the client it inherited without closing it, since closing it would end
 the parent's sessions on the server; reopening it then connects a new client.
 
-An appender that cannot be reopened, such as `:udp` once its server's name no longer resolves, or
-`:http` while its server cannot be reached, is reported to the internal logger, as
-`Failed to re-open appender`, or `Async: Failed to reopen the appender` for one added with
-`async: true` or in batches, and carries on with what it had, apart from a connection inherited from
-the parent (see above). The other appenders are still reopened, and the thread that writes the
-entries of an appender added with `async: true` or in batches is still started in the child, so its
-entries are written, or discarded and counted like any other entry it cannot write (see
+An appender that cannot be reopened, such as `:udp` once its server's name no longer resolves, is
+reported to the internal logger, as `Failed to re-open appender`, or
+`Async: Failed to reopen the appender` for one added with `async: true` or in batches, and carries
+on with what it had, apart from a connection inherited from the parent (see above). The HTTP
+appenders, and the TCP ones, report a server they cannot connect to themselves instead, as
+`Could not connect`, and connect at the next write. The other appenders are still reopened, and the
+thread that writes the entries of an appender added with `async: true` or in batches is still
+started in the child, so its entries are written, or discarded and counted like any other entry it cannot write (see
 [Retry a failing appender](#retry-a-failing-appender)), rather than left on its queue.
 
 ### Reopen manually

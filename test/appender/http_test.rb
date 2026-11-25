@@ -497,6 +497,136 @@ module Appender
         assert_predicate appender.http, :started?
       end
 
+      describe "when it cannot connect as it is added" do
+        let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+        let(:refused_port) do
+          server = TCPServer.new("127.0.0.1", 0)
+          port   = server.addr[1]
+          server.close
+          port
+        end
+
+        def build(url)
+          SemanticLogger::Processor.stub(:logger, internal_logger) do
+            SemanticLogger::Appender::Http.new(url: url)
+          end
+        end
+
+        it "reports, rather than raises, that the server refused the connection" do
+          appender = build("http://127.0.0.1:#{refused_port}/path")
+          report   = internal_logger.events.find { |event| event.message.start_with?("Could not connect") }
+
+          assert report, "the failure to connect should be reported"
+          assert_equal :warn, report.level
+          assert_equal "Could not connect to http://127.0.0.1:#{refused_port}: the next request connects",
+                       report.message
+          assert_kind_of Errno::ECONNREFUSED, report.exception
+          refute_predicate appender.http, :started?
+        end
+
+        it "reports the url without its credentials" do
+          refused = -> { raise Errno::ECONNREFUSED }
+          Net::HTTP.stub_any_instance(:start, refused) do
+            build("http://user:S3cr3t@127.0.0.1:8088/path?api_key=0123456789abcdef")
+          end
+          report = internal_logger.events.last
+
+          assert_equal "Could not connect to http://127.0.0.1:8088: the next request connects", report.message
+        end
+
+        [SocketError, Net::OpenTimeout, Errno::EHOSTUNREACH, Errno::ENETUNREACH, Errno::EADDRNOTAVAIL, Errno::ETIMEDOUT,
+         Errno::EHOSTDOWN, Errno::ENETDOWN, Errno::ECONNABORTED, Errno::ECONNRESET, EOFError].each do |error_class|
+          it "reports #{error_class}, raised when it could not connect" do
+            Net::HTTP.stub_any_instance(:start, -> { raise error_class }) { build("http://localhost:8088/path") }
+
+            assert_kind_of error_class, internal_logger.events.last.exception
+          end
+        end
+
+        it "connects at the next request" do
+          appender = Net::HTTP.stub_any_instance(:start, -> { raise Errno::ECONNREFUSED }) do
+            build("http://localhost:8088/path")
+          end
+          request = nil
+          stub_http_start do
+            appender.http.stub(:request, lambda { |r|
+              request = r
+              http_success
+            }) do
+              appender.info(log_message)
+            end
+          end
+
+          assert request, "the entry should be sent"
+          assert_predicate appender.http, :started?, "the next request should start the connection"
+        end
+
+        [Errno::ETIMEDOUT, Errno::ENETDOWN, Errno::ECONNRESET, EOFError].each do |error_class|
+          it "raises a ConnectError, not sent, when a request cannot start its connection for #{error_class}" do
+            appender = Net::HTTP.stub_any_instance(:start, -> { raise error_class }) do
+              build("http://localhost:8088/path")
+            end
+            error = Net::HTTP.stub_any_instance(:start, -> { raise error_class }) do
+              assert_raises(SemanticLogger::Appender::Http::ConnectError) { appender.info(log_message) }
+            end
+
+            assert_kind_of error_class, error.cause
+            assert_includes error.message, "Could not connect to http://localhost:8088: #{error_class}"
+            assert appender.not_sent?(error)
+            assert appender.wrote_nothing?(error)
+          end
+        end
+
+        it "raises the error itself when a request cannot start its connection for one of NOT_SENT_ERRORS" do
+          refused  = -> { raise Errno::ECONNREFUSED }
+          appender = Net::HTTP.stub_any_instance(:start, refused) { build("http://localhost:8088/path") }
+
+          Net::HTTP.stub_any_instance(:start, refused) do
+            assert_raises(Errno::ECONNREFUSED) { appender.info(log_message) }
+          end
+        end
+
+        it "raises when the server closes the connection during the TLS handshake" do
+          server = TCPServer.new("127.0.0.1", 0)
+          thread = Thread.new do
+            client = server.accept
+            # Reads the whole ClientHello first, since closing with data unread resets the connection.
+            client.readpartial(65_536) while client.wait_readable(0.2)
+          rescue EOFError
+            nil
+          ensure
+            client&.close
+          end
+          assert_raises(OpenSSL::SSL::SSLError) { build("https://127.0.0.1:#{server.addr[1]}/path") }
+        ensure
+          thread&.join(1)
+          server&.close
+        end
+
+        it "raises any other failure, such as a certificate that does not verify" do
+          failed = -> { raise OpenSSL::SSL::SSLError, "certificate verify failed" }
+          error  = Net::HTTP.stub_any_instance(:start, failed) do
+            assert_raises(OpenSSL::SSL::SSLError) { build("https://localhost:8088/path") }
+          end
+
+          assert_equal "certificate verify failed", error.message
+          assert_empty internal_logger.events
+        end
+
+        it "is added by add_appender" do
+          refused = -> { raise Errno::ECONNREFUSED }
+          SemanticLogger::Processor.stub(:logger, internal_logger) do
+            appender = Net::HTTP.stub_any_instance(:start, refused) do
+              SemanticLogger.add_appender(appender: :http, url: "http://localhost:8088/path")
+            end
+
+            assert_includes SemanticLogger.appenders, appender
+          ensure
+            SemanticLogger.remove_appender(appender) if appender
+          end
+        end
+      end
+
       describe "over https, after a fork" do
         include ForkedChildHelper
 
@@ -539,13 +669,11 @@ module Appender
         it "starts a connection of its own for the next request in the child when a reopen there cannot" do
           https_appender.log(log_with("before"))
           output = in_forked_child do
-            error = Net::HTTP.stub_any_instance(:start, -> { raise Errno::ECONNREFUSED }) do
-              https_appender.reopen
-            rescue Errno::ECONNREFUSED => e
-              e
-            end
+            internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+            https_appender.logger = internal_logger
+            Net::HTTP.stub_any_instance(:start, -> { raise Errno::ECONNREFUSED }) { https_appender.reopen }
             https_appender.log(log_with("child"))
-            error.class.name
+            internal_logger.events.find { |event| event.message.start_with?("Could not connect") }&.exception.class.name
           end
           https_appender.log(log_with("after"))
 
@@ -774,7 +902,7 @@ module Appender
 
         it "raises the error of a request whose answer timed out, rather than one from connecting again" do
           appender.logger = internal_logger
-          refused         = -> { raise Errno::ECONNREFUSED }
+          refused         = -> { raise OpenSSL::SSL::SSLError, "certificate verify failed" }
           error           = appender.stub(:reopen, refused) do
             appender.http.stub(:request, ->(_request) { raise Net::ReadTimeout }) do
               assert_raises(Net::ReadTimeout) { appender.info(log_message) }
@@ -786,7 +914,7 @@ module Appender
 
           assert report, "the failure to connect again should be reported"
           assert_equal :warn, report.level
-          assert_kind_of Errno::ECONNREFUSED, report.exception
+          assert_kind_of OpenSSL::SSL::SSLError, report.exception
         end
 
         # Connecting again straight away would fail the same way, so that a server that cannot be
