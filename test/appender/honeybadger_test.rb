@@ -51,6 +51,12 @@ module Appender
         assert_equal "Café ☕", hash[:message]
       end
 
+      it "makes its backtrace capture shareable, so that it runs in other Ractors too" do
+        skip "Ractors are not supported" unless defined?(Ractor.shareable?)
+
+        assert Ractor.shareable?(SemanticLogger::Appender::Honeybadger::CAPTURE_BACKTRACE)
+      end
+
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
           hash = nil

@@ -223,6 +223,7 @@ module SemanticLogger
       describe "#flush, #close, #reopen" do
         it "delegate to the appenders" do
           mock = Minitest::Mock.new
+          mock.expect(:current_captures, nil)
           mock.expect(:flush, nil)
           mock.expect(:close, nil)
           mock.expect(:reopen, nil)

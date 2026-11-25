@@ -980,11 +980,12 @@ class SimpleAppender < SemanticLogger::Subscriber
 end
 ~~~
 
-Each capture runs only for an entry that an appender returning it writes at its level, and once per
-entry, however many appenders return it. The capture decides anything more, such as to take a
-backtrace only for an entry without an exception. The appender's `filter` runs later, on its own
-thread. A capture that raises is reported to the internal logger. Keep captures fast: they run in
-every log call of the application. An appender whose captures change after it was added, other than
+Each capture runs only for an entry that an appender returning it writes at its level, as its
+`#writes_level?(log)` answers, and once per entry, however many appenders return it. An appender
+whose `#should_log?` accepts entries below its level also overrides `#writes_level?` to accept them.
+The capture decides anything more, such as to take a backtrace only for an entry without an
+exception. The appender's `filter` runs later, on its own thread. A capture that raises is reported
+to the internal logger. Keep captures fast: they run in every log call of the application. An appender whose captures change after it was added, other than
 by `formatter=`, calls `SemanticLogger::SourceCaptures.changed` afterwards. In a Ractor other than the
 main one, only the captures that are shareable run, such as a module with a `call` method, for every
 entry logged there.

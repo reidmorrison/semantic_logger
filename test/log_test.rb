@@ -434,7 +434,7 @@ module SemanticLogger
           appender.define_singleton_method(:source_captures) { [CaptureInApplication] }
           appenders << appender
           caller_line = __LINE__ + 1
-          appenders.capture(log)
+          appenders.current_captures.capture(log)
 
           assert_match(/log_test\.rb:#{caller_line}:/, log.backtrace.first)
         end

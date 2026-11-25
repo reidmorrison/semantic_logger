@@ -51,8 +51,16 @@ module SemanticLogger
       shareable.each do |capture|
         capture.call(log)
       rescue Exception => e
-        reporter.logger.error("Exception calling a source capture", e)
+        report_failed_capture(reporter, e)
       end
+    end
+
+    # Reports a capture that raised to the internal logger of the reporter, without raising from the
+    # log call when the internal logger fails too, such as on a closed stream.
+    def self.report_failed_capture(reporter, exception)
+      reporter.logger.error("Exception calling a source capture", exception)
+    rescue StandardError
+      nil
     end
 
     NONE = [].freeze
@@ -63,21 +71,29 @@ module SemanticLogger
 
     # Parameters
     #   appenders: [Array<Subscriber|Appender::Async>]
-    #     The appenders, each answering #source_captures and #writes_level?. One that does not, such as
-    #     a stand-in for one, has none.
+    #     The appenders, each answering #source_captures and #writes_level?. One that does not answer
+    #     both, such as a stand-in for one, has none.
     #   generation: [Integer]
     #     The count of changes read before the appenders were, so that a change made meanwhile has the
     #     plan built again.
+    #
+    # An appender whose #source_captures raises has none, so that a log call never raises for it, and
+    # is kept with its error (see #failures).
     def initialize(appenders, generation)
       @generation = generation
-      owners      = {}
+      @failures   = []
+      # By identity, so that two captures that are equal, such as two Structs, each run.
+      owners      = {}.compare_by_identity
       appenders.each do |appender|
-        next unless appender.respond_to?(:source_captures)
-
-        Array(appender.source_captures).each { |capture| (owners[capture] ||= []) << appender }
+        captures_of(appender).each { |capture| (owners[capture] ||= []) << appender }
       end
-      @entries = owners.map { |capture, list| [capture, list.freeze].freeze }.freeze
+      @entries  = owners.map { |capture, list| [capture, list.freeze].freeze }.freeze
+      @failures = @failures.freeze
     end
+
+    # Returns [Array<Array(Object, Exception)>] each appender whose #source_captures raised, with its
+    # error.
+    attr_reader :failures
 
     # Returns [true|false] whether the plan was built at the current count of changes.
     def current?
@@ -104,9 +120,88 @@ module SemanticLogger
 
         capture.call(log)
       rescue Exception => e
-        reporter.logger.error("Exception calling a source capture", e)
+        self.class.report_failed_capture(reporter, e)
       end
       nil
+    end
+
+    private
+
+    # Returns [Array<#call>] the captures of the appender, none when it does not answer both
+    # #source_captures and #writes_level?, or when #source_captures raises, which is kept (see
+    # #failures).
+    def captures_of(appender)
+      return NONE unless appender.respond_to?(:source_captures) && appender.respond_to?(:writes_level?)
+
+      Array(appender.source_captures)
+    rescue StandardError, ScriptError => e
+      @failures << [appender, e]
+      NONE
+    end
+
+    # The source captures of a list of appenders as they are now: it builds them from the appenders,
+    # again after they or the captures of one of them changed (see SourceCaptures.changed), and runs
+    # them for each log entry, on the thread that logged it.
+    #
+    # Held apart from the list, Appenders, which is a Concurrent::Array, whose every method JRuby
+    # synchronizes, so that a log call never waits for the thread that writes to the appenders while
+    # it holds the list. The list is read only to build the captures again.
+    class Current
+      # Parameters
+      #   appenders: [Appenders]
+      #     The appenders whose captures these are, which also answer the internal logger to report
+      #     to (#logger).
+      def initialize(appenders)
+        @appenders = appenders
+        @plan      = nil
+        # The appenders whose #source_captures raised as the captures were last built, each reported
+        # once. Replaced rather than changed, without a lock, since several threads can build the
+        # captures at once, and in a signal trap: two of them may report the same one. Only those
+        # still failing are kept, so that a removed appender is not held.
+        @reported  = {}.compare_by_identity.freeze
+      end
+
+      # Runs the captures for the log entry, on the calling thread, which logged it, building them
+      # again first when they changed.
+      def capture(log)
+        plan = @plan
+        plan = rebuild unless plan&.current?
+        plan.call(log, @appenders) unless plan.empty?
+      end
+
+      # Builds the captures of the appenders as they are now, reports each appender whose
+      # #source_captures raised once, and publishes the shareable captures when these are the
+      # appenders of the main processor. The count of changes is read before the appenders, so that
+      # a change made meanwhile has them built again. Returns [SourceCaptures] them.
+      def rebuild
+        generation = SourceCaptures.generation
+        plan       = SourceCaptures.new(@appenders.to_a, generation)
+        report(plan.failures)
+        @plan = plan
+        SourceCaptures.publish(plan) if RactorSupport.enabled? && Logger.main_appenders?(@appenders)
+        plan
+      end
+
+      private
+
+      # Reports each appender whose #source_captures raised, unless it was already reported, without
+      # raising from the log call that built the captures, even when the internal logger fails, such
+      # as on a closed stream: each one is then still counted as reported.
+      def report(failures)
+        reported = @reported
+        failing  = {}.compare_by_identity
+        failures.each do |appender, exception|
+          failing[appender] = true
+          report_failure(appender, exception) unless reported.key?(appender)
+        end
+        @reported = failing.freeze
+      end
+
+      def report_failure(appender, exception)
+        @appenders.logger.error("Exception asking an appender for its source captures: #{appender.class}", exception)
+      rescue StandardError
+        nil
+      end
     end
   end
 end

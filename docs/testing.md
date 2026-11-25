@@ -43,6 +43,11 @@ messages = semantic_logger_events do
 end
 ~~~
 
+The events are captured in place of the appenders, so the captures of the appenders (see
+[Capturing what the logging thread knows](config.html#capturing-what-the-logging-thread-knows)), such
+as the current trace, or the Sentry scope, are not taken. Each event at `:error` and above has the
+backtrace of the code that logged it.
+
 By default it captures events from every class. To capture only the events from one class, pass that
 class as `klass:`:
 

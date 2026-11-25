@@ -43,7 +43,8 @@ module SemanticLogger
 
       # Captures the backtrace of the code that logged an entry without an exception, which Honeybadger
       # shows as the backtrace of its notice (see Log#capture_backtrace!). An exception carries its own.
-      CAPTURE_BACKTRACE = ->(log) { log.capture_backtrace! unless log.exception }
+      # Shareable, so that it runs for the entries logged in a Ractor other than the main one too.
+      CAPTURE_BACKTRACE = Utils.make_shareable(->(log) { log.capture_backtrace! unless log.exception })
 
       # Returns [Array<#call>] the captures of its formatter, and that of the backtrace of the thread
       # that logs each entry that it sends (see CAPTURE_BACKTRACE).

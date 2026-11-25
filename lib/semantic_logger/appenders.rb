@@ -34,9 +34,13 @@ module SemanticLogger
       @source      = source
       @exiting     = false
       @skipped     = {}.compare_by_identity
-      @captures    = nil
       super()
+      @current_captures = SourceCaptures::Current.new(self)
     end
+
+    # Returns [SourceCaptures::Current] the source captures of these appenders, which the processor
+    # runs for each log entry on the thread that logged it (see Subscriber#source_captures).
+    attr_reader :current_captures
 
     # Returns the internal logger that these appenders report to.
     def logger = @logger || (@internal_logger_copy ||= InternalLoggerCopy.new(self.class.name, @source)).logger
@@ -55,36 +59,29 @@ module SemanticLogger
       appender
     end
 
-    # Adds the appender, and builds the source captures again (see #capture).
-    def <<(appender)
-      super
-      source_captures_changed
-      self
-    end
+    # The methods of Array that can change which appenders these are. Each builds the source
+    # captures again once it has (see #current_captures).
+    MEMBERSHIP_CHANGES = %i[
+      << push append unshift prepend insert concat []= fill replace
+      delete delete_at delete_if reject! select! filter! keep_if slice! pop shift clear
+      compact! uniq! flatten! map! collect!
+    ].freeze
+    private_constant :MEMBERSHIP_CHANGES
 
-    # Removes the appender, and builds the source captures again (see #capture).
-    def delete(appender)
-      deleted = super
-      source_captures_changed if deleted
-      deleted
-    end
+    # Those of them that change the appenders only through a block. Without one they return an
+    # Enumerator, which calls them again with a block.
+    BLOCK_CHANGES = %i[delete_if reject! select! filter! keep_if map! collect!].freeze
+    private_constant :BLOCK_CHANGES
 
-    # Removes every appender, and builds the source captures again (see #capture).
-    def clear
-      super
-      source_captures_changed
-      self
-    end
+    MEMBERSHIP_CHANGES.each do |name|
+      through_block = BLOCK_CHANGES.include?(name)
+      define_method(name) do |*args, &block|
+        return to_enum(name, *args) if through_block && block.nil?
 
-    # Runs the source captures of these appenders for the log entry, on the thread that logged it,
-    # before it is handed to the thread that writes it: each capture once, and only when an appender
-    # that uses it writes the entry at its level (see Subscriber#source_captures). The captures are
-    # built once, and again after these appenders, or the captures of one of them, changed (see
-    # SourceCaptures.changed).
-    def capture(log)
-      captures = @captures
-      captures = build_source_captures unless captures&.current?
-      captures.call(log, self) unless captures.empty?
+        result = super(*args, &block)
+        source_captures_changed
+        result
+      end
     end
 
     # The console streams (:stdout and/or :stderr) already being written to by the existing appenders.
@@ -294,21 +291,10 @@ module SemanticLogger
 
     # Counts the change, then builds the captures at once, so that a Ractor other than the main one
     # captures what the appenders now need before the main Ractor logs again (see
-    # SourceCaptures.publish).
+    # SourceCaptures.publish). Not while Array builds the list, before #initialize made them.
     def source_captures_changed
       SourceCaptures.changed
-      build_source_captures
-    end
-
-    # Builds the source captures of these appenders as they are now, and publishes the shareable ones
-    # when these are the appenders of the main processor. The count of changes is read before the
-    # appenders, so that a change made meanwhile has them built again.
-    def build_source_captures
-      generation = SourceCaptures.generation
-      captures   = SourceCaptures.new(to_a, generation)
-      @captures  = captures
-      SourceCaptures.publish(captures) if RactorSupport.enabled? && Logger.main_appenders?(self)
-      captures
+      @current_captures&.rebuild
     end
 
     # Whether this process is exiting (see #process_exiting=), rather than a child process forked while

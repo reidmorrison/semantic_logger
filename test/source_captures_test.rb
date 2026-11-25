@@ -62,6 +62,16 @@ class SourceCapturesTest < Minitest::Test
       assert_equal 1, calls.size
     end
 
+    it "runs each of two captures that are equal, but not the same object" do
+      calls   = []
+      capture = Struct.new(:calls) do
+        def call(log) = calls << log
+      end
+      plan(CapturingAppender.new([capture.new(calls), capture.new(calls)])).call(entry, reporter)
+
+      assert_equal 2, calls.size
+    end
+
     it "runs a capture for an entry that any of the appenders using it writes" do
       calls   = []
       capture = recording_capture(calls)
@@ -94,8 +104,55 @@ class SourceCapturesTest < Minitest::Test
       assert_equal "capture failed", logger.events.first.exception.message
     end
 
+    it "reports a capture that raises without raising, even when the internal logger fails too" do
+      broken  = Object.new.tap { |logger| logger.define_singleton_method(:error) { |*| raise IOError } }
+      failing = Struct.new(:logger).new(broken)
+      plan(CapturingAppender.new([->(_log) { raise "capture failed" }])).call(entry, failing)
+
+      pass
+    end
+
+    it "leaves out a metric appender, which writes no log entries, whatever its formatter" do
+      metric = InMemoryMetricAppender.new
+      metric.formatter = :json
+
+      assert_empty plan(metric).captures
+      refute metric.writes_level?(entry(:fatal))
+    end
+
     it "leaves out an appender that does not answer source captures" do
       assert_empty plan(Object.new).captures
+    end
+
+    it "leaves out an appender that answers source captures, but not whether it writes the level" do
+      stand_in = Object.new
+      stand_in.define_singleton_method(:source_captures) { [->(_log) {}] }
+
+      assert_empty plan(stand_in).captures
+    end
+
+    it "keeps an appender whose source captures raise, which then has none, and keeps the others" do
+      calls   = []
+      raising = CapturingAppender.new
+      raising.define_singleton_method(:source_captures) { raise "no captures" }
+      captures = plan(raising, CapturingAppender.new([recording_capture(calls)]))
+      captures.call(entry, reporter)
+
+      assert_equal 1, calls.size
+      assert_equal [raising], captures.failures.map(&:first)
+      assert_equal "no captures", captures.failures.first.last.message
+    end
+
+    it "runs no capture for a metric-only entry that no appender using it writes" do
+      calls      = []
+      log        = entry
+      log.metric = "orders.placed"
+      plan(CapturingAppender.new([recording_capture(calls)])).call(log, reporter)
+
+      assert_empty calls
+      plan(CapturingAppender.new([recording_capture(calls)], metrics: true)).call(log, reporter)
+
+      assert_equal 1, calls.size
     end
 
     it "is current until a change is counted" do
@@ -117,20 +174,41 @@ class SourceCapturesTest < Minitest::Test
       calls    = []
       appender = CapturingAppender.new([recording_capture(calls)])
       appenders << appender
-      appenders.capture(entry)
+      appenders.current_captures.capture(entry)
 
       assert_equal 1, calls.size
       appenders.delete(appender)
-      appenders.capture(entry)
+      appenders.current_captures.capture(entry)
 
       assert_equal 1, calls.size
+    end
+
+    it "runs those of an appender added with any method of Array, such as #unshift" do
+      calls = []
+      appenders.unshift(CapturingAppender.new([recording_capture(calls)]))
+      appenders.current_captures.capture(entry)
+
+      assert_equal 1, calls.size
+      appenders.delete_if { true }
+      appenders.current_captures.capture(entry)
+
+      assert_equal 1, calls.size
+    end
+
+    it "builds them again once an appender is removed through the Enumerator of a method such as #delete_if" do
+      calls = []
+      appenders << CapturingAppender.new([recording_capture(calls)])
+      appenders.delete_if.each { |appender| appender.is_a?(CapturingAppender) }
+      appenders.current_captures.capture(entry)
+
+      assert_empty calls
     end
 
     it "runs none once cleared" do
       calls = []
       appenders << CapturingAppender.new([recording_capture(calls)])
       appenders.clear
-      appenders.capture(entry)
+      appenders.current_captures.capture(entry)
 
       assert_empty calls
     end
@@ -142,11 +220,11 @@ class SourceCapturesTest < Minitest::Test
       formatter.define_singleton_method(:source_captures) { [capture] }
       appender = InMemoryAppender.new(formatter: :default)
       appenders << appender
-      appenders.capture(entry)
+      appenders.current_captures.capture(entry)
 
       assert_empty calls
       appender.formatter = formatter
-      appenders.capture(entry)
+      appenders.current_captures.capture(entry)
 
       assert_equal 1, calls.size
     end
@@ -159,7 +237,7 @@ class SourceCapturesTest < Minitest::Test
       added    = in_signal_trap { (appenders << appender).size }
 
       assert_equal 1, added
-      appenders.capture(entry)
+      appenders.current_captures.capture(entry)
 
       assert_equal 1, calls.size
     end
@@ -208,6 +286,33 @@ class SourceCapturesTest < Minitest::Test
       processor.log_captured(entry)
 
       assert_empty calls
+    end
+
+    it "does not run them for an appender whose source captures raise, and does not raise either" do
+      appender = CapturingAppender.new
+      appender.define_singleton_method(:source_captures) { raise "no captures" }
+      reports = SemanticLogger::Test::CaptureLogEvents.new
+      appenders.stub(:logger, reports) do
+        appenders << appender
+        SemanticLogger::Logger.stub(:processor, processor) { SemanticLogger["Test"].info("hello") }
+      end
+
+      SemanticLogger::Logger.stub(:processor, processor) { SemanticLogger["Test"].info("again") }
+      appenders.stub(:logger, reports) { appenders.current_captures.rebuild }
+
+      assert_equal 2, appender.logged.size
+      assert_equal(1, reports.events.count { |event| event.message.include?("source captures") })
+    end
+
+    it "counts an appender as reported even when the internal logger fails to report it" do
+      appender = CapturingAppender.new
+      appender.define_singleton_method(:source_captures) { raise "no captures" }
+      failing  = Object.new.tap { |logger| logger.define_singleton_method(:error) { |*| raise IOError } }
+      reports  = SemanticLogger::Test::CaptureLogEvents.new
+      appenders.stub(:logger, failing) { appenders << appender }
+      appenders.stub(:logger, reports) { appenders.current_captures.rebuild }
+
+      assert_empty reports.events
     end
 
     it "does not run them for the reports of the internal logger" do

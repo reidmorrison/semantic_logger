@@ -130,6 +130,12 @@ module Appender
         assert_match(/bugsnag_test\.rb:\d+/, exception.backtrace.first)
       end
 
+      it "makes its backtrace capture shareable, so that it runs in other Ractors too" do
+        skip "Ractors are not supported" unless defined?(Ractor.shareable?)
+
+        assert Ractor.shareable?(SemanticLogger::Appender::Bugsnag::CAPTURE_BACKTRACE)
+      end
+
       def stub_bugsnag(&block)
         exception = hash = level = nil
         appender.stub(:bugsnag_notify, lambda { |exc, h, l|

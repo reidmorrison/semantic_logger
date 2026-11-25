@@ -57,11 +57,12 @@ module SemanticLogger
       current.source_captures
     end
 
-    # Returns [true|false] whether this appender's level lets it write the log entry, its filter
-    # aside, which runs on the thread that writes it. Its source captures run for such an entry
-    # (see #source_captures).
+    # Returns [true|false] whether this appender's level lets it write the log entry, and, for a
+    # metric-only entry, whether it writes those, as #should_log? decides, its filter aside, which
+    # runs on the thread that writes it. Its source captures run for such an entry (see
+    # #source_captures).
     def writes_level?(log)
-      meets_log_level?(log)
+      meets_log_level?(log) && (!log.metric_only? || metrics?)
     end
 
     # Method called to log an event

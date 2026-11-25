@@ -54,6 +54,20 @@ class CaptureLogEventsTest < Minitest::Test
       assert_match(/capture_log_events_test\.rb:\d+:in .*fail!/, capture_logger.events.last.backtrace.first)
     end
 
+    it "captures no backtrace on this thread for an event whose source captures ran where it was logged" do
+      log = SemanticLogger::Log.new("Test", :error)
+      capture_logger.log_captured(log)
+
+      assert_same log, capture_logger.events.last
+      assert_nil log.backtrace
+    end
+
+    it "makes its backtrace capture shareable, so that it runs in other Ractors too" do
+      skip "Ractors are not supported" unless defined?(Ractor.shareable?)
+
+      assert Ractor.shareable?(SemanticLogger::Test::CaptureLogEvents::CAPTURE_BACKTRACE)
+    end
+
     it "metric only event" do
       user.stub(:logger, capture_logger) do
         user.disable!

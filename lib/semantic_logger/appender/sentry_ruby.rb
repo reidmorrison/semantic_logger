@@ -40,10 +40,10 @@ module SemanticLogger
 
       # Captures the backtrace of the code that logged an entry without an exception, which Sentry
       # shows as the stack trace of its message (see Log#capture_backtrace!). An exception carries its
-      # own.
-      CAPTURE_BACKTRACE = lambda do |log|
+      # own. Shareable, so that it runs for the entries logged in a Ractor other than the main one too.
+      CAPTURE_BACKTRACE = Utils.make_shareable(lambda do |log|
         log.capture_backtrace! unless log.exception || log.name == "Sentry"
-      end
+      end)
 
       # Create Appender
       #

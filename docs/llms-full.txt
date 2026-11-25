@@ -1858,11 +1858,12 @@ class SimpleAppender < SemanticLogger::Subscriber
 end
 ~~~
 
-Each capture runs only for an entry that an appender returning it writes at its level, and once per
-entry, however many appenders return it. The capture decides anything more, such as to take a
-backtrace only for an entry without an exception. The appender's `filter` runs later, on its own
-thread. A capture that raises is reported to the internal logger. Keep captures fast: they run in
-every log call of the application. An appender whose captures change after it was added, other than
+Each capture runs only for an entry that an appender returning it writes at its level, as its
+`#writes_level?(log)` answers, and once per entry, however many appenders return it. An appender
+whose `#should_log?` accepts entries below its level also overrides `#writes_level?` to accept them.
+The capture decides anything more, such as to take a backtrace only for an entry without an
+exception. The appender's `filter` runs later, on its own thread. A capture that raises is reported
+to the internal logger. Keep captures fast: they run in every log call of the application. An appender whose captures change after it was added, other than
 by `formatter=`, calls `SemanticLogger::SourceCaptures.changed` afterwards. In a Ractor other than the
 main one, only the captures that are shareable run, such as a module with a `call` method, for every
 entry logged there.
@@ -5753,7 +5754,8 @@ level, in every environment.
 2026-11-15 13:58:05.906754 I [8462:puma srv tp 001 orders_controller.rb:12 OrdersController#create] OrdersController -- Creating order
 ~~~
 
-To record them in another environment, or only at and above a level, set that level:
+Other environments record them for the entries at `:error` and above, Semantic Logger's default. To
+record them at another level, set it:
 
 ~~~ruby
 config.semantic_logger.call_site_level = :info
@@ -6569,6 +6571,11 @@ messages = semantic_logger_events do
   User.new.enable!
 end
 ~~~
+
+The events are captured in place of the appenders, so the captures of the appenders (see
+[Capturing what the logging thread knows](config.html#capturing-what-the-logging-thread-knows)), such
+as the current trace, or the Sentry scope, are not taken. Each event at `:error` and above has the
+backtrace of the code that logged it.
 
 By default it captures events from every class. To capture only the events from one class, pass that
 class as `klass:`:
@@ -8374,6 +8381,10 @@ built-in appenders no longer register `on_log` subscribers:
 
 * A custom appender that registers one in `#initialize` keeps working. Return its capture from
   `#source_captures` instead, so that it stops once the appender is removed.
+* The captures run after the `on_log` subscribers, so a subscriber no longer finds what an appender
+  captures, such as `log.captured(:otlp_trace_context)` or `log.captured(:new_relic_metadata)`. Read
+  it from where the appender reads it, such as the current span, or take a backtrace with
+  `log.capture_backtrace!`.
 * The `:new_relic_logs` formatter captures New Relic's linking metadata itself, so an appender that
   writes with it, such as a file appender, needs no `on_log(SemanticLogger::Appender::NewRelicLogs::CAPTURE_CONTEXT)`
   any more (see [v4.18](#upgrading-to-semantic-logger-v418)). Remove it, or the metadata is captured
@@ -8409,10 +8420,11 @@ config.rails_semantic_logger.appenders do |appenders|
 end
 ~~~
 
-`rails_semantic_logger` 5.x records the call site of every entry in development only while
-`call_site_level` is `nil`, which it no longer is by default. Until its v6 release, set
-`config.semantic_logger.call_site_level = :trace` in `config/environments/development.rb` to keep
-them.
+`rails_semantic_logger` v6 still records the call site of every entry in development: it sets
+`call_site_level = :trace` before the application's configuration is read, whatever its level was.
+5.x did that only while `call_site_level` was `nil`, which it no longer is by default, so until you
+upgrade it, set `config.semantic_logger.call_site_level = :trace` in
+`config/environments/development.rb` to keep them.
 
 ### Upgrading to Semantic Logger v5.3
 

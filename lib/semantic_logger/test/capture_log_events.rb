@@ -35,9 +35,10 @@ module SemanticLogger
       ERROR_INDEX = Levels.index(:error)
       private_constant :ERROR_INDEX
 
-      CAPTURE_BACKTRACE = lambda do |log|
+      # Shareable, so that it runs for the events logged in a Ractor other than the main one too.
+      CAPTURE_BACKTRACE = Utils.make_shareable(lambda do |log|
         log.capture_backtrace! if log.level_index >= ERROR_INDEX
-      end
+      end)
 
       # CAPTURE_BACKTRACE, as its source captures (see #source_captures).
       CAPTURES = [CAPTURE_BACKTRACE].freeze
@@ -73,6 +74,13 @@ module SemanticLogger
       def log(log)
         Logger.call_subscribers(log) if @created.key?(log)
         CAPTURE_BACKTRACE.call(log)
+        @events << log
+      end
+
+      # Standing in for the processor, captures an event whose source captures already ran where it was
+      # logged, such as in a Ractor other than the main one (see RactorReceiver), without capturing a
+      # backtrace on this thread, which did not log it.
+      def log_captured(log)
         @events << log
       end
 

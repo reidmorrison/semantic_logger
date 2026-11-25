@@ -45,9 +45,9 @@ module SemanticLogger
     end
 
     # Runs the source captures of the appenders on the calling thread, which logged the entry (see
-    # Appenders#capture), then writes it (see #log_captured).
+    # Appenders#current_captures), then writes it (see #log_captured).
     def log(log)
-      @appenders.capture(log)
+      @captures.capture(log)
       log_captured(log)
     end
 
@@ -205,6 +205,7 @@ module SemanticLogger
     def initialize(appenders = nil)
       @monitor         = Monitor.new
       @appenders       = appenders || Appenders.new(source: self.class)
+      @captures        = @appenders.current_captures
       @processed_count = 0
       @aside_count     = 0
       @pending         = Thread::Queue.new

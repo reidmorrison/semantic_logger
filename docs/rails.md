@@ -588,7 +588,8 @@ level, in every environment.
 2026-11-15 13:58:05.906754 I [8462:puma srv tp 001 orders_controller.rb:12 OrdersController#create] OrdersController -- Creating order
 ~~~
 
-To record them in another environment, or only at and above a level, set that level:
+Other environments record them for the entries at `:error` and above, Semantic Logger's default. To
+record them at another level, set it:
 
 ~~~ruby
 config.semantic_logger.call_site_level = :info

@@ -457,6 +457,10 @@ built-in appenders no longer register `on_log` subscribers:
 
 * A custom appender that registers one in `#initialize` keeps working. Return its capture from
   `#source_captures` instead, so that it stops once the appender is removed.
+* The captures run after the `on_log` subscribers, so a subscriber no longer finds what an appender
+  captures, such as `log.captured(:otlp_trace_context)` or `log.captured(:new_relic_metadata)`. Read
+  it from where the appender reads it, such as the current span, or take a backtrace with
+  `log.capture_backtrace!`.
 * The `:new_relic_logs` formatter captures New Relic's linking metadata itself, so an appender that
   writes with it, such as a file appender, needs no `on_log(SemanticLogger::Appender::NewRelicLogs::CAPTURE_CONTEXT)`
   any more (see [v4.18](#upgrading-to-semantic-logger-v418)). Remove it, or the metadata is captured
@@ -492,10 +496,11 @@ config.rails_semantic_logger.appenders do |appenders|
 end
 ~~~
 
-`rails_semantic_logger` 5.x records the call site of every entry in development only while
-`call_site_level` is `nil`, which it no longer is by default. Until its v6 release, set
-`config.semantic_logger.call_site_level = :trace` in `config/environments/development.rb` to keep
-them.
+`rails_semantic_logger` v6 still records the call site of every entry in development: it sets
+`call_site_level = :trace` before the application's configuration is read, whatever its level was.
+5.x did that only while `call_site_level` was `nil`, which it no longer is by default, so until you
+upgrade it, set `config.semantic_logger.call_site_level = :trace` in
+`config/environments/development.rb` to keep them.
 
 ### Upgrading to Semantic Logger v5.3
 

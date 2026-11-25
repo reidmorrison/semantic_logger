@@ -9,6 +9,12 @@ module Appender
 
       after { appender.close }
 
+      it "makes its backtrace capture shareable, so that it runs in other Ractors too" do
+        skip "Ractors are not supported" unless defined?(Ractor.shareable?)
+
+        assert Ractor.shareable?(SemanticLogger::Appender::SentryRuby::CAPTURE_BACKTRACE)
+      end
+
       SemanticLogger::LEVELS.each do |level|
         it "sends #{level} message" do
           error_message = hash = scope = nil
@@ -282,7 +288,7 @@ module Appender
               log = SemanticLogger::Log.new("Checkout", level)
               log.assign(message: "Payment declined")
               log.named_tags = named_tags
-              appenders.capture(log)
+              appenders.current_captures.capture(log)
               log
             end
           end.value
@@ -387,7 +393,7 @@ module Appender
           log = Thread.new do
             entry = SemanticLogger::Log.new("Checkout", :error)
             entry.assign(message: "Payment declined", exception: RuntimeError.new("declined"))
-            appenders.capture(entry)
+            appenders.current_captures.capture(entry)
             entry
           end.value
 
