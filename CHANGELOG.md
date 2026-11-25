@@ -10,6 +10,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Added
 
+- A [ClickHouse guide](https://logger.reidmorrison.com/clickhouse.html), with `examples/clickhouse/`: a
+  Docker Compose stack of ClickHouse, the OpenTelemetry Collector, and Grafana, its Collector
+  configuration, a sample application, and the test that checks its rows arrive.
 - `appender: :otlp` and `formatter: :otlp_json_lines` write an exception logged without a message as the
   body of its record, as `ArgumentError: the message`, rather than no body, so that log views
   that show the body, such as Grafana's, show what happened. So do the `examples/filelog/` receivers.

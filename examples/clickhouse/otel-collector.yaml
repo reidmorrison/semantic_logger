@@ -1,0 +1,37 @@
+# Receives OTLP/HTTP from Semantic Logger and writes logs and metrics to ClickHouse, which the
+# exporter creates the tables of: otel_logs, and otel_metrics_sum, _gauge, _histogram, and
+# _exponential_histogram. See docs/clickhouse.md.
+#
+# To read log files instead, add a receiver from examples/filelog/ (filelog.yaml for files that
+# `formatter: :json` writes, otlp_json_file.yaml for `formatter: :otlp_json_lines`) to the logs
+# pipeline.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  clickhouse:
+    endpoint: tcp://clickhouse:9000?dial_timeout=10s
+    database: otel
+    username: otel
+    password: otel
+    # How long rows are kept. Raise it for production.
+    ttl: 72h
+    create_schema: true
+    timeout: 10s
+    sending_queue:
+      batch:
+        flush_timeout: 1s
+    retry_on_failure:
+      enabled: true
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [clickhouse]
+    metrics:
+      receivers: [otlp]
+      exporters: [clickhouse]
