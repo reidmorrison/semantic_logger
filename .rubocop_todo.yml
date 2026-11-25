@@ -89,7 +89,6 @@ Minitest/AssertWithExpectedArgument:
     - 'test/appender/graylog_test.rb'
     - 'test/appender/http_test.rb'
     - 'test/appender/new_relic_logs_test.rb'
-    - 'test/appender/new_relic_test.rb'
     - 'test/appender/splunk_http_test.rb'
     - 'test/appender/splunk_test.rb'
     - 'test/appender/tcp_test.rb'

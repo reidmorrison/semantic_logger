@@ -106,6 +106,7 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [Splunk SDK](#splunk-sdk) (deprecated) | `appender: :splunk` | `splunk-sdk-ruby` |
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
+| [New Relic Logs](#new-relic-logs) | `appender: :new_relic_logs` | `newrelic_rpm` |
 | [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
 | [Logstash](#logstash) | `logger:` | `logstash-logger` |
 | [logentries.com](#logentriescom) | `appender: :tcp` | `net_tcp_client` |
@@ -120,7 +121,6 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [Sentry](#sentry) | `appender: :sentry_ruby` | `sentry-ruby` |
 | [Honeybadger](#honeybadger-and-honeybadger-insights) | `appender: :honeybadger` | `honeybadger` |
 | [Honeybadger Insights](#honeybadger-and-honeybadger-insights) | `appender: :honeybadger_insights` | `honeybadger` |
-| [New Relic](#newrelic) | `appender: :new_relic` | `newrelic_rpm` |
 | [Rollbar](#rollbar) | via `SemanticLogger.on_log` | `rollbar` |
 
 **Databases and message queues**
@@ -1046,6 +1046,23 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+### New Relic Logs
+
+Forward log entries to New Relic Logs through the New Relic Ruby agent (requires the `newrelic_rpm`
+gem):
+
+~~~ruby
+SemanticLogger.add_appender(appender: :new_relic_logs)
+
+# Only forward warnings and above:
+SemanticLogger.add_appender(appender: :new_relic_logs, level: :warn)
+~~~
+
+The appender hands each entry to the agent, which sends it to New Relic on its own thread, so the
+agent's log forwarding must be on (`application_logging.forwarding.enabled`). Each entry
+carries the agent's linking metadata of the thread that logged it, such as `trace.id` and
+`entity.name`, so that New Relic shows it with its trace.
+
 ### OpenTelemetry
 
 Send log entries to [OpenTelemetry](https://opentelemetry.io) through its
@@ -1310,21 +1327,6 @@ SemanticLogger.add_appender(appender: :honeybadger_insights)
 
 Both appenders use the Honeybadger
 [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
-
-### NewRelic
-
-New Relic supports Error Events on both its paid and free plans. The appender sends `:error` and
-`:fatal` entries to New Relic as error events by default (requires the `newrelic_rpm` gem):
-
-~~~ruby
-SemanticLogger.add_appender(appender: :new_relic)
-
-# To also send warnings:
-SemanticLogger.add_appender(appender: :new_relic, level: :warn)
-~~~
-
-> **Deprecated:** `appender: :new_relic` (error events via `newrelic_rpm`) is deprecated and will be
-> removed in v6. To forward log entries to New Relic, use `appender: :new_relic_logs` instead.
 
 ### Rollbar
 

@@ -15,9 +15,6 @@ module NewRelic
       LogEventAggregator
     end
 
-    def self.notice_error(message, hash)
-    end
-
     def self.record_metric(name, secoonds)
     end
 

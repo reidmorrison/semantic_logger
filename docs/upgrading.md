@@ -178,6 +178,14 @@ include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapsho
 v5.1, has been removed. Use `appender: :sentry_ruby` with the `sentry-ruby` gem instead, as shown
 in [Replace the `:sentry` appender with `:sentry_ruby`](#replace-the-sentry-appender-with-sentry_ruby).
 
+#### The `:new_relic` appender has been removed
+
+`appender: :new_relic`, which sent `:error` and `:fatal` entries to New Relic as error events and was
+deprecated in v5.1, has been removed. Use `appender: :new_relic_logs` instead, which forwards log
+entries to New Relic Logs, as shown in
+[Replace the `:new_relic` appender with `:new_relic_logs`](#replace-the-new_relic-appender-with-new_relic_logs).
+The `:new_relic` metric appender, `add_appender(metric: :new_relic)`, is not affected.
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

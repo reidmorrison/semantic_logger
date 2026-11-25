@@ -33,7 +33,7 @@ gem "ruby-kafka"
 # [optional] MongoDB appender
 gem "base64"
 gem "mongo"
-# [optional] NewRelic appender ( Tests use a mock class )
+# [optional] New Relic Logs appender and New Relic metrics ( Tests use a mock class )
 # gem 'newrelic_rpm'
 # [optional] Open Telemetry appender
 gem "opentelemetry-logs-sdk"

@@ -15,7 +15,6 @@ module SemanticLogger
     autoload :Kafka,               "semantic_logger/appender/kafka"
     autoload :Http,                "semantic_logger/appender/http"
     autoload :MongoDB,             "semantic_logger/appender/mongodb"
-    autoload :NewRelic,            "semantic_logger/appender/new_relic"
     autoload :NewRelicLogs,        "semantic_logger/appender/new_relic_logs"
     autoload :Opensearch,          "semantic_logger/appender/opensearch"
     autoload :OpenTelemetry,       "semantic_logger/appender/open_telemetry"

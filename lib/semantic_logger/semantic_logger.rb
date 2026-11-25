@@ -299,7 +299,7 @@ module SemanticLogger
   #   appender: [Symbol|SemanticLogger::Subscriber]
   #     A symbol identifying the appender to create.
   #     For example:
-  #       :bugsnag, :elasticsearch, :graylog, :http, :mongodb, :new_relic, :splunk_http, :syslog
+  #       :bugsnag, :elasticsearch, :graylog, :http, :mongodb, :new_relic_logs, :splunk_http, :syslog
   #          Or,
   #     An instance of an appender derived from SemanticLogger::Subscriber
   #     For example:

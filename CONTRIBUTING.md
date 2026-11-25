@@ -273,7 +273,6 @@ classDiagram
     class Wrapper
     class Elasticsearch
     class MongoDB
-    class NewRelicApp["Appender::NewRelic"]
     class Splunk
 
     Subscriber <|-- IO
@@ -285,7 +284,6 @@ classDiagram
     Subscriber <|-- Wrapper
     Subscriber <|-- Elasticsearch
     Subscriber <|-- MongoDB
-    Subscriber <|-- NewRelicApp
     Subscriber <|-- Splunk
     Http <|-- Loki
     Http <|-- SplunkHttp
