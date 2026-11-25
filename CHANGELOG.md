@@ -10,6 +10,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Added
 
+- `appender: :otlp` and `formatter: :otlp_json_lines` write an exception logged without a message as the
+  body of its record, as `ArgumentError: the message`, rather than no body, so that log views
+  that show the body, such as Grafana's, show what happened. So do the `examples/filelog/` receivers.
 - `examples/filelog/` holds a `filelog` receiver for the files that `formatter: :json` writes, tested
   with the OpenTelemetry Collector, Datadog's DDOT, Elastic's EDOT, and, in its own syntax, Grafana
   Alloy, and the Collector's `otlpjsonfile` receiver for `formatter: :otlp_json_lines`, with the Docker

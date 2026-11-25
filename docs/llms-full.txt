@@ -2453,8 +2453,9 @@ body, its `timestamp` and `level` the record's time and severity, `trace_id`, `s
 `trace_flags` the record's trace, the logger `name` its instrumentation scope, `application`, `host`,
 `environment`, and `pid` its resource (`service.name`, `host.name`, `deployment.environment.name`, and
 `process.pid`), and `thread` the attribute `thread.name`. The other fields, such as `payload` and
-`named_tags`, stay attributes. An entry without a message has no body. A line that is not JSON, such
-as a crash dump, is sent on with its text as the body. So is a JSON line without a `level`, which
+`named_tags`, stay attributes. An entry without a message has no body, unless it has an exception,
+which then is its body, as `ArgumentError: the message`, as `:otlp` writes it. A line that is not JSON,
+such as a crash dump, is sent on with its text as the body. So is a JSON line without a `level`, which
 another process wrote, unless it has a `message`, with its fields as attributes too.
 
 ~~~ruby
@@ -3332,8 +3333,11 @@ sends it, so that each forked worker reports its own. Each logger name in the ba
 instrumentation scope of its own, such as `MyApp::Orders`, holding the records it logged.
 
 Each entry is a log record with the time it was logged, its level as the severity number and text,
-such as `9` and `info`, and its message as the body; an entry without a message, such as
-`logger.error(exception)`, has no body. For example, inside a span:
+such as `9` and `info`, and its message as the body. An exception logged without a message, such as
+`logger.error(exception)`, has the exception as its body, as `ArgumentError: the message`, so that a
+log view that shows the body, such as Grafana's, shows what happened; its `exception.*` attributes are
+written too. An entry with neither, such as a metric-only entry, has no body. For example, inside a
+span:
 
 ~~~ruby
 SemanticLogger.named_tagged(request_id: "abc") do
@@ -8043,6 +8047,8 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
              "thread.name" => "puma srv tp 001", "process.pid" => 12345}
 ~~~
 
+* An exception logged without a message, such as `logger.error(exception)`, has the exception as its
+  body, as `ArgumentError: the message`, instead of no body, beside its `exception.*` attributes.
 * The payload attributes keep their names. An Array that mixes types, such as `[1, "two"]`, is now
   sent as Strings, `["1", "two"]`, since OpenTelemetry does not accept it otherwise.
 * Each named tag is an attribute of its own, such as `request_id`, instead of `body.named_tags`. A

@@ -49,6 +49,40 @@ module SemanticLogger
           refute record.key?(:body)
         end
 
+        it "has the exception as its body when it has no message" do
+          log.message   = nil
+          log.exception = ArgumentError.new("no route matches")
+
+          assert_equal({stringValue: "ArgumentError: no route matches"}, record[:body])
+          assert_equal({stringValue: "ArgumentError"}, attributes["exception.type"])
+        end
+
+        it "keeps an empty message as its body when it has an exception, as :json writes it" do
+          log.message   = ""
+          log.exception = ArgumentError.new("no route matches")
+
+          assert_equal({stringValue: ""}, record[:body])
+        end
+
+        it "keeps an empty message as its body without an exception" do
+          log.message = ""
+
+          assert_equal({stringValue: ""}, record[:body])
+        end
+
+        it "writes the exception as its body whatever the encoding of its message" do
+          log.message   = nil
+          log.exception = ArgumentError.new("hi".encode("UTF-16LE"))
+
+          assert_equal({stringValue: "ArgumentError: hi"}, record[:body])
+        end
+
+        it "keeps its message as its body when it also has an exception" do
+          log.exception = ArgumentError.new("no route matches")
+
+          assert_equal({stringValue: "Charged"}, record[:body])
+        end
+
         it "flattens a Hash of the payload or named tags into dotted attribute names, by default" do
           log.payload    = {request: {address: {zip_code: "10001"}, items: [{sku: "a"}], empty: {}}, ratio: 0.5}
           log.named_tags = {tenant: {id: 3}}

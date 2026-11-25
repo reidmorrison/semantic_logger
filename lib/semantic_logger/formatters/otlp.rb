@@ -5,7 +5,9 @@ module SemanticLogger
     # Otlp::Protobuf):
     #   timeUnixNano, observedTimeUnixNano: when the entry was logged, in nanoseconds.
     #   severityNumber, severityText:       the level, such as 9 and "info".
-    #   body:                               the message, when the entry has one.
+    #   body:                               the message, when the entry has one, or else an exception
+    #                                       logged without one, as "ArgumentError: the message". A
+    #                                       message that is empty once cleansed stays the empty body.
     #   attributes:                         the named tags and the payload, then the entry's own fields.
     #   traceId, spanId, flags:             the trace the entry was logged in (see Otlp::TraceContext).
     #
@@ -37,6 +39,21 @@ module SemanticLogger
 
       # Returns true: each record carries the trace it was logged in.
       def trace_context? = true
+
+      # Returns [String|nil] the message, or else, for an exception logged without one, the exception as
+      # "ArgumentError: the message", so that a log view that shows the body, such as Grafana's, shows
+      # what happened rather than an empty line. The exception's attributes are written as well. Nil for
+      # an entry with neither, such as a metric only entry.
+      def body
+        message   = super
+        exception = log.exception
+        # Only without a message, as the :json formatter writes "message" for an empty one too, so that a
+        # record read from its file has the same body (see examples/filelog).
+        return message unless exception && message.nil?
+
+        # Joined whatever the encoding of the exception's message, such as UTF-16LE.
+        Utils.join_texts(Utils.exception_name(exception), ": ", Utils.exception_message(exception))
+      end
 
       # Parameters:
       #   flatten: [true|false]
