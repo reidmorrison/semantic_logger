@@ -34,7 +34,8 @@ module SemanticLogger
     # series with another unit than the first one merged is left out, with a warning once per name. Each
     # datapoint has the dimensions of its series, with each value as text, leaving out those whose value
     # is blank (nil, or text that is empty or only whitespace), and the `host`, `application`, and, when
-    # it is set, `environment` of the appender.
+    # it is set, `environment` of the appender, unless the series has a dimension of that name of its own,
+    # which it keeps.
     #
     # A series whose name holds a "/", and that has no dimensions (or only blank ones), is sent as
     # Semantic Logger 5 sent such a metric, so that existing charts keep working: the class and action
@@ -348,11 +349,12 @@ module SemanticLogger
         present
       end
 
-      # Adds the host, application, and, when set, environment of the appender to the dimensions.
+      # Adds the host, application, and, when set, environment of the appender to the dimensions, unless the
+      # metric has a dimension of that name of its own, which it keeps.
       def add_default_dimensions(dimensions)
-        dimensions["host"]        = host if host
-        dimensions["application"] = application if application
-        dimensions["environment"] = environment if environment
+        dimensions["host"]        ||= host if host
+        dimensions["application"] ||= application if application
+        dimensions["environment"] ||= environment if environment
         dimensions
       end
 

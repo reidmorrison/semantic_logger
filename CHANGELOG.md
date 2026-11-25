@@ -130,8 +130,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   dimensions is still sent as `Application.counter` and `Application.average` (with
   `Application.sum`, `Application.min`, and so on), with the `class` and `action` dimensions taken from
   the name; any other name is sent as it is, with `/` as `.`, so a dotted name such as `users.signup`
-  is no longer sent with the class `Unknown`. `internal_metrics: true` adds Semantic Logger's own
-  metrics. The `dimensions:` option, which listed the named tags to send, raises `ArgumentError`, since
+  is no longer sent with the class `Unknown`. A metric's own dimension named `host`, `application`, or
+  `environment` is kept, rather than replaced by the appender's. `internal_metrics: true` adds
+  Semantic Logger's own metrics. The `dimensions:` option, which listed the named tags to send, raises `ArgumentError`, since
   named tags are never part of a metric's series, as do `level:`, `filter:`, `formatter:`, a formatter
   block, and `batch: true`. A leading, trailing, or repeated `/` in a name is left out, and a series
   whose name is then empty is not sent, with a warning. A counter named as one of the names a histogram

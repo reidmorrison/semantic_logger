@@ -173,10 +173,29 @@ module Metric
           )
         end
 
-        it "lets the host, application, and environment of the appender stand over dimensions of those names" do
-          data = body(snapshot([:counter, "jobs", 1, {dimensions: {host: "other", region: "east"}}]))
+        it "keeps the metric's own dimensions named host, application, or environment" do
+          own  = {host: "db1", application: "billing", environment: "staging", region: "east"}
+          data = body(snapshot([:counter, "jobs", 1, {dimensions: own}]))
+
+          sent = data["counter"].map { |point| point["dimensions"] }
+
+          assert_equal [own.transform_keys(&:to_s)], sent
+        end
+
+        it "adds the appender's own for a dimension of those names whose value is blank" do
+          blank = {host: " ", application: nil, environment: "", region: "east"}
+          data  = body(snapshot([:counter, "jobs", 1, {dimensions: blank}]))
 
           assert_equal({"counter" => [datapoint("jobs", 1, {"region" => "east"})]}, data)
+        end
+
+        it "keeps the metric's own environment when the appender has none" do
+          appender = build_appender(environment: nil)
+          SemanticLogger.stub(:environment, nil) do
+            data = body(snapshot([:counter, "jobs", 1, {dimensions: {environment: "staging"}}]), appender)
+
+            assert_equal "staging", data["counter"].first["dimensions"]["environment"]
+          end
         end
 
         it "leaves out the environment when none is set" do
