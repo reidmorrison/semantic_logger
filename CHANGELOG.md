@@ -5,6 +5,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Deprecated
+
+- Passing the class to the Minitest helper `semantic_logger_events` positionally, as in
+  `semantic_logger_events(ApiClient)`, reports a deprecation warning, since v6 takes it only as
+  `klass:`. Use `semantic_logger_events(klass: ApiClient)`.
+
 ### Fixed
 
 - The HTTP appenders (`:http`, `:elasticsearch_http`, `:splunk_http`, `:loki`, and
