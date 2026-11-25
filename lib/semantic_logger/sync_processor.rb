@@ -195,7 +195,7 @@ module SemanticLogger
 
     def initialize(appenders = nil)
       @monitor         = Monitor.new
-      @appenders       = appenders || Appenders.new(self.class.logger.dup)
+      @appenders       = appenders || Appenders.new(source: self.class)
       @processed_count = 0
       @aside_count     = 0
       @pending         = Thread::Queue.new

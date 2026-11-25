@@ -238,7 +238,6 @@ class SemanticLoggerTest < Minitest::Test
       let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
 
       before do
-        @logger = SemanticLogger::Logger.processor.appenders.logger
         SemanticLogger::Logger.processor.appenders.logger = internal_logger
         # Created here, since a let is not thread-safe: the appender's worker thread and the test
         # could otherwise each create a Queue of their own on first use.
@@ -246,7 +245,8 @@ class SemanticLoggerTest < Minitest::Test
       end
 
       after do
-        SemanticLogger::Logger.processor.appenders.logger = @logger
+        # Follow the internal logger again.
+        SemanticLogger::Logger.processor.appenders.logger = nil
         # Should the call wait forever, its thread is ended, so that the processor's thread no longer
         # waits for it, and the tests that follow do not wait either.
         @caller.processor.instance_variable_get(:@thread)&.kill&.join
@@ -1177,6 +1177,59 @@ class SemanticLoggerTest < Minitest::Test
         SemanticLogger::Appender::IO.new(StringIO.new).logger.warn("Could not connect")
 
         assert_includes output.string, "Could not connect"
+      end
+
+      it "takes effect on the running processor" do
+        processor_logger = SemanticLogger::Logger.processor.logger
+        output           = StringIO.new
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(output)
+
+        refute_same processor_logger, SemanticLogger::Logger.processor.logger
+        SemanticLogger::Logger.processor.logger.warn("Failed to log to appender")
+
+        assert_includes output.string, "Failed to log to appender"
+      end
+
+      it "takes effect on an appender that has already reported" do
+        appender = SemanticLogger::Appender::IO.new(StringIO.new)
+        appender.logger.warn("Before")
+        output                         = StringIO.new
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(output)
+
+        appender.logger.warn("Could not connect")
+
+        assert_includes output.string, "Could not connect"
+        assert_equal "SemanticLogger::Appender::IO", appender.logger.name
+      end
+
+      it "takes effect on the running processor again once its own logger is set to nil" do
+        SemanticLogger::Logger.processor.appenders.logger = SemanticLogger::Test::CaptureLogEvents.new
+        SemanticLogger::Logger.processor.appenders.logger = nil
+        output                         = StringIO.new
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(output)
+
+        SemanticLogger::Logger.processor.logger.warn("Failed to log to appender")
+
+        assert_includes output.string, "Failed to log to appender"
+      end
+
+      it "leaves the logger of an appender that was given one of its own" do
+        own      = SemanticLogger::Appender::IO.new(StringIO.new)
+        appender = SemanticLogger::Appender::IO.new(StringIO.new)
+        appender.logger = own
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(StringIO.new)
+
+        assert_same own, appender.logger
+      end
+
+      it "takes effect on a synchronous processor started on its own" do
+        processor = SemanticLogger::SyncProcessor.new
+        output    = StringIO.new
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(output)
+
+        processor.logger.warn("Failed to log to appender")
+
+        assert_includes output.string, "Failed to log to appender"
       end
 
       it "wraps a Ruby Logger" do
