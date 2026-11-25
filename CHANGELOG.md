@@ -21,11 +21,11 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   once per metric name, as is a call that fails as it is recorded.
 - `SemanticLogger::Test::CaptureLogEvents` captures these metric calls in `metric_events`, as they are
   made, both when it stands in for a logger and for the processor, with their dimensions as they are
-  recorded (String keys, Symbol values as Strings); an expected `dimensions:` is compared the same way,
-  so `dimensions: {plan: "free"}` matches. Minitest:
-  `semantic_logger_metrics { ... }` returns them, and `assert_metric(metrics, name:, kind:, value:,
-  unit:, dimensions:, scope:)` asserts that one of them matches. RSpec: `capture_semantic_logger_metrics`, the
-  matchers `be_a_semantic_logger_metric` and `a_semantic_logger_metric`, and the block matcher
+  recorded (String keys, Symbol values as Strings); an expected `dimensions:` is compared the same
+  way, so `dimensions: {plan: "free"}` matches. Minitest: `semantic_logger_metrics { ... }` returns
+  them, and `assert_metric(metrics, name:, kind:, value:, unit:, dimensions:, scope:)` asserts that
+  one of them matches. RSpec: `capture_semantic_logger_metrics`, the matchers
+  `be_a_semantic_logger_metric` and `a_semantic_logger_metric`, and the block matcher
   `record_semantic_logger_metric`. Each captured call has the `scope` that `metric: :otlp` sends it
   in, the name of the logger that made it, except those captured through one class's logger.
 - Semantic Logger's own metrics, for a metric appender added with `internal_metrics: true`: the counter

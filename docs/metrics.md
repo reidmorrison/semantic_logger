@@ -863,8 +863,8 @@ Each captured call is a `SemanticLogger::Test::MetricEvent`, with the attributes
 or `:histogram`), `name` (a String), `value` (seconds for `time`), `unit`, `dimensions` (as they
 are recorded: String keys, Symbol values as Strings, `nil` for none, including an empty Hash), and
 `scope`, the name of the logger that made the call, such as `"Signup"`, which `metric: :otlp` sends
-as its instrumentation scope. The calls captured through one class's logger, with `klass:`, have no
-scope (`nil`), since only the class's own calls are captured then.
+as its instrumentation scope. The calls of a logger without a name, and those captured through one
+class's logger, with `klass:`, have no scope (`nil`).
 
 ### Minitest
 

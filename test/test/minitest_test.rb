@@ -218,6 +218,7 @@ class MinitestHelpersTest < Minitest::Test
 
       assert_equal "MinitestHelpersTest::Signup", metric.scope
       assert_metric(metrics, name: "users.signup", scope: /Signup\z/)
+      assert_metric(metrics, name: "users.signup", scope: :"MinitestHelpersTest::Signup")
       assert_raises(Minitest::Assertion) { assert_metric(metrics, name: "users.signup", scope: "Other") }
       assert_raises(Minitest::Assertion) { assert_metric(metrics, name: "users.signup", scope: :nil) }
     end
