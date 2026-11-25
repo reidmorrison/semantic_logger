@@ -253,6 +253,9 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
     "tag1": "any named tags will be inside this named_tags tag",
     "tag2": "any named tags will be inside this named_tags tag"
   },
+  "trace_id": "32 hex digits of the trace the entry was logged in",
+  "span_id": "16 hex digits of its span",
+  "trace_flags": "01 when the span is sampled, 00 when not",
 
   "payload": {
     "field1": "any custom payload fields will be inside this payload tag",
@@ -283,6 +286,13 @@ Notes:
   such as `#<Class:0x000...>`. Its `message` is always a String: when the exception's `#message`
   raises, such as one that reads a record that is nil, the message it was raised with is written
   instead.
+* `trace_id`, `span_id`, and `trace_flags` link the entry to the trace it was logged in, so that a log
+  agent that reads the file, such as the OpenTelemetry Collector's `filelog` receiver, can link it to
+  its trace. When the `opentelemetry-api` gem is loaded, as it is by any OpenTelemetry instrumentation,
+  they are those of the span that was current on the thread that logged the entry. Without it, or
+  outside a span, they are taken from the `trace_id` and `span_id` named tags, when they hold valid
+  hex ids, and `trace_flags` is left out; the named tags are still written as they are. An entry
+  logged outside a trace has none of them.
 * To also log the detail Ruby adds to an exception's message, such as did_you_mean suggestions, as
   `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
   See [Exception details](config.html#exception-details).

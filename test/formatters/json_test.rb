@@ -30,6 +30,51 @@ module SemanticLogger
           JSON.parse(formatter.call(log, appender))
         end
 
+        describe "trace" do
+          let(:trace_id) { "5b8efff798038103d269b633813fc60c" }
+          let(:span_id) { "eee19b7ec3c1b174" }
+
+          it "is written by this formatter, so its appender captures it" do
+            assert_predicate formatter, :trace_context?
+          end
+
+          it "writes the ids and flags of the span that was current when the entry was logged" do
+            log.capture(SemanticLogger::Otlp::TraceContext::KEY, [trace_id, span_id, 1])
+
+            assert_equal trace_id, parsed["trace_id"]
+            assert_equal span_id, parsed["span_id"]
+            assert_equal "01", parsed["trace_flags"]
+          end
+
+          it "writes flags of 00 for a span that is not sampled" do
+            log.capture(SemanticLogger::Otlp::TraceContext::KEY, [trace_id, span_id, 0])
+
+            assert_equal "00", parsed["trace_flags"]
+          end
+
+          it "writes the trace_id and span_id named tags without flags, and keeps the named tags" do
+            log.named_tags = {trace_id: trace_id.upcase, span_id: span_id, user: "joe"}
+
+            assert_equal trace_id, parsed["trace_id"]
+            assert_equal span_id, parsed["span_id"]
+            refute parsed.key?("trace_flags")
+            assert_equal({"trace_id" => trace_id.upcase, "span_id" => span_id, "user" => "joe"}, parsed["named_tags"])
+          end
+
+          it "writes the trace without a span_id named tag that is not a span id" do
+            log.named_tags = {trace_id: trace_id, span_id: "123"}
+
+            assert_equal trace_id, parsed["trace_id"]
+            refute parsed.key?("span_id")
+          end
+
+          it "writes no trace for an entry logged outside one" do
+            log.named_tags = {trace_id: "abc"}
+
+            refute(parsed.keys.any? { |key| key.start_with?("trace_", "span_") })
+          end
+        end
+
         it "returns a JSON string" do
           result = formatter.call(log, appender)
 

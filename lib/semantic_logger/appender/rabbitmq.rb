@@ -136,6 +136,7 @@ module SemanticLogger
         @queue      = nil
         @channel    = nil
         @connection = nil
+        super
       end
 
       # Publishes the formatted entry. Bunny raises Bunny::ChannelAlreadyClosed or Bunny::ConnectionClosedError

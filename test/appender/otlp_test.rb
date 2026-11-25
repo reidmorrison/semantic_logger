@@ -87,14 +87,20 @@ module Appender
       end
 
       it "captures the current span while any :otlp appender is open" do
-        capture = SemanticLogger::Otlp::TraceContext::CAPTURE
-        first   = new_appender
-        second  = new_appender
+        trace_context = SemanticLogger::Otlp::TraceContext
+        capture       = trace_context::CAPTURE
+        # Without the appenders that other tests left open, whose :json formatter writes the trace too.
+        owners        = trace_context.instance_variable_get(:@owners)
+        trace_context.instance_variable_set(:@owners, {}.compare_by_identity)
+        first         = new_appender
+        second        = new_appender
 
         assert_equal 1, SemanticLogger::Logger.subscribers.count(capture)
+        assert trace_context.registered?(first)
         first.close
         first.close
 
+        refute trace_context.registered?(first)
         assert_includes SemanticLogger::Logger.subscribers, capture
         second.close
 
@@ -107,6 +113,10 @@ module Appender
 
         assert_includes SemanticLogger::Logger.subscribers, capture
         third.close
+        second.close
+      ensure
+        trace_context.instance_variable_set(:@owners, owners)
+        SemanticLogger.on_log(capture) unless owners.empty?
       end
 
       it "makes the capture of the current span shareable, for entries logged in other Ractors" do

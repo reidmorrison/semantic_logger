@@ -17,9 +17,13 @@ module SemanticLogger
       # NOOP
     end
 
-    # A subscriber should implement close if it can.
+    # A subscriber should implement close if it can, and call super, so that it stops capturing the
+    # trace of each log call for its formatter, once no other appender needs it (see #formatter=).
+    # Closing it again changes nothing more. Writing again afterwards captures it again, until it is
+    # closed once more. Trap-safe.
     def close
-      # NOOP
+      release_trace_context
+      nil
     end
 
     # Method called to log an event
@@ -64,6 +68,10 @@ module SemanticLogger
     end
 
     # Set the formatter from Symbol|Hash|Block
+    #
+    # While the formatter writes the trace that each entry was logged in (see
+    # Formatters::Base#trace_context?), this appender has it captured on the thread of each log call
+    # (see Otlp::TraceContext.register), until it is closed, or given a formatter that does not.
     def formatter=(formatter)
       @formatter =
         if formatter.nil?
@@ -71,6 +79,7 @@ module SemanticLogger
         else
           Formatters.factory(formatter)
         end
+      capture_trace_context
     end
 
     # Whether this log entry meets the criteria to be logged by this appender.
@@ -274,6 +283,7 @@ module SemanticLogger
     # The block, when given, turns the formatter's output into what the appender sends, such as
     # its JSON. An error doing so is also caused by the content of the message.
     def format_log(log)
+      capture_trace_context if @trace_context_needed && !@trace_context_registered
       formatted = formatter.call(log, self)
       block_given? ? yield(formatted) : formatted
     rescue StandardError, ScriptError => e
@@ -291,6 +301,7 @@ module SemanticLogger
     # The formatter is read once, so that one changed by #formatter= on another thread cannot be
     # swapped in between the check and the call.
     def format_batch(logs)
+      capture_trace_context if @trace_context_needed && !@trace_context_registered
       batch_formatter = formatter
       refusal         = format_batch_refusal(batch_formatter)
       raise(ArgumentError, "Cannot batch #{self.class}: #{refusal}") if refusal
@@ -326,6 +337,26 @@ module SemanticLogger
     # define a #method of its own, such as for the HTTP method of its requests.
     def batch_defined_by?(owner)
       respond_to?(:batch) && Kernel.instance_method(:method).bind_call(self, :batch).owner.equal?(owner)
+    end
+
+    # Captures the trace of each log call while the formatter writes it, and this appender is open, or
+    # stops capturing it for this appender once its formatter does not (see #formatter=). Called again,
+    # such as by #format_log after #close, it registers this appender again, which Otlp::TraceContext
+    # counts once.
+    def capture_trace_context
+      @trace_context_needed = formatter.respond_to?(:trace_context?) && formatter.trace_context?
+      return release_trace_context unless @trace_context_needed
+
+      SemanticLogger::Otlp::TraceContext.register(self)
+      @trace_context_registered = true
+    end
+
+    # Stops capturing the trace for this appender (see Otlp::TraceContext.unregister).
+    def release_trace_context
+      return unless @trace_context_registered
+
+      @trace_context_registered = false
+      SemanticLogger::Otlp::TraceContext.unregister(self)
     end
 
     # Returns [Hash] a copy of the supplied options, with a copy of each Hash among them, such as ssl:, for an

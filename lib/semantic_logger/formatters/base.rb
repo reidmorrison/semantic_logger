@@ -159,6 +159,14 @@ module SemanticLogger
         $$
       end
 
+      # Returns [true|false] whether it writes the trace that each entry was logged in, which then has
+      # to be captured on the thread that logs it (see Otlp::TraceContext). The appender asks, and
+      # captures it while it is open (see Subscriber#formatter=). False: a formatter that writes the
+      # trace returns true.
+      def trace_context?
+        false
+      end
+
       private
 
       # When `escape_control_chars` is enabled, return a copy of the supplied

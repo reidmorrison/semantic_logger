@@ -113,6 +113,8 @@ module SemanticLogger
         forget_inherited
         task&.shutdown
         flush
+      ensure
+        super
       end
 
       # Builds a new client, starts a new timer that sends the buffered log events every

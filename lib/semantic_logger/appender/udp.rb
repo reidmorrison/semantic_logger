@@ -118,6 +118,8 @@ module SemanticLogger
         socket  = @socket
         @socket = nil
         close_socket(socket)
+      ensure
+        super
       end
 
       # A log message too large for a datagram (Errno::EMSGSIZE) cannot be sent by retrying.

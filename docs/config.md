@@ -782,6 +782,10 @@ and
 [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/main/lib/semantic_logger/formatters/color.rb)
 for all the methods that can be overridden.
 
+A formatter that writes the trace each entry was logged in, from `SemanticLogger::Otlp::TraceContext.of(log)`,
+returns `true` from `#trace_context?`, so that its appender has that trace captured on the thread of
+each log call. A subclass of `:json` or `:otlp` already does.
+
 To replace the formatter on an appender that is already installed, for example in a Rails app:
 
 ~~~ruby
@@ -934,9 +938,15 @@ class SimpleAppender < SemanticLogger::Subscriber
   # Optional
   def close
     puts "Closing :)"
+  ensure
+    super
   end
 end
 ~~~
+
+Call `super` from `#close`, as above. While the appender's formatter writes the trace that each entry
+was logged in, such as `:json`, Semantic Logger captures that trace on the thread of each log call,
+and `super` stops it once no other appender needs it.
 
 Do not give the appender an option of the same name as one that `super` already accepts, such as
 `host` or `level`: the appender's own keyword would take the value, so `super` would never receive

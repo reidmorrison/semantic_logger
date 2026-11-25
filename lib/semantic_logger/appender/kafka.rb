@@ -202,6 +202,8 @@ module SemanticLogger
         @producer = nil
         @kafka&.close
         @kafka = nil
+      ensure
+        super
       end
 
       # Forward log messages to Kafka producer thread. Raises IOError when the appender has no producer:

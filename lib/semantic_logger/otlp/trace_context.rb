@@ -28,30 +28,53 @@ module SemanticLogger
         nil
       end)
 
-      # The appenders that use CAPTURE, so that it is subscribed while there is any (see .register).
-      @users = 0
-      @mutex = Mutex.new
+      # The appenders whose formatter writes the trace, so that CAPTURE is subscribed while there is
+      # any (see .register and Subscriber#formatter=), by identity, since an appender may define #==.
+      @owners = {}.compare_by_identity
+      @mutex  = Mutex.new
 
-      # Subscribes CAPTURE with SemanticLogger.on_log, for an appender that links its records to traces,
-      # unless another already did. Each appender that registers must unregister once closed.
-      def self.register
-        @mutex.synchronize do
-          # Subscribed each time, which subscribes it once, so that an appender added after the subscribers
-          # were cleared, such as by Logger.clear_subscribers, subscribes it again.
+      # Seconds that .register and .unregister wait in a signal trap for the thread that does it for
+      # them (see TrapSafe.hand_off).
+      TRAP_WAIT_SECONDS = 0.1
+
+      # Subscribes CAPTURE with SemanticLogger.on_log, for an appender whose formatter writes the trace,
+      # such as Formatters::Otlp or Formatters::Json, unless another already did. Registering the same
+      # appender again changes nothing, other than subscribing CAPTURE again after the subscribers were
+      # cleared, such as by Logger.clear_subscribers. Each appender that registers unregisters once
+      # closed (see Subscriber#close).
+      #
+      # Trap-safe: in a signal trap, where Ruby does not allow a Mutex to be locked, such as one that
+      # adds an appender, a new thread registers it (see TrapSafe.hand_off).
+      def self.register(owner)
+        exclusively do
           SemanticLogger.on_log(CAPTURE)
-          @users += 1
+          @owners[owner] = true
         end
       end
 
       # Unsubscribes CAPTURE once no appender that registered uses it, so that no log call captures a
-      # trace context that no appender reads.
-      def self.unregister
-        @mutex.synchronize do
-          next if @users.zero?
+      # trace context that no appender reads. Unregistering an appender that is not registered changes
+      # nothing. Trap-safe, as .register is.
+      def self.unregister(owner)
+        exclusively do
+          next unless @owners.delete(owner)
 
-          @users -= 1
-          SemanticLogger::Logger.unsubscribe(CAPTURE) if @users.zero?
+          SemanticLogger::Logger.unsubscribe(CAPTURE) if @owners.empty?
         end
+      end
+
+      # Returns [true|false] whether the appender is registered.
+      def self.registered?(owner)
+        @owners.key?(owner)
+      end
+
+      # Runs the block holding the Mutex, or in a signal trap, on a new thread, waiting for it at most
+      # TRAP_WAIT_SECONDS.
+      def self.exclusively(&block)
+        return if TrapSafe.try_synchronize(@mutex, &block)
+
+        TrapSafe.hand_off(TRAP_WAIT_SECONDS) { @mutex.synchronize(&block) }
+        nil
       end
 
       # The named tags that hold the ids, when the application sets them.
@@ -105,7 +128,7 @@ module SemanticLogger
         [key, value.downcase]
       end
 
-      private_class_method :new, :from_named_tags, :id_tag
+      private_class_method :new, :from_named_tags, :id_tag, :exclusively
 
       def initialize(trace_id, span_id, flags, tags)
         @trace_id = trace_id

@@ -1,5 +1,7 @@
 require_relative "test_helper"
 require "stringio"
+require "tmpdir"
+require_relative "signal_trap_helper"
 
 class SubscriberTest < Minitest::Test
   class SimpleSubscriber < SemanticLogger::Subscriber
@@ -196,6 +198,87 @@ class SubscriberTest < Minitest::Test
     describe "#console_stream" do
       it "is nil by default" do
         assert_nil appender.console_stream
+      end
+    end
+
+    describe "trace capture" do
+      include SignalTrapHelper
+
+      let(:trace_context) { SemanticLogger::Otlp::TraceContext }
+      let(:capture) { SemanticLogger::Otlp::TraceContext::CAPTURE }
+
+      # Without the appenders that other tests left open.
+      before do
+        @owners = trace_context.instance_variable_get(:@owners)
+        trace_context.instance_variable_set(:@owners, {}.compare_by_identity)
+        SemanticLogger::Logger.unsubscribe(capture)
+      end
+
+      after do
+        trace_context.instance_variable_set(:@owners, @owners)
+        @owners.empty? ? SemanticLogger::Logger.unsubscribe(capture) : SemanticLogger.on_log(capture)
+      end
+
+      it "captures the trace while its formatter writes it, until it is closed" do
+        json = SemanticLogger::Appender::IO.new($stdout, formatter: :json)
+
+        assert trace_context.registered?(json)
+        assert_includes SemanticLogger::Logger.subscribers, capture
+        json.close
+
+        refute trace_context.registered?(json)
+        refute_includes SemanticLogger::Logger.subscribers, capture
+      end
+
+      it "does not capture it for a formatter that does not write it" do
+        appender = SemanticLogger::Appender::IO.new($stdout, formatter: :default)
+
+        refute trace_context.registered?(appender)
+        refute_includes SemanticLogger::Logger.subscribers, capture
+      end
+
+      it "stops capturing it once given a formatter that does not write it, and captures it again for one that does" do
+        appender = SemanticLogger::Appender::IO.new($stdout, formatter: :json)
+        appender.formatter = :default
+
+        refute trace_context.registered?(appender)
+        appender.formatter = :json
+
+        assert trace_context.registered?(appender)
+      ensure
+        appender&.close
+      end
+
+      it "captures it again when written to after it was closed" do
+        appender = SemanticLogger::Appender::IO.new(StringIO.new, formatter: :json)
+        appender.close
+        appender.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "again" })
+
+        assert trace_context.registered?(appender)
+      ensure
+        appender&.close
+      end
+
+      it "is released by the close of each built-in appender, which calls super" do
+        Dir.mktmpdir do |dir|
+          appender = SemanticLogger::Appender::File.new(File.join(dir, "test.log"), formatter: :json)
+
+          assert trace_context.registered?(appender)
+          appender.close
+
+          refute trace_context.registered?(appender)
+        end
+      end
+
+      it "registers and releases it in a signal trap" do
+        appender = in_signal_trap { SemanticLogger::Appender::IO.new(StringIO.new, formatter: :json) }
+
+        refute_kind_of Exception, appender
+        assert trace_context.registered?(appender)
+        closed = in_signal_trap { appender.close || :closed }
+
+        assert_equal :closed, closed
+        refute trace_context.registered?(appender)
       end
     end
 

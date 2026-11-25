@@ -1660,6 +1660,10 @@ and
 [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/main/lib/semantic_logger/formatters/color.rb)
 for all the methods that can be overridden.
 
+A formatter that writes the trace each entry was logged in, from `SemanticLogger::Otlp::TraceContext.of(log)`,
+returns `true` from `#trace_context?`, so that its appender has that trace captured on the thread of
+each log call. A subclass of `:json` or `:otlp` already does.
+
 To replace the formatter on an appender that is already installed, for example in a Rails app:
 
 ~~~ruby
@@ -1812,9 +1816,15 @@ class SimpleAppender < SemanticLogger::Subscriber
   # Optional
   def close
     puts "Closing :)"
+  ensure
+    super
   end
 end
 ~~~
+
+Call `super` from `#close`, as above. While the appender's formatter writes the trace that each entry
+was logged in, such as `:json`, Semantic Logger captures that trace on the thread of each log call,
+and `super` stops it once no other appender needs it.
 
 Do not give the appender an option of the same name as one that `super` already accepts, such as
 `host` or `level`: the appender's own keyword would take the value, so `super` would never receive
@@ -2385,6 +2395,9 @@ The file, IO, and HTTP appenders can emit machine-readable output by choosing a 
     "tag1": "any named tags will be inside this named_tags tag",
     "tag2": "any named tags will be inside this named_tags tag"
   },
+  "trace_id": "32 hex digits of the trace the entry was logged in",
+  "span_id": "16 hex digits of its span",
+  "trace_flags": "01 when the span is sampled, 00 when not",
 
   "payload": {
     "field1": "any custom payload fields will be inside this payload tag",
@@ -2415,6 +2428,13 @@ Notes:
   such as `#<Class:0x000...>`. Its `message` is always a String: when the exception's `#message`
   raises, such as one that reads a record that is nil, the message it was raised with is written
   instead.
+* `trace_id`, `span_id`, and `trace_flags` link the entry to the trace it was logged in, so that a log
+  agent that reads the file, such as the OpenTelemetry Collector's `filelog` receiver, can link it to
+  its trace. When the `opentelemetry-api` gem is loaded, as it is by any OpenTelemetry instrumentation,
+  they are those of the span that was current on the thread that logged the entry. Without it, or
+  outside a span, they are taken from the `trace_id` and `span_id` named tags, when they hold valid
+  hex ids, and `trace_flags` is left out; the named tags are still written as they are. An entry
+  logged outside a trace has none of them.
 * To also log the detail Ruby adds to an exception's message, such as did_you_mean suggestions, as
   `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
   See [Exception details](config.html#exception-details).
@@ -7888,6 +7908,16 @@ meanwhile.) The client library of the `:mongodb`, `:elasticsearch`, `:opensearch
 `appender.logger` returns a copy of the internal logger, named after the appender, which is replaced
 when the internal logger is. A setting changed on that copy, such as its level, is lost then: set it
 on the internal logger itself.
+
+#### `:json` writes the trace each entry was logged in
+
+The `:json` formatter, and `:fluentd`, which builds on it, add `trace_id`, `span_id`, and
+`trace_flags` to an entry logged in a trace: the span that was current, when the `opentelemetry-api`
+gem is loaded, or else the `trace_id` and `span_id` named tags. The named tags are still written as
+before. See [JSON](appenders.html#json).
+
+A custom appender whose `#close` does not call `super` keeps that trace being captured on each log
+call after it is closed. Call `super` from it (see [Custom appenders](config.html#custom-appenders)).
 
 #### A negative Integer level raises `ArgumentError`
 
