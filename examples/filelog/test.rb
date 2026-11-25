@@ -6,7 +6,7 @@
 #   bundle exec ruby examples/filelog/test.rb                # every agent
 #   bundle exec ruby examples/filelog/test.rb alloy ddot     # some of them
 #
-# Needs Docker, and the images below, which it pulls when missing. Run it by hand before a release, and
+# Needs Docker, and the images below, which it pulls when they are missing. Run it by hand before a release, and
 # after changing either configuration or the :json formatter.
 require "bundler/setup"
 require "fileutils"
@@ -28,7 +28,10 @@ module Records
     return [] unless File.exist?(path)
 
     File.readlines(path).flat_map do |line|
-      JSON.parse(line).fetch("resourceLogs", []).flat_map do |resource_logs|
+      request = parse(line)
+      next [] unless request
+
+      request.fetch("resourceLogs", []).flat_map do |resource_logs|
         resource = attributes(resource_logs.dig("resource", "attributes"))
         resource_logs.fetch("scopeLogs", []).flat_map do |scope_logs|
           scope_logs.fetch("logRecords", []).map do |record|
@@ -37,6 +40,13 @@ module Records
         end
       end
     end
+  end
+
+  # Returns [Hash|nil] the request on the line, nil for a line that the sink is still writing.
+  def parse(line)
+    JSON.parse(line)
+  rescue JSON::ParserError
+    nil
   end
 
   def attributes(list)
@@ -48,6 +58,8 @@ module Records
 
     if value.key?("kvlistValue") then attributes(value.dig("kvlistValue", "values"))
     elsif value.key?("arrayValue") then (value.dig("arrayValue", "values") || []).map { |item| any_value(item) }
+    # An Integer, as OTLP/JSON writes an int64 as text, so that a value read as a double is told apart.
+    elsif value.key?("intValue") then Integer(value["intValue"])
     else
       value.values.first
     end
@@ -59,16 +71,23 @@ module Records
   def check(records, entries, otlp: false)
     problems = []
     by_body  = records.to_h { |record| [record.dig("body", "stringValue"), record] }
+    unless otlp
+      FilelogTest::OTHER_LINES.each do |line|
+        problems << "the line #{line} lost its text" unless by_body.key?(line)
+      end
+    end
     entries.each do |message, entry|
       record = by_body[message]
-      next problems << "#{message}: not received" unless record
+      label  = message || "(no message, #{entry.dig('exception', 'name')})"
+      next problems << "#{label}: not received" unless record
 
-      check_record(problems, message, record, entry)
+      check_record(problems, label, record, entry)
       attrs = attributes(record["attributes"])
+      expect(problems, label, "thread.name", attrs["thread.name"], entry["thread"])
       if otlp
-        check_otlp_attributes(problems, message, attrs, entry)
+        check_otlp_attributes(problems, label, attrs, entry)
       else
-        check_json_attributes(problems, message, attrs, entry)
+        check_json_attributes(problems, label, attrs, entry)
       end
     end
     problems
@@ -82,12 +101,16 @@ module Records
   def check_record(problems, message, record, entry)
     time     = Time.iso8601(entry["timestamp"])
     resource = record["resource"]
-    expect(problems, message, "timeUnixNano", record["timeUnixNano"], (time.to_r * 1_000_000_000).to_i.to_s)
+    # To the microsecond that :json writes, since :otlp_json_lines writes the nanosecond.
+    received = record["timeUnixNano"].to_i / 1000
+    expect(problems, message, "timeUnixNano (µs)", received, (time.to_r * 1_000_000).to_i)
     expect(problems, message, "severityNumber", record["severityNumber"], SEVERITY.fetch(entry["level"]))
     expect(problems, message, "scope", record["scope"], "Orders")
     expect(problems, message, "service.name", resource["service.name"], "checkout")
     expect(problems, message, "deployment.environment.name", resource["deployment.environment.name"], "test")
     expect(problems, message, "host.name", resource["host.name"], entry["host"])
+    pid = resource["process.pid"]
+    expect(problems, message, "process.pid", [pid, pid.class], [entry["pid"], Integer])
     expect(problems, message, "traceId", record["traceId"].to_s, entry["trace_id"].to_s)
     expect(problems, message, "spanId", record["spanId"].to_s, entry["span_id"].to_s)
     expect(problems, message, "flags", record["flags"].to_i, entry["trace_flags"].to_s.to_i(16))
@@ -95,12 +118,15 @@ module Records
 
   # The fields of the :json entry that the operators leave as attributes, and none that they move.
   def check_json_attributes(problems, message, attrs, entry)
-    %w[timestamp level level_index name message trace_id span_id trace_flags].each do |moved|
+    %w[timestamp level level_index name message trace_id span_id trace_flags pid thread].each do |moved|
       problems << "#{message}: attribute #{moved} left in" if attrs.key?(moved)
     end
     expect(problems, message, "payload", attrs["payload"], entry["payload"]) if entry["payload"]
     expect(problems, message, "named_tags", attrs["named_tags"], entry["named_tags"]) if entry["named_tags"]
-    expect(problems, message, "exception.name", attrs.dig("exception", "name"), "RuntimeError") if entry["exception"]
+    return unless entry["exception"]
+
+    expect(problems, message, "exception.name", attrs.dig("exception", "name"),
+           entry.dig("exception", "name"))
   end
 
   # The attributes that Formatters::Otlp writes, flattened.
@@ -108,7 +134,7 @@ module Records
     wanted = {}
     wanted["customer.tier"]  = "gold" if entry["payload"]
     wanted["user"]           = "jack" if entry["named_tags"]
-    wanted["exception.type"] = "RuntimeError" if entry["exception"]
+    wanted["exception.type"] = entry.dig("exception", "name") if entry["exception"]
     wanted.each do |name, value|
       unless attrs[name] == value
         problems << "#{message}: attribute #{name} is #{attrs[name].inspect}, not #{value.inspect}"
@@ -177,13 +203,22 @@ module FilelogTest
   SPAN_ID    = "eee19b7ec3c1b174".freeze
   TAG_TRACE  = "0af7651916cd43dd8448eb211c80319c".freeze
   TAG_SPAN   = "b7ad6b7169203331".freeze
-  EXPECTED   = 4
-  WAIT       = 120
+  # The entries that Semantic Logger writes to each file.
+  EXPECTED   = 5
+  # A line that another process wrote to the :json file, which the filelog agents read too.
+  NOT_JSON   = "Segmentation fault (core dumped)".freeze
+  # A JSON line without a level, which another process wrote, which keeps its text too.
+  OTHER_JSON = '{"msg":"started","pid":1}'.freeze
+  # The lines that another process wrote to the :json file.
+  OTHER_LINES = [NOT_JSON, OTHER_JSON].freeze
+  WAIT = 120
 
   module_function
 
-  def docker(*args, allow_failure: false)
-    output, status = Open3.capture2e("docker", *args)
+  # Returns [String] what the docker command wrote, standard error included unless only `stdout:` is
+  # wanted, such as a file that a container prints.
+  def docker(*args, allow_failure: false, stdout: false)
+    output, status = stdout ? Open3.capture2("docker", *args) : Open3.capture2e("docker", *args)
     raise("docker #{args.first(2).join(' ')} failed:\n#{output}") unless status.success? || allow_failure
 
     output
@@ -192,6 +227,9 @@ module FilelogTest
   # Writes the log file with the :json formatter, and the same entries to the file with the
   # :otlp_json_lines formatter, returning each :json entry by its message.
   def write_log(file_name, otlp_file_name)
+    # Without the resource of the developer's own environment, which :otlp_json_lines would write.
+    ENV.delete("OTEL_SERVICE_NAME")
+    ENV.delete("OTEL_RESOURCE_ATTRIBUTES")
     SemanticLogger.sync!
     SemanticLogger.default_level = :trace
     SemanticLogger.application   = "checkout"
@@ -213,6 +251,8 @@ module FilelogTest
     end
     logger.error("Charge failed", RuntimeError.new("card expired"))
     SemanticLogger.tagged("cart") { logger.debug("Cart loaded") }
+    # No message: the record has no body, rather than the line as it was read.
+    logger.error(ArgumentError.new("no message"))
     SemanticLogger.flush
     SemanticLogger.remove_appender(appender)
     SemanticLogger.remove_appender(otlp)
@@ -229,8 +269,8 @@ module FilelogTest
     else
       config = YAML.safe_load_file(File.join(DIR, agent.fetch(:file, "filelog.yaml")))
       if agent[:base]
-        config = deep_merge(YAML.safe_load(docker("run", "--rm", "--entrypoint", "cat", agent[:image], agent[:base])),
-                            config)
+        base   = docker("run", "--rm", "--entrypoint", "cat", agent[:image], agent[:base], stdout: true)
+        config = deep_merge(YAML.safe_load(base), config)
       end
       deep_merge(config, test_pipeline(agent.fetch(:receiver, "filelog/semantic_logger"))).to_yaml
     end
@@ -264,14 +304,23 @@ module FilelogTest
     "service"   => {"pipelines" => {"logs" => {"receivers" => ["otlp"], "exporters" => ["file"]}}}
   }.freeze
 
+  # Pulls the image, unless it is there already, so that a run needs no network once each was pulled.
+  def pull(image)
+    docker("image", "inspect", image) && return
+  rescue RuntimeError
+    docker("pull", "-q", image)
+  end
+
   def run(name, agent, entries, logs)
+    pull(agent[:image])
     Dir.mktmpdir("agent-#{name}-", WORK) do |work|
       out = writable_dir(work, "out")
       start_sink(work, out)
       start_agent(work, agent, logs)
-      records  = wait_for_records(out)
+      expected = agent[:otlp] ? EXPECTED : EXPECTED + OTHER_LINES.size
+      records  = wait_for_records(out, expected)
       problems = Records.check(records, entries, otlp: agent[:otlp])
-      problems << "received #{records.size} records, not #{EXPECTED}" unless records.size == EXPECTED
+      problems << "received #{records.size} records, not #{expected}" unless records.size == expected
       unless problems.empty?
         puts docker("logs", "--tail", ENV.fetch("FILELOG_LOG_LINES", "40"), AGENT,
                     allow_failure: true)
@@ -313,13 +362,13 @@ module FilelogTest
            agent[:image], *agent[:args])
   end
 
-  # Returns [Array<Hash>] the records received, once there are EXPECTED of them, or WAIT seconds passed.
-  def wait_for_records(out)
+  # Returns [Array<Hash>] the records received, once there are as many as expected, or WAIT seconds passed.
+  def wait_for_records(out, expected)
     deadline = Time.now + WAIT
     records  = []
     until Time.now > deadline
       records = Records.received(out)
-      break if records.size >= EXPECTED
+      break if records.size >= expected
 
       sleep 2
     end
@@ -336,7 +385,9 @@ module FilelogTest
       FileUtils.chmod(0o755, logs)
       log_file = File.join(logs, "app.log")
       entries  = write_log(log_file, File.join(logs, "app.jsonl"))
+      File.write(log_file, OTHER_LINES.map { |line| "#{line}\n" }.join, mode: "a")
       Dir[File.join(logs, "*")].each { |file| FileUtils.chmod(0o644, file) }
+      pull(COLLECTOR)
       docker("network", "create", NETWORK, allow_failure: true)
       results = names.to_h do |name|
         puts "== #{name} (#{AGENTS[name][:image]})"

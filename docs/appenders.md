@@ -308,15 +308,19 @@ is a `filelog` receiver for the file, the same for each agent below, and
 [filelog.alloy](https://github.com/reidmorrison/semantic_logger/blob/main/examples/filelog/filelog.alloy)
 is the same in Grafana Alloy's syntax. Each line becomes one OpenTelemetry log record: its `message` the
 body, its `timestamp` and `level` the record's time and severity, `trace_id`, `span_id`, and
-`trace_flags` the record's trace, the logger `name` its instrumentation scope, and `application`,
-`host`, and `environment` its resource. The other fields, such as `payload` and `named_tags`, stay
-attributes.
+`trace_flags` the record's trace, the logger `name` its instrumentation scope, `application`, `host`,
+`environment`, and `pid` its resource (`service.name`, `host.name`, `deployment.environment.name`, and
+`process.pid`), and `thread` the attribute `thread.name`. The other fields, such as `payload` and
+`named_tags`, stay attributes. An entry without a message has no body. A line that is not JSON, such
+as a crash dump, is sent on with its text as the body. So is a JSON line without a `level`, which
+another process wrote, unless it has a `message`, with its fields as attributes too.
 
 ~~~ruby
 SemanticLogger.add_appender(file_name: "/var/log/app/production.log", formatter: :json)
 ~~~
 
-Add the receiver to the agent's own configuration, with its exporter, and point `SEMANTIC_LOGGER_LOGS`
+Add the receiver to the agent's own configuration, with its exporter, list its storage extension,
+`file_storage/semantic_logger`, under `service.extensions`, and point `SEMANTIC_LOGGER_LOGS`
 at the files (default `/var/log/app/*.log`) and `FILELOG_STORAGE_DIR` at a persistent directory, where
 it keeps how far it has read each file.
 

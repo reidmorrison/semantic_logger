@@ -1,8 +1,10 @@
 # Reads the log files that Semantic Logger writes with `formatter: :json`, for the OpenTelemetry
 # Collector (contrib build), Datadog's DDOT Collector, and Elastic's EDOT Collector, which all take this
-# receiver as it is. Add it to the agent's own configuration, and its receiver to a logs pipeline:
+# receiver as it is. Add it to the agent's own configuration, its storage extension to the service's
+# extensions, and its receiver to a logs pipeline:
 #
 #   service:
+#     extensions: [file_storage/semantic_logger]
 #     pipelines:
 #       logs:
 #         receivers: [filelog/semantic_logger]
@@ -11,8 +13,10 @@
 #
 # Each line becomes one log record: its message the body, its time and level the timestamp and severity,
 # its trace_id, span_id, and trace_flags those of the record, its logger name the instrumentation scope,
-# and its application, host, and environment the resource. Every other field, such as payload,
-# named_tags, tags, and exception, stays an attribute of the record.
+# its application, host, environment, and pid the resource (service.name, host.name,
+# deployment.environment.name, process.pid), and its thread the attribute thread.name. Every other
+# field, such as payload, named_tags, tags, and exception, stays an attribute of the record. An entry
+# without a message has no body.
 #
 # Tested by examples/filelog/test.rb with each agent.
 extensions:
@@ -31,6 +35,12 @@ receivers:
       - type: json_parser
         parse_from: body
         parse_to: attributes
+        # Keeps whole numbers, such as the pid and payload counts, as integers rather than doubles.
+        parse_ints: true
+        # A line that is not JSON, such as a crash dump, is sent on as it is, without an error for each.
+        # This also hides a time that does not match the layout below, which the record then does not
+        # have: use `on_error: send` while trying a :json formatter with another time_format.
+        on_error: send_quiet
         timestamp:
           parse_from: attributes.timestamp
           layout_type: gotime
@@ -48,6 +58,13 @@ receivers:
       - type: scope_name_parser
         if: 'attributes.name != nil'
         parse_from: attributes.name
+      # The body is still the line as it was read: the message replaces it, and without one it goes.
+      # A line that is not JSON, such as a crash dump, keeps its text: it has no level. So does a JSON
+      # line without one, which another process wrote, unless it has a message; its fields are
+      # attributes too.
+      - type: remove
+        if: 'attributes.message == nil and attributes.level != nil'
+        field: body
       - type: move
         if: 'attributes.message != nil'
         from: attributes.message
@@ -74,8 +91,10 @@ receivers:
         to: attributes["thread.name"]
       # Fields that the record now holds, or that only repeat the level.
       - type: remove
+        if: 'attributes.timestamp != nil'
         field: attributes.timestamp
       - type: remove
+        if: 'attributes.level != nil'
         field: attributes.level
       - type: remove
         if: 'attributes.level_index != nil'

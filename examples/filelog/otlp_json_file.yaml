@@ -1,9 +1,11 @@
 # Reads the log files that Semantic Logger writes with `formatter: :otlp_json_lines`, for the
 # OpenTelemetry Collector's contrib build, the only agent here that has the otlpjsonfile receiver.
 # Each line is already an OTLP LogsData, so nothing needs parsing. Add it to the Collector's own
-# configuration, and its receiver to a logs pipeline:
+# configuration, its storage extension to the service's extensions, and its receiver to a logs
+# pipeline:
 #
 #   service:
+#     extensions: [file_storage/semantic_logger]
 #     pipelines:
 #       logs:
 #         receivers: [otlpjsonfile/semantic_logger]
