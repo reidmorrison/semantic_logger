@@ -13,7 +13,6 @@ module SemanticLogger
     autoload :HoneybadgerInsights, "semantic_logger/appender/honeybadger_insights"
     autoload :IO,                  "semantic_logger/appender/io"
     autoload :Kafka,               "semantic_logger/appender/kafka"
-    autoload :Sentry,              "semantic_logger/appender/sentry"
     autoload :Http,                "semantic_logger/appender/http"
     autoload :MongoDB,             "semantic_logger/appender/mongodb"
     autoload :NewRelic,            "semantic_logger/appender/new_relic"

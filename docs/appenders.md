@@ -1257,9 +1257,6 @@ Use the `sentry-ruby` gem and the corresponding appender:
 SemanticLogger.add_appender(appender: :sentry_ruby)
 ~~~
 
-> **Deprecated:** the older `appender: :sentry` (backed by the end-of-life `sentry-raven` gem) still
-> works but is deprecated and will be removed in v6. Switch to `appender: :sentry_ruby`.
-
 Each entry is sent with the Sentry context of the thread (or fiber) that logged it: the user, tags,
 contexts, breadcrumbs, trace, and event processors that `sentry-ruby`, `sentry-rails`, or the
 application set for it, such as with `Sentry.set_user`. The request itself (its url, headers, and
