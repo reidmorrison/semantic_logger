@@ -200,6 +200,56 @@ module Metric
         assert_equal [{"userPassword" => "[FILTERED]", "plan" => "free"}], recorded.map(&:dimensions)
       end
 
+      it "never redacts a dimension key declared safe, matched exactly" do
+        SemanticLogger.sensitive_keys = %i[name type]
+        SemanticLogger.safe_dimension_keys |= ["messaging.destination.name", :"error.type"]
+        logger.increment("jobs", dimensions: {"messaging.destination.name" => "default", "error.type" => "Oops",
+                                              "user.name" => "jack"})
+
+        assert_equal [{"messaging.destination.name" => "default", "error.type" => "Oops", "user.name" => "[FILTERED]"}],
+                     points.map(&:dimensions)
+      ensure
+        SemanticLogger.safe_dimension_keys = []
+      end
+
+      it "keeps the safe keys of a log entry's dimensions too, redacting the others" do
+        SemanticLogger.sensitive_keys = %i[name type]
+        SemanticLogger.safe_dimension_keys |= ["messaging.destination.name"]
+        log = SemanticLogger::Log.new("Test", :info)
+        log.dimensions = {"messaging.destination.name": "default", "error.type" => "Oops", "user.name" => "jack"}
+        log.redact(SemanticLogger.redactor)
+
+        assert_equal [[:"messaging.destination.name", "default"], %w[error.type Oops], ["user.name", "[FILTERED]"]],
+                     log.dimensions.to_a
+      ensure
+        SemanticLogger.safe_dimension_keys = []
+      end
+
+      it "keeps a log entry's dimensions when nothing is redacted, and its safe keys beside a Hash key" do
+        SemanticLogger.sensitive_keys = %i[password]
+        unchanged = {"error.type" => "Oops", "plan" => "free"}
+        log       = SemanticLogger::Log.new("Test", :info)
+        log.dimensions = unchanged
+        log.redact(SemanticLogger.redactor)
+
+        assert_same unchanged, log.dimensions
+        log.dimensions = {"error.type" => "Oops", {password: "x"} => 1}
+        log.redact(SemanticLogger.redactor)
+
+        assert_equal({"error.type" => "Oops", {password: "[FILTERED]"} => 1}, log.dimensions)
+      end
+
+      it "still redacts a structure that a safe key of a log entry's dimensions holds" do
+        SemanticLogger.sensitive_keys = %i[password]
+        log = SemanticLogger::Log.new("Test", :info)
+        log.dimensions = {"error.type" => {password: "secret"}}
+        log.redact(SemanticLogger.redactor)
+
+        assert_equal({"error.type" => {password: "[FILTERED]"}}, log.dimensions)
+      ensure
+        SemanticLogger.safe_dimension_keys = []
+      end
+
       it "redacts the metric: of a log call, at any level" do
         logger.info("Signed up", metric: "users.signup", dimensions: {password: "a"})
         logger.debug("Signed up", metric: "users.signup", dimensions: {password: "b"})

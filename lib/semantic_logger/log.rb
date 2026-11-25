@@ -531,7 +531,7 @@ module SemanticLogger
       self.payload    = redactor.redact(payload)
       self.named_tags = redactor.redact(named_tags)
       self.context    = redactor.redact(context)
-      self.dimensions = redactor.redact(dimensions)
+      self.dimensions = Metric::DimensionRedactor.new(redactor).redact(dimensions) if dimensions
       self
     end
 

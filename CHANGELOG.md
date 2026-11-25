@@ -93,6 +93,10 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   `metric: :otlp` and reads the same variables in their `OTEL_EXPORTER_OTLP_LOGS_*` form, and sends a
   batch again after a 502 or 504, as OTLP/HTTP asks. Its formatter is
   `SemanticLogger::Formatters::Otlp`, or a subclass of it.
+- `SemanticLogger.safe_dimension_keys`, the metric dimension keys that are never redacted, matched
+  exactly, so that a sensitive key such as `:name` or `:type` does not redact OpenTelemetry attribute
+  names such as `messaging.destination.name`. `error.type` is always safe. A library adds its own:
+  `SemanticLogger.safe_dimension_keys |= %w[http.route]`.
 - `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
   appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension
   whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the

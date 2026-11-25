@@ -203,7 +203,9 @@ together, under its name alone. See [Metric appenders](#metric-appenders).
 [`SemanticLogger.sensitive_keys=`](security.html#metric-dimensions) redacts the dimensions too: the
 value of a dimension whose key is sensitive is replaced, such as with `"[FILTERED]"`, once per
 interval as the metrics are collected, and the series that differed only by that value are merged.
-Only values are replaced, never keys, so never put a secret in a dimension, nor in its key.
+Only values are replaced, never keys, so never put a secret in a dimension, nor in its key. A
+dimension key declared with `SemanticLogger.safe_dimension_keys` is never redacted (see
+[Metric dimensions](security.html#metric-dimensions)).
 
 ### Keep the values of each dimension bounded
 
