@@ -46,7 +46,8 @@ about 1 GB of memory: give Docker more, such as with `colima start --memory 4`, 
 ### 2. The Collector
 
 [otel-collector.yaml](https://github.com/reidmorrison/semantic_logger/blob/main/examples/clickhouse/otel-collector.yaml)
-receives OTLP/HTTP and writes logs and metrics to the `otel` database, creating its tables:
+receives OTLP/HTTP and writes logs and metrics to the `otel` database, creating its tables. In
+short, without its timeout and retry settings:
 
 ~~~yaml
 receivers:
@@ -77,7 +78,8 @@ service:
       exporters: [clickhouse]
 ~~~
 
-`ttl` is how long rows are kept: raise it for production.
+`ttl` is how long rows are kept: raise it for production. `up --wait` returns once the Collector has
+started, which may be a moment before it accepts connections.
 
 ### 3. The application
 
@@ -100,16 +102,20 @@ logger.time("orders.charge", dimensions: {gateway: "stripe"}) { charge(order) }
 a few of each: `bundle exec ruby examples/clickhouse/app.rb`.
 
 In Rails, with Rails Semantic Logger 6.0 or later, `bin/rails generate rails_semantic_logger:observability`
-adds the same stack, with dashboards, and these appenders to `config/environments/development.rb`,
-beside the default ones (see [Keeping the defaults](rails.html#add-defaults)):
+adds the same stack, with dashboards. It first runs `rails_semantic_logger:install`, which writes an
+explicit `config.rails_semantic_logger.appenders` block in each environment file, unless the app
+already declares its appenders, then adds the OTLP appenders to the development one:
 
 ~~~ruby
+# config/environments/development.rb
 config.rails_semantic_logger.appenders do |appenders|
-  appenders.add_defaults
+  # The appenders that the app already writes to, such as log/development.log and the screen, then:
   appenders.add(appender: :otlp)
   appenders.add(metric: :otlp, interval: 10)
 end
 ~~~
+
+See [Configuring where logs go](rails.html#configuring-where-logs-go-the-appenders-block).
 
 The [OTLP appender](appenders.html#otlp) and [OTLP metrics](metrics.html) pages describe what each
 sends and their options.
@@ -159,7 +165,8 @@ GROUP BY minute, plan
 ORDER BY minute
 ~~~
 
-Each duration, `time` or `measure_*`, arrives as a delta base-2 exponential histogram, in seconds.
+Each duration, of `time`, or of `measure_*` given `metric:`, arrives as a delta base-2 exponential
+histogram, in seconds.
 Its 95th percentile weights each positive bucket by its count, at the bucket's middle,
 2<sup>(PositiveOffset + i + 0.5) × 2<sup>-Scale</sup></sup>, which is within one bucket of the
 durations recorded:
@@ -184,8 +191,8 @@ its data.
 | Table | Holds | From Semantic Logger |
 |-------|-------|----------------------|
 | `otel_logs` | One row for each log entry | `Body` the message, or an exception logged without one, as `ArgumentError: the message`; `SeverityText` and `SeverityNumber` the level; `ScopeName` the logger name; `ServiceName` the application; `LogAttributes` the payload, named tags, exception, and call site; `TraceId` and `SpanId` the trace |
-| `otel_metrics_sum` | Counters, as deltas | `increment` |
-| `otel_metrics_exponential_histogram` | Histograms, as deltas: durations in seconds, and other values | `time` and `measure_*`, and `record` |
+| `otel_metrics_sum` | Counters, as deltas | `increment`, and a log call given `metric:` without a duration |
+| `otel_metrics_exponential_histogram` | Histograms, as deltas: durations in seconds, and other values | `time`, `measure_*` given `metric:`, and `record` |
 
 Every row also has the resource of the process: `ServiceName`, and `ResourceAttributes` with
 `host.name`, `deployment.environment.name`, and `process.pid`.
@@ -200,8 +207,10 @@ at your ClickHouse, and a persistent queue:
 
 ~~~yaml
 extensions:
+  # A directory that the Collector's user can write to, on a persistent volume.
   file_storage/queue:
     directory: /var/lib/otelcol/queue
+    create_directory: true
 
 exporters:
   clickhouse:
@@ -225,7 +234,10 @@ Then choose how the application hands its entries to the Collector:
   so that a Collector that is down never stalls the application:
 
   ~~~ruby
-  SemanticLogger.add_appender(appender: :otlp, max_queue_size: 10_000, non_blocking: true)
+  SemanticLogger.add_appender(appender: :otlp, non_blocking: true)
   ~~~
 
-  The entries dropped are counted, and reported on the internal logger.
+  Its queue holds 10,000 entries by default (`max_queue_size:`); once it is full, the entries dropped
+  are counted, and reported on the internal logger. After `async_max_retries` failures in a row,
+  100 by default, the appender stops for good, until the process restarts: give
+  `async_max_retries: -1` to keep trying through a long outage of the Collector.

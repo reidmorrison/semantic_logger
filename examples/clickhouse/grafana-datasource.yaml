@@ -1,5 +1,5 @@
-# The ClickHouse data source, with the tables that the Collector's exporter creates as its OpenTelemetry
-# defaults, so that Grafana's logs and traces views find them.
+# The ClickHouse data source, with the logs table that the Collector's exporter creates by default, so
+# that Grafana's logs views find it.
 apiVersion: 1
 datasources:
   - name: ClickHouse

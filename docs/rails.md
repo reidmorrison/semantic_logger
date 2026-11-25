@@ -138,29 +138,6 @@ Semantic Logger default of plain text.
 > what you want: `add` for an always-on destination (such as the file log), `add_server` for screen
 > output while serving, and `add_console` for the Rails console.
 
-### Keeping the defaults: `add_defaults` {#add-defaults}
-
-To add destinations while keeping the automatic ones, call `appenders.add_defaults` in the block
-(Rails Semantic Logger 6.0 or later). The default `log/<env>.log` file (in color, unless
-`config.colorize_logging` is false) is then added beside the appenders you declare, and the default
-screen appender under `rails server`, Sidekiq in server mode, and `rails console` too:
-
-~~~ruby
-config.rails_semantic_logger.appenders do |appenders|
-  appenders.add_defaults
-  appenders.add(appender: :otlp)
-  appenders.add(metric: :otlp, interval: 10)
-end
-~~~
-
-* The default log file is also the internal logger, which Semantic Logger reports its own problems
-  to. Do not also declare an appender that writes to that same file.
-* The default screen appender is added after the `add_server` and `add_console` appenders you
-  declare, and only when none of them already writes to the screen.
-
-`bin/rails generate rails_semantic_logger:observability` writes exactly this block into
-`config/environments/development.rb`; see [ClickHouse](clickhouse.html).
-
 ### Step 1: a single log file
 
 ~~~ruby
@@ -388,8 +365,8 @@ config.rails_semantic_logger.appenders do |appenders|
 end
 ~~~
 
-Because the block disables the automatic appenders (it does not call `appenders.add_defaults`), this
-JSON-to-stdout appender is the *only* destination: there is no default file log and no separate color logger under `rails server`, which
+Because the block disables the automatic appenders, this JSON-to-stdout appender is the *only*
+destination: there is no default file log and no separate color logger under `rails server`, which
 is exactly what a container platform wants.
 
 To keep one configuration that works both locally and in-cluster, gate the JSON appender on an

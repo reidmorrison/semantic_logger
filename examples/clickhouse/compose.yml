@@ -1,7 +1,7 @@
 # Semantic Logger -> OpenTelemetry Collector -> ClickHouse, with Grafana to look at the data, for
 # development and trying it out. See docs/clickhouse.md.
 #
-#   docker compose -f examples/clickhouse/compose.yml up -d
+#   docker compose -f examples/clickhouse/compose.yml up -d --wait
 #
 # The application sends OTLP/HTTP to http://localhost:4318, the default of `appender: :otlp` and
 # `metric: :otlp`. ClickHouse answers SQL on http://localhost:8123 and Grafana is on
