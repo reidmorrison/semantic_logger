@@ -19,7 +19,7 @@ end
 
 desc "Regenerate docs/llms-full.txt from the docs markdown pages"
 task :llms_full do
-  pages  = %w[index api config appenders log metrics rails testing operations security upgrading]
+  pages  = %w[index api config appenders log metrics clickhouse rails testing operations security upgrading]
   header = <<~HEADER
     # Semantic Logger - Complete Documentation
 

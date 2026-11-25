@@ -1,0 +1,20 @@
+# The ClickHouse data source, with the logs table that the Collector's exporter creates by default, so
+# that Grafana's logs views find it.
+apiVersion: 1
+datasources:
+  - name: ClickHouse
+    type: grafana-clickhouse-datasource
+    uid: clickhouse
+    isDefault: true
+    jsonData:
+      host: clickhouse
+      port: 8123
+      protocol: http
+      username: otel
+      defaultDatabase: otel
+      logs:
+        defaultDatabase: otel
+        defaultTable: otel_logs
+        otelEnabled: true
+    secureJsonData:
+      password: otel

@@ -1,0 +1,61 @@
+# Semantic Logger -> OpenTelemetry Collector -> ClickHouse, with Grafana to look at the data, for
+# development and trying it out. See docs/clickhouse.md.
+#
+#   docker compose -f examples/clickhouse/compose.yml up -d --wait
+#
+# The application sends OTLP/HTTP to http://localhost:4318, the default of `appender: :otlp` and
+# `metric: :otlp`. ClickHouse answers SQL on http://localhost:8123 and Grafana is on
+# http://localhost:3000 (admin / admin), each on this host only. To use other ports, such as when another
+# stack has these, set CLICKHOUSE_PORT, OTLP_PORT, or GRAFANA_PORT, and point the application at the
+# Collector with OTEL_EXPORTER_OTLP_ENDPOINT. The image tags are the ones Rails Semantic Logger's
+# observability generator uses.
+name: semantic-logger-clickhouse
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.46.6
+    environment:
+      CLICKHOUSE_DB: otel
+      CLICKHOUSE_USER: otel
+      CLICKHOUSE_PASSWORD: otel
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "127.0.0.1:${CLICKHOUSE_PORT:-8123}:8123"
+    volumes:
+      - clickhouse:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "otel", "--query", "SELECT 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.166.0
+    command: ["--config", "/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:${OTLP_PORT:-4318}:4318"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:13.3.2
+    environment:
+      GF_PLUGINS_PREINSTALL_SYNC: grafana-clickhouse-datasource@4.24.0
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./grafana-datasource.yaml:/etc/grafana/provisioning/datasources/clickhouse.yaml:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+volumes:
+  clickhouse:

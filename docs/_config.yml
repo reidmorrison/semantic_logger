@@ -59,6 +59,7 @@ nav:
       - { page: config.html,     label: Configuration }
       - { page: appenders.html,  label: Appenders }
       - { page: metrics.html,    label: Metrics }
+      - { page: clickhouse.html, label: ClickHouse }
 
   - group: Integration
     items:
