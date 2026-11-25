@@ -95,6 +95,7 @@ module SemanticLogger
         logger.warn("Shutdown failed", e)
       ensure
         @provider = nil
+        super
       end
 
       private

@@ -326,6 +326,8 @@ module SemanticLogger
       # belongs to the parent (see #reopen), and the next request starts a new one.
       def close
         finish_connection
+      ensure
+        super
       end
 
       # Forward log messages to HTTP Server

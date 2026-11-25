@@ -150,6 +150,8 @@ module SemanticLogger
         closing.close if closing && @pid == ::Process.pid
       rescue StandardError => e
         logger.warn("Could not close the MongoDB client", e)
+      ensure
+        super
       end
 
       # Create the required capped collection.

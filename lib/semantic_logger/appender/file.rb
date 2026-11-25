@@ -249,6 +249,7 @@ module SemanticLogger
       ensure
         @file             = nil
         @refused_retry_at = nil
+        super
       end
 
       # See Subscriber#inspect.

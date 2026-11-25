@@ -7,7 +7,7 @@ class AppenderTest < Minitest::Test
       built(**, &).first
     end
 
-    # Returns [appender, created] as #build returns them.
+    # Returns [appender, on_failure] as #build returns them.
     def built(**, &)
       SemanticLogger::Appender.send(:build, **, &)
     end
@@ -96,25 +96,27 @@ class AppenderTest < Minitest::Test
         end
       end
 
-      describe "says whether it created the appender" do
-        it "created it for file_name:, or for a Symbol given as appender: or metric:" do
+      describe "says what to do with the appender when add_appender fails afterwards" do
+        it "closes it for file_name:, or for a Symbol given as appender: or metric:, which it created" do
           file_name = File.join(Dir.tmpdir, "semantic_logger_appender_test_#{Process.pid}.log")
 
-          assert built(file_name: file_name).last
-          assert built(appender: :bugsnag).last
-          assert built(metric: :statsd).last
+          assert_equal :close, built(file_name: file_name).last
+          assert_equal :close, built(appender: :bugsnag).last
+          assert_equal :close, built(metric: :statsd).last
         ensure
           FileUtils.rm_f(file_name)
         end
 
-        it "did not for a Subscriber instance given as appender: or metric:, nor for io: or logger:, " \
-           "which the caller holds" do
+        it "releases it for io: or logger:, whose destination the caller holds" do
           io = StringIO.new
 
-          refute built(appender: InMemoryAppender.new).last
-          refute built(metric: InMemoryMetricsAppender.new).last
-          refute built(io: io).last
-          refute built(logger: Logger.new(io)).last
+          assert_equal :release, built(io: io).last
+          assert_equal :release, built(logger: Logger.new(io)).last
+        end
+
+        it "leaves a Subscriber instance given as appender: or metric:, which the caller holds" do
+          assert_nil built(appender: InMemoryAppender.new).last
+          assert_nil built(metric: InMemoryMetricsAppender.new).last
         end
       end
 

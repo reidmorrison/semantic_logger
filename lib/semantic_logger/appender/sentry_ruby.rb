@@ -64,6 +64,8 @@ module SemanticLogger
       # Stops capturing the Sentry scope of each log entry.
       def close
         SemanticLogger::Logger.unsubscribe(method(:capture_scope))
+      ensure
+        super
       end
 
       # Send an error notification to sentry

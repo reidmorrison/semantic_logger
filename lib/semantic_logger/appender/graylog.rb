@@ -142,6 +142,7 @@ module SemanticLogger
         close_notifier(@notifier)
       ensure
         @notifier = nil
+        super
       end
 
       # Returns [Hash] of parameters to send

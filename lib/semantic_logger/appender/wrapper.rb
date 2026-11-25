@@ -74,6 +74,8 @@ module SemanticLogger
       #  Waits for all queued log messages to be written to disk.
       def close
         @wrapped_logger.close if @wrapped_logger.respond_to?(:close)
+      ensure
+        super
       end
     end
   end

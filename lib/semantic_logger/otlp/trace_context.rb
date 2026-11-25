@@ -28,29 +28,61 @@ module SemanticLogger
         nil
       end)
 
-      # The appenders that use CAPTURE, so that it is subscribed while there is any (see .register).
-      @users = 0
-      @mutex = Mutex.new
+      # The appenders whose formatter writes the trace, so that CAPTURE is subscribed while there is
+      # any (see .register and Subscriber#formatter=), by identity, since an appender may define #==.
+      @owners  = {}.compare_by_identity
+      @mutex   = Mutex.new
+      # Each change to @owners, [owner, true] to register it or [owner, false] to unregister it, in the
+      # order asked for, applied holding the Mutex (see .change). A Queue, since a signal trap may add
+      # to it, where Ruby does not allow a Mutex to be locked.
+      @changes = Thread::Queue.new
 
-      # Subscribes CAPTURE with SemanticLogger.on_log, for an appender that links its records to traces,
-      # unless another already did. Each appender that registers must unregister once closed.
-      def self.register
-        @mutex.synchronize do
-          # Subscribed each time, which subscribes it once, so that an appender added after the subscribers
-          # were cleared, such as by Logger.clear_subscribers, subscribes it again.
-          SemanticLogger.on_log(CAPTURE)
-          @users += 1
-        end
-      end
+      # Seconds that .register and .unregister wait in a signal trap for the thread that applies the
+      # change for them (see TrapSafe.hand_off).
+      TRAP_WAIT_SECONDS = 0.1
+
+      # Subscribes CAPTURE with SemanticLogger.on_log, for an appender whose formatter writes the trace,
+      # such as Formatters::Otlp or Formatters::Json, unless another already did. Registering the same
+      # appender again changes nothing, other than subscribing CAPTURE again after the subscribers were
+      # cleared, such as by Logger.clear_subscribers. Each appender that registers unregisters once
+      # closed (see Subscriber#close).
+      #
+      # Trap-safe: in a signal trap, such as one that adds an appender, the change is applied by a new
+      # thread, or else by the next register or unregister, whichever comes first, in the order asked
+      # for either way (see .change).
+      def self.register(owner) = change(owner, true)
 
       # Unsubscribes CAPTURE once no appender that registered uses it, so that no log call captures a
-      # trace context that no appender reads.
-      def self.unregister
-        @mutex.synchronize do
-          next if @users.zero?
+      # trace context that no appender reads. Unregistering an appender that is not registered changes
+      # nothing. Trap-safe, as .register is.
+      def self.unregister(owner) = change(owner, false)
 
-          @users -= 1
-          SemanticLogger::Logger.unsubscribe(CAPTURE) if @users.zero?
+      # Returns [true|false] whether the appender is registered. In a signal trap, or just after one,
+      # a change that the trap asked for may not be applied yet.
+      def self.registered?(owner)
+        @owners.key?(owner)
+      end
+
+      # Queues the change, then applies every change queued, in order, holding the Mutex, or in a
+      # signal trap, on a new thread, waiting for it at most TRAP_WAIT_SECONDS. A change queued in a trap
+      # is so never applied after one asked for later.
+      def self.change(owner, registered)
+        @changes << [owner, registered]
+        return if TrapSafe.try_synchronize(@mutex) { apply_changes }
+
+        TrapSafe.hand_off(TRAP_WAIT_SECONDS) { @mutex.synchronize { apply_changes } }
+        nil
+      end
+
+      def self.apply_changes
+        until @changes.empty?
+          owner, registered = @changes.pop
+          if registered
+            SemanticLogger.on_log(CAPTURE)
+            @owners[owner] = true
+          elsif @owners.delete(owner) && @owners.empty?
+            SemanticLogger::Logger.unsubscribe(CAPTURE)
+          end
         end
       end
 
@@ -105,7 +137,7 @@ module SemanticLogger
         [key, value.downcase]
       end
 
-      private_class_method :new, :from_named_tags, :id_tag
+      private_class_method :new, :from_named_tags, :id_tag, :change, :apply_changes
 
       def initialize(trace_id, span_id, flags, tags)
         @trace_id = trace_id

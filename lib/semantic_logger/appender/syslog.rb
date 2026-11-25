@@ -214,6 +214,8 @@ module SemanticLogger
           close_remote_syslog(@remote_syslog)
           @remote_syslog = nil
         end
+      ensure
+        super
       end
 
       # Write the log using the specified protocol and server. Connects over TCP, or opens a socket over UDP,

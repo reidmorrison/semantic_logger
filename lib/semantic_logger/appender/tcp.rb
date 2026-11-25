@@ -130,6 +130,8 @@ module SemanticLogger
       def close
         error = tcp_client.close
         logger.warn("Could not close the connection", error) if error
+      ensure
+        super
       end
 
       # Whether nothing of the entry was written, since it could not connect, or the write failed before any of it

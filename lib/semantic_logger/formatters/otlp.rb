@@ -35,6 +35,9 @@ module SemanticLogger
       # `flatten: false` was given, such as for a subclass whose #initialize does not call super.
       def flatten = @flatten != false
 
+      # Returns true: each record carries the trace it was logged in.
+      def trace_context? = true
+
       # Parameters:
       #   flatten: [true|false]
       #     Whether to flatten each Hash of the payload and named tags into an attribute for each of its
