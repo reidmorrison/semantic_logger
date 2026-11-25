@@ -77,8 +77,10 @@ module Records
       end
     end
     entries.each do |message, entry|
-      record = by_body[message]
-      label  = message || "(no message, #{entry.dig('exception', 'name')})"
+      # An exception logged without a message is the body, as :otlp writes it.
+      exception = entry["exception"]
+      record    = by_body[message || "#{exception['name']}: #{exception['message']}"]
+      label = message || "(no message, #{entry.dig('exception', 'name')})"
       next problems << "#{label}: not received" unless record
 
       check_record(problems, label, record, entry)
@@ -251,7 +253,7 @@ module FilelogTest
     end
     logger.error("Charge failed", RuntimeError.new("card expired"))
     SemanticLogger.tagged("cart") { logger.debug("Cart loaded") }
-    # No message: the record has no body, rather than the line as it was read.
+    # No message: the exception is the body, rather than the line as it was read.
     logger.error(ArgumentError.new("no message"))
     SemanticLogger.flush
     SemanticLogger.remove_appender(appender)

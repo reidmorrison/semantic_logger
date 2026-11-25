@@ -38,6 +38,18 @@ module SemanticLogger
       # Returns true: each record carries the trace it was logged in.
       def trace_context? = true
 
+      # Returns [String|nil] the message, or else, for an exception logged without one, the exception as
+      # "ArgumentError: the message", so that a log view that shows the body, such as Grafana's, shows
+      # what happened rather than an empty line. The exception's attributes are written as well. Nil for
+      # an entry with neither, such as a metric only entry.
+      def body
+        message = super
+        return message unless message.nil? || message.empty?
+
+        exception = log.exception
+        "#{Utils.exception_name(exception)}: #{Utils.exception_message(exception)}" if exception
+      end
+
       # Parameters:
       #   flatten: [true|false]
       #     Whether to flatten each Hash of the payload and named tags into an attribute for each of its
