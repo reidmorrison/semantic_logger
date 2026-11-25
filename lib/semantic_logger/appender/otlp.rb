@@ -98,16 +98,7 @@ module SemanticLogger
 
       # Returns [Hash] the ExportLogsServiceRequest of the records, by the name of their logger.
       def request(scopes)
-        {
-          resourceLogs: [
-            {
-              resource:  {attributes: SemanticLogger::Otlp::Values.attributes(request_resource)},
-              scopeLogs: scopes.map do |name, records|
-                {scope: {name: SemanticLogger::Otlp::Values.text(name)}, logRecords: records}
-              end
-            }
-          ]
-        }
+        SemanticLogger::Otlp::LogsData.request(request_resource, scopes)
       end
 
       def default_formatter

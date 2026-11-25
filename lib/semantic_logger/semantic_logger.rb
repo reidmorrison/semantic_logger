@@ -970,8 +970,10 @@ module SemanticLogger
   module Otlp
     autoload :Environment,          "semantic_logger/otlp/environment"
     autoload :Exporter,             "semantic_logger/otlp/exporter"
+    autoload :LogsData,             "semantic_logger/otlp/logs_data"
     autoload :Protobuf,             "semantic_logger/otlp/protobuf"
     autoload :Protocol,             "semantic_logger/otlp/protocol"
+    autoload :Resource,             "semantic_logger/otlp/resource"
     autoload :Schema,               "semantic_logger/otlp/schema"
     autoload :Signal,               "semantic_logger/otlp/signal"
     autoload :TraceContext,         "semantic_logger/otlp/trace_context"

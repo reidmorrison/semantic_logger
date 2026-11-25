@@ -10,6 +10,11 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Added
 
+- `formatter: :otlp_json_lines` writes each log entry as one line of OTLP JSON, a `LogsData` with the
+  resource of the process, the scope of its logger, and its log record, as `appender: :otlp` sends it,
+  for the OpenTelemetry Collector's `otlpjsonfile` receiver. Each line is capped at `max_bytes:`,
+  1 MiB by default: a longer one is cut, first the stack trace, then the body, then the largest
+  attributes.
 - Every logger has `increment(name, amount = 1, unit: nil, dimensions: nil)` for a counter,
   `time(name, duration: nil, dimensions: nil) { ... }` for a histogram of durations in seconds (it
   times the block and returns its result, or records a `duration:` given in milliseconds; when the

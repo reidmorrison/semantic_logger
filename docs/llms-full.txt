@@ -1061,7 +1061,7 @@ Where each formatter writes the call site:
 | `:json`, `:raw`, `:syslog_cee`, `:fluentd` (with `need_process_info: true`), and the appenders that use them | `file`, `line` | `method` |
 | `:ecs` | `log.origin.file.name`, `log.origin.file.line` | `log.origin.function` |
 | `:new_relic_logs` | `file.name`, `line.number` | `method.name` |
-| `:otlp` | `code.file.path`, `code.line.number` | `code.function.name` |
+| `:otlp`, `:otlp_json_lines` | `code.file.path`, `code.line.number` | `code.function.name` |
 
 The `:logfmt` and `:loki` formatters write neither. A custom formatter reads the call site from
 [`log.call_site`](log.html#attributes).
@@ -1149,7 +1149,7 @@ give it `formatter: {json: {backtrace_cleaner: false}}`.
 The exception itself is never changed, so appenders that send the exception to an error service,
 such as Sentry, Bugsnag, or Honeybadger, still send its full backtrace. The other formatters,
 including `:raw` and the formatters written for a particular service, such as `:ecs`, `:loki`,
-`:new_relic_logs`, and `:otlp`, write the full backtrace. So do the `:elasticsearch`,
+`:new_relic_logs`, `:otlp`, and `:otlp_json_lines`, write the full backtrace. So do the `:elasticsearch`,
 `:opensearch`, `:mongodb`, `:graylog`, `:splunk_http`, and `:honeybadger_insights` appenders, which
 build their entries with formatters of their own: giving one of them a `formatter` replaces how it
 builds its entries.
@@ -2557,6 +2557,38 @@ Notes:
   `stack_trace`, and, when the exception has a cause, `cause`. With `log_exception_details: true`
   (off by default), the detail Ruby adds to the exception's message is included as
   `exception_details`; see [Exception details](config.html#exception-details).
+
+### OTLP JSON Lines {#otlp-json-lines}
+
+`formatter: :otlp_json_lines` writes each entry as one line of OTLP JSON: a `LogsData` holding the
+resource of the process, the instrumentation scope named after the entry's logger, and its OTLP log
+record, as the [`:otlp` appender](#otlp) sends it, trace included. The OpenTelemetry Collector's
+[`otlpjsonfile` receiver](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver)
+reads such a file as it is, with no parsing to configure. That receiver is in the Collector's contrib
+build, but not in Grafana Alloy, Datadog's DDOT, or Elastic's EDOT, which read the [`:json`](#json)
+format with their `filelog` receiver instead.
+
+~~~ruby
+SemanticLogger.add_appender(file_name: "log/otlp.jsonl", formatter: :otlp_json_lines)
+~~~
+
+Notes:
+
+* Rotating the file is left to the file appender, with `reopen_period:`, `reopen_size:`, or an external
+  tool followed by `SemanticLogger.reopen`.
+* Each line holds at most `max_bytes:`, 1 MiB by default, the most that the receiver reads of one line
+  unless its `max_log_size` is raised. A longer line is cut until it fits: first the exception's stack
+  trace, then the body, each ending with `...[truncated]`, then the attributes, the largest first,
+  counted in the record's `droppedAttributesCount`.
+* The resource takes `application:`, `host:`, `environment:`, and `resource_attributes:` given to the
+  formatter over `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES`, which win over the appender's own
+  application, host, and environment. Each line holds the `process.pid` of the process that wrote it.
+* The resource follows the appender's application, host, and environment as they change, such as
+  when a framework sets `SemanticLogger.application` after the first line.
+* Hashes in the payload and named tags are flattened into dotted attribute names, as for `:otlp`;
+  `flatten: false` writes them as maps, and the other options of the `:otlp` formatter, such as
+  `log_exception_details:`, apply too:
+  `formatter: {otlp_json_lines: {flatten: false, max_bytes: 4 * 1024 * 1024}}`.
 
 ## Network protocols
 
@@ -4705,7 +4737,7 @@ What each formatter writes for a metric on an entry with a message:
 | `:json`, `:raw`, `:fluentd`, `:syslog_cee`, `:new_relic_logs` | `metric`, `metric_amount`, and `dimensions` |
 | `:ecs` | `metric`, `metric_amount`, and `dimensions`, under its namespace, `semantic_logger` by default, or in `labels` when it has none |
 | `:loki` | `metric`, `metric_value`, and `dimensions` (as JSON), in the structured metadata |
-| `:otlp` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes, and a `semantic_logger.dimensions.<key>` attribute for each dimension |
+| `:otlp`, `:otlp_json_lines` | The `semantic_logger.metric` and `semantic_logger.metric_amount` attributes, and a `semantic_logger.dimensions.<key>` attribute for each dimension |
 | `:default`, `:color`, `:one_line`, `:pattern`, `:syslog`, `:logfmt` | None; only the duration is shown |
 
 An appender writes what its formatter writes. For example `:elasticsearch`, `:opensearch`,
