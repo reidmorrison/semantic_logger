@@ -8,7 +8,7 @@ module Metric
       OTEL_EXPORTER_OTLP_HEADERS OTEL_EXPORTER_OTLP_METRICS_HEADERS
       OTEL_EXPORTER_OTLP_TIMEOUT OTEL_EXPORTER_OTLP_METRICS_TIMEOUT
       OTEL_EXPORTER_OTLP_COMPRESSION OTEL_EXPORTER_OTLP_METRICS_COMPRESSION
-      OTEL_RESOURCE_ATTRIBUTES OTEL_METRIC_EXPORT_INTERVAL
+      OTEL_RESOURCE_ATTRIBUTES OTEL_METRIC_EXPORT_INTERVAL OTEL_METRIC_EXPORT_TIMEOUT
       OTEL_EXPORTER_OTLP_CERTIFICATE OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE
       OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE
       OTEL_EXPORTER_OTLP_CLIENT_KEY OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY
@@ -981,6 +981,72 @@ module Metric
         end
       end
 
+      describe "export_timeout:" do
+        it "is 30 seconds by default, as in the OpenTelemetry metrics SDK" do
+          assert_in_delta 30.0, appender.export_timeout
+        end
+
+        it "has no limit for 0" do
+          assert_nil new_appender(export_timeout: 0).export_timeout
+        end
+
+        [-1, "5", Float::NAN, Float::INFINITY, true].each do |value|
+          it "raises ArgumentError for #{value.inspect}" do
+            error = assert_raises(ArgumentError) { new_appender(export_timeout: value) }
+
+            assert_match(/export_timeout:/, error.message)
+          end
+        end
+
+        # Returns the [read, write] timeouts of the connection while the request of the snapshot was sent.
+        def timeouts_of_export(on)
+          sent_with = nil
+          on.http.stub(:request, lambda { |_request|
+            sent_with = [on.http.read_timeout, on.http.write_timeout]
+            success
+          }) do
+            on.write_metrics(snapshot)
+          end
+          sent_with
+        end
+
+        it "bounds the waits of the export by it" do
+          read, write = timeouts_of_export(new_appender(export_timeout: 0.5))
+
+          assert_operator read, :<=, 0.5
+          assert_operator write, :<=, 0.5
+        end
+
+        it "keeps the waits of the export at their own timeouts without a limit" do
+          on          = new_appender(export_timeout: 0)
+          read, write = timeouts_of_export(on)
+
+          assert_in_delta 1.0, read
+          assert_equal on.http.write_timeout, write
+        end
+
+        it "gives the export a deadline that long after it starts" do
+          on       = new_appender(export_timeout: 2)
+          given    = nil
+          before   = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          on.stub(:export, ->(_request, deadline:) { given = deadline }) { on.write_metrics(snapshot) }
+
+          assert_in_delta before + 2, given, 0.5
+        end
+
+        it "gives the export no deadline without a limit" do
+          on       = new_appender(export_timeout: 0)
+          given    = :not_called
+          on.stub(:export, ->(_request, deadline:) { given = deadline }) { on.write_metrics(snapshot) }
+
+          assert_nil given
+        end
+
+        it "keeps for the next snapshot one whose time ran out before it was sent" do
+          assert appender.metrics_retryable?(SemanticLogger::Appender::Http::DeadlinePassed.new("passed"))
+        end
+      end
+
       describe "environment variables" do
         before do
           aggregator.record(:counter, "users.signup", 1)
@@ -1235,6 +1301,45 @@ module Metric
               assert_equal 60, appender.metrics_interval
               assert_equal 1, warnings.size
               assert_match(/Ignoring OTEL_METRIC_EXPORT_INTERVAL/, warnings.first)
+            end
+          end
+        end
+
+        describe "export timeout" do
+          it "sets export_timeout: from OTEL_METRIC_EXPORT_TIMEOUT, in milliseconds" do
+            ENV["OTEL_METRIC_EXPORT_TIMEOUT"] = "5000"
+
+            assert_in_delta 5.0, new_appender.export_timeout
+          end
+
+          it "has no limit for 0" do
+            ENV["OTEL_METRIC_EXPORT_TIMEOUT"] = "0"
+
+            assert_nil new_appender.export_timeout
+          end
+
+          it "lets export_timeout: given win" do
+            ENV["OTEL_METRIC_EXPORT_TIMEOUT"] = "5000"
+
+            assert_in_delta 2.0, new_appender(export_timeout: 2).export_timeout
+          end
+
+          it "is not the timeout of each wait, which OTEL_EXPORTER_OTLP_TIMEOUT sets" do
+            ENV["OTEL_METRIC_EXPORT_TIMEOUT"] = "5000"
+            appender = new_appender
+
+            assert_in_delta 2.0, appender.open_timeout
+            assert_in_delta 1.0, appender.read_timeout
+          end
+
+          ["-1", "1.5", "10s"].each do |value|
+            it "ignores #{value.inspect}, and warns" do
+              ENV["OTEL_METRIC_EXPORT_TIMEOUT"] = value
+              appender = new_logged_appender
+
+              assert_in_delta 30.0, appender.export_timeout
+              assert_equal 1, warnings.size
+              assert_match(/Ignoring OTEL_METRIC_EXPORT_TIMEOUT/, warnings.first)
             end
           end
         end

@@ -1263,6 +1263,172 @@ module Appender
         ENV["http_proxy"] = old_env_proxy if old_env_proxy
       end
 
+      it "posts without a deadline to a subclass that overrides process_request as before" do
+        subclass = Class.new(SemanticLogger::Appender::Http) do
+          def process_request(request, body = nil)
+            super
+          end
+        end
+        on     = stub_http_start { subclass.new(url: "http://localhost:8088/path") }
+        posted = on.http.stub(:request, ->(_request) { http_success }) { on.send(:post, "body") }
+
+        assert posted
+      end
+
+      describe "a request with a deadline" do
+        # Returns the time on the monotonic clock the given seconds from now.
+        def deadline_in(seconds)
+          Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+        end
+
+        # Posts with the deadline, returning the [open, read, write] timeouts that the request was sent
+        # with, or raising what the request raised. The connection starts within `start`, when given.
+        def post_with(deadline, on: appender, start: nil)
+          sent_with = nil
+          on.http.instance_variable_set(:@started, false) if start
+          request = lambda { |_request|
+            sent_with = [on.http.open_timeout, on.http.read_timeout, on.http.write_timeout]
+            http_success
+          }
+          start ||= -> {}
+          on.http.stub(:start, -> { start.call.tap { on.http.instance_variable_set(:@started, true) } }) do
+            on.http.stub(:request, request) { on.send(:post, "body", deadline: deadline) }
+          end
+          sent_with
+        end
+
+        it "bounds each timeout by the time left, when that is shorter" do
+          open, read, write = post_with(deadline_in(0.5))
+
+          assert_operator open, :<=, 0.5
+          assert_operator read, :<=, 0.5
+          assert_operator write, :<=, 0.5
+          assert_operator read, :>, 0.25
+        end
+
+        it "keeps the timeouts that are shorter than the time left" do
+          open, read, write = post_with(deadline_in(30))
+
+          assert_in_delta 2.0, open
+          assert_in_delta 1.0, read
+          assert_operator write, :<=, 30
+          assert_operator write, :>, 29
+        end
+
+        it "bounds a timeout of no limit by the time left" do
+          no_limit = stub_http_start do
+            SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", open_timeout: nil, read_timeout: nil)
+          end
+          open, read, = post_with(deadline_in(5), on: no_limit)
+
+          assert_operator open, :<=, 5
+          assert_operator read, :<=, 5
+        end
+
+        it "sets the timeouts of the connection back afterwards" do
+          before = [appender.http.open_timeout, appender.http.read_timeout, appender.http.write_timeout]
+          post_with(deadline_in(0.5))
+
+          assert_equal before, [appender.http.open_timeout, appender.http.read_timeout, appender.http.write_timeout]
+        end
+
+        it "sets the timeouts of the connection back after a request that raised" do
+          before = [appender.http.open_timeout, appender.http.read_timeout, appender.http.write_timeout]
+          appender.http.stub(:request, ->(_request) { raise Net::ReadTimeout }) do
+            appender.stub(:reconnect, nil) do
+              assert_raises(Net::ReadTimeout) { appender.send(:post, "body", deadline: deadline_in(0.5)) }
+            end
+          end
+
+          assert_equal before, [appender.http.open_timeout, appender.http.read_timeout, appender.http.write_timeout]
+        end
+
+        it "connects with the open timeout bounded by the time left" do
+          open_at_start = nil
+          post_with(deadline_in(0.5), start: -> { open_at_start = appender.http.open_timeout })
+
+          assert_operator open_at_start, :<=, 0.5
+        end
+
+        it "raises DeadlinePassed, a request not sent, when the deadline passed before connecting" do
+          sent  = :not_called
+          error = assert_raises(SemanticLogger::Appender::Http::DeadlinePassed) do
+            sent = post_with(deadline_in(-1), start: -> { flunk "should not connect" })
+          end
+
+          assert_equal :not_called, sent
+          assert_kind_of Net::OpenTimeout, error
+          assert appender.not_sent?(error)
+          assert appender.wrote_nothing?(error)
+        end
+
+        it "raises DeadlinePassed, without sending the request, when connecting took the time left" do
+          error = assert_raises(SemanticLogger::Appender::Http::DeadlinePassed) do
+            post_with(deadline_in(0.05), start: -> { sleep 0.1 })
+          end
+
+          assert_match(%r{before the request to http://localhost:8088 was sent}, error.message)
+        end
+
+        it "bounds the continue timeout by the time left too" do
+          on = stub_http_start do
+            SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", continue_timeout: 60)
+          end
+          limited = nil
+          on.http.stub(:request, lambda { |_request|
+            limited = on.http.continue_timeout
+            http_success
+          }) do
+            on.send(:post, "body", deadline: deadline_in(0.5))
+          end
+
+          assert_operator limited, :<=, 0.5
+          assert_equal 60, on.http.continue_timeout
+        end
+
+        it "keeps a continue timeout of nil, which does not wait for 100 Continue" do
+          on = stub_http_start do
+            SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", continue_timeout: nil)
+          end
+          kept = :not_called
+          on.http.stub(:request, lambda { |_request|
+            kept = on.http.continue_timeout
+            http_success
+          }) do
+            on.send(:post, "body", deadline: deadline_in(0.5))
+          end
+
+          assert_nil kept
+        end
+
+        it "raises the error of the request when closing its connection fails too" do
+          old_http = appender.http
+          old_http.stub(:finish, -> { raise Errno::ECONNRESET }) do
+            old_http.stub(:request, ->(_request) { raise Net::ReadTimeout }) do
+              assert_raises(Net::ReadTimeout) { appender.send(:post, "body", deadline: deadline_in(0.5)) }
+            end
+          end
+        end
+
+        it "leaves a new connection, not started, after a request sent that failed, rather than connect again" do
+          old_http = appender.http
+          appender.stub(:reconnect, -> { flunk "should not connect again within the deadline" }) do
+            old_http.stub(:request, ->(_request) { raise Net::ReadTimeout }) do
+              assert_raises(Net::ReadTimeout) { appender.send(:post, "body", deadline: deadline_in(0.5)) }
+            end
+          end
+
+          refute_same old_http, appender.http
+          refute_predicate appender.http, :started?
+        end
+
+        it "keeps the connection when the deadline passed before the request was sent" do
+          appender.stub(:reconnect, -> { flunk "should not reconnect" }) do
+            assert_raises(SemanticLogger::Appender::Http::DeadlinePassed) { post_with(deadline_in(-1)) }
+          end
+        end
+      end
+
       it "doesn't use the ENV proxy if explicity requested" do
         old_env_proxy = ENV.fetch("http_proxy", nil)
         ENV["http_proxy"] = "http://user:password@proxy.example.com:12345"

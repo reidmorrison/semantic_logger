@@ -35,6 +35,9 @@ module SemanticLogger
       # The variable of the seconds between exports, in milliseconds (see #export_interval).
       EXPORT_INTERVAL = "OTEL_METRIC_EXPORT_INTERVAL".freeze
 
+      # The variable of the timeout of a whole export of metrics, in milliseconds (see #export_timeout).
+      EXPORT_TIMEOUT = "OTEL_METRIC_EXPORT_TIMEOUT".freeze
+
       # The timeout when it is not set, or ignored (see #timeout?).
       UNSET = Object.new.freeze
       private_constant :UNSET
@@ -169,6 +172,21 @@ module SemanticLogger
         @export_interval = text && parse_export_interval(text)
       end
 
+      # Returns [true|false] whether OTEL_METRIC_EXPORT_TIMEOUT is set, to a value that can be used (see
+      # #export_timeout).
+      def export_timeout?
+        !export_timeout_seconds.equal?(UNSET)
+      end
+
+      # Returns [Float|nil] the seconds that a whole export of metrics may take, of
+      # OTEL_METRIC_EXPORT_TIMEOUT, given in milliseconds: a variable of the metrics SDK, whatever the
+      # signal; nil when it is 0, meaning no limit, or when it is not set (see #export_timeout?). A
+      # value that is not a whole number of milliseconds is ignored and reported.
+      def export_timeout
+        seconds = export_timeout_seconds
+        seconds unless seconds.equal?(UNSET)
+      end
+
       # Returns [Hash<String, String>] the attributes of the resource, none when not set. When any entry
       # is not a valid `key=value`, once percent-decoded, the whole value is ignored and reported, as the
       # OpenTelemetry specification of the resource SDK asks.
@@ -189,6 +207,15 @@ module SemanticLogger
 
         name, text       = signal_value("TIMEOUT")
         @timeout_seconds = text ? parse_timeout(name, text) : UNSET
+      end
+
+      # Returns [Float|nil|UNSET] the export timeout in seconds, nil for no limit, UNSET when not set or
+      # ignored.
+      def export_timeout_seconds
+        return @export_timeout_seconds if defined?(@export_timeout_seconds)
+
+        text                    = value(EXPORT_TIMEOUT)
+        @export_timeout_seconds = text ? parse_timeout(EXPORT_TIMEOUT, text) : UNSET
       end
 
       def parse_timeout(name, text)

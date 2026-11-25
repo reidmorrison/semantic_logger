@@ -452,6 +452,7 @@ the same name and dimensions are merged into one before they are written.
 | `header:` | Headers to send with each request, such as one with credentials. Default: `OTEL_EXPORTER_OTLP_METRICS_HEADERS`, or else `OTEL_EXPORTER_OTLP_HEADERS`; a header given wins over one of the environment with the same name, in any case. See below for the headers of the environment. |
 | `compress:` | `true` to compress each request with gzip. Default: `true` when `OTEL_EXPORTER_OTLP_METRICS_COMPRESSION`, or else `OTEL_EXPORTER_OTLP_COMPRESSION`, is `gzip`, otherwise `false`. |
 | `open_timeout:`, `read_timeout:` | Seconds to wait to connect, and for each read of the response. Default: `OTEL_EXPORTER_OTLP_METRICS_TIMEOUT`, or else `OTEL_EXPORTER_OTLP_TIMEOUT`, in milliseconds (`0` for no limit), only when neither option is given; otherwise those of the HTTP appender. |
+| `export_timeout:` | Seconds that the export of each snapshot may take in all, from encoding it to the end of the response; `0` for no limit. Each step of connecting (the TCP connection, then any TLS handshake), sending the request, and each read of the response are bounded by the time left, as well as by `open_timeout:` or `read_timeout:`, each capped separately, so a receiver that stalls at each step, or answers a byte at a time, can hold an export for a few times `export_timeout:`. A snapshot whose time ran out before its request was sent is sent with the next one; once sent, it is discarded, since the receiver may have stored it. Default: `OTEL_METRIC_EXPORT_TIMEOUT`, in milliseconds (`0` for no limit), or else `30`, as in the OpenTelemetry metrics SDK. |
 | `ssl:`, `proxy_url:`, ... | The other options of the [HTTP appender](appenders.html#https). |
 
 Every request also has the `process.pid` of the process that sends it, so that the deltas of each
@@ -480,6 +481,7 @@ not set, and the `_METRICS_` form of a variable replaces its generic form as a w
 | `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE`, `OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE` | The `cert:` of `ssl:`: the PEM file of the client's certificate, for mutual TLS. |
 | `OTEL_EXPORTER_OTLP_CLIENT_KEY`, `OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY` | The `key:` of `ssl:`: the PEM file of the client's private key, for mutual TLS. |
 | `OTEL_METRIC_EXPORT_INTERVAL` | `interval:`, in whole milliseconds. |
+| `OTEL_METRIC_EXPORT_TIMEOUT` | `export_timeout:`, in whole milliseconds; `0` means no limit. |
 | `OTEL_SERVICE_NAME` | `application:` |
 | `OTEL_RESOURCE_ATTRIBUTES` | Attributes of the resource, as `key=value` pairs separated by commas, trimmed and percent-decoded, each value a String, other than `process.pid`. |
 
@@ -496,14 +498,13 @@ environment named, in any case, as one of the headers the HTTP appender sets its
 basic auth, is left out, with a warning that names it.
 
 A value it cannot use is ignored, with a warning on the internal logger: a variable that is not valid
-UTF-8 (named, never its value), a timeout that is not a whole number of milliseconds, an export
-interval that is not a positive whole number of milliseconds, a protocol other than `http/protobuf`,
-`http/json`, or `grpc`, or a compression
-other than `gzip` or `none`. A malformed header entry, such as one without `=`, with a name that is
-not a valid header name, or with a value that holds anything other than printable ASCII and tabs once
-percent-decoded, is left out, and the warning names its position only, never its text, since a header
-may hold credentials. A malformed `OTEL_RESOURCE_ATTRIBUTES` is ignored as a whole, as the
-OpenTelemetry specification asks.
+UTF-8 (named, never its value), a timeout or export timeout that is not a whole number of milliseconds,
+an export interval that is not a positive whole number of milliseconds, a protocol other than
+`http/protobuf`, `http/json`, or `grpc`, or a compression other than `gzip` or `none`. A malformed
+header entry, such as one without `=`, with a name that is not a valid header name, or with a value that
+holds anything other than printable ASCII and tabs once percent-decoded, is left out, and the warning
+names its position only, never its text, since a header may hold credentials. A malformed
+`OTEL_RESOURCE_ATTRIBUTES` is ignored as a whole, as the OpenTelemetry specification asks.
 
 The certificate variables apply to an `https` url only. A `ca_file:`, `ca_path:`, or `cert_store:`
 given in `ssl:` wins over the certificate variable, and a `cert:` or `key:` given over both client
@@ -515,8 +516,10 @@ would fail without it. Only the first certificate of the client certificate file
 is sent.
 
 OTLP's timeout bounds a whole export, while the HTTP appender bounds connecting and each read of the
-response instead, so a request can take somewhat longer than the timeout in all.
-`OTEL_METRIC_EXPORT_TIMEOUT`, which bounds a whole export, is not read.
+response instead, so a request can take somewhat longer than the timeout in all. To bound the whole
+export, the appender has `export_timeout:`, from `OTEL_METRIC_EXPORT_TIMEOUT`: each wait on the
+receiver is capped at the time left when it starts, separately, so a receiver that stalls at each step
+can still hold an export for a few times `export_timeout:`.
 
 **Responses.** A snapshot that the receiver asks to send again (408, 429, 502, 503, or 504), or that
 could not be sent since the receiver could not be reached, is sent again with the next one (see

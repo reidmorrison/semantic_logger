@@ -108,8 +108,8 @@ module SemanticLogger
       #   open_timeout:, read_timeout: from OTEL_EXPORTER_OTLP_SIGNAL_TIMEOUT or OTEL_EXPORTER_OTLP_TIMEOUT,
       #     in milliseconds, 0 meaning no limit, only when neither option is given, so that one given
       #     keeps the default of Appender::Http for the other (see #otel_timeouts). Each bounds one wait,
-      #     connecting or one read of the response, not the whole export, so the export timeout
-      #     variables of the SDKs, which bound the whole export, are not read.
+      #     connecting or one read of the response, not the whole export. An appender that bounds the
+      #     whole export gives #export a deadline, as Metric::Otlp does from `export_timeout:`.
       #
       # Every request also holds the `process.pid` of the process that sends it, so that the data of
       # each process, such as forked workers of the same application on the same host, are kept apart.
@@ -152,9 +152,13 @@ module SemanticLogger
 
       # Posts the request of the signal, the Hash of its message, in the protocol. Returns true once the
       # server accepted it, and raises when it did not, or could not be reached (see Appender::Http).
-      def export(request)
+      # With a deadline, a time on Process::CLOCK_MONOTONIC, each wait on the server is bounded by the
+      # time left before it too (see Appender::Http#post).
+      def export(request, deadline: nil)
         logger.trace { JSON.generate(request) }
-        post(protocol.encode(request, otlp_signal.request), full_path)
+        body = protocol.encode(request, otlp_signal.request)
+        # Without a deadline, as #post was called before it took one, for a subclass that overrides it.
+        deadline ? post(body, full_path, deadline: deadline) : post(body, full_path)
       end
 
       # Reports a partial success, where the server stored only some of the request, from the body of a
