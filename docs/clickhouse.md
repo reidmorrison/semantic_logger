@@ -102,18 +102,32 @@ logger.time("orders.charge", dimensions: {gateway: "stripe"}) { charge(order) }
 a few of each: `bundle exec ruby examples/clickhouse/app.rb`.
 
 In Rails, with Rails Semantic Logger 6.0 or later, `bin/rails generate rails_semantic_logger:observability`
-adds the same stack, with dashboards. It first runs `rails_semantic_logger:install`, which writes an
-explicit `config.rails_semantic_logger.appenders` block in each environment file, unless the app
-already declares its appenders, then adds the OTLP appenders to the development one:
+adds the same stack, with dashboards, in `compose.observability.yml`, with Grafana on
+`http://localhost:3001`. It first runs `rails_semantic_logger:install`, which writes an explicit
+`config.rails_semantic_logger.appenders` block in each environment file, unless the app already
+declares its appenders, then adds the OTLP appenders to the development one. In a new Rails app:
 
 ~~~ruby
 # config/environments/development.rb
 config.rails_semantic_logger.appenders do |appenders|
-  # The appenders that the app already writes to, such as log/development.log and the screen, then:
+  appenders.add(file_name: config.paths["log"].first, formatter: {color: {ap: {multiline: false}}})
+  appenders.add_server(io: $stdout, formatter: :color)
+  appenders.add_console(io: $stderr, formatter: :color)
+
+  # Send the logs and metrics to the local observability stack in compose.observability.yml:
+  # the OpenTelemetry Collector on localhost:4318, ClickHouse, and Grafana on http://localhost:3001.
+  # Added by `bin/rails generate rails_semantic_logger:observability`.
   appenders.add(appender: :otlp)
   appenders.add(metric: :otlp, interval: 10)
 end
+
+# The service.name of the logs and metrics sent to the observability stack.
+config.semantic_logger.application = "my_shop"
 ~~~
+
+It adds only an OTLP appender, for logs or for metrics, that the app does not already have. When the
+app has one that applies only some of the time, such as `add_server` or inside a condition, it leaves
+it as it is and says so.
 
 See [Configuring where logs go](rails.html#configuring-where-logs-go-the-appenders-block).
 
