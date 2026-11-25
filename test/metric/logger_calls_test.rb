@@ -34,6 +34,15 @@ module Metric
         it "returns the result of the block timed" do
           assert_equal 42, logger.time("supplier.add_user") { 42 }
         end
+
+        it "calls the block of #time without reading the clock or calling its dimensions" do
+          dimensions = ->(*) { flunk "dimensions called" }
+
+          Process.stub(:clock_gettime, ->(*) { flunk "clock read" }) do
+            assert_equal 42, logger.time("supplier.add_user", dimensions: dimensions) { 42 }
+          end
+          refute logger.time("supplier.add_user", duration: 12, dimensions: dimensions)
+        end
       end
 
       describe "when the processor raises" do
@@ -200,6 +209,127 @@ module Metric
             logger.time("supplier.add_user", duration: 60_000) { nil }
 
             assert_operator points.first.value.max, :<, 1
+          end
+
+          it "adds the error.type of what the block raised to its dimensions" do
+            assert_raises(ArgumentError) do
+              logger.time("supplier.add_user", dimensions: {supplier: "acme"}) { raise ArgumentError, "boom" }
+            end
+            logger.time("supplier.add_user", dimensions: {supplier: "acme"}) { :added }
+
+            assert_equal [{"supplier" => "acme", "error.type" => "ArgumentError"}, {"supplier" => "acme"}],
+                         points.map(&:dimensions)
+          end
+
+          describe "with dimensions given as a callable" do
+            it "calls it with the block's result, once the block has returned" do
+              calls  = []
+              result = logger.time("supplier.add_user", dimensions: lambda { |result, error|
+                calls << [result, error]
+                {outcome: result}
+              }) { :added }
+
+              assert_equal :added, result
+              assert_equal [[:added, nil]], calls
+              assert_equal [{"outcome" => "added"}], points.map(&:dimensions)
+            end
+
+            it "calls it with what the block raised, adding its error.type, and raises it again" do
+              calls = []
+              error = assert_raises(ArgumentError) do
+                logger.time("supplier.add_user", dimensions: lambda { |result, error|
+                  calls << [result, error]
+                  {supplier: "acme"}
+                }) { raise ArgumentError, "boom" }
+              end
+
+              assert_equal [[nil, error]], calls
+              assert_equal [{"supplier" => "acme", "error.type" => "ArgumentError"}], points.map(&:dimensions)
+            end
+
+            it "keeps the error.type that it returns, as a String or Symbol key" do
+              handled = Class.new(StandardError)
+              assert_raises(handled) do
+                logger.time("sidekiq.job.duration", dimensions: ->(*) { {"error.type" => "JobError"} }) do
+                  raise handled
+                end
+              end
+              assert_raises(handled) do
+                logger.time("sidekiq.job.duration", dimensions: ->(*) { {"error.type": "OtherError"} }) do
+                  raise handled
+                end
+              end
+
+              recorded = points.map(&:dimensions).sort_by { |dimensions| dimensions["error.type"] }
+
+              assert_equal [{"error.type" => "JobError"}, {"error.type" => "OtherError"}], recorded
+            end
+
+            it "adds an error.type to nil dimensions" do
+              assert_raises(ArgumentError) do
+                logger.time("supplier.add_user", dimensions: ->(*) {}) { raise ArgumentError, "boom" }
+              end
+
+              assert_equal [{"error.type" => "ArgumentError"}], points.map(&:dimensions)
+            end
+
+            it "calls it with nil and nil without a block" do
+              calls = []
+
+              assert logger.time("db.client.operation.duration", duration: 12, dimensions: lambda { |*args|
+                calls << args
+                {db: "users"}
+              })
+              assert_equal [[nil, nil]], calls
+              assert_equal [{"db" => "users"}], points.map(&:dimensions)
+            end
+
+            it "records nothing, reporting it, when it raises, and returns the block's result" do
+              warnings = []
+
+              SemanticLogger::Logger.processor.logger.stub(:warn, ->(message) { warnings << message }) do
+                failing = ->(*) { raise NoMethodError, "dimensions" }
+
+                # A name of its own, since the collector reports once per name for the whole process.
+                assert_equal :added, logger.time("logger_calls.failing_dimensions", dimensions: failing) { :added }
+                assert_raises(ArgumentError) do
+                  logger.time("logger_calls.failing_dimensions", dimensions: failing) { raise ArgumentError, "boom" }
+                end
+                refute logger.time("logger_calls.failing_dimensions", duration: 12, dimensions: failing)
+              end
+
+              assert_empty points
+              assert_equal 1, warnings.size
+              assert_includes warnings.first,
+                              'Failed to record histogram "logger_calls.failing_dimensions": NoMethodError'
+            end
+
+            it "records nothing, reporting it, when it returns neither a Hash nor nil" do
+              warnings = []
+
+              SemanticLogger::Logger.processor.logger.stub(:warn, ->(message) { warnings << message }) do
+                assert_equal :added, logger.time("logger_calls.array_dimensions", dimensions: ->(*) { [1] }) { :added }
+                assert_raises(ArgumentError) do
+                  logger.time("logger_calls.array_dimensions", dimensions: ->(*) { [1] }) { raise ArgumentError }
+                end
+              end
+
+              assert_empty points
+              assert_equal 1, warnings.size
+              assert_includes warnings.first, "are not a Hash"
+            end
+
+            it "reports a callable that does not take two arguments" do
+              warnings = []
+
+              SemanticLogger::Logger.processor.logger.stub(:warn, ->(message) { warnings << message }) do
+                assert_equal :added, logger.time("logger_calls.arity_dimensions", dimensions: -> { {} }) { :added }
+              end
+
+              assert_empty points
+              assert_includes warnings.first,
+                              'Failed to record histogram "logger_calls.arity_dimensions": ArgumentError'
+            end
           end
 
           it "drops a duration that is not a Numeric, and a call without a duration or block" do

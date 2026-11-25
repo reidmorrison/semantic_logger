@@ -191,7 +191,9 @@ module SemanticLogger
 
     # Records how long the block takes, in seconds, in the histogram `name`, with the unit "s", and
     # returns the block's result. The time is recorded however the block ends: when it raises, which
-    # is then raised again, and when it returns or breaks out early.
+    # is then raised again, and when it returns or breaks out early. When the block raises, the
+    # dimensions get an "error.type", the class name of the exception, as for a measure call, unless
+    # they already have one.
     #
     #   logger.time("supplier.add_user") { supplier.add_user(user) }
     #
@@ -203,31 +205,50 @@ module SemanticLogger
     # With a block, `duration:` is ignored. Without either, nothing is recorded, as for any duration
     # that is not a Numeric.
     #
+    # The dimensions can be given as a callable, such as a lambda, which is called only while metrics
+    # are collected (see #collecting_metrics?), once the block has ended, with the block's result and
+    # the exception it raised, either one nil. Without a block, both are nil. It returns the dimensions,
+    # a Hash or nil:
+    #
+    #   logger.time("sidekiq.job.duration", dimensions: ->(result, error) { {queue: queue} }) { run(job) }
+    #   logger.time("db.client.operation.duration", duration: ms, dimensions: ->(*) { dimensions_of(sql) })
+    #
+    # It is always called with these two arguments, so it takes `(result, error)`, or `(*)` when it
+    # needs neither. A callable that raises, or returns neither a Hash nor nil, is reported once for
+    # the metric name, and the time is not recorded; the block's result, or its exception, is unchanged.
+    #
     # Parameters:
     #   name [String|Symbol]
     #     Name of the histogram.
     #   duration [Numeric]
     #     Milliseconds to record, without a block.
-    #   dimensions [Hash]
-    #     Dimensions of the series to record it in.
+    #   dimensions [Hash|#call]
+    #     Dimensions of the series to record it in, or a callable that returns them.
     #
     # Returns the block's result. Without a block, [true|false] whether it was recorded.
     def time(name, duration: nil, dimensions: nil)
       unless block_given?
+        return false unless collecting_metrics?
+
         begin
           seconds = Log.duration_seconds(duration)
         rescue StandardError => e
           return report_metric_failure(:histogram, name, e)
         end
-        return record_metric(:histogram, name, seconds, unit: "s", dimensions: dimensions)
+        return record_time(name, seconds, dimensions, nil, nil)
       end
+      # Without a metric appender the block is only called: no clock reads, and no dimensions built.
+      return yield unless collecting_metrics?
 
-      start = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+      start  = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+      result = raised = nil
       begin
-        yield
+        result = yield
+      rescue Exception => e
+        raised = e
+        raise
       ensure
-        seconds = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - start
-        record_metric(:histogram, name, seconds, unit: "s", dimensions: dimensions)
+        record_time(name, ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - start, dimensions, result, raised)
       end
     end
 
@@ -588,6 +609,22 @@ module SemanticLogger
 
       record_log_metric(metric, measure_option(options, :metric_amount), duration,
                         measure_dimensions(measure_option(options, :dimensions), raised))
+    end
+
+    # Records the seconds that #time measured, or was given, in the histogram `name`, with its
+    # dimensions: those given, or those that a callable given returns once called with the block's
+    # result and what it raised, either one nil. Adds the "error.type" of `raised`, if anything, to
+    # dimensions that are a Hash or nil (see #measure_dimensions). A callable that raises is reported
+    # once for the name, and nothing is recorded; any other dimensions are checked as for every metric
+    # call, which drops, and reports, those that are not a Hash (see Metric::Validator).
+    #
+    # Returns [true|false] whether it was recorded. Never raises.
+    def record_time(name, seconds, dimensions, result, raised)
+      dimensions = dimensions.call(result, raised) if dimensions.respond_to?(:call)
+      dimensions = measure_dimensions(dimensions, raised) if dimensions.nil? || dimensions.is_a?(Hash)
+      record_metric(:histogram, name, seconds, unit: "s", dimensions: dimensions)
+    rescue StandardError => e
+      report_metric_failure(:histogram, name, e)
     end
 
     # Return the level index for fast comparisons, resolved in the same order as `#level`.
