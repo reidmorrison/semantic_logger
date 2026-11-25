@@ -70,6 +70,13 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   a warning on the internal logger, which never holds a header's value; a malformed header entry is
   left out, and a malformed `OTEL_RESOURCE_ATTRIBUTES` is ignored as a whole. The headers of the
   environment are sent to a `url:` or `endpoint:` given too, as the specification asks.
+- `metric: :otlp` also reads the certificate variables `OTEL_EXPORTER_OTLP_CERTIFICATE` (the `ca_file:`
+  of `ssl:`), `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` and `OTEL_EXPORTER_OTLP_CLIENT_KEY` (PEM files, the
+  `cert:` and `key:` of `ssl:`, taken as a pair), each replaced as a whole by its
+  `OTEL_EXPORTER_OTLP_METRICS_*` form, for an https url, an option of `ssl:` given winning; a file
+  that cannot be read or parsed, one client variable without the other, or a key that is public or
+  not the certificate's, raises `ArgumentError` naming the variables.
+  It reads `OTEL_METRIC_EXPORT_INTERVAL` (milliseconds) as the default of `interval:`.
 - `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
   appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension
   whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the

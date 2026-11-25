@@ -1,3 +1,4 @@
+require "openssl"
 require "uri"
 
 module SemanticLogger
@@ -30,6 +31,9 @@ module SemanticLogger
 
         # Milliseconds in a second, to convert the timeout.
         MILLISECONDS = 1000.0
+
+        # The variable of the seconds between exports, in milliseconds (see #export_interval).
+        EXPORT_INTERVAL = "OTEL_METRIC_EXPORT_INTERVAL".freeze
 
         # The timeout when it is not set, or ignored (see #timeout?).
         UNSET = Object.new.freeze
@@ -88,6 +92,67 @@ module SemanticLogger
           @compress  = text && parse_compression(name, text)
         end
 
+        # The certificate variables below each name a file, which is read only when asked for, so that a
+        # variable whose option the appender was given, and so does not ask for, is never read. Each
+        # raises ArgumentError, naming the variable and its file, for a file that cannot be read, or
+        # that does not hold what it should: every request would fail without it.
+
+        # Returns [String|nil] the path of CERTIFICATE, the PEM file of trusted certificates to verify
+        # the server with, nil when not set.
+        def ca_file
+          return @ca_file if defined?(@ca_file)
+
+          name, path = signal_value("CERTIFICATE")
+          @ca_file   = path && read_pem(name, path, "certificate") do
+            OpenSSL::X509::Store.new.add_file(path)
+            path
+          end
+        end
+
+        # Returns [Hash] the client's certificate and private key, as the `cert:` and `key:` of `ssl:`, from
+        # the PEM files of CLIENT_CERTIFICATE and CLIENT_KEY; none when neither is set. Raises ArgumentError
+        # when only one of them is set, or the key is not the private key of the certificate, such as when
+        # one is of the signal and the other generic, since every request would then fail. An encrypted
+        # key raises, rather than asking for its pass phrase on a terminal: the specification has no
+        # variable for one.
+        def client_identity
+          return @client_identity if defined?(@client_identity)
+
+          cert_name, cert_path = signal_value("CLIENT_CERTIFICATE")
+          key_name, key_path   = signal_value("CLIENT_KEY")
+          return @client_identity = {}.freeze if cert_path.nil? && key_path.nil?
+
+          missing = cert_path.nil? ? "CLIENT_CERTIFICATE" : "CLIENT_KEY" unless cert_path && key_path
+          if missing
+            raise(ArgumentError,
+                  "#{cert_path ? cert_name : key_name} is set without OTEL_EXPORTER_OTLP_METRICS_#{missing} or " \
+                  "OTEL_EXPORTER_OTLP_#{missing}: a client certificate needs both")
+          end
+
+          cert = read_pem(cert_name, cert_path, "certificate") { OpenSSL::X509::Certificate.new(File.read(cert_path)) }
+          key  = read_pem(key_name, key_path, "private key, without a pass phrase") do
+            key = OpenSSL::PKey.read(File.read(key_path), "")
+            raise(OpenSSL::PKey::PKeyError, "it holds a public key") unless private_key?(key)
+
+            key
+          end
+          unless cert.check_private_key(key)
+            raise(ArgumentError, "#{key_name} does not hold the private key of the certificate of #{cert_name}")
+          end
+
+          @client_identity = {cert: cert, key: key}.freeze
+        end
+
+        # Returns [Float|nil] the seconds between exports of OTEL_METRIC_EXPORT_INTERVAL, given in
+        # milliseconds, nil when not set. A value that is not a positive whole number of milliseconds is
+        # ignored and reported.
+        def export_interval
+          return @export_interval if defined?(@export_interval)
+
+          text             = value(EXPORT_INTERVAL)
+          @export_interval = text && parse_export_interval(text)
+        end
+
         # Returns [Hash<String, String>] the attributes of the resource, none when not set. When any entry
         # is not a valid `key=value`, once percent-decoded, the whole value is ignored and reported, as the
         # OpenTelemetry specification of the resource SDK asks.
@@ -119,6 +184,41 @@ module SemanticLogger
 
           milliseconds = Integer(text, 10)
           milliseconds.zero? ? nil : milliseconds / MILLISECONDS
+        end
+
+        def parse_export_interval(text)
+          text = text.strip
+          if text.match?(/\A\d+\z/) && Integer(text, 10).positive?
+            Integer(text, 10) / MILLISECONDS
+          else
+            logger.warn("Ignoring #{EXPORT_INTERVAL}=#{text.inspect}: not a positive whole number of milliseconds")
+            nil
+          end
+        end
+
+        # Returns [true|false] whether the key holds its private part. A key of a type without #private?, such as
+        # Ed25519, is asked for its private part instead.
+        def private_key?(key)
+          return key.private? if key.respond_to?(:private?)
+
+          key.private_to_der
+          true
+        rescue OpenSSL::PKey::PKeyError
+          false
+        end
+
+        # Returns what the block makes of the PEM file, raising ArgumentError, naming the variable and the
+        # file, when it is not a file that can be read, or, saying what it should hold, when the block
+        # cannot parse it.
+        def read_pem(name, path, what)
+          unless File.file?(path) && File.readable?(path)
+            raise(ArgumentError,
+                  "#{name}: cannot read the file #{path.inspect}")
+          end
+
+          yield
+        rescue OpenSSL::OpenSSLError, SystemCallError, IOError => e
+          raise(ArgumentError, "#{name}: the file #{path.inspect} does not hold a PEM #{what}: #{e.message}")
         end
 
         def parse_compression(name, text)
