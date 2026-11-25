@@ -65,7 +65,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * UDP
 * Syslog
 * CloudWatch Logs
-* OpenTelemetry (OTLP/HTTP, with no extra gems, or through the OpenTelemetry SDK)
+* OpenTelemetry (OTLP/HTTP, with no extra gems)
 * Add any existing Ruby logger as another destination.
 * Roll-your-own
 
@@ -102,7 +102,6 @@ and are therefore not automatically included by this gem:
 - OpenSearch Appender: gem 'opensearch-ruby'
 - Kafka Appender: gem 'ruby-kafka'
 - Sentry Appender: gem 'sentry-ruby'
-- OpenTelemetry Appender: gem 'opentelemetry-logs-sdk' (plus an exporter, e.g. 'opentelemetry-exporter-otlp-logs')
 
 ## Upgrading
 

@@ -105,7 +105,6 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
 | [New Relic Logs](#new-relic-logs) | `appender: :new_relic_logs` | `newrelic_rpm` |
 | [OpenTelemetry over OTLP/HTTP](#otlp) | `appender: :otlp` | |
-| [OpenTelemetry](#opentelemetry) | `appender: :open_telemetry` | `opentelemetry-logs-sdk` |
 | [Logstash](#logstash) | `logger:` | `logstash-logger` |
 | [logentries.com](#logentriescom) | `appender: :tcp` | |
 | [loggly.com](#logglycom) | `appender: :http` | |
@@ -1086,15 +1085,51 @@ sends it, so that each forked worker reports its own. Each logger name in the ba
 instrumentation scope of its own, such as `MyApp::Orders`, holding the records it logged.
 
 Each entry is a log record with the time it was logged, its level as the severity number and text,
-such as `9` and `info`, its message as the body, and the attributes of the
-[`:open_telemetry` appender](#opentelemetry) below, except that:
+such as `9` and `info`, and its message as the body; an entry without a message, such as
+`logger.error(exception)`, has no body. For example, inside a span:
 
-- a Hash in the payload or named tags is flattened into an attribute for each of its values, its
-  keys joined with `.`, at any depth, as the OpenTelemetry semantic conventions name attributes, so
-  that every backend can query each value. An Array is sent as an array, which may mix types, such
-  as `[1, "two"]`, and a Hash within it as a map;
-- the logger's name is the scope of the record, so it is not the `semantic_logger.name` attribute;
-- the process id is in the resource, so it is not the `process.pid` attribute.
+~~~ruby
+SemanticLogger.named_tagged(request_id: "abc") do
+  logger.info("Created user", user_id: 42)
+end
+~~~
+
+logged by the logger of `UserService`, is sent as a record of the scope `UserService`, with the trace
+and span ids of that span, and:
+
+~~~
+body:       "Created user"
+attributes: {"request_id" => "abc", "user_id" => 42, "thread.name" => "puma srv tp 001"}
+~~~
+
+Each named tag and payload key is an attribute of its own; a payload key takes precedence over a
+named tag of the same name. Semantic Logger adds these attributes when the entry has the value:
+
+| Attribute | Value |
+|-----------|-------|
+| `exception.type`, `exception.message` | The class and message of the logged exception. |
+| `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
+| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a call site (see [`call_site_level`](config.html#recording-where-each-entry-was-logged)) or captured a backtrace (see `backtrace_level`). |
+| `code.function.name` | The method that logged the entry, such as `Order#submit`, when it has a call site. |
+| `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
+| `semantic_logger.tags` | The tags, as an array. |
+| `semantic_logger.duration_ms` | The duration in milliseconds, from the `measure_*` methods. |
+| `semantic_logger.metric`, `semantic_logger.metric_amount` | The metric name and amount. |
+| `semantic_logger.dimensions.<key>` | Each of the metric's dimensions, such as `semantic_logger.dimensions.region`. |
+
+The first five rows use the names from the
+[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/). A named tag or
+payload key named like one of these attributes is prefixed with its source, as in
+`payload.exception.type`, so that logged data cannot replace or forge them. The logger's name is the
+scope of the record, and the process id is in the resource, so neither is an attribute.
+
+A Hash in the payload or named tags is flattened into an attribute for each of its values, its keys
+joined with `.`, at any depth, as the OpenTelemetry semantic conventions name attributes, so that
+every backend can query each value. An Array is sent as an array, which may mix types, such as
+`[1, "two"]`, and a Hash within it as a map. A `nil` attribute value, or a `nil` value in a Hash, is
+left out. A String, Integer, Float, `true`, or `false` keeps its type; any other value, such as a
+Symbol or a Time, is sent as its text, as is an Integer beyond 64 bits, and a structure nested
+deeper than 20 levels is sent as a placeholder.
 
 For example, `logger.info("Charged", order: {id: 42, address: {zip_code: "10001"}})` has the
 attributes `order.id` and `order.address.zip_code`. A flattened name never replaces one of the
@@ -1143,101 +1178,6 @@ or `504 Gateway Timeout` is sent again after the back-off, as OTLP/HTTP asks and
 does, unlike the other HTTP appenders: a proxy may answer either after the receiver stored the
 records, which are then stored twice. Any other response is handled as by the
 [HTTP appender](#when-the-server-does-not-accept-a-request).
-
-### OpenTelemetry
-
-Send log entries to [OpenTelemetry](https://opentelemetry.io) through its
-[Logs API](https://opentelemetry.io/docs/specs/otel/logs/), so they can be exported to any
-OpenTelemetry-compatible backend (the OTLP collector, Honeycomb, Datadog, Grafana, and so on).
-
-This appender requires the `opentelemetry-logs-sdk` gem plus an exporter such as
-`opentelemetry-exporter-otlp-logs`:
-
-~~~ruby
-gem "opentelemetry-logs-sdk"
-gem "opentelemetry-exporter-otlp-logs"
-~~~
-
-Configure the OpenTelemetry SDK once at startup, then add the appender. `OpenTelemetry::SDK.configure`
-reads the standard `OTEL_*` environment variables (for example `OTEL_EXPORTER_OTLP_ENDPOINT`) and
-installs a logger provider, which the appender picks up automatically:
-
-~~~ruby
-require "opentelemetry-logs-sdk"
-require "opentelemetry-exporter-otlp-logs"
-
-OpenTelemetry::SDK.configure
-
-SemanticLogger.add_appender(appender: :open_telemetry)
-~~~
-
-Each entry is emitted with its level mapped to the matching OpenTelemetry severity number, the message
-as the record body, and the named tags and payload as record attributes. The appender registers a
-`SemanticLogger.on_log` subscriber that captures the current OpenTelemetry context as each entry is
-logged, so log records are correlated with the active trace and span.
-
-For example, inside a span:
-
-~~~ruby
-SemanticLogger.named_tagged(request_id: "abc") do
-  logger.info("Created user", user_id: 42)
-end
-~~~
-
-is emitted as a record with the severity text `info` and number `9`, the trace and span ids of that
-span, and:
-
-~~~
-body:       "Created user"
-attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "UserService",
-             "thread.name" => "puma srv tp 001", "process.pid" => 12345}
-~~~
-
-Each named tag and payload key is an attribute of its own; a payload key takes precedence over a
-named tag of the same name. An entry without a message, such as `logger.error(exception)`, has no
-body. Semantic Logger adds these attributes when the entry has the value:
-
-| Attribute | Value |
-|-----------|-------|
-| `exception.type`, `exception.message` | The class and message of the logged exception. |
-| `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
-| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a call site (see [`call_site_level`](config.html#recording-where-each-entry-was-logged)) or captured a backtrace (see `backtrace_level`). |
-| `code.function.name` | The method that logged the entry, such as `Order#submit`, when it has a call site. |
-| `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
-| `process.pid` | The id of the process that logged the entry. |
-| `semantic_logger.name` | The logger's name, usually the class name. |
-| `semantic_logger.tags` | The tags, as an array. |
-| `semantic_logger.duration_ms` | The duration in milliseconds, from the `measure_*` methods. |
-| `semantic_logger.metric`, `semantic_logger.metric_amount` | The metric name and amount. |
-| `semantic_logger.dimensions.<key>` | Each of the metric's dimensions, such as `semantic_logger.dimensions.region`. |
-
-The first six rows use the names from the
-[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/). A named tag or
-payload key named like one of these attributes is prefixed with its source, as in
-`payload.exception.type`, so that logged data cannot replace or forge them.
-
-OpenTelemetry attribute values are Strings, Integers, Floats, booleans, or arrays of one of those
-types, so a nested Hash, Array, `Struct`, or `Set` is sent as JSON, any other value, such as a Symbol
-or a Time, as its `#to_s`, every element of an array that mixes types, such as `[1, "two"]`, as a
-String, and a `nil` value is left out.
-
-The host name, application, and environment are not attributes: OpenTelemetry reports them once per
-export, in its resource, rather than on every record. Set them with the standard environment
-variables:
-
-~~~
-OTEL_SERVICE_NAME=my_app
-OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,host.name=web-1
-~~~
-
-The process id is an attribute because the resource holds the id of the process that configured
-OpenTelemetry, which is wrong for a worker forked from it, for example by Puma or Unicorn.
-
-| Option | Description |
-|--------|-------------|
-| `name` | Instrumentation scope name reported to OpenTelemetry. Defaults to `"SemanticLogger"`. |
-| `version` | Instrumentation scope version. Defaults to the Semantic Logger gem version. |
-| `metrics` | Whether to also send metric-only entries, as log records with no body. Defaults to `false`. |
 
 ### Logstash
 
