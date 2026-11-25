@@ -1007,6 +1007,8 @@ off. See [Upgrading to v5.3](rails.html#upgrading-to-v53) for details.
   `ArgumentError` when given a `SemanticLogger::Logger`, whose reports of a failing appender went
   back to that appender, failed again, and were reported again. Give it an appender, such as
   `SemanticLogger::Appender::IO.new($stderr)`, or a Ruby or Rails `Logger`, which it now accepts.
+  Set it with `SemanticLogger.internal_logger=`, which v6 adds, rather than through the processor
+  classes (see [Internal logger](config.html#internal-logger)).
 * `SemanticLogger.remove_appender` now waits, as `SemanticLogger.flush` does, until the messages
   already logged are written and the appenders flushed, before it closes the appender, so it can
   take as long as a flush. Called on the thread of an appender added with `async: true` or in
