@@ -268,9 +268,11 @@ module SemanticLogger
         reopen
       end
 
-      # Closes the connection, if it is open, and starts a new one, such as after a log rotation, or a
-      # fork. When starting it fails, such as while the server cannot be reached, it raises, and the
-      # next request starts it (see #process_request).
+      # Closes the connection, if it is open, and starts a new one, such as when the appender is added,
+      # after a log rotation, or after a fork. When it cannot connect, such as while the server is not
+      # listening yet as the application starts (see NOT_SENT_ERRORS), it reports that to the internal
+      # logger rather than raising, so that add_appender still adds it, and the next request connects
+      # (see #process_request). Any other failure, such as a certificate that does not verify, raises.
       #
       # After a fork, the child first forgets the connection it inherited, without finishing it: it
       # belongs to the parent. Finishing an https connection sends the server a TLS close_notify, which
@@ -281,6 +283,8 @@ module SemanticLogger
       def reopen
         finish_connection
         build_http.start
+      rescue *NOT_SENT_ERRORS => e
+        logger.warn("Could not connect to #{redacted_url}: the next request connects", e)
       end
 
       # Closes the connection, if it is open, such as when the appender is removed, or add_appender
@@ -572,7 +576,8 @@ module SemanticLogger
       end
 
       # Connects again after a request failed. A failure to connect is reported to the internal
-      # logger, and left to the next request, which connects again when the connection is not open.
+      # logger, by #reopen itself when it could not connect, and left to the next request, which
+      # connects again when the connection is not open.
       def reconnect
         reopen
       rescue StandardError => e

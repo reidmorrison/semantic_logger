@@ -492,6 +492,16 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+#### When the server cannot be reached
+
+The HTTP appender, and every appender built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
+`:otlp`, and the `:otlp` and `:signalfx` metric appenders), connects to the server when it is added,
+and again when it is reopened, such as after a fork. When it cannot connect, since the host name does
+not resolve, the server cannot be reached, or it refuses the connection or does not accept it within
+`open_timeout`, such as while a collector is not listening yet as the application starts, it reports
+that to the internal logger rather than raising, and the next request connects. Any other failure,
+such as a server certificate that does not verify, still raises from `add_appender`.
+
 #### When the server does not accept a request
 
 An entry is written once the server answers its request with a 2xx status. The HTTP appender, and

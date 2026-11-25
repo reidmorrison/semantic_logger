@@ -2576,6 +2576,16 @@ SemanticLogger.add_appender(
 )
 ~~~
 
+#### When the server cannot be reached
+
+The HTTP appender, and every appender built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
+`:otlp`, and the `:otlp` and `:signalfx` metric appenders), connects to the server when it is added,
+and again when it is reopened, such as after a fork. When it cannot connect, since the host name does
+not resolve, the server cannot be reached, or it refuses the connection or does not accept it within
+`open_timeout`, such as while a collector is not listening yet as the application starts, it reports
+that to the internal logger rather than raising, and the next request connects. Any other failure,
+such as a server certificate that does not verify, still raises from `add_appender`.
+
 #### When the server does not accept a request
 
 An entry is written once the server answers its request with a 2xx status. The HTTP appender, and
@@ -4180,9 +4190,10 @@ process, such as the forked workers of one application on one host, are kept apa
 `resource_attributes:` can replace it; a `process.pid` in `OTEL_RESOURCE_ATTRIBUTES`, which every
 process shares, is left out, with a warning.
 
-It connects to the receiver when it is added, as every appender built on the HTTP appender does, so
-`add_appender` raises, such as with `Errno::ECONNREFUSED`, while the receiver cannot be reached.
-Once it is added, a snapshot that could not be sent follows [Outages](#intervals-flushes-and-outages).
+It connects to the receiver when it is added, as every appender built on the HTTP appender does.
+When it cannot, such as while the receiver is not listening yet as the application starts, it
+reports that to the internal logger rather than raising, and the next request connects. A snapshot
+that could not be sent follows [Outages](#intervals-flushes-and-outages).
 
 Of the [OpenTelemetry exporter environment variables](https://opentelemetry.io/docs/specs/otel/protocol/exporter/),
 it reads those below, each only when the matching option is not given. An empty variable counts as
@@ -4374,9 +4385,9 @@ merged, since `a/b` is then sent as `Application`.)
 A value beyond the range of a Float, such as the sum of a histogram of huge values, is left out,
 with a warning. Each of these warnings is made once per metric name, on the internal logger.
 
-It connects to the ingest url when it is added, as every appender built on the HTTP appender does,
-so `add_appender` raises, such as with `Errno::ECONNREFUSED`, while it cannot be reached. Once it is
-added, a snapshot that the server asks to send again later (408, 429, or 503), or that could not
+It connects to the ingest url when it is added, as every appender built on the HTTP appender does.
+When it cannot, it reports that to the internal logger rather than raising, and the next request
+connects. A snapshot that the server asks to send again later (408, 429, or 503), or that could not
 reach it, is sent with the next one (see [Outages](#intervals-flushes-and-outages)).
 
 ### Summary log entries
@@ -7656,6 +7667,16 @@ What changes:
   `SemanticLogger::Appender::TcpConnection::ConnectError`, and a write that fails raises
   `TcpConnection::WriteError`, both a `SocketError`, rather than the errors of `Net::TCPClient`.
 * **Readers.** `Tcp#tcp_client` and `Syslog#remote_syslog` return the `TcpConnection`.
+
+#### The HTTP appenders start while the server is down
+
+The HTTP appender, and every appender built on it (`:elasticsearch_http`, `:splunk_http`, `:loki`,
+`:otlp`, and the `:otlp` and `:signalfx` metric appenders), no longer raise from `add_appender`, nor
+from a reopen, when they cannot connect, such as with `Errno::ECONNREFUSED` while a collector is not
+listening yet. They report it to the internal logger instead, and the next request connects, so the
+application still starts. A server certificate that does not verify, or any other failure, still
+raises. Code that rescued the connection error from `add_appender` to notice a server that is down
+no longer sees it.
 
 #### Rails Semantic Logger
 

@@ -121,6 +121,10 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Changed
 
+- The HTTP appender, and every appender built on it, such as `:otlp`, `:loki`, and the `:otlp` metric
+  appender, reports to the internal logger, rather than raising from `add_appender` or a reopen, when
+  it cannot connect, such as while a collector is not listening yet; the next request connects. Any
+  other failure, such as a certificate that does not verify, still raises.
 - A `measure_*` call with a `metric:` whose block raises adds the dimension `"error.type"`, the
   exception's class name, to its metric, unless its dimensions have one, as the OpenTelemetry semantic
   conventions ask. The log entry keeps its own dimensions.

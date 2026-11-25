@@ -497,6 +497,86 @@ module Appender
         assert_predicate appender.http, :started?
       end
 
+      describe "when it cannot connect as it is added" do
+        let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
+        let(:refused_port) do
+          server = TCPServer.new("127.0.0.1", 0)
+          port   = server.addr[1]
+          server.close
+          port
+        end
+
+        def build(url)
+          SemanticLogger::Processor.stub(:logger, internal_logger) do
+            SemanticLogger::Appender::Http.new(url: url)
+          end
+        end
+
+        it "reports, rather than raises, that the server refused the connection" do
+          appender = build("http://127.0.0.1:#{refused_port}/path")
+          report   = internal_logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not connect to http://127.0.0.1:#{refused_port}: the next request connects",
+                       report.message
+          assert_kind_of Errno::ECONNREFUSED, report.exception
+          refute_predicate appender.http, :started?
+        end
+
+        it "reports the url without its credentials" do
+          build("http://user:S3cr3t@127.0.0.1:#{refused_port}/path?api_key=0123456789abcdef")
+          report = internal_logger.events.last
+
+          assert_equal "Could not connect to http://127.0.0.1:#{refused_port}: the next request connects",
+                       report.message
+        end
+
+        [SocketError, Net::OpenTimeout, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
+         Errno::EADDRNOTAVAIL].each do |error_class|
+          it "reports #{error_class}, raised when it could not connect" do
+            Net::HTTP.stub_any_instance(:start, -> { raise error_class }) { build("http://localhost:8088/path") }
+
+            assert_kind_of error_class, internal_logger.events.last.exception
+          end
+        end
+
+        it "connects at the next request" do
+          appender = build("http://127.0.0.1:#{refused_port}/path")
+          request  = nil
+          stub_http_start do
+            appender.http.stub(:request, lambda { |r|
+              request = r
+              http_success
+            }) do
+              appender.info(log_message)
+            end
+          end
+
+          assert request, "the entry should be sent"
+          assert_predicate appender.http, :started?, "the next request should start the connection"
+        end
+
+        it "raises any other failure, such as a certificate that does not verify" do
+          failed = -> { raise OpenSSL::SSL::SSLError, "certificate verify failed" }
+          error  = Net::HTTP.stub_any_instance(:start, failed) do
+            assert_raises(OpenSSL::SSL::SSLError) { build("https://localhost:8088/path") }
+          end
+
+          assert_equal "certificate verify failed", error.message
+          assert_empty internal_logger.events
+        end
+
+        it "is added by add_appender" do
+          SemanticLogger::Processor.stub(:logger, internal_logger) do
+            appender = SemanticLogger.add_appender(appender: :http, url: "http://127.0.0.1:#{refused_port}/path")
+
+            assert_includes SemanticLogger.appenders, appender
+          ensure
+            SemanticLogger.remove_appender(appender) if appender
+          end
+        end
+      end
+
       describe "over https, after a fork" do
         include ForkedChildHelper
 
@@ -539,13 +619,11 @@ module Appender
         it "starts a connection of its own for the next request in the child when a reopen there cannot" do
           https_appender.log(log_with("before"))
           output = in_forked_child do
-            error = Net::HTTP.stub_any_instance(:start, -> { raise Errno::ECONNREFUSED }) do
-              https_appender.reopen
-            rescue Errno::ECONNREFUSED => e
-              e
-            end
+            internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+            https_appender.logger = internal_logger
+            Net::HTTP.stub_any_instance(:start, -> { raise Errno::ECONNREFUSED }) { https_appender.reopen }
             https_appender.log(log_with("child"))
-            error.class.name
+            internal_logger.events.find { |event| event.message.start_with?("Could not connect") }&.exception.class.name
           end
           https_appender.log(log_with("after"))
 
