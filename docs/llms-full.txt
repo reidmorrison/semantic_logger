@@ -4614,8 +4614,11 @@ aggregated, whether or not a metric appender is present: `increment`, `time`, `r
 negative counter amount, is not captured. See [Testing](testing.html) for capturing log entries.
 
 Each captured call is a `SemanticLogger::Test::MetricEvent`, with the attributes `kind` (`:counter`
-or `:histogram`), `name` (a String), `value` (seconds for `time`), `unit`, and `dimensions` (as they
-are recorded: String keys, Symbol values as Strings, `nil` for none, including an empty Hash).
+or `:histogram`), `name` (a String), `value` (seconds for `time`), `unit`, `dimensions` (as they
+are recorded: String keys, Symbol values as Strings, `nil` for none, including an empty Hash), and
+`scope`, the name of the logger that made the call, such as `"Signup"`, which `metric: :otlp` sends
+as its instrumentation scope. The calls captured through one class's logger, with `klass:`, have no
+scope (`nil`), since only the class's own calls are captured then.
 
 ### Minitest
 
@@ -4630,6 +4633,7 @@ it "counts sign ups" do
   assert_metric(metrics, name: "users.signup", kind: :counter, value: 1)
   assert_metric(metrics, name: "supplier.add_user", kind: :histogram, unit: "s", value: Float)
   assert_metric(metrics, name: "order.items", value: 1..10, dimensions: {plan: "free"})
+  assert_metric(metrics, name: "users.signup", scope: "Signup")
 end
 ~~~
 

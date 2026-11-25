@@ -24,9 +24,10 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   recorded (String keys, Symbol values as Strings); an expected `dimensions:` is compared the same way,
   so `dimensions: {plan: "free"}` matches. Minitest:
   `semantic_logger_metrics { ... }` returns them, and `assert_metric(metrics, name:, kind:, value:,
-  unit:, dimensions:)` asserts that one of them matches. RSpec: `capture_semantic_logger_metrics`, the
+  unit:, dimensions:, scope:)` asserts that one of them matches. RSpec: `capture_semantic_logger_metrics`, the
   matchers `be_a_semantic_logger_metric` and `a_semantic_logger_metric`, and the block matcher
-  `record_semantic_logger_metric`.
+  `record_semantic_logger_metric`. Each captured call has the `scope` that `metric: :otlp` sends it
+  in, the name of the logger that made it, except those captured through one class's logger.
 - Semantic Logger's own metrics, for a metric appender added with `internal_metrics: true`: the counter
   `semantic_logger.log.processed` (unit `{log_record}`) counts the log entries that each queue has
   finished with in each interval, with the dimension `appender` (`"main"` for the main queue, otherwise

@@ -212,5 +212,20 @@ class MinitestHelpersTest < Minitest::Test
     it "raises ArgumentError for an attribute that a metric does not have" do
       assert_raises(ArgumentError) { metrics.first.matches?(level: :info) }
     end
+
+    it "matches the scope, the name of the logger that made the call" do
+      metric = assert_metric(metrics, name: "users.signup", scope: "MinitestHelpersTest::Signup")
+
+      assert_equal "MinitestHelpersTest::Signup", metric.scope
+      assert_metric(metrics, name: "users.signup", scope: /Signup\z/)
+      assert_raises(Minitest::Assertion) { assert_metric(metrics, name: "users.signup", scope: "Other") }
+      assert_raises(Minitest::Assertion) { assert_metric(metrics, name: "users.signup", scope: :nil) }
+    end
+
+    it "matches scope: :nil for the metric calls captured with klass:, which have no scope" do
+      captured = semantic_logger_metrics(klass: Signup) { Signup.new.call("free") }
+
+      assert_metric(captured, name: "users.signup", scope: :nil)
+    end
   end
 end

@@ -83,19 +83,22 @@ module SemanticLogger
       # them, as the processor does (see Metric::Validator), so that a test sees just what would be
       # recorded.
       #
-      # Semantic Logger's own metrics (`internal: true`) are not captured, nor is the scope, the name of
-      # the logger that made the call, which only groups the metrics sent to a destination. Like the
-      # processor, it never raises: a metric call that fails as it is captured, such as one whose
-      # dimensions raise as they are read, is reported once for its name and not captured.
+      # Semantic Logger's own metrics (`internal: true`) are not captured. The scope, the name of the
+      # logger that made the call, is captured as the MetricEvent's scope when it stands in for the
+      # processor, which a logger tells; standing in for a logger, it is not told, and captures none.
+      # Like the processor, it never raises: a metric call that fails as it is captured, such as one
+      # whose dimensions raise as they are read, is reported once for its name and not captured.
       #
       # Returns [true|false] whether it was captured.
-      def record_metric(kind, name, value, unit: nil, dimensions: nil, internal: false, scope: nil) # rubocop:disable Lint/UnusedMethodArgument
+      def record_metric(kind, name, value, unit: nil, dimensions: nil, internal: false, scope: nil)
         return false if internal
 
         accepted = @metric_validator.accept(kind, name, value, dimensions)
         return false unless accepted
 
-        @metric_events << MetricEvent.new(kind: kind, name: accepted, value: value, unit: unit, dimensions: dimensions)
+        @metric_events << MetricEvent.new(
+          kind: kind, name: accepted, value: value, unit: unit, dimensions: dimensions, scope: scope
+        )
         true
       rescue StandardError => e
         @metric_validator.report_failure(kind, name, e)
