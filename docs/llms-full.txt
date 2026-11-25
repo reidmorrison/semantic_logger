@@ -4087,8 +4087,9 @@ dropped.
 ### OpenTelemetry (OTLP)
 
 Sends the metrics of each interval to an OpenTelemetry collector, or any other receiver of
-OTLP/HTTP, such as Grafana Alloy, Datadog, Honeycomb, or New Relic's OTLP endpoint, as OTLP/JSON. It
-needs no OpenTelemetry gems.
+OTLP/HTTP, such as Grafana Alloy, Datadog, Honeycomb, or New Relic's OTLP endpoint, in OTLP's binary
+Protobuf encoding (`http/protobuf`), or as OTLP/JSON (`http/json`). It needs no OpenTelemetry gems,
+nor the `google-protobuf` gem.
 
 ~~~ruby
 SemanticLogger.add_appender(metric: :otlp)
@@ -4115,6 +4116,7 @@ hold one name in two units: each is sent as a metric of its own.
 |--------|-------------|
 | `url:` | Base url of the receiver; the metrics are posted to `v1/metrics` under its path. Default: `OTEL_EXPORTER_OTLP_ENDPOINT`, or else `http://localhost:4318`. |
 | `endpoint:` | The full url to post the metrics to, used as it is, instead of `url:`. Default: `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, unless `url:` is given. |
+| `protocol:` | `"http/protobuf"` or `"http/json"`. Default: `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`, or else `OTEL_EXPORTER_OTLP_PROTOCOL` (in any case), or else `"http/protobuf"`. A `Content-Type` given in `header:` of another type raises `ArgumentError`: choose the encoding with `protocol:`. |
 | `application:` | The `service.name` of the resource. Default: `OTEL_SERVICE_NAME`, or else `SemanticLogger.application`. |
 | `host:` | The `host.name` of the resource. Default: `SemanticLogger.host`. |
 | `environment:` | The `deployment.environment.name` of the resource, left out when there is none. Default: `SemanticLogger.environment`. |
@@ -4144,6 +4146,7 @@ not set, and the `_METRICS_` form of a variable replaces its generic form as a w
 | `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_METRICS_HEADERS` | `header:`, as `name=value` pairs separated by commas, trimmed and percent-decoded, such as `api-key=abc%3D,x-team=core`. |
 | `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_METRICS_TIMEOUT` | `open_timeout:` and `read_timeout:`, in whole milliseconds; `0` means no limit. Used only when neither option is given, so that one given keeps the HTTP appender's default for the other. |
 | `OTEL_EXPORTER_OTLP_COMPRESSION`, `OTEL_EXPORTER_OTLP_METRICS_COMPRESSION` | `compress:`: `true` for `gzip`, `false` for `none`, in any case. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | `protocol:`: `http/protobuf` or `http/json`. `grpc` sends `http/protobuf`, with a warning, since the appender speaks OTLP/HTTP only: give it the url of an OTLP/HTTP receiver, such as port 4318 rather than gRPC's 4317. |
 | `OTEL_EXPORTER_OTLP_CERTIFICATE`, `OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE` | The `ca_file:` of `ssl:`: the file of trusted certificates to verify the receiver with. |
 | `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE`, `OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE` | The `cert:` of `ssl:`: the PEM file of the client's certificate, for mutual TLS. |
 | `OTEL_EXPORTER_OTLP_CLIENT_KEY`, `OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY` | The `key:` of `ssl:`: the PEM file of the client's private key, for mutual TLS. |
@@ -4165,7 +4168,8 @@ basic auth, is left out, with a warning that names it.
 
 A value it cannot use is ignored, with a warning on the internal logger: a variable that is not valid
 UTF-8 (named, never its value), a timeout that is not a whole number of milliseconds, an export
-interval that is not a positive whole number of milliseconds, or a compression
+interval that is not a positive whole number of milliseconds, a protocol other than `http/protobuf`,
+`http/json`, or `grpc`, or a compression
 other than `gzip` or `none`. A malformed header entry, such as one without `=`, with a name that is
 not a valid header name, or with a value that holds anything other than printable ASCII and tabs once
 percent-decoded, is left out, and the warning names its position only, never its text, since a header
@@ -7402,6 +7406,13 @@ receives the log entries that pass its level and filters, so its metrics still f
 and it is never given the metrics of `increment`, `time`, and `record`. To receive every metric,
 include `SemanticLogger::Metric::Snapshots` and implement `write_metrics(snapshot)` instead. See
 [Write a custom metric appender](metrics.html#write-a-custom-metric-appender).
+
+#### `metric: :otlp` sends http/protobuf by default
+
+In `6.0.0.beta1`, `metric: :otlp` sent OTLP/JSON. It now sends OTLP's binary Protobuf encoding by
+default, as the OpenTelemetry specification asks, without the `google-protobuf` gem. Every OTLP/HTTP
+receiver accepts it. To keep sending OTLP/JSON, add `protocol: "http/json"`, or set
+`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/json`.
 
 #### The `:sentry` appender has been removed
 

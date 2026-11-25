@@ -1,5 +1,6 @@
-# Send metrics to an OpenTelemetry collector, or any other server that receives OTLP/HTTP, as
-# OTLP/JSON. Needs no OpenTelemetry gems.
+# Send metrics to an OpenTelemetry collector, or any other server that receives OTLP/HTTP, in its
+# binary Protobuf encoding (http/protobuf) by default, or as OTLP/JSON (http/json). Needs no
+# OpenTelemetry gems, nor the google-protobuf gem.
 #
 # Example:
 #   SemanticLogger.add_appender(metric: :otlp)
@@ -10,6 +11,8 @@
 #     header:   {"Authorization" => "Bearer TOKEN"},
 #     interval: 10
 #   )
+#
+#   SemanticLogger.add_appender(metric: :otlp, protocol: "http/json")
 #
 # Each snapshot of metrics (see Metric::Snapshots) is posted as one ExportMetricsServiceRequest to
 # `<url>/v1/metrics`: counters as monotonic sums, and histograms as base-2 exponential histograms, both
@@ -58,6 +61,9 @@ module SemanticLogger
       # Returns [String] the path that the metrics are posted to.
       attr_reader :full_path
 
+      # Returns [SemanticLogger::Otlp::Protocol] the encoding of the requests, http/protobuf or http/json.
+      attr_reader :protocol
+
       # Returns [Hash] the attributes of the resource, other than process.pid, which is the process's
       # own when each request is sent.
       attr_reader :resource_attributes
@@ -95,6 +101,13 @@ module SemanticLogger
       #   `resource_attributes:`; `application:`, `host:`, and `environment:` when given, and
       #   ENV["OTEL_SERVICE_NAME"]; ENV["OTEL_RESOURCE_ATTRIBUTES"]; then the defaults of
       #   SemanticLogger.application, .host, and .environment.
+      #
+      #   protocol: [String]
+      #     How to encode each request: "http/protobuf", OTLP's binary Protobuf encoding, or "http/json",
+      #     its JSON encoding. Any other raises ArgumentError.
+      #     Default: ENV["OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"], or else ENV["OTEL_EXPORTER_OTLP_PROTOCOL"],
+      #     or else "http/protobuf". The environment's "grpc", which the appender cannot send, is taken as
+      #     "http/protobuf", with a warning; any other value it does not know is ignored, with a warning.
       #
       #   interval: [Numeric]
       #     Seconds between requests.
@@ -139,14 +152,16 @@ module SemanticLogger
       #
       # Every request also holds the `process.pid` of the process that sends it, so that the deltas of
       # each process, such as forked workers of the same application on the same host, are kept apart.
-      def initialize(url: nil, endpoint: nil, application: nil, resource_attributes: nil, **args, &)
+      def initialize(url: nil, endpoint: nil, application: nil, resource_attributes: nil, protocol: nil, **args, &)
         raise(ArgumentError, "Supply either url: or endpoint:, not both") if url && endpoint
 
         otel          = Environment.new(logger)
+        @protocol     = SemanticLogger::Otlp::Protocol[protocol || otel.protocol]
         endpoint    ||= otel.endpoint unless url
         url         ||= otel.base_url || DEFAULT_URL
         application ||= otel.service_name
-        args[:header]   = given_header = args[:header] || {}
+        given_header    = args[:header] || {}
+        args[:header]   = @protocol.headers(given_header)
         args[:compress] = otel.compress if !args.key?(:compress) && !otel.compress.nil?
         args[:interval] = otel.export_interval if args[:interval].nil? && otel.export_interval
         args[:ssl]      = otel_ssl(otel, args.fetch(:ssl, {})) if HTTPS.match?((endpoint || url).to_s)
@@ -162,9 +177,9 @@ module SemanticLogger
       # did not, or could not be reached (see #metrics_retryable?).
       def write_metrics(snapshot)
         resource = resource_attributes.merge(PID_ATTRIBUTE => ::Process.pid) { |_key, given, _pid| given }
-        body     = Encoder.call(snapshot, resource)
-        logger.trace(body)
-        post(body, full_path)
+        request  = Encoder.request(snapshot, resource)
+        logger.trace { JSON.generate(request) }
+        post(protocol.encode(request, :ExportMetricsServiceRequest), full_path)
       end
 
       # Whether the snapshot that raised the exception is sent again with the next one (see
@@ -186,7 +201,7 @@ module SemanticLogger
       # body holds: a rejectedDataPoints that is not a number counts as 0, and an errorMessage that is
       # not a String is reported as its text.
       def accepted(response)
-        partial = partial_success(response.body)
+        partial = partial_success(response)
         return true unless partial
 
         rejected = rejected_count(partial["rejectedDataPoints"]) || 0
@@ -208,16 +223,13 @@ module SemanticLogger
         count || 0
       end
 
-      # Returns [Hash|nil] the partialSuccess of an ExportMetricsServiceResponse, nil when the body has
-      # none, or cannot be parsed as JSON, for any reason.
-      def partial_success(body)
-        return if body.nil? || body.empty?
-
-        partial = JSON.parse(body)
-        partial = partial["partialSuccess"] if partial.is_a?(Hash)
+      # Returns [Hash|nil] the partialSuccess of the ExportMetricsServiceResponse in the body of the
+      # response, nil when it has none, or cannot be read, for any reason (see
+      # SemanticLogger::Otlp::Protocol#decode).
+      def partial_success(response)
+        fields  = protocol.decode(response.body, response["Content-Type"], :ExportMetricsServiceResponse)
+        partial = fields && fields["partialSuccess"]
         partial if partial.is_a?(Hash)
-      rescue StandardError
-        nil
       end
 
       # Returns [Hash] the attributes of the resource, with String keys: those of OTEL_RESOURCE_ATTRIBUTES
