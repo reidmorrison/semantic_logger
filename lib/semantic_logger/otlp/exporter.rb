@@ -5,7 +5,7 @@ module SemanticLogger
     # What an OTLP/HTTP appender of any signal does, included in a subclass of Appender::Http that
     # answers #otlp_signal with its Signal, such as Metric::Otlp and Appender::Otlp: it takes the
     # options of OTLP/HTTP and their defaults from the environment (see Environment), keeps the
-    # attributes of the resource, posts each request in its protocol (see Protocol), and reports a
+    # resource (see Resource), posts each request in its protocol (see Protocol), and reports a
     # partial success. The appender builds the request itself, from #request_resource.
     #
     # It knows nothing about the messages of a signal beyond the names that Signal gives it.
@@ -17,9 +17,6 @@ module SemanticLogger
       # Base url of an OTLP/HTTP receiver, when neither `url:` nor `endpoint:` is given, nor set in the
       # environment.
       DEFAULT_URL = "http://localhost:4318".freeze
-
-      # The attribute of the resource that holds the pid of the process that sends each request.
-      PID_ATTRIBUTE = "process.pid".freeze
 
       # The options of `ssl:` that say which certificates to trust, so that the certificate variable
       # neither replaces nor adds to them, such as by loading its file into a shared `cert_store:`.
@@ -34,9 +31,8 @@ module SemanticLogger
       # Returns [Otlp::Protocol] the encoding of the requests, http/protobuf or http/json.
       attr_reader :protocol
 
-      # Returns [Hash] the attributes of the resource, other than process.pid, which is the process's
-      # own when each request is sent (see #request_resource).
-      attr_reader :resource_attributes
+      # Returns [Otlp::Resource] the resource of each request.
+      attr_reader :resource
 
       # Parameters, where SIGNAL is the `variable` of the appender's Signal, such as METRICS or LOGS:
       #   url: [String]
@@ -130,8 +126,18 @@ module SemanticLogger
 
         add_otel_header(otel.headers, given_header)
         @full_path           = endpoint ? @path : "#{@path.delete_suffix('/')}/#{otlp_signal.path}"
-        @resource_attributes = resource(otel.resource_attributes, resource_attributes).freeze
+        @resource            = Resource.new(
+          otel:       otel,
+          defaults:   {application: self.application, host: host, environment: environment},
+          given:      {application: @application, host: @host, environment: @environment},
+          attributes: resource_attributes,
+          logger:     logger
+        )
       end
+
+      # Returns [Hash] the attributes of the resource, other than process.pid, which is the process's
+      # own when each request is sent (see #request_resource).
+      def resource_attributes = resource.attributes
 
       # Whether the request that raised the exception stored nothing on the server and is worth sending
       # again (see Appender::Http#wrote_nothing?), or the server answered 502 or 504, which OTLP/HTTP
@@ -146,9 +152,7 @@ module SemanticLogger
 
       # Returns [Hash] the attributes of the resource of a request: #resource_attributes, with the
       # `process.pid` of the process that sends it, unless `resource_attributes:` gave one.
-      def request_resource
-        resource_attributes.merge(PID_ATTRIBUTE => ::Process.pid) { |_key, given, _pid| given }
-      end
+      def request_resource = resource.process_attributes
 
       # Posts the request of the signal, the Hash of its message, in the protocol. Returns true once the
       # server accepted it, and raises when it did not, or could not be reached (see Appender::Http).
@@ -194,26 +198,6 @@ module SemanticLogger
         fields  = protocol.decode(response.body, response["Content-Type"], otlp_signal.response)
         partial = fields && fields["partialSuccess"]
         partial if partial.is_a?(Hash)
-      end
-
-      # Returns [Hash] the attributes of the resource, with String keys: those of OTEL_RESOURCE_ATTRIBUTES
-      # (from_env) replace the defaults, the application, host, and environment given (including the
-      # service name of OTEL_SERVICE_NAME) replace them, and those of `resource_attributes:` (extra)
-      # replace all of them. The process.pid of OTEL_RESOURCE_ATTRIBUTES is left out, with a warning,
-      # since every process of a deployment shares its environment: the pid of the process that sends
-      # each request keeps their data apart (see #request_resource).
-      def resource(from_env, extra)
-        attributes = {"service.name" => application, "host.name" => host}
-        attributes["deployment.environment.name"] = environment if environment
-        if from_env.key?(PID_ATTRIBUTE)
-          logger.warn("Ignoring #{PID_ATTRIBUTE} in OTEL_RESOURCE_ATTRIBUTES: each process sends its own")
-        end
-        attributes.merge!(from_env.except(PID_ATTRIBUTE))
-        attributes.merge!(
-          {"service.name" => @application, "host.name" => @host, "deployment.environment.name" => @environment}.compact
-        )
-        extra&.each { |key, value| attributes[key.to_s] = value }
-        attributes
       end
 
       # Adds the headers of the environment (from_env) to those that Appender::Http sends, except those

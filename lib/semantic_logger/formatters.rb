@@ -9,6 +9,7 @@ module SemanticLogger
     autoload :OneLine,       "semantic_logger/formatters/one_line"
     autoload :OpenTelemetry, "semantic_logger/formatters/open_telemetry"
     autoload :Otlp,          "semantic_logger/formatters/otlp"
+    autoload :OtlpJsonLines, "semantic_logger/formatters/otlp_json_lines"
     autoload :Syslog,        "semantic_logger/formatters/syslog"
     autoload :Fluentd,       "semantic_logger/formatters/fluentd"
     autoload :Logfmt,        "semantic_logger/formatters/logfmt"

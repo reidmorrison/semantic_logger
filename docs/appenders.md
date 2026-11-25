@@ -416,6 +416,35 @@ Notes:
   (off by default), the detail Ruby adds to the exception's message is included as
   `exception_details`; see [Exception details](config.html#exception-details).
 
+### OTLP JSON Lines {#otlp-json-lines}
+
+`formatter: :otlp_json_lines` writes each entry as one line of OTLP JSON: a `LogsData` holding the
+resource of the process, the instrumentation scope named after the entry's logger, and its OTLP log
+record, as the [`:otlp` appender](#otlp) sends it, trace included. The OpenTelemetry Collector's
+[`otlpjsonfile` receiver](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver)
+reads such a file as it is, with no parsing to configure. That receiver is in the Collector's contrib
+build, but not in Grafana Alloy, Datadog's DDOT, or Elastic's EDOT, which read the [`:json`](#json)
+format with their `filelog` receiver instead.
+
+~~~ruby
+SemanticLogger.add_appender(file_name: "log/otlp.jsonl", formatter: :otlp_json_lines)
+~~~
+
+Notes:
+
+* Rotating the file is left to the file appender, with `reopen_period:`, `reopen_size:`, or an external
+  tool followed by `SemanticLogger.reopen`.
+* Each line holds at most `max_bytes:`, 1 MiB by default, the most that the receiver reads of one line
+  unless its `max_log_size` is raised. A longer line is cut until it fits: first the exception's stack
+  trace, then the body, each ending with `...[truncated]`, then the attributes, the largest first,
+  counted in the record's `droppedAttributesCount`.
+* The resource takes `application:`, `host:`, `environment:`, and `resource_attributes:` given to the
+  formatter over `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES`, which win over the appender's own
+  application, host, and environment. Each line holds the `process.pid` of the process that wrote it.
+* Hashes in the payload and named tags are flattened into dotted attribute names, as for `:otlp`;
+  `flatten: false` writes them as maps:
+  `formatter: {otlp_json_lines: {flatten: false, max_bytes: 4 * 1024 * 1024}}`.
+
 ## Network protocols
 
 ### HTTP(S)
