@@ -141,6 +141,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   reach it, is sent with the next one.
 - The `:kafka`, `:rabbitmq`, and `:udp` appenders leave out metric-only entries by default, as the
   other log appenders do and as v5.3 warned: add them with `metrics: true` to keep sending them.
+- `add_appender(appender: instance)` and `add_appender(metric: instance)` raise `ArgumentError` for a
+  formatter block or an appender option given with the instance, such as `level:` or `formatter:`,
+  which v5.3 ignored with a deprecation warning. An option given as `nil` is not refused.
 
 ### Removed
 

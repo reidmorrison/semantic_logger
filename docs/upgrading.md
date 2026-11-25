@@ -217,12 +217,43 @@ leave them out, as the other log appenders do, and as v5.3 warned. To keep sendi
 appender with `metrics: true`. A `metrics: false` added to silence the v5.3 warning can stay, or be
 removed. See [Choose `metrics:` for the `:kafka`, `:rabbitmq`, and `:udp` appenders](#choose-metrics-for-the-kafka-rabbitmq-and-udp-appenders).
 
+#### Options given with an appender instance raise `ArgumentError`
+
+`add_appender(appender: instance)` and `add_appender(metric: instance)` now raise `ArgumentError`
+when given a formatter block or an appender option, such as `level:`, `formatter:`, or `filter:`,
+which v5.3 ignored with a deprecation warning, since the instance was created with its own. Give
+them to `new` instead. The options of `add_appender` itself, `async:`, `batch:`, and the queue
+options, still apply to an instance, and an option given as `nil` sets nothing, so it is not
+refused:
+
+~~~ruby
+# Before:
+SemanticLogger.add_appender(appender: MyAppender.new, level: :warn)
+
+# After:
+SemanticLogger.add_appender(appender: MyAppender.new(level: :warn))
+~~~
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with
 `logger.time("sidekiq.queue.latency", duration: latency_ms)`, a histogram of durations. Until then,
 `rails_semantic_logger` 5.x sends it as the `metric_amount` of a log entry, which v6 records as a
 counter of milliseconds, adding up the latencies of the interval.
+
+`rails_semantic_logger` 5.x adds `formatter: :color` to the appenders declared with `add_server` and
+`add_console`, which v6 refuses with an appender instance (see
+[Options given with an appender instance raise `ArgumentError`](#options-given-with-an-appender-instance-raise-argumenterror))
+and with a metric appender (see
+[Options that now raise `ArgumentError`](#options-that-now-raise-argumenterror)). Until its v6
+release, give such an appender `formatter: nil`, which sets nothing, so that it is not refused:
+
+~~~ruby
+config.rails_semantic_logger.appenders do |appenders|
+  appenders.add_server(appender: MyAppender.new, formatter: nil)
+  appenders.add_server(metric: :statsd, formatter: nil)
+end
+~~~
 
 ### Upgrading to Semantic Logger v5.3
 
