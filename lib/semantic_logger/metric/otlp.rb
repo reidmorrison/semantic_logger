@@ -40,6 +40,10 @@ module SemanticLogger
 
       autoload :Encoder, "semantic_logger/metric/otlp/encoder"
 
+      # Seconds that the export of each snapshot may take in all, unless `export_timeout:` or
+      # OTEL_METRIC_EXPORT_TIMEOUT says otherwise: 30, the default of the OpenTelemetry metrics SDK.
+      DEFAULT_EXPORT_TIMEOUT = 30.0
+
       # Create an OTLP/HTTP metric appender.
       #
       # Parameters:
@@ -51,14 +55,28 @@ module SemanticLogger
       #     Whether to send Semantic Logger's own metrics too.
       #     Default: false
       #
+      #   export_timeout: [Numeric]
+      #     Seconds that the export of each snapshot may take in all, from encoding it to the end of
+      #     the response; 0 for no limit. Each wait on the server, connecting, sending the request, and
+      #     each read of the response, is bounded by the time left, as well as by its own timeout, such
+      #     as `read_timeout:` (see Appender::Http#post). A snapshot whose export ran out of time before
+      #     its request was sent is sent with the next one; once sent, it is discarded, since the server
+      #     may have stored it.
+      #     Default: ENV["OTEL_METRIC_EXPORT_TIMEOUT"], in milliseconds, 0 meaning no limit, or else 30
+      #
       # The other options, and the environment variables that they take their defaults from, are those
       # of SemanticLogger::Otlp::Exporter, with METRICS for SIGNAL, such as
-      # OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, and posted to `v1/metrics` under `url:`. Its timeouts are
-      # not bounded by OTEL_METRIC_EXPORT_TIMEOUT, which bounds a whole export.
-      def initialize(interval: nil, **args, &)
-        interval ||= SemanticLogger::Otlp::Environment.new(logger, otlp_signal).export_interval
-        super
+      # OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, and posted to `v1/metrics` under `url:`.
+      def initialize(interval: nil, export_timeout: nil, **args, &)
+        otel            = SemanticLogger::Otlp::Environment.new(logger, otlp_signal)
+        interval      ||= otel.export_interval
+        @export_timeout = export_timeout_option(export_timeout, otel)
+        super(interval: interval, **args, &)
       end
+
+      # Returns [Float|nil] the seconds that the export of each snapshot may take in all, nil for no
+      # limit (see `export_timeout:`).
+      attr_reader :export_timeout
 
       # Returns [true]: each logger's metrics are sent with the logger's name as their instrumentation
       # scope (see Encoder).
@@ -70,7 +88,8 @@ module SemanticLogger
       # Posts the snapshot in one request. Returns true once the server accepted it, and raises when it
       # did not, or could not be reached (see #metrics_retryable?).
       def write_metrics(snapshot)
-        export(Encoder.request(snapshot, request_resource))
+        deadline = export_timeout && (::Process.clock_gettime(::Process::CLOCK_MONOTONIC) + export_timeout)
+        export(Encoder.request(snapshot, request_resource), deadline: deadline)
       end
 
       # Whether the snapshot that raised the exception is sent again with the next one (see
@@ -78,6 +97,22 @@ module SemanticLogger
       # SemanticLogger::Otlp::Exporter#wrote_nothing?).
       def metrics_retryable?(exception)
         wrote_nothing?(exception)
+      end
+
+      private
+
+      # Returns [Float|nil] the export timeout in seconds, nil for no limit: that given, 0 meaning no
+      # limit, or else that of the environment (see Otlp::Environment#export_timeout), or else
+      # DEFAULT_EXPORT_TIMEOUT. Raises ArgumentError for one given that is not a Numeric of 0 or more.
+      def export_timeout_option(given, otel)
+        if given.nil?
+          return otel.export_timeout? ? otel.export_timeout : DEFAULT_EXPORT_TIMEOUT
+        end
+        unless given.is_a?(Numeric) && given.real? && given.finite? && !given.negative?
+          raise(ArgumentError, "export_timeout: must be a number of seconds, 0 or more: #{given.inspect}")
+        end
+
+        given.zero? ? nil : given.to_f
       end
     end
   end

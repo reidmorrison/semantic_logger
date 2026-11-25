@@ -77,6 +77,11 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   that cannot be read or parsed, one client variable without the other, or a key that is public or
   not the certificate's, raises `ArgumentError` naming the variables.
   It reads `OTEL_METRIC_EXPORT_INTERVAL` (milliseconds) as the default of `interval:`.
+- `metric: :otlp` bounds the whole export of each snapshot with `export_timeout:`, in seconds, from
+  `OTEL_METRIC_EXPORT_TIMEOUT` (milliseconds) by default, or else 30 as in the OpenTelemetry metrics
+  SDK, `0` meaning no limit: connecting, sending the request, and each read of the response are
+  bounded by the time left, as well as by `open_timeout:` and `read_timeout:`. A snapshot whose time
+  ran out before its request was sent is sent with the next one.
 - `metric: :otlp` sends OTLP's binary Protobuf encoding (`http/protobuf`) by default, as the
   OpenTelemetry specification asks, rather than the OTLP/JSON of `6.0.0.beta1`, written by Semantic
   Logger itself, without the `google-protobuf` gem. `protocol: "http/json"`, or

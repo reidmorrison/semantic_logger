@@ -56,6 +56,13 @@ module SemanticLogger
       class ConnectError < SocketError
       end
 
+      # Raised by a request given a deadline (see #post) when the deadline passed before the request
+      # was sent, such as while connecting took most of the time. Since nothing was sent, it is a
+      # Net::OpenTimeout, one of NOT_SENT_ERRORS, so that #not_sent? and #wrote_nothing? say so from
+      # its class alone.
+      class DeadlinePassed < Net::OpenTimeout
+      end
+
       # Raised when the server answers a request with a status other than 2xx. Its message holds
       # the status code, the redacted url, and the start of the response body, for the internal
       # logger.
@@ -509,9 +516,13 @@ module SemanticLogger
       end
 
       # HTTP Post
-      def post(body, request_uri = path)
+      #
+      # deadline: [Float|nil]
+      #   The time, on Process::CLOCK_MONOTONIC, by which the request must be done, as an exporter
+      #   whose whole export has a timeout gives it; nil for none. See #process_request.
+      def post(body, request_uri = path, deadline: nil)
         request = Net::HTTP::Post.new(uri_with_query(request_uri), @header)
-        process_request(request, body)
+        process_request(request, body, deadline: deadline)
       end
 
       # HTTP Put
@@ -566,7 +577,14 @@ module SemanticLogger
       # could not send (see #not_sent?), such as a Net::OpenTimeout: connecting again straight away
       # would fail the same way, so that a server that cannot be reached would hold up each request
       # for twice its open_timeout.
-      def process_request(request, body = nil)
+      #
+      # With a deadline (see #post), each wait on the server is bounded by the time left before it
+      # too: connecting, by the open_timeout, then sending the request and each read of the response,
+      # by the write and read timeouts, each set to the time left when the request starts, or to its
+      # own, when that is shorter (see #limit_timeouts). Net::HTTP has no deadline of its own, so a
+      # server that answers a byte at a time can still take longer in all. Raises DeadlinePassed when
+      # it passed before the request was sent. The timeouts of the connection are set back afterwards.
+      def process_request(request, body = nil, deadline: nil)
         if body
           request.body = compress ? compress_data(body) : body
         end
@@ -576,8 +594,16 @@ module SemanticLogger
         # connection for the requests that follow, such as once a removed appender is added again.
         # A new one is built first when the appender has none, since #close forgot the one it
         # inherited in a forked child.
-        http = @http || build_http
-        start_connection(http) unless http.started?
+        http     = @http || build_http
+        timeouts = deadline && saved_timeouts(http)
+        unless http.started?
+          limit_timeouts(http, deadline, timeouts) if deadline
+          start_connection(http)
+        end
+        # Once more after connecting, so that sending the request and reading the response get only
+        # what is left. Net::HTTP also connects again within the request when the server closed an idle
+        # connection, under the open_timeout set here.
+        limit_timeouts(http, deadline, timeouts) if deadline
         response = http.request(request)
         return accepted(response) if response.is_a?(Net::HTTPSuccess)
 
@@ -590,6 +616,33 @@ module SemanticLogger
       rescue RuntimeError => e
         reconnect unless not_sent?(e)
         raise e
+      ensure
+        restore_timeouts(http, timeouts) if timeouts
+      end
+
+      # Returns [Array] the open, read, and write timeouts of the connection, to set back after a
+      # request with a deadline (see #restore_timeouts).
+      def saved_timeouts(http)
+        [http.open_timeout, http.read_timeout, http.write_timeout]
+      end
+
+      # Sets the open, read, and write timeouts of the connection to the seconds left before the
+      # deadline, or to its own (timeouts, see #saved_timeouts), when that is shorter; nil, no limit,
+      # is never shorter. Raises DeadlinePassed once none are left.
+      def limit_timeouts(http, deadline, timeouts)
+        left = deadline - ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+        raise DeadlinePassed, "Deadline passed before the request to #{redacted_url} was sent" unless left.positive?
+
+        open, read, write = timeouts.map { |timeout| timeout.nil? || timeout > left ? left : timeout }
+        http.open_timeout  = open
+        http.read_timeout  = read
+        http.write_timeout = write
+      end
+
+      # Sets back the timeouts of the connection that #saved_timeouts returned. The connection may no
+      # longer be the appender's, after a reconnect, which built a new one with the appender's own.
+      def restore_timeouts(http, timeouts)
+        http.open_timeout, http.read_timeout, http.write_timeout = timeouts
       end
 
       # Starts the connection for a request, when it is not started, such as the first request after
