@@ -15,8 +15,10 @@ module SemanticLogger
     private_constant :NONE_SKIPPED
 
     # Sets the internal logger that these appenders report to, in place of the one they follow, or
-    # nil to follow it again.
-    attr_writer :logger
+    # nil to follow it again. So does the copy that #logger returns now, such as one saved to be set back.
+    def logger=(logger)
+      @logger = @internal_logger_copy&.copy?(logger) ? nil : logger
+    end
 
     # Parameters
     #   logger: [Subscriber|nil]

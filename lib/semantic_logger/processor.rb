@@ -14,7 +14,8 @@ module SemanticLogger
     #   while trying to log to the various appenders (raises ArgumentError)
     #
     # A Ruby or Rails logger is wrapped in an appender (see Appender.internal_logger), so .logger
-    # returns that appender. The appenders added from then on report to it.
+    # returns that appender. The running Processor and every appender follow it, apart from one
+    # given a logger of its own. SemanticLogger.internal_logger= sets it, and SyncProcessor.logger.
     def self.logger=(logger)
       @logger = Appender.internal_logger(logger)
     end

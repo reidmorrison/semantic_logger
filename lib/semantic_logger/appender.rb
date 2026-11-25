@@ -152,7 +152,7 @@ module SemanticLogger
     private_class_method :build
 
     # Returns [SemanticLogger::Base] the supplied logger, ready to be an internal logger: the one that
-    # Semantic Logger reports its own problems to (see Processor.logger=).
+    # Semantic Logger reports its own problems to (see SemanticLogger.internal_logger=).
     #
     # An internal logger is named after whatever reports to it, logs at :trace, and takes an
     # exception after the message, as every Semantic Logger appender does. So an appender, such as the

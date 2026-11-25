@@ -90,7 +90,7 @@ module SemanticLogger
   # Raises ArgumentError for nil or a level that Semantic Logger does not know.
   #
   # Example:
-  #   if SemanticLogger.backtrace?(:debug)
+  #   if logger.debug? && SemanticLogger.backtrace?(:debug)
   #     logger.debug(message: "Query", backtrace: SemanticLogger.application_backtrace)
   #   end
   def self.backtrace?(level) = Levels.index!(level) >= @backtrace_level_index
@@ -99,8 +99,12 @@ module SemanticLogger
   # application: the frames of gems, of Ruby's own libraries, and of Semantic Logger and Rails
   # Semantic Logger, at the top of the stack, are left out. For an entry about the application code
   # that a library was running, such as the query that it ran, rather than about the library.
-  # Empty when no application code is on the stack.
-  def self.application_backtrace = Utils.strip_backtrace(caller)
+  # nil when no application code is on the stack, so that an entry given it as its backtrace captures
+  # its own instead, as at backtrace_level.
+  def self.application_backtrace
+    backtrace = Utils.strip_backtrace(caller)
+    backtrace unless backtrace.empty?
+  end
 
   # Sets the level at and above which each log entry records where it was logged: the file, line,
   # and method of the code that made the log call (see Log#call_site). The JSON and text formatters
@@ -467,18 +471,23 @@ module SemanticLogger
   #     nil: Restore the default.
   #
   # Takes effect at once: the running processor, and the appenders already added, report their next
-  # problem to it, apart from an appender given a logger of its own with #logger=.
+  # problem to it, apart from an appender given a logger of its own with #logger=. A client library
+  # that an appender gave its logger as it connected, such as MongoDB's, keeps the previous one until
+  # the appender reconnects.
   #
   # Raises ArgumentError for a SemanticLogger::Logger, since it would log a report of a failing
   # appender back to that appender.
   def self.internal_logger=(logger)
-    Processor.logger     = logger
-    SyncProcessor.logger = logger
+    # Wrapped once, so that both processors report to the same one.
+    internal             = Appender.internal_logger(logger)
+    Processor.logger     = internal
+    SyncProcessor.logger = internal
   end
 
   # Returns the internal logger (see .internal_logger=), such as to report a problem in code that
-  # extends Semantic Logger: `SemanticLogger.internal_logger.warn("...")`.
-  def self.internal_logger = Processor.logger
+  # extends Semantic Logger: `SemanticLogger.internal_logger.warn("...")`. In a Ractor other than the
+  # main one, the internal logger of that Ractor, which writes to its $stderr.
+  def self.internal_logger = RactorSupport.other_ractor? ? Logger.processor.logger : Processor.logger
 
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.

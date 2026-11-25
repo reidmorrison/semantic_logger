@@ -10,7 +10,7 @@ module SemanticLogger
   class Subscriber < SemanticLogger::Base
     # Every appender has its own formatter
     attr_reader :formatter
-    attr_writer :application, :environment, :host, :logger, :metrics
+    attr_writer :application, :environment, :host, :metrics
 
     # A subscriber should implement flush if it can.
     def flush
@@ -54,6 +54,13 @@ module SemanticLogger
     # which follows the internal logger when it is replaced (see SemanticLogger.internal_logger=).
     def logger
       @logger || (@internal_logger_copy ||= InternalLoggerCopy.new(self.class.name, Processor)).logger
+    end
+
+    # Sets the logger of this appender, in place of the copy of the internal logger, or nil to follow
+    # the internal logger again. So does the copy that #logger returns now, such as one saved to be set
+    # back.
+    def logger=(logger)
+      @logger = @internal_logger_copy&.copy?(logger) ? nil : logger
     end
 
     # Set the formatter from Symbol|Hash|Block

@@ -145,6 +145,14 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Changed
 
+- `SemanticLogger.internal_logger=`, which v6 adds in place of `SemanticLogger::Processor.logger=`,
+  takes effect on the running processor and on the appenders already added, rather than only on the
+  appenders added afterwards. An appender given a logger of its own with `appender.logger =` keeps it;
+  `nil` follows the internal logger again. The client library of the `:mongodb`, `:elasticsearch`,
+  `:opensearch`, `:rabbitmq`, and `:sentry_ruby` appenders keeps the logger it was given until the
+  appender reconnects.
+- A level given as a negative Integer, such as `logger.level = -1`, raises `ArgumentError`, rather
+  than counting back from the last Ruby `::Logger` level.
 - The HTTP appender, and every appender built on it, such as `:otlp`, `:loki`, and the `:otlp` metric
   appender, reports to the internal logger, rather than raising from `add_appender` or a reopen, when
   it cannot connect, such as while a collector is not listening yet; the next request connects. Any

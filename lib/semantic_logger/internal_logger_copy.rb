@@ -20,6 +20,13 @@ module SemanticLogger
       @copied = nil
     end
 
+    # Returns [true|false] whether the logger is the copy that #logger returns now, such as one that
+    # was saved from it to be set back later, which then still follows the internal logger.
+    def copy?(logger)
+      copied = @copied
+      !copied.nil? && copied.last.equal?(logger)
+    end
+
     # Returns the copy of the internal logger as it is now, making a new one when it was replaced.
     def logger
       internal = @source.logger

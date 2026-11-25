@@ -128,8 +128,9 @@ module SemanticLogger
       @strip_paths ||= make_shareable(Gem.path | [Gem.default_dir, RbConfig::CONFIG["rubylibdir"]], copy: true)
     end
 
-    # Whether this path should be excluded from any cleansed backtrace
-    def self.strip_path?(path) = strip_paths.any? { |exclude| path.start_with?(exclude) }
+    # Whether this path should be excluded from any cleansed backtrace: a gem's, one of Ruby's own
+    # libraries, or Ruby's internal code, such as `<internal:kernel>` for Kernel#loop.
+    def self.strip_path?(path) = path.start_with?("<internal:") || strip_paths.any? { |dir| path.start_with?(dir) }
 
     # Returns [String] the name of the exception's class as Ruby names it, as in Exception#inspect and
     # #full_message: the constant it was assigned to, such as "Net::ReadTimeout", or, for an

@@ -46,6 +46,12 @@ module SemanticLogger
           end
         end
 
+        it "raises ArgumentError for a negative Integer, rather than counting from the end" do
+          [-1, -6, -7].each do |level|
+            assert_raises(ArgumentError) { SemanticLogger::Levels.index(level) }
+          end
+        end
+
         it "raises ArgumentError for an Integer too large to be an index" do
           assert_raises ArgumentError do
             SemanticLogger::Levels.index(2**70)

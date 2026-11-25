@@ -394,6 +394,27 @@ An application that uses the `net_tcp_client` gem itself needs version 2.3 or la
 versions call `benchmark_debug` and `benchmark_error` on their Semantic Logger logger, which raise
 `NoMethodError` now.
 
+#### The internal logger takes effect at once
+
+Set the internal logger with `SemanticLogger.internal_logger=`, which v6 adds, rather than with
+`SemanticLogger::Processor.logger=` (see [Internal logger](config.html#internal-logger)). Either
+now takes effect at once: the running processor, and the appenders already added, report their next
+problem to it. Before, only the appenders added afterwards did. An appender given a logger of its own
+with `appender.logger = ...` keeps it; set it to `nil` to follow the internal logger again. (Setting
+back the copy read from `appender.logger` follows it too, unless the internal logger was replaced
+meanwhile.) The client library of the `:mongodb`, `:elasticsearch`, `:opensearch`, `:rabbitmq`, and
+`:sentry_ruby` appenders keeps the logger it was given as it connected, until the appender reconnects.
+
+`appender.logger` returns a copy of the internal logger, named after the appender, which is replaced
+when the internal logger is. A setting changed on that copy, such as its level, is lost then: set it
+on the internal logger itself.
+
+#### A negative Integer level raises `ArgumentError`
+
+A level given as a negative Integer, such as `logger.level = -1`, was taken as counting back from the
+last Ruby `::Logger` level, so `-1` meant `:error`. It now raises `ArgumentError`, as any other level
+that Semantic Logger does not know does.
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with
@@ -1007,8 +1028,6 @@ off. See [Upgrading to v5.3](rails.html#upgrading-to-v53) for details.
   `ArgumentError` when given a `SemanticLogger::Logger`, whose reports of a failing appender went
   back to that appender, failed again, and were reported again. Give it an appender, such as
   `SemanticLogger::Appender::IO.new($stderr)`, or a Ruby or Rails `Logger`, which it now accepts.
-  Set it with `SemanticLogger.internal_logger=`, which v6 adds, rather than through the processor
-  classes (see [Internal logger](config.html#internal-logger)).
 * `SemanticLogger.remove_appender` now waits, as `SemanticLogger.flush` does, until the messages
   already logged are written and the appenders flushed, before it closes the appender, so it can
   take as long as a flush. Called on the thread of an appender added with `async: true` or in
