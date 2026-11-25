@@ -8047,6 +8047,8 @@ attributes: {"request_id" => "abc", "user_id" => 42, "semantic_logger.name" => "
              "thread.name" => "puma srv tp 001", "process.pid" => 12345}
 ~~~
 
+* An exception logged without a message, such as `logger.error(exception)`, has the exception as its
+  body, as `ArgumentError: the message`, instead of no body, beside its `exception.*` attributes.
 * The payload attributes keep their names. An Array that mixes types, such as `[1, "two"]`, is now
   sent as Strings, `["1", "two"]`, since OpenTelemetry does not accept it otherwise.
 * Each named tag is an attribute of its own, such as `request_id`, instead of `body.named_tags`. A

@@ -57,11 +57,24 @@ module SemanticLogger
           assert_equal({stringValue: "ArgumentError"}, attributes["exception.type"])
         end
 
-        it "has the exception as its body when its message is empty" do
+        it "keeps an empty message as its body when it has an exception, as :json writes it" do
           log.message   = ""
           log.exception = ArgumentError.new("no route matches")
 
-          assert_equal({stringValue: "ArgumentError: no route matches"}, record[:body])
+          assert_equal({stringValue: ""}, record[:body])
+        end
+
+        it "keeps an empty message as its body without an exception" do
+          log.message = ""
+
+          assert_equal({stringValue: ""}, record[:body])
+        end
+
+        it "writes the exception as its body whatever the encoding of its message" do
+          log.message   = nil
+          log.exception = ArgumentError.new("hi".encode("UTF-16LE"))
+
+          assert_equal({stringValue: "ArgumentError: hi"}, record[:body])
         end
 
         it "keeps its message as its body when it also has an exception" do

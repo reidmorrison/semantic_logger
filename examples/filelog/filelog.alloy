@@ -62,9 +62,12 @@ otelcol.receiver.filelog "semantic_logger" {
     { type = "remove", "if" = "attributes.message == nil and attributes.level != nil", field = "body" },
     {
       type   = "add",
-      "if"   = "attributes.message == nil and attributes.exception != nil",
+      "if"   = "attributes.message == nil and attributes.exception != nil and attributes.level != nil",
       field  = "body",
       value  = "EXPR(attributes[\"exception\"][\"name\"] + \": \" + attributes[\"exception\"][\"message\"])",
+      // Another process's line whose exception is not a map with a name and a message is sent on with
+      // no body.
+      on_error = "send_quiet",
     },
     { type = "move", "if" = "attributes.message != nil", from = "attributes.message", to = "body" },
     { type = "move", "if" = "attributes.application != nil", from = "attributes.application", to = "resource[\"service.name\"]" },

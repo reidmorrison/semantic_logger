@@ -79,8 +79,12 @@ module Records
     entries.each do |message, entry|
       # An exception logged without a message is the body, as :otlp writes it.
       exception = entry["exception"]
-      record    = by_body[message || "#{exception['name']}: #{exception['message']}"]
-      label = message || "(no message, #{entry.dig('exception', 'name')})"
+      record    = by_body[message || (exception && "#{exception['name']}: #{exception['message']}")]
+      label     = if message.to_s.empty?
+                    "(#{message ? 'empty' : 'no'} message, #{exception&.fetch('name')})"
+                  else
+                    message
+                  end
       next problems << "#{label}: not received" unless record
 
       check_record(problems, label, record, entry)
@@ -206,7 +210,7 @@ module FilelogTest
   TAG_TRACE  = "0af7651916cd43dd8448eb211c80319c".freeze
   TAG_SPAN   = "b7ad6b7169203331".freeze
   # The entries that Semantic Logger writes to each file.
-  EXPECTED   = 5
+  EXPECTED   = 6
   # A line that another process wrote to the :json file, which the filelog agents read too.
   NOT_JSON   = "Segmentation fault (core dumped)".freeze
   # A JSON line without a level, which another process wrote, which keeps its text too.
@@ -255,6 +259,8 @@ module FilelogTest
     SemanticLogger.tagged("cart") { logger.debug("Cart loaded") }
     # No message: the exception is the body, rather than the line as it was read.
     logger.error(ArgumentError.new("no message"))
+    # An empty message stays the empty body, on both paths.
+    logger.error("", ArgumentError.new("empty message"))
     SemanticLogger.flush
     SemanticLogger.remove_appender(appender)
     SemanticLogger.remove_appender(otlp)
