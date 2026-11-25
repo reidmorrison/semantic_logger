@@ -375,6 +375,25 @@ after the appender could not connect, and fails because the server reset it duri
 or the operating system timed out the connect, is now written again later, as one the server refused
 is, rather than discarded; it raises `SemanticLogger::Appender::Http::ConnectError`.
 
+#### The `benchmark_*` methods have been removed
+
+The `benchmark_trace`, `benchmark_debug`, `benchmark_info`, `benchmark_warn`, `benchmark_error`,
+`benchmark_fatal`, and `benchmark` methods of a logger, deprecated in v5.4, have been removed. They
+were the old names of `measure_trace` through `measure_fatal` and `measure`, which take the same
+arguments:
+
+~~~ruby
+# Before:
+logger.benchmark_info("Called supplier") { supplier.call }
+
+# After:
+logger.measure_info("Called supplier") { supplier.call }
+~~~
+
+An application that uses the `net_tcp_client` gem itself needs version 2.3 or later with v6: earlier
+versions call `benchmark_debug` and `benchmark_error` on their Semantic Logger logger, which raise
+`NoMethodError` now.
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

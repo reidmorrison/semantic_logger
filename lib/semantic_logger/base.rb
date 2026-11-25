@@ -126,9 +126,6 @@ module SemanticLogger
             block.call(params)
           end
         end
-
-        # Backward compatibility
-        alias benchmark_#{level} measure_#{level}
       METHODS
     end
 
@@ -143,9 +140,6 @@ module SemanticLogger
         yield(params)
       end
     end
-
-    # Backward compatibility
-    alias benchmark measure
 
     # Metrics: increment, time, and record.
     #

@@ -235,6 +235,9 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   extras. Set them with named tags.
 - The positional class of the Minitest helper `semantic_logger_events`, deprecated in v5.4: pass it as
   `klass:`.
+- The `benchmark_*` methods and `benchmark` of a logger, deprecated in v5.4: use `measure_*` and
+  `measure`, which take the same arguments. An application that uses `net_tcp_client` itself needs
+  its version 2.3 or later, which calls `measure_*`.
 
 ## [Unreleased]
 

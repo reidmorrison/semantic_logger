@@ -313,10 +313,9 @@ module Metric
           it "accepts all the options as a Hash in place of the message" do
             logger.measure_debug(message: "Called supplier", metric: "supplier.call", duration: 250)
             logger.measure(:debug, message: "Called supplier", metric: "supplier.call", duration: 250)
-            logger.benchmark_debug(message: "Called supplier", metric: "supplier.call", duration: 250)
             logger.measure_debug({message: "Called supplier", metric: "supplier.call", duration: 250}, {})
 
-            assert_equal 4, points.first.value.count
+            assert_equal 3, points.first.value.count
           end
 
           it "reads the options once the block has returned, as when the level passes" do

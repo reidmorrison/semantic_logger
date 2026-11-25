@@ -6,6 +6,5 @@ module SemanticLogger
     alias debug trace
     alias debug? trace?
     alias measure_debug measure_trace
-    alias benchmark_debug benchmark_trace
   end
 end
