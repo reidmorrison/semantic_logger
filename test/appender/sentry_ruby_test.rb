@@ -1,11 +1,11 @@
 require_relative "../test_helper"
 
-# Unit Test for SemanticLogger::Appender::Sentry
+# Unit Test for SemanticLogger::Appender::SentryRuby
 module Appender
   class SentryTest < Minitest::Test
     describe SemanticLogger::Appender::SentryRuby do
       let(:appender) { SemanticLogger::Appender::SentryRuby.new(level: :trace) }
-      let(:amessage) { "AppenderRavenTest log message" }
+      let(:amessage) { "AppenderSentryRubyTest log message" }
 
       # Each appender registers an on_log subscriber, which closing it removes.
       after { appender.close }
@@ -121,9 +121,7 @@ module Appender
         assert_equal "Café", scope.extra[:body]
       end
 
-      describe "with the Sentry user or fingerprint in the payload" do
-        allow_deprecation(/SentryRuby took the Sentry user or fingerprint from the log payload/)
-
+      describe "with the Sentry user or fingerprint" do
         # Logs the entry directly, and returns the Sentry scope it was captured with.
         def capture(log)
           scope = nil
@@ -141,21 +139,6 @@ module Appender
         end
 
         # As a HashWithIndifferentAccess finds a String key by its Symbol.
-        it "takes the user from a payload whose Hash class finds its keys by Symbol" do
-          indifferent = Class.new(Hash) do
-            def [](key) = super(key.to_s)
-            def delete(key) = super(key.to_s)
-          end
-          payload = indifferent.new.update("user_id" => 7, "amount" => 10)
-          appender.instance_variable_set(:@payload_context_deprecated, true)
-
-          scope = capture(error_log(payload))
-
-          assert_equal({id: 7}, scope.user)
-          assert_equal 10, scope.extra["amount"]
-          assert_equal({"user_id" => 7, "amount" => 10}, payload)
-        end
-
         it "takes the user and fingerprint from named tags whose Hash class finds their keys by Symbol" do
           indifferent = Class.new(Hash) do
             def [](key) = super(key.to_s)
@@ -169,25 +152,37 @@ module Appender
           assert_equal ["f"], scope.fingerprint
         end
 
-        it "leaves the log entry and the application's payload unchanged" do
-          attributes = {user_id: 7, fingerprint: ["a"], amount: 10}
-          log        = error_log(attributes, {transaction_name: "checkout", username: "bob"})
-          scope      = capture(log)
+        it "sends the user and fingerprint in the payload as data, without a warning" do
+          payload = {user_id: 666, username: "eve", fingerprint: ["forged"], user: {segment: "paid"}}
 
-          assert_equal({id: 7, username: "bob"}, scope.user)
-          assert_equal ["a"], scope.fingerprint
-          assert_equal({user_id: 7, fingerprint: ["a"], amount: 10}, attributes)
-          assert_equal({user_id: 7, fingerprint: ["a"], amount: 10}, log.payload)
-          assert_equal({transaction_name: "checkout", username: "bob"}, log.named_tags)
+          scope = refute_deprecated { capture(error_log(payload)) }
+
+          assert_empty scope.user
+          assert_empty scope.fingerprint
+          assert_equal 666, scope.extra[:user_id]
+          assert_equal "eve", scope.extra[:username]
+          assert_equal ["forged"], scope.extra[:fingerprint]
+          assert_equal({segment: "paid"}, scope.extra[:user])
         end
 
-        it "sends a value of the wrong type as data, instead of raising" do
-          scope = capture(error_log({fingerprint: "not an array", user_id: {id: 1}, user: "not a hash"}))
+        it "takes each user field from the named tags only" do
+          scope = capture(error_log({user_id: 666, username: "eve"}, {user_id: 7}))
 
-          assert_empty scope.fingerprint
-          assert_empty scope.user
-          assert_equal "not an array", scope.extra[:fingerprint]
-          assert_equal({id: 1}, scope.extra[:user_id])
+          assert_equal({id: 7}, scope.user)
+          assert_equal 666, scope.extra[:user_id]
+          assert_equal "eve", scope.extra[:username]
+        end
+
+        it "leaves the log entry and the application's payload unchanged" do
+          attributes = {user_id: 666, amount: 10}
+          log        = error_log(attributes, {transaction_name: "checkout", username: "bob", fingerprint: ["a"]})
+          scope      = capture(log)
+
+          assert_equal({username: "bob"}, scope.user)
+          assert_equal ["a"], scope.fingerprint
+          assert_equal({user_id: 666, amount: 10}, attributes)
+          assert_equal({user_id: 666, amount: 10}, log.payload)
+          assert_equal({transaction_name: "checkout", username: "bob", fingerprint: ["a"]}, log.named_tags)
         end
 
         it "sends a payload that is not a Hash as data, instead of raising" do
@@ -203,26 +198,17 @@ module Appender
           refute scope.tags.key?("fingerprint")
         end
 
-        it "takes each user field from the named tags over the payload" do
-          scope = capture(error_log({user_id: 666, username: "eve"}, {user_id: 7}))
+        it "sends a fingerprint of the wrong type in the named tags as a tag, instead of raising" do
+          scope = capture(error_log({}, {fingerprint: "not an array"}))
 
-          assert_equal({id: 7, username: "eve"}, scope.user)
-          assert_equal 666, scope.extra[:user_id]
+          assert_empty scope.fingerprint
+          assert_equal "not an array", scope.tags["fingerprint"]
         end
 
-        it "merges a user Hash from the payload under the named tags" do
-          payload = {user: {id: 666, "username" => "eve", segment: "paid"}}
-          scope   = capture(error_log(payload, {user_id: 7, username: "bob"}))
+        it "merges a user Hash from the named tags" do
+          scope = capture(error_log({}, {user_id: 7, user: {segment: "paid"}}))
 
-          assert_equal({id: 7, username: "bob", segment: "paid"}, scope.user)
-          refute scope.extra.key?(:user)
-        end
-
-        it "sends a user Hash from the payload with a value of another type as data" do
-          scope = capture(error_log({user: {geo: {city: "Paris"}}}, {user_id: 7}))
-
-          assert_equal({id: 7}, scope.user)
-          assert_equal({geo: {city: "Paris"}}, scope.extra[:user])
+          assert_equal({id: 7, segment: "paid"}, scope.user)
         end
 
         it "takes a user field of any type from the named tags, and leaves out a nil one" do
@@ -234,24 +220,9 @@ module Appender
         end
 
         it "takes a fingerprint with numbers in it, as Strings" do
-          scope = capture(error_log({fingerprint: ["upstream", 503, :timeout]}))
+          scope = capture(error_log({}, {fingerprint: ["upstream", 503, :timeout]}))
 
           assert_equal %w[upstream 503 timeout], scope.fingerprint
-        end
-
-        it "warns that taking a user Hash from the payload is deprecated" do
-          assert_deprecated(/SemanticLogger: .*SentryRuby took the Sentry user or fingerprint from the log payload/) do
-            capture(error_log({user: {segment: "paid"}}, {user_id: 7}))
-          end
-        end
-
-        it "warns once that taking them from the payload is deprecated" do
-          _result, warnings = deprecations_of do
-            2.times { capture(error_log({user_id: 7})) }
-          end
-
-          assert_equal 1, warnings.size
-          assert_match(/SentryRuby took the Sentry user or fingerprint from the log payload/, warnings.first)
         end
       end
 
@@ -272,12 +243,10 @@ module Appender
 
             SemanticLogger.tagged(tag: "tag 1") do
               SemanticLogger.tagged("tag 2") do
-                SemanticLogger.tagged(transaction_name: "foo", user_id: 42, baz: "quz") do
+                SemanticLogger.tagged(transaction_name: "foo", user_id: 42, username: "joe", fingerprint: ["bar"],
+                                      baz: "quz") do
                   ::Sentry.stub(:capture_message, capture) do
-                    args = {username: "joe", fingerprint: ["bar"], other: "unrelated"}
-                    assert_deprecated(/took the Sentry user or fingerprint from the log payload/) do
-                      appender.error("some message", **args)
-                    end
+                    appender.error("some message", other: "unrelated")
                   end
                 end
               end

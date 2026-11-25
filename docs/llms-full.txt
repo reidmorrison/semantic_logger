@@ -3371,14 +3371,9 @@ Some logging context is also forwarded to Sentry, added to that of the thread:
 * Named tags are sent as Sentry tags. See
   <https://docs.sentry.io/platforms/ruby/enriching-events/tags/>.
 * Unnamed tags are sent as the `:tag` tag, separated by commas.
-* Everything else from the payload and context is added to `extras`, including a value of the
-  wrong type for one of the keys above.
-
-> **Deprecated:** the `user` and `fingerprint` keys are also still taken from the payload, but that
-> is deprecated and will be removed in v6, since the payload often holds untrusted data, such as a
-> request body, that could set the user an error is reported for. Set them with named tags. The
-> named tags win over the payload, and a user field is only taken from the payload when it is a
-> String, Symbol, or Integer.
+* The payload and the rest of the context are added to `extras`. The user and fingerprint are never
+  taken from the payload, since it often holds untrusted data, such as a request body, that could
+  set the user an error is reported for.
 
 ~~~ruby
 SemanticLogger.tagged(transaction_name: "foo", user_id: 42, username: "joe", fingerprint: ["bar"], baz: "quz") do
@@ -7417,6 +7412,14 @@ and deprecated since v5.1 since document `_type` has been unused since Elasticse
 removed. Remove it: `:elasticsearch_http` now raises `ArgumentError` for it, and `:elasticsearch` and
 `:opensearch` hand it to their client gem with their other options. See
 [Remove the `type:` option from the Elasticsearch and OpenSearch appenders](#remove-the-type-option-from-the-elasticsearch-and-opensearch-appenders).
+
+#### `:sentry_ruby` takes the Sentry user and fingerprint from named tags only
+
+The `:sentry_ruby` appender no longer takes the Sentry user (`user_id`, `username`, `user_email`,
+`ip_address`, and `user`) or the `fingerprint` from the payload, as deprecated in v5.2, since the
+payload can hold untrusted data, such as a request body. They are sent with the rest of the payload,
+as extras. Set them with named tags, as shown in
+[Set the Sentry user and fingerprint with named tags](#set-the-sentry-user-and-fingerprint-with-named-tags).
 
 #### Rails Semantic Logger
 

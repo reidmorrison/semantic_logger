@@ -12,11 +12,8 @@ end
 module SemanticLogger
   module Appender
     class SentryRuby < SemanticLogger::Subscriber
-      # Keys of the named tags or payload that set the Sentry user, mapped to its fields.
+      # Keys of the named tags that set the Sentry user, mapped to its fields.
       USER_KEYS = {user_id: :id, username: :username, user_email: :email, ip_address: :ip_address}.freeze
-
-      # The types of value taken from the payload for a field of the Sentry user.
-      USER_VALUE_TYPES = [String, Symbol, Integer].freeze
 
       # The types of value accepted in a fingerprint, which Sentry turns into Strings.
       FINGERPRINT_PART_TYPES = [String, Symbol, Numeric].freeze
@@ -81,14 +78,15 @@ module SemanticLogger
         # deeply, or that holds itself, cut off there as they cut it off (see Utils.encode_utf8).
         # Any other object is sent as it is, for Sentry to write as it writes it.
         context = format_log(log) { |data| Utils.encode_utf8(data) }
-        # The payload and named tags are this appender's own copies (above), so the keys taken out
-        # below are left out only of what is sent to Sentry.
-        payload               = payload_extras(context.delete(:payload), log.payload)
-        named_tags            = (context[:named_tags] = like_original(context[:named_tags] || {}, log.named_tags))
-        transaction_name      = named_tags.delete(:transaction_name)
-        fingerprint           = extract_fingerprint!(named_tags) || extract_fingerprint!(payload, from_payload: true)
+        # The named tags are this appender's own copy (above), so the keys taken out below are left
+        # out only of what is sent to Sentry. The payload is sent as data: it can hold untrusted data,
+        # such as a request body, so the user and fingerprint are never taken from it.
+        payload          = payload_extras(context.delete(:payload))
+        named_tags       = (context[:named_tags] = like_original(context[:named_tags] || {}, log.named_tags))
+        transaction_name = named_tags.delete(:transaction_name)
+        fingerprint      = extract_fingerprint!(named_tags)
 
-        user = extract_user!(named_tags, payload)
+        user = extract_user!(named_tags)
         tags = extract_tags!(context)
 
         ::Sentry.with_scope do |scope|
@@ -158,87 +156,53 @@ module SemanticLogger
         SemanticLogger::Formatters::Raw.new
       end
 
-      # Extract user data from named tags or payload.
+      # Returns [Hash] the Sentry user taken from the named tags, or nil when they set none.
       #
       # Keys :user_id and :user_email will be used as :id and :email respectively.
       # Keys :username and :ip_address will be used verbatim.
       #
-      # Any additional value nested in a :user key will be added, provided any of
+      # Any additional value nested in a :user named tag will be added, provided any of
       # the above keys is already present.
-      #
-      # The payload can hold untrusted data, such as a request body, so taking the user from it is
-      # deprecated, and the named tags win: a payload field is only taken when the named tags do not
-      # set it, and its value is a String, Symbol, or Integer. A payload value that is not taken is
-      # left where it is, and sent to Sentry as data.
-      def extract_user!(named_tags, payload)
+      def extract_user!(named_tags)
         user = {}
 
         USER_KEYS.each do |source_key, target_key|
           value = named_tags.delete(source_key)
-          if value
-            user[target_key] = value
-          elsif user_value?(payload[source_key])
-            user[target_key] = payload.delete(source_key)
-            payload_context_deprecated
-          end
+          user[target_key] = value if value
         end
 
         return if user.empty?
 
         user.merge!(named_tags.delete(:user)) if named_tags[:user].is_a?(Hash)
-        merge_payload_user!(user, payload)
         user
       end
 
-      # Adds the fields of a :user Hash in the payload that the user does not have yet, when each of
-      # its keys is a Symbol or String, and each of its values a String, Symbol, or Integer.
-      def merge_payload_user!(user, payload)
-        extras = payload[:user]
-        return unless extras.is_a?(Hash) && extras.all? { |key, value| user_key?(key) && user_value?(value) }
-
-        payload.delete(:user)
-        payload_context_deprecated
-        extras.each do |key, value|
-          user[key.to_sym] = value unless user.key?(key.to_sym) || user.key?(key.to_s)
-        end
-      end
-
-      def user_key?(key)
-        key.is_a?(Symbol) || key.is_a?(String)
-      end
-
-      def user_value?(value)
-        USER_VALUE_TYPES.any? { |type| value.is_a?(type) }
-      end
-
-      # Returns [Array<String>] the fingerprint taken from the named tags or payload, an Array of
-      # Strings, Symbols, or numbers. Returns nil when there is none, or it is of another type, which
-      # is then left where it is and sent to Sentry as data. As for the user, taking it from the
-      # payload is deprecated.
-      def extract_fingerprint!(source, from_payload: false)
-        fingerprint = source[:fingerprint]
+      # Returns [Array<String>] the fingerprint taken from the named tags, an Array of Strings,
+      # Symbols, or numbers. Returns nil when there is none, or it is of another type, which is then
+      # left where it is and sent to Sentry as a tag.
+      def extract_fingerprint!(named_tags)
+        fingerprint = named_tags[:fingerprint]
         return unless fingerprint.is_a?(Array) && fingerprint.all? { |part| fingerprint_part?(part) }
 
-        payload_context_deprecated if from_payload
-        source.delete(:fingerprint).map(&:to_s)
+        named_tags.delete(:fingerprint).map(&:to_s)
       end
 
       def fingerprint_part?(part)
         FINGERPRINT_PART_TYPES.any? { |type| part.is_a?(type) }
       end
 
-      # Returns [Hash] the payload, from this appender's own copy, as a Hash that keys can be taken out
-      # of. A payload that is not a Hash is sent to Sentry as the extra named payload.
-      def payload_extras(payload, original)
+      # Returns [Hash] the payload, from this appender's own copy, as the extras to send to Sentry. A
+      # payload that is not a Hash is sent as the extra named payload.
+      def payload_extras(payload)
         case payload
         when nil  then {}
-        when Hash then like_original(payload, original)
+        when Hash then payload
         else {payload: payload}
         end
       end
 
-      # Returns [Hash] this appender's copy of the payload or named tags as a Hash of the class of the
-      # log entry's own, such as HashWithIndifferentAccess, so that the keys taken out of it, such as
+      # Returns [Hash] this appender's copy of the named tags as a Hash of the class of the log
+      # entry's own, such as HashWithIndifferentAccess, so that the keys taken out of it, such as
       # :user_id, are found as in the application's Hash. The class's own #update may convert the
       # nested Hashes too, as HashWithIndifferentAccess does. A plain Hash, or one whose class cannot
       # be rebuilt this way, is returned as it is.
@@ -249,18 +213,6 @@ module SemanticLogger
         rebuilt.is_a?(Hash) ? rebuilt : copy
       rescue StandardError
         copy
-      end
-
-      # Warns once that the Sentry user or fingerprint was taken from the payload.
-      def payload_context_deprecated
-        return if @payload_context_deprecated
-
-        @payload_context_deprecated = true
-        Deprecation.warn(
-          "SemanticLogger::Appender::SentryRuby took the Sentry user or fingerprint from the log payload. " \
-          "This is deprecated and will be removed in v6, since the payload can hold untrusted data: " \
-          "set them with named tags instead, for example SemanticLogger.tagged(user_id: user.id)."
-        )
       end
 
       # Extract tags.
