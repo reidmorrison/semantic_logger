@@ -1,0 +1,92 @@
+// Reads the log files that Semantic Logger writes with `formatter: :json`, for Grafana Alloy: the
+// operators of filelog.yaml, in Alloy's syntax. otelcol.receiver.filelog is a public-preview component,
+// so run Alloy with `--stability.level=public-preview`.
+//
+// Each line becomes one log record: its message the body, its time and level the timestamp and
+// severity, its trace_id, span_id, and trace_flags those of the record, its logger name the
+// instrumentation scope, its application, host, environment, and pid the resource (service.name,
+// host.name, deployment.environment.name, process.pid), and its thread the attribute thread.name.
+// Every other field, such as payload, named_tags, tags, and exception, stays an attribute of the
+// record. An entry without a message has no body.
+//
+// Sends the records over OTLP/HTTP to OTLP_ENDPOINT, such as Grafana Cloud's OTLP gateway, with the
+// credentials it needs: replace otelcol.exporter.otlphttp.default with the exporter you use.
+//
+// Tested by examples/filelog/test.rb.
+
+// Keeps the offset of each file, so that a restart neither reads a file again nor skips what was
+// written while Alloy was down. Give its directory a persistent volume.
+otelcol.storage.file "semantic_logger" {
+  directory = coalesce(sys.env("FILELOG_STORAGE_DIR"), "/var/lib/alloy/file_storage")
+}
+
+otelcol.receiver.filelog "semantic_logger" {
+  include  = [coalesce(sys.env("SEMANTIC_LOGGER_LOGS"), "/var/log/app/*.log")]
+  start_at = "beginning"
+  storage  = otelcol.storage.file.semantic_logger.handler
+
+  operators = [
+    {
+      type       = "json_parser",
+      parse_from = "body",
+      parse_to   = "attributes",
+      // Keeps whole numbers, such as the pid and payload counts, as integers rather than doubles.
+      parse_ints = true,
+      // A line that is not JSON, such as a crash dump, is sent on as it is, without an error for each.
+      // This also hides a time that does not match the layout below, which the record then does not
+      // have: use on_error = "send" while trying a :json formatter with another time_format.
+      on_error   = "send_quiet",
+      timestamp  = {
+        parse_from  = "attributes.timestamp",
+        layout_type = "gotime",
+        layout      = "2006-01-02T15:04:05.999999999Z07:00",
+      },
+      severity = {
+        parse_from = "attributes.level",
+      },
+    },
+    {
+      type        = "trace_parser",
+      "if"        = "attributes.trace_id != nil",
+      trace_id    = { parse_from = "attributes.trace_id" },
+      span_id     = { parse_from = "attributes.span_id" },
+      trace_flags = { parse_from = "attributes.trace_flags" },
+    },
+    { type = "scope_name_parser", "if" = "attributes.name != nil", parse_from = "attributes.name" },
+    // The body is still the line as it was read: the message replaces it, and without one it goes.
+    // A line that is not JSON, such as a crash dump, keeps its text: it has no level. So does a JSON
+    // line without one, which another process wrote, unless it has a message; its fields are
+    // attributes too.
+    { type = "remove", "if" = "attributes.message == nil and attributes.level != nil", field = "body" },
+    { type = "move", "if" = "attributes.message != nil", from = "attributes.message", to = "body" },
+    { type = "move", "if" = "attributes.application != nil", from = "attributes.application", to = "resource[\"service.name\"]" },
+    { type = "move", "if" = "attributes.host != nil", from = "attributes.host", to = "resource[\"host.name\"]" },
+    { type = "move", "if" = "attributes.environment != nil", from = "attributes.environment", to = "resource[\"deployment.environment.name\"]" },
+    { type = "move", "if" = "attributes.pid != nil", from = "attributes.pid", to = "resource[\"process.pid\"]" },
+    { type = "move", "if" = "attributes.thread != nil", from = "attributes.thread", to = "attributes[\"thread.name\"]" },
+    // Fields that the record now holds, or that only repeat the level.
+    { type = "remove", "if" = "attributes.timestamp != nil", field = "attributes.timestamp" },
+    { type = "remove", "if" = "attributes.level != nil", field = "attributes.level" },
+    { type = "remove", "if" = "attributes.level_index != nil", field = "attributes.level_index" },
+    { type = "remove", "if" = "attributes.name != nil", field = "attributes.name" },
+    { type = "remove", "if" = "attributes.trace_id != nil", field = "attributes.trace_id" },
+    { type = "remove", "if" = "attributes.span_id != nil", field = "attributes.span_id" },
+    { type = "remove", "if" = "attributes.trace_flags != nil", field = "attributes.trace_flags" },
+  ]
+
+  output {
+    logs = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    logs = [otelcol.exporter.otlphttp.default.input]
+  }
+}
+
+otelcol.exporter.otlphttp "default" {
+  client {
+    endpoint = sys.env("OTLP_ENDPOINT")
+  }
+}

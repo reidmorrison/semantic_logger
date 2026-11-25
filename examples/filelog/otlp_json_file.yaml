@@ -1,0 +1,28 @@
+# Reads the log files that Semantic Logger writes with `formatter: :otlp_json_lines`, for the
+# OpenTelemetry Collector's contrib build, the only agent here that has the otlpjsonfile receiver.
+# Each line is already an OTLP LogsData, so nothing needs parsing. Add it to the Collector's own
+# configuration, its storage extension to the service's extensions, and its receiver to a logs
+# pipeline:
+#
+#   service:
+#     extensions: [file_storage/semantic_logger]
+#     pipelines:
+#       logs:
+#         receivers: [otlpjsonfile/semantic_logger]
+#
+# The receiver reads a line of at most 1 MiB by default, which is also the formatter's default
+# `max_bytes:`. Raise both together.
+#
+# Tested by examples/filelog/test.rb.
+extensions:
+  # Keeps the offset of each file, so that a restart neither reads a file again nor skips what was
+  # written while the Collector was down. Give its directory a persistent volume.
+  file_storage/semantic_logger:
+    directory: ${env:FILELOG_STORAGE_DIR:-/var/lib/otelcol/file_storage}
+    create_directory: true
+
+receivers:
+  otlpjsonfile/semantic_logger:
+    include: ["${env:SEMANTIC_LOGGER_OTLP_LOGS:-/var/log/app/*.jsonl}"]
+    start_at: beginning
+    storage: file_storage/semantic_logger

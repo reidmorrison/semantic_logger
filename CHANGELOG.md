@@ -10,6 +10,10 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 ### Added
 
+- `examples/filelog/` holds a `filelog` receiver for the files that `formatter: :json` writes, tested
+  with the OpenTelemetry Collector, Datadog's DDOT, Elastic's EDOT, and, in its own syntax, Grafana
+  Alloy, and the Collector's `otlpjsonfile` receiver for `formatter: :otlp_json_lines`, with the Docker
+  test that runs each agent against files that Semantic Logger wrote.
 - `formatter: :otlp_json_lines` writes each log entry as one line of OTLP JSON, a `LogsData` with the
   resource of the process, the scope of its logger, and its log record, as `appender: :otlp` sends it,
   for the OpenTelemetry Collector's `otlpjsonfile` receiver. Each line is capped at `max_bytes:`,

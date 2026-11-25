@@ -2441,6 +2441,43 @@ Notes:
   `exception.details`, enable `log_exception_details`: `formatter: {json: {log_exception_details: true}}`.
   See [Exception details](config.html#exception-details).
 
+#### Reading the file with an OpenTelemetry agent {#json-filelog}
+
+In production, write the `:json` file on the host and let a local agent read it and send it on: the
+agent then owns the network, its retries, and a buffer on disk, so that a backend that is down never
+slows the application. [examples/filelog/filelog.yaml](https://github.com/reidmorrison/semantic_logger/blob/main/examples/filelog/filelog.yaml)
+is a `filelog` receiver for the file, the same for each agent below, and
+[filelog.alloy](https://github.com/reidmorrison/semantic_logger/blob/main/examples/filelog/filelog.alloy)
+is the same in Grafana Alloy's syntax. Each line becomes one OpenTelemetry log record: its `message` the
+body, its `timestamp` and `level` the record's time and severity, `trace_id`, `span_id`, and
+`trace_flags` the record's trace, the logger `name` its instrumentation scope, `application`, `host`,
+`environment`, and `pid` its resource (`service.name`, `host.name`, `deployment.environment.name`, and
+`process.pid`), and `thread` the attribute `thread.name`. The other fields, such as `payload` and
+`named_tags`, stay attributes. An entry without a message has no body. A line that is not JSON, such
+as a crash dump, is sent on with its text as the body. So is a JSON line without a `level`, which
+another process wrote, unless it has a `message`, with its fields as attributes too.
+
+~~~ruby
+SemanticLogger.add_appender(file_name: "/var/log/app/production.log", formatter: :json)
+~~~
+
+Add the receiver to the agent's own configuration, with its exporter, list its storage extension,
+`file_storage/semantic_logger`, under `service.extensions`, and point `SEMANTIC_LOGGER_LOGS`
+at the files (default `/var/log/app/*.log`) and `FILELOG_STORAGE_DIR` at a persistent directory, where
+it keeps how far it has read each file.
+
+| Agent | Configuration | Tested with |
+|-------|---------------|-------------|
+| OpenTelemetry Collector (contrib) | `filelog.yaml` | `otel/opentelemetry-collector-contrib:0.166.0` |
+| Datadog Agent's DDOT Collector | `filelog.yaml`, in `otel-config.yaml` | `datadog/agent:7.86.0-full` |
+| Elastic EDOT Collector | `filelog.yaml` | `elastic-otel-collector:9.5.7` |
+| Grafana Alloy | `filelog.alloy`, run with `--stability.level=public-preview` | `grafana/alloy:v1.22.0` |
+
+[examples/filelog/test.rb](https://github.com/reidmorrison/semantic_logger/blob/main/examples/filelog/test.rb)
+runs each agent in Docker against a file that Semantic Logger wrote, and checks every record it sends.
+Recent Collectors log that `filelog` is a deprecated name for `file_log`: the old name is kept, since
+it works in every agent tested.
+
 ### Fluentd
 
 `formatter: :fluentd` is the same as `:json`, except it renames the log level fields to `severity` and
@@ -2574,6 +2611,10 @@ SemanticLogger.add_appender(file_name: "log/otlp.jsonl", formatter: :otlp_json_l
 
 Notes:
 
+* [examples/filelog/otlp_json_file.yaml](https://github.com/reidmorrison/semantic_logger/blob/main/examples/filelog/otlp_json_file.yaml)
+  is the Collector's receiver for these files, tested with `otel/opentelemetry-collector-contrib:0.166.0`
+  by `examples/filelog/test.rb`. Point `SEMANTIC_LOGGER_OTLP_LOGS` at them (default
+  `/var/log/app/*.jsonl`).
 * Rotating the file is left to the file appender, with `reopen_period:`, `reopen_size:`, or an external
   tool followed by `SemanticLogger.reopen`.
 * Each line holds at most `max_bytes:`, 1 MiB by default, the most that the receiver reads of one line
