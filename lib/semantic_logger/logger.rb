@@ -2,6 +2,18 @@ module SemanticLogger
   # Logger stores the class name to be used for all log messages so that every
   # log message written by this instance will include the class name
   class Logger < Base
+    # Returns [true|false] whether the metric calls are collected, for the whole process: true once a
+    # metric appender is present, in the main Ractor only. Without one, a metric call returns at once, so
+    # code that builds costly dimensions for a metric, such as by parsing a statement, can ask first and
+    # skip it:
+    #
+    #   if logger.collecting_metrics?
+    #     logger.time("db.client.operation.duration", duration: ms, dimensions: dimensions_of(sql))
+    #   end
+    #
+    # A test logger (see SemanticLogger::Test::CaptureLogEvents) always answers true.
+    public :collecting_metrics?
+
     include SemanticLogger::Concerns::Compatibility
 
     def self.subscribe(object = nil, &block)

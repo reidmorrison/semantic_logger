@@ -281,7 +281,9 @@ expect { ApiClient.new.call }.to(
 
 The same helpers capture the metric calls (`increment`, `time`, `record`, and the `metric:` of log
 and `measure_*` calls) as they are made, whether or not a metric appender is present, and whatever
-the log level. `semantic_logger_metrics` and `assert_metric` for Minitest:
+the log level. While they capture, `collecting_metrics?` answers `true` on the logger they capture
+from: every logger, or the one of the class given as `klass:`.
+`semantic_logger_metrics` and `assert_metric` for Minitest:
 
 ~~~ruby
 metrics = semantic_logger_metrics { Signup.new.call(user) }

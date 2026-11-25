@@ -474,9 +474,11 @@ module SemanticLogger
       false
     end
 
-    # Returns [true|false] whether the metric calls are collected, once a metric appender is present
-    # (see Processor#collecting_metrics?). Asked before the metric of a log call is read, so that a log
-    # call without a metric appender costs what it did before metrics were collected.
+    # Returns [true|false] whether the metric calls are collected: true once a metric appender is present
+    # (see Processor#collecting_metrics?), in the main Ractor only. Asked before the metric of a log call
+    # is read, so that a log call without a metric appender costs what it did before metrics were
+    # collected. Public on a Logger (see Logger#collecting_metrics?), but not on an appender, which a test
+    # can stand in for the processor with.
     #
     # A processor without the method, such as a stand-in for it in a test written for 5.x that answers
     # only #log, collects nothing.

@@ -3948,6 +3948,20 @@ combined.
 * `time` with a block returns the block's result. Without a block, it returns `true` or `false`, as
   `increment` does.
 
+### Skip costly dimensions: `collecting_metrics?`
+
+Without a metric appender, a metric call returns at once, but its arguments are still built. When
+building the dimensions costs something, such as parsing a statement, ask the logger first:
+
+~~~ruby
+if logger.collecting_metrics?
+  logger.time("db.client.operation.duration", duration: ms, dimensions: dimensions_of(sql))
+end
+~~~
+
+`collecting_metrics?` answers for the whole process: `true` once a metric appender is present, in the
+main Ractor only, and always for a test logger (see [Testing](testing.html)).
+
 ### They never raise
 
 Like log calls, the metric calls never raise. A metric is dropped, with a warning on Semantic
@@ -6225,7 +6239,9 @@ expect { ApiClient.new.call }.to(
 
 The same helpers capture the metric calls (`increment`, `time`, `record`, and the `metric:` of log
 and `measure_*` calls) as they are made, whether or not a metric appender is present, and whatever
-the log level. `semantic_logger_metrics` and `assert_metric` for Minitest:
+the log level. While they capture, `collecting_metrics?` answers `true` on the logger they capture
+from: every logger, or the one of the class given as `klass:`.
+`semantic_logger_metrics` and `assert_metric` for Minitest:
 
 ~~~ruby
 metrics = semantic_logger_metrics { Signup.new.call(user) }

@@ -183,6 +183,22 @@ module Metric
           assert_equal [3], points.map(&:value)
         end
 
+        it "answers whether metrics are collected, publicly, so that a caller can skip building dimensions" do
+          assert_predicate logger, :collecting_metrics?
+          SemanticLogger::Logger.stub(:processor, Object.new) do
+            refute_predicate logger, :collecting_metrics?
+          end
+          assert_respond_to logger, :collecting_metrics?
+          refute_respond_to InMemoryAppender.new, :collecting_metrics?
+        end
+
+        it "collects nothing, and never recurses, when an appender stands in for the processor" do
+          SemanticLogger::Logger.stub(:processor, InMemoryAppender.new) do
+            assert logger.info("Signed up", metric: "users.signup")
+            refute_predicate logger, :collecting_metrics?
+          end
+        end
+
         describe "measure" do
           it "records the time of the block when the level passes, and logs it" do
             result = logger.measure_info("Called supplier", metric: "supplier.call") { :added }
