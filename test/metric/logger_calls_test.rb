@@ -62,6 +62,29 @@ module Metric
           SemanticLogger.add_appender(metric: appender)
         end
 
+        describe "scope" do
+          let(:appender) do
+            scoped = InMemoryMetricAppender.new
+            scoped.define_singleton_method(:metric_scopes?) { true }
+            scoped
+          end
+
+          it "is the name of the logger, for each kind of call" do
+            logger.increment("users.signup")
+            logger.record("order.items", 3)
+            logger.time("supplier.add_user", duration: 12)
+            logger.info("Signed up", metric: "users.signed_up")
+            SemanticLogger["Other"].increment("users.signup")
+
+            assert_equal(
+              [["Metric::LoggerCallsTest", "users.signup"], ["Metric::LoggerCallsTest", "order.items"],
+               ["Metric::LoggerCallsTest", "supplier.add_user"], ["Metric::LoggerCallsTest", "users.signed_up"],
+               ["Other", "users.signup"]],
+              points.map { |point| [point.scope, point.name] }
+            )
+          end
+        end
+
         describe "#increment" do
           it "adds 1 to a counter" do
             assert logger.increment("users.signup")

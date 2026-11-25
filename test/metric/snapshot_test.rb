@@ -43,10 +43,32 @@ module Metric
           assert_predicate point, :overflow?
         end
 
-        it "has an identity from kind, name, unit, internal and dimensions" do
-          point = new_point(kind: :histogram, name: "job", unit: "s", value: histogram, dimensions: {a: 1})
+        it "has an identity from scope, kind, name, unit, internal and dimensions" do
+          point = new_point(kind: :histogram, name: "job", unit: "s", value: histogram, dimensions: {a: 1},
+                            scope: "Jobs")
 
-          assert_equal [:histogram, "job", "s", false, {a: 1}], point.identity
+          assert_equal ["Jobs", :histogram, "job", "s", false, {a: 1}], point.identity
+        end
+
+        it "keeps a frozen copy of its scope" do
+          scope = +"Jobs"
+          point = new_point(kind: :counter, name: "jobs", value: 1, scope: scope)
+          scope << "X"
+
+          assert_equal "Jobs", point.scope
+          assert_predicate point.scope, :frozen?
+        end
+
+        it "has no scope when internal" do
+          assert_nil new_point(kind: :counter, name: "processed", value: 1, internal: true, scope: "Jobs").scope
+        end
+
+        it "keeps its scope when merged and redacted" do
+          point    = new_point(kind: :counter, name: "jobs", value: 1, dimensions: {"password" => "x"}, scope: "Jobs")
+          redactor = SemanticLogger::Redactor.new(["password"])
+
+          assert_equal "Jobs", point.merge(point).scope
+          assert_equal "Jobs", point.redact(redactor).scope
         end
       end
 
@@ -148,23 +170,27 @@ module Metric
         it "adds the records dropped, keeping the earliest first name dropped" do
           earlier = SemanticLogger::Metric::Snapshot.new(
             start_time: Time.at(0), end_time: Time.at(60),
-            dropped_by_name_limit: 2, first_name_dropped: "x", dropped_by_conflict: {"a" => 1},
+            dropped_by_name_limit: 2, first_name_dropped: "x", first_scope_dropped: "X",
+            dropped_by_conflict: {"a" => 1},
             dropped_by_internal_conflict: {"p" => 1}
           )
           later = SemanticLogger::Metric::Snapshot.new(
             start_time: Time.at(60), end_time: Time.at(120),
-            dropped_by_name_limit: 3, first_name_dropped: "y", dropped_by_conflict: {"a" => 2, "b" => 1},
+            dropped_by_name_limit: 3, first_name_dropped: "y", first_scope_dropped: "Y",
+            dropped_by_conflict: {"a" => 2, "b" => 1},
             dropped_by_internal_conflict: {"p" => 2}
           )
           merged = earlier.merge(later)
 
           assert_equal 5, merged.dropped_by_name_limit
           assert_equal "x", merged.first_name_dropped
+          assert_equal "X", merged.first_scope_dropped
           assert_equal({"a" => 3, "b" => 1}, merged.dropped_by_conflict)
           assert_predicate merged.dropped_by_conflict, :frozen?
           assert_equal({"p" => 3}, merged.dropped_by_internal_conflict)
           assert_predicate merged.dropped_by_internal_conflict, :frozen?
           assert_equal "y", snapshot(0, 60).merge(later).first_name_dropped
+          assert_equal "Y", snapshot(0, 60).merge(later).first_scope_dropped
         end
       end
 
@@ -240,6 +266,35 @@ module Metric
           merged = snapshot(0, 60, new_point(kind: :histogram, name: "a", value: value)).merged_by(&:name)
 
           assert_same value, merged["a"][2]
+        end
+      end
+
+      describe "#without_scopes" do
+        it "merges the series that differ only by their scope, and keeps the others apart" do
+          snapshot = snapshot(
+            0, 60,
+            new_point(kind: :counter, name: "jobs", value: 1, scope: "Orders"),
+            new_point(kind: :counter, name: "jobs", value: 2, scope: "Payments"),
+            new_point(kind: :counter, name: "jobs", value: 4, dimensions: {"queue" => "a"}, scope: "Orders"),
+            new_point(kind: :histogram, name: "jobs", value: histogram(1.0), scope: "Payments"),
+            new_point(kind: :histogram, name: "jobs", value: histogram(2.0), scope: "Orders")
+          )
+          unscoped = snapshot.without_scopes
+
+          assert_equal [nil], unscoped.map(&:scope).uniq
+          assert_equal(
+            [[:counter, {}, 3], [:counter, {"queue" => "a"}, 4], [:histogram, {}, 2]],
+            unscoped.map { |point| [point.kind, point.dimensions, point.counter? ? point.value : point.value.count] }
+          )
+          assert_equal snapshot.start_time, unscoped.start_time
+          assert_equal snapshot.end_time, unscoped.end_time
+          assert_equal(2, snapshot.select(&:histogram?).sum { |point| point.value.count })
+        end
+
+        it "is itself when no point has a scope" do
+          snapshot = snapshot(0, 60, new_point(kind: :counter, name: "jobs", value: 1))
+
+          assert_same snapshot, snapshot.without_scopes
         end
       end
 

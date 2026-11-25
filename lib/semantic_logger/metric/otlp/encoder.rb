@@ -18,21 +18,25 @@ module SemanticLogger
       # - a field that holds its default value, such as an empty list, may be left out, as it is here.
       #
       # Each counter is a monotonic Sum and each histogram an ExponentialHistogram, both with delta
-      # temporality, since a snapshot holds what was recorded during its interval only. The points of
-      # one kind, name, and unit, either all Semantic Logger's own or all an application's, are the
-      # data points of one metric, which is what identifies a metric in OpenTelemetry. The Aggregator
-      # keeps one kind and one unit per name in an interval, and Semantic Logger's own metrics have
-      # names of their own (semantic_logger.*), so a snapshot that it collected has one metric per
-      # name. A merged snapshot, holding the points of more than one interval, may hold one name with
-      # two units or kinds, and one built otherwise may hold both Semantic Logger's own points and an
-      # application's of one name: each is then a metric of its own, of the same name, rather than one
-      # being left out (see .metrics).
+      # temporality, since a snapshot holds what was recorded during its interval only.
+      #
+      # The points of an application are in one ScopeMetrics for each scope, the name of the logger
+      # that recorded them (see Snapshot::Point#scope), which is the instrumentation scope, without a
+      # version; Semantic Logger's own points are in a ScopeMetrics of their own, whose scope is
+      # SemanticLogger, with the gem's version, as for the internal metrics of an OpenTelemetry SDK.
+      #
+      # Within a scope, the points of one kind, name, and unit are the data points of one metric, which
+      # is what identifies a metric in OpenTelemetry. The Aggregator keeps one kind and one unit per name,
+      # in every scope, in an interval, so a snapshot that it collected has one metric per name of a
+      # scope. A merged snapshot, holding the points of more than one interval, may hold one name with
+      # two units or kinds: each is then a metric of its own, of the same name, rather than one being
+      # left out (see .metrics).
       module Encoder
         # AggregationTemporality AGGREGATION_TEMPORALITY_DELTA.
         DELTA = 1
 
-        # The instrumentation scope of every metric.
-        SCOPE_NAME = "SemanticLogger".freeze
+        # The instrumentation scope of Semantic Logger's own metrics.
+        INTERNAL_SCOPE = {name: "SemanticLogger", version: SemanticLogger::VERSION}.freeze
 
         # The range of an sfixed64 or int64: an Integer outside it is not an intValue or asInt.
         INT64_RANGE = SemanticLogger::Otlp::Values::INT64_RANGE
@@ -50,31 +54,37 @@ module SemanticLogger
             resourceMetrics: [
               {
                 resource:     {attributes: attributes(resource)},
-                scopeMetrics: [
-                  {
-                    scope:   {name: SCOPE_NAME, version: SemanticLogger::VERSION},
-                    metrics: metrics(snapshot)
-                  }
-                ]
+                scopeMetrics: scope_metrics(snapshot)
               }
             ]
           }
         end
 
-        # Returns [Array<Hash>] a Metric for each kind, name, and unit in the snapshot, apart for
-        # Semantic Logger's own points and an application's, with a data point for each of its points.
-        # A counter whose sum is not finite has no data point, and a metric left with none is left out.
-        def self.metrics(snapshot)
+        # Returns [Array<Hash>] a ScopeMetrics for each scope of the snapshot's points, and one for Semantic
+        # Logger's own, in the order that their first points come in, leaving out one without any metric
+        # (see .metrics).
+        def self.scope_metrics(snapshot)
           start_time = nanoseconds(snapshot.start_time)
           end_time   = nanoseconds(snapshot.end_time)
-          groups     = snapshot.points.group_by do |point|
-            [point.internal?, point.kind, text(point.name), point.unit && text(point.unit)]
+          scopes     = snapshot.points.group_by { |point| [point.internal?, point.scope] }
+          scopes.filter_map do |(internal, scope), points|
+            metrics = metrics(points, start_time, end_time)
+            next if metrics.empty?
+
+            {scope: internal ? INTERNAL_SCOPE : {name: text(scope)}, metrics: metrics}
           end
-          groups.filter_map do |(_internal, _kind, name, _unit), points|
-            data_points = points.filter_map { |point| data_point(point, start_time, end_time) }
+        end
+
+        # Returns [Array<Hash>] a Metric for each kind, name, and unit of the points of one scope, with a
+        # data point for each of its points. A counter whose sum is not finite has no data point, and a
+        # metric left with none is left out.
+        def self.metrics(points, start_time, end_time)
+          groups = points.group_by { |point| [point.kind, text(point.name), point.unit && text(point.unit)] }
+          groups.filter_map do |(_kind, name, _unit), metric_points|
+            data_points = metric_points.filter_map { |point| data_point(point, start_time, end_time) }
             next if data_points.empty?
 
-            metric(name, points.first, data_points)
+            metric(name, metric_points.first, data_points)
           end
         end
 
@@ -173,7 +183,7 @@ module SemanticLogger
 
         def self.text(value) = SemanticLogger::Otlp::Values.text(value)
 
-        private_class_method :metrics, :metric, :data_point, :number_value, :histogram, :buckets,
+        private_class_method :scope_metrics, :metrics, :metric, :data_point, :number_value, :histogram, :buckets,
                              :attributes, :any_value, :double, :nanoseconds, :text
       end
     end

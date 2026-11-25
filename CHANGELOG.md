@@ -94,6 +94,12 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   `metric: :otlp` and reads the same variables in their `OTEL_EXPORTER_OTLP_LOGS_*` form, and sends a
   batch again after a 502 or 504, as OTLP/HTTP asks. Its formatter is
   `SemanticLogger::Formatters::Otlp`, or a subclass of it.
+- `metric: :otlp` sends the metrics of each logger in an instrumentation scope named after the logger,
+  as `appender: :otlp` sends its log records, rather than all of them in the scope `SemanticLogger`,
+  which now holds only Semantic Logger's own metrics, with the gem's version. A name recorded by the
+  loggers of two classes is two metrics, which count twice towards the limit of 2000 metrics per
+  interval, each with up to 2000 series; a name still has one kind and one unit in every class. The other metric appenders are given the series of every logger
+  merged, unless a custom one answers true to `metric_scopes?`, and is then given each point's `scope`.
 - `logger.collecting_metrics?`, whether the metric calls are collected, so that code that builds
   costly dimensions can skip them without a metric appender.
 - `SemanticLogger.safe_dimension_keys`, the metric dimension keys that are never redacted, matched
