@@ -208,6 +208,11 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   does not stop the application from starting. They keep the connection they have, if any; with none,
   the next write connects.
 
+### Deprecated
+
+- `appender: :open_telemetry`, which writes through the OpenTelemetry logs SDK, warns that it is
+  deprecated and will be removed in v7: use `appender: :otlp`, which needs no OpenTelemetry gems.
+
 ### Removed
 
 - `SemanticLogger::Formatters::Signalfx`: the `:signalfx` metric appender builds its requests from

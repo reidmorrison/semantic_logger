@@ -10,6 +10,9 @@ end
 #
 #   Writes log entries to Open Telemetry, as log records through its Logs API.
 #
+#   Deprecated: use `appender: :otlp`, which sends log records over OTLP/HTTP without the Open
+#   Telemetry gems. To be removed in v7.
+#
 module SemanticLogger
   module Appender
     class OpenTelemetry < SemanticLogger::Subscriber
@@ -44,6 +47,10 @@ module SemanticLogger
                      formatter: nil,
                      **args,
                      &)
+        Deprecation.warn(
+          "SemanticLogger::Appender::OpenTelemetry (appender: :open_telemetry) is deprecated and will be removed " \
+          "in v7. Use appender: :otlp, which sends log records over OTLP/HTTP without the OpenTelemetry gems."
+        )
         # Base#initialize (via Subscriber) overwrites @name with the class name,
         # so call super first and then assign our own attributes.
         super(formatter: formatter, **args, &)

@@ -194,8 +194,10 @@ SemanticLogger.add_appender(appender: :otlp)
 ~~~
 
 It reads the standard `OTEL_EXPORTER_OTLP_*` variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT`, so
-`OpenTelemetry::SDK.configure` is no longer needed for logging. Its records differ from those of
-`:open_telemetry`, so check the dashboards and alerts that select on their attributes:
+`OpenTelemetry::SDK.configure` is no longer needed for logging. `appender: :open_telemetry` still
+works in v6, but is deprecated and warns (see [Seeing deprecation warnings](#seeing-deprecation-warnings)),
+and will be removed in v7. The records of `:otlp` differ from those of `:open_telemetry`, so check the
+dashboards and alerts that select on their attributes:
 
 * The logger's name is the instrumentation scope of the record, rather than the
   `semantic_logger.name` attribute, and the `name:` and `version:` options are gone.
