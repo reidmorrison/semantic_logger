@@ -3,7 +3,8 @@ layout: default
 title: Upgrading
 description: >-
   Version-by-version upgrade notes for Semantic Logger, from v4.0 through the
-  v5.4 deprecation of the TCP options that v6 does not take.
+  v5.4 deprecations of the TCP options that v6 does not take and of the
+  positional class of semantic_logger_events.
 ---
 
 
@@ -88,6 +89,22 @@ SemanticLogger.add_appender(appender: :tcp, server: "logs:3300", connect_retry_c
 # After, with the same behaviour in v5.4 and v6:
 SemanticLogger.add_appender(appender: :tcp, server: "logs:3300", connect_retry_count: 0, retry_count: 0)
 ~~~
+
+#### Pass the class to `semantic_logger_events` as `klass:`
+
+The Minitest helper `semantic_logger_events` takes the class whose events to capture as the keyword
+`klass:`. Passing it positionally still works, but is deprecated, and reports a
+[deprecation warning](#seeing-deprecation-warnings), since v6 takes it only as `klass:`:
+
+~~~ruby
+# Before:
+messages = semantic_logger_events(ApiClient) { ApiClient.new.call }
+
+# After:
+messages = semantic_logger_events(klass: ApiClient) { ApiClient.new.call }
+~~~
+
+The RSpec helper `capture_semantic_logger_events(ApiClient)` is unchanged.
 
 ### Upgrading to Semantic Logger v5.3
 

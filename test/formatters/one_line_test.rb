@@ -219,6 +219,33 @@ module SemanticLogger
           end
         end
 
+        # Most terminals move down a line at these.
+        describe "vertical tab and form feed" do
+          {"vertical tab" => "\v", "form feed" => "\f"}.each do |name, char|
+            it "strips the #{name} from every text field" do
+              text            = "user=bob#{char}forged"
+              log.message     = text
+              log.name        = text
+              log.tags        = [text]
+              log.named_tags  = {user: text}
+              log.exception   = RuntimeError.new(text)
+              log.thread_name = text
+
+              output = formatter.call(log, nil)
+
+              refute_includes output, char
+              assert_includes output, "-- user=bobforged -- Exception: RuntimeError: user=bobforged"
+              assert_includes output, "[user=bobforged] {user: user=bobforged}"
+            end
+
+            it "strips the #{name} from text that is not ASCII" do
+              log.message = "Café#{char}forged"
+
+              assert_includes formatter.call(log, nil), "-- Caféforged"
+            end
+          end
+        end
+
         # Editors, browsers, and some log viewers start a new line at these too.
         describe "Unicode line breaks" do
           {
@@ -272,6 +299,19 @@ module SemanticLogger
             output = SemanticLogger::Formatters::OneLine.new(log_exception_details: true).call(log, nil)
 
             assert_includes output, "Order rejected -- first line second line third line"
+          end
+
+          it "joins the lines of exception details that an ASCII line break separates with a space" do
+            detailed = Class.new(StandardError) do
+              def detailed_message(highlight: false, **)
+                "#{super}\nfirst\vsecond\fthird\rfourth"
+              end
+            end
+            log.exception = detailed.new("Order rejected")
+
+            output = SemanticLogger::Formatters::OneLine.new(log_exception_details: true).call(log, nil)
+
+            assert_includes output, "Order rejected -- first second third fourth"
           end
         end
 

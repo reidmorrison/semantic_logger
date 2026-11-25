@@ -767,7 +767,9 @@ in the `\uXXXX` form: the C1 control characters (U+0080 to U+009F), the line and
 separators (U+2028, U+2029), at which editors and some log viewers start a new line, and the
 bidirectional controls (U+202A to U+202E, U+2066 to U+2069), such as the right-to-left override that
 can make logged text read backwards. The option is **disabled by default** to preserve the existing
-human readable output:
+human readable output. Without it, the `:one_line` formatter still removes line breaks (line feeds, carriage
+returns, vertical tabs, form feeds, U+0085, U+2028, and U+2029), so each of its entries stays on one
+line, but it writes the other control characters as supplied:
 
 ```ruby
 # Text appender that escapes control characters in untrusted data:
