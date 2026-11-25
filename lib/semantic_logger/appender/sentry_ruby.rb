@@ -21,6 +21,30 @@ module SemanticLogger
       # The key of the Sentry scope of the thread that logged the entry, as captured with the entry.
       SCOPE_CAPTURE_KEY = :sentry_scope
 
+      # Keeps a copy of the Sentry scope of the thread that logs the entry, which holds the user, tags,
+      # contexts, breadcrumbs, and trace of the request it handles, for #log, which runs on the
+      # appender thread. Not for the entries of Sentry's own logger, which are never sent.
+      #
+      # The copy leaves out the Rack env: Sentry reads and rewinds the request body in it as it builds
+      # the request of an event, which must not happen on the appender thread while the request is
+      # still using it, or after it has closed the body.
+      CAPTURE_SCOPE = lambda do |log|
+        next if log.name == "Sentry" || !::Sentry.initialized?
+
+        scope = ::Sentry.get_current_scope&.dup
+        next unless scope
+
+        scope.set_rack_env(nil)
+        log.capture(SCOPE_CAPTURE_KEY, scope)
+      end
+
+      # Captures the backtrace of the code that logged an entry without an exception, which Sentry
+      # shows as the stack trace of its message (see Log#capture_backtrace!). An exception carries its
+      # own.
+      CAPTURE_BACKTRACE = lambda do |log|
+        log.capture_backtrace! unless log.exception || log.name == "Sentry"
+      end
+
       # Create Appender
       #
       # Parameters
@@ -56,16 +80,14 @@ module SemanticLogger
           end
         end
         super
-        # Sentry keeps the user, tags, contexts, breadcrumbs, and trace of a request in the Sentry
-        # scope of the thread or fiber handling it, but #log runs on the appender thread.
-        SemanticLogger::Logger.subscribe(method(:capture_scope))
       end
 
-      # Stops capturing the Sentry scope of each log entry.
-      def close
-        SemanticLogger::Logger.unsubscribe(method(:capture_scope))
-      ensure
-        super
+      # Returns [Array<#call>] the captures of its formatter, and those of the Sentry scope and of the
+      # backtrace of the thread that logs each entry that it sends (see CAPTURE_SCOPE and
+      # CAPTURE_BACKTRACE): Sentry keeps the scope of a request in the thread or fiber handling it, but
+      # #log runs on the appender thread.
+      def source_captures
+        [*super, CAPTURE_SCOPE, CAPTURE_BACKTRACE]
       end
 
       # Send an error notification to sentry
@@ -114,24 +136,6 @@ module SemanticLogger
       end
 
       private
-
-      # As an on_log subscriber, on the thread that logs the entry, keeps a copy of its Sentry scope
-      # with the entry when it meets this appender's level. The filter is left to #log, so that it
-      # runs once, on the appender thread.
-      #
-      # The copy leaves out the Rack env: Sentry reads and rewinds the request body in it as it builds
-      # the request of an event, which must not happen on the appender thread while the request is
-      # still using it, or after it has closed the body.
-      def capture_scope(log)
-        return if log.captured(SCOPE_CAPTURE_KEY) || log.name == "Sentry"
-        return unless ::Sentry.initialized? && meets_log_level?(log)
-
-        scope = ::Sentry.get_current_scope&.dup
-        return unless scope
-
-        scope.set_rack_env(nil)
-        log.capture(SCOPE_CAPTURE_KEY, scope)
-      end
 
       # Starts the scope of the event from the Sentry scope captured when the entry was logged, so
       # that the event has the user, tags, contexts, breadcrumbs, trace, and event processors of the

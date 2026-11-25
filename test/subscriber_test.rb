@@ -1,7 +1,5 @@
 require_relative "test_helper"
 require "stringio"
-require "tmpdir"
-require_relative "signal_trap_helper"
 
 class SubscriberTest < Minitest::Test
   class SimpleSubscriber < SemanticLogger::Subscriber
@@ -18,15 +16,17 @@ class SubscriberTest < Minitest::Test
     let(:appender) { SimpleSubscriber.new }
     let(:hash_value) { {session_id: "HSSKLEU@JDK767", tracking_number: 12_345} }
     let(:hash_str) { Regexp.escape(hash_value.inspect) }
-    let(:file_name_reg_exp) { ' subscriber_test.rb:\d+' }
+    let(:file_name_reg_exp) { ' subscriber_test.rb:\d+(?: [^\]]+)?' }
 
-    # Shared prefix of a formatted log line: "<time> <level> [<pid>:<thread> <file>:<line>] <name>".
-    let :log_prefix do
+    # Shared prefix of a formatted log line:
+    # "<time> <level> [<pid>:<thread> <file>:<line> <method>] <name>", the method when it is known.
+    let :log_prefix_with_file do
       /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+#{file_name_reg_exp}\] SubscriberTest::SimpleSubscriber/
     end
 
-    # Same prefix but without a captured file name (when the backtrace level is not met).
-    let :log_prefix_no_file do
+    # Same prefix but without where it was logged (when the call site level is not met), as for the
+    # :debug entries below.
+    let :log_prefix do
       /\d+-\d+-\d+ \d+:\d+:\d+.\d+ \w \[\d+:\w+\] SubscriberTest::SimpleSubscriber/
     end
 
@@ -83,7 +83,7 @@ class SubscriberTest < Minitest::Test
         end
 
         assert_match(
-          /#{log_prefix} -- Exception: StandardError: SecondError\n/, appender.message
+          /#{log_prefix_with_file} -- Exception: StandardError: SecondError\n/, appender.message
         )
         if Exception.instance_methods.include?(:cause)
           assert_match(/^Cause: StandardError: FirstError\n/,
@@ -118,21 +118,21 @@ class SubscriberTest < Minitest::Test
       # Ensure that any log level can be logged
       SemanticLogger::LEVELS.each do |level|
         it "log #{level} with file_name" do
-          SemanticLogger.stub(:backtrace_level_index, 0) do
+          SemanticLogger.stub(:call_site_level_index, 0) do
             appender.send(level, "hello world", hash_value)
 
             assert_match(
-              /#{log_prefix} -- hello world -- #{hash_str}\n/, appender.message
+              /#{log_prefix_with_file} -- hello world -- #{hash_str}\n/, appender.message
             )
           end
         end
 
         it "log #{level} without file_name" do
-          SemanticLogger.stub(:backtrace_level_index, 100) do
+          SemanticLogger.stub(:call_site_level_index, 100) do
             appender.send(level, "hello world", hash_value)
 
             assert_match(
-              /#{log_prefix_no_file} -- hello world -- #{hash_str}\n/, appender.message
+              /#{log_prefix} -- hello world -- #{hash_str}\n/, appender.message
             )
           end
         end
@@ -201,130 +201,50 @@ class SubscriberTest < Minitest::Test
       end
     end
 
-    describe "trace capture" do
-      include SignalTrapHelper
+    describe "#source_captures" do
+      let(:trace_captures) { SemanticLogger::Otlp::TraceContext::CAPTURES }
 
-      let(:trace_context) { SemanticLogger::Otlp::TraceContext }
-      let(:capture) { SemanticLogger::Otlp::TraceContext::CAPTURE }
+      it "are those of its formatter" do
+        appender.formatter = :json
 
-      # Without the appenders that other tests left open.
-      before do
-        @owners = trace_context.instance_variable_get(:@owners)
-        trace_context.instance_variable_set(:@owners, {}.compare_by_identity)
-        SemanticLogger::Logger.unsubscribe(capture)
+        assert_equal trace_captures, appender.source_captures
       end
 
-      after do
-        trace_context.instance_variable_set(:@owners, @owners)
-        @owners.empty? ? SemanticLogger::Logger.unsubscribe(capture) : SemanticLogger.on_log(capture)
-      end
-
-      it "captures the trace while its formatter writes it, until it is closed" do
-        json = SemanticLogger::Appender::IO.new($stdout, formatter: :json)
-
-        assert trace_context.registered?(json)
-        assert_includes SemanticLogger::Logger.subscribers, capture
-        json.close
-
-        refute trace_context.registered?(json)
-        refute_includes Array(SemanticLogger::Logger.subscribers), capture
-      end
-
-      it "does not capture it for a formatter that does not write it" do
-        appender = SemanticLogger::Appender::IO.new($stdout, formatter: :default)
-
-        refute trace_context.registered?(appender)
-        refute_includes Array(SemanticLogger::Logger.subscribers), capture
-      end
-
-      it "stops capturing it once given a formatter that does not write it, and captures it again for one that does" do
-        appender = SemanticLogger::Appender::IO.new($stdout, formatter: :json)
+      it "are none for a formatter that reads nothing on the logging thread" do
         appender.formatter = :default
 
-        refute trace_context.registered?(appender)
+        assert_empty appender.source_captures
+      end
+
+      it "are none for a formatter that does not answer them, such as a Proc" do
+        appender.formatter = ->(log, _logger) { log.message }
+
+        assert_empty appender.source_captures
+      end
+
+      it "are none for an appender that formats its own entries with #call" do
+        own = Class.new(SemanticLogger::Subscriber) do
+          def call(log, _logger) = log.message
+        end
+
+        assert_empty own.new.source_captures
+      end
+
+      it "has the appenders build them again once given another formatter" do
+        generation = SemanticLogger::SourceCaptures.generation
         appender.formatter = :json
 
-        assert trace_context.registered?(appender)
-      ensure
-        appender&.close
+        refute_equal generation, SemanticLogger::SourceCaptures.generation
       end
+    end
 
-      it "captures it again when written to after it was closed" do
-        appender = SemanticLogger::Appender::IO.new(StringIO.new, formatter: :json)
-        appender.close
-        appender.log(SemanticLogger::Log.new("Test", :info).tap { |log| log.message = "again" })
+    describe "#writes_level?" do
+      it "is true for an entry at or above its level, whatever its filter" do
+        appender.level  = :warn
+        appender.filter = ->(_log) { false }
 
-        assert trace_context.registered?(appender)
-      ensure
-        appender&.close
-      end
-
-      it "is released by the close of each built-in appender, which calls super" do
-        Dir.mktmpdir do |dir|
-          appender = SemanticLogger::Appender::File.new(File.join(dir, "test.log"), formatter: :json)
-
-          assert trace_context.registered?(appender)
-          appender.close
-
-          refute trace_context.registered?(appender)
-        end
-      end
-
-      # Waits for a change asked for in a signal trap, which a new thread applies.
-      def wait_for(deadline = Time.now + 5)
-        sleep(0.01) until yield || Time.now > deadline
-        yield
-      end
-
-      it "registers and releases it in a signal trap" do
-        appender = in_signal_trap { SemanticLogger::Appender::IO.new(StringIO.new, formatter: :json) }
-
-        refute_kind_of Exception, appender
-        assert(wait_for { trace_context.registered?(appender) })
-        closed = in_signal_trap { appender.close || :closed }
-
-        assert_equal :closed, closed
-        assert(wait_for { !trace_context.registered?(appender) })
-      end
-
-      it "applies the changes asked for in a signal trap before those asked for after it" do
-        appender = SemanticLogger::Appender::IO.new(StringIO.new, formatter: :json)
-        # Held, so that the change asked for in the trap waits on the queue.
-        trace_context.instance_variable_get(:@mutex).synchronize do
-          in_signal_trap { appender.close }
-        end
-        appender.formatter = :json
-
-        assert trace_context.registered?(appender)
-      ensure
-        appender&.close
-      end
-
-      it "releases the appender that add_appender built for an io: when it fails afterwards" do
-        assert_raises(ArgumentError) { SemanticLogger.add_appender(io: StringIO.new, formatter: :json, batch: true) }
-        assert_empty trace_context.instance_variable_get(:@owners)
-      end
-
-      it "releases a second console appender, which add_appender drops" do
-        first = SemanticLogger.add_appender(io: $stdout, formatter: :default)
-        SemanticLogger.add_appender(io: $stdout, formatter: :json)
-
-        assert_empty trace_context.instance_variable_get(:@owners)
-      ensure
-        SemanticLogger.remove_appender(first) if first
-      end
-
-      it "releases it when the appender cannot be built" do
-        failing = Class.new(SemanticLogger::Appender::IO) do
-          def initialize(*, **)
-            super
-            raise IOError, "cannot open"
-          end
-        end
-
-        assert_raises(IOError) { failing.new(StringIO.new, formatter: :json) }
-        assert_empty trace_context.instance_variable_get(:@owners)
-        refute_includes Array(SemanticLogger::Logger.subscribers), capture
+        assert appender.writes_level?(SemanticLogger::Log.new("Test", :warn))
+        refute appender.writes_level?(SemanticLogger::Log.new("Test", :info))
       end
     end
 

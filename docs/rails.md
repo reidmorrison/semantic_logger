@@ -632,7 +632,10 @@ application code is the first frame that the subscriber's `backtrace_cleaner` ke
 `config.active_record.verbose_query_logs` and `config.active_job.verbose_enqueue_logs` add to the
 payload.
 
-To capture the whole backtrace of each entry instead, use `backtrace_level`:
+As of v6 no backtrace is captured for every entry: an appender that sends one, such as
+`:sentry_ruby`, captures it for the entries it sends (see
+[Capturing backtraces](config.html#capturing-backtraces)). The deprecated `backtrace_level` still
+captures the whole backtrace of each entry at that level and above, until v7:
 
 ~~~ruby
 config.semantic_logger.backtrace_level = :info
@@ -640,9 +643,8 @@ config.semantic_logger.backtrace_level = :info
 
 ![with_source](images/rails_with_backtrace.png)
 
-**Warning:** capturing a backtrace for every log entry allocates many objects. In production set this
-to `nil` (disabled) or to a high level such as `:error`. By default backtraces are only captured for
-`:error` and `:fatal`. This feature is best used in development.
+**Warning:** capturing a backtrace for every log entry allocates many objects. It is off by default.
+This feature is best used in development.
 
 ### Cleaning exception backtraces
 

@@ -92,10 +92,10 @@ module SemanticLogger
         line.bytesize <= max_bytes ? line : fit(resource, log.name, record, line)
       end
 
-      # Returns [true|false] whether each record carries the trace it was logged in, as its record
-      # formatter says.
-      def trace_context?
-        record_formatter.trace_context?
+      # Returns [Array<#call>] the captures of its record formatter, such as that of the trace that each
+      # record carries.
+      def source_captures
+        record_formatter.source_captures
       end
 
       private

@@ -34,6 +34,7 @@ module SemanticLogger
       @source      = source
       @exiting     = false
       @skipped     = {}.compare_by_identity
+      @captures    = nil
       super()
     end
 
@@ -47,13 +48,43 @@ module SemanticLogger
       if stream && console_streams.include?(stream)
         logger.warn "Ignoring attempt to add a second #{stream} console appender since it " \
                     "would result in duplicate console output."
-        # Dropped, without closing the stream it writes to, so that it stops capturing the trace.
-        appender.release_trace_context if appender.respond_to?(:release_trace_context)
         return
       end
 
       self << appender
       appender
+    end
+
+    # Adds the appender, and builds the source captures again (see #capture).
+    def <<(appender)
+      super
+      source_captures_changed
+      self
+    end
+
+    # Removes the appender, and builds the source captures again (see #capture).
+    def delete(appender)
+      deleted = super
+      source_captures_changed if deleted
+      deleted
+    end
+
+    # Removes every appender, and builds the source captures again (see #capture).
+    def clear
+      super
+      source_captures_changed
+      self
+    end
+
+    # Runs the source captures of these appenders for the log entry, on the thread that logged it,
+    # before it is handed to the thread that writes it: each capture once, and only when an appender
+    # that uses it writes the entry at its level (see Subscriber#source_captures). The captures are
+    # built once, and again after these appenders, or the captures of one of them, changed (see
+    # SourceCaptures.changed).
+    def capture(log)
+      captures = @captures
+      captures = build_source_captures unless captures&.current?
+      captures.call(log, self) unless captures.empty?
     end
 
     # The console streams (:stdout and/or :stderr) already being written to by the existing appenders.
@@ -260,6 +291,25 @@ module SemanticLogger
     end
 
     private
+
+    # Counts the change, then builds the captures at once, so that a Ractor other than the main one
+    # captures what the appenders now need before the main Ractor logs again (see
+    # SourceCaptures.publish).
+    def source_captures_changed
+      SourceCaptures.changed
+      build_source_captures
+    end
+
+    # Builds the source captures of these appenders as they are now, and publishes the shareable ones
+    # when these are the appenders of the main processor. The count of changes is read before the
+    # appenders, so that a change made meanwhile has them built again.
+    def build_source_captures
+      generation = SourceCaptures.generation
+      captures   = SourceCaptures.new(to_a, generation)
+      @captures  = captures
+      SourceCaptures.publish(captures) if RactorSupport.enabled? && Logger.main_appenders?(self)
+      captures
+    end
 
     # Whether this process is exiting (see #process_exiting=), rather than a child process forked while
     # it was.

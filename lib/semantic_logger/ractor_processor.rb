@@ -21,11 +21,14 @@ module SemanticLogger
       @name  = ractor.name || "ractor-#{ractor.inspect[/\A#<Ractor:#(\d+)/, 1]}"
     end
 
-    # Sends the log entry to the main Ractor. Its thread name is prefixed with this Ractor's name.
+    # Runs the shareable source captures of the main processor's appenders on the calling thread (see
+    # SourceCaptures.shareable), then sends the log entry to the main Ractor. Its thread name is
+    # prefixed with this Ractor's name.
     #
     # Sending copies the entry. When something in it cannot be copied, such as a Proc in its payload,
     # those values are replaced (see Log#make_copyable) and it is sent again.
     def log(log)
+      SourceCaptures.call_shareable(log, self)
       log.thread_name = "#{name}/#{log.thread_name}"
       begin
         RactorReceiver.port << [:log, *RactorCopy.pack(log)]

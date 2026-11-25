@@ -27,8 +27,7 @@ InMemoryAppenderHelper = shared_description do
   end
 
   before do
-    SemanticLogger.default_level   = :trace
-    SemanticLogger.backtrace_level = :trace
+    SemanticLogger.default_level = :trace
     SemanticLogger.flush
     added_appender
   end

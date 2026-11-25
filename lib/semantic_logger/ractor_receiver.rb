@@ -216,13 +216,21 @@ module SemanticLogger
         end
       end
 
+      # Hands the processor an entry from another Ractor, whose source captures already ran there (see
+      # RactorProcessor#log), so that the processor does not run them again on this thread. A stand-in
+      # for the processor, such as SemanticLogger::Test::CaptureLogEvents, is handed it with #log.
+      def log_captured(log)
+        processor = Logger.processor
+        processor.respond_to?(:log_captured) ? processor.log_captured(log) : processor.log(log)
+      end
+
       # Receives from the port until it is closed.
       def receive(port)
         loop do
           kind, *args = port.receive
           case kind
           when :log
-            Logger.processor.log(RactorCopy.unpack(*args))
+            log_captured(RactorCopy.unpack(*args))
           when :flush
             flush_and_reply(args.first)
           when :pause

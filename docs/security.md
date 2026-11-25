@@ -92,7 +92,7 @@ A hash returned from a logging block, such as
 `logger.debug("Webhook received") { JSON.parse(body, symbolize_names: true) }`, is checked the
 same way, and never replaces a value the log call supplied. A key is only used as an argument when
 its value is valid for it and the log entry does not have that argument yet: an empty `message`
-counts as none, and a backtrace captured at the `backtrace_level` counts as supplied. Its `payload`
+counts as none, and a backtrace captured at the deprecated `backtrace_level` counts as supplied. Its `payload`
 is only used when it is a Hash. Every other key, including an argument the entry already has, is
 added to the payload without replacing the log call's values, and wins over the block's own
 `payload` values of the same name. The caller's own payload Hash is left unchanged.

@@ -101,26 +101,31 @@ formatter such as `:json`.
 
 ### Capturing backtraces
 
-Semantic Logger can capture the backtrace of the code that created each log entry, include its file
-name and line number in the output, and forward it to error services such as Bugsnag. To record only
-where each entry was logged, at a fraction of the cost, see
-[Recording where each entry was logged](#recording-where-each-entry-was-logged) below.
+As of v6 Semantic Logger captures no backtrace for every log entry. Where each entry was logged comes
+from its call site instead, recorded for the entries at `:error` and above by default, at a fraction of
+the cost (see [Recording where each entry was logged](#recording-where-each-entry-was-logged) below).
 
-Capturing a backtrace is expensive, so it is controlled by its own level, which defaults to
-`:error`. Only entries at this level or higher capture a backtrace:
+An appender that sends a backtrace captures one itself, on the thread that logged the entry, for the
+entries it sends: `:sentry_ruby`, `:bugsnag`, and `:honeybadger` capture one for each entry without an
+exception, at their level, `:error` by default (`:bugsnag` also for an exception that was never raised,
+which has none). Each entry captures one backtrace however many appenders ask for it. A custom appender
+does the same with a source capture that calls `log.capture_backtrace!` (see
+[Capturing what the logging thread knows](#capturing-what-the-logging-thread-knows)), and so can an
+`on_log` subscriber that needs one.
+
+`SemanticLogger.backtrace_level` still captures a backtrace for every entry at that level and above,
+whichever appender writes it, but it is deprecated, will be removed in v7, and is off (`nil`) by
+default:
 
 ~~~ruby
-# Capture backtraces for :error and :fatal entries (the default)
+# Deprecated: a backtrace for every :error and :fatal entry, as v5 captured by default
 SemanticLogger.backtrace_level = :error
 ~~~
-
-To capture a backtrace for every entry, set it to `:trace`. To turn backtrace capture off entirely,
-set it to `nil`. It is strongly recommended to leave this at `:error` or higher in production.
 
 ### Recording where each entry was logged
 
 To record the file, line, and method of the code that made each log call, set `call_site_level`.
-Entries at this level or higher record their call site. It is off (`nil`) by default:
+Entries at this level or higher record their call site. It is `:error` by default:
 
 ~~~ruby
 # Record where :info and higher entries were logged
@@ -129,7 +134,7 @@ SemanticLogger.call_site_level = :info
 # Every entry
 SemanticLogger.call_site_level = :trace
 
-# Off (the default)
+# Off
 SemanticLogger.call_site_level = nil
 ~~~
 
@@ -155,7 +160,7 @@ depth of the stack:
 | Records | The whole stack, as an Array of Strings | The file, line, and method of the log call |
 | Time added to a `logger.info` call, 100 frames deep | About 16 µs (Ruby 3.2) to 26 µs (Ruby 4.0) | About 1.5 µs |
 | On a deeper stack | Grows with the depth | The same |
-| Default | `:error` | `nil` (off) |
+| Default | `nil` (off), deprecated | `:error` |
 
 (Measured on an Apple M5; a `logger.info` call without either takes about 1.3 µs. Reading the stack
 costs much more on JRuby: about 25 µs for the call site, and 180 µs for a backtrace.) The call site is
@@ -208,7 +213,7 @@ Which code counts as the call site:
   A String, or any other value that parsed data can hold, is not accepted as a call site, nor is a
   `CallSite` without a String path, an Integer line, and a String or `nil` label: a log call logs it
   as part of the payload, and a `measure_*` call ignores it. An entry
-  with `call_site: false` that captures a backtrace (see `backtrace_level`), or logs an exception,
+  with `call_site: false` that has a backtrace (see [Capturing backtraces](#capturing-backtraces)), or logs an exception,
   still has a file name and line number from that backtrace, as the last point below says.
 * The first frame outside Semantic Logger, `rails_semantic_logger`, and Ruby's internal files (paths
   that start with `<internal:`). So an entry logged by a `measure_*` call, or by a logging block,
@@ -219,8 +224,8 @@ Which code counts as the call site:
   delegates, is recorded as the call site: add its path to `call_site_skip_paths` (see below).
 * When the log call supplies a `backtrace:`, the first line of that backtrace. For example
   `logger.backtrace` passes the backtrace of the thread it logs, and `rails_semantic_logger` passes
-  the application code that ran a SQL query when it captures a backtrace for the entry (see
-  `backtrace_level` above). A backtrace returned by a logging block does not change the call site.
+  the application code that ran a SQL query when `SemanticLogger.backtrace?` says to (see the
+  deprecated `backtrace_level` above). A backtrace returned by a logging block does not change the call site.
 * Entries that `rails_semantic_logger` logs for Rails' own events, such as `Processing`,
   `Completed`, `Rendered`, and SQL entries without a backtrace, are logged from Active Support's
   notifications, so their call site is an Active Support frame rather than the application's code.
@@ -308,8 +313,9 @@ Notes:
 * The application's cleaner is looked up as each entry is written, so it can be set before or after
   the appenders are added.
 * The file name and line number of an entry are not cleaned. They are where the entry was logged when
-  it has a call site (see `call_site_level` above) or captured a backtrace (see `backtrace_level`
-  above), and otherwise the first line of the exception's backtrace.
+  it has a call site (see `call_site_level` above) or a backtrace (see
+  [Capturing backtraces](#capturing-backtraces) above), and otherwise the first line of the
+  exception's backtrace.
 
 ### Redacting sensitive keys
 
@@ -396,7 +402,8 @@ SemanticLogger.normalize_level(::Logger::INFO) # => :info
 # such as before looking for the call site of an entry yourself.
 SemanticLogger.call_site?(:info)
 
-# Whether an entry at the level captures a backtrace (see backtrace_level). An entry about the
+# Whether an entry at the level captures a backtrace for every appender (see the deprecated
+# backtrace_level, which is off by default). An entry about the
 # application code that a library ran can then log the backtrace from that code, leaving out the
 # frames of gems, of Ruby's own libraries, and of Semantic Logger, at the top of the stack.
 if logger.debug? && SemanticLogger.backtrace?(:debug)
@@ -782,9 +789,11 @@ and
 [SemanticLogger::Formatters::Color](https://github.com/reidmorrison/semantic_logger/blob/main/lib/semantic_logger/formatters/color.rb)
 for all the methods that can be overridden.
 
-A formatter that writes the trace each entry was logged in, from `SemanticLogger::Otlp::TraceContext.of(log)`,
-returns `true` from `#trace_context?`, so that its appender has that trace captured on the thread of
-each log call. A subclass of `:json` or `:otlp` already does.
+A formatter that writes something that only the thread that logged the entry can read, such as the
+trace each entry was logged in, from `SemanticLogger::Otlp::TraceContext.of(log)`, returns its capture
+from `#source_captures`, which its appender returns as its own (see
+[Capturing what the logging thread knows](#capturing-what-the-logging-thread-knows)). A subclass of
+`:json` or `:otlp` already returns `SemanticLogger::Otlp::TraceContext::CAPTURES`.
 
 To replace the formatter on an appender that is already installed, for example in a Rails app:
 
@@ -944,9 +953,41 @@ class SimpleAppender < SemanticLogger::Subscriber
 end
 ~~~
 
-Call `super` from `#close`, as above. While the appender's formatter writes the trace that each entry
-was logged in, such as `:json`, Semantic Logger captures that trace on the thread of each log call,
-and `super` stops it once no other appender needs it.
+Call `super` from `#close`, as above.
+
+#### Capturing what the logging thread knows
+
+The appender writes on a thread of its own, so it cannot read what only the thread that logged the
+entry knows, such as a client's current scope, or the current trace. Return the objects that keep it
+on the entry from `#source_captures`: Semantic Logger calls each with the entry on the thread that
+logged it, after the `on_log` subscribers, while the appender is added. A capture keeps an object for
+the appender with `log.capture(key, value)`, which formatters do not write, and the appender reads it
+with `log.captured(key)`. A capture can also take a backtrace with `log.capture_backtrace!`, which
+keeps one that the entry already has:
+
+~~~ruby
+class SimpleAppender < SemanticLogger::Subscriber
+  # Constants, so that each runs once per entry however many of these appenders are added.
+  CAPTURE_SCOPE     = ->(log) { log.capture(:my_service, MyService.current_scope) }
+  CAPTURE_BACKTRACE = ->(log) { log.capture_backtrace! unless log.exception }
+
+  # Those of the formatter, such as the capture of the current trace for :json, and its own.
+  def source_captures = [*super, CAPTURE_SCOPE, CAPTURE_BACKTRACE]
+
+  def log(log)
+    MyService.deliver(format_log(log), scope: log.captured(:my_service), backtrace: log.backtrace)
+  end
+end
+~~~
+
+Each capture runs only for an entry that an appender returning it writes at its level, and once per
+entry, however many appenders return it. The capture decides anything more, such as to take a
+backtrace only for an entry without an exception. The appender's `filter` runs later, on its own
+thread. A capture that raises is reported to the internal logger. Keep captures fast: they run in
+every log call of the application. An appender whose captures change after it was added, other than
+by `formatter=`, calls `SemanticLogger::SourceCaptures.changed` afterwards. In a Ractor other than the
+main one, only the captures that are shareable run, such as a module with a `call` method, for every
+entry logged there.
 
 Do not give the appender an option of the same name as one that `super` already accepts, such as
 `host` or `level`: the appender's own keyword would take the value, so `super` would never receive
@@ -1265,7 +1306,8 @@ end
 
 Because these callbacks run on the application's own thread, keep them fast. The captured context is
 available to appenders and formatters as `log.context`, and formatters that write the context, such
-as `:loki`, write it too. To hand an appender of your own an object it needs from the logging thread
-that is not log data, such as a client's current scope, use `log.capture(key, value)` instead, and
-read it in the appender with `log.captured(key)`: formatters do not write it, unless one is built
-for that appender and reads its key.
+as `:loki`, write it too. An appender of your own that needs something from the logging thread that
+is not log data, such as a client's current scope, captures it itself instead (see
+[Capturing what the logging thread knows](#capturing-what-the-logging-thread-knows)). The `on_log`
+subscribers run before those captures, so a subscriber that needs a backtrace takes one with
+`log.capture_backtrace!`.

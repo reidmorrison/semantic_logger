@@ -34,8 +34,8 @@ module SemanticLogger
           let(:trace_id) { "5b8efff798038103d269b633813fc60c" }
           let(:span_id) { "eee19b7ec3c1b174" }
 
-          it "is written by this formatter, so its appender captures it" do
-            assert_predicate formatter, :trace_context?
+          it "is written by this formatter, so it returns its capture for its appender" do
+            assert_equal SemanticLogger::Otlp::TraceContext::CAPTURES, formatter.source_captures
           end
 
           it "writes the ids and flags of the span that was current when the entry was logged" do

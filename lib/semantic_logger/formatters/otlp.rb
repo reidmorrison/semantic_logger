@@ -37,8 +37,8 @@ module SemanticLogger
       # `flatten: false` was given, such as for a subclass whose #initialize does not call super.
       def flatten = @flatten != false
 
-      # Returns true: each record carries the trace it was logged in.
-      def trace_context? = true
+      # Returns [Array<#call>] the capture of the trace that each record carries.
+      def source_captures = SemanticLogger::Otlp::TraceContext::CAPTURES
 
       # Returns [String|nil] the message, or else, for an exception logged without one, the exception as
       # "ArgumentError: the message", so that a log view that shows the body, such as Grafana's, shows

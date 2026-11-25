@@ -103,6 +103,14 @@ module SemanticLogger
     # Returns a new Array, leaving the supplied stack unchanged since it can belong to the caller.
     def self.extract_backtrace(stack = caller) = stack.drop_while { |path| extract_path?(path) }
 
+    # Returns [Array<String>] the backtrace of the code that made the log call, from a stack taken
+    # inside it, such as by a source capture or an on_log subscriber (see Log#capture_backtrace!): the
+    # frames above the first one of Semantic Logger, such as those of an appender's own capture
+    # defined in the application, are left out, then those of Semantic Logger and Rails Semantic
+    # Logger, as .extract_backtrace leaves them out. A stack with no frame of Semantic Logger is
+    # returned as it is.
+    def self.logging_backtrace(stack) = extract_backtrace(stack.drop(stack.index { |path| extract_path?(path) } || 0))
+
     # Paths whose entries are stripped from the top of a captured backtrace.
     EXTRACT_PATHS = make_shareable(%w[lib/semantic_logger lib/rails_semantic_logger].freeze)
 

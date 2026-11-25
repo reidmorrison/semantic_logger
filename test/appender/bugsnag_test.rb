@@ -112,6 +112,24 @@ module Appender
         assert_equal "Could not save", hash[:message]
       end
 
+      it "sends the backtrace of the code that logged an entry without an exception" do
+        exception, _hash, _severity = stub_bugsnag do
+          through(appender) { |logger| logger.error(log_message) }
+        end
+
+        assert_match(/bugsnag_test\.rb:\d+/, exception.backtrace.first)
+      end
+
+      it "sends the backtrace of the code that logged an exception that was never raised" do
+        error = RuntimeError.new("Never raised")
+        exception, _hash, _severity = stub_bugsnag do
+          through(appender) { |logger| logger.error(log_message, error) }
+        end
+
+        assert_same error, exception
+        assert_match(/bugsnag_test\.rb:\d+/, exception.backtrace.first)
+      end
+
       def stub_bugsnag(&block)
         exception = hash = level = nil
         appender.stub(:bugsnag_notify, lambda { |exc, h, l|

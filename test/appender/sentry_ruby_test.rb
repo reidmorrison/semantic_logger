@@ -7,7 +7,6 @@ module Appender
       let(:appender) { SemanticLogger::Appender::SentryRuby.new(level: :trace) }
       let(:amessage) { "AppenderSentryRubyTest log message" }
 
-      # Each appender registers an on_log subscriber, which closing it removes.
       after { appender.close }
 
       SemanticLogger::LEVELS.each do |level|
@@ -21,7 +20,7 @@ module Appender
           }
 
           ::Sentry.stub(:capture_message, capture) do
-            appender.send(level, amessage)
+            through(appender) { |logger| logger.send(level, amessage) }
           end
 
           assert_equal amessage, error_message
@@ -271,18 +270,19 @@ module Appender
 
       describe "with the Sentry scope of the thread that logged the entry" do
         let(:appender) { SemanticLogger::Appender::SentryRuby.new }
+        let(:appenders) { SemanticLogger::Appenders.new.tap { |appenders| appenders << appender } }
 
         # Returns an entry logged on a thread of its own, after the block sets up that thread's
-        # Sentry scope, as a request would.
+        # Sentry scope, as a request would, whose source captures the appenders ran on that thread.
         def log_on_thread(level = :error, named_tags: {})
-          appender
+          appenders
           Thread.new do
             ::Sentry.with_scope do |scope|
               yield(scope) if block_given?
               log = SemanticLogger::Log.new("Checkout", level)
               log.assign(message: "Payment declined")
               log.named_tags = named_tags
-              SemanticLogger::Logger.call_subscribers(log)
+              appenders.capture(log)
               log
             end
           end.value
@@ -369,11 +369,29 @@ module Appender
           assert_nil log.captured(:sentry_scope)
         end
 
-        it "stops capturing the scope once closed" do
-          appender.close
+        it "stops capturing the scope once removed from the appenders" do
+          appenders.delete(appender)
           log = log_on_thread { |s| request_scope(s) }
 
           assert_nil log.captured(:sentry_scope)
+        end
+
+        it "captures the backtrace of an entry without an exception, on that thread" do
+          log = log_on_thread
+
+          assert_kind_of Array, log.backtrace
+          refute_empty log.backtrace
+        end
+
+        it "does not capture a backtrace for an entry with an exception, which has its own" do
+          log = Thread.new do
+            entry = SemanticLogger::Log.new("Checkout", :error)
+            entry.assign(message: "Payment declined", exception: RuntimeError.new("declined"))
+            appenders.capture(entry)
+            entry
+          end.value
+
+          assert_nil log.backtrace
         end
       end
     end

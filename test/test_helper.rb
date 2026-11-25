@@ -64,11 +64,20 @@ module Minitest
     def stub_http_start(&)
       Net::HTTP.stub_any_instance(:start, -> { @started = true }, &)
     end
+
+    # Yields a logger named after the appender, whose entries are written on this thread to the
+    # appender alone while the block runs, after its source captures ran, as when it is added (see
+    # SemanticLogger::Subscriber#source_captures). Returns the result of the block.
+    def through(appender)
+      appenders = SemanticLogger::Appenders.new
+      appenders << appender
+      processor = SemanticLogger::SyncProcessor.new(appenders)
+      SemanticLogger::Logger.stub(:processor, processor) { yield SemanticLogger::Logger.new(appender.name) }
+    end
   end
 end
 
-SemanticLogger.default_level   = :trace
-SemanticLogger.backtrace_level = :trace
+SemanticLogger.default_level = :trace
 SemanticLogger.add_appender(file_name: "test.log", formatter: :color)
 
 reporters = [

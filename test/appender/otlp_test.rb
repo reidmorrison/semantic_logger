@@ -86,37 +86,15 @@ module Appender
         end
       end
 
-      it "captures the current span while any :otlp appender is open" do
-        trace_context = SemanticLogger::Otlp::TraceContext
-        capture       = trace_context::CAPTURE
-        # Without the appenders that other tests left open, whose :json formatter writes the trace too.
-        owners        = trace_context.instance_variable_get(:@owners)
-        trace_context.instance_variable_set(:@owners, {}.compare_by_identity)
-        first         = new_appender
-        second        = new_appender
+      it "has the current span captured once per entry, however many :otlp appenders there are" do
+        first  = new_appender
+        second = new_appender
+        plan   = SemanticLogger::SourceCaptures.new([first, second], SemanticLogger::SourceCaptures.generation)
 
-        assert_equal 1, SemanticLogger::Logger.subscribers.count(capture)
-        assert trace_context.registered?(first)
-        first.close
-        first.close
-
-        refute trace_context.registered?(first)
-        assert_includes SemanticLogger::Logger.subscribers, capture
-        second.close
-
-        refute_includes SemanticLogger::Logger.subscribers, capture
-        stub_http_start { post([entry("A", :info, "again")], on: second) }
-
-        assert_includes SemanticLogger::Logger.subscribers, capture
-        SemanticLogger::Logger.clear_subscribers
-        third = new_appender
-
-        assert_includes SemanticLogger::Logger.subscribers, capture
-        third.close
-        second.close
+        assert_equal [SemanticLogger::Otlp::TraceContext::CAPTURE], plan.captures
       ensure
-        trace_context.instance_variable_set(:@owners, owners)
-        SemanticLogger.on_log(capture) unless owners.empty?
+        first&.close
+        second&.close
       end
 
       it "makes the capture of the current span shareable, for entries logged in other Ractors" do

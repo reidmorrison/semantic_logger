@@ -115,14 +115,14 @@ module SemanticLogger
       it "builds a log entry inside a Ractor" do
         skip "Logging from a Ractor requires Ruby 4.0" unless ruby4?
 
-        payload, backtrace, application = in_ractor do
+        payload, call_site, application = in_ractor do
           log = SemanticLogger::Log.new("InRactor", :error)
           log.assign(**log.extract_arguments({user: "jack", duration: 12.5}, "Failed"))
-          [log.payload, log.backtrace, SemanticLogger.application]
+          [log.payload, log.call_site, SemanticLogger.application]
         end
 
         assert_equal({user: "jack"}, payload)
-        refute_empty backtrace
+        assert_equal __FILE__, call_site.path
         assert_equal SemanticLogger.application, application
       end
 
@@ -137,7 +137,7 @@ module SemanticLogger
             log.call_site
           end
         ensure
-          SemanticLogger.call_site_level = nil
+          SemanticLogger.call_site_level = :error
         end
 
         assert_equal __FILE__, call_site.path
@@ -156,7 +156,7 @@ module SemanticLogger
             log.call_site
           end
         ensure
-          SemanticLogger.call_site_level      = nil
+          SemanticLogger.call_site_level      = :error
           SemanticLogger.call_site_skip_paths = nil
         end
 

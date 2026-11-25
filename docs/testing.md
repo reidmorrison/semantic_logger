@@ -117,7 +117,7 @@ test. The available checks are:
 | `context` | Named contexts captured with the entry. |
 | `time` | When the entry was created. |
 | `duration` | Duration of a measure call, in milliseconds. |
-| `backtrace` | The captured backtrace, if any. |
+| `backtrace` | The backtrace, if any: the one the log call supplied, or the one captured for each entry at `:error` and above. |
 | `call_site` | Where the entry was logged, a `SemanticLogger::CallSite`, when `SemanticLogger.call_site_level` is set. |
 | `thread_name` | Name of the thread that logged the entry, or its object id when the thread has no name. |
 

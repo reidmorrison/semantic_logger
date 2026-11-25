@@ -55,7 +55,7 @@ module Appender
         it "sends #{level} message" do
           hash = nil
           Honeybadger.stub(:notify, ->(h) { hash = h }) do
-            appender.send(level, amessage)
+            through(appender) { |logger| logger.send(level, amessage) }
           end
 
           assert_equal amessage, hash[:error_message]

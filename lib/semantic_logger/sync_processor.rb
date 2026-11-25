@@ -44,12 +44,21 @@ module SemanticLogger
       false
     end
 
-    # Logs on the calling thread, which belongs to the application, so a stack overflow while
-    # writing (see Appenders#log) is reported rather than raised from the log call.
+    # Runs the source captures of the appenders on the calling thread, which logged the entry (see
+    # Appenders#capture), then writes it (see #log_captured).
+    def log(log)
+      @appenders.capture(log)
+      log_captured(log)
+    end
+
+    # Logs an entry whose source captures already ran on the thread that logged it, such as one
+    # logged in a Ractor other than the main one (see RactorReceiver), on the calling thread, which
+    # belongs to the application, so a stack overflow while writing (see Appenders#log) is reported
+    # rather than raised from the log call.
     #
     # In a signal trap, the entry is written just after, by another thread, before any entry logged
     # after the trap, and the trap returns without waiting for it (see #defer).
-    def log(log)
+    def log_captured(log)
       logged = exclusively { write(log) }
       return logged unless logged.equal?(TRAPPED)
 

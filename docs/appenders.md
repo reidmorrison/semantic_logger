@@ -1164,7 +1164,8 @@ SemanticLogger.add_appender(appender: :new_relic_logs, level: :warn)
 The appender hands each entry to the agent, which sends it to New Relic on its own thread, so the
 agent's log forwarding must be on (`application_logging.forwarding.enabled`). Each entry
 carries the agent's linking metadata of the thread that logged it, such as `trace.id` and
-`entity.name`, so that New Relic shows it with its trace.
+`entity.name`, so that New Relic shows it with its trace. The `NewRelicLogs` formatter captures it,
+so an entry written with that formatter by any appender, such as a file appender, carries it too.
 
 ### OpenTelemetry over OTLP/HTTP {#otlp}
 
@@ -1218,7 +1219,7 @@ named tag of the same name. Semantic Logger adds these attributes when the entry
 |-----------|-------|
 | `exception.type`, `exception.message` | The class and message of the logged exception. |
 | `exception.stacktrace` | Its backtrace, followed by each exception that caused it. |
-| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a call site (see [`call_site_level`](config.html#recording-where-each-entry-was-logged)) or captured a backtrace (see `backtrace_level`). |
+| `code.file.path`, `code.line.number` | Where the entry was logged, when it has a call site (see [`call_site_level`](config.html#recording-where-each-entry-was-logged)) or a backtrace (see [Capturing backtraces](config.html#capturing-backtraces)). |
 | `code.function.name` | The method that logged the entry, such as `Order#submit`, when it has a call site. |
 | `thread.name` | The name of the thread that logged the entry, or its object id when it has none. |
 | `semantic_logger.tags` | The tags, as an array. |
@@ -1396,6 +1397,10 @@ SemanticLogger.add_appender(appender: :bugsnag, level: :warn)
 SemanticLogger.add_appender(appender: :bugsnag, level: :info)
 ~~~
 
+Each entry without an exception, or with one that was never raised, is sent with the backtrace of the
+code that logged it, which the appender captures as the entry is logged, since Bugsnag groups errors
+by their stack trace.
+
 ### Sentry
 
 Use the `sentry-ruby` gem and the corresponding appender:
@@ -1409,8 +1414,9 @@ contexts, breadcrumbs, trace, and event processors that `sentry-ruby`, `sentry-r
 application set for it, such as with `Sentry.set_user`. The request itself (its url, headers, and
 body) is left out, since Sentry reads the request body to send it, which the appender thread must not
 do while the request is using it; the errors that `sentry-rails` reports itself still include it. The appender sends the entry from its own thread, so it
-registers an `on_log` subscriber that keeps a copy of that Sentry scope with each entry it will send
-(with `Log#capture`, so that no formatter writes it), as the entry is logged.
+keeps a copy of that Sentry scope with each entry it will send (with `Log#capture`, so that no
+formatter writes it), as the entry is logged, and the backtrace of the code that logged an entry
+without an exception, which Sentry shows as the stack trace of its message.
 
 Some logging context is also forwarded to Sentry, added to that of the thread:
 
@@ -1450,6 +1456,9 @@ Or forward log entries at `:info` and above, its default level, to Honeybadger I
 SemanticLogger.add_appender(appender: :honeybadger_insights)
 ~~~
 
+`:honeybadger` sends each entry without an exception with the backtrace of the code that logged it,
+which it captures as the entry is logged.
+
 Both appenders use the Honeybadger
 [gem configuration](https://docs.honeybadger.io/lib/ruby/gem-reference/configuration/).
 
@@ -1464,7 +1473,7 @@ SemanticLogger.on_log do |log|
   next unless log.try(:level) == :error
 
   err = RuntimeError.new(log.try(:message))
-  err.set_backtrace(log.backtrace) if log.backtrace
+  err.set_backtrace(log.capture_backtrace!)
   Rollbar.error(err, :log_extra => log.to_h)
 end
 ~~~

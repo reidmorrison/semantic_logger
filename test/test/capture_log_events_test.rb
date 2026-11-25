@@ -12,6 +12,10 @@ class CaptureLogEventsTest < Minitest::Test
       logger.info(metric: "User/disabled")
     end
 
+    def fail!
+      logger.error("Could not enable")
+    end
+
     def sign_up!
       logger.increment(:"users.signup", dimensions: {plan: "free"})
       logger.time("users.signup.time") { :signed_up }
@@ -32,6 +36,22 @@ class CaptureLogEventsTest < Minitest::Test
       assert_equal :info, capture_logger.events.last.level
       assert_equal "User/enabled", capture_logger.events.last.metric
       refute_predicate capture_logger.events.last, :metric_only?
+    end
+
+    it "captures the backtrace of an event at :error and above, standing in for a logger" do
+      user.stub(:logger, capture_logger) do
+        user.enable!
+        user.fail!
+      end
+
+      assert_nil capture_logger.events.first.backtrace
+      assert_match(/capture_log_events_test\.rb:\d+:in .*fail!/, capture_logger.events.last.backtrace.first)
+    end
+
+    it "captures the backtrace of an event at :error and above, standing in for the processor" do
+      SemanticLogger::Logger.stub(:processor, capture_logger) { User.new.fail! }
+
+      assert_match(/capture_log_events_test\.rb:\d+:in .*fail!/, capture_logger.events.last.backtrace.first)
     end
 
     it "metric only event" do

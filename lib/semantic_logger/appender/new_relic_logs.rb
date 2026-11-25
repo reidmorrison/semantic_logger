@@ -23,10 +23,9 @@ require "semantic_logger/formatters/new_relic_logs"
 module SemanticLogger
   module Appender
     class NewRelicLogs < SemanticLogger::Subscriber
-      CAPTURE_CONTEXT = lambda do |log|
-        meta = ::NewRelic::Agent.linking_metadata
-        log.capture(:new_relic_metadata, meta) unless meta.empty?
-      end
+      # The capture of New Relic's linking metadata, which its formatter writes (see
+      # Formatters::NewRelicLogs#source_captures).
+      CAPTURE_CONTEXT = SemanticLogger::Formatters::NewRelicLogs::CAPTURE_CONTEXT
 
       # Create Appender
       #
@@ -46,14 +45,11 @@ module SemanticLogger
       #     regular expression. All other messages will be ignored.
       #     Proc: Only include log messages where the supplied Proc returns true
       #           The Proc must return true or false.
+      #
+      # Its formatter, NewRelicLogs by default, has New Relic's linking metadata, such as "trace.id",
+      # captured on the thread that logs each entry (see Formatters::NewRelicLogs#source_captures).
       def initialize(formatter: nil, **args, &block)
         super
-
-        # Record NewRelic's "trace.id"/"entity.name"/"hostname"/etc, so we can include them
-        # later in the formatted output.
-        # These are thread-local, so need to be captured as soon as the log-message is created.
-        # https://rubydoc.info/gems/newrelic_rpm/NewRelic/Agent#linking_metadata-instance_method
-        SemanticLogger.on_log(CAPTURE_CONTEXT)
       end
 
       # Send the log entry to the New Relic agent, which forwards it to New Relic Logs.

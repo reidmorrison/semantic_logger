@@ -2,8 +2,8 @@
 # logger that the processor builds on first use, which can be in a signal trap, where Ruby does not
 # allow a require.
 require "semantic_logger/formatters/default"
-# Loaded now too, since setting a formatter that writes the trace registers with it (see #formatter=),
-# which can be in a signal trap too, such as one that adds an appender.
+# Loaded now too, since the formatters that write the trace return its capture (see #source_captures),
+# which the appenders build again once one is added, which can be in a signal trap too.
 require "semantic_logger/otlp/trace_context"
 
 # Abstract Subscriber
@@ -11,17 +11,9 @@ require "semantic_logger/otlp/trace_context"
 #   Abstract base class for all appenders.
 module SemanticLogger
   class Subscriber < SemanticLogger::Base
-    # Builds the appender, and releases the capture of the trace that setting its formatter registered
-    # (see #formatter=) when its #initialize raises, such as for a file that cannot be opened, since an
-    # appender that was never built is never closed.
-    def self.new(...)
-      appender = allocate
-      appender.send(:initialize, ...)
-      appender
-    rescue Exception
-      appender&.release_trace_context
-      raise
-    end
+    # No source capture (see #source_captures).
+    NO_SOURCE_CAPTURES = [].freeze
+    private_constant :NO_SOURCE_CAPTURES
 
     # Every appender has its own formatter
     attr_reader :formatter
@@ -32,24 +24,44 @@ module SemanticLogger
       # NOOP
     end
 
-    # Stops capturing the trace of each log call for this appender's formatter (see #formatter=), without
-    # closing it, for an appender that is dropped without being closed, such as one that add_appender
-    # built for the caller's own `io:` or `logger:`, whose destination it must leave open. Writing to it
-    # again captures it again. Trap-safe.
-    def release_trace_context
-      return unless @trace_context_registered
-
-      @trace_context_registered = false
-      SemanticLogger::Otlp::TraceContext.unregister(self)
+    # A subscriber should implement close if it can, and call super.
+    def close
+      nil
     end
 
-    # A subscriber should implement close if it can, and call super, so that it stops capturing the
-    # trace of each log call for its formatter, once no other appender needs it (see #formatter=).
-    # Closing it again changes nothing more. Writing again afterwards captures it again, until it is
-    # closed once more. Trap-safe.
-    def close
-      release_trace_context
-      nil
+    # Returns [Array<#call>] the objects to call with each log entry that this appender writes, on the
+    # thread that logged it, before it is handed to the thread that writes it: to keep on the entry
+    # what only that thread can read, such as the current span or a client's scope, with
+    # `log.capture(key, value)`, for this appender to read with `log.captured(key)` (see
+    # Log#capture), or a backtrace with `log.capture_backtrace!`. By default those of the formatter,
+    # when it answers #source_captures (see Formatters::Base#source_captures), other than this
+    # appender itself, when it formats its own entries with #call.
+    #
+    # The appenders that are added run them (see Appenders#capture): each capture once for each entry,
+    # however many appenders return it, so return the same object each time, such as a constant, and
+    # only for an entry that one of them writes at its level (see #writes_level?). The capture decides
+    # anything more, such as to take a backtrace only for an entry without an exception. Keep them
+    # fast, since they run in every log call of the application.
+    #
+    # An appender whose captures can change after it was added, other than by #formatter=, calls
+    # SourceCaptures.changed afterwards.
+    #
+    # Example:
+    #   CAPTURE = ->(log) { log.capture(:my_service, MyService.current_context) }
+    #
+    #   def source_captures = [*super, CAPTURE]
+    def source_captures
+      current = formatter
+      return NO_SOURCE_CAPTURES if current.equal?(self) || !current.respond_to?(:source_captures)
+
+      current.source_captures
+    end
+
+    # Returns [true|false] whether this appender's level lets it write the log entry, its filter
+    # aside, which runs on the thread that writes it. Its source captures run for such an entry
+    # (see #source_captures).
+    def writes_level?(log)
+      meets_log_level?(log)
     end
 
     # Method called to log an event
@@ -95,9 +107,8 @@ module SemanticLogger
 
     # Set the formatter from Symbol|Hash|Block
     #
-    # While the formatter writes the trace that each entry was logged in (see
-    # Formatters::Base#trace_context?), this appender has it captured on the thread of each log call
-    # (see Otlp::TraceContext.register), until it is closed, or given a formatter that does not.
+    # The appenders then build their source captures again, since this appender's are by default
+    # those of its formatter (see #source_captures).
     def formatter=(formatter)
       @formatter =
         if formatter.nil?
@@ -105,7 +116,7 @@ module SemanticLogger
         else
           Formatters.factory(formatter)
         end
-      capture_trace_context
+      SourceCaptures.changed
     end
 
     # Whether this log entry meets the criteria to be logged by this appender.
@@ -309,7 +320,6 @@ module SemanticLogger
     # The block, when given, turns the formatter's output into what the appender sends, such as
     # its JSON. An error doing so is also caused by the content of the message.
     def format_log(log)
-      capture_trace_context if @trace_context_needed && !@trace_context_registered
       formatted = formatter.call(log, self)
       block_given? ? yield(formatted) : formatted
     rescue StandardError, ScriptError => e
@@ -327,7 +337,6 @@ module SemanticLogger
     # The formatter is read once, so that one changed by #formatter= on another thread cannot be
     # swapped in between the check and the call.
     def format_batch(logs)
-      capture_trace_context if @trace_context_needed && !@trace_context_registered
       batch_formatter = formatter
       refusal         = format_batch_refusal(batch_formatter)
       raise(ArgumentError, "Cannot batch #{self.class}: #{refusal}") if refusal
@@ -363,18 +372,6 @@ module SemanticLogger
     # define a #method of its own, such as for the HTTP method of its requests.
     def batch_defined_by?(owner)
       respond_to?(:batch) && Kernel.instance_method(:method).bind_call(self, :batch).owner.equal?(owner)
-    end
-
-    # Captures the trace of each log call while the formatter writes it, and this appender is open, or
-    # stops capturing it for this appender once its formatter does not (see #formatter=). Called again,
-    # such as by #format_log after #close, it registers this appender again, which Otlp::TraceContext
-    # counts once.
-    def capture_trace_context
-      @trace_context_needed = formatter.respond_to?(:trace_context?) && formatter.trace_context?
-      return release_trace_context unless @trace_context_needed
-
-      SemanticLogger::Otlp::TraceContext.register(self)
-      @trace_context_registered = true
     end
 
     # Returns [Hash] a copy of the supplied options, with a copy of each Hash among them, such as ssl:, for an

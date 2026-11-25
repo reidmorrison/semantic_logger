@@ -47,9 +47,7 @@ module SemanticLogger
     #
     # Raises ArgumentError when the appender is to be batched, with `batch: true` or by default, see
     # Subscriber#batch_by_default?, and it says why it cannot be, see Subscriber#batch_refusal. When it fails
-    # after .build, it first does what .build says to do with the appender on a failure: close the one that it created,
-    # see .close_created, or release the one that it built for what the caller holds (see
-    # Subscriber#release_trace_context).
+    # after .build, it first closes the appender when .build says to, the one that it created, see .close_created.
     def self.factory(async: false, batch: nil,
                      max_queue_size: 10_000, lag_check_interval: 1_000, lag_threshold_s: 30,
                      batch_size: 300, batch_seconds: 5,
@@ -92,10 +90,7 @@ module SemanticLogger
         appender
       end
     rescue Exception
-      case on_failure
-      when :close then close_created(appender)
-      when :release then release_dropped(appender)
-      end
+      close_created(appender) if on_failure == :close
       raise
     end
 
@@ -109,24 +104,13 @@ module SemanticLogger
     end
     private_class_method :close_created
 
-    # Stops the trace capture of the appender that .build made for what the caller holds, since .factory failed
-    # after making it (see Subscriber#release_trace_context). An error from doing so is ignored, as for
-    # .close_created.
-    def self.release_dropped(appender)
-      appender.release_trace_context
-    rescue StandardError
-      nil
-    end
-    private_class_method :release_dropped
-
-    # Returns [Subscriber, :close | :release | nil] the appender for the supplied options, and what .factory does with
-    # it when it fails afterwards:
-    #   :close   for one that .build created with its destination, so that nothing else holds them (see
-    #            .close_created): the appender for `file_name:`, or one named by a Symbol as `appender:` or `metric:`.
-    #   :release for one that .build created for the caller's own `io:` or `logger:`, which it must not close, since
-    #            closing the one for `logger:` closes that logger, and the stream it writes to, such as $stdout, yet is
-    #            dropped, so that it stops capturing the trace (see Subscriber#release_trace_context).
-    #   nil      for a Subscriber instance that the caller supplied as `appender:` or `metric:`, which the caller holds.
+    # Returns [Subscriber, :close | nil] the appender for the supplied options, and what .factory does with it when it
+    # fails afterwards:
+    #   :close for one that .build created with its destination, so that nothing else holds them (see .close_created):
+    #          the appender for `file_name:`, or one named by a Symbol as `appender:` or `metric:`.
+    #   nil    for one that .build created for the caller's own `io:` or `logger:`, which it must not close, since
+    #          closing the one for `logger:` closes that logger, and the stream it writes to, such as $stdout; and for
+    #          a Subscriber instance that the caller supplied as `appender:` or `metric:`, which the caller holds.
     #
     # It adds one destination, one of file_name:, io:, logger:, appender:, and metric:, and raises ArgumentError when
     # given more than one, see .check_one_destination.
@@ -136,9 +120,9 @@ module SemanticLogger
       if file_name
         [SemanticLogger::Appender::File.new(file_name, **args, &), :close]
       elsif io
-        [SemanticLogger::Appender::IO.new(io, **args, &), :release]
+        [SemanticLogger::Appender::IO.new(io, **args, &), nil]
       elsif logger
-        [SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &), :release]
+        [SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &), nil]
       elsif appender
         if appender.is_a?(Symbol)
           [named(appender).new(**args, &), :close]

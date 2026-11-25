@@ -417,8 +417,53 @@ The `:json` formatter, and `:fluentd`, which builds on it, add `trace_id`, `span
 gem is loaded, or else the `trace_id` and `span_id` named tags. The named tags are still written as
 before. See [JSON](appenders.html#json).
 
-A custom appender whose `#close` does not call `super` keeps that trace being captured on each log
-call after it is closed. Call `super` from it (see [Custom appenders](config.html#custom-appenders)).
+The trace is captured on the thread of each log call while an appender whose formatter writes it is
+added, and no longer once it is removed.
+
+#### No backtrace is captured for every entry, and `backtrace_level` is deprecated
+
+v5 captured a backtrace for every entry at `:error` and above (`SemanticLogger.backtrace_level`), only
+for its first line to be written as the file name and line number by most formatters, at a cost that
+grows with the depth of the stack. v6 captures none by default:
+
+* `call_site_level` is `:error` by default, so the entries at `:error` and above still say where they
+  were logged, from their call site, at a fraction of the cost. The text formatters now also write the
+  method after the line number for them, such as `order.rb:42 Order#submit`, and the JSON formatters
+  a `method` field (see
+  [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged)). Set
+  `call_site_level = nil` to record none.
+* `:sentry_ruby`, `:bugsnag`, and `:honeybadger` capture a backtrace themselves for each entry they
+  send without an exception, at their own level, as before by default.
+* `log.backtrace` is `nil` for any other entry, unless the log call supplied one. A custom appender or
+  formatter that writes it captures one itself (see
+  [Capturing what the logging thread knows](config.html#capturing-what-the-logging-thread-knows)), as
+  does an `on_log` subscriber, such as the [Rollbar](appenders.html#rollbar) one, with
+  `log.capture_backtrace!`.
+* `SemanticLogger::Test::CaptureLogEvents`, and so `semantic_logger_events`, still captures a backtrace
+  for each event at `:error` and above.
+* `SemanticLogger.backtrace?` is false by default.
+
+Setting `SemanticLogger.backtrace_level` reports a deprecation warning. It still captures a backtrace
+for every entry at that level and above, whichever appender writes it, until it is removed in v7.
+
+#### Appenders capture what the logging thread knows with `#source_captures`
+
+An appender, or its formatter, returns the objects that keep on each entry what only the thread that
+logged it knows, such as a client's scope, from `#source_captures`. Semantic Logger runs them, once per
+entry, after the `on_log` subscribers, while the appender is added, and only for the entries that it
+writes at its level (see
+[Capturing what the logging thread knows](config.html#capturing-what-the-logging-thread-knows)). The
+built-in appenders no longer register `on_log` subscribers:
+
+* A custom appender that registers one in `#initialize` keeps working. Return its capture from
+  `#source_captures` instead, so that it stops once the appender is removed.
+* The `:new_relic_logs` formatter captures New Relic's linking metadata itself, so an appender that
+  writes with it, such as a file appender, needs no `on_log(SemanticLogger::Appender::NewRelicLogs::CAPTURE_CONTEXT)`
+  any more (see [v4.18](#upgrading-to-semantic-logger-v418)). Remove it, or the metadata is captured
+  twice.
+* A custom formatter that returned `true` from `#trace_context?` returns
+  `SemanticLogger::Otlp::TraceContext::CAPTURES` from `#source_captures` instead, as `:json` and
+  `:otlp` do.
 
 #### A negative Integer level raises `ArgumentError`
 
@@ -446,6 +491,11 @@ config.rails_semantic_logger.appenders do |appenders|
   appenders.add_server(metric: :statsd, formatter: nil)
 end
 ~~~
+
+`rails_semantic_logger` 5.x records the call site of every entry in development only while
+`call_site_level` is `nil`, which it no longer is by default. Until its v6 release, set
+`config.semantic_logger.call_site_level = :trace` in `config/environments/development.rb` to keep
+them.
 
 ### Upgrading to Semantic Logger v5.3
 

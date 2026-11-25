@@ -39,6 +39,21 @@ module SemanticLogger
         super
       end
 
+      # Captures the backtrace of the code that logged an entry without an exception, or with one that
+      # was never raised, which has none, since Bugsnag groups errors by their stack trace (see
+      # Log#capture_backtrace!). Not for the entries of Bugsnag's own logger, which are never sent.
+      CAPTURE_BACKTRACE = lambda do |log|
+        next if log.name == "Bugsnag" || log.exception&.backtrace
+
+        log.capture_backtrace!
+      end
+
+      # Returns [Array<#call>] the captures of its formatter, and that of the backtrace of the thread
+      # that logs each entry that it sends (see CAPTURE_BACKTRACE).
+      def source_captures
+        [*super, CAPTURE_BACKTRACE]
+      end
+
       # Returns [Hash] of parameters to send to Bugsnag.
       def call(log, logger)
         hash = SemanticLogger::Formatters::Raw.new.call(log, logger)

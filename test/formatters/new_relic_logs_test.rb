@@ -37,6 +37,15 @@ module SemanticLogger
           JSON.parse(formatted_log[:message]) if formatted_log[:message].is_a?(String)
         end
 
+        describe "#source_captures" do
+          it "captures New Relic's linking metadata for any appender that writes with it, such as a file" do
+            io_appender = SemanticLogger::Appender::IO.new(StringIO.new, formatter: NewRelicLogs.new)
+
+            assert_equal [NewRelicLogs::CAPTURE_CONTEXT], io_appender.source_captures
+            assert_same NewRelicLogs::CAPTURE_CONTEXT, SemanticLogger::Appender::NewRelicLogs::CAPTURE_CONTEXT
+          end
+        end
+
         describe "duration" do
           it "logs long duration" do
             log.duration = 1_000_000.34567

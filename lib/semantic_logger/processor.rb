@@ -43,6 +43,19 @@ module SemanticLogger
       super(appender: @appenders, max_queue_size: max_queue_size)
     end
 
+    # Runs the source captures of the appenders on the calling thread, which logged the entry (see
+    # Appenders#capture), then queues it for the worker thread.
+    def log(log)
+      appenders.capture(log)
+      log_captured(log)
+    end
+
+    # Queues an entry whose source captures already ran on the thread that logged it, such as one
+    # logged in a Ractor other than the main one (see RactorReceiver).
+    def log_captured(log)
+      processor.log(log)
+    end
+
     # Reopen the appenders, after a fork or within the same process, each on the thread that writes
     # to it, between writes (see Appender::Async#reopen): the worker thread of this processor reopens
     # the appenders (see Appenders#reopen).

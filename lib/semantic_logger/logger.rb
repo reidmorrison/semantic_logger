@@ -58,6 +58,14 @@ module SemanticLogger
       @processor ||= Processor.new
     end
 
+    # Returns [true|false] whether the appenders are those of the processor of the main Ractor, such as
+    # to publish their shareable source captures for the other Ractors (see SourceCaptures.publish).
+    # Does not create the processor.
+    def self.main_appenders?(appenders)
+      processor = @processor
+      processor.respond_to?(:appenders) && processor.appenders.equal?(appenders)
+    end
+
     # Switch to the synchronous processor
     def self.sync!
       return if @processor.is_a?(SyncProcessor)
@@ -98,8 +106,9 @@ module SemanticLogger
     # Place log request on the queue for the Appender thread to write to each
     # appender in the order that they were registered
     #
-    # Subscribers are called inline before handing off to the queue so that
-    # they can capture additional context information as needed.
+    # The on_log subscribers are called inline before handing off to the queue so that
+    # they can capture additional context information as needed. The processor then runs the
+    # source captures of the appenders, on this thread too (see Subscriber#source_captures).
     def log(log, message = nil, progname = nil, &)
       # Compatibility with ::Logger
       return add(log, message, progname, &) unless log.is_a?(SemanticLogger::Log)

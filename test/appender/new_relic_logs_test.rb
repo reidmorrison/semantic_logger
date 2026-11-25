@@ -96,7 +96,7 @@ module Appender
       it "includes NewRelic's linking metadata" do
         NewRelic::Agent.agent.log_event_aggregator.stub(:record, method(:log_newrelic_stub)) do
           log = SemanticLogger::Log.new("TestLogger", :info)
-          SemanticLogger::Logger.call_subscribers(log)
+          @appender.source_captures.each { |capture| capture.call(log) }
           @appender.log(log)
         end
         parse_logged_message
