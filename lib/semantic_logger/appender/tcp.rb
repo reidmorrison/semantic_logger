@@ -109,6 +109,7 @@ module SemanticLogger
         super(level: level, formatter: formatter, filter: filter, application: application,
               environment: environment, host: host, metrics: metrics, &)
         TcpClientOptions.report_deprecated(tcp_client_args, ":tcp")
+        logger.extend(TcpClientOptions::BenchmarkWithoutWarning) if TcpClientOptions.report_outdated_gem(":tcp")
         reopen
       end
 

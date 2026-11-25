@@ -20,7 +20,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - The `benchmark_*` methods and `benchmark` of a logger report a deprecation warning, since v6
   removes them: use `measure_*` and `measure`, which take the same arguments. Update `net_tcp_client`,
   used by the `:tcp` appender and the `:syslog` appender over TCP, to 2.3 or later, which calls
-  `measure_*`.
+  `measure_*`: those appenders report a deprecation warning when they are added with an earlier one.
 
 ### Fixed
 

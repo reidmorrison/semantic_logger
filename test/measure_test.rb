@@ -197,6 +197,18 @@ class MeasureTest < Minitest::Test
           end
         end
 
+        unless level == :fatal
+          it "the deprecated #benchmark_#{level} runs the block below the level" do
+            appender.level = :fatal
+            result = assert_deprecated(/benchmark_#{level} is deprecated/) do
+              appender.send(:"benchmark_#{level}", "hello world") { |params| params }
+            end
+
+            assert_equal({}, result)
+            assert_empty appender.events
+          end
+        end
+
         it ":dimensions with the deprecated #benchmark_#{level}" do
           result = assert_deprecated(/benchmark_#{level} is deprecated and removed in v6\. Use measure_#{level},/) do
             appender.send(:"benchmark_#{level}", "hello world", metric: metric, dimensions: dimensions) { "result" }

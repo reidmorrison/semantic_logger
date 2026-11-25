@@ -65,6 +65,15 @@ module Appender
           end
         end
 
+        it "gives net_tcp_client its own logger, with benchmark_* methods that do not warn, when it is outdated" do
+          options  = SemanticLogger::Appender::TcpClientOptions
+          appender = options.stub(:report_outdated_gem, ->(name) { name == ":syslog" }) { appender_with({}) }
+
+          assert_same appender.logger, appender.remote_syslog.logger
+          assert_kind_of options::BenchmarkWithoutWarning, appender.remote_syslog.logger
+          refute_kind_of options::BenchmarkWithoutWarning, Net::TCPClient.logger
+        end
+
         it "keeps the ssl: handshake_timeout after a reopen, and leaves the Hashes given as they are" do
           ssl        = {handshake_timeout: 2}
           tcp_client = {connect_timeout: 3, ssl: ssl}

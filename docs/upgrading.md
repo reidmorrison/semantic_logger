@@ -123,7 +123,10 @@ logger.measure_info("Called supplier") { supplier.call }
 
 Update the `net_tcp_client` gem to version 2.3 or later, which calls `measure_*`, if your application
 uses it, such as for the `:tcp` appender or the `:syslog` appender over TCP: earlier versions call
-`benchmark_debug` and `benchmark_error`, which then report the warning on every connection and write.
+`benchmark_debug` and `benchmark_error` at every connection and write. The `:tcp` appender, and the
+`:syslog` appender over TCP, report a warning when they are added with such a version, saying to
+update it, and keep those calls from warning; an application that uses `net_tcp_client` without them
+gets the warning at each call.
 
 ### Upgrading to Semantic Logger v5.3
 
