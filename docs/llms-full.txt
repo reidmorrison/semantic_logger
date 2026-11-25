@@ -3886,13 +3886,18 @@ Every logger has three metric methods. They log nothing, and do not depend on th
 
 ### Count something: `increment`
 
-`increment(name, amount = 1, dimensions: nil)` adds to a counter:
+`increment(name, amount = 1, unit: nil, dimensions: nil)` adds to a counter:
 
 ~~~ruby
 logger.increment("users.signup")
 logger.increment("cart.items_added", 3, dimensions: {department: "clothing"})
 logger.increment("payments.amount", 189.42, dimensions: {currency: "USD"})
+logger.increment("messaging.client.sent.messages", unit: "{message}")
 ~~~
+
+`unit:` names what the counter counts, in the notation of OpenTelemetry (UCUM), such as
+`"{message}"`, or `"By"` for bytes. As for `record`, it is part of the identity of the series. The
+`:otlp` and `:summary` appenders send it; the others leave it out.
 
 A counter only ever grows: its amount is zero or more. To count something that goes down, such as
 items removed from a cart, give it a counter of its own:
@@ -4422,7 +4427,7 @@ SemanticLogger.add_appender(metric: :summary, interval: 300, level: :debug)
 
 Each entry is named `SemanticLogger::Metric::Summary`, its message is the metric name, and its
 payload holds the `sum` of a counter, or the `count`, `sum`, `min`, `max`, `p50`, `p95`, and `p99`
-of a histogram, with its `unit` and `dimensions` when it has them. Values are rounded to 3
+of a histogram, with the `unit` and `dimensions` of either when it has them. Values are rounded to 3
 significant digits, and the percentiles are estimates.
 
 Its `level:`, `:info` by default, is the level of the entries it writes, independent of
