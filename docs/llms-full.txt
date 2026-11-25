@@ -3898,6 +3898,36 @@ logger.time("sidekiq.queue.latency", duration: latency_ms)
 
 With a block, `duration:` is ignored.
 
+When the block raises, the metric gets the dimension `"error.type"`, the class name of the exception,
+as for a [`measure_*` call](#metrics-on-log-and-measure-calls), unless its dimensions already have one.
+Failed calls are then a series of their own.
+
+#### Dimensions known only once the block has ended
+
+`dimensions:` can also be a callable, such as a lambda, that returns the dimensions, a Hash or `nil`.
+It is called once the block has ended, with the block's result and the exception it raised, one of
+them `nil`, so that the dimensions can depend on the outcome. Return an `"error.type"` of your own to
+name the failure in place of the exception raised, such as the error that a wrapper exception holds:
+
+~~~ruby
+logger.time("sidekiq.job.duration", dimensions: lambda { |_result, error|
+  dimensions = {queue: queue}
+  dimensions["error.type"] = error.cause.class.name if error.is_a?(Sidekiq::JobRetry::Handled) && error.cause
+  dimensions
+}) { run(job) }
+~~~
+
+Without a block, it is called with `nil` and `nil`. It is always called with these two arguments,
+so write it as `->(result, error) { ... }`, or as `->(*) { ... }` when it needs neither: a lambda
+that takes another number of arguments raises.
+
+It is called only while `collecting_metrics?` (below) is `true`. Until then, `time` with a block only
+calls the block, without reading the clock, and `time` without one returns `false`, as it does
+without a Numeric `duration:`. A callable that raises a `StandardError` is reported on the internal
+logger, once per metric name, and the time is not recorded, as are dimensions that are neither a
+Hash nor `nil`; `time` still returns the block's result, or raises its exception. Any other exception
+that the callable raises, such as `Interrupt`, is raised by `time`, as from any code of the block.
+
 ### Record any value: `record`
 
 `record(name, value, unit: nil, dimensions: nil)` records a value in a histogram, such as a size or
@@ -3930,6 +3960,12 @@ building the dimensions costs something, such as parsing a statement, ask the lo
 if logger.collecting_metrics?
   logger.time("db.client.operation.duration", duration: ms, dimensions: dimensions_of(sql))
 end
+~~~
+
+Or give `time` its dimensions as a callable, which it calls only while metrics are collected:
+
+~~~ruby
+logger.time("db.client.operation.duration", duration: ms, dimensions: ->(*) { dimensions_of(sql) })
 ~~~
 
 `collecting_metrics?` answers for the whole process: `true` once a metric appender is present, in the

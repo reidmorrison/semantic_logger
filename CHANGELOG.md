@@ -12,7 +12,10 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 
 - Every logger has `increment(name, amount = 1, unit: nil, dimensions: nil)` for a counter,
   `time(name, duration: nil, dimensions: nil) { ... }` for a histogram of durations in seconds (it
-  times the block and returns its result, or records a `duration:` given in milliseconds), and
+  times the block and returns its result, or records a `duration:` given in milliseconds; when the
+  block raises, its metric gets the dimension `"error.type"`, as for a `measure_*` call, unless its
+  dimensions have one; its `dimensions:` can be a callable, called with the block's result and the
+  exception it raised only while metrics are collected), and
   `record(name, value, unit: nil, dimensions: nil)` for a histogram of any value. They do not depend
   on the log level, and log nothing: once a metric appender is added, each call is aggregated and the
   metric appenders are given what was recorded in each interval; without one, they return at once.
