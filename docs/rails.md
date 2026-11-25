@@ -66,6 +66,88 @@ already does:
 * `rails_stdout_logging`
 * `rails_12factor`
 
+#### An existing application: the install generator
+
+An application that already configures Rails logging, or still sets the deprecated
+`config.rails_semantic_logger` appender options, can let Rails Semantic Logger v5.4 or later
+configure it:
+
+    bin/rails generate rails_semantic_logger:install
+
+In `config/application.rb` and each `config/environments/*.rb`, the generator:
+
+* Removes the logger settings that Rails Semantic Logger replaces or ignores, when set without a
+  condition: `config.logger`, `config.log_formatter`, the `if ENV["RAILS_LOG_TO_STDOUT"].present?`
+  block of Rails 6 and 7.0 when it holds only logger settings, and commented-out examples of another
+  logger, such as `Syslog::Logger`. One with a condition, or a `RAILS_LOG_TO_STDOUT` block that does
+  more, is left for you to move.
+* Writes an explicit [appenders block](#configuring-where-logs-go-the-appenders-block) at the top of
+  each environment's settings, listing the appenders that Rails Semantic Logger was already
+  creating, so that nothing changes until you edit them.
+* Carries the [deprecated options](#deprecated-configuration-options) (`format`, `ap_options`,
+  `filter`, `add_file_appender`, `console_logger`) and the appenders added with
+  `config.semantic_logger.add_appender` into that block, and removes them.
+
+For a production application that set `config.rails_semantic_logger.format = :json`, it writes:
+
+~~~ruby
+# config/environments/production.rb
+Rails.application.configure do
+  # Where the logs go. Rails Semantic Logger creates exactly the appenders listed here, so change this
+  # block to send them elsewhere. ...
+  config.rails_semantic_logger.appenders do |appenders|
+    appenders.add(file_name: config.paths["log"].first, formatter: :json)
+    appenders.add_server(io: $stdout, formatter: :color)
+    appenders.add_console(io: $stderr, formatter: :color)
+
+    # Or, in a container (Docker, Kubernetes), replace the lines above with JSON on stdout, one line
+    # per entry, and no log file:
+    #   appenders.add(io: $stdout, formatter: :json)
+  end
+
+  # ...
+end
+~~~
+
+`config.paths["log"].first` is the file Rails Semantic Logger wrote to by default,
+`log/production.log` under the application's root. Since the block now lists every destination,
+change it there: see [Common recipes](#common-recipes).
+
+The generator writes no block where it cannot keep the same logging, and says why for each
+environment and each setting it left in place:
+
+* An environment that already declares its appenders gets no block, nor does any environment when
+  `config/application.rb` declares them. Their ignored logger settings are still removed.
+* An environment that loads another one, such as a `staging.rb` that starts with
+  `require_relative "production"`, gets no block of its own: it gets the other one's.
+* An environment is left unchanged when a block would override a setting that has to stay where it
+  is: a deprecated option or a screen appender inside a condition (`... if ENV["JSON"]`), an option
+  set to a computed value, a conditional or computed `config.colorize_logging`, or
+  `config.paths["log"]` set in that file. So is an environment that another one loads when the
+  loading file sets any deprecated appender option, adds an appender that writes to the screen,
+  declares its own appenders, sets `config.colorize_logging`, or sets `config.paths["log"]`, since
+  the block would apply to it too. Move such a setting into the block by hand, then run the
+  generator again.
+* An environment is also left unchanged when its block would declare no appender at all (both
+  `add_file_appender` and `console_logger` false, and no appender added), which would bring back
+  the default appenders, or when its file has no `.configure do` block
+  (`Rails.application.configure` or `MyApp::Application.configure`).
+* When any environment is left unchanged, or declares its own appenders, the deprecated options and
+  appenders of `config/application.rb` stay where they are, since they apply to that environment
+  too. Its deprecated options then keep every environment from taking a block.
+* An appender whose arguments read a local variable, call a method of the file, or read `config`
+  stays in place, since the block goes at the top of the settings, where they may not exist yet.
+  When it writes to standard out or standard error, its environment is left unchanged, since the
+  block's screen appenders would repeat its output.
+
+One change to expect: before, the default log file gave its formatter to every file and IO
+appender (standard out, standard error) that the application added with
+`config.semantic_logger.add_appender`. Listed in the block, such an appender keeps the formatter it
+was given, or the default text formatter when it was given none.
+
+Read the changes with `git diff` before you commit them. `bin/rails destroy rails_semantic_logger:install`
+does nothing, since the generator cannot put back what it removed.
+
 ### Out of the box
 
 With no configuration at all, Rails Semantic Logger:
@@ -136,7 +218,9 @@ Semantic Logger default of plain text.
 > logger it normally adds under `rails server`, and the standard-error logger it normally adds in
 > `rails console`. The block becomes the single source of truth for every destination. So declare
 > what you want: `add` for an always-on destination (such as the file log), `add_server` for screen
-> output while serving, and `add_console` for the Rails console.
+> output while serving, and `add_console` for the Rails console. The
+> [install generator](#an-existing-application-the-install-generator) writes the block that
+> reproduces the automatic appenders, for you to change.
 
 ### Step 1: a single log file
 
@@ -974,6 +1058,28 @@ After they initialize, Rails Semantic Logger replaces the loggers of these libra
 
 ---
 
+## Upgrading to v5.4
+
+v5.4 needs no configuration changes.
+
+### The install generator moves an application off the deprecated options
+
+`bin/rails generate rails_semantic_logger:install` replaces the
+[deprecated appender options](#deprecated-configuration-options), and the Rails logger settings
+that Rails Semantic Logger ignores, with an explicit appenders block in each environment. See
+[An existing application: the install generator](#an-existing-application-the-install-generator).
+The deprecation warnings of those options now name the generator, and are not emitted while
+`rails generate` runs, since it loads the application's configuration.
+
+### A declared log file has its directory created
+
+A log file declared in `config.rails_semantic_logger.appenders`, such as
+`appenders.add(file_name: "log/json/production.log")`, has its directory created, as the default
+log file always had. Before, an `add` log file could not be opened, and Rails Semantic Logger fell
+back to logging to standard error at the `:warn` level (see
+[A log file that cannot be opened now fails at boot](#a-log-file-that-cannot-be-opened-now-fails-at-boot)),
+and an `add_server` or `add_console` one raised.
+
 ## Upgrading to v5.3
 
 v5.3 requires Semantic Logger v5.3; see [Upgrading to Semantic Logger v5.3](upgrading.html#upgrading-to-semantic-logger-v53)
@@ -1179,6 +1285,9 @@ and will be **removed in v6**. Each is replaced by the [appenders block](#config
 | `config.rails_semantic_logger.filter` | `filter:` on the appender |
 | `config.rails_semantic_logger.console_logger` | Declare (or omit) an `add_console` appender |
 | `config.rails_semantic_logger.add_file_appender` | Declare appenders in the block (doing so already replaces the default file appender) |
+
+From v5.4, `bin/rails generate rails_semantic_logger:install` makes these replacements for you. See
+[An existing application: the install generator](#an-existing-application-the-install-generator).
 
 ### Silencing the warnings until you migrate
 
