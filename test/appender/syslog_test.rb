@@ -132,13 +132,11 @@ module Appender
         it "connects in the child when a reopen there cannot, rather than writing through the parent's connection" do
           tls_appender.log(log_with("before"))
           output = in_forked_child do
-            error = Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) do
-              tls_appender.reopen
-            rescue SemanticLogger::Appender::TcpConnection::ConnectError => e
-              e
-            end
+            internal_logger     = SemanticLogger::Test::CaptureLogEvents.new
+            tls_appender.logger = internal_logger
+            Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) { tls_appender.reopen }
             tls_appender.log(log_with("child"))
-            error.class.name
+            internal_logger.events.last.exception.class.name
           end
           tls_appender.log(log_with("after"))
 
@@ -230,16 +228,40 @@ module Appender
 
         it "keeps the connection it has when a reopen cannot connect" do
           tcp_appender
-          connection = server.accept
+          connection          = server.accept
+          internal_logger     = SemanticLogger::Test::CaptureLogEvents.new
+          tcp_appender.logger = internal_logger
 
-          Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) do
-            assert_raises(SemanticLogger::Appender::TcpConnection::ConnectError) { tcp_appender.reopen }
-          end
+          Socket.stub(:tcp, ->(*, **) { raise Errno::ECONNREFUSED }) { tcp_appender.reopen }
+          report = internal_logger.events.last
+
+          assert_equal :warn, report.level
+          assert_instance_of SemanticLogger::Appender::TcpConnection::ConnectError, report.exception
           tcp_appender.log(log_with("after"))
 
           assert_equal "after\r\n", record(connection)
         ensure
           connection&.close
+        end
+
+        it "reports, rather than raises, that it cannot connect as it is added, and connects at the next write" do
+          stopped = TCPServer.new("127.0.0.1", 0)
+          port    = stopped.addr[1]
+          stopped.close
+          internal_logger = SemanticLogger::Test::CaptureLogEvents.new
+          appender        = SemanticLogger::Processor.stub(:logger, internal_logger) do
+            SemanticLogger::Appender::Syslog.new(url: "tcp://127.0.0.1:#{port}")
+          end
+          report = internal_logger.events.last
+
+          assert_equal :warn, report.level
+          assert_equal "Could not connect to the syslog server: the next write connects, if it has no connection",
+                       report.message
+          assert_instance_of SemanticLogger::Appender::TcpConnection::ConnectError, report.exception
+          refute_predicate appender.remote_syslog, :connected?
+          assert_raises(SemanticLogger::Appender::TcpConnection::ConnectError) { appender.log(log_with("lost")) }
+        ensure
+          appender&.close
         end
 
         it "reports an error closing the connection that a reopen replaced, rather than raising it" do
