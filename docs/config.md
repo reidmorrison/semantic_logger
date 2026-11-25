@@ -183,7 +183,7 @@ Where each formatter writes the call site:
 | `:json`, `:raw`, `:syslog_cee`, `:fluentd` (with `need_process_info: true`), and the appenders that use them | `file`, `line` | `method` |
 | `:ecs` | `log.origin.file.name`, `log.origin.file.line` | `log.origin.function` |
 | `:new_relic_logs` | `file.name`, `line.number` | `method.name` |
-| `:otlp` | `code.file.path`, `code.line.number` | `code.function.name` |
+| `:otlp`, `:otlp_json_lines` | `code.file.path`, `code.line.number` | `code.function.name` |
 
 The `:logfmt` and `:loki` formatters write neither. A custom formatter reads the call site from
 [`log.call_site`](log.html#attributes).
@@ -271,7 +271,7 @@ give it `formatter: {json: {backtrace_cleaner: false}}`.
 The exception itself is never changed, so appenders that send the exception to an error service,
 such as Sentry, Bugsnag, or Honeybadger, still send its full backtrace. The other formatters,
 including `:raw` and the formatters written for a particular service, such as `:ecs`, `:loki`,
-`:new_relic_logs`, and `:otlp`, write the full backtrace. So do the `:elasticsearch`,
+`:new_relic_logs`, `:otlp`, and `:otlp_json_lines`, write the full backtrace. So do the `:elasticsearch`,
 `:opensearch`, `:mongodb`, `:graylog`, `:splunk_http`, and `:honeybadger_insights` appenders, which
 build their entries with formatters of their own: giving one of them a `formatter` replaces how it
 builds its entries.

@@ -16,7 +16,7 @@ module SemanticLogger
     # of its exception, then its body, each ending with TRUNCATED; then its attributes, the largest first,
     # counted in the record's droppedAttributesCount.
     #
-    # The resource is that of the `:otlp` appender (see Otlp::Resource): `application:`, `host:`, and
+    # The resource is built as the `:otlp` appender's is (see Otlp::Resource): `application:`, `host:`, and
     # `environment:` given win over OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES, which win over those of
     # the appender, such as SemanticLogger.application. Each line holds the `process.pid` of the process
     # that writes it.
@@ -27,6 +27,9 @@ module SemanticLogger
 
       # Ends the text of a value that was cut to fit the line.
       TRUNCATED = "...[truncated]".freeze
+
+      # The most bytes that the droppedAttributesCount field adds to a line.
+      DROPPED_COUNT_BYTES = %(,"droppedAttributesCount":4294967295).bytesize
 
       # Returns [Integer] the most bytes of one line.
       attr_reader :max_bytes
@@ -56,23 +59,29 @@ module SemanticLogger
       #
       #   record_formatter: [SemanticLogger::Formatters::Otlp]
       #     Maps each entry to its LogRecord.
-      #     Default: SemanticLogger::Formatters::Otlp.new(flatten:)
+      #     Default: SemanticLogger::Formatters::Otlp.new(**options)
       #
-      #   flatten: [true|false]
-      #     Whether to flatten the Hashes of the payload and named tags (see Formatters::Otlp), when no
-      #     `record_formatter:` is given.
-      #     Default: true
+      # The other options, such as `flatten:` and `log_exception_details:`, are those of the
+      # Formatters::Otlp that it builds when no `record_formatter:` is given.
       def initialize(max_bytes: DEFAULT_MAX_BYTES, application: nil, host: nil, environment: nil,
-                     resource_attributes: nil, record_formatter: nil, flatten: true)
+                     resource_attributes: nil, record_formatter: nil, **record_options)
         unless max_bytes.is_a?(Integer) && max_bytes.positive?
           raise(ArgumentError, "max_bytes: must be a positive Integer, not: #{max_bytes.inspect}")
+        end
+        if record_formatter && !record_options.empty?
+          raise(ArgumentError, "Give either record_formatter: or its options, not both: #{record_options.keys.inspect}")
+        end
+
+        if record_formatter && !record_formatter.is_a?(Formatters::Otlp)
+          raise(ArgumentError,
+                "record_formatter: must be a SemanticLogger::Formatters::Otlp, not: #{record_formatter.class}")
         end
 
         @max_bytes           = max_bytes
         @given               = {application: application, host: host, environment: environment}.freeze
         @resource_attributes = resource_attributes
-        @record_formatter    = record_formatter || Formatters::Otlp.new(flatten: flatten)
-        @resources           = Concurrent::Map.new
+        @record_formatter    = record_formatter || Formatters::Otlp.new(**record_options)
+        @latest_resource     = nil
       end
 
       # Returns [String] the line of the log entry, without a newline.
@@ -83,23 +92,36 @@ module SemanticLogger
         line.bytesize <= max_bytes ? line : fit(resource, log.name, record, line)
       end
 
-      # Returns true: each record carries the trace it was logged in.
+      # Returns [true|false] whether each record carries the trace it was logged in, as its record
+      # formatter says.
       def trace_context?
-        true
+        record_formatter.trace_context?
       end
 
       private
 
-      # Returns [Otlp::Resource] the resource of the lines written for the appender, built once for each.
+      # Returns [Otlp::Resource] the resource of the lines written for the appender: the latest one built,
+      # while it was built for this appender, by its object_id, so that an appender that is removed is not
+      # kept from being collected, and for the application, host, and environment that it has now, which
+      # are read once, for both; or else a new one, so that one set after its first line, such as by a
+      # framework as it starts, takes effect. One formatter usually serves one appender, so only the
+      # latest is kept.
+      #
+      # It is held in one instance variable, replaced whole, which a signal trap may do too.
       def resource_for(appender)
-        TrapSafe.compute_if_absent(@resources, appender || :none) { build_resource(appender) }
-      end
-
-      def build_resource(appender)
-        internal = appender.respond_to?(:logger) ? appender.logger : SemanticLogger::Processor.logger
-        # Without an appender, SemanticLogger's own settings, which it answers in the same way.
         source   = appender || SemanticLogger
         defaults = {application: source.application, host: source.host, environment: source.environment}
+        owner    = appender&.object_id
+        latest   = @latest_resource
+        return latest[2] if latest && latest[0] == owner && latest[1] == defaults
+
+        resource         = build_resource(appender, defaults)
+        @latest_resource = [owner, defaults, resource].freeze
+        resource
+      end
+
+      def build_resource(appender, defaults)
+        internal = appender.respond_to?(:logger) ? appender.logger : SemanticLogger::Processor.logger
         SemanticLogger::Otlp::Resource.new(
           otel:       SemanticLogger::Otlp::Environment.new(internal, SemanticLogger::Otlp::Signal::LOGS),
           defaults:   defaults,
@@ -120,8 +142,7 @@ module SemanticLogger
           line = line(resource, name, record) if cut(value, line.bytesize - max_bytes)
           return line if line.bytesize <= max_bytes
         end
-        drop_attributes(record, line.bytesize - max_bytes)
-        line(resource, name, record)
+        drop_attributes(resource, name, record, line)
       end
 
       # Returns [Hash|nil] the AnyValue of the stack trace attribute of the record.
@@ -143,23 +164,30 @@ module SemanticLogger
         true
       end
 
-      # Drops the attributes of the record, the largest first, until at least `excess` bytes are gone,
-      # counting them in droppedAttributesCount.
-      def drop_attributes(record, excess)
+      # Returns [String] the line, with the attributes of the record dropped, the largest first, until it
+      # fits, or none is left, counted in droppedAttributesCount. Each pass drops attributes whose bytes,
+      # with the count it adds, cover the excess, then writes the line again to check.
+      def drop_attributes(resource, name, record, line)
         attributes = record[:attributes]
-        return unless attributes
+        return line unless attributes
 
-        sized   = attributes.map { |attribute| [JSON.generate(attribute).bytesize + 1, attribute] }
+        largest = attributes.map { |attribute| [JSON.generate(attribute).bytesize + 1, attribute] }
+        largest.sort_by! { |size, _| -size }
         dropped = 0
-        sized.sort_by { |size, _| -size }.each do |size, attribute|
-          break if excess <= 0
-
-          attributes.delete(attribute)
-          excess  -= size
-          dropped += 1
+        while line.bytesize > max_bytes && dropped < largest.size
+          excess  = line.bytesize - max_bytes
+          excess += DROPPED_COUNT_BYTES if dropped.zero?
+          while excess.positive? && dropped < largest.size
+            size, attribute = largest[dropped]
+            attributes.delete_at(attributes.index { |kept| kept.equal?(attribute) })
+            excess  -= size
+            dropped += 1
+          end
+          record.delete(:attributes) if attributes.empty?
+          record[:droppedAttributesCount] = dropped
+          line = line(resource, name, record)
         end
-        record.delete(:attributes) if attributes.empty?
-        record[:droppedAttributesCount] = dropped if dropped.positive?
+        line
       end
     end
   end

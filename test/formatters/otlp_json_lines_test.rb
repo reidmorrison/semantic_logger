@@ -78,6 +78,26 @@ module SemanticLogger
           refute OtlpJsonLines.new(flatten: false).record_formatter.flatten
         end
 
+        it "passes the other options to its record formatter" do
+          assert OtlpJsonLines.new(log_exception_details: true).record_formatter.log_exception_details
+        end
+
+        it "refuses a record_formatter: that is not a Formatters::Otlp" do
+          assert_raises(ArgumentError) { OtlpJsonLines.new(record_formatter: :otlp) }
+        end
+
+        it "refuses a record_formatter: with options for it" do
+          assert_raises(ArgumentError) { OtlpJsonLines.new(record_formatter: Otlp.new, flatten: false) }
+        end
+
+        it "takes an application set after the first line, keeping one resource for each appender" do
+          formatter.call(log, appender)
+          appender.application = "renamed"
+
+          assert_equal "renamed", resource(parse(formatter.call(log, appender)))["service.name"]
+          assert_equal "renamed", formatter.instance_variable_get(:@latest_resource)[2].attributes["service.name"]
+        end
+
         it "refuses a max_bytes: that is not a positive Integer" do
           assert_raises(ArgumentError) { OtlpJsonLines.new(max_bytes: 0) }
           assert_raises(ArgumentError) { OtlpJsonLines.new(max_bytes: "1MB") }
@@ -123,6 +143,20 @@ module SemanticLogger
             assert_nil attribute(rec, "big")
             assert_operator rec["droppedAttributesCount"], :>=, 1
             assert(rec["attributes"].any? { |kv| kv["key"] == "small" })
+          end
+
+          it "fits whatever the cap, once it drops attributes" do
+            log.message   = "m"
+            log.exception = nil
+            log.payload   = {a: "x" * 40, b: "y" * 40, c: "z" * 40}
+            full          = OtlpJsonLines.new.call(log, appender).bytesize
+            minimum       = OtlpJsonLines.new(max_bytes: 1).call(log, appender).bytesize
+
+            (minimum..full).each do |cap|
+              line = OtlpJsonLines.new(max_bytes: cap).call(log, appender)
+
+              assert_operator line.bytesize, :<=, cap, "max_bytes: #{cap}"
+            end
           end
 
           it "is left as it is when it cannot be cut further" do

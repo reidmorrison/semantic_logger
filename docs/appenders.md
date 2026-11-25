@@ -441,8 +441,11 @@ Notes:
 * The resource takes `application:`, `host:`, `environment:`, and `resource_attributes:` given to the
   formatter over `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES`, which win over the appender's own
   application, host, and environment. Each line holds the `process.pid` of the process that wrote it.
+* The resource follows the appender's application, host, and environment as they change, such as
+  when a framework sets `SemanticLogger.application` after the first line.
 * Hashes in the payload and named tags are flattened into dotted attribute names, as for `:otlp`;
-  `flatten: false` writes them as maps:
+  `flatten: false` writes them as maps, and the other options of the `:otlp` formatter, such as
+  `log_exception_details:`, apply too:
   `formatter: {otlp_json_lines: {flatten: false, max_bytes: 4 * 1024 * 1024}}`.
 
 ## Network protocols
