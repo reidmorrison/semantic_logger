@@ -356,6 +356,48 @@ Notes:
 - Setting `SemanticLogger.cache_loggers = false` clears the cache. It can also be cleared explicitly
   with `SemanticLogger.clear_logger_cache`, for example after redefining a class.
 
+### Internal logger
+
+Semantic Logger reports its own problems, such as an appender that fails to write, to its internal
+logger rather than raising them in the application. By default it writes `:warn` and above to
+`$stderr`. Give it an appender, or a Ruby or Rails `Logger`, whose own level then decides which
+reports it writes:
+
+~~~ruby
+SemanticLogger.internal_logger = SemanticLogger::Appender::File.new("log/semantic_logger.log")
+
+# Restore the default
+SemanticLogger.internal_logger = nil
+~~~
+
+Set it before logging anything or adding appenders, since the processor and each appender keep a
+copy of the internal logger they started with. It cannot be a logger returned by `SemanticLogger[...]`,
+which would log the report of a failing appender back to that appender. Code that extends Semantic
+Logger can report its own problems there too, with `SemanticLogger.internal_logger.warn("...")`.
+
+### Levels and settings in code that extends Semantic Logger
+
+A library that builds on Semantic Logger, such as rails_semantic_logger, can ask about levels and the
+settings above without depending on how Semantic Logger keeps them:
+
+~~~ruby
+# The level as Semantic Logger names it, for any level it accepts.
+# Raises ArgumentError for nil or a level it does not know, so check a level once, as it is configured.
+SemanticLogger.normalize_level("WARN")         # => :warn
+SemanticLogger.normalize_level(::Logger::INFO) # => :info
+
+# Whether an entry at the level records where it was logged (see call_site_level),
+# such as before looking for the call site of an entry yourself.
+SemanticLogger.call_site?(:info)
+
+# Whether an entry at the level captures a backtrace (see backtrace_level). An entry about the
+# application code that a library ran can then log the backtrace from that code, leaving out the
+# frames of gems, of Ruby's own libraries, and of Semantic Logger, at the top of the stack.
+if SemanticLogger.backtrace?(:debug)
+  logger.debug(message: "Query", backtrace: SemanticLogger.application_backtrace)
+end
+~~~
+
 ---
 
 ## Per-appender settings

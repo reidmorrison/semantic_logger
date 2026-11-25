@@ -133,6 +133,15 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   [Write a custom metric appender](https://logger.reidmorrison.com/metrics.html#write-a-custom-metric-appender).
 - `add_appender(metric: :splunk_observability)`, the current name of `metric: :signalfx` (Splunk
   Observability Cloud, formerly SignalFx), which adds the same appender and keeps working.
+- For code that extends Semantic Logger, such as rails_semantic_logger, so that it no longer reaches
+  into internal classes: `SemanticLogger.normalize_level(level)` returns the Symbol of any level that
+  Semantic Logger accepts, such as `:info` for `"INFO"` or `::Logger::INFO`, and raises
+  `ArgumentError` for nil or an unknown level; `SemanticLogger.call_site?(level)` and
+  `SemanticLogger.backtrace?(level)` say whether an entry at the level records its call site or
+  captures a backtrace; `SemanticLogger.application_backtrace` returns the backtrace of its caller from
+  its first application frame; and `SemanticLogger.internal_logger=` / `internal_logger` set and return
+  the internal logger, as `SemanticLogger::Processor.logger=` / `.logger` did. See
+  [Internal logger](https://logger.reidmorrison.com/config.html#internal-logger).
 
 ### Changed
 

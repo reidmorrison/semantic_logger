@@ -67,6 +67,22 @@ module SemanticLogger
         end
       end
 
+      describe ".index!" do
+        it "returns the index of a level, as .index does" do
+          assert_equal 2, SemanticLogger::Levels.index!(:info)
+          assert_equal 2, SemanticLogger::Levels.index!(::Logger::INFO)
+        end
+
+        it "raises ArgumentError for nil, which .index returns nil for" do
+          error = assert_raises(ArgumentError) { SemanticLogger::Levels.index!(nil) }
+          assert_includes error.message, "Invalid level:nil"
+        end
+
+        it "raises ArgumentError for a level it does not know" do
+          assert_raises(ArgumentError) { SemanticLogger::Levels.index!(:inf) }
+        end
+      end
+
       describe ".level" do
         it "returns the symbol for an index" do
           SemanticLogger::Levels::LEVELS.each_with_index do |level, index|

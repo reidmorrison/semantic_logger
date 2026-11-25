@@ -31,16 +31,12 @@ module SemanticLogger
   end
 
   # Returns whether logger caching is enabled.
-  def self.cache_loggers?
-    @cache_loggers
-  end
+  def self.cache_loggers? = @cache_loggers
 
   # Discard all cached loggers so that subsequent `SemanticLogger[Class]` calls
   # build fresh instances. Primarily useful in tests, or after redefining a
   # class that was previously cached.
-  def self.clear_logger_cache
-    @logger_cache&.clear
-  end
+  def self.clear_logger_cache = @logger_cache&.clear
 
   # Sets the global default log level
   def self.default_level=(level)
@@ -50,9 +46,18 @@ module SemanticLogger
   end
 
   # Returns the global default log level
-  def self.default_level
-    @default_level
-  end
+  def self.default_level = @default_level
+
+  # Returns [Symbol] the level as Semantic Logger names it, such as :info, for any level that it
+  # accepts: a Symbol, a String in any case, such as "info" or "INFO", or a Ruby ::Logger level, such
+  # as ::Logger::INFO. Use it to check a level once, as it is configured, rather than when it is used.
+  #
+  # Raises ArgumentError for nil or a level that Semantic Logger does not know.
+  #
+  # Example:
+  #   SemanticLogger.normalize_level("WARN")        # => :warn
+  #   SemanticLogger.normalize_level(::Logger::INFO) # => :info
+  def self.normalize_level(level) = Levels.level(Levels.index!(level))
 
   # Sets the level at which backtraces should be captured
   # for every log message.
@@ -76,6 +81,26 @@ module SemanticLogger
   # Returns the current backtrace level index
   # For internal use only
   def self.backtrace_level_index = @backtrace_level_index
+
+  # Returns [true|false] whether an entry logged at the level captures a backtrace: the level is at
+  # or above backtrace_level. For code that logs an entry with a backtrace of its own (see
+  # .application_backtrace), so that it builds one only when Semantic Logger would have captured one.
+  # The level is any that .normalize_level accepts.
+  #
+  # Raises ArgumentError for nil or a level that Semantic Logger does not know.
+  #
+  # Example:
+  #   if SemanticLogger.backtrace?(:debug)
+  #     logger.debug(message: "Query", backtrace: SemanticLogger.application_backtrace)
+  #   end
+  def self.backtrace?(level) = Levels.index!(level) >= @backtrace_level_index
+
+  # Returns [Array<String>] the backtrace of the code that calls it, from its first frame in the
+  # application: the frames of gems, of Ruby's own libraries, and of Semantic Logger and Rails
+  # Semantic Logger, at the top of the stack, are left out. For an entry about the application code
+  # that a library was running, such as the query that it ran, rather than about the library.
+  # Empty when no application code is on the stack.
+  def self.application_backtrace = Utils.strip_backtrace(caller)
 
   # Sets the level at and above which each log entry records where it was logged: the file, line,
   # and method of the code that made the log call (see Log#call_site). The JSON and text formatters
@@ -107,6 +132,13 @@ module SemanticLogger
   # Returns the call site level index
   # For internal use only
   def self.call_site_level_index = @call_site_level_index
+
+  # Returns [true|false] whether an entry logged at the level records where it was logged: the level
+  # is at or above call_site_level. For code that supplies the call site of an entry itself, so that
+  # it looks for one only when it would be recorded. The level is any that .normalize_level accepts.
+  #
+  # Raises ArgumentError for nil or a level that Semantic Logger does not know.
+  def self.call_site?(level) = Levels.index!(level) >= @call_site_level_index
 
   # Sets the paths, or parts of paths, of code that logs on behalf of its caller, such as an
   # application's own logging helper. A frame in a file whose path includes one of them is skipped
@@ -163,9 +195,7 @@ module SemanticLogger
   end
 
   # Returns the application's backtrace cleaner, or nil when there is none.
-  def self.backtrace_cleaner
-    @backtrace_cleaner
-  end
+  def self.backtrace_cleaner = @backtrace_cleaner
 
   # Sets the keys whose values are replaced with "[FILTERED]" in every log entry, such as
   # passwords and access tokens, before any appender writes it.
@@ -253,9 +283,7 @@ module SemanticLogger
 
   # Returns [String] name of this host for logging purposes
   # Note: Not all appenders use `host`
-  def self.host
-    @host
-  end
+  def self.host = @host
 
   # Override the default host name, which is this machine's host name. Set it to nil to go back to
   # the default.
@@ -268,9 +296,7 @@ module SemanticLogger
 
   # Returns [String] name of this application for logging purposes
   # Note: Not all appenders use `application`
-  def self.application
-    @application
-  end
+  def self.application = @application
 
   # Override the default application
   def self.application=(application)
@@ -279,9 +305,7 @@ module SemanticLogger
 
   # Returns [String] name of this environment for logging purposes
   # Note: Not all appenders use `environment`
-  def self.environment
-    @environment
-  end
+  def self.environment = @environment
 
   # Override the default environment
   def self.environment=(environment)
@@ -431,6 +455,30 @@ module SemanticLogger
   # Use SemanticLogger.add_appender and SemanticLogger.remove_appender
   # to manipulate the active appenders list
   def self.appenders = Logger.processor.appenders
+
+  # Sets the internal logger, to which Semantic Logger reports its own problems, such as an appender
+  # that fails to write, rather than raising them in the application. By default it writes :warn and
+  # above to $stderr.
+  #
+  # Parameters
+  #   logger: [SemanticLogger::Subscriber|::Logger|nil]
+  #     An appender, such as SemanticLogger::Appender::File.new("log/semantic_logger.log"), or a Ruby
+  #     or Rails Logger, whose own level then decides which reports it writes.
+  #     nil: Restore the default.
+  #
+  # Set it before logging anything or adding appenders, since the processor and each appender keep
+  # a copy of the internal logger they started with.
+  #
+  # Raises ArgumentError for a SemanticLogger::Logger, since it would log a report of a failing
+  # appender back to that appender.
+  def self.internal_logger=(logger)
+    Processor.logger     = logger
+    SyncProcessor.logger = logger
+  end
+
+  # Returns the internal logger (see .internal_logger=), such as to report a problem in code that
+  # extends Semantic Logger: `SemanticLogger.internal_logger.warn("...")`.
+  def self.internal_logger = Processor.logger
 
   # Flush all queued log entries disk, database, etc.
   #  All queued log messages are written and then each appender is flushed in turn.

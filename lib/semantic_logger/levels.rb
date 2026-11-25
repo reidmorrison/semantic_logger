@@ -25,9 +25,19 @@ module SemanticLogger
       when Integer
         # Bounded first, since Array#[] raises RangeError for an Integer too large for a C long.
         MAPPED_LEVELS[level] if level.abs <= MAPPED_LEVELS.size
-      end ||
-        raise(ArgumentError, "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}")
+      end || raise(ArgumentError, invalid_message(level))
     end
+
+    # Returns the level as an internal index, as #index does, but raises ArgumentError for nil too,
+    # for a level that must be given.
+    def self.index!(level)
+      index(level) || raise(ArgumentError, invalid_message(level))
+    end
+
+    def self.invalid_message(level)
+      "Invalid level:#{level.inspect} being requested. Must be one of #{LEVELS.inspect}"
+    end
+    private_class_method :invalid_message
 
     # Returns [true|false] whether the supplied value is a level that #index accepts.
     # Never raises, so it can be used to check values that come from untrusted data.

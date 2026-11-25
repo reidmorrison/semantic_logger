@@ -1070,6 +1070,139 @@ class SemanticLoggerTest < Minitest::Test
       end
     end
 
+    describe ".normalize_level" do
+      it "returns the Symbol for every level that Semantic Logger accepts" do
+        assert_equal :info, SemanticLogger.normalize_level(:info)
+        assert_equal :warn, SemanticLogger.normalize_level("warn")
+        assert_equal :warn, SemanticLogger.normalize_level("WARN")
+        assert_equal :info, SemanticLogger.normalize_level(::Logger::INFO)
+        assert_equal :error, SemanticLogger.normalize_level(::Logger::UNKNOWN)
+      end
+
+      it "raises ArgumentError for nil and for a level it does not know" do
+        [nil, :inf, "verbose", 99, Object.new].each do |level|
+          error = assert_raises(ArgumentError) { SemanticLogger.normalize_level(level) }
+          assert_includes error.message, "Invalid level:#{level.inspect}"
+        end
+      end
+    end
+
+    describe ".call_site?" do
+      after { SemanticLogger.call_site_level = nil }
+
+      it "is true at and above call_site_level" do
+        SemanticLogger.call_site_level = :info
+
+        refute SemanticLogger.call_site?(:debug)
+        assert SemanticLogger.call_site?(:info)
+        assert SemanticLogger.call_site?("ERROR")
+        assert SemanticLogger.call_site?(::Logger::WARN)
+      end
+
+      it "is false at every level while call sites are not recorded" do
+        SemanticLogger.call_site_level = nil
+
+        refute SemanticLogger.call_site?(:fatal)
+      end
+
+      it "raises ArgumentError for nil and for a level it does not know" do
+        assert_raises(ArgumentError) { SemanticLogger.call_site?(nil) }
+        assert_raises(ArgumentError) { SemanticLogger.call_site?(:inf) }
+      end
+    end
+
+    describe ".backtrace?" do
+      after { SemanticLogger.backtrace_level = :error }
+
+      it "is true at and above backtrace_level" do
+        SemanticLogger.backtrace_level = :warn
+
+        refute SemanticLogger.backtrace?(:info)
+        assert SemanticLogger.backtrace?(:warn)
+        assert SemanticLogger.backtrace?("FATAL")
+        assert SemanticLogger.backtrace?(::Logger::ERROR)
+      end
+
+      it "is false at every level while backtraces are not captured" do
+        SemanticLogger.backtrace_level = nil
+
+        refute SemanticLogger.backtrace?(:fatal)
+      end
+
+      it "raises ArgumentError for nil and for a level it does not know" do
+        assert_raises(ArgumentError) { SemanticLogger.backtrace?(nil) }
+        assert_raises(ArgumentError) { SemanticLogger.backtrace?(:inf) }
+      end
+    end
+
+    describe ".application_backtrace" do
+      it "starts at the code that calls it" do
+        line      = __LINE__ + 1
+        backtrace = SemanticLogger.application_backtrace
+
+        assert_kind_of Array, backtrace
+        assert backtrace.all?(String)
+        assert_match(/\A#{Regexp.escape(__FILE__)}:#{line}:/, backtrace.first)
+      end
+
+      it "leaves out Semantic Logger's own frames" do
+        refute(SemanticLogger.application_backtrace.any? { |frame| frame.include?("lib/semantic_logger/") })
+      end
+    end
+
+    describe ".internal_logger=" do
+      before do
+        @processor_logger      = SemanticLogger::Processor.logger
+        @sync_processor_logger = SemanticLogger::SyncProcessor.logger
+      end
+
+      after do
+        SemanticLogger::Processor.logger     = @processor_logger
+        SemanticLogger::SyncProcessor.logger = @sync_processor_logger
+      end
+
+      it "is the internal logger of both processors" do
+        appender                       = SemanticLogger::Appender::IO.new(StringIO.new)
+        SemanticLogger.internal_logger = appender
+
+        assert_same appender, SemanticLogger.internal_logger
+        assert_same appender, SemanticLogger::Processor.logger
+        assert_same appender, SemanticLogger::SyncProcessor.logger
+      end
+
+      it "is what an appender added afterwards reports to" do
+        output                         = StringIO.new
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(output)
+
+        SemanticLogger::Appender::IO.new(StringIO.new).logger.warn("Could not connect")
+
+        assert_includes output.string, "Could not connect"
+      end
+
+      it "wraps a Ruby Logger" do
+        output                         = StringIO.new
+        SemanticLogger.internal_logger = ::Logger.new(output)
+
+        assert_kind_of SemanticLogger::Appender::Wrapper, SemanticLogger.internal_logger
+        SemanticLogger.internal_logger.warn("Could not connect")
+
+        assert_includes output.string, "Could not connect"
+      end
+
+      it "restores the default for nil" do
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(StringIO.new)
+        SemanticLogger.internal_logger = nil
+
+        assert_kind_of SemanticLogger::Appender::IO, SemanticLogger.internal_logger
+        assert_equal "SemanticLogger::Processor", SemanticLogger.internal_logger.name
+        assert_equal :warn, SemanticLogger.internal_logger.level
+      end
+
+      it "raises ArgumentError for a SemanticLogger::Logger" do
+        assert_raises(ArgumentError) { SemanticLogger.internal_logger = SemanticLogger["Test"] }
+      end
+    end
+
     describe ".call_site_level=" do
       after { SemanticLogger.call_site_level = nil }
 
