@@ -49,13 +49,11 @@ module SemanticLogger
 
     # Give each appender its own logger for logging.
     # For example trace messages sent to services or errors when something fails.
+    #
+    # Unless one was set with #logger=, it is a copy of the internal logger named after the appender,
+    # which follows the internal logger when it is replaced (see SemanticLogger.internal_logger=).
     def logger
-      @logger ||=
-        begin
-          logger      = SemanticLogger::Processor.logger.clone
-          logger.name = self.class.name
-          logger
-        end
+      @logger || (@internal_logger_copy ||= InternalLoggerCopy.new(self.class.name, Processor)).logger
     end
 
     # Set the formatter from Symbol|Hash|Block

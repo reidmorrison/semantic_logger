@@ -14,15 +14,29 @@ module SemanticLogger
     NONE_SKIPPED = {}.freeze
     private_constant :NONE_SKIPPED
 
-    attr_accessor :logger
+    # Sets the internal logger that these appenders report to, in place of the one they follow, or
+    # nil to follow it again.
+    attr_writer :logger
 
-    def initialize(logger = Processor.logger.dup)
+    # Parameters
+    #   logger: [Subscriber|nil]
+    #     The internal logger to report to, which is named after this class.
+    #     nil: Report to a copy of the internal logger of the source, which follows it when it is
+    #     replaced (see SemanticLogger.internal_logger=).
+    #   source: [#logger]
+    #     Answers the internal logger to follow, the processor class.
+    #     Default: SemanticLogger::Processor
+    def initialize(logger = nil, source: Processor)
       @logger      = logger
-      @logger.name = self.class.name
+      @logger.name = self.class.name if logger
+      @source      = source
       @exiting     = false
       @skipped     = {}.compare_by_identity
       super()
     end
+
+    # Returns the internal logger that these appenders report to.
+    def logger = @logger || (@internal_logger_copy ||= InternalLoggerCopy.new(self.class.name, @source)).logger
 
     def add(**args, &)
       appender = SemanticLogger::Appender.factory(**args, &)

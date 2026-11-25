@@ -1248,10 +1248,11 @@ SemanticLogger.internal_logger = SemanticLogger::Appender::File.new("log/semanti
 SemanticLogger.internal_logger = nil
 ~~~
 
-Set it before logging anything or adding appenders, since the processor and each appender keep a
-copy of the internal logger they started with. It cannot be a logger returned by `SemanticLogger[...]`,
-which would log the report of a failing appender back to that appender. Code that extends Semantic
-Logger can report its own problems there too, with `SemanticLogger.internal_logger.warn("...")`.
+It takes effect at once: the running processor, and the appenders already added, report their next
+problem to it, apart from an appender given a logger of its own with `appender.logger = ...`. It
+cannot be a logger returned by `SemanticLogger[...]`, which would log the report of a failing
+appender back to that appender. Code that extends Semantic Logger can report its own problems there
+too, with `SemanticLogger.internal_logger.warn("...")`.
 
 ### Levels and settings in code that extends Semantic Logger
 

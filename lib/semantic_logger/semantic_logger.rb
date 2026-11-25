@@ -466,8 +466,8 @@ module SemanticLogger
   #     or Rails Logger, whose own level then decides which reports it writes.
   #     nil: Restore the default.
   #
-  # Set it before logging anything or adding appenders, since the processor and each appender keep
-  # a copy of the internal logger they started with.
+  # Takes effect at once: the running processor, and the appenders already added, report their next
+  # problem to it, apart from an appender given a logger of its own with #logger=.
   #
   # Raises ArgumentError for a SemanticLogger::Logger, since it would log a report of a failing
   # appender back to that appender.

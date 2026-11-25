@@ -83,8 +83,7 @@ module Metric
           plain            = SemanticLogger.add_appender(appender: InMemoryAppender.new)
           given            = []
           plain.define_singleton_method(:log_metrics) { |snapshot| given << snapshot }
-          original_logger  = SemanticLogger.appenders.logger
-          capture_logger   = SemanticLogger::Test::CaptureLogEvents.new
+          capture_logger = SemanticLogger::Test::CaptureLogEvents.new
           SemanticLogger.appenders.logger = capture_logger
           SemanticLogger.add_appender(metric: appender)
 
@@ -99,7 +98,8 @@ module Metric
           assert_empty given
           assert_empty(capture_logger.events.reject { |event| event.level == :trace })
         ensure
-          SemanticLogger.appenders.logger = original_logger if original_logger
+          # Follow the internal logger again.
+          SemanticLogger.appenders.logger = nil
           SemanticLogger.remove_appender(plain)
         end
 
