@@ -106,6 +106,43 @@ class CaptureLogEventsTest < Minitest::Test
         assert_captured capture_logger.metric_events
       end
 
+      it "capture the name of the logger that made each call as its scope, standing in for the processor" do
+        SemanticLogger::Logger.stub(:processor, capture_logger) do
+          user.sign_up!
+          SemanticLogger["Other"].increment("other")
+        end
+
+        scopes = capture_logger.metric_events.map(&:scope)
+
+        assert_equal %w[CaptureLogEventsTest::User CaptureLogEventsTest::User CaptureLogEventsTest::User Other], scopes
+      end
+
+      it "capture a scope as it is recorded: a frozen String, from a Symbol too" do
+        logger      = SemanticLogger["Orders"]
+        logger.name = :orders
+        given       = +"Payments"
+        SemanticLogger::Logger.stub(:processor, capture_logger) do
+          logger.increment("orders.placed")
+          SemanticLogger[given].increment("payments.made")
+        end
+        given << "!"
+
+        assert_equal %w[orders Payments], capture_logger.metric_events.map(&:scope)
+        assert capture_logger.metric_events.map(&:scope).all?(&:frozen?)
+      end
+
+      it "capture no scope for a logger without a name" do
+        SemanticLogger::Logger.stub(:processor, capture_logger) { SemanticLogger[Class.new].increment("a") }
+
+        assert_nil capture_logger.metric_events.first.scope
+      end
+
+      it "capture no scope standing in for a logger, which is not told which logger made the call" do
+        user.stub(:logger, capture_logger) { user.sign_up! }
+
+        assert_equal [nil] * 3, capture_logger.metric_events.map(&:scope)
+      end
+
       it "are captured without a metric appender, and whatever the level" do
         capture_logger.level = :fatal
         capture_logger.increment("users.signup")

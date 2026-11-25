@@ -29,7 +29,9 @@ module SemanticLogger
       #   metrics = semantic_logger_metrics { Signup.new.call(user) }
       #   assert_metric(metrics, name: "users.signup", kind: :counter, value: 1)
       #
-      # Pass `klass:` to capture only the metric calls made through that class's logger.
+      # Pass `klass:` to capture only the metric calls made through that class's logger. They then have
+      # no scope (see SemanticLogger::Test::MetricEvent), the name of the logger that made each call,
+      # which the metric calls captured without it have.
       def semantic_logger_metrics(klass: nil, &)
         logger = SemanticLogger::Test::CaptureLogEvents.new
         if klass
@@ -45,15 +47,19 @@ module SemanticLogger
       #   metrics = semantic_logger_metrics { Signup.new.call(user) }
       #   assert_metric(metrics, name: "users.signup", kind: :counter, value: 1)
       #   assert_metric(metrics, name: "supplier.add_user", kind: :histogram, unit: "s", value: Float)
+      #   assert_metric(metrics, name: "users.signup", scope: "Signup")
+      #
+      # `scope:` is the name of the logger that made the call (see SemanticLogger::Test::MetricEvent),
+      # which metric calls captured with `klass:` do not have.
       #
       # metrics: [Array<SemanticLogger::Test::MetricEvent>|SemanticLogger::Test::MetricEvent]
       #   The metric calls captured, such as by #semantic_logger_metrics, or one of them.
       #
       # An expected value may be :nil, a Class, a Range, a Regexp, or any value to compare with (see
       # SemanticLogger::Test::MetricEvent#matches?). An attribute that is not given is not checked.
-      def assert_metric(metrics, name:, kind: nil, value: nil, unit: nil, dimensions: nil)
+      def assert_metric(metrics, name:, kind: nil, value: nil, unit: nil, dimensions: nil, scope: nil)
         metrics  = Array(metrics)
-        expected = {name: name, kind: kind, value: value, unit: unit, dimensions: dimensions}.compact
+        expected = {name: name, kind: kind, value: value, unit: unit, dimensions: dimensions, scope: scope}.compact
         metric   = metrics.find { |captured| captured.matches?(**expected) }
 
         failure = lambda do

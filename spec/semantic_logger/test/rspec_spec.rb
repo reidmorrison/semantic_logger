@@ -218,6 +218,11 @@ RSpec.describe SemanticLogger::Test::RSpec do
       expect(metrics[2]).to be_a_semantic_logger_metric(value: 1024..4096, dimensions: :nil)
     end
 
+    it "matches the scope, the name of the logger that made the call" do
+      expect(metrics.first).to be_a_semantic_logger_metric(name: "users.signup", scope: "RSpecMatcherSignup")
+      expect(metrics.first).not_to be_a_semantic_logger_metric(scope: "Other")
+    end
+
     it "does not match when an attribute differs" do
       expect(metrics.first).not_to be_a_semantic_logger_metric(name: "users.signup", value: 2)
     end

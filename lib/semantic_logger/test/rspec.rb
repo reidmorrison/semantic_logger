@@ -291,7 +291,9 @@ module SemanticLogger
       #   metrics = capture_semantic_logger_metrics { Signup.new.call(user) }
       #   expect(metrics).to include(a_semantic_logger_metric(name: "users.signup", kind: :counter, value: 1))
       #
-      # Pass a class to capture only the metric calls made through that class's logger.
+      # Pass a class to capture only the metric calls made through that class's logger. They then have
+      # no scope (see SemanticLogger::Test::MetricEvent), the name of the logger that made each call,
+      # which the metric calls captured without it have.
       def capture_semantic_logger_metrics(klass = nil, &block)
         logger = SemanticLogger::Test::CaptureLogEvents.new
 
