@@ -129,8 +129,8 @@ logger.info? # => true when :info and above are being logged
 
 ## Step 3: Add structured data
 
-This is what sets Semantic Logger apart. Instead of building a sentence by hand, pass the data as a
-Hash "payload" after the message:
+This is what sets Semantic Logger apart. Instead of building a sentence by hand, pass the data as
+keyword arguments after the message:
 
 ~~~ruby
 # Traditional logging bakes the data into a string:
@@ -145,6 +145,16 @@ Elasticsearch appender indexes `duration`, `result`, and `table` as real fields,
 and build dashboards on them without parsing log text. The fields that make up an entry are listed in
 [Log Event](log.html).
 
+A few names are log arguments rather than payload fields: `duration` above sets the entry's duration,
+and so do `message`, `exception`, `backtrace`, `call_site`, `min_duration`, `log_exception`,
+`on_exception_level`, `metric`, `metric_amount`, and `dimensions` for what their names say. To log a
+Hash that your code did not write out itself, such as request parameters or a parsed JSON body, pass
+it as `payload:`, so that none of its keys can be taken for one of those arguments:
+
+~~~ruby
+logger.info("Webhook received", payload: JSON.parse(body), account_id: account.id)
+~~~
+
 ## Step 4: Log an exception
 
 Pass a Ruby exception as the second argument. Its class, message, and backtrace are all captured:
@@ -157,10 +167,10 @@ rescue => exception
 end
 ~~~
 
-To log a payload and an exception together, pass both:
+To log a payload and an exception together, pass the exception as `exception:`:
 
 ~~~ruby
-logger.error("Outbound call failed", {result: :failed}, exception)
+logger.error("Outbound call failed", exception: exception, result: :failed)
 ~~~
 
 ## Step 5: Skip expensive messages with a block
@@ -175,19 +185,21 @@ logger.debug { "Processed #{records.sum(&:size)} bytes across #{records.size} re
 
 ### The full call signature
 
-Putting the pieces together, every level method accepts:
+Putting the pieces together, every level method accepts either of these forms:
 
 ~~~ruby
-logger.info(message, payload_or_exception = nil, exception = nil, &block)
+logger.info(message, exception, &block)
+logger.info(message, field: value, ..., &block)
 ~~~
 
 - `message`: the text message. Optional only when a block is supplied.
-- `payload_or_exception`: an optional Hash payload, or a Ruby exception.
-- `exception`: an optional exception, used when you are also passing a payload.
-- `&block`: evaluated only when the level is active; its return value becomes the message.
+- `exception`: a Ruby exception. To log fields along with it, pass it as `exception:` instead.
+- `field: value, ...`: the payload fields, written out as keyword arguments, and the log arguments
+  described below, such as `exception:`, `duration:`, `metric:`, and `payload:`.
+- `&block`: evaluated only when the level is active. A String it returns is added to the message,
+  and a Hash it returns is merged in as fields, as shown below.
 
-The same call can also be written as a single Hash, which is handy when assembling fields
-programmatically:
+The message can also be passed as `message:`, so that the whole call is keyword arguments:
 
 ~~~ruby
 logger.debug(message: "Calling Supplier", payload: {request: "update", user: "Jack"})
@@ -209,15 +221,21 @@ logger.debug(message: "Order Load", duration: 0.4, call_site: query_location)
 logger.info(message: "Started GET /orders", call_site: false)
 ~~~
 
-In both forms, a key such as `duration` or `exception` is only used as an argument when its value is
-valid for it; otherwise it is logged as part of the payload. Any other keys supplied alongside
-`payload:` are merged into it, without overwriting its own values. When the Hash holds untrusted
-data, see [Logging untrusted hashes](security.html#logging-untrusted-hashes).
+A key such as `duration` or `backtrace` is only used as an argument when its value is valid for it;
+otherwise it is logged as part of the payload. `message`, `exception`, and `metric` take any value:
+an `exception:` that is not an Exception is logged as an `ArgumentError` naming it. Any other keys supplied alongside `payload:` are
+merged into it, and win over its values of the same name. Data your code did not write out itself
+always goes in `payload:`; see [Logging untrusted hashes](security.html#logging-untrusted-hashes).
 
-A block can return the same Hash, but it never replaces an argument the entry already has. That
-includes the backtrace that an entry captures when its level is at or above
+A block can return the same keys as a Hash, but it never replaces an argument the entry already has.
+That includes the backtrace that an entry captures when its level is at or above
 `SemanticLogger.backtrace_level`, so to attach a backtrace of your own, pass `backtrace:` with the
-call rather than returning it from the block.
+call rather than returning it from the block. A block that returns data, such as a parsed response
+body, returns it as `payload:`:
+
+~~~ruby
+logger.debug("Supplier replied") { {payload: JSON.parse(response.body)} }
+~~~
 
 ## Step 6: Measure how long something takes
 
@@ -297,7 +315,7 @@ Either a block or `:duration` must be supplied on every measure call.
 
 ### All measure options
 
-The second argument to a measure call is a Hash of options:
+A measure call takes these keyword options after the message:
 
 - `:min_duration` [Float]: only log if the block takes longer than this many milliseconds. Default
   `0.0` (always log).
@@ -324,7 +342,7 @@ The second argument to a measure call is a Hash of options:
   [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged).
 
 An option with a value that is not valid for it, such as a non-numeric `:min_duration` or an unknown
-level, is ignored and its default is used. Other keys in the Hash are not logged; pass the data to
+level, is ignored and its default is used. Other keys are not logged; pass the data to
 log as `:payload`.
 
 Putting several together:

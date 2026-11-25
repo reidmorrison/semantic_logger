@@ -50,6 +50,12 @@ SemanticLogger.add_appender(file_name: "production.log", formatter: {default: {e
 See [Escaping Control Characters](config.html#escaping-control-characters) for
 details.
 
+The `:one_line` formatter always removes line feeds, carriage returns, vertical tabs,
+form feeds, and the Unicode line breaks U+0085, U+2028, and U+2029 from every text field,
+so each entry stays on a single line and a newline cannot forge another entry. It still writes ANSI escape sequences and bidirectional controls
+as supplied, so enable `escape_control_chars` with it too when its output may be
+viewed in a terminal or log viewer.
+
 The record-framed network appenders are already safe by default:
 
 * The **TCP** and **UDP** appenders default to the JSON formatter.
@@ -71,6 +77,8 @@ Semantic Logger only uses such a key as an argument when its value is valid for 
 `duration` must be a finite real number, `backtrace` an Array of Strings, and `on_exception_level` a
 valid level. Any other value stays in the payload as data, and a `nil` value is ignored, so an
 untrusted hash passed to a level method such as `info` can never make the logging call raise.
+`message`, `exception`, and `metric` take any value, so untrusted data can still set them: an
+`exception` that is not an Exception is logged as an `ArgumentError` naming it.
 A valid `backtrace` also sets where the entry is recorded as logged: its file name, line number, and,
 with [`call_site_level`](config.html#recording-where-each-entry-was-logged), its method. A
 `call_site` key can only leave out the recorded call site, with `false`: the values that set one are
@@ -88,12 +96,13 @@ Symbol key it spells:
 logger.info("Webhook received", payload: JSON.parse(body, symbolize_names: true), account_id: account.id)
 ~~~
 
-A hash returned from a logging block, such as
-`logger.debug("Webhook received") { JSON.parse(body, symbolize_names: true) }`, is checked the
-same way, and never replaces a value the log call supplied. A key is only used as an argument when
+The same goes for a logging block: return the untrusted data as `payload:`, as in
+`logger.debug("Webhook received") { {payload: JSON.parse(body, symbolize_names: true)} }`.
+A hash returned from a block is otherwise checked the same way as one passed with the call, and
+never replaces a value the log call supplied. A key is only used as an argument when
 its value is valid for it and the log entry does not have that argument yet: an empty `message`
-counts as none, and a backtrace captured at the `backtrace_level` counts as supplied. Its `payload`
-is only used when it is a Hash. Every other key, including an argument the entry already has, is
+counts as none, and a backtrace captured at the `backtrace_level` counts as supplied. A `payload`
+that is not a Hash, such as the Array that `JSON.parse` can return, is logged under a `payload` key. Every other key, including an argument the entry already has, is
 added to the payload without replacing the log call's values, and wins over the block's own
 `payload` values of the same name. The caller's own payload Hash is left unchanged.
 
