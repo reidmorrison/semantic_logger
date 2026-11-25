@@ -90,7 +90,6 @@ Minitest/AssertWithExpectedArgument:
     - 'test/appender/http_test.rb'
     - 'test/appender/new_relic_logs_test.rb'
     - 'test/appender/splunk_http_test.rb'
-    - 'test/appender/splunk_test.rb'
     - 'test/appender/tcp_test.rb'
     - 'test/appender/udp_test.rb'
     - 'test/formatters/signalfx_test.rb'

@@ -103,7 +103,6 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [OpenSearch](#opensearch) | `appender: :opensearch` | `opensearch-ruby` |
 | [Graylog](#graylog) | `appender: :graylog` | `gelf` |
 | [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
-| [Splunk SDK](#splunk-sdk) (deprecated) | `appender: :splunk` | `splunk-sdk-ruby` |
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
 | [New Relic Logs](#new-relic-logs) | `appender: :new_relic_logs` | `newrelic_rpm` |
@@ -879,16 +878,6 @@ Splunk's
 second, one entry for each request. To send more, add it with `batch: true`, or write to Splunk with
 the [TCP appender](#tcp-appender-ssl) instead, which reached about 1,400 entries per second (1,200
 with SSL).
-
-### Splunk SDK
-
-> **Deprecated:** `appender: :splunk` is deprecated and will be removed in v6. Use the
-> [HTTP Event Collector](#splunk-http) (`appender: :splunk_http`) or the
-> [TCP appender](#tcp-appender-ssl) instead.
-
-`appender: :splunk` submits entries through the `splunk-sdk-ruby` gem to the Splunk management
-port. That gem was last released in 2015 and does not verify the server's TLS certificate, so the
-connection, including the login credentials, is open to interception.
 
 ### Grafana Loki
 

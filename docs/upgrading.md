@@ -186,6 +186,13 @@ entries to New Relic Logs, as shown in
 [Replace the `:new_relic` appender with `:new_relic_logs`](#replace-the-new_relic-appender-with-new_relic_logs).
 The `:new_relic` metric appender, `add_appender(metric: :new_relic)`, is not affected.
 
+#### The `:splunk` appender has been removed
+
+`appender: :splunk`, which depended on the `splunk-sdk-ruby` gem (last released in 2015, and never
+verifying the server's certificate) and was deprecated in v5.2, has been removed. Use the HTTP Event
+Collector with `appender: :splunk_http` instead, as shown in
+[Replace the `:splunk` appender with `:splunk_http`](#replace-the-splunk-appender-with-splunk_http).
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

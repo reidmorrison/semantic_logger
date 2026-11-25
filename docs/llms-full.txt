@@ -2189,7 +2189,6 @@ time the appender is used, and is never a hard dependency of Semantic Logger its
 | [OpenSearch](#opensearch) | `appender: :opensearch` | `opensearch-ruby` |
 | [Graylog](#graylog) | `appender: :graylog` | `gelf` |
 | [Splunk over HTTP](#splunk-http) | `appender: :splunk_http` | |
-| [Splunk SDK](#splunk-sdk) (deprecated) | `appender: :splunk` | `splunk-sdk-ruby` |
 | [Grafana Loki](#grafana-loki) | `appender: :loki` | |
 | [CloudWatch Logs](#cloudwatch-logs) | `appender: :cloudwatch_logs` | `aws-sdk-cloudwatchlogs` |
 | [New Relic Logs](#new-relic-logs) | `appender: :new_relic_logs` | `newrelic_rpm` |
@@ -2965,16 +2964,6 @@ Splunk's
 second, one entry for each request. To send more, add it with `batch: true`, or write to Splunk with
 the [TCP appender](#tcp-appender-ssl) instead, which reached about 1,400 entries per second (1,200
 with SSL).
-
-### Splunk SDK
-
-> **Deprecated:** `appender: :splunk` is deprecated and will be removed in v6. Use the
-> [HTTP Event Collector](#splunk-http) (`appender: :splunk_http`) or the
-> [TCP appender](#tcp-appender-ssl) instead.
-
-`appender: :splunk` submits entries through the `splunk-sdk-ruby` gem to the Splunk management
-port. That gem was last released in 2015 and does not verify the server's TLS certificate, so the
-connection, including the login credentials, is open to interception.
 
 ### Grafana Loki
 
@@ -7176,9 +7165,6 @@ verifying the server certificate (`OpenSSL::SSL::VERIFY_PEER`) when an `https` U
 used. The `:tcp` appender, and the `:syslog` appender over TCP, verify both the certificate
 and the host name when `ssl:` is enabled.
 
-The deprecated `:splunk` appender is the exception: its `splunk-sdk-ruby` gem never verifies
-the certificate. Use `:splunk_http` instead.
-
 Do not disable certificate verification. Settings such as
 `ssl: {verify_mode: OpenSSL::SSL::VERIFY_NONE}` expose the connection to
 man-in-the-middle attacks. To connect to a server with a self-signed certificate, or one issued
@@ -7416,6 +7402,13 @@ deprecated in v5.1, has been removed. Use `appender: :new_relic_logs` instead, w
 entries to New Relic Logs, as shown in
 [Replace the `:new_relic` appender with `:new_relic_logs`](#replace-the-new_relic-appender-with-new_relic_logs).
 The `:new_relic` metric appender, `add_appender(metric: :new_relic)`, is not affected.
+
+#### The `:splunk` appender has been removed
+
+`appender: :splunk`, which depended on the `splunk-sdk-ruby` gem (last released in 2015, and never
+verifying the server's certificate) and was deprecated in v5.2, has been removed. Use the HTTP Event
+Collector with `appender: :splunk_http` instead, as shown in
+[Replace the `:splunk` appender with `:splunk_http`](#replace-the-splunk-appender-with-splunk_http).
 
 #### Rails Semantic Logger
 
