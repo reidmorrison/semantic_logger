@@ -25,11 +25,6 @@ module SemanticLogger
       #       I.e. The final index will look like 'semantic_logger-YYYY.MM.DD'
       #     Default: 'semantic_logger'
       #
-      #   type: [String]
-      #     Deprecated and ignored. Document `_type` has been unused since
-      #     Elasticsearch 7. Passing it logs a deprecation warning; it will be
-      #     removed in v6.
-      #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
       #     Default: none (:trace), so it writes every entry that a logger emits; each logger
@@ -54,17 +49,9 @@ module SemanticLogger
       #     Name of this application to appear in log messages.
       #     Default: SemanticLogger.application
       def initialize(index: "semantic_logger",
-                     type: nil,
                      url: "http://localhost:9200",
                      **http_args,
                      &)
-        if type
-          Deprecation.warn(
-            "The Elasticsearch/OpenSearch appender `type:` parameter is deprecated and will be removed in v6. " \
-            "Document `_type` has been unused since Elasticsearch 7 and is ignored by OpenSearch."
-          )
-        end
-
         @index = index
         super(url: url, **http_args, &)
 

@@ -152,6 +152,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - `appender: :splunk` (`SemanticLogger::Appender::Splunk`), deprecated in v5.2: its `splunk-sdk-ruby`
   gem was last released in 2015 and never verifies the server's certificate. Use
   `appender: :splunk_http`.
+- The `type:` option of the `:elasticsearch`, `:elasticsearch_http`, and `:opensearch` appenders,
+  ignored and deprecated since v5.1: document `_type` has been unused since Elasticsearch 7.
 
 ## [Unreleased]
 

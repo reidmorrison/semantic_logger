@@ -193,6 +193,14 @@ verifying the server's certificate) and was deprecated in v5.2, has been removed
 Collector with `appender: :splunk_http` instead, as shown in
 [Replace the `:splunk` appender with `:splunk_http`](#replace-the-splunk-appender-with-splunk_http).
 
+#### The Elasticsearch and OpenSearch `type:` option has been removed
+
+The `type:` option of the `:elasticsearch`, `:elasticsearch_http`, and `:opensearch` appenders, ignored
+and deprecated since v5.1 since document `_type` has been unused since Elasticsearch 7, has been
+removed. Remove it: `:elasticsearch_http` now raises `ArgumentError` for it, and `:elasticsearch` and
+`:opensearch` hand it to their client gem with their other options. See
+[Remove the `type:` option from the Elasticsearch and OpenSearch appenders](#remove-the-type-option-from-the-elasticsearch-and-opensearch-appenders).
+
 #### Rails Semantic Logger
 
 A `rails_semantic_logger` release for v6 will send `sidekiq.queue.latency` with

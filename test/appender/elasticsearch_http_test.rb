@@ -27,6 +27,14 @@ module Appender
         assert_nil stub_http_start { bulk.new(url: "http://localhost:9200") }.batch_refusal
       end
 
+      it "raises ArgumentError for the type: option, removed in v6" do
+        error = assert_raises(ArgumentError) do
+          stub_http_start { SemanticLogger::Appender::ElasticsearchHttp.new(url: "http://localhost:9200", type: "log") }
+        end
+
+        assert_includes error.message, "type"
+      end
+
       it "logs to daily indexes" do
         index = nil
         appender.stub(:post, ->(_json, ind) { index = ind }) do

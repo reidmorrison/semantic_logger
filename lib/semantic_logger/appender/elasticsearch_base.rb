@@ -47,11 +47,6 @@ module SemanticLogger
       #     default formatter writes the time under `@timestamp`.
       #     Default: false
       #
-      #   type: [String]
-      #     Deprecated and ignored. Document `_type` has been unused since
-      #     Elasticsearch 7 and is ignored by OpenSearch. Passing it logs a
-      #     deprecation warning; it will be removed in v6.
-      #
       #   level: [:trace | :debug | :info | :warn | :error | :fatal]
       #     Override the log level for this appender.
       #     Default: none (:trace), so it writes every entry that a logger emits; each logger
@@ -152,7 +147,6 @@ module SemanticLogger
       def initialize(url: "http://localhost:9200",
                      index: "semantic_logger",
                      date_pattern: "%Y.%m.%d",
-                     type: nil,
                      level: nil,
                      formatter: nil,
                      filter: nil,
@@ -163,13 +157,6 @@ module SemanticLogger
                      metrics: false,
                      **client_args,
                      &)
-        if type
-          Deprecation.warn(
-            "The Elasticsearch/OpenSearch appender `type:` parameter is deprecated and will be removed in v6. " \
-            "Document `_type` has been unused since Elasticsearch 7 and is ignored by OpenSearch."
-          )
-        end
-
         @url                  = url
         @index                = index
         @date_pattern         = date_pattern
