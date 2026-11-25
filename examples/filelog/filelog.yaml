@@ -1,0 +1,94 @@
+# Reads the log files that Semantic Logger writes with `formatter: :json`, for the OpenTelemetry
+# Collector (contrib build), Datadog's DDOT Collector, and Elastic's EDOT Collector, which all take this
+# receiver as it is. Add it to the agent's own configuration, and its receiver to a logs pipeline:
+#
+#   service:
+#     pipelines:
+#       logs:
+#         receivers: [filelog/semantic_logger]
+#
+# Grafana Alloy takes the same operators in its own syntax: see filelog.alloy.
+#
+# Each line becomes one log record: its message the body, its time and level the timestamp and severity,
+# its trace_id, span_id, and trace_flags those of the record, its logger name the instrumentation scope,
+# and its application, host, and environment the resource. Every other field, such as payload,
+# named_tags, tags, and exception, stays an attribute of the record.
+#
+# Tested by examples/filelog/test.rb with each agent.
+extensions:
+  # Keeps the offset of each file, so that a restart neither reads a file again nor skips what was
+  # written while the agent was down. Give its directory a persistent volume.
+  file_storage/semantic_logger:
+    directory: ${env:FILELOG_STORAGE_DIR:-/var/lib/otelcol/file_storage}
+    create_directory: true
+
+receivers:
+  filelog/semantic_logger:
+    include: ["${env:SEMANTIC_LOGGER_LOGS:-/var/log/app/*.log}"]
+    start_at: beginning
+    storage: file_storage/semantic_logger
+    operators:
+      - type: json_parser
+        parse_from: body
+        parse_to: attributes
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.999999999Z07:00"
+        severity:
+          parse_from: attributes.level
+      - type: trace_parser
+        if: 'attributes.trace_id != nil'
+        trace_id:
+          parse_from: attributes.trace_id
+        span_id:
+          parse_from: attributes.span_id
+        trace_flags:
+          parse_from: attributes.trace_flags
+      - type: scope_name_parser
+        if: 'attributes.name != nil'
+        parse_from: attributes.name
+      - type: move
+        if: 'attributes.message != nil'
+        from: attributes.message
+        to: body
+      - type: move
+        if: 'attributes.application != nil'
+        from: attributes.application
+        to: resource["service.name"]
+      - type: move
+        if: 'attributes.host != nil'
+        from: attributes.host
+        to: resource["host.name"]
+      - type: move
+        if: 'attributes.environment != nil'
+        from: attributes.environment
+        to: resource["deployment.environment.name"]
+      - type: move
+        if: 'attributes.pid != nil'
+        from: attributes.pid
+        to: resource["process.pid"]
+      - type: move
+        if: 'attributes.thread != nil'
+        from: attributes.thread
+        to: attributes["thread.name"]
+      # Fields that the record now holds, or that only repeat the level.
+      - type: remove
+        field: attributes.timestamp
+      - type: remove
+        field: attributes.level
+      - type: remove
+        if: 'attributes.level_index != nil'
+        field: attributes.level_index
+      - type: remove
+        if: 'attributes.name != nil'
+        field: attributes.name
+      - type: remove
+        if: 'attributes.trace_id != nil'
+        field: attributes.trace_id
+      - type: remove
+        if: 'attributes.span_id != nil'
+        field: attributes.span_id
+      - type: remove
+        if: 'attributes.trace_flags != nil'
+        field: attributes.trace_flags
