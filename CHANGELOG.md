@@ -86,6 +86,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   `SemanticLogger::Test::CaptureLogEvents#snapshots` holds the snapshots given to it when it stands in
   for the processor. See
   [Write a custom metric appender](https://logger.reidmorrison.com/metrics.html#write-a-custom-metric-appender).
+- `add_appender(metric: :splunk_observability)`, the current name of `metric: :signalfx` (Splunk
+  Observability Cloud, formerly SignalFx), which adds the same appender and keeps working.
 
 ### Changed
 

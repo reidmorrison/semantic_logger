@@ -64,8 +64,8 @@ SemanticLogger.add_appender(metric: :statsd, url: "udp://localhost:8125")
 # New Relic custom metrics, through the newrelic_rpm agent:
 SemanticLogger.add_appender(metric: :new_relic)
 
-# SignalFx (Splunk Observability Cloud):
-SemanticLogger.add_appender(metric: :signalfx, token: "SIGNALFX_ORG_ACCESS_TOKEN")
+# Splunk Observability Cloud (SignalFx):
+SemanticLogger.add_appender(metric: :splunk_observability, token: "SIGNALFX_ORG_ACCESS_TOKEN")
 
 # A summary of each interval, written as log entries by the log appenders:
 SemanticLogger.add_appender(metric: :summary)
@@ -526,16 +526,19 @@ SemanticLogger.add_appender(metric: :new_relic, prefix: "Custom/MyApp")
   is recorded as the largest Float, `Float::MAX`, so that the histogram's count, total, minimum, and
   maximum are still recorded.
 
-### SignalFx
+### Splunk Observability Cloud (SignalFx) {#signalfx}
 
 Posts the metrics of each interval to the
-[SignalFx](https://www.splunk.com/en_us/products/infrastructure-monitoring.html) (Splunk
-Observability Cloud) ingest API, `v2/datapoint`, in one request, with the end of the interval as
-the timestamp:
+[Splunk Observability Cloud](https://www.splunk.com/en_us/products/infrastructure-monitoring.html)
+ingest API, formerly SignalFx, `v2/datapoint`, in one request, with the end of the interval as the
+timestamp:
 
 ~~~ruby
-SemanticLogger.add_appender(metric: :signalfx, token: "SIGNALFX_ORG_ACCESS_TOKEN")
+SemanticLogger.add_appender(metric: :splunk_observability, token: "SIGNALFX_ORG_ACCESS_TOKEN")
 ~~~
+
+`metric: :signalfx`, its former name, adds the same appender, which names itself
+`SemanticLogger::Metric::Signalfx` in its reports and errors, whichever name added it.
 
 | Option | Description |
 |--------|-------------|
