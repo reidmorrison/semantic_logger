@@ -1263,6 +1263,18 @@ module Appender
         ENV["http_proxy"] = old_env_proxy if old_env_proxy
       end
 
+      it "posts without a deadline to a subclass that overrides process_request as before" do
+        subclass = Class.new(SemanticLogger::Appender::Http) do
+          def process_request(request, body = nil)
+            super
+          end
+        end
+        on     = stub_http_start { subclass.new(url: "http://localhost:8088/path") }
+        posted = on.http.stub(:request, ->(_request) { http_success }) { on.send(:post, "body") }
+
+        assert posted
+      end
+
       describe "a request with a deadline" do
         # Returns the time on the monotonic clock the given seconds from now.
         def deadline_in(seconds)
@@ -1356,6 +1368,58 @@ module Appender
           end
 
           assert_match(%r{before the request to http://localhost:8088 was sent}, error.message)
+        end
+
+        it "bounds the continue timeout by the time left too" do
+          on = stub_http_start do
+            SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", continue_timeout: 60)
+          end
+          limited = nil
+          on.http.stub(:request, lambda { |_request|
+            limited = on.http.continue_timeout
+            http_success
+          }) do
+            on.send(:post, "body", deadline: deadline_in(0.5))
+          end
+
+          assert_operator limited, :<=, 0.5
+          assert_equal 60, on.http.continue_timeout
+        end
+
+        it "keeps a continue timeout of nil, which does not wait for 100 Continue" do
+          on = stub_http_start do
+            SemanticLogger::Appender::Http.new(url: "http://localhost:8088/path", continue_timeout: nil)
+          end
+          kept = :not_called
+          on.http.stub(:request, lambda { |_request|
+            kept = on.http.continue_timeout
+            http_success
+          }) do
+            on.send(:post, "body", deadline: deadline_in(0.5))
+          end
+
+          assert_nil kept
+        end
+
+        it "raises the error of the request when closing its connection fails too" do
+          old_http = appender.http
+          old_http.stub(:finish, -> { raise Errno::ECONNRESET }) do
+            old_http.stub(:request, ->(_request) { raise Net::ReadTimeout }) do
+              assert_raises(Net::ReadTimeout) { appender.send(:post, "body", deadline: deadline_in(0.5)) }
+            end
+          end
+        end
+
+        it "leaves a new connection, not started, after a request sent that failed, rather than connect again" do
+          old_http = appender.http
+          appender.stub(:reconnect, -> { flunk "should not connect again within the deadline" }) do
+            old_http.stub(:request, ->(_request) { raise Net::ReadTimeout }) do
+              assert_raises(Net::ReadTimeout) { appender.send(:post, "body", deadline: deadline_in(0.5)) }
+            end
+          end
+
+          refute_same old_http, appender.http
+          refute_predicate appender.http, :started?
         end
 
         it "keeps the connection when the deadline passed before the request was sent" do

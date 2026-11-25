@@ -156,7 +156,9 @@ module SemanticLogger
       # time left before it too (see Appender::Http#post).
       def export(request, deadline: nil)
         logger.trace { JSON.generate(request) }
-        post(protocol.encode(request, otlp_signal.request), full_path, deadline: deadline)
+        body = protocol.encode(request, otlp_signal.request)
+        # Without a deadline, as #post was called before it took one, for a subclass that overrides it.
+        deadline ? post(body, full_path, deadline: deadline) : post(body, full_path)
       end
 
       # Reports a partial success, where the server stored only some of the request, from the body of a
