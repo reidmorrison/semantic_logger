@@ -36,10 +36,14 @@ class MinitestHelpersTest < Minitest::Test
     end
 
     it "captures only the supplied class's events" do
-      events = semantic_logger_events(User) { User.new.enable! }
+      events = semantic_logger_events(klass: User) { User.new.enable! }
 
       assert_equal 1, events.size
       assert_equal "User enabled", events.first.message
+    end
+
+    it "takes the class only as klass:" do
+      assert_raises(ArgumentError) { semantic_logger_events(User) { User.new.enable! } }
     end
 
     it "captures events below the global default level" do

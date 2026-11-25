@@ -5864,10 +5864,10 @@ end
 ~~~
 
 By default it captures events from every class. To capture only the events from one class, pass that
-class:
+class as `klass:`:
 
 ~~~ruby
-messages = semantic_logger_events(ApiClient) do
+messages = semantic_logger_events(klass: ApiClient) do
   # Only ApiClient log events created during this block are captured.
 end
 ~~~
@@ -7452,6 +7452,21 @@ SemanticLogger.add_appender(appender: :loki, url: "https://logs-prod-001.grafana
 
 A `structured_metadata: [:pid, :thread]` added to silence the v5.3 warning can stay, or be removed.
 See [pid and thread as structured metadata](appenders.html#pid-and-thread-as-structured-metadata).
+
+#### `semantic_logger_events` takes the class as `klass:`
+
+The Minitest helper `semantic_logger_events` takes the class whose events to capture only as the
+keyword `klass:`, as deprecated in v5.4. Passing it positionally raises `ArgumentError`:
+
+~~~ruby
+# Before:
+messages = semantic_logger_events(ApiClient) { ApiClient.new.call }
+
+# After:
+messages = semantic_logger_events(klass: ApiClient) { ApiClient.new.call }
+~~~
+
+The RSpec helper `capture_semantic_logger_events(ApiClient)` is unchanged.
 
 #### Rails Semantic Logger
 

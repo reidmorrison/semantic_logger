@@ -44,10 +44,10 @@ end
 ~~~
 
 By default it captures events from every class. To capture only the events from one class, pass that
-class:
+class as `klass:`:
 
 ~~~ruby
-messages = semantic_logger_events(ApiClient) do
+messages = semantic_logger_events(klass: ApiClient) do
   # Only ApiClient log events created during this block are captured.
 end
 ~~~
