@@ -38,7 +38,16 @@ module Metric
         it "calls the block of #time without reading the clock or calling its dimensions" do
           dimensions = ->(*) { flunk "dimensions called" }
 
-          Process.stub(:clock_gettime, ->(*) { flunk "clock read" }) do
+          test_thread = Thread.current
+          clock       = Process.method(:clock_gettime)
+          # Only this thread's clock reads fail, so that the background threads are left to run.
+          read_clock = lambda do |*args|
+            flunk "clock read" if Thread.current == test_thread
+
+            clock.call(*args)
+          end
+
+          Process.stub(:clock_gettime, read_clock) do
             assert_equal 42, logger.time("supplier.add_user", dimensions: dimensions) { 42 }
           end
           refute logger.time("supplier.add_user", duration: 12, dimensions: dimensions)
@@ -49,6 +58,7 @@ module Metric
         let(:internal_logger) { SemanticLogger::Test::CaptureLogEvents.new }
         let(:processor) do
           failing = Struct.new(:logger).new(internal_logger)
+          failing.define_singleton_method(:collecting_metrics?) { true }
           failing.define_singleton_method(:record_metric) { |*, **| raise "boom" }
           failing
         end
@@ -271,6 +281,21 @@ module Metric
               end
 
               assert_equal [{"error.type" => "ArgumentError"}], points.map(&:dimensions)
+            end
+
+            it "is not called without a block and without a Numeric duration" do
+              without_warnings do
+                refute logger.time("sidekiq.queue.latency", duration: "1500", dimensions: ->(*) { flunk "called" })
+                refute logger.time("sidekiq.queue.latency", dimensions: ->(*) { flunk "called" })
+              end
+
+              assert_empty points
+            end
+
+            it "raises an exception that is not a StandardError, as from the block" do
+              assert_raises(NotImplementedError) do
+                logger.time("supplier.add_user", dimensions: ->(*) { raise NotImplementedError }) { :added }
+              end
             end
 
             it "calls it with nil and nil without a block" do

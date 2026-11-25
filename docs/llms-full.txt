@@ -3922,10 +3922,11 @@ so write it as `->(result, error) { ... }`, or as `->(*) { ... }` when it needs 
 that takes another number of arguments raises.
 
 It is called only while `collecting_metrics?` (below) is `true`. Until then, `time` with a block only
-calls the block, without reading the clock, and `time` without one returns `false`. A callable that
-raises is reported on the internal logger, once per metric name, and the time is not recorded, as
-are dimensions that are neither a Hash nor `nil`; `time` still returns the block's result, or raises
-its exception.
+calls the block, without reading the clock, and `time` without one returns `false`, as it does
+without a Numeric `duration:`. A callable that raises a `StandardError` is reported on the internal
+logger, once per metric name, and the time is not recorded, as are dimensions that are neither a
+Hash nor `nil`; `time` still returns the block's result, or raises its exception. Any other exception
+that the callable raises, such as `Interrupt`, is raised by `time`, as from any code of the block.
 
 ### Record any value: `record`
 

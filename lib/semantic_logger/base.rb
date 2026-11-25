@@ -214,8 +214,11 @@ module SemanticLogger
     #   logger.time("db.client.operation.duration", duration: ms, dimensions: ->(*) { dimensions_of(sql) })
     #
     # It is always called with these two arguments, so it takes `(result, error)`, or `(*)` when it
-    # needs neither. A callable that raises, or returns neither a Hash nor nil, is reported once for
-    # the metric name, and the time is not recorded; the block's result, or its exception, is unchanged.
+    # needs neither. A callable that raises a StandardError, or returns neither a Hash nor nil, is
+    # reported once for the metric name, and the time is not recorded; the block's result, or its
+    # exception, is unchanged. Any other exception that it raises, such as Interrupt, is raised, from
+    # the end of the block, as from any code there. Without a Numeric `duration:` and without a block,
+    # it is not called.
     #
     # Parameters:
     #   name [String|Symbol]
@@ -229,6 +232,8 @@ module SemanticLogger
     def time(name, duration: nil, dimensions: nil)
       unless block_given?
         return false unless collecting_metrics?
+        # Dropped, and reported, as any value that is not a Numeric, without building its dimensions.
+        return record_metric(:histogram, name, duration, unit: "s", dimensions: nil) unless duration.is_a?(Numeric)
 
         begin
           seconds = Log.duration_seconds(duration)
@@ -614,11 +619,13 @@ module SemanticLogger
     # Records the seconds that #time measured, or was given, in the histogram `name`, with its
     # dimensions: those given, or those that a callable given returns once called with the block's
     # result and what it raised, either one nil. Adds the "error.type" of `raised`, if anything, to
-    # dimensions that are a Hash or nil (see #measure_dimensions). A callable that raises is reported
-    # once for the name, and nothing is recorded; any other dimensions are checked as for every metric
-    # call, which drops, and reports, those that are not a Hash (see Metric::Validator).
+    # dimensions that are a Hash or nil (see #measure_dimensions). A callable that raises a
+    # StandardError is reported once for the name, and nothing is recorded; any other dimensions are
+    # checked as for every metric call, which drops, and reports, those that are not a Hash (see
+    # Metric::Validator).
     #
-    # Returns [true|false] whether it was recorded. Never raises.
+    # Returns [true|false] whether it was recorded. Raises only what the callable raises that is not a
+    # StandardError.
     def record_time(name, seconds, dimensions, result, raised)
       dimensions = dimensions.call(result, raised) if dimensions.respond_to?(:call)
       dimensions = measure_dimensions(dimensions, raised) if dimensions.nil? || dimensions.is_a?(Hash)
