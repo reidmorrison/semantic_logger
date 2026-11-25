@@ -106,15 +106,21 @@ module SemanticLogger
       def add_logged(attributes, prefix, hash)
         hash.each_pair do |key, value|
           name = Utils.encode_utf8_string(key.to_s)
-          name = prefix + name if ENTRY_ATTRIBUTES.key?(name) || name.start_with?(DIMENSIONS_PREFIX)
+          name = prefix + name if entry_attribute?(name) || name.start_with?(DIMENSIONS_PREFIX)
           add(attributes, name, value)
         end
       end
 
+      # Whether the formatter writes an attribute of the entry itself of that name (see ENTRY_ATTRIBUTES),
+      # so that a payload or named tag key of that name is prefixed with its source.
+      def entry_attribute?(name)
+        ENTRY_ATTRIBUTES.key?(name)
+      end
+
       def add_entry(attributes)
-        add(attributes, NAME, log.name)
+        add(attributes, NAME, log.name) if entry_attribute?(NAME)
         add(attributes, THREAD_NAME, log.thread_name)
-        add(attributes, PROCESS_PID, pid)
+        add(attributes, PROCESS_PID, pid) if entry_attribute?(PROCESS_PID)
 
         add_code(attributes)
 

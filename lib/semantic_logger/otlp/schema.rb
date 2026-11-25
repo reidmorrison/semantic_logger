@@ -111,6 +111,36 @@ module SemanticLogger
           bucketCounts: [2, :uint64, :repeated]
         },
 
+        # opentelemetry/proto/logs/v1/logs.proto
+        ResourceLogs:                  {
+          resource:  [1, :Resource],
+          scopeLogs: [2, :ScopeLogs, :repeated],
+          schemaUrl: [3, :string]
+        },
+        ScopeLogs:                     {
+          scope:      [1, :InstrumentationScope],
+          logRecords: [2, :LogRecord, :repeated],
+          schemaUrl:  [3, :string]
+        },
+        LogRecord:                     {
+          timeUnixNano:           [1, :fixed64],
+          observedTimeUnixNano:   [11, :fixed64],
+          severityNumber:         [2, :enum],
+          severityText:           [3, :string],
+          body:                   [5, :AnyValue],
+          attributes:             [6, :KeyValue, :repeated],
+          droppedAttributesCount: [7, :uint32],
+          flags:                  [8, :fixed32],
+          traceId:                [9, :hex_bytes],
+          spanId:                 [10, :hex_bytes],
+          eventName:              [12, :string]
+        },
+
+        # opentelemetry/proto/collector/logs/v1/logs_service.proto
+        ExportLogsServiceRequest:      {resourceLogs: [1, :ResourceLogs, :repeated]},
+        ExportLogsServiceResponse:     {partialSuccess: [1, :ExportLogsPartialSuccess]},
+        ExportLogsPartialSuccess:      {rejectedLogRecords: [1, :int64], errorMessage: [2, :string]},
+
         # opentelemetry/proto/collector/metrics/v1/metrics_service.proto
         ExportMetricsServiceRequest:   {resourceMetrics: [1, :ResourceMetrics, :repeated]},
         ExportMetricsServiceResponse:  {partialSuccess: [1, :ExportMetricsPartialSuccess]},

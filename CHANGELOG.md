@@ -83,6 +83,16 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   `OTEL_EXPORTER_OTLP_[METRICS_]PROTOCOL=http/json`, sends OTLP/JSON. The environment's `grpc` sends
   `http/protobuf`, with a warning, since the appender speaks OTLP/HTTP only. A partial success is read
   from a response in either encoding.
+- `add_appender(appender: :otlp)` sends log entries to an OpenTelemetry collector, or any other
+  OTLP/HTTP receiver, as OTLP log records posted to `<url>/v1/logs`, in batches, without any
+  OpenTelemetry gems or `google-protobuf`, as `http/protobuf` by default or `http/json`. Each logger
+  name is an instrumentation scope, the resource is that of `metric: :otlp` (with the `process.pid`
+  of the sender), and attribute values keep their structure, a Hash as a map and an Array as an
+  array. A record is linked to the span current when it was logged, when the `opentelemetry-api` gem
+  is loaded, or else to the `trace_id` and `span_id` named tags. It takes the options of
+  `metric: :otlp` and reads the same variables in their `OTEL_EXPORTER_OTLP_LOGS_*` form, and sends a
+  batch again after a 502 or 504, as OTLP/HTTP asks. Its formatter is
+  `SemanticLogger::Formatters::Otlp`, or a subclass of it.
 - `SemanticLogger.sensitive_keys=` also redacts the dimensions of the metrics given to the metric
   appenders, from `increment`, `time`, `record`, and the `metric:` of log calls alike: a dimension
   whose key is sensitive gets the filtered value, such as `"[FILTERED]"`, so that it never leaves the

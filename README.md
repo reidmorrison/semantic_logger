@@ -65,7 +65,7 @@ Logging to the following destinations are all supported "out-of-the-box":
 * UDP
 * Syslog
 * CloudWatch Logs
-* OpenTelemetry
+* OpenTelemetry (OTLP/HTTP, with no extra gems, or through the OpenTelemetry SDK)
 * Add any existing Ruby logger as another destination.
 * Roll-your-own
 
