@@ -5727,11 +5727,15 @@ they initialize, it also replaces the loggers of these libraries when present:
 - Sidetiq
 - Solid Queue (unless `replace_solid_queue_logger = false`)
 
-Each of these loggers is the one through which its component's or library's entries are logged and
-its [metrics](#metrics) recorded. Do not replace one yourself, with a Ruby `Logger`, another logger
-that is not a Semantic Logger one, or `nil`, such as with
-`config.solid_queue.logger = Logger.new($stdout)`: that is not supported, and breaks both its log
-entries and its metrics.
+Each of these loggers is the one through which its component or library logs. The
+[metrics](#metrics) of Active Record, Action Controller, Action View, Action Mailer, Active Job, the
+cache store, Sidekiq, and Solid Queue are recorded through it too. Action Controller logs each
+controller's entries through that controller's own logger, named after it, such as
+`ArticlesController`, and only its metrics through `ActionController::Base`'s.
+
+Do not replace one of these loggers yourself, with a Ruby `Logger`, another logger that is not a
+Semantic Logger one, or `nil`, such as with `config.solid_queue.logger = Logger.new($stdout)`: that
+is not supported, and can break its log entries and its metrics.
 
 To log less from a component or library, set the level of its logger instead, such as in
 `config/initializers/logging.rb`:
@@ -5741,6 +5745,14 @@ To log less from a component or library, set the level of its logger instead, su
 ActiveSupport.on_load(:active_record) { logger.level = :info }
 
 SolidQueue.logger.level = :warn
+~~~
+
+For a controller, set the level of its own logger, in the controller:
+
+~~~ruby
+class ArticlesController < ApplicationController
+  logger.level = :warn
+end
 ~~~
 
 A logger's level applies to its log entries only: its metrics are recorded whatever it logs. To
