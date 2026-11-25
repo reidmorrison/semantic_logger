@@ -84,8 +84,13 @@ module Metric
         JSON.parse(requests.first.body)
       end
 
+      # Returns [Array<Hash>] the metrics of every scope of the single request sent for the snapshot.
       def metrics(snapshot = self.snapshot, on: appender)
-        body(snapshot, on: on).dig("resourceMetrics", 0, "scopeMetrics", 0, "metrics")
+        scope_metrics(snapshot, on: on).flat_map { |scope_metrics| scope_metrics["metrics"] }
+      end
+
+      def scope_metrics(snapshot = self.snapshot, on: appender)
+        body(snapshot, on: on).dig("resourceMetrics", 0, "scopeMetrics")
       end
 
       def metric(name, snapshot = self.snapshot)
@@ -356,10 +361,50 @@ module Metric
           assert_equal({"intValue" => "7"}, resource["process.pid"])
         end
 
-        it "is the SemanticLogger scope, with the gem version" do
-          scope = body.dig("resourceMetrics", 0, "scopeMetrics", 0, "scope")
+        it "is the name of the logger that recorded them, without a version" do
+          aggregator.reset(start_time)
+          aggregator.record(:counter, "users.signup", 1, scope: "MyApp::Users")
 
-          assert_equal({"name" => "SemanticLogger", "version" => SemanticLogger::VERSION}, scope)
+          assert_equal([{"name" => "MyApp::Users"}], scope_metrics.map { |scope_metrics| scope_metrics["scope"] })
+        end
+
+        it "sends the metrics of each logger in a scope of its own, a name in each" do
+          aggregator.reset(start_time)
+          aggregator.record(:counter, "jobs", 1, scope: "Orders")
+          aggregator.record(:counter, "jobs", 2, scope: "Payments")
+          aggregator.record(:counter, "jobs", 4, scope: "Orders")
+          sent = scope_metrics.to_h do |scope_metrics|
+            [scope_metrics.dig("scope", "name"),
+             scope_metrics["metrics"].map { |metric| [metric["name"], metric.dig("sum", "dataPoints", 0, "asInt")] }]
+          end
+
+          assert_equal({"Orders" => [%w[jobs 5]], "Payments" => [%w[jobs 2]]}, sent)
+        end
+
+        it "sends a metric whose logger has no name in a scope without a name" do
+          assert_equal([{"name" => ""}], scope_metrics.map { |scope_metrics| scope_metrics["scope"] })
+        end
+
+        it "sends Semantic Logger's own metrics in the SemanticLogger scope, with the gem version" do
+          aggregator.reset(start_time)
+          aggregator.record(:counter, "users.signup", 1, scope: "SemanticLogger")
+          name = SemanticLogger::Metric::InternalMetrics::NAME
+          aggregator.record(:counter, name, 5, internal: true, scope: "Ignored")
+          scopes = scope_metrics(on: new_appender(internal_metrics: true)).map do |scope_metrics|
+            [scope_metrics["scope"], scope_metrics["metrics"].map { |metric| metric["name"] }]
+          end
+
+          assert_equal(
+            [
+              [{"name" => "SemanticLogger"}, ["users.signup"]],
+              [{"name" => "SemanticLogger", "version" => SemanticLogger::VERSION}, [name]]
+            ],
+            scopes
+          )
+        end
+
+        it "is given the snapshots with their scopes" do
+          assert_predicate appender, :metric_scopes?
         end
       end
 
@@ -740,7 +785,9 @@ module Metric
 
         def names(bodies)
           bodies.flat_map do |body|
-            body.dig("resourceMetrics", 0, "scopeMetrics", 0, "metrics").map { |metric| metric["name"] }
+            body.dig("resourceMetrics", 0, "scopeMetrics").flat_map do |scope_metrics|
+              scope_metrics["metrics"].map { |metric| metric["name"] }
+            end
           end
         end
 

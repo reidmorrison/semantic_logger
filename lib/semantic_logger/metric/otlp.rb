@@ -16,7 +16,10 @@
 #
 # Each snapshot of metrics (see Metric::Snapshots) is posted as one ExportMetricsServiceRequest to
 # `<url>/v1/metrics`: counters as monotonic sums, and histograms as base-2 exponential histograms, both
-# with delta temporality. See Otlp::Encoder.
+# with delta temporality, with one ScopeMetrics for each logger that recorded metrics, its
+# instrumentation scope (the meter) named after it, such as "MyApp::Orders", as the log records of
+# `appender: :otlp` are. Semantic Logger's own metrics are in the scope "SemanticLogger", with the gem's
+# version. See Otlp::Encoder.
 #
 # Responses:
 # As for Appender::Http, except that a 502 or 504 is retryable too, as OTLP/HTTP requires. A snapshot
@@ -56,6 +59,10 @@ module SemanticLogger
         interval ||= SemanticLogger::Otlp::Environment.new(logger, otlp_signal).export_interval
         super
       end
+
+      # Returns [true]: each logger's metrics are sent with the logger's name as their instrumentation
+      # scope (see Encoder).
+      def metric_scopes? = true
 
       # Returns [SemanticLogger::Otlp::Signal] the metrics signal.
       def otlp_signal = SemanticLogger::Otlp::Signal::METRICS

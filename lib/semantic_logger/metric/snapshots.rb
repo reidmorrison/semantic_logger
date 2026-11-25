@@ -20,6 +20,10 @@ module SemanticLogger
     #
     #   SemanticLogger.add_appender(metric: MyMetrics.new(interval: 10))
     #
+    # The snapshots that it is given have no scopes (see Snapshot::Point#scope): the series that the
+    # loggers of different classes recorded with the same name and dimensions are merged into one,
+    # unless the appender answers true to #metric_scopes?, since its destination keeps them apart.
+    #
     # A snapshot that #write_metrics fails to write is reported and discarded, unless the appender says
     # that it is worth writing again (see #metrics_retryable?): it is then kept, and written with the
     # snapshot of its next interval, merged into one. One that the destination answered with a failure
@@ -98,6 +102,12 @@ module SemanticLogger
       # Returns [true|false] whether it writes Semantic Logger's own metrics too.
       def internal_metrics? = @internal_metrics
 
+      # Returns [true|false] whether it writes the scope of each point, the name of the logger that
+      # recorded it, such as OpenTelemetry's instrumentation scope, so that it is given the points of each
+      # scope apart. Otherwise the series that differ only by their scope are merged before it holds them
+      # (see Snapshot#without_scopes). Default: false
+      def metric_scopes? = false
+
       # A metric appender takes no log entries.
       def should_log?(_log) = false
 
@@ -111,8 +121,9 @@ module SemanticLogger
       end
 
       # Holds the snapshot, merged with the one it holds, without Semantic Logger's own metrics unless
-      # it writes them, then writes what it holds once its interval has passed (see #interval_ended?),
-      # with the snapshot it kept to write again, if any. Returns true, or false when writing failed,
+      # it writes them, and without scopes unless it writes them (see #metric_scopes?), then writes
+      # what it holds once its interval has passed (see #interval_ended?), with the snapshot it kept to
+      # write again, if any. Returns true, or false when writing failed,
       # which it reports.
       #
       # Two snapshots may arrive out of order (see Collector#deliver), so the earlier one is merged
@@ -121,6 +132,7 @@ module SemanticLogger
         one_at_a_time do
           forget_parent_snapshots
           snapshot       = snapshot.without_internal unless @internal_metrics
+          snapshot       = snapshot.without_scopes unless metric_scopes?
           @held_snapshot = Snapshots.merged(@held_snapshot, snapshot)
           next true unless interval_ended?(snapshot)
 

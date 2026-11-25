@@ -460,7 +460,7 @@ module SemanticLogger
     #
     # Returns [true|false] whether it was recorded.
     def record_metric(kind, name, value, unit:, dimensions:)
-      Logger.processor.record_metric(kind, name, value, unit: unit, dimensions: dimensions)
+      Logger.processor.record_metric(kind, name, value, unit: unit, dimensions: dimensions, scope: self.name)
     rescue StandardError => e
       report_metric_failure(kind, name, e)
     end

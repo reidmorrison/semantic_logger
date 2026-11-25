@@ -75,13 +75,13 @@ module SemanticLogger
       #
       # In a forked child that was not reopened, such as one forked while SemanticLogger.reopen_on_fork
       # is false, first discards the series inherited from the parent (see #renew_after_fork).
-      def record(kind, name, value, unit: nil, dimensions: nil, internal: false)
+      def record(kind, name, value, unit: nil, dimensions: nil, internal: false, scope: nil)
         return false unless @collecting
         return false unless (name = @validator.accept(kind, name, value, dimensions))
 
         renew_after_fork unless @pid == ::Process.pid
         begin
-          @aggregator.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal)
+          @aggregator.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal, scope: scope)
         rescue StandardError => e
           report_failure(kind, name, e)
         end
@@ -309,7 +309,7 @@ module SemanticLogger
       def new_aggregator = Aggregator.new(series_limit: @aggregator.series_limit, name_limit: @aggregator.name_limit)
 
       # Reports to the internal logger the records that the Aggregator dropped in the interval of the
-      # snapshot: those beyond its limit of metric names, once per interval, naming the first one, and
+      # snapshot: those beyond its limit of metrics, once per interval, naming the first one, and
       # those of a metric name recorded with another kind or unit than the first, once per name. The
       # latter among Semantic Logger's own metrics are reported apart (see #report_internal_conflicts).
       def report_dropped(snapshot)
@@ -317,7 +317,7 @@ module SemanticLogger
           report(
             :warn,
             "Dropped #{snapshot.dropped_by_name_limit} metric records from #{snapshot.start_time} to " \
-            "#{snapshot.end_time}, since that interval already had #{@aggregator.name_limit} metric names, " \
+            "#{snapshot.end_time}, since that interval already had #{@aggregator.name_limit} metrics, " \
             "starting with #{snapshot.first_name_dropped.inspect}. " \
             "Put variable parts in dimensions: instead of the metric name."
           )

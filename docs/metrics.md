@@ -274,17 +274,19 @@ built from an id, as in `"users.#{user.id}.fetch"`, makes a new metric for every
 So that a mistake in the application cannot use up the memory of the process, each interval holds
 at most:
 
-* **2000 metric names.** A record of a further name is dropped, and the internal logger reports it
-  once per interval, naming the first name dropped: "Put variable parts in dimensions: instead of
-  the metric name."
-* **2000 series per metric name.** The values of further dimension combinations are added to one
+* **2000 metrics**, each a metric name recorded by the logger of one class, so a name recorded by
+  the loggers of two classes counts twice. A record of a further metric is dropped, and the internal
+  logger reports it once per interval, naming the first name dropped: "Put variable parts in
+  dimensions: instead of the metric name."
+* **2000 series per metric.** The values of further dimension combinations are added to one
   overflow series, whose dimensions are `{"otel.metric.overflow" => true}`, as OpenTelemetry names
   it, so that the totals of the metric stay right.
 
-Within one interval a metric name has one kind (counter or histogram) and one unit: the first
-record of the name decides them. A later record of the same name with another kind or unit, such as
-`increment("jobs")` after `time("jobs")`, is dropped, with a warning on the internal logger once
-per metric name. Give each metric name one kind and one unit.
+Within one interval a metric name has one kind (counter or histogram) and one unit in the logger of
+each class: the first record of the name decides them. A later record of the same name with another
+kind or unit by that logger, such as `increment("jobs")` after `time("jobs")`, is dropped, with a
+warning on the internal logger once per metric name. Give each metric name one kind and one unit
+everywhere, since the metric appenders without scopes merge the series of every logger.
 
 ## Metrics on log and measure calls
 
@@ -421,11 +423,20 @@ SemanticLogger.add_appender(
 Each snapshot is posted as one `ExportMetricsServiceRequest` to `<url>/v1/metrics`: counters as
 monotonic sums, and histograms as base-2 exponential histograms, both with delta temporality. A
 histogram that recorded a negative value is sent without its sum, as OTLP asks, since a receiver takes
-the sum as one that only grows. The
-instrumentation scope is `SemanticLogger`, with the gem's version. Each kind, name, and unit is sent
-as one OTLP metric, with a data point for each of its series, and Semantic Logger's own metrics are
-kept apart from the application's. A snapshot that merges several intervals, during an outage, may
+the sum as one that only grows.
+
+The metrics of each logger are sent in an instrumentation scope (a meter) named after the logger,
+such as `MyApp::Orders`, as the log records of [`appender: :otlp`](appenders.html) are, so the
+metrics of `MyApp::Orders` are sent apart from those of `MyApp::Payments`, even with the same name.
+A receiver that keeps scopes apart, such as Prometheus with its `otel_scope_name` label, then has a
+series for each class that records a name; one that ignores the scope may take two of them, with the
+same name and attributes, as one. Semantic Logger's own metrics are in the scope `SemanticLogger`,
+with the gem's version. Within a scope, each kind, name, and unit is sent as one OTLP metric, with a
+data point for each of its series. A snapshot that merges several intervals, during an outage, may
 hold one name in two units: each is sent as a metric of its own.
+
+The other metric appenders have no scopes: the series that loggers of different classes record with
+the same name and dimensions are merged into one before they are written.
 
 | Option | Description |
 |--------|-------------|
@@ -731,6 +742,13 @@ class MyMetrics < SemanticLogger::Subscriber
         )
       end
     end
+  end
+
+  # Optional: whether each point keeps its scope, point.scope, the name of the logger that recorded it,
+  # for a destination with scopes. False by default: the series that differ only by their scope are
+  # merged, and point.scope is nil.
+  def metric_scopes?
+    false
   end
 
   # Optional: whether a snapshot that failed with this exception is worth writing again, with the

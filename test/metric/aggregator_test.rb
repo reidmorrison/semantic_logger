@@ -163,6 +163,51 @@ module Metric
         end
       end
 
+      describe "scope" do
+        it "keeps the metrics of each scope apart, each with its own kind and unit" do
+          aggregator.record(:counter, "jobs", 1, scope: "Orders")
+          aggregator.record(:counter, "jobs", 2, scope: "Payments")
+          aggregator.record(:counter, "jobs", 4, scope: "Orders")
+
+          assert aggregator.record(:histogram, "jobs", 1.5, unit: "s", scope: "Reports")
+          refute aggregator.record(:histogram, "jobs", 1.5, scope: "Orders")
+          snapshot = aggregator.collect(end_time)
+
+          assert_equal(
+            [["Orders", :counter, 5], ["Payments", :counter, 2], ["Reports", :histogram, 1]],
+            snapshot.map { |point| [point.scope, point.kind, point.counter? ? point.value : point.value.count] }
+          )
+          assert_equal({"jobs" => 1}, snapshot.dropped_by_conflict)
+        end
+
+        it "gives a point no scope when it was recorded without one" do
+          aggregator.record(:counter, "jobs", 1)
+
+          assert_nil point.scope
+        end
+
+        it "makes a Symbol and a String scope one, a frozen String, with a frozen copy of the caller's" do
+          scope = +"Orders"
+          aggregator.record(:counter, "jobs", 1, scope: scope)
+          scope << "X"
+          aggregator.record(:counter, "jobs", 2, scope: :Orders)
+          point = point()
+
+          assert_equal "Orders", point.scope
+          assert_predicate point.scope, :frozen?
+          assert_equal 3, point.value
+        end
+
+        it "gives an internal metric no scope" do
+          aggregator.record(:counter, "semantic_logger.log.processed", 1, internal: true, scope: "Orders")
+          aggregator.record(:counter, "semantic_logger.log.processed", 2, internal: true, scope: "Payments")
+          point = point()
+
+          assert_nil point.scope
+          assert_equal 3, point.value
+        end
+      end
+
       describe "dimensions" do
         it "treats nil and empty dimensions as the same series" do
           aggregator.record(:counter, "jobs", 1)
@@ -384,6 +429,18 @@ module Metric
           assert_predicate snapshot, :dropped?
         end
 
+        it "counts a name in each scope as a metric of its own" do
+          aggregator.record(:counter, "jobs", 1, scope: "Orders")
+          aggregator.record(:counter, "jobs", 1, scope: "Payments")
+
+          refute aggregator.record(:counter, "jobs", 1, scope: "Reports")
+          snapshot = aggregator.collect(end_time)
+
+          assert_equal %w[Orders Payments], snapshot.map(&:scope)
+          assert_equal 1, snapshot.dropped_by_name_limit
+          assert_equal "jobs", snapshot.first_name_dropped
+        end
+
         it "does not count internal metrics" do
           aggregator.record(:counter, "a", 1)
           aggregator.record(:counter, "b", 1)
@@ -522,6 +579,14 @@ module Metric
 
           assert_equal 2, point.value
           assert_equal({"queue" => "a"}, point.dimensions)
+        end
+
+        it "queues the record with a frozen copy of its scope" do
+          scope = +"Orders"
+          in_signal_trap { aggregator.record(:counter, "jobs", 2, scope: scope) }
+          scope << "X"
+
+          assert_equal "Orders", point.scope
         end
 
         it "queues the record and adds it on the next record" do

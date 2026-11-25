@@ -89,6 +89,10 @@ module Metric
       end
 
       describe "options" do
+        it "is given snapshots without scopes by default" do
+          refute_predicate appender, :metric_scopes?
+        end
+
         it "has an interval of 60 seconds and leaves out internal metrics by default" do
           assert_equal 60, appender.metrics_interval
           refute_predicate appender, :internal_metrics?
@@ -243,6 +247,20 @@ module Metric
 
           assert_equal ["users.signup"], appender.points.map(&:name)
           assert_equal ["semantic_logger.log.processed", "users.signup"], internal.points.map(&:name).sort
+        end
+
+        it "merges the scopes, unless the appender writes them" do
+          scoped = InMemoryMetricAppender.new(interval: 1)
+          scoped.define_singleton_method(:metric_scopes?) { true }
+          appenders << appender
+          appenders << scoped
+          aggregator.record(:counter, "jobs", 1, scope: "Orders")
+          aggregator.record(:counter, "jobs", 2, scope: "Payments")
+          appenders.log_metrics(aggregator.collect(start_time + 1))
+          appenders.flush
+
+          assert_equal([[nil, 3]], appender.points.map { |point| [point.scope, point.value] })
+          assert_equal([["Orders", 1], ["Payments", 2]], scoped.points.map { |point| [point.scope, point.value] })
         end
 
         it "does not write a snapshot without points" do

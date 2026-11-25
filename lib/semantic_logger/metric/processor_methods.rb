@@ -10,8 +10,11 @@ module SemanticLogger
     module ProcessorMethods
       # Records the metric with the collector of the process (see Metric::Collector#record), which
       # returns false at once unless a metric appender is present. Never raises.
-      def record_metric(kind, name, value, unit: nil, dimensions: nil, internal: false)
-        Metric.collector.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal)
+      #
+      # scope: Name of the logger that recorded it (see Metric::Aggregator#record).
+      def record_metric(kind, name, value, unit: nil, dimensions: nil, internal: false, scope: nil)
+        Metric.collector.record(kind, name, value, unit: unit, dimensions: dimensions, internal: internal,
+                                                    scope: scope)
       end
 
       # Returns [true|false] whether the collector of the process collects the metrics recorded, while a
