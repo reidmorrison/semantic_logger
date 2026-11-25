@@ -50,6 +50,15 @@ module Metric
           assert_equal ["Jobs", :histogram, "job", "s", false, {a: 1}], point.identity
         end
 
+        it "keeps a frozen copy of its scope" do
+          scope = +"Jobs"
+          point = new_point(kind: :counter, name: "jobs", value: 1, scope: scope)
+          scope << "X"
+
+          assert_equal "Jobs", point.scope
+          assert_predicate point.scope, :frozen?
+        end
+
         it "has no scope when internal" do
           assert_nil new_point(kind: :counter, name: "processed", value: 1, internal: true, scope: "Jobs").scope
         end
@@ -161,23 +170,27 @@ module Metric
         it "adds the records dropped, keeping the earliest first name dropped" do
           earlier = SemanticLogger::Metric::Snapshot.new(
             start_time: Time.at(0), end_time: Time.at(60),
-            dropped_by_name_limit: 2, first_name_dropped: "x", dropped_by_conflict: {"a" => 1},
+            dropped_by_name_limit: 2, first_name_dropped: "x", first_scope_dropped: "X",
+            dropped_by_conflict: {"a" => 1},
             dropped_by_internal_conflict: {"p" => 1}
           )
           later = SemanticLogger::Metric::Snapshot.new(
             start_time: Time.at(60), end_time: Time.at(120),
-            dropped_by_name_limit: 3, first_name_dropped: "y", dropped_by_conflict: {"a" => 2, "b" => 1},
+            dropped_by_name_limit: 3, first_name_dropped: "y", first_scope_dropped: "Y",
+            dropped_by_conflict: {"a" => 2, "b" => 1},
             dropped_by_internal_conflict: {"p" => 2}
           )
           merged = earlier.merge(later)
 
           assert_equal 5, merged.dropped_by_name_limit
           assert_equal "x", merged.first_name_dropped
+          assert_equal "X", merged.first_scope_dropped
           assert_equal({"a" => 3, "b" => 1}, merged.dropped_by_conflict)
           assert_predicate merged.dropped_by_conflict, :frozen?
           assert_equal({"p" => 3}, merged.dropped_by_internal_conflict)
           assert_predicate merged.dropped_by_internal_conflict, :frozen?
           assert_equal "y", snapshot(0, 60).merge(later).first_name_dropped
+          assert_equal "Y", snapshot(0, 60).merge(later).first_scope_dropped
         end
       end
 

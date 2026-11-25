@@ -7,8 +7,8 @@ module SemanticLogger
     # until its own interval has passed.
     #
     # It also says what the Aggregator dropped during the interval, for its collector to report:
-    # #dropped_by_name_limit and #first_name_dropped for records of names beyond the limit of
-    # names per interval, #dropped_by_conflict for records of a name with a kind or unit other
+    # #dropped_by_name_limit, #first_name_dropped and #first_scope_dropped for records of metrics
+    # beyond the limit of metrics per interval, #dropped_by_conflict for records of a name with a kind or unit other
     # than the one the name was first recorded with, and #dropped_by_internal_conflict for the
     # same among Semantic Logger's own metrics.
     class Snapshot
@@ -20,9 +20,9 @@ module SemanticLogger
       # The aggregate of one series over the interval of its snapshot. Frozen.
       #
       # A series is identified by its scope, kind, name, unit, dimensions and whether it is internal (see
-      # #identity). Within one interval the Aggregator gives a name of a scope one kind and one unit; points
-      # of a name with two kinds, or two units, meet only when snapshots of different intervals are merged,
-      # or when the scopes of a snapshot are merged (see Snapshot#without_scopes), and stay two series.
+      # #identity). Within one interval the Aggregator gives a name one kind and one unit, in every scope;
+      # points of a name with two kinds, or two units, meet only when snapshots of different intervals are
+      # merged, and stay two series.
       class Point
         # The dimensions of the series that holds the values of the dimension sets beyond the cardinality
         # limit of a metric, as OpenTelemetry names it.
@@ -47,7 +47,7 @@ module SemanticLogger
         # Freezes the value, and takes a frozen copy of the dimensions unless already frozen. An internal
         # point has no scope.
         def initialize(kind:, name:, value:, unit: nil, dimensions: nil, internal: false, scope: nil)
-          @scope      = internal ? nil : scope
+          @scope      = internal || scope.nil? ? nil : Aggregator.frozen(scope)
           @kind       = kind
           @name       = name
           @unit       = unit
@@ -140,24 +140,27 @@ module SemanticLogger
       # dropped_by_name_limit: Number of records dropped because the interval already had as many
       #                        metrics as the Aggregator allows.
       # first_name_dropped:    Name of the first of those records, or nil.
+      # first_scope_dropped:   Scope of the first of those records, or nil.
       # dropped_by_conflict:   Frozen Hash of the number of records dropped, by metric name, because
       #                        their kind or unit was not the one that name was first recorded
       #                        with in the interval (the one its points have).
       # dropped_by_internal_conflict:
       #                        The same, for Semantic Logger's own metrics, counted apart since an
       #                        internal metric may share its name with an application metric.
-      attr_reader :start_time, :end_time, :points, :dropped_by_name_limit, :first_name_dropped, :dropped_by_conflict,
-                  :dropped_by_internal_conflict
+      attr_reader :start_time, :end_time, :points, :dropped_by_name_limit, :first_name_dropped, :first_scope_dropped,
+                  :dropped_by_conflict, :dropped_by_internal_conflict
 
       # Takes frozen copies of `points` (an Array of Point) and of the Hashes of records dropped unless
       # already frozen.
       def initialize(start_time:, end_time:, points: EMPTY_POINTS, dropped_by_name_limit: 0, first_name_dropped: nil,
-                     dropped_by_conflict: EMPTY_COUNTS, dropped_by_internal_conflict: EMPTY_COUNTS)
+                     first_scope_dropped: nil, dropped_by_conflict: EMPTY_COUNTS,
+                     dropped_by_internal_conflict: EMPTY_COUNTS)
         @start_time                   = start_time
         @end_time                     = end_time
         @points                       = frozen(points)
         @dropped_by_name_limit        = dropped_by_name_limit
         @first_name_dropped           = first_name_dropped
+        @first_scope_dropped          = first_scope_dropped
         @dropped_by_conflict          = frozen(dropped_by_conflict)
         @dropped_by_internal_conflict = frozen(dropped_by_internal_conflict)
         freeze
@@ -188,7 +191,7 @@ module SemanticLogger
       # Returns a new snapshot from the start of this one to the end of `later`, the snapshot of the
       # interval that follows it (or of a later one), with the points of both: the points of a series
       # are merged (see Point#merge), those of a series in only one are kept as they are. The counts
-      # of records dropped are added; the first name dropped is the earliest.
+      # of records dropped are added; the first name dropped, and its scope, are the earliest.
       def merge(later)
         Snapshot.new(
           start_time:                   @start_time,
@@ -196,6 +199,7 @@ module SemanticLogger
           points:                       merged_points(@points, later.points),
           dropped_by_name_limit:        @dropped_by_name_limit + later.dropped_by_name_limit,
           first_name_dropped:           @first_name_dropped || later.first_name_dropped,
+          first_scope_dropped:          @first_name_dropped ? @first_scope_dropped : later.first_scope_dropped,
           dropped_by_conflict:          add_counts(@dropped_by_conflict, later.dropped_by_conflict),
           dropped_by_internal_conflict: add_counts(@dropped_by_internal_conflict, later.dropped_by_internal_conflict)
         )
@@ -298,6 +302,7 @@ module SemanticLogger
           points:                       points.freeze,
           dropped_by_name_limit:        @dropped_by_name_limit,
           first_name_dropped:           @first_name_dropped,
+          first_scope_dropped:          @first_scope_dropped,
           dropped_by_conflict:          @dropped_by_conflict,
           dropped_by_internal_conflict: @dropped_by_internal_conflict
         )

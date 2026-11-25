@@ -4012,15 +4012,15 @@ at most:
   the loggers of two classes counts twice. A record of a further metric is dropped, and the internal
   logger reports it once per interval, naming the first name dropped: "Put variable parts in
   dimensions: instead of the metric name."
-* **2000 series per metric.** The values of further dimension combinations are added to one
+* **2000 series per metric**, of each class, so a metric appender without scopes (see
+  [OpenTelemetry](#opentelemetry-otlp)) may be given more series of a name recorded by several classes. The values of further dimension combinations are added to one
   overflow series, whose dimensions are `{"otel.metric.overflow" => true}`, as OpenTelemetry names
   it, so that the totals of the metric stay right.
 
-Within one interval a metric name has one kind (counter or histogram) and one unit in the logger of
-each class: the first record of the name decides them. A later record of the same name with another
-kind or unit by that logger, such as `increment("jobs")` after `time("jobs")`, is dropped, with a
-warning on the internal logger once per metric name. Give each metric name one kind and one unit
-everywhere, since the metric appenders without scopes merge the series of every logger.
+Within one interval a metric name has one kind (counter or histogram) and one unit, in the loggers
+of every class: the first record of the name decides them. A later record of the same name with
+another kind or unit, such as `increment("jobs")` after `time("jobs")`, is dropped, with a warning
+on the internal logger once per metric name. Give each metric name one kind and one unit.
 
 ## Metrics on log and measure calls
 
@@ -4164,7 +4164,9 @@ such as `MyApp::Orders`, as the log records of [`appender: :otlp`](appenders.htm
 metrics of `MyApp::Orders` are sent apart from those of `MyApp::Payments`, even with the same name.
 A receiver that keeps scopes apart, such as Prometheus with its `otel_scope_name` label, then has a
 series for each class that records a name; one that ignores the scope may take two of them, with the
-same name and attributes, as one. Semantic Logger's own metrics are in the scope `SemanticLogger`,
+same name and attributes, as one. The metrics of a logger without a name, such as that of an
+anonymous class, are in a scope without a name, as its log records are. Semantic Logger's own
+metrics are in the scope `SemanticLogger`,
 with the gem's version. Within a scope, each kind, name, and unit is sent as one OTLP metric, with a
 data point for each of its series. A snapshot that merges several intervals, during an outage, may
 hold one name in two units: each is sent as a metric of its own.

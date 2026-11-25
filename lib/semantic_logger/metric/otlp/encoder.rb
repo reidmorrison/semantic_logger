@@ -26,11 +26,11 @@ module SemanticLogger
       # SemanticLogger, with the gem's version, as for the internal metrics of an OpenTelemetry SDK.
       #
       # Within a scope, the points of one kind, name, and unit are the data points of one metric, which
-      # is what identifies a metric in OpenTelemetry. The Aggregator keeps one kind and one unit per name
-      # of a scope in an interval, so a snapshot that it collected has one metric per name of a scope. A
-      # merged snapshot, holding the points of more than one interval, may hold one name with two units
-      # or kinds: each is then a metric of its own, of the same name, rather than one being left out
-      # (see .metrics).
+      # is what identifies a metric in OpenTelemetry. The Aggregator keeps one kind and one unit per name,
+      # in every scope, in an interval, so a snapshot that it collected has one metric per name of a
+      # scope. A merged snapshot, holding the points of more than one interval, may hold one name with
+      # two units or kinds: each is then a metric of its own, of the same name, rather than one being
+      # left out (see .metrics).
       module Encoder
         # AggregationTemporality AGGREGATION_TEMPORALITY_DELTA.
         DELTA = 1

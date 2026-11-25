@@ -318,7 +318,8 @@ module SemanticLogger
             :warn,
             "Dropped #{snapshot.dropped_by_name_limit} metric records from #{snapshot.start_time} to " \
             "#{snapshot.end_time}, since that interval already had #{@aggregator.name_limit} metrics, " \
-            "starting with #{snapshot.first_name_dropped.inspect}. " \
+            "starting with #{snapshot.first_name_dropped.inspect}" \
+            "#{" of #{snapshot.first_scope_dropped}" if snapshot.first_scope_dropped}. " \
             "Put variable parts in dimensions: instead of the metric name."
           )
         end
@@ -330,7 +331,8 @@ module SemanticLogger
             :warn,
             "Dropped #{count} records of metric #{name.inspect} from #{snapshot.start_time} to " \
             "#{snapshot.end_time}, with a kind or unit other than the one it was first recorded with in " \
-            "that interval. Give each metric name one kind and unit. Reported once per metric name."
+            "that interval, by the logger of any class. Give each metric name one kind and unit in every " \
+            "class. Reported once per metric name."
           )
         end
         report_internal_conflicts(snapshot)

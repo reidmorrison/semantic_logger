@@ -448,6 +448,19 @@ module Metric
           assert_includes events.first.message, "Put variable parts in dimensions: instead of the metric name"
         end
 
+        it "names the scope of the first metric dropped beyond the limit" do
+          aggregator = SemanticLogger::Metric::Aggregator.new(name_limit: 1)
+          collector  = SemanticLogger::Metric::Collector.new(aggregator: aggregator)
+          with_processor(collector: collector) do
+            collector.start
+            collector.record(:counter, "jobs", 1, scope: "Orders")
+            collector.record(:counter, "jobs", 1, scope: "Payments")
+            collector.deliver
+          end
+
+          assert_includes processor.logger.events.first.message, 'starting with "jobs" of Payments. '
+        end
+
         it "reports the records of a metric name dropped for another kind or unit once per name" do
           with_processor do
             collector.start

@@ -97,8 +97,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - `metric: :otlp` sends the metrics of each logger in an instrumentation scope named after the logger,
   as `appender: :otlp` sends its log records, rather than all of them in the scope `SemanticLogger`,
   which now holds only Semantic Logger's own metrics, with the gem's version. A name recorded by the
-  loggers of two classes is two metrics, each with its own kind and unit, and counts twice towards the
-  limit of 2000 metrics per interval. The other metric appenders are given the series of every logger
+  loggers of two classes is two metrics, which count twice towards the limit of 2000 metrics per
+  interval, each with up to 2000 series; a name still has one kind and one unit in every class. The other metric appenders are given the series of every logger
   merged, unless a custom one answers true to `metric_scopes?`, and is then given each point's `scope`.
 - `logger.collecting_metrics?`, whether the metric calls are collected, so that code that builds
   costly dimensions can skip them without a metric appender.

@@ -9,10 +9,12 @@ module SemanticLogger
     # metrics of each class are kept apart; Semantic Logger's own metrics have none. A metric is a name
     # within a scope: the same name recorded by the loggers of two classes is two metrics. A name and
     # a scope are normalized to frozen Strings, so :jobs and "jobs" are one metric. Within an interval
-    # a metric has one kind and one unit: the first record of it decides them, and a later record of
-    # it with another kind or unit is dropped and counted on the snapshot by its name
-    # (Snapshot#dropped_by_conflict, or #dropped_by_internal_conflict for an internal metric). Internal
-    # metrics have names of their own: they never conflict with an application metric.
+    # a name has one kind and one unit, in every scope, so that the destinations without scopes, which
+    # merge the series of every scope (see Snapshot#without_scopes), are given one metric per name:
+    # the first record of a name decides them, and a later record of that name with another kind or
+    # unit, in any scope, is dropped and counted on the snapshot (Snapshot#dropped_by_conflict, or
+    # #dropped_by_internal_conflict for an internal metric). Internal metrics have names of their own:
+    # they never conflict with an application metric.
     #
     # Dimensions are normalized, so that the same dimensions written in different ways make one
     # series: keys become frozen Strings ({region: "eu"} and {"region" => "eu"} are one series), and
@@ -27,7 +29,7 @@ module SemanticLogger
     # Limits, per interval, so that a mistake in the application cannot exhaust memory:
     # - At most `name_limit` application metrics, a name within a scope each. A record of a further
     #   metric is dropped and counted on the snapshot (Snapshot#dropped_by_name_limit,
-    #   #first_name_dropped).
+    #   #first_name_dropped, #first_scope_dropped).
     # - At most `series_limit` dimension sets per metric, the series without dimensions included.
     #   The values of further dimension sets go to one overflow series with
     #   Snapshot::Point::OVERFLOW_DIMENSIONS.
@@ -359,11 +361,11 @@ module SemanticLogger
       # and of the records dropped, and starts the next interval at `now`. The snapshot is empty when
       # nothing was recorded.
       def collect(now = Time.now)
-        instruments, internal_instruments, start_time, dropped_by_name_limit, first_name_dropped, dropped_by_conflict,
-          dropped_by_internal_conflict = @mutex.synchronize do
+        instruments, internal_instruments, start_time, dropped_by_name_limit, first_name_dropped, first_scope_dropped,
+          dropped_by_conflict, dropped_by_internal_conflict = @mutex.synchronize do
             add_pending unless @pending.empty?
             taken = [@instruments, @internal_instruments, @start_time, @dropped_by_name_limit, @first_name_dropped,
-                     @dropped_by_conflict, @dropped_by_internal_conflict]
+                     @first_scope_dropped, @dropped_by_conflict, @dropped_by_internal_conflict]
             start(now)
             taken
           end
@@ -378,6 +380,7 @@ module SemanticLogger
           points:                       points.freeze,
           dropped_by_name_limit:        dropped_by_name_limit,
           first_name_dropped:           first_name_dropped,
+          first_scope_dropped:          first_scope_dropped,
           dropped_by_conflict:          dropped_by_conflict.freeze,
           dropped_by_internal_conflict: dropped_by_internal_conflict.freeze
         )
@@ -396,12 +399,15 @@ module SemanticLogger
 
       def start(now)
         @start_time            = now
-        # Application metrics by scope, then name, and their number; internal metrics by name.
+        # Application metrics by scope, then name, and their number; the first metric of each name, whose
+        # kind and unit the name has in every scope; internal metrics by name.
         @instruments           = {}
         @metrics               = 0
+        @first_of_name         = {}
         @internal_instruments  = {}
         @dropped_by_name_limit = 0
         @first_name_dropped    = nil
+        @first_scope_dropped   = nil
         @dropped_by_conflict   = {}
         @dropped_by_internal_conflict = {}
       end
@@ -435,21 +441,29 @@ module SemanticLogger
         end
       end
 
-      # Adds an application metric, unless the interval already has as many as the name limit allows.
+      # Adds an application metric, unless its name was first recorded with another kind or unit, in
+      # another scope, or the interval already has as many as the name limit allows.
       def add_instrument(kind, name, unit, scope)
-        return drop_name(name) if @metrics >= @name_limit
+        first = @first_of_name[name]
+        return drop_conflict(name, @dropped_by_conflict) if first && !first.accepts?(kind, unit)
+        return drop_name(name, scope) if @metrics >= @name_limit
 
         @metrics += 1
-        (@instruments[scope] ||= {})[name] = Instrument.new(kind, name, unit, false, @series_limit, scope: scope)
+        instrument = Instrument.new(kind, name, unit, false, @series_limit, scope: scope)
+        @first_of_name[name] ||= instrument
+        (@instruments[scope] ||= {})[name] = instrument
       end
 
       def add_internal_instrument(kind, name, unit)
         @internal_instruments[name] = Instrument.new(kind, name, unit, true, @series_limit)
       end
 
-      def drop_name(name)
+      def drop_name(name, scope)
         @dropped_by_name_limit += 1
-        @first_name_dropped ||= name
+        unless @first_name_dropped
+          @first_name_dropped  = name
+          @first_scope_dropped = scope && Aggregator.metric_name(scope)
+        end
         nil
       end
 

@@ -164,20 +164,26 @@ module Metric
       end
 
       describe "scope" do
-        it "keeps the metrics of each scope apart, each with its own kind and unit" do
+        it "keeps the metrics of each scope apart" do
           aggregator.record(:counter, "jobs", 1, scope: "Orders")
           aggregator.record(:counter, "jobs", 2, scope: "Payments")
           aggregator.record(:counter, "jobs", 4, scope: "Orders")
-
-          assert aggregator.record(:histogram, "jobs", 1.5, unit: "s", scope: "Reports")
-          refute aggregator.record(:histogram, "jobs", 1.5, scope: "Orders")
           snapshot = aggregator.collect(end_time)
 
-          assert_equal(
-            [["Orders", :counter, 5], ["Payments", :counter, 2], ["Reports", :histogram, 1]],
-            snapshot.map { |point| [point.scope, point.kind, point.counter? ? point.value : point.value.count] }
-          )
-          assert_equal({"jobs" => 1}, snapshot.dropped_by_conflict)
+          assert_equal([["Orders", 5], ["Payments", 2]], snapshot.map { |point| [point.scope, point.value] })
+        end
+
+        it "gives a name the kind and unit of its first record in every scope, dropping and counting others" do
+          aggregator.record(:counter, "jobs", 1, scope: "Orders")
+
+          refute aggregator.record(:histogram, "jobs", 1.5, scope: "Reports")
+          refute aggregator.record(:counter, "jobs", 1, unit: "{job}", scope: "Payments")
+          assert aggregator.record(:counter, "jobs", 1, scope: "Payments")
+          snapshot = aggregator.collect(end_time)
+
+          assert_equal(%w[Orders Payments], snapshot.map(&:scope))
+          assert_equal([:counter], snapshot.map(&:kind).uniq)
+          assert_equal({"jobs" => 2}, snapshot.dropped_by_conflict)
         end
 
         it "gives a point no scope when it was recorded without one" do
@@ -439,6 +445,7 @@ module Metric
           assert_equal %w[Orders Payments], snapshot.map(&:scope)
           assert_equal 1, snapshot.dropped_by_name_limit
           assert_equal "jobs", snapshot.first_name_dropped
+          assert_equal "Reports", snapshot.first_scope_dropped
         end
 
         it "does not count internal metrics" do
