@@ -23,8 +23,9 @@ module SemanticLogger
       when String
         LEVELS.index(level.downcase.to_sym)
       when Integer
-        # Bounded first, since Array#[] raises RangeError for an Integer too large for a C long.
-        MAPPED_LEVELS[level] if level.abs <= MAPPED_LEVELS.size
+        # Bounded first, since Array#[] raises RangeError for an Integer too large for a C long, and
+        # counts a negative Integer from the end.
+        MAPPED_LEVELS[level] if level >= 0 && level < MAPPED_LEVELS.size
       end || raise(ArgumentError, invalid_message(level))
     end
 

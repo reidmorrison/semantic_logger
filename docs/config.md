@@ -371,8 +371,13 @@ SemanticLogger.internal_logger = nil
 ~~~
 
 It takes effect at once: the running processor, and the appenders already added, report their next
-problem to it, apart from an appender given a logger of its own with `appender.logger = ...`. It
-cannot be a logger returned by `SemanticLogger[...]`, which would log the report of a failing
+problem to it, apart from an appender given a logger of its own with `appender.logger = ...` (set it
+to `nil` to follow the internal logger again). The client library of the `:mongodb`,
+`:elasticsearch`, `:opensearch`, `:rabbitmq`, and `:sentry_ruby` appenders is given the appender's
+logger as it connects, and keeps writing its own messages to the previous one until the appender
+reconnects, such as with `SemanticLogger.reopen`.
+
+It cannot be a logger returned by `SemanticLogger[...]`, which would log the report of a failing
 appender back to that appender. Code that extends Semantic Logger can report its own problems there
 too, with `SemanticLogger.internal_logger.warn("...")`.
 
@@ -394,7 +399,7 @@ SemanticLogger.call_site?(:info)
 # Whether an entry at the level captures a backtrace (see backtrace_level). An entry about the
 # application code that a library ran can then log the backtrace from that code, leaving out the
 # frames of gems, of Ruby's own libraries, and of Semantic Logger, at the top of the stack.
-if SemanticLogger.backtrace?(:debug)
+if logger.debug? && SemanticLogger.backtrace?(:debug)
   logger.debug(message: "Query", backtrace: SemanticLogger.application_backtrace)
 end
 ~~~

@@ -152,6 +152,10 @@ module SemanticLogger
         it "is false for application paths" do
           refute SemanticLogger::Utils.strip_path?("/app/models/user.rb:10")
         end
+
+        it "is true for Ruby's internal code" do
+          assert SemanticLogger::Utils.strip_path?("<internal:kernel>:168:in 'Kernel#loop'")
+        end
       end
 
       describe ".exception_name" do

@@ -26,6 +26,24 @@ class InternalLoggerCopyTest < Minitest::Test
       assert_same copy.logger, copy.logger
     end
 
+    describe "#copy?" do
+      it "is true for the copy that it returns now" do
+        assert copy.copy?(copy.logger)
+      end
+
+      it "is false for the internal logger, any other logger, and nil" do
+        copy.logger
+
+        refute copy.copy?(first)
+        refute copy.copy?(SemanticLogger::Appender::IO.new(StringIO.new))
+        refute copy.copy?(nil)
+      end
+
+      it "is false before it has made a copy" do
+        refute copy.copy?(nil)
+      end
+    end
+
     it "copies the internal logger that replaced it" do
       output       = StringIO.new
       before       = copy.logger

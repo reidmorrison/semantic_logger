@@ -1080,7 +1080,7 @@ class SemanticLoggerTest < Minitest::Test
       end
 
       it "raises ArgumentError for nil and for a level it does not know" do
-        [nil, :inf, "verbose", 99, Object.new].each do |level|
+        [nil, :inf, "verbose", 99, -1, Object.new].each do |level|
           error = assert_raises(ArgumentError) { SemanticLogger.normalize_level(level) }
           assert_includes error.message, "Invalid level:#{level.inspect}"
         end
@@ -1088,7 +1088,8 @@ class SemanticLoggerTest < Minitest::Test
     end
 
     describe ".call_site?" do
-      after { SemanticLogger.call_site_level = nil }
+      before { @call_site_level = SemanticLogger.call_site_level }
+      after { SemanticLogger.call_site_level = @call_site_level }
 
       it "is true at and above call_site_level" do
         SemanticLogger.call_site_level = :info
@@ -1112,7 +1113,8 @@ class SemanticLoggerTest < Minitest::Test
     end
 
     describe ".backtrace?" do
-      after { SemanticLogger.backtrace_level = :error }
+      before { @backtrace_level = SemanticLogger.backtrace_level }
+      after { SemanticLogger.backtrace_level = @backtrace_level }
 
       it "is true at and above backtrace_level" do
         SemanticLogger.backtrace_level = :warn
@@ -1147,6 +1149,20 @@ class SemanticLoggerTest < Minitest::Test
 
       it "leaves out Semantic Logger's own frames" do
         refute(SemanticLogger.application_backtrace.any? { |frame| frame.include?("lib/semantic_logger/") })
+      end
+
+      it "leaves out Ruby's internal frames, such as that of Kernel#loop" do
+        backtrace = SemanticLogger::Utils.strip_backtrace(
+          ["<internal:kernel>:168:in 'Kernel#loop'", "/app/models/user.rb:10:in 'User#save'"]
+        )
+
+        assert_equal ["/app/models/user.rb:10:in 'User#save'"], backtrace
+      end
+
+      it "is nil when no application code is on the stack" do
+        SemanticLogger::Utils.stub(:strip_backtrace, []) do
+          assert_nil SemanticLogger.application_backtrace
+        end
       end
     end
 
@@ -1211,6 +1227,48 @@ class SemanticLoggerTest < Minitest::Test
         SemanticLogger::Logger.processor.logger.warn("Failed to log to appender")
 
         assert_includes output.string, "Failed to log to appender"
+      end
+
+      it "is the internal logger of the Ractor, in a Ractor other than the main one" do
+        ractor_logger = SemanticLogger::Appender::IO.new(StringIO.new)
+        processor     = Struct.new(:logger).new(ractor_logger)
+
+        SemanticLogger::RactorSupport.stub(:other_ractor?, true) do
+          SemanticLogger::Logger.stub(:processor, processor) do
+            assert_same ractor_logger, SemanticLogger.internal_logger
+          end
+        end
+      end
+
+      it "takes effect on the running processor after its logger was saved and set back" do
+        saved = SemanticLogger::Logger.processor.appenders.logger
+        SemanticLogger::Logger.processor.appenders.logger = SemanticLogger::Test::CaptureLogEvents.new
+        SemanticLogger::Logger.processor.appenders.logger = saved
+        output                         = StringIO.new
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(output)
+
+        SemanticLogger::Logger.processor.logger.warn("Failed to log to appender")
+
+        assert_includes output.string, "Failed to log to appender"
+      end
+
+      it "takes effect on an appender after its logger was saved and set back" do
+        appender        = SemanticLogger::Appender::IO.new(StringIO.new)
+        saved           = appender.logger
+        appender.logger = SemanticLogger::Test::CaptureLogEvents.new
+        appender.logger = saved
+        output                         = StringIO.new
+        SemanticLogger.internal_logger = SemanticLogger::Appender::IO.new(output)
+
+        appender.logger.warn("Could not connect")
+
+        assert_includes output.string, "Could not connect"
+      end
+
+      it "wraps a Ruby Logger once, for both processors" do
+        SemanticLogger.internal_logger = ::Logger.new(StringIO.new)
+
+        assert_same SemanticLogger::Processor.logger, SemanticLogger::SyncProcessor.logger
       end
 
       it "leaves the logger of an appender that was given one of its own" do
