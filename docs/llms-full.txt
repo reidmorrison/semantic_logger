@@ -6200,18 +6200,25 @@ Without an appenders block nothing changes: Rails Semantic Logger writes `log/<e
 color (plain text when `config.colorize_logging` is `false`), and to the screen under `rails server`,
 Sidekiq, and `rails console`.
 
-`bin/rails generate rails_semantic_logger:install` converts an existing application:
+Rails Semantic Logger 6.0 adds `bin/rails generate rails_semantic_logger:install`, which converts an
+existing application:
 
 * It removes the Rails logger settings that Rails Semantic Logger replaces: `config.logger`,
   `config.log_formatter`, and a `RAILS_LOG_TO_STDOUT` block that only sets the Rails logger. It keeps
   `config.log_level` and `config.log_tags`, which are used.
-* It converts the removed options, and any top-level `config.semantic_logger.add_appender(...)` calls,
-  into `appenders.add(...)` lines of an appenders block.
-* In each environment file that declares no appenders, it writes an appenders block with today's
-  defaults, followed by commented-out alternatives, such as JSON on standard out for a container in
-  production.
-* It leaves settings inside a condition, such as `if ENV["RAILS_LOG_TO_STDOUT"].present?`, in place,
-  and reports them, for you to move into the appenders block.
+* In each environment file that declares no appenders, unless `config/application.rb` declares them,
+  it writes an appenders block with today's defaults. The deployed environments also get commented-out
+  alternatives, such as JSON on standard out for a container. Since declarations from every file add
+  up, it writes no environment blocks at all when `config/application.rb` declares appenders.
+* It applies the removed options to the lines of that block: `format`, `ap_options`, and `filter` to
+  the default file appender, and `add_file_appender = false` or `console_logger = false` comment out
+  the default lines they turned off. Top-level `config.semantic_logger.add_appender(...)` calls become
+  `appenders.add(...)` lines. A converted appender that writes to standard out or standard error
+  comments out the default screen lines, so that nothing is written twice.
+* Where appenders are already declared, it removes the removed options and reports them, for you to
+  carry into your block.
+* It leaves settings inside a condition, such as an `if ENV["RAILS_LOG_TO_STDOUT"].present?` block
+  that sets `add_file_appender`, in place, and reports them, for you to move into the appenders block.
 
 If you set `add_file_appender = false` or `console_logger = false`, do not just delete the line:
 that brings back `log/<environment>.log`, or the screen output, which `console_logger` also turned off
@@ -6412,15 +6419,20 @@ if ENV["RAILS_LOG_TO_STDOUT"].present?
 end
 ~~~
 
-becomes, in v5 and v6 (`add_file_appender` raises `NoMethodError` in v6; see
-[Upgrading to v6](#upgrading-to-v6), whose `rails_semantic_logger:install` generator converts the rest):
+becomes, in v5 and v6:
 
 ~~~ruby
 # v5 and v6
-config.rails_semantic_logger.appenders do |appenders|
-  appenders.add(io: $stdout, formatter: :json)
+if ENV["RAILS_LOG_TO_STDOUT"].present?
+  config.rails_semantic_logger.appenders do |appenders|
+    appenders.add(io: $stdout, formatter: :json)
+  end
 end
 ~~~
+
+In v6 `add_file_appender` raises `NoMethodError`. The `rails_semantic_logger:install` generator (see
+[Upgrading to v6](#upgrading-to-v6)) leaves such a block in place and reports it: replace it by hand
+with the one above.
 
 ### Server standard-out behavior
 
