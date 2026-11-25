@@ -22,6 +22,37 @@ class AppenderTest < Minitest::Test
           assert_includes error.message, "not: \"not valid\""
         end
 
+        {
+          sentry:    ["sentry-raven", "appender: :sentry_ruby"],
+          new_relic: ["error events", "appender: :new_relic_logs"],
+          splunk:    ["splunk-sdk-ruby", "appender: :splunk_http"]
+        }.each_pair do |removed, (reason, replacement)|
+          it "raises naming the replacement of appender: #{removed.inspect}, which v6 removed" do
+            error = assert_raises(ArgumentError) { build(appender: removed) }
+
+            assert_includes error.message, "appender: #{removed.inspect}"
+            assert_includes error.message, reason
+            assert_includes error.message, "was removed in v6"
+            assert_includes error.message, replacement
+          end
+        end
+
+        it "builds a class of that name that the application defined itself" do
+          stand_in = Class.new(SemanticLogger::Subscriber) { def log(_log) = true }
+          SemanticLogger::Appender.const_set(:Splunk, stand_in)
+
+          assert_instance_of stand_in, build(appender: :splunk)
+        ensure
+          SemanticLogger::Appender.send(:remove_const, :Splunk) if SemanticLogger::Appender.const_defined?(:Splunk,
+                                                                                                           false)
+        end
+
+        it "raises for a Symbol that names no appender" do
+          error = assert_raises(ArgumentError) { build(appender: :no_such_appender) }
+
+          assert_includes error.message, "Could not convert symbol: :no_such_appender"
+        end
+
         it "formats with the block, for an appender named by a Symbol" do
           formatter = ->(log, _logger) { log.message }
           appender  = build(appender: :udp, server: "localhost:10514", &formatter)

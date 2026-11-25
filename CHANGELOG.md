@@ -171,7 +171,8 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
 - `SemanticLogger::Formatters::Signalfx`: the `:signalfx` metric appender builds its requests from
   the snapshot of each interval itself, and takes no formatter.
 - `appender: :sentry` (`SemanticLogger::Appender::Sentry`), deprecated in v5.1: it depended on the
-  end-of-life `sentry-raven` gem. Use `appender: :sentry_ruby`.
+  end-of-life `sentry-raven` gem. Use `appender: :sentry_ruby`. Adding it raises `ArgumentError`
+  naming its replacement, as do the two below.
 - `appender: :new_relic` (`SemanticLogger::Appender::NewRelic`), deprecated in v5.1: it sent
   `:error` and `:fatal` entries to New Relic as error events. Use `appender: :new_relic_logs`. The
   `:new_relic` metric appender, `add_appender(metric: :new_relic)`, is unchanged.

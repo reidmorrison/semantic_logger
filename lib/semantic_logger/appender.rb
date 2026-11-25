@@ -30,6 +30,18 @@ module SemanticLogger
     autoload :Loki,                "semantic_logger/appender/loki"
     # @formatter:on
 
+    # Why each appender that v6 removed is gone, and what to use instead, so that adding one, such as from an
+    # example written for v5, raises an error that says so, rather than that the Symbol names no appender.
+    REMOVED = {
+      sentry:    "appender: :sentry, which depended on the end-of-life sentry-raven gem, was removed in v6. " \
+                 "Use appender: :sentry_ruby with the sentry-ruby gem instead.",
+      new_relic: "appender: :new_relic, which sent error events to New Relic, was removed in v6. " \
+                 "Use appender: :new_relic_logs to send log entries to New Relic instead. " \
+                 "The metric appender, metric: :new_relic, remains.",
+      splunk:    "appender: :splunk, which depended on the splunk-sdk-ruby gem, was removed in v6. " \
+                 "Use appender: :splunk_http, which sends to the Splunk HTTP Event Collector, instead."
+    }.freeze
+
     # Returns [SemanticLogger::Subscriber] appender for the supplied options
     #
     # Raises ArgumentError when the appender is to be batched, with `batch: true` or by default, see
@@ -111,7 +123,7 @@ module SemanticLogger
         [SemanticLogger::Appender::Wrapper.new(logger: logger, **args, &), false]
       elsif appender
         if appender.is_a?(Symbol)
-          [SemanticLogger::Utils.constantize_symbol(appender).new(**args, &), true]
+          [named(appender).new(**args, &), true]
         elsif appender.is_a?(Subscriber)
           [subscriber_instance(:appender, appender, **args, &), false]
         else
@@ -204,5 +216,18 @@ module SemanticLogger
       words.size < 3 ? words.join(" and ") : "#{words[0..-2].join(', ')}, and #{words.last}"
     end
     private_class_method :word_list
+
+    # Returns [Class] the appender that the Symbol names, such as Appender::File for :file. Raises ArgumentError
+    # when it names none: for one that v6 removed, saying what to use instead (see REMOVED), unless the application
+    # defined that class itself.
+    def self.named(symbol)
+      SemanticLogger::Utils.constantize_symbol(symbol)
+    rescue ArgumentError
+      removed = REMOVED[symbol]
+      raise unless removed
+
+      raise(ArgumentError, removed)
+    end
+    private_class_method :named
   end
 end
