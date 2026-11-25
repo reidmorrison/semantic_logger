@@ -197,12 +197,12 @@ class MeasureTest < Minitest::Test
           end
         end
 
-        it ":dimensions with #benchmark_#{level}" do
-          assert_equal "result",
-                       appender.send(:"benchmark_#{level}", "hello world", metric: metric, dimensions: dimensions) {
-                         "result"
-                       }
+        it ":dimensions with the deprecated #benchmark_#{level}" do
+          result = assert_deprecated(/benchmark_#{level} is deprecated and removed in v6\. Use measure_#{level},/) do
+            appender.send(:"benchmark_#{level}", "hello world", metric: metric, dimensions: dimensions) { "result" }
+          end
 
+          assert_equal "result", result
           assert log = appender.events.first
           assert_equal dimensions, log.dimensions
         end
@@ -301,12 +301,26 @@ class MeasureTest < Minitest::Test
           assert_equal dimensions, log.dimensions
         end
 
-        it ":dimensions with #benchmark(#{level})" do
-          assert_equal "result",
-                       appender.benchmark(level, "hello world", metric: metric, dimensions: dimensions) { "result" }
+        it ":dimensions with the deprecated #benchmark(#{level})" do
+          result = assert_deprecated(/benchmark is deprecated and removed in v6\. Use measure,/) do
+            appender.benchmark(level, "hello world", metric: metric, dimensions: dimensions) { "result" }
+          end
 
+          assert_equal "result", result
           assert log = appender.events.first
           assert_equal dimensions, log.dimensions
+        end
+
+        unless level == :fatal
+          it "the deprecated #benchmark(#{level}) runs the block below the level" do
+            appender.level = :fatal
+            result = assert_deprecated(/benchmark is deprecated/) do
+              appender.benchmark(level, "hello world") { |params| params }
+            end
+
+            assert_equal({}, result)
+            assert_empty appender.events
+          end
         end
 
         it ":backtrace_level" do

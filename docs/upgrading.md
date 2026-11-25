@@ -106,6 +106,25 @@ messages = semantic_logger_events(klass: ApiClient) { ApiClient.new.call }
 
 The RSpec helper `capture_semantic_logger_events(ApiClient)` is unchanged.
 
+#### Replace the `benchmark_*` methods with `measure_*`
+
+The `benchmark_trace`, `benchmark_debug`, `benchmark_info`, `benchmark_warn`, `benchmark_error`,
+`benchmark_fatal`, and `benchmark` methods of a logger are the old names of `measure_trace` through
+`measure_fatal` and `measure`, which take the same arguments. They still work, but are deprecated,
+and report a [deprecation warning](#seeing-deprecation-warnings), since v6 removes them:
+
+~~~ruby
+# Before:
+logger.benchmark_info("Called supplier") { supplier.call }
+
+# After:
+logger.measure_info("Called supplier") { supplier.call }
+~~~
+
+Update the `net_tcp_client` gem to version 2.3 or later, which calls `measure_*`, if your application
+uses it, such as for the `:tcp` appender or the `:syslog` appender over TCP: earlier versions call
+`benchmark_debug` and `benchmark_error`, which then report the warning on every connection and write.
+
 ### Upgrading to Semantic Logger v5.3
 
 #### OpenTelemetry log records

@@ -17,6 +17,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Passing the class to the Minitest helper `semantic_logger_events` positionally, as in
   `semantic_logger_events(ApiClient)`, reports a deprecation warning, since v6 takes it only as
   `klass:`. Use `semantic_logger_events(klass: ApiClient)`.
+- The `benchmark_*` methods and `benchmark` of a logger report a deprecation warning, since v6
+  removes them: use `measure_*` and `measure`, which take the same arguments. Update `net_tcp_client`,
+  used by the `:tcp` appender and the `:syslog` appender over TCP, to 2.3 or later, which calls
+  `measure_*`.
 
 ### Fixed
 

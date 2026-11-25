@@ -62,6 +62,18 @@ class DebugAsTraceLoggerTest < Minitest::Test
         assert log = logger.events.first
         assert_equal :trace, log.level
       end
+
+      it "maps the deprecated benchmark_debug to measure_trace" do
+        logger.level = :trace
+        result = assert_deprecated(/benchmark_debug is deprecated and removed in v6\. Use measure_debug/) do
+          logger.benchmark_debug("hello world") { "result" }
+        end
+
+        assert_equal "result", result
+        assert log = logger.events.first
+        assert_equal :trace, log.level
+        assert log.duration
+      end
     end
   end
 end

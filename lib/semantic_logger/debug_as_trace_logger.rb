@@ -6,6 +6,13 @@ module SemanticLogger
     alias debug trace
     alias debug? trace?
     alias measure_debug measure_trace
-    alias benchmark_debug benchmark_trace
+
+    # Deprecated: use measure_debug, which takes the same arguments. Removed in v6.
+    def benchmark_debug(message, params = {}, &)
+      SemanticLogger::Deprecation.warn(
+        "benchmark_debug is deprecated and removed in v6. Use measure_debug, which takes the same arguments."
+      )
+      measure_trace(message, params, &)
+    end
   end
 end
