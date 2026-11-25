@@ -282,9 +282,8 @@ module SemanticLogger
   # of the messages sent to that appender. See "Formatter as a block or Proc" in
   # docs/config.md for more information on custom formatters
   #
-  # Give it one destination: file_name:, io:, logger:, appender:, or metric:. Given more than one, it adds
-  # only the first, in that order, and reports a deprecation warning that names the others, which it
-  # ignores; v6 raises ArgumentError. A destination given as nil is not one.
+  # Give it one destination: file_name:, io:, logger:, appender:, or metric:. Given more than one, it
+  # raises ArgumentError. A destination given as nil is not one.
   #
   # Parameters
   #   file_name: [String]

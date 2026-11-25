@@ -1241,9 +1241,8 @@ Notes:
 Each destination is added with `SemanticLogger.add_appender`. The full catalogue of destinations,
 and the options specific to each, is in [Appenders](appenders.html). Each call adds one destination,
 given as one of `file_name:`, `io:`, `logger:`, `appender:`, or `metric:`; to write to several, call
-it once for each. Given more than one of them, `add_appender` adds only the first, in that order, and
-reports a [deprecation warning](upgrading.html#seeing-deprecation-warnings) that names the others,
-which it ignores; v6 raises an `ArgumentError`. A destination given as `nil` is not one, so that
+it once for each. Given more than one of them, `add_appender` raises an `ArgumentError` that names
+them. A destination given as `nil` is not one, so that
 settings of which only one is set can be passed on, such as
 `file_name: options[:log_file], io: options[:log_io]`.
 
@@ -2127,9 +2126,7 @@ SemanticLogger.add_appender(metric: :otlp, url: "http://localhost:4318")
 
 Pass one of these keywords to each call, and call `add_appender` once for each destination, see
 [Logging to several destinations at once](#logging-to-several-destinations-at-once). Given more than
-one, it adds only the first of `file_name:`, `io:`, `logger:`, `appender:`, and `metric:`, and
-reports a [deprecation warning](upgrading.html#seeing-deprecation-warnings); v6 raises an
-`ArgumentError`.
+one of `file_name:`, `io:`, `logger:`, `appender:`, and `metric:`, it raises an `ArgumentError`.
 
 In a Rails app using [rails_semantic_logger](rails.html), put `add_appender` calls in an initializer
 such as `config/initializers/semantic_logger.rb`. Otherwise add them wherever you configure Semantic
@@ -7435,6 +7432,14 @@ SemanticLogger.add_appender(appender: MyAppender.new, level: :warn)
 # After:
 SemanticLogger.add_appender(appender: MyAppender.new(level: :warn))
 ~~~
+
+#### More than one destination raises `ArgumentError`
+
+`add_appender` adds one destination. Given more than one of `file_name:`, `io:`, `logger:`,
+`appender:`, and `metric:`, it now raises `ArgumentError`, which v5.3 reported as a deprecation
+warning while it added only the first. Call `add_appender` once for each destination. A destination
+given as `nil` is still not one. `appender: :wrapper`, which only worked with `logger:`, now raises
+too: leave it out, since `logger:` already adds the wrapper.
 
 #### Rails Semantic Logger
 

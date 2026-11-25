@@ -42,9 +42,7 @@ SemanticLogger.add_appender(metric: :otlp, url: "http://localhost:4318")
 
 Pass one of these keywords to each call, and call `add_appender` once for each destination, see
 [Logging to several destinations at once](#logging-to-several-destinations-at-once). Given more than
-one, it adds only the first of `file_name:`, `io:`, `logger:`, `appender:`, and `metric:`, and
-reports a [deprecation warning](upgrading.html#seeing-deprecation-warnings); v6 raises an
-`ArgumentError`.
+one of `file_name:`, `io:`, `logger:`, `appender:`, and `metric:`, it raises an `ArgumentError`.
 
 In a Rails app using [rails_semantic_logger](rails.html), put `add_appender` calls in an initializer
 such as `config/initializers/semantic_logger.rb`. Otherwise add them wherever you configure Semantic
