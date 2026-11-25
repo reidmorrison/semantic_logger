@@ -1046,6 +1046,19 @@ class ArticlesController < ApplicationController
 end
 ~~~
 
+Rails logs a line for each cache operation, such as `Cache read: <key>`, through the cache store's
+logger, which logs them at `:trace` rather than `:debug`, so that they do not appear at the usual
+`:debug`. To see them, set its level in a file under `config/initializers`, which Rails loads once
+Rails Semantic Logger has given the cache store its logger:
+
+~~~ruby
+ActiveSupport::Cache::Store.logger.level = :trace if Rails.env.development?
+~~~
+
+These lines show each cache key as it is: `config.filter_parameters` does not redact them. The errors
+that a cache store swallows, such as a lost connection to Redis or Memcached, are logged at
+`:error`.
+
 A logger's level applies to its log entries only: its metrics are recorded whatever it logs. To
 record no Rails metrics, set `config.rails_semantic_logger.metrics = false`.
 
