@@ -6185,12 +6185,13 @@ OpenTelemetry conventions, and recorded apart from the logs.
 ### The deprecated appender options are removed
 
 `config.rails_semantic_logger.format`, `ap_options`, `filter`, `console_logger`, and
-`add_file_appender` have warned since v5 and are gone: setting one raises `NoMethodError`. Declare
-the destinations in the [appenders block](#configuring-where-logs-go-the-appenders-block) instead:
+`add_file_appender` have warned since v5 and are gone: setting one raises `NoMethodError`, which names
+the `rails_semantic_logger:install` generator that converts them. Declare the destinations in the
+[appenders block](#configuring-where-logs-go-the-appenders-block) instead:
 
 | Removed option | Instead |
 |----------------|---------|
-| `config.rails_semantic_logger.format = :json` | `appenders.add(file_name: "log/#{Rails.env}.log", formatter: :json)` |
+| `config.rails_semantic_logger.format = :json` | `appenders.add(file_name: config.paths["log"].first, formatter: :json)` |
 | `config.rails_semantic_logger.ap_options = {multiline: true}` | `formatter: {color: {ap: {multiline: true}}}` on the appender |
 | `config.rails_semantic_logger.filter = /MyClass/` | `filter: /MyClass/` on the appender |
 | `config.rails_semantic_logger.console_logger = false` | Declare your appenders, without an `add_console` one |
@@ -6199,6 +6200,27 @@ the destinations in the [appenders block](#configuring-where-logs-go-the-appende
 Without an appenders block nothing changes: Rails Semantic Logger writes `log/<environment>.log` in
 color (plain text when `config.colorize_logging` is `false`), and to the screen under `rails server`,
 Sidekiq, and `rails console`.
+
+Rails Semantic Logger 6.0 adds `bin/rails generate rails_semantic_logger:install`, which converts an
+existing application:
+
+* It removes the Rails logger settings that Rails Semantic Logger replaces: `config.logger`,
+  `config.log_formatter`, and a `RAILS_LOG_TO_STDOUT` block that only sets the Rails logger. It keeps
+  `config.log_level` and `config.log_tags`, which are used.
+* In each environment file that declares no appenders, unless `config/application.rb` declares them,
+  it writes an appenders block with today's defaults, the log file at `config.paths["log"].first`.
+  The deployed environments also get commented-out alternatives: JSON on standard out for a
+  container, or text on standard out with the logs and metrics over OTLP to a Collector. Since
+  declarations from every file add up, it writes no environment blocks at all when `config/application.rb` declares appenders.
+* It applies the removed options to the lines of that block: `format`, `ap_options`, and `filter` to
+  the default file appender, and `add_file_appender = false` or `console_logger = false` comment out
+  the default lines they turned off. Top-level `config.semantic_logger.add_appender(...)` calls become
+  `appenders.add(...)` lines. A converted appender that writes to standard out or standard error
+  comments out the default screen lines, so that nothing is written twice.
+* Where appenders are already declared, it removes the removed options and reports them, for you to
+  carry into your block.
+* It leaves settings inside a condition, such as an `if ENV["RAILS_LOG_TO_STDOUT"].present?` block
+  that sets `add_file_appender`, in place, and reports them, for you to move into the appenders block.
 
 If you set `add_file_appender = false` or `console_logger = false`, do not just delete the line:
 that brings back `log/<environment>.log`, or the screen output, which `console_logger` also turned off
@@ -6399,14 +6421,20 @@ if ENV["RAILS_LOG_TO_STDOUT"].present?
 end
 ~~~
 
-becomes, in v5:
+becomes, in v5 and v6:
 
 ~~~ruby
-# v5
-config.rails_semantic_logger.appenders do |appenders|
-  appenders.add(io: $stdout, formatter: :json)
+# v5 and v6
+if ENV["RAILS_LOG_TO_STDOUT"].present?
+  config.rails_semantic_logger.appenders do |appenders|
+    appenders.add(io: $stdout, formatter: :json)
+  end
 end
 ~~~
+
+In v6 `add_file_appender` raises `NoMethodError`. The `rails_semantic_logger:install` generator (see
+[Upgrading to v6](#upgrading-to-v6)) leaves such a block in place and reports it: replace it by hand
+with the one above.
 
 ### Server standard-out behavior
 
