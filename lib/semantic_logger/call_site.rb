@@ -2,8 +2,9 @@ module SemanticLogger
   # Where a log entry was logged: the path and line of the code that made the log call, and the
   # label of its frame, usually the method, such as "Order#submit".
   #
-  # Log#assign sets it when the entry's level is at or above SemanticLogger.call_site_level. When the
-  # log call supplies a backtrace, the call site is its first line. Otherwise it is the first frame of
+  # Log#assign records the call site that the log call supplies, at any level. Otherwise it finds one
+  # when the entry's level is at or above SemanticLogger.call_site_level: when the log call supplies a
+  # backtrace, the call site is its first line, and otherwise it is the first frame of
   # the calling thread's stack outside Semantic Logger and SemanticLogger.call_site_skip_paths, which
   # costs far less than capturing a backtrace, since only the frames up to it are read.
   #

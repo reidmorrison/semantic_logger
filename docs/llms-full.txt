@@ -423,7 +423,7 @@ logger.error(message: "Calling Supplier", metric: "Supplier/inquiry", metric_amo
 # Attach a backtrace of your own, an Array of Strings, instead of the logger's call stack
 logger.warn(message: "Open redirect detected", backtrace: redirect_stack)
 
-# Say where the entry was logged, or that it has no such place (see call_site_level)
+# Say where the entry was logged, recorded at any level, or that it has no such place
 logger.debug(message: "Order Load", duration: 0.4, call_site: query_location)
 logger.info(message: "Started GET /orders", call_site: false)
 ~~~
@@ -6656,7 +6656,7 @@ test. The available checks are:
 | `time` | When the entry was created. |
 | `duration` | Duration of a measure call, in milliseconds. |
 | `backtrace` | The backtrace, if any: the one the log call supplied, or the one captured for each entry at `:error` and above. |
-| `call_site` | Where the entry was logged, a `SemanticLogger::CallSite`, when `SemanticLogger.call_site_level` is set. |
+| `call_site` | Where the entry was logged, a `SemanticLogger::CallSite`, when the level is at or above `SemanticLogger.call_site_level`, or the log call supplied one. |
 | `thread_name` | Name of the thread that logged the entry, or its object id when the thread has no name. |
 
 ### Match part of a message or payload
@@ -8404,7 +8404,7 @@ entry was at or above `call_site_level`. It is now recorded at any level, even w
 is `nil`, so that code can supply one when its own criteria are met, such as for a slow query.
 `call_site_level` still decides when Semantic Logger finds a call site itself, from the stack or from
 a supplied `backtrace:`. Code that supplies a call site and should follow `call_site_level` asks
-`SemanticLogger.call_site?(level)` before it finds one, as Rails Semantic Logger does (see
+`SemanticLogger.call_site?(level)` before it finds one (see
 [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged)).
 
 #### A negative Integer level raises `ArgumentError`

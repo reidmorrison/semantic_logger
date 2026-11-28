@@ -476,7 +476,7 @@ entry was at or above `call_site_level`. It is now recorded at any level, even w
 is `nil`, so that code can supply one when its own criteria are met, such as for a slow query.
 `call_site_level` still decides when Semantic Logger finds a call site itself, from the stack or from
 a supplied `backtrace:`. Code that supplies a call site and should follow `call_site_level` asks
-`SemanticLogger.call_site?(level)` before it finds one, as Rails Semantic Logger does (see
+`SemanticLogger.call_site?(level)` before it finds one (see
 [Recording where each entry was logged](config.html#recording-where-each-entry-was-logged)).
 
 #### A negative Integer level raises `ArgumentError`
