@@ -45,9 +45,10 @@ module SemanticLogger
   #
   # call_site [CallSite]
   #   Where the entry was logged: the path, line, and label (usually the method) of the code that
-  #   made the log call, when the log level >= SemanticLogger.call_site_level. The one the log call
-  #   supplies as `call_site:`, or nil for `call_site: false`, or else the first line of a backtrace
-  #   it supplies. nil below that level.
+  #   made the log call. The one the log call supplies as `call_site:`, at any level, or nil for
+  #   `call_site: false`. Otherwise, when the log level >= SemanticLogger.call_site_level, the first
+  #   line of a backtrace the log call supplies, or else the code that made the log call, and nil
+  #   below that level.
   #
   # metric_amount [Numeric]
   #   Used for numeric or counter metrics.
@@ -188,11 +189,12 @@ module SemanticLogger
         self.backtrace = Utils.extract_backtrace(caller)
       end
 
-      # A call site or backtrace supplied by the log call says where the entry is about, such as the
-      # application code that ran a query, or the thread whose backtrace is logged.
-      if level_index >= SemanticLogger.call_site_level_index
-        self.call_site = CallSite.locate(call_site: call_site, backtrace: backtrace)
-      end
+      # A call site supplied by the log call says where the entry is about, such as the application
+      # code that ran a query. It is recorded whatever the level, since the code that supplied it
+      # decided when the entry needs one (false: none). call_site_level only decides when a call site
+      # is found here, from a supplied backtrace, such as that of the thread logged, or the stack.
+      locate = !call_site.nil? || level_index >= SemanticLogger.call_site_level_index
+      self.call_site = CallSite.locate(call_site: call_site, backtrace: backtrace) if locate
 
       true
     end

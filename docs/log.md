@@ -57,8 +57,8 @@ The rest are **situational**: they are set only when relevant to that particular
 `duration` is present only for `measure_*` calls, `exception` only when an exception was logged,
 `metric`/`metric_amount`/`dimensions` only for metrics, `backtrace` only when the log call supplied
 one or an appender that sends one captured it (see `capture_backtrace!` below), and `call_site` only
-when call site recording is enabled (`SemanticLogger.call_site_level`, `:error` by default). Always guard against `nil` when reading a
-situational field.
+when call site recording is enabled (`SemanticLogger.call_site_level`, `:error` by default) or the log
+call supplied one. Always guard against `nil` when reading a situational field.
 
 ### Attributes
 
@@ -78,7 +78,7 @@ situational field.
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
 |`backtrace`|`Array<String>`|The backtrace of the code that made the log call: the one it supplied with `backtrace:`, or one captured on the logging thread by an appender that sends it, such as `:sentry_ruby`, or by an `on_log` subscriber (see `capture_backtrace!`), or, while the deprecated `SemanticLogger.backtrace_level` is set, for each entry at that level and above. `nil` otherwise.|
-|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`, and the log call did not pass `call_site: false`. See [The call site](#the-call-site).|
+|`call_site`|`SemanticLogger::CallSite`|Where the entry was logged: the one the log call supplied with `call_site:`, at any level, or else present only when the level is at or above `SemanticLogger.call_site_level`. `nil` for `call_site: false`. See [The call site](#the-call-site).|
 |`metric`|`String`|The metric name, present for log and `measure_*` calls given a `metric:`. See [Metrics](metrics.html#metrics-on-log-and-measure-calls).|
 |`metric_amount`|`Numeric`|Amount to add to a counter metric, for example the quantity purchased. A counter adds 1 when it is `nil`. A negative amount is still logged, but once a metric appender is present its metric is dropped, with a warning on the internal logger, see [Negative metric amounts are dropped](upgrading.html#negative-metric-amounts-are-dropped).|
 |`dimensions`|`Hash`|Dimensions (key/value labels) supplied for a metric.|

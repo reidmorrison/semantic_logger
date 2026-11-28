@@ -200,13 +200,17 @@ Which code counts as the call site:
   `Thread::Backtrace::Location` (for example from `Thread.each_caller_location`) or a
   `SemanticLogger::CallSite`, or that it has no such code with `false`, which records no call site
   without reading the stack for one. `nil` means none was supplied, so the call site is found as
-  usual. A supplied call site is only recorded when the entry is at or above `call_site_level`, so
-  that it never adds a call site to the output of an application that has not turned call sites on:
+  usual. A supplied call site is recorded at any level, even when `call_site_level` is `nil`, since
+  the code that supplies it decides when an entry needs one, such as for a query slower than a
+  threshold. To supply one only when the application asked for call sites at the entry's level,
+  and to skip the work of finding it otherwise, ask `SemanticLogger.call_site?(level)` first:
 
   ~~~ruby
   # The application code that ran the query, or none when no frame is the application's
-  logger.debug(message: "Order Load", duration: 0.4,
-               call_site: backtrace_cleaner.first_clean_location || false)
+  if SemanticLogger.call_site?(:debug)
+    call_site = backtrace_cleaner.first_clean_location || false
+  end
+  logger.debug(message: "Order Load", duration: 0.4, call_site: call_site)
   logger.info(message: "Started GET /orders", call_site: false)
   ~~~
 
@@ -399,7 +403,7 @@ SemanticLogger.normalize_level("WARN")         # => :warn
 SemanticLogger.normalize_level(::Logger::INFO) # => :info
 
 # Whether an entry at the level records where it was logged (see call_site_level),
-# such as before looking for the call site of an entry yourself.
+# such as before looking for the call site of an entry yourself, which is recorded at any level.
 SemanticLogger.call_site?(:info)
 
 # Whether an entry at the level captures a backtrace for every appender (see the deprecated
