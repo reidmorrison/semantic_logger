@@ -469,6 +469,16 @@ built-in appenders no longer register `on_log` subscribers:
   `SemanticLogger::Otlp::TraceContext::CAPTURES` from `#source_captures` instead, as `:json` and
   `:otlp` do.
 
+#### A supplied call site is recorded at any level
+
+A call site that a log call or a `measure_*` call supplies with `call_site:` was only recorded when the
+entry was at or above `call_site_level`. It is now recorded at any level, even when `call_site_level`
+is `nil`, so that code can supply one when its own criteria are met, such as for a slow query.
+`call_site_level` still decides when Semantic Logger finds a call site itself, from the stack or from
+a supplied `backtrace:`. Code that supplies a call site and should follow `call_site_level` asks
+`SemanticLogger.call_site?(level)` before it finds one (see
+[Recording where each entry was logged](config.html#recording-where-each-entry-was-logged)).
+
 #### A negative Integer level raises `ArgumentError`
 
 A level given as a negative Integer, such as `logger.level = -1`, was taken as counting back from the

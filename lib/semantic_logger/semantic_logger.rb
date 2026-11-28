@@ -114,7 +114,8 @@ module SemanticLogger
 
   # Sets the level at and above which each log entry records where it was logged: the file, line,
   # and method of the code that made the log call (see Log#call_site). The JSON and text formatters
-  # then write the method next to the file name and line number.
+  # then write the method next to the file name and line number. A call site that a log call
+  # supplies as `call_site:` is recorded at any level (see .call_site?).
   #
   # Unlike backtrace_level, it reads only the frames of the stack up to the code that made the log
   # call, which costs about 1.5 µs per entry however deep the stack is, instead of building
@@ -144,8 +145,9 @@ module SemanticLogger
   def self.call_site_level_index = @call_site_level_index
 
   # Returns [true|false] whether an entry logged at the level records where it was logged: the level
-  # is at or above call_site_level. For code that supplies the call site of an entry itself, so that
-  # it looks for one only when it would be recorded. The level is any that .normalize_level accepts.
+  # is at or above call_site_level. For code that supplies the call site of an entry itself, which is
+  # recorded at any level, so that it looks for one, and supplies it, only when the application asked
+  # for call sites at that level. The level is any that .normalize_level accepts.
   #
   # Raises ArgumentError for nil or a level that Semantic Logger does not know.
   def self.call_site?(level) = Levels.index!(level) >= @call_site_level_index

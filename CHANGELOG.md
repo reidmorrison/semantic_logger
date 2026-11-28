@@ -168,6 +168,10 @@ and [Metrics](https://logger.reidmorrison.com/metrics.html).
   appender reconnects.
 - A level given as a negative Integer, such as `logger.level = -1`, raises `ArgumentError`, rather
   than counting back from the last Ruby `::Logger` level.
+- A call site that a log call or a `measure_*` call supplies with `call_site:` is recorded at any
+  level, even when `call_site_level` is `nil`, rather than only at or above `call_site_level`, which
+  now decides only when Semantic Logger finds a call site itself. See
+  [A supplied call site is recorded at any level](https://logger.reidmorrison.com/upgrading.html#a-supplied-call-site-is-recorded-at-any-level).
 - The HTTP appender, and every appender built on it, such as `:otlp`, `:loki`, and the `:otlp` metric
   appender, reports to the internal logger, rather than raising from `add_appender` or a reopen, when
   it cannot connect, such as while a collector is not listening yet; the next request connects. Any

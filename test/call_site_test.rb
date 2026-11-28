@@ -581,12 +581,57 @@ module SemanticLogger
           end
         end
 
-        it "does not record it below call_site_level" do
+        it "records it below call_site_level" do
           with_call_site_level(:warn) do
             events = semantic_logger_events { SemanticLogger["Order"].info("Rendered", call_site: supplied) }
 
+            assert_equal supplied, events.first.call_site
+            assert_nil events.first.payload
+          end
+        end
+
+        it "records it without call_site_level" do
+          with_call_site_level(nil) do
+            events = semantic_logger_events { SemanticLogger["Order"].info("Rendered", call_site: supplied) }
+
+            assert_equal supplied, events.first.call_site
+          end
+        end
+
+        it "records a supplied Thread::Backtrace::Location below call_site_level" do
+          with_call_site_level(:warn) do
+            location = caller_locations(0, 1).first
+            events   = semantic_logger_events { SemanticLogger["Order"].info("Query", call_site: location) }
+
+            assert_equal location.lineno, events.first.call_site.line
+          end
+        end
+
+        it "records no call site for call_site: false below call_site_level" do
+          with_call_site_level(:warn) do
+            events = semantic_logger_events { SemanticLogger["Rack"].info("Started", call_site: false) }
+
             assert_nil events.first.call_site
             assert_nil events.first.payload
+          end
+        end
+
+        it "does not take one from a supplied backtrace below call_site_level" do
+          with_call_site_level(:warn) do
+            events = semantic_logger_events { SemanticLogger["Order"].info("Query", backtrace: ["/app/a.rb:1:in 'x'"]) }
+
+            assert_nil events.first.call_site
+            assert_equal ["/app/a.rb:1:in 'x'"], events.first.backtrace
+          end
+        end
+
+        it "records it as a measure option below call_site_level" do
+          with_call_site_level(:warn) do
+            events = semantic_logger_events do
+              SemanticLogger["View"].measure_info("Rendered", call_site: supplied) { 1 }
+            end
+
+            assert_equal supplied, events.first.call_site
           end
         end
 
