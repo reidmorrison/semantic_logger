@@ -46,6 +46,20 @@ module SemanticLogger
       end
     end
 
+    # A shareable source capture, and one that is not.
+    module CaptureInRactor
+      def self.call(log)
+        log.capture(:in_ractor, ::Ractor.main? ? "main" : "ractor")
+      end
+    end
+
+    NOT_SHAREABLE_CAPTURE = ->(log) { log.capture(:not_shareable, true) }
+
+    # An appender with both captures, which it writes with the entries.
+    class CapturingCollector < Collector
+      def source_captures = [CaptureInRactor, NOT_SHAREABLE_CAPTURE]
+    end
+
     # A shareable on_log subscriber.
     module MarkInRactor
       def self.call(log)
@@ -331,6 +345,20 @@ module SemanticLogger
           log = logs_from_ractor { SemanticLogger["InRactor"].info("Subscribed") }.first
 
           assert_equal({subscriber: "shareable"}, log.context)
+        end
+      end
+
+      describe "source captures" do
+        it "runs only the shareable ones of the appenders, in the Ractor" do
+          capturing = SemanticLogger.add_appender(appender: CapturingCollector.new(level: :trace, filter: /\AInRactor/))
+          in_ractor { SemanticLogger["InRactor"].info("Captured") }
+          SemanticLogger.flush
+          log = capturing.logs.first
+
+          assert_equal "ractor", log.captured(:in_ractor)
+          assert_nil log.captured(:not_shareable)
+        ensure
+          SemanticLogger.remove_appender(capturing)
         end
       end
 

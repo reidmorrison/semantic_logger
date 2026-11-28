@@ -12,6 +12,10 @@ class CaptureLogEventsTest < Minitest::Test
       logger.info(metric: "User/disabled")
     end
 
+    def fail!
+      logger.error("Could not enable")
+    end
+
     def sign_up!
       logger.increment(:"users.signup", dimensions: {plan: "free"})
       logger.time("users.signup.time") { :signed_up }
@@ -32,6 +36,36 @@ class CaptureLogEventsTest < Minitest::Test
       assert_equal :info, capture_logger.events.last.level
       assert_equal "User/enabled", capture_logger.events.last.metric
       refute_predicate capture_logger.events.last, :metric_only?
+    end
+
+    it "captures the backtrace of an event at :error and above, standing in for a logger" do
+      user.stub(:logger, capture_logger) do
+        user.enable!
+        user.fail!
+      end
+
+      assert_nil capture_logger.events.first.backtrace
+      assert_match(/capture_log_events_test\.rb:\d+:in .*fail!/, capture_logger.events.last.backtrace.first)
+    end
+
+    it "captures the backtrace of an event at :error and above, standing in for the processor" do
+      SemanticLogger::Logger.stub(:processor, capture_logger) { User.new.fail! }
+
+      assert_match(/capture_log_events_test\.rb:\d+:in .*fail!/, capture_logger.events.last.backtrace.first)
+    end
+
+    it "captures no backtrace on this thread for an event whose source captures ran where it was logged" do
+      log = SemanticLogger::Log.new("Test", :error)
+      capture_logger.log_captured(log)
+
+      assert_same log, capture_logger.events.last
+      assert_nil log.backtrace
+    end
+
+    it "makes its backtrace capture shareable, so that it runs in other Ractors too" do
+      skip "Ractors are not supported" unless defined?(Ractor.shareable?)
+
+      assert Ractor.shareable?(SemanticLogger::Test::CaptureLogEvents::CAPTURE_BACKTRACE)
     end
 
     it "metric only event" do

@@ -35,7 +35,12 @@ module SemanticLogger
       @exiting     = false
       @skipped     = {}.compare_by_identity
       super()
+      @current_captures = SourceCaptures::Current.new(self)
     end
+
+    # Returns [SourceCaptures::Current] the source captures of these appenders, which the processor
+    # runs for each log entry on the thread that logged it (see Subscriber#source_captures).
+    attr_reader :current_captures
 
     # Returns the internal logger that these appenders report to.
     def logger = @logger || (@internal_logger_copy ||= InternalLoggerCopy.new(self.class.name, @source)).logger
@@ -47,13 +52,36 @@ module SemanticLogger
       if stream && console_streams.include?(stream)
         logger.warn "Ignoring attempt to add a second #{stream} console appender since it " \
                     "would result in duplicate console output."
-        # Dropped, without closing the stream it writes to, so that it stops capturing the trace.
-        appender.release_trace_context if appender.respond_to?(:release_trace_context)
         return
       end
 
       self << appender
       appender
+    end
+
+    # The methods of Array that can change which appenders these are. Each builds the source
+    # captures again once it has (see #current_captures).
+    MEMBERSHIP_CHANGES = %i[
+      << push append unshift prepend insert concat []= fill replace
+      delete delete_at delete_if reject! select! filter! keep_if slice! pop shift clear
+      compact! uniq! flatten! map! collect!
+    ].freeze
+    private_constant :MEMBERSHIP_CHANGES
+
+    # Those of them that change the appenders only through a block. Without one they return an
+    # Enumerator, which calls them again with a block.
+    BLOCK_CHANGES = %i[delete_if reject! select! filter! keep_if map! collect!].freeze
+    private_constant :BLOCK_CHANGES
+
+    MEMBERSHIP_CHANGES.each do |name|
+      through_block = BLOCK_CHANGES.include?(name)
+      define_method(name) do |*args, &block|
+        return to_enum(name, *args) if through_block && block.nil?
+
+        result = super(*args, &block)
+        source_captures_changed
+        result
+      end
     end
 
     # The console streams (:stdout and/or :stderr) already being written to by the existing appenders.
@@ -260,6 +288,14 @@ module SemanticLogger
     end
 
     private
+
+    # Counts the change, then builds the captures at once, so that a Ractor other than the main one
+    # captures what the appenders now need before the main Ractor logs again (see
+    # SourceCaptures.publish). Not while Array builds the list, before #initialize made them.
+    def source_captures_changed
+      SourceCaptures.changed
+      @current_captures&.rebuild
+    end
 
     # Whether this process is exiting (see #process_exiting=), rather than a child process forked while
     # it was.

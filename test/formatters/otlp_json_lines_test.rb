@@ -57,7 +57,7 @@ module SemanticLogger
                       ["5b8efff798038103d269b633813fc60c", "eee19b7ec3c1b174", 1])
 
           assert_equal "5b8efff798038103d269b633813fc60c", record(parse(formatter.call(log, appender)))["traceId"]
-          assert_predicate formatter, :trace_context?
+          assert_equal SemanticLogger::Otlp::TraceContext::CAPTURES, formatter.source_captures
         end
 
         it "takes the resource values given over the appender's" do

@@ -18,6 +18,7 @@ module SemanticLogger
     class OpenTelemetry < SemanticLogger::Subscriber
       attr_reader :name, :version, :provider
 
+      # Keeps the Open Telemetry context of the thread that logs each entry, which #log emits the record in.
       CAPTURE_CONTEXT = ->(log) { log.capture(:open_telemetry, ::OpenTelemetry::Context.current) }
 
       # Create a Open Telemetry Logger appender instance.
@@ -62,10 +63,12 @@ module SemanticLogger
         # Not @logger, which holds the internal logger that this appender reports its own problems
         # to, as every appender does (see Subscriber#logger).
         @open_telemetry_logger = @provider.logger(name: @name, version: @version)
+      end
 
-        # Capture the current Open Telemetry context when a log entry is captured.
-        # Prevents duplicate subscribers as long as it is from a constant.
-        SemanticLogger.on_log(CAPTURE_CONTEXT)
+      # Returns [Array<#call>] the captures of its formatter, and that of the Open Telemetry context of
+      # the thread that logs each entry (see #log).
+      def source_captures
+        [*super, CAPTURE_CONTEXT]
       end
 
       # Emits the log record the formatter returns, in the Open Telemetry context captured when the

@@ -43,6 +43,11 @@ messages = semantic_logger_events do
 end
 ~~~
 
+The events are captured in place of the appenders, so the captures of the appenders (see
+[Capturing what the logging thread knows](config.html#capturing-what-the-logging-thread-knows)), such
+as the current trace, or the Sentry scope, are not taken. Each event at `:error` and above has the
+backtrace of the code that logged it.
+
 By default it captures events from every class. To capture only the events from one class, pass that
 class as `klass:`:
 
@@ -117,7 +122,7 @@ test. The available checks are:
 | `context` | Named contexts captured with the entry. |
 | `time` | When the entry was created. |
 | `duration` | Duration of a measure call, in milliseconds. |
-| `backtrace` | The captured backtrace, if any. |
+| `backtrace` | The backtrace, if any: the one the log call supplied, or the one captured for each entry at `:error` and above. |
 | `call_site` | Where the entry was logged, a `SemanticLogger::CallSite`, when `SemanticLogger.call_site_level` is set. |
 | `thread_name` | Name of the thread that logged the entry, or its object id when the thread has no name. |
 

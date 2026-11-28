@@ -39,7 +39,9 @@ module SemanticLogger
   #   Object supplied when measure_x was called
   #
   # backtrace [Array<String>]
-  #   The backtrace captured at source when the log level >= SemanticLogger.backtrace_level
+  #   The backtrace of the code that made the log call: the one the log call supplied, or the one
+  #   captured on the logging thread by an appender that sends it (see #capture_backtrace!), or,
+  #   while the deprecated SemanticLogger.backtrace_level is set, for each entry at that level or above.
   #
   # call_site [CallSite]
   #   Where the entry was logged: the path, line, and label (usually the method) of the code that
@@ -459,9 +461,7 @@ module SemanticLogger
     end
 
     # Extract the file name and line number from the first line of the supplied backtrace.
-    def extract_file_and_line(stack, short_name = false)
-      CallSite.parse(stack&.first)&.file_name_and_line(short_name: short_name)
-    end
+    def extract_file_and_line(stack, short_name = false) = CallSite.parse(stack&.first)&.file_name_and_line(short_name:)
 
     # Returns [String, Integer] the file name and line number where the entry was logged: from the call
     # site, or else the first line of the backtrace, or of the exception's backtrace.
@@ -518,6 +518,17 @@ module SemanticLogger
 
     # Returns the value captured with the key, or nil when there is none.
     def captured(key) = captures&.[](key)
+
+    # Captures the backtrace of the code that made the log call, unless this entry already has one,
+    # such as one that the log call supplied, or that another appender's capture took. Returns
+    # [Array<String>] the backtrace.
+    #
+    # Call it on the thread that logged the entry: in a source capture of an appender that sends the
+    # backtrace (see Subscriber#source_captures), which decides for which entries, or in an on_log
+    # subscriber. The frames of the capture itself and of Semantic Logger are left out (see
+    # Utils.logging_backtrace). A backtrace is costly to build, so capture it only for the entries
+    # that need one, such as errors.
+    def capture_backtrace! = (self.backtrace ||= Utils.logging_backtrace(caller))
 
     # Replaces this entry's payload, named tags, context, and metric dimensions, the fields that
     # hold keyed data, with copies in which the value of every sensitive key is replaced (see

@@ -36,11 +36,25 @@ module SemanticLogger
 
     def initialize(max_queue_size: 10_000)
       @appenders        = Appenders.new
+      @captures         = @appenders.current_captures
       # The appenders whose removal was handed over to the worker thread, and not yet done (see #remove),
       # kept here rather than only on the queue, which a forked child replaces. Takes no lock to change.
       @pending_removals = Concurrent::Array.new
       @pid              = ::Process.pid
       super(appender: @appenders, max_queue_size: max_queue_size)
+    end
+
+    # Runs the source captures of the appenders on the calling thread, which logged the entry (see
+    # Appenders#current_captures), then queues it for the worker thread.
+    def log(log)
+      @captures.capture(log)
+      log_captured(log)
+    end
+
+    # Queues an entry whose source captures already ran on the thread that logged it, such as one
+    # logged in a Ractor other than the main one (see RactorReceiver).
+    def log_captured(log)
+      processor.log(log)
     end
 
     # Reopen the appenders, after a fork or within the same process, each on the thread that writes

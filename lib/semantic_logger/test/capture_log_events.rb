@@ -30,6 +30,20 @@ module SemanticLogger
     #   assert metric = logger.metric_events.first
     #   assert_equal "users.enabled", metric.name
     class CaptureLogEvents < SemanticLogger::Subscriber
+      # Captures the backtrace of the code that logged each event at :error and above, as the appender
+      # of an error service does, so that a test can assert it (see Log#capture_backtrace!).
+      ERROR_INDEX = Levels.index(:error)
+      private_constant :ERROR_INDEX
+
+      # Shareable, so that it runs for the events logged in a Ractor other than the main one too.
+      CAPTURE_BACKTRACE = Utils.make_shareable(lambda do |log|
+        log.capture_backtrace! if log.level_index >= ERROR_INDEX
+      end)
+
+      # CAPTURE_BACKTRACE, as its source captures (see #source_captures).
+      CAPTURES = [CAPTURE_BACKTRACE].freeze
+      private_constant :CAPTURES
+
       attr_accessor :events
 
       # Returns [Array<SemanticLogger::Metric::Snapshot>] the snapshots of metrics given to it while it
@@ -53,9 +67,27 @@ module SemanticLogger
       # logger does. Log events from a logger, received as the processor or an appender, already
       # went through them. A log event built elsewhere and passed to `#log` is captured without
       # running them, since it cannot be told apart from one received from a logger.
+      #
+      # It then runs its own source captures (see #source_captures), on the calling thread, which
+      # logged the event when it stands in for a logger or for the processor. Added as an appender,
+      # they ran when the event was logged, so they leave it as it is.
       def log(log)
         Logger.call_subscribers(log) if @created.key?(log)
+        CAPTURE_BACKTRACE.call(log)
         @events << log
+      end
+
+      # Standing in for the processor, captures an event whose source captures already ran where it was
+      # logged, such as in a Ractor other than the main one (see RactorReceiver), without capturing a
+      # backtrace on this thread, which did not log it.
+      def log_captured(log)
+        @events << log
+      end
+
+      # Returns [Array<#call>] the capture of the backtrace of each event at :error and above (see
+      # CAPTURE_BACKTRACE).
+      def source_captures
+        CAPTURES
       end
 
       # Supports batching of log events

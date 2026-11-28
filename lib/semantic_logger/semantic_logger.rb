@@ -59,17 +59,22 @@ module SemanticLogger
   #   SemanticLogger.normalize_level(::Logger::INFO) # => :info
   def self.normalize_level(level) = Levels.level(Levels.index!(level))
 
-  # Sets the level at which backtraces should be captured
-  # for every log message.
+  # Deprecated: captures a backtrace for every log entry at this level or above, whichever appender
+  # writes it.
   #
-  # By enabling backtrace capture the filename and line number of where
-  # message was logged can be written to the log file. Additionally, the backtrace
-  # can be forwarded to error management services such as Bugsnag.
+  # As of v6 no backtrace is captured by default. An appender that sends a backtrace, such as
+  # `:sentry_ruby`, `:bugsnag` or `:honeybadger`, captures one itself for the entries it sends (see
+  # Log#capture_backtrace!), and the file name and line number of the entries logged at
+  # `call_site_level`, :error by default, come from their call site, which is cheaper.
   #
-  # Warning:
-  #   Capturing backtraces is very expensive and should not be done all
-  #   the time. It is recommended to run it at :error level in production.
+  # Parameters
+  #   level: [Symbol|nil]
+  #     :trace, :debug, :info, :warn, :error, or :fatal.
+  #     nil: Capture no backtrace for every entry.
+  #     Default: nil
   def self.backtrace_level=(level)
+    deprecated = "SemanticLogger.backtrace_level= is deprecated: each appender captures the backtraces it sends"
+    Deprecation.warn(deprecated) unless level.nil?
     @backtrace_level = level
     # For performance reasons pre-calculate the level index
     @backtrace_level_index = level.nil? ? 65_535 : Levels.index(level)
@@ -82,9 +87,10 @@ module SemanticLogger
   # For internal use only
   def self.backtrace_level_index = @backtrace_level_index
 
-  # Returns [true|false] whether an entry logged at the level captures a backtrace: the level is at
-  # or above backtrace_level. For code that logs an entry with a backtrace of its own (see
-  # .application_backtrace), so that it builds one only when Semantic Logger would have captured one.
+  # Returns [true|false] whether an entry logged at the level captures a backtrace for every
+  # appender: the level is at or above the deprecated backtrace_level, which is nil by default. For
+  # code that logs an entry with a backtrace of its own (see .application_backtrace), so that it
+  # builds one only when Semantic Logger would have captured one.
   # The level is any that .normalize_level accepts.
   #
   # Raises ArgumentError for nil or a level that Semantic Logger does not know.
@@ -118,7 +124,7 @@ module SemanticLogger
   #   level: [Symbol|nil]
   #     :trace, :debug, :info, :warn, :error, or :fatal.
   #     nil: Do not record where entries were logged.
-  #     Default: nil
+  #     Default: :error
   #
   # Example:
   #   SemanticLogger.call_site_level = :info
@@ -914,16 +920,17 @@ module SemanticLogger
   # Initial default Level for all new instances of SemanticLogger::Logger
   @default_level         = :info
   @default_level_index   = Levels.index(@default_level)
-  @backtrace_level       = :error
-  @backtrace_level_index = Levels.index(@backtrace_level)
+  @backtrace_level       = nil
+  @backtrace_level_index = 65_535
   @backtrace_cleaner     = nil
   @redactor              = nil
   @sync                  = false
   @cache_loggers         = false
   @logger_cache          = nil
 
-  # Do not record where entries were logged, and skip only Semantic Logger's own frames.
-  self.call_site_level      = nil
+  # Record where the entries at :error and above were logged, and skip only Semantic Logger's own
+  # frames.
+  self.call_site_level      = :error
   self.call_site_skip_paths = nil
 
   # Lazily initialized thread-safe cache of one Logger per Class/Module.

@@ -418,8 +418,8 @@ module SemanticLogger
     describe "logging" do
       include Helpers
 
-      it "records no call site by default" do
-        assert_nil SemanticLogger.call_site_level
+      it "records no call site below :error by default" do
+        assert_equal :error, SemanticLogger.call_site_level
 
         events = semantic_logger_events { Order.new.submit }
 

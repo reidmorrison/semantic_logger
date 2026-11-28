@@ -36,6 +36,18 @@ module SemanticLogger
     #   * https://www.rubydoc.info/gems/newrelic_rpm/NewRelic/Agent/Tracer#current_span_id-class_method
     #
     class NewRelicLogs < Raw
+      # Keeps New Relic's linking metadata of the thread that logs the entry, such as "trace.id" and
+      # "entity.name", which are thread-local, for #call to write on the appender's thread.
+      # https://rubydoc.info/gems/newrelic_rpm/NewRelic/Agent#linking_metadata-instance_method
+      CAPTURE_CONTEXT = lambda do |log|
+        meta = ::NewRelic::Agent.linking_metadata
+        log.capture(:new_relic_metadata, meta) unless meta.empty?
+      end
+
+      # CAPTURE_CONTEXT, as this formatter's source captures (see #source_captures).
+      CAPTURES = [CAPTURE_CONTEXT].freeze
+      private_constant :CAPTURES
+
       def initialize(**args)
         args.delete(:time_key)
         args.delete(:time_format)
@@ -103,6 +115,12 @@ module SemanticLogger
         end
 
         result
+      end
+
+      # Returns [Array<#call>] the capture of New Relic's linking metadata of the thread that logs each
+      # entry, which it writes, whatever the appender, such as a file appender.
+      def source_captures
+        CAPTURES
       end
 
       private

@@ -215,7 +215,7 @@ valid for it; otherwise it is logged as part of the payload. Any other keys supp
 data, see [Logging untrusted hashes](security.html#logging-untrusted-hashes).
 
 A block can return the same Hash, but it never replaces an argument the entry already has. That
-includes the backtrace that an entry captures when its level is at or above
+includes the backtrace that an entry captures when its level is at or above the deprecated
 `SemanticLogger.backtrace_level`, so to attach a backtrace of your own, pass `backtrace:` with the
 call rather than returning it from the block.
 

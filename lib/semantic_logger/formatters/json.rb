@@ -49,9 +49,9 @@ module SemanticLogger
         hash[:trace_flags] = format("%02x", trace.flags) if trace.flags
       end
 
-      # Returns true: it writes the trace of each entry.
-      def trace_context?
-        true
+      # Returns [Array<#call>] the capture of the trace that each entry was logged in, which it writes.
+      def source_captures
+        SemanticLogger::Otlp::TraceContext::CAPTURES
       end
 
       private

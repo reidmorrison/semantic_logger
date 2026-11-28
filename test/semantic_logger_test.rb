@@ -1117,7 +1117,7 @@ class SemanticLoggerTest < Minitest::Test
       after { SemanticLogger.backtrace_level = @backtrace_level }
 
       it "is true at and above backtrace_level" do
-        SemanticLogger.backtrace_level = :warn
+        assert_deprecated(/backtrace_level= is deprecated/) { SemanticLogger.backtrace_level = :warn }
 
         refute SemanticLogger.backtrace?(:info)
         assert SemanticLogger.backtrace?(:warn)
@@ -1128,6 +1128,11 @@ class SemanticLoggerTest < Minitest::Test
       it "is false at every level while backtraces are not captured" do
         SemanticLogger.backtrace_level = nil
 
+        refute SemanticLogger.backtrace?(:fatal)
+      end
+
+      it "is false at every level by default, since no backtrace is captured for every appender" do
+        assert_nil SemanticLogger.backtrace_level
         refute SemanticLogger.backtrace?(:fatal)
       end
 
@@ -1315,11 +1320,11 @@ class SemanticLoggerTest < Minitest::Test
     end
 
     describe ".call_site_level=" do
-      after { SemanticLogger.call_site_level = nil }
+      after { SemanticLogger.call_site_level = :error }
 
-      it "is nil by default, with an index that no level reaches" do
-        assert_nil SemanticLogger.call_site_level
-        assert_operator SemanticLogger.call_site_level_index, :>, SemanticLogger::Levels.index(:fatal)
+      it "is :error by default, so that the entries at :error and above say where they were logged" do
+        assert_equal :error, SemanticLogger.call_site_level
+        assert_equal SemanticLogger::Levels.index(:error), SemanticLogger.call_site_level_index
       end
 
       it "sets the level and its index" do

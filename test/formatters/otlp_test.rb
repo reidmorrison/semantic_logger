@@ -228,12 +228,8 @@ module SemanticLogger
         end
 
         describe "trace" do
-          # Leaves CAPTURE subscribed for the appenders that other tests registered, as they need it.
-          after do
-            trace_context = SemanticLogger::Otlp::TraceContext
-            next unless trace_context.instance_variable_get(:@owners).empty?
-
-            SemanticLogger::Logger.unsubscribe(trace_context::CAPTURE)
+          it "is written by this formatter, so it returns its capture for its appender" do
+            assert_equal SemanticLogger::Otlp::TraceContext::CAPTURES, formatter.source_captures
           end
 
           # Runs the block in a span with the ids, and the flags.

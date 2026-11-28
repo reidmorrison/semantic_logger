@@ -31,12 +31,8 @@ module Appender
         SemanticLogger::Appender::OpenTelemetry.new
       end
 
-      # The appender registers a global on_log subscriber to capture the Open
-      # Telemetry context. Remove it afterwards so it does not pollute other tests.
-      after do
-        SemanticLogger::Logger.subscribers&.delete(
-          SemanticLogger::Appender::OpenTelemetry::CAPTURE_CONTEXT
-        )
+      it "captures the Open Telemetry context of the thread that logs each entry" do
+        assert_includes appender.source_captures, SemanticLogger::Appender::OpenTelemetry::CAPTURE_CONTEXT
       end
 
       # Emit a log through the appender and return the single exported record.

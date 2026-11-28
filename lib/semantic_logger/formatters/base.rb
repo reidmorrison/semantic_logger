@@ -5,6 +5,10 @@ module SemanticLogger
       attr_accessor :log, :logger, :log_host, :log_application, :log_environment, :precision,
                     :escape_control_chars, :log_exception_details
 
+      # No source capture (see #source_captures).
+      NO_SOURCE_CAPTURES = [].freeze
+      private_constant :NO_SOURCE_CAPTURES
+
       # Printable escapes for the most common control characters. Any other ASCII
       # control character is escaped to its hexadecimal `\xHH` form by
       # #escape_control_characters, and a Unicode one (see UNICODE_CONTROL_CHARS)
@@ -159,12 +163,12 @@ module SemanticLogger
         $$
       end
 
-      # Returns [true|false] whether it writes the trace that each entry was logged in, which then has
-      # to be captured on the thread that logs it (see Otlp::TraceContext). The appender asks, and
-      # captures it while it is open (see Subscriber#formatter=). False: a formatter that writes the
-      # trace returns true.
-      def trace_context?
-        false
+      # Returns [Array<#call>] the captures to run on the thread that logs each entry, for what this
+      # formatter writes that only that thread can read, such as the trace that the entry was logged in
+      # (see Otlp::TraceContext). The appender returns them as its own (see
+      # Subscriber#source_captures). None: a formatter that needs one returns it.
+      def source_captures
+        NO_SOURCE_CAPTURES
       end
 
       private

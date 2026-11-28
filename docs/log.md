@@ -55,9 +55,9 @@ A handful of attributes are populated for **every** event:
 
 The rest are **situational**: they are set only when relevant to that particular call. For example
 `duration` is present only for `measure_*` calls, `exception` only when an exception was logged,
-`metric`/`metric_amount`/`dimensions` only for metrics, `backtrace` only when backtrace
-capture is enabled (`SemanticLogger.backtrace_level`), and `call_site` only when call site recording
-is enabled (`SemanticLogger.call_site_level`). Always guard against `nil` when reading a
+`metric`/`metric_amount`/`dimensions` only for metrics, `backtrace` only when the log call supplied
+one or an appender that sends one captured it (see `capture_backtrace!` below), and `call_site` only
+when call site recording is enabled (`SemanticLogger.call_site_level`, `:error` by default). Always guard against `nil` when reading a
 situational field.
 
 ### Attributes
@@ -74,10 +74,10 @@ situational field.
 |`tags`|`Array<String>`|Tags active on the thread when the call was made.|
 |`named_tags`|`Hash<String, Object>`|Named tags active on the thread when the call was made.|
 |`context`|`Hash`|Named contexts captured in-line at the point the event was created. `nil` when none.|
-|`captures`|`Hash`|Objects an appender captured in-line for its own use, such as the OpenTelemetry context. Unlike `context`, formatters do not write them, except one built for that appender, as `:new_relic_logs` writes the linking metadata its appender captures. `nil` when none.|
+|`captures`|`Hash`|Objects an appender or its formatter captured in-line for its own use, such as the current trace (see [Capturing what the logging thread knows](config.html#capturing-what-the-logging-thread-knows)). Unlike `context`, formatters do not write them, except the one that captured them, as `:new_relic_logs` writes the linking metadata it captures. `nil` when none.|
 |`duration`|`Float`|Time in milliseconds taken by a `measure_*` call. `nil` for ordinary log calls.|
 |`exception`|`Exception`|The Ruby exception that was logged. `nil` when none. Use `each_exception` to walk a `cause` chain.|
-|`backtrace`|`Array<String>`|Backtrace captured at the call site, present only when the level is at or above `SemanticLogger.backtrace_level`.|
+|`backtrace`|`Array<String>`|The backtrace of the code that made the log call: the one it supplied with `backtrace:`, or one captured on the logging thread by an appender that sends it, such as `:sentry_ruby`, or by an `on_log` subscriber (see `capture_backtrace!`), or, while the deprecated `SemanticLogger.backtrace_level` is set, for each entry at that level and above. `nil` otherwise.|
 |`call_site`|`SemanticLogger::CallSite`|Where the entry was logged, present only when the level is at or above `SemanticLogger.call_site_level`, and the log call did not pass `call_site: false`. See [The call site](#the-call-site).|
 |`metric`|`String`|The metric name, present for log and `measure_*` calls given a `metric:`. See [Metrics](metrics.html#metrics-on-log-and-measure-calls).|
 |`metric_amount`|`Numeric`|Amount to add to a counter metric, for example the quantity purchased. A counter adds 1 when it is `nil`. A negative amount is still logged, but once a metric appender is present its metric is dropped, with a warning on the internal logger, see [Negative metric amounts are dropped](upgrading.html#negative-metric-amounts-are-dropped).|
@@ -130,6 +130,7 @@ These read-only helpers derive convenient values from the attributes above:
 |`set_context(key, value)`|`Object`|Lazily initializes `context`, stores a key/value pair on it, and returns the value.|
 |`capture(key, value)`|`Object`|Lazily initializes `captures`, stores a key/value pair on it, and returns the value, for an appender that needs state of the logging thread, such as the current trace, that is not log data.|
 |`captured(key)`|`Object` or `nil`|The value captured with `key`, or `nil` when there is none.|
+|`capture_backtrace!`|`Array<String>`|Captures the backtrace of the code that made the log call, unless the event already has one, and returns it. Call it on the thread that logged the event: in an appender's source capture (see [Capturing what the logging thread knows](config.html#capturing-what-the-logging-thread-knows)) or an `on_log` subscriber. The frames of Semantic Logger, and of the capture above them, are left out. A backtrace is costly to build, so capture one only for the events that need it.|
 
 ### Inspecting an event
 

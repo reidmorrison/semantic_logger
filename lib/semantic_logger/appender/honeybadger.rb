@@ -41,6 +41,17 @@ module SemanticLogger
         super
       end
 
+      # Captures the backtrace of the code that logged an entry without an exception, which Honeybadger
+      # shows as the backtrace of its notice (see Log#capture_backtrace!). An exception carries its own.
+      # Shareable, so that it runs for the entries logged in a Ractor other than the main one too.
+      CAPTURE_BACKTRACE = Utils.make_shareable(->(log) { log.capture_backtrace! unless log.exception })
+
+      # Returns [Array<#call>] the captures of its formatter, and that of the backtrace of the thread
+      # that logs each entry that it sends (see CAPTURE_BACKTRACE).
+      def source_captures
+        [*super, CAPTURE_BACKTRACE]
+      end
+
       # Send an error notification to honeybadger
       #
       # Honeybadger replaces each byte of text that is not valid UTF-8 with "?", including binary text

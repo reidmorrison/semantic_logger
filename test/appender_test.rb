@@ -107,11 +107,11 @@ class AppenderTest < Minitest::Test
           FileUtils.rm_f(file_name)
         end
 
-        it "releases it for io: or logger:, whose destination the caller holds" do
+        it "leaves the appender for io: or logger:, whose destination the caller holds" do
           io = StringIO.new
 
-          assert_equal :release, built(io: io).last
-          assert_equal :release, built(logger: Logger.new(io)).last
+          assert_nil built(io: io).last
+          assert_nil built(logger: Logger.new(io)).last
         end
 
         it "leaves a Subscriber instance given as appender: or metric:, which the caller holds" do

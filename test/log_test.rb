@@ -8,6 +8,11 @@ module SemanticLogger
     # assigned to, in that constant's encoding (see ExceptionFixtures::ISO_8859_1_NAMED_ERROR).
     UTF8_NAMED_ERROR = const_set("Größe", Class.new(StandardError))
 
+    # A source capture defined in the application, as this file is (see Log#capture_backtrace!).
+    module CaptureInApplication
+      def self.call(log) = log.capture_backtrace!
+    end
+
     describe SemanticLogger::Log do
       let(:log) do
         SemanticLogger::Log.new("LogTest", :info)
@@ -406,6 +411,39 @@ module SemanticLogger
               assert_nil log.backtrace
             end
           end
+
+          it "captures none by default, whatever the level" do
+            log = SemanticLogger::Log.new("LogTest", :fatal)
+            log.assign(message: "Hello")
+
+            assert_nil log.backtrace
+          end
+        end
+      end
+
+      describe "#capture_backtrace!" do
+        it "captures the backtrace of the code that made the log call" do
+          log.capture_backtrace!
+
+          assert_match(/log_test\.rb:\d+/, log.backtrace.first)
+        end
+
+        it "leaves out the frames of Semantic Logger, and those of a capture defined in the application above them" do
+          appenders = SemanticLogger::Appenders.new
+          appender  = InMemoryAppender.new
+          appender.define_singleton_method(:source_captures) { [CaptureInApplication] }
+          appenders << appender
+          caller_line = __LINE__ + 1
+          appenders.current_captures.capture(log)
+
+          assert_match(/log_test\.rb:#{caller_line}:/, log.backtrace.first)
+        end
+
+        it "keeps a backtrace the entry already has" do
+          log.backtrace = ["/app/foo.rb:1"]
+
+          assert_equal ["/app/foo.rb:1"], log.capture_backtrace!
+          assert_equal ["/app/foo.rb:1"], log.backtrace
         end
       end
 
@@ -1469,9 +1507,10 @@ module SemanticLogger
         end
       end
 
+      # Sets the deprecated backtrace level while the block runs.
       def with_backtrace_level(level)
         original = SemanticLogger.backtrace_level
-        SemanticLogger.backtrace_level = level
+        assert_deprecated(/backtrace_level= is deprecated/) { SemanticLogger.backtrace_level = level }
         yield
       ensure
         SemanticLogger.backtrace_level = original

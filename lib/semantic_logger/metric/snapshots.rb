@@ -111,6 +111,13 @@ module SemanticLogger
       # A metric appender takes no log entries.
       def should_log?(_log) = false
 
+      # A metric appender takes no log entries, so it needs nothing captured on the thread that logs
+      # them, whatever its formatter (see Subscriber#source_captures).
+      def source_captures = [].freeze
+
+      # A metric appender writes no log entry, at any level.
+      def writes_level?(_log) = false
+
       # A metric appender takes no log entries, so it is never batched by default, even when it
       # implements #batch, or inherits one, as from Appender::Http.
       def batch_by_default? = false
